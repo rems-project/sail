@@ -92,6 +92,7 @@
     (%{workspace_root}/lib/real.sail as lib/real.sail)
     (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
     (%{workspace_root}/lib/result.sail as lib/result.sail)
+    (%{workspace_root}/lib/float.sail as lib/float.sail)
     (%{workspace_root}/lib/reverse_endianness.sail as lib/reverse_endianness.sail)
     (%{workspace_root}/lib/rts.c as lib/rts.c)
     (%{workspace_root}/lib/rts.h as lib/rts.h)

@@ -343,6 +343,8 @@ let string_of_op = function
 let rec string_of_ctyp = function
   | CT_lint -> "%i"
   | CT_fint n -> "%i" ^ string_of_int n
+  | CT_float n -> "%f" ^ string_of_int n
+  | CT_rounding_mode -> "%rounding_mode"
   | CT_lbits _ -> "%bv"
   | CT_sbits (n, _) -> "%sbv" ^ string_of_int n
   | CT_fbits (n, _) -> "%bv" ^ string_of_int n
@@ -456,6 +458,8 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
   | CT_fint n, CT_fint m -> n = m
+  | CT_float n, CT_float m -> n = m
+  | CT_rounding_mode, CT_rounding_mode -> true
   | CT_constant n, CT_constant m -> Big_int.equal n m
   | CT_unit, CT_unit -> true
   | CT_bool, CT_bool -> true
@@ -511,6 +515,10 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_real, CT_real -> 0
   | CT_real, _ -> 1
   | _, CT_real -> -1
+
+  | CT_float n, CT_float m -> compare n m
+  | CT_float _, _ -> 1
+  | _, CT_float _ -> -1
 
   | CT_poly kid1, CT_poly kid2 -> Kid.compare kid1 kid2
   | CT_poly _, _ -> 1
@@ -707,7 +715,8 @@ let unref_ctyp = function
   | ctyp -> ctyp
  
 let rec is_polymorphic = function
-  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
+  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
+    | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_float _ | CT_rounding_mode -> false
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors

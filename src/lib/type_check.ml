@@ -710,7 +710,12 @@ end = struct
         ("list", [K_type]);
         ("string", []);
         ("itself", [K_int]);
-        ("atom_bool", [K_bool])
+        ("atom_bool", [K_bool]);
+        ("float16", []);
+        ("float32", []);
+        ("float64", []);
+        ("float128", []);
+        ("rounding_mode", []);
       ]
 
   let bound_typ_id env id =

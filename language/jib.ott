@@ -151,6 +151,9 @@ ctyp :: 'CT_' ::=
 % floating point.
   | real                      :: :: real
 
+  | float nat                 :: :: float
+  | rounding_mode             :: :: rounding_mode
+
   | ( ctyp0 , ... , ctypn )   :: :: tup
 
 % Abstractly represent how all the Sail user defined types get mapped

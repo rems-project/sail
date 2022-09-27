@@ -425,8 +425,8 @@ let remove_tuples cdefs ctx =
        List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
     | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        all_tuples ctyp
-    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ ->
+    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _
+      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode ->
        CTSet.empty
   in
   let rec tuple_depth = function
@@ -453,8 +453,8 @@ let remove_tuples cdefs ctx =
     | CT_vector (d, ctyp) -> CT_vector (d, fix_tuples ctyp)
     | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
-    | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _) as ctyp ->
+    | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _
+       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode) as ctyp ->
        ctyp
   in
   let rec fix_cval = function
