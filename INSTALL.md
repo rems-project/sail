@@ -42,8 +42,7 @@ The version of z3 that ships in the ubuntu repositories can be quite old, and we
 Released Sail packages lag behind the latest development in the repository. If you find you need a recently added feature or bug fix you can use opam pin to install the latest version of Sail from the repository. Assuming you have previously followed the above instructions (required to install dependencies):
 ```
 git clone https://github.com/rems-project/sail.git
-cd sail
-opam pin add sail .
+opam pin add sail
 ```
 will install from a local checkout of the Sail sources.
 
