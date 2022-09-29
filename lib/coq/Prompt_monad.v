@@ -103,7 +103,7 @@ Inductive monad regval a e :=
   (* Request to choose a Boolean, e.g. to resolve an undefined bit. The string
      argument may be used to provide information to the system about what the
      Boolean is going to be used for. *)
-  | Choose : string -> (bool -> monad regval a e) -> monad regval a e
+  | Choose : string -> forall ty, (choose_type ty -> monad regval a e) -> monad regval a e
   (* Print debugging or tracing information *)
   | Print : string -> monad regval a e -> monad regval a e
   (*Result of a failed assert with possible error message to report*)
@@ -138,7 +138,7 @@ Inductive event {regval} :=
   | E_footprint : event
   | E_read_reg : register_name -> regval -> event
   | E_write_reg : register_name -> regval -> event
-  | E_choose : string -> bool -> event
+  | E_choose : string -> forall ty, choose_type ty -> event
   | E_print : string -> event.
 Arguments event : clear implicits.
 
@@ -156,7 +156,7 @@ Fixpoint bind {rv A B E} (m : monad rv A E) (f : A -> monad rv B E) := match m w
   | Write_memt wk a sz v t k => Write_memt wk a sz v t (fun v => bind (k v) f)
   | Read_reg descr k =>         Read_reg descr         (fun v => bind (k v) f)
   | Excl_res k =>               Excl_res               (fun v => bind (k v) f)
-  | Choose descr k =>           Choose descr           (fun v => bind (k v) f)
+  | Choose descr ty k =>        Choose descr ty        (fun v => bind (k v) f)
   | Write_ea wk a sz k =>       Write_ea wk a sz       (bind k f)
   | Footprint k =>              Footprint              (bind k f)
   | Barrier bk k =>             Barrier bk             (bind k f)
@@ -175,13 +175,27 @@ Notation "m >> n" := (bind0 m n) (at level 50, left associativity).
 (*val exit : forall rv a e. unit -> monad rv a e*)
 Definition exit {rv A E} (_ : unit) : monad rv A E := Fail "exit".
 
+(*val maybe_fail : forall 'rv 'a 'e. string -> maybe 'a -> monad 'rv 'a 'e*)
+Definition maybe_fail {rv A E} msg (x : option A) : monad rv A E :=
+match x with
+  | Some a => returnm a
+  | None => Fail msg
+end.
+
+Section Choose.
+Context {rv E : Type}.
+
 (*val choose_bool : forall 'rv 'e. string -> monad 'rv bool 'e*)
-Definition choose_bool {rv E} descr : monad rv bool E := Choose descr returnm.
+Definition choose_bool descr : monad rv bool E := Choose descr ChooseBool returnm.
+Definition choose_bit descr : monad rv bitU E := Choose descr ChooseBit returnm.
+Definition choose_int descr : monad rv Z E := Choose descr ChooseInt returnm.
+Definition choose_nat descr : monad rv {n : Z & ArithFact (n >=? 0)} E := Choose descr ChooseNat returnm.
+Definition choose_real descr : monad rv _ E := Choose descr ChooseReal returnm.
+Definition choose_string descr : monad rv string E := Choose descr ChooseString returnm.
+Definition choose_range descr lo hi : monad rv Z E := Choose descr (ChooseRange lo hi) returnm.
+Definition choose_bitvector descr n : monad rv (mword n) E := Choose descr (ChooseBitvector n) returnm.
 
-(*val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e*)
-Definition undefined_bool {rv e} (_:unit) : monad rv bool e := choose_bool "undefined_bool".
-
-Definition undefined_unit {rv e} (_:unit) : monad rv unit e := returnm tt.
+End Choose.
 
 (*val assert_exp : forall rv e. bool -> string -> monad rv unit e*)
 Definition assert_exp {rv E} (exp :bool) msg : monad rv unit E :=
@@ -205,7 +219,7 @@ Fixpoint try_catch {rv A E1 E2} (m : monad rv A E1) (h : E1 -> monad rv A E2) :=
   | Write_memt wk a sz v t k => Write_memt wk a sz v t (fun v => try_catch (k v) h)
   | Read_reg descr k =>         Read_reg descr         (fun v => try_catch (k v) h)
   | Excl_res k =>               Excl_res               (fun v => try_catch (k v) h)
-  | Choose descr k =>           Choose descr           (fun v => try_catch (k v) h)
+  | Choose descr ty k =>        Choose descr ty        (fun v => try_catch (k v) h)
   | Write_ea wk a sz k =>       Write_ea wk a sz       (try_catch k h)
   | Footprint k =>              Footprint              (try_catch k h)
   | Barrier bk k =>             Barrier bk             (try_catch k h)
@@ -261,13 +275,6 @@ Definition try_catchR {rv A R E1 E2} (m : monadR rv A R E1) (h : E1 -> monadR rv
       | inl r => throw (inl r)
       | inr e => h e
      end).
-
-(*val maybe_fail : forall 'rv 'a 'e. string -> maybe 'a -> monad 'rv 'a 'e*)
-Definition maybe_fail {rv A E} msg (x : option A) : monad rv A E :=
-match x with
-  | Some a => returnm a
-  | None => Fail msg
-end.
 
 (*val read_memt_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte * bitU) 'e*)
 Definition read_memt_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memory_byte * bitU) E :=
@@ -403,7 +410,11 @@ Definition emitEvent {Regval A E} `{forall (x y : Regval), Decidable (x = y)} (m
   | (E_print m, Print m' k) =>
      if generic_eq m' m then Some k else None
   | (E_excl_res v, Excl_res k) => Some (k v)
-  | (E_choose descr v, Choose descr' k) => if generic_eq descr' descr then Some (k v) else None
+  | (E_choose descr ty v, Choose descr' ty' k) =>
+     match ChooseType_eq_dec ty' ty with
+     | left EQ => if generic_eq descr' descr then Some (k (eq_rect_r choose_type v EQ)) else None
+     | right _ => None
+     end
   | (E_footprint, Footprint k) => Some k
   | _ => None
 end.

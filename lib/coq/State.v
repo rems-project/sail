@@ -167,7 +167,7 @@ Definition bool_of_bitU_nondetS {RV E} (b : bitU) : monadS RV bool E :=
 match b with
   | B0 => returnS false
   | B1 => returnS true
-  | BU => undefined_boolS tt
+  | BU => nondet_boolS
 end.
 
 (*val bools_of_bits_nondetS : forall 'rv 'e. list bitU -> monadS 'rv (list bool) 'e*)
@@ -236,38 +236,4 @@ Defined.
 Definition untilST {RV Vars E} (vars : Vars) measure (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
   let limit := measure vars in
   untilST' limit vars cond body (Zwf_guarded limit).
-
-
-(*val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e*)
-Definition choose_boolsS {RV E} n : monadS RV (list bool) E :=
- genlistS (fun _ => choose_boolS tt) n.
-
-(* TODO: Replace by chooseS and prove equivalence to prompt monad version *)
-(*val internal_pickS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e*)
-Definition internal_pickS {RV A E} (xs : list A) : monadS RV A E :=
-  (* Use sufficiently many nondeterministically chosen bits and convert into an
-     index into the list *)
-  choose_boolsS (List.length xs) >>$= fun bs =>
-  let idx := ((nat_of_bools bs) mod List.length xs)%nat in
-  match List.nth_error xs idx with
-    | Some x => returnS x
-    | None => failS "choose internal_pick"
-  end.
-
-Fixpoint undefined_word_natS {rv e} n : monadS rv (Word.word n) e :=
-  match n with
-  | O => returnS Word.WO
-  | S m =>
-    choose_boolS tt >>$= fun b =>
-    undefined_word_natS m >>$= fun t =>
-    returnS (Word.WS b t)
-  end.
-
-Definition undefined_bitvectorS {rv e} n : monadS rv (mword n) e :=
-  match n return monadS rv (mword n) e with
-  | Zneg _ => returnS Word.WO
-  | Z0 => returnS Word.WO
-  | Zpos p => undefined_word_natS (Pos.to_nat p)
-  end.
-
 

@@ -66,7 +66,7 @@
 (*==========================================================================*)
 
 Require Import String ZArith Setoid Morphisms Equivalence.
-Require Import Sail.State_monad Sail.Prompt Sail.State Sail.State_monad_lemmas.
+Require Import Sail.Values Sail.State_monad Sail.Prompt Sail.State Sail.State_monad_lemmas.
 Require Import Sail.State_lemmas.
 Require Import Lia.
 
@@ -81,7 +81,7 @@ Definition predS regs := sequential_state regs -> Prop.
 
 Definition PrePost {Regs A E} (P : predS Regs) (f : monadS Regs A E) (Q : result A E -> predS Regs) : Prop :=
  (*"\<lbrace>_\<rbrace> _ \<lbrace>_\<rbrace>"*)
-  forall s, P s -> (forall r s', List.In (r, s') (f s) -> Q r s').
+  forall s, P s -> (forall r cs s' cs', List.In (r, s', cs') (f s cs) -> Q r s').
 
 Notation "{{ P }} m {{ Q }}" := (PrePost P m Q).
 
@@ -102,9 +102,9 @@ Lemma PrePost_consequence Regs X E (A P : predS Regs) (f : monadS Regs X E) (B Q
   (forall v s, B v s -> Q v s) ->
   PrePost P f Q.
 intros Triple PA BQ.
-intros s Pre r s' IN.
+intros s Pre r cs s' cs' IN.
 specialize (Triple s).
-auto.
+eauto.
 Qed.
 
 Lemma PrePost_strengthen_pre Regs X E (A B : predS Regs) (f : monadS Regs X E) (C : result X E -> predS Regs) :
@@ -127,28 +127,28 @@ unfold PrePost. auto.
 Qed.
 
 Lemma PrePost_any Regs A E (m : monadS Regs A E) (Q : result A E -> predS Regs) :
-  PrePost (fun s => forall r s', List.In (r, s') (m s) -> Q r s') m Q.
+  PrePost (fun s => forall r cs s' cs', List.In (r, s', cs') (m s cs) -> Q r s') m Q.
 unfold PrePost. auto.
 Qed.
 
 Lemma PrePost_returnS (*[intro, PrePost_atomI]:*) Regs A E  (P : result A E -> predS Regs) (x : A) :
   PrePost (P (Value x)) (returnS x) P.
 unfold PrePost, returnS.
-intros s p r s' IN.
+intros s p r cs s' cs' IN.
 simpl in IN.
 destruct IN as [[=] | []].
 subst; auto.
 Qed.
 
 Lemma PrePost_bindS (*[intro, PrePost_compositeI]:*) Regs A B E (m : monadS Regs A E) (f : A -> monadS Regs B E) (P : predS Regs) (Q : result B E -> predS Regs) (R : A -> predS Regs) :
-  (forall s a s', List.In (Value a, s') (m s) -> PrePost (R a) (f a) Q) ->
+  (forall s cs a s' cs', List.In (Value a, s', cs') (m s cs) -> PrePost (R a) (f a) Q) ->
   (PrePost P m (fun r => match r with Value a => R a | Ex e => Q (Ex e) end)) ->
   PrePost P (bindS m f) Q.
-intros F M s Pre r s' IN.
-destruct (bindS_cases IN) as [(a & a' & s'' & [= ->] & IN' & IN'') | [(e & [= ->] & IN') | (e & a & s'' & [= ->] & IN' & IN'')]].
-* eapply F. apply IN'. specialize (M s Pre (Value a') s'' IN'). apply M. assumption.
-* specialize (M _ Pre _ _ IN'). apply M.
-* specialize (M _ Pre _ _ IN'). simpl in M. eapply F; eauto.
+intros F M s Pre r cs s' cs' IN.
+destruct (bindS_cases IN) as [(a & a' & s'' & cs'' & [= ->] & IN' & IN'') | [(e & [= ->] & IN') | (e & a & s'' & cs'' & [= ->] & IN' & IN'')]].
+* eapply F. apply IN'. specialize (M s Pre (Value a') cs s'' cs'' IN'). apply M. eassumption.
+* specialize (M _ Pre _ _ _ _ IN'). apply M.
+* specialize (M _ Pre _ _ _ _ IN'). simpl in M. eapply F; eauto.
 Qed.
 
 Lemma PrePost_bindS_ignore Regs A B E (m : monadS Regs A E) (f : monadS Regs B E) (P : predS Regs) (Q : result B E -> predS Regs) (R : predS Regs) :
@@ -184,7 +184,7 @@ Qed.
 Lemma PrePost_readS (*[intro, PrePost_atomI]:*) Regs A E (P : result A E -> predS Regs) f :
   PrePost (fun s => P (Value (f s)) s) (readS f) P.
 unfold PrePost, readS, returnS.
-intros s Pre r s' [H | []].
+intros s Pre r cs s' cs' [H | []].
 inversion H; subst.
 assumption.
 Qed.
@@ -192,7 +192,7 @@ Qed.
 Lemma PrePost_updateS (*[intro, PrePost_atomI]:*) Regs E (P : result unit E -> predS Regs) f :
   PrePost (fun s => P (Value tt) (f s)) (updateS f) P.
 unfold PrePost, readS, returnS.
-intros s Pre r s' [H | []].
+intros s Pre r cs s' cs' [H | []].
 inversion H; subst.
 assumption.
 Qed.
@@ -280,10 +280,10 @@ intros Hr Hl.
 unfold and_boolSP.
 eapply (PrePost_bindS _ _ _ _ _ _ _ _ _ _ Hl).
 Unshelve.
-intros s [[|] p] s' IN.
+intros s cs [[|] p] s' cs' IN.
 * eapply PrePost_bindS. 2: apply Hr.
-  clear s s' IN.
-  intros s [b q] s' IN.
+  clear s cs s' cs' IN.
+  intros s cs [b q] s' cs' IN.
   apply PrePost_returnS.
 * apply PrePost_returnS.
 Qed.
@@ -324,17 +324,17 @@ intros Hr Hl.
 unfold or_boolSP.
 eapply (PrePost_bindS _ _ _ _ _ _ _ _ _ _ Hl).
 Unshelve.
-intros s [[|] p] s' IN.
+intros s cs [[|] p] s' cs' IN.
 * apply PrePost_returnS.
 * eapply PrePost_bindS. 2: apply Hr.
-  clear s s' IN.
-  intros s [b q] s' IN.
+  clear s cs s' cs' IN.
+  intros s cs [b q] s' cs' IN.
   apply PrePost_returnS.
 Qed.
 
 Lemma PrePost_failS (*[intro, PrePost_atomI]:*) Regs A E msg (Q : result A E -> predS Regs) :
   PrePost (Q (Ex (Failure msg))) (failS msg) Q.
-intros s Pre r s' [[= <- <-] | []].
+intros s Pre r cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
@@ -345,14 +345,24 @@ destruct c; simpl.
 * apply PrePost_failS. 
 Qed.
 
-Lemma PrePost_chooseS (*[intro, PrePost_atomI]:*) Regs A E xs (Q : result A E -> predS Regs) :
-  PrePost (fun s => forall x, List.In x xs -> Q (Value x) s) (chooseS xs) Q.
+Lemma PrePost_choose_listS (*[intro, PrePost_atomI]:*) Regs A E xs (Q : result A E -> predS Regs) :
+  PrePost (fun s => forall x, List.In x xs -> Q (Value x) s) (choose_listS xs) Q.
 unfold PrePost, chooseS.
-intros s IN r s' IN'.
+intros s IN r cs s' cs' IN'.
 apply List.in_map_iff in IN'.
 destruct IN' as (x & [= <- <-] & IN').
 auto.
 Qed.
+
+Lemma PrePost_chooseS (*[intro, PrePost_atomI]:*) Regs E ty (Q : result (choose_type ty) E -> predS Regs) :
+  PrePost (fun s => forall x, Q (Value x) s) (chooseS ty) Q.
+unfold PrePost, chooseS.
+intros s Pre r cs s' cs' IN'.
+destruct (choose cs ty).
+destruct IN' as [[= <- <- <-] | [] ].
+auto.
+Qed.
+
 
 Lemma case_result_combine (*[simp]:*) A E X r (Q : result A E -> X) :
   (match r with Value a => Q (Value a) | Ex e => Q (Ex e) end) = Q r.
@@ -365,7 +375,7 @@ simpl. apply PrePost_returnS.
 Qed.
 
 Lemma PrePost_foreachS_Cons Regs A Vars E (x : A) xs vars body (Q : result Vars E -> predS Regs) :
-  (forall s vars' s', List.In (Value vars', s') (body x vars s) -> PrePost (Q (Value vars')) (foreachS xs vars' body) Q) ->
+  (forall s cs vars' s' cs', List.In (Value vars', s', cs') (body x vars s cs) -> PrePost (Q (Value vars')) (foreachS xs vars' body) Q) ->
   PrePost (Q (Value vars)) (body x vars) Q ->
   PrePost (Q (Value vars)) (foreachS (x :: xs) vars body) Q.
 intros XS X.
@@ -408,8 +418,8 @@ Notation "{{ P }} m {{ Q | X }}" := (PrePostE P m Q X).
 (*lemmas PrePost_defs = PrePost_def PrePostE_def*)
 
 Lemma PrePostE_I (*[case_names Val Err]:*) Regs A Ety (P : predS Regs) f (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
-  (forall s a s', P s -> List.In (Value a, s') (f s) -> Q a s') ->
-  (forall s e s', P s -> List.In (Ex e, s') (f s) -> E e s') ->
+  (forall s cs a s' cs', P s -> List.In (Value a, s', cs') (f s cs) -> Q a s') ->
+  (forall s cs e s' cs', P s -> List.In (Ex e, s', cs') (f s cs) -> E e s') ->
   PrePostE P f Q E.
 intros. unfold PrePostE.
 unfold PrePost.
@@ -422,14 +432,14 @@ Lemma PrePostE_PrePost Regs A Ety P m (Q : A -> predS Regs) (E : ex Ety -> predS
 auto.
 Qed.
 
-Lemma PrePostE_elim Regs A Ety P f r s s' (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_elim Regs A Ety P f r s cs s' cs' (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE P f Q E ->
   P s ->
-  List.In (r, s') (f s) ->
+  List.In (r, s', cs') (f s cs) ->
   (exists v, r = Value v /\ Q v s') \/
   (exists e, r = Ex e /\ E e s').
 intros PP Pre IN.
-specialize (PP _ Pre _ _ IN).
+specialize (PP _ Pre _ _ _ _ IN).
 destruct r; eauto.
 Qed.
 
@@ -440,10 +450,10 @@ Lemma PrePostE_consequence Regs Aty Ety (P : predS Regs) f A B C (Q : Aty -> pre
   (forall e s, C e s -> E e s) ->
   PrePostE P f Q E.
 intros PP PA BQ CE.
-intros s Pre [a | e] s' IN.
-* apply BQ. specialize (PP _ (PA _ Pre) _ _ IN).
+intros s Pre [a | e] cs s' cs' IN.
+* apply BQ. specialize (PP _ (PA _ Pre) _ _ _ _ IN).
   apply PP.
-* apply CE. specialize (PP _ (PA _ Pre) _ _ IN).
+* apply CE. specialize (PP _ (PA _ Pre) _ _ _ _ IN).
   apply PP.
 Qed.
 
@@ -479,14 +489,14 @@ Lemma PrePostE_conj_conds Regs Aty Ety (P1 P2 : predS Regs) m (Q1 Q2 : Aty -> pr
   PrePostE (fun s => P1 s /\ P2 s) m (fun r s => Q1 r s /\ Q2 r s) (fun e s => E1 e s /\ E2 e s).
 intros H1 H2.
 apply PrePostE_I.
-* intros s a s' [p1 p2] IN.
-  specialize (H1 _ p1 _ _ IN).
-  specialize (H2 _ p2 _ _ IN).
+* intros s cs a s' cs' [p1 p2] IN.
+  specialize (H1 _ p1 _ _ _ _ IN).
+  specialize (H2 _ p2 _ _ _ _ IN).
   simpl in *.
   auto.
-* intros s a s' [p1 p2] IN.
-  specialize (H1 _ p1 _ _ IN).
-  specialize (H2 _ p2 _ _ IN).
+* intros s cs a s' cs' [p1 p2] IN.
+  specialize (H1 _ p1 _ _ _ _ IN).
+  specialize (H2 _ p2 _ _ _ _ IN).
   simpl in *.
   auto.
 Qed.
@@ -511,9 +521,9 @@ Lemma PrePostE_cong Regs Aty Ety (P1 P2 : predS Regs) m1 m2 (Q1 Q2 : Aty -> pred
 intros P12 m12 Q12 E12.
 unfold PrePostE, PrePost.
 split.
-* intros. apply P12 in H0. rewrite <- m12 in H1; auto. specialize (H _ H0 _ _ H1).
+* intros. apply P12 in H0. rewrite <- m12 in H1; auto. specialize (H _ H0 _ _ _ _ H1).
   destruct r; [ apply Q12 | apply E12]; auto.
-* intros. rewrite m12 in H1; auto. apply P12 in H0. specialize (H _ H0 _ _ H1).
+* intros. rewrite m12 in H1; auto. apply P12 in H0. specialize (H _ H0 _ _ _ _ H1).
   destruct r; [ apply Q12 | apply E12]; auto.
 Qed.
 
@@ -523,16 +533,16 @@ intros s Pre [a | e]; auto.
 Qed.
 
 Lemma PrePostE_any Regs A Ety m (Q : result A Ety -> predS Regs) E :
-  PrePostE (Ety := Ety) (fun s => forall r s', List.In (r, s') (m s) -> match r with Value a => Q a s' | Ex e => E e s' end) m Q E.
+  PrePostE (Ety := Ety) (fun s => forall r cs s' cs', List.In (r, s', cs') (m s cs) -> match r with Value a => Q a s' | Ex e => E e s' end) m Q E.
 apply PrePostE_I.
-intros. apply (H (Value a)); auto.
-intros. apply (H (Ex e)); auto.
+intros. apply (H (Value a) cs _ cs'); auto.
+intros. apply (H (Ex e) cs _ cs'); auto.
 Qed.
 
 Lemma PrePostE_returnS (*[PrePostE_atomI, intro, simp]:*) Regs A Ety Q (x : A) (E : ex Ety -> predS Regs) :
   PrePostE (Q x) (returnS x) Q E.
 unfold PrePostE, PrePost.
-intros s Pre r s' [[= <- <-] | []].
+intros s Pre r cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
@@ -571,13 +581,13 @@ Qed.
 Lemma PrePostE_readS (*[PrePostE_atomI, intro]:*) Regs A Ety f (Q : A -> predS Regs) E :
   PrePostE (Ety := Ety) (fun s => Q (f s) s) (readS f) Q E.
 unfold PrePostE, PrePost, readS.
-intros s Pre [a | e] s' [[= <- <-] | []].
+intros s Pre [a | e] cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
 Lemma PrePostE_updateS (*[PrePostE_atomI, intro]:*) Regs Ety f (Q : unit -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (fun s => Q tt (f s)) (updateS f) Q E.
-intros s Pre [a | e] s' [[= <- <-] | []].
+intros s Pre [a | e] cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
@@ -738,7 +748,7 @@ Qed.
 Lemma PrePostE_failS (*[PrePostE_atomI, intro]:*) Regs A Ety msg (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (E (Failure msg)) (failS msg) Q E.
 unfold PrePostE, PrePost, failS.
-intros s Pre r s' [[= <- <-] | []].
+intros s Pre r cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
@@ -769,33 +779,33 @@ unfold exitS.
 apply PrePostE_failS.
 Qed.
 
-Lemma PrePostE_chooseS (*[intro, PrePostE_atomI]:*) Regs A Ety (xs : list A) (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
-  PrePostE (fun s => forall x, List.In x xs -> Q x s) (chooseS xs) Q E.
+Lemma PrePostE_chooseS (*[intro, PrePostE_atomI]:*) Regs Ety ty (Q : choose_type ty -> predS Regs) (E : ex Ety -> predS Regs) :
+  PrePostE (fun s => forall x, Q x s) (chooseS ty) Q E.
 unfold chooseS.
-intros s IN r s' IN'.
-apply List.in_map_iff in IN'.
-destruct IN' as (x & [= <- <-] & IN').
+intros s IN r cs s' cs' IN'.
+destruct (choose cs ty).
+destruct IN' as [[= <- <- <-] | []].
 auto.
 Qed.
 
 Lemma PrePostE_throwS (*[PrePostE_atomI]:*) Regs A Ety e (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (E (Throw e)) (throwS e) Q E.
 unfold throwS.
-intros s Pre r s' [[= <- <-] | []].
+intros s Pre r cs s' cs' [[= <- <-] | []].
 assumption.
 Qed.
 
 Lemma PrePostE_try_catchS (*[PrePostE_compositeI]:*) Regs A E1 E2 m h P (Ph : E1 -> predS Regs) (Q : A -> predS Regs) (E : ex E2 -> predS Regs) :
-  (forall s e s', List.In (Ex (Throw e), s') (m s) -> PrePostE (Ph e) (h e) Q E) ->
+  (forall s cs e s' cs', List.In (Ex (Throw e), s', cs') (m s cs) -> PrePostE (Ph e) (h e) Q E) ->
   PrePostE P m Q (fun ex => match ex with Throw e => Ph e | Failure msg => E (Failure msg) end) ->
   PrePostE P (try_catchS m h) Q E.
 intros.
-intros s Pre r s' IN.
-destruct (try_catchS_cases IN) as [(a' & [= ->] & IN') | [(msg & [= ->] & IN') | (e & s'' & IN1 & IN2)]].
-* specialize (H0 _ Pre _ _ IN'). apply H0.
-* specialize (H0 _ Pre _ _ IN'). apply H0.
-* specialize (H _ _ _ IN1). specialize (H0 _ Pre _ _ IN1). simpl in *.
-    specialize (H _ H0 _ _ IN2). apply H.
+intros s Pre r cs s' cs' IN.
+destruct (try_catchS_cases IN) as [(a' & [= ->] & IN') | [(msg & [= ->] & IN') | (e & s'' & cs'' & IN1 & IN2)]].
+* specialize (H0 _ Pre _ _ _ _ IN'). apply H0.
+* specialize (H0 _ Pre _ _ _ _ IN'). apply H0.
+* specialize (H _ _ _ _ _ IN1). specialize (H0 _ Pre _ _ _ _ IN1). simpl in *.
+    specialize (H _ H0 _ _ _ _ IN2). apply H.
 Qed.
 
 Lemma PrePostE_catch_early_returnS (*[PrePostE_compositeI]:*) Regs A Ety m P (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
@@ -924,7 +934,7 @@ apply Wf_Z.natlike_ind with (x := limit).
   - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
     intros ? [[? ?] ?]; auto.
   - apply PrePostE_I;
-    intros ? ? ? [[Pre ?] ?] ?; exfalso;
+    intros ? ? ? ? ? [[Pre ?] ?] ?; exfalso;
     specialize (Hmeasure _ _ Pre); lia.
 * intros limit' Hlimit' IH vars Hmeasure_limit [acc].
   simpl.
@@ -992,7 +1002,7 @@ lemma PrePostE_liftState_untilM_pure_cond:
     and body: (forall vars, PrePostE (Inv Q vars) (liftState r (body vars)) (fun vars' s' => Inv Q vars' s' /\ (cond vars' \<longrightarrow> Q vars' s')) E"
   shows "PrePostE (Inv Q vars) (liftState r (untilM vars (return \<circ> cond) body)) Q E"
   using assms by (intro PrePostE_liftState_untilM) (auto simp: comp_def liftState_simp)
-*)
+
 Lemma PrePostE_choose_boolS_any (*[PrePostE_atomI]:*) Regs Ety unit_val (Q : bool -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (fun s => forall b, Q b s) (choose_boolS unit_val) Q E.
 unfold choose_boolS, seqS.
@@ -1037,10 +1047,10 @@ apply PrePostE_weaken_post with (B := fun _ s => forall bs, Q bs s).
     apply PrePostE_choose_boolS_any.
     intuition.
 * intuition.
-Qed.
+Qed.*)
 
 Lemma nth_error_exists {A} {l : list A} {n} :
-  n < Datatypes.length l -> exists x, List.In x l /\ List.nth_error l n = Some x.
+  (n < Datatypes.length l)%nat -> exists x, List.In x l /\ List.nth_error l n = Some x.
 revert n. induction l.
 * simpl. intros. apply PeanoNat.Nat.nlt_0_r in H. destruct H.
 * intros. destruct n.
@@ -1054,13 +1064,13 @@ Lemma nth_error_modulo {A} {xs : list A} n :
   xs <> nil ->
   exists x, List.In x xs /\ List.nth_error xs (PeanoNat.Nat.modulo n (Datatypes.length xs)) = Some x.
 intro notnil.
-assert (Datatypes.length xs <> 0) by (rewrite List.length_zero_iff_nil; auto).
-assert (PeanoNat.Nat.modulo n (Datatypes.length xs) < Datatypes.length xs) by auto using PeanoNat.Nat.mod_upper_bound.
+assert ((Datatypes.length xs <> 0)%nat) by (rewrite List.length_zero_iff_nil; auto).
+assert ((PeanoNat.Nat.modulo n (Datatypes.length xs) < Datatypes.length xs)%nat) by auto using PeanoNat.Nat.mod_upper_bound.
 destruct (nth_error_exists H0) as [x [H1 H2]].
 exists x.
 auto.
 Qed.
-
+(*
 Lemma PrePostE_internal_pick Regs A Ety (xs : list A) (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
   xs <> nil ->
   PrePostE (fun s => forall x, List.In x xs -> Q x s) (internal_pickS xs) Q E.
@@ -1121,7 +1131,7 @@ eapply PrePostE_strengthen_pre.
 apply PrePostE_undefined_bitvectorS_any; auto.
 simpl; auto.
 Qed.
-
+*)
 Lemma PrePostE_build_trivial_exS Regs (T:Type) Ety (m : monadS Regs T Ety) P (Q : {T & Sail.Values.ArithFact true} -> predS Regs) E :
   PrePostE P m (fun v => Q (existT _ v (Sail.Values.Build_ArithFactP _ eq_refl))) E ->
   PrePostE P (build_trivial_exS m) Q E.
@@ -1141,9 +1151,9 @@ Add Parametric Morphism {Regs A Ety} : (@PrePost Regs A Ety)
   as PrePost_morphism.
 intros.
 unfold PrePost.
-split; intros H' s.
-* rewrite <- (H s). apply H'.
-* rewrite -> (H s). apply H'.
+split; intros H' s PRE r cs s' cs'.
+* rewrite <- (H s). apply H'. apply PRE.
+* rewrite -> (H s). apply H'. apply PRE.
 Qed.
 
 Add Parametric Morphism {Regs A Ety} : (@PrePostE Regs A Ety)
@@ -1200,6 +1210,8 @@ Ltac PrePostE_step :=
   | |- PrePostE _ (or_boolS _ _) _ _ => eapply PrePostE_or_boolS
   | |- PrePostE _ (and_boolSP _ _) _ _ => eapply PrePostE_and_boolSP; intros
   | |- PrePostE _ (or_boolSP _ _) _ _ => eapply PrePostE_or_boolSP; intros
+  | |- PrePostE _ (chooseS _) _ _ => eapply PrePostE_chooseS; intros
+(*
   | |- PrePostE _ (choose_boolS _) (fun _ => ?ppeQ) ?ppeE =>
          apply PrePostE_choose_boolS_ignore with (Q := ppeQ) (E := ppeE)
   | |- PrePostE _ (choose_boolS _) ?ppeQ ?ppeE =>
@@ -1216,6 +1228,7 @@ Ltac PrePostE_step :=
          apply PrePostE_undefined_bitvectorS_ignore with (Q := ppeQ) (E := ppeE)
   | |- PrePostE _ (undefined_bitvectorS _) ?ppeQ ?ppeE =>
          apply PrePostE_undefined_bitvectorS_any with (Q := ppeQ) (E := ppeE)
+*)
   | |- PrePostE _ (build_trivial_exS _) _ _ => eapply PrePostE_build_trivial_exS; intros
   | |- PrePostE _ (liftRS _) ?ppeQ ?ppeE =>
          apply PrePostE_liftRS with (Q := ppeQ) (E := ppeE); intros

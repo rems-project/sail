@@ -65,11 +65,20 @@
 (*  SUCH DAMAGE.                                                            *)
 (*==========================================================================*)
 
-Require Export Sail.Instr_kinds.
-Require Export Sail.Values.
-Require Export Sail.String.
-Require Export Sail.Operators_mwords.
-Require Export Sail.Prompt_monad.
-Require Export Sail.Prompt.
-Require Export Sail.State.
-Require Export Sail.Undefined.
+From Sail Require Import Prompt_monad Prompt Values.
+Require Import String ZArith.
+Local Open Scope Z.
+
+Section Undef.
+Context {rv E : Type}.
+
+Definition undefined_unit (_:unit) : monad rv unit E := returnm tt.
+Definition undefined_bool (_:unit) : monad rv bool E := choose_bool "undefined_bool".
+Definition undefined_string (_:unit) : monad rv string E := choose_string "undefined_string".
+Definition undefined_int (_:unit) : monad rv Z E := choose_int "undefined_int".
+Definition undefined_nat (_:unit) : monad rv {n : Z & ArithFact (n >=? 0)} E := choose_nat "undefined_nat".
+Definition undefined_real (_:unit) : monad rv _ E := choose_real "undefined_real".
+Definition undefined_range i j `{ArithFact (i <=? j)}: monad rv _ E := choose_range "undefined_range" i j.
+Definition undefined_bitvector n : monad rv (mword n) E := choose_bitvector "undefined_bitvector" n.
+
+End Undef.

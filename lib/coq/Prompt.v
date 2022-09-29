@@ -346,37 +346,22 @@ Definition untilMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars 
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   write_reg r1 r1_v >> write_reg r2 r2_v*)
 
-Definition choose_bools {RV E} (descr : string) (n : nat) : monad RV (list bool) E :=
-  genlistM (fun _ => choose_bool descr) n.
+Section Choose.
+Context {rv E : Type}.
 
-Definition choose {RV A E} (descr : string) (xs : list A) : monad RV A E :=
+Definition choose_from_list {A} (descr : string) (xs : list A) : monad rv A E :=
   (* Use sufficiently many nondeterministically chosen bits and convert into an
      index into the list *)
-  choose_bools descr (List.length xs) >>= fun bs =>
-  let idx := ((nat_of_bools bs) mod List.length xs)%nat in
-  match List.nth_error xs idx with
+  choose_range descr 0 (Z.of_nat (List.length xs) - 1) >>= fun idx =>
+  match List.nth_error xs (Z.to_nat idx) with
     | Some x => returnm x
     | None => Fail ("choose " ++ descr)
   end.
 
-Definition internal_pick {rv a e} (xs : list a) : monad rv a e :=
-  choose "internal_pick" xs.
+Definition internal_pick {a} (xs : list a) : monad rv a E :=
+  choose_from_list "internal_pick" xs.
 
-Fixpoint undefined_word_nat {rv e} n : monad rv (Word.word n) e :=
-  match n with
-  | O => returnm Word.WO
-  | S m =>
-    choose_bool "undefined_word_nat" >>= fun b =>
-    undefined_word_nat m >>= fun t =>
-    returnm (Word.WS b t)
-  end.
-
-Definition undefined_bitvector {rv e} n : monad rv (mword n) e :=
-  match n return monad rv (mword n) e with
-  | Zneg _ => returnm Word.WO
-  | Z0 => returnm Word.WO
-  | Zpos p => undefined_word_nat (Pos.to_nat p)
-  end.
+End Choose.
 
 (* If we need to build an existential after a monadic operation, assume that
    we can do it entirely from the type. *)

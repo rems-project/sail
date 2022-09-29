@@ -81,6 +81,7 @@ Require Import Eqdep_dec.
 Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
+Require Import Rbase.  (* TODO would like to avoid this in models without reals *)
 
 
 Local Open Scope Z.
@@ -2460,9 +2461,25 @@ Definition external_mem_value v :=
 val internal_mem_value : memory_value -> list bitU
 Definition internal_mem_value bytes :=
   List.reverse bytes $> bitv_of_byte_lifteds*)
+*)
+
+(* The choice operations in the monads operate on a small selection of base
+   types.  Normally, -undefined_gen is used to construct functions for more
+   complex types. *)
+
+Inductive ChooseType : Type :=
+  | ChooseBool | ChooseBit | ChooseInt | ChooseNat | ChooseReal | ChooseString
+  | ChooseRange (lo hi : Z) | ChooseBitvector (n:Z).
+Scheme Equality for ChooseType.
+Definition choose_type ty :=
+  match ty with
+  | ChooseBool => bool | ChooseBit => bitU | ChooseInt => Z | ChooseNat => {n : Z & ArithFact (n >=? 0)}
+  | ChooseReal => R | ChooseString => string
+  | ChooseRange _ _ => Z | ChooseBitvector n => mword n
+  end.
 
 
-val foreach : forall a vars.
+(*val foreach : forall a vars.
   (list a) -> vars -> (a -> vars -> vars) -> vars*)
 Fixpoint foreach {a Vars} (l : list a) (vars : Vars) (body : a -> Vars -> Vars) : Vars :=
 match l with

@@ -71,6 +71,7 @@ Require FMapList.
 Require Import OrderedType.
 Require OrderedTypeEx.
 Require Import List.
+Require Import Rbase.  (* TODO would like to avoid this in models without reals *)
 Require bbv.Word.
 Import ListNotations.
 Local Open Scope Z.
@@ -81,6 +82,38 @@ Module NatMap := FMapList.Make(OrderedTypeEx.Nat_as_OT).
 Definition Memstate : Type := NatMap.t memory_byte.
 Definition Tagstate : Type := NatMap.t bitU.
 (* type regstate = map string (vector bitU) *)
+
+(* To avoid infinite sets in this state monad we parametrise on a choice
+   operator for (e.g.) undefined values.  For executability, we define a
+   default operator which always returns the same value for a given type,
+   but we could also have oracle strings to provide real non-determinism.
+ *)
+Record ChoiceSource := {
+  choice_t : Type;
+  choice_state : choice_t;
+  choice_choose : forall ty, choice_t -> choice_t * choose_type ty;
+}.
+Definition choose (cs : ChoiceSource) ty : ChoiceSource * choose_type ty :=
+  let '(state, result) := cs.(choice_choose) ty cs.(choice_state) in
+  let cs' := {| choice_t := cs.(choice_t); choice_state := state; choice_choose := cs.(choice_choose) |} in
+  (cs', result).
+
+Definition default_choice_fn ty (_:unit) : unit * choose_type ty :=
+  match ty return unit * choose_type ty with
+  | ChooseBool        => (tt, false)
+  | ChooseBit         => (tt, BU)
+  | ChooseInt         => (tt, 0)
+  | ChooseNat         => (tt, build_ex 0)
+  | ChooseReal        => (tt, R0)
+  | ChooseString      => (tt, "")
+  | ChooseRange lo _  => (tt, lo)
+  | ChooseBitvector n => (tt, mword_of_int 0)
+  end.
+Definition default_choice : ChoiceSource := {|
+  choice_t := unit;
+  choice_state := tt;
+  choice_choose := default_choice_fn;
+|}.
 
 (* We deviate from the Lem library and prefix the fields with ss_ to avoid
    name clashes. *)
@@ -112,18 +145,18 @@ Arguments Ex {A} {E} _.
    and exception type 'e. *)
 (* TODO: the list was originally a set, can we reasonably go back to a set? *)
 Definition monadS Regs a e : Type :=
- sequential_state Regs -> list (result a e * sequential_state Regs).
+ sequential_state Regs -> ChoiceSource -> list (result a e * sequential_state Regs * ChoiceSource).
 
 (*val returnS : forall 'regs 'a 'e. 'a -> monadS 'regs 'a 'e*)
-Definition returnS {Regs A E} (a:A) : monadS Regs A E := fun s => [(Value a,s)].
+Definition returnS {Regs A E} (a:A) : monadS Regs A E := fun s cs => [(Value a,s,cs)].
 
 (*val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e*)
 Definition bindS {Regs A B E} (m : monadS Regs A E) (f : A -> monadS Regs B E) : monadS Regs B E :=
- fun (s : sequential_state Regs) =>
+ fun (s : sequential_state Regs) cs =>
   List.flat_map (fun v => match v with
-             | (Value a, s') => f a s'
-             | (Ex e, s') => [(Ex e, s')]
-             end) (m s).
+             | (Value a, s', cs') => f a s' cs'
+             | (Ex e, s', cs') => [(Ex e, s', cs')]
+             end) (m s cs).
 
 (*val seqS: forall 'regs 'b 'e. monadS 'regs unit 'e -> monadS 'regs 'b 'e -> monadS 'regs 'b 'e*)
 Definition seqS {Regs B E} (m : monadS Regs unit E) (n : monadS Regs B E) : monadS Regs B E :=
@@ -136,8 +169,16 @@ Notation "m >>$= f" := (bindS m f) (at level 50, left associativity).
 Notation "m >>$ n" := (seqS m n) (at level 50, left associativity).
 
 (*val chooseS : forall 'regs 'a 'e. SetType 'a => list 'a -> monadS 'regs 'a 'e*)
-Definition chooseS {Regs A E} (xs : list A) : monadS Regs A E :=
- fun s => (List.map (fun x => (Value x, s)) xs).
+Definition choose_listS {Regs A E} (xs : list A) : monadS Regs A E :=
+ fun s cs => (List.map (fun x => (Value x, s, cs)) xs).
+
+Definition chooseS {Regs E} ty : monadS Regs (choose_type ty) E :=
+  fun s cs =>
+    let (cs',v) := choose cs ty in
+    [(Value v, s, cs')].
+
+Definition nondet_boolS {Regs E} : monadS Regs bool E :=
+  fun s cs => [(Value false, s, cs); (Value true, s, cs)].
 
 (*val readS : forall 'regs 'a 'e. (sequential_state 'regs -> 'a) -> monadS 'regs 'a 'e*)
 Definition readS {Regs A E} (f : sequential_state Regs -> A) : monadS Regs A E :=
@@ -149,28 +190,23 @@ Definition updateS {Regs E} (f : sequential_state Regs -> sequential_state Regs)
 
 (*val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e*)
 Definition failS {Regs A E} msg : monadS Regs A E :=
- fun s => [(Ex (Failure msg), s)].
-
-(*val choose_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e*)
-Definition choose_boolS {Regs E} (_:unit) : monadS Regs bool E :=
- chooseS [false; true].
-Definition undefined_boolS {Regs E} := @choose_boolS Regs E.
+ fun s cs => [(Ex (Failure msg), s, cs)].
 
 (*val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e*)
 Definition exitS {Regs A E} (_:unit) : monadS Regs A E := failS "exit".
 
 (*val throwS : forall 'regs 'a 'e. 'e -> monadS 'regs 'a 'e*)
 Definition throwS {Regs A E} (e : E) :monadS Regs A E :=
- fun s => [(Ex (Throw e), s)].
+ fun s cs => [(Ex (Throw e), s, cs)].
 
 (*val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2*)
 Definition try_catchS {Regs A E1 E2} (m : monadS Regs A E1) (h : E1 -> monadS Regs A E2) : monadS Regs A E2 :=
-fun s =>
+fun s cs =>
   List.flat_map (fun v => match v with
-                | (Value a, s') => returnS a s'
-                | (Ex (Throw e), s') => h e s'
-                | (Ex (Failure msg), s') => [(Ex (Failure msg), s')]
-                end) (m s).
+                | (Value a, s', cs') => returnS a s' cs'
+                | (Ex (Throw e), s', cs') => h e s' cs'
+                | (Ex (Failure msg), s', cs') => [(Ex (Failure msg), s', cs')]
+                end) (m s cs).
 
 (*val assert_expS : forall 'regs 'e. bool -> string -> monadS 'regs unit 'e*)
 Definition assert_expS {Regs E} (exp : bool) (msg : string) : monadS Regs unit E :=
@@ -267,7 +303,7 @@ Definition excl_resultS {Regs E} : unit -> monadS Regs bool E :=
      whether an exclusive load has occurred before.  However, this does not
      seem very precise; it might be safer to overapproximate the possible
      behaviours by always making a nondeterministic choice. *)
-  @undefined_boolS Regs E.
+  fun _ => nondet_boolS.
 
 (* Write little-endian list of bytes to given address *)
 (*val put_mem_bytes : forall 'regs. nat -> nat -> list memory_byte -> bitU -> sequential_state 'regs -> sequential_state 'regs*)
@@ -391,4 +427,3 @@ end.
 Definition prerr_results {A E S} (rs : list (result A E * S)) : unit := tt.
 (*  let _ = Set.map (fun (r, _) -> let _ = prerr_endline (show_result r) in ()) rs in
   ()*)
-

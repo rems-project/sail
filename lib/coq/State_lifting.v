@@ -82,7 +82,7 @@ Fixpoint liftState {Regval Regs A E} (ra : register_accessors Regs Regval) (m : 
   | (Write_memt wk a sz v t k) => bindS (write_memt_bytesS wk a sz v t) (fun v => liftState ra (k v))
   | (Read_reg r k)             => bindS (read_regvalS ra r)             (fun v => liftState ra (k v))
   | (Excl_res k)               => bindS (excl_resultS tt)               (fun v => liftState ra (k v))
-  | (Choose _ k)               => bindS (choose_boolS tt)               (fun v => liftState ra (k v))
+  | (Choose _ ty k)            => bindS (chooseS ty)                    (fun v => liftState ra (k v))
   | (Write_reg r v k)          => seqS (write_regvalS ra r v)           (liftState ra k)
   | (Write_ea _ _ _ k)         => liftState ra k
   | (Footprint k)              => liftState ra k

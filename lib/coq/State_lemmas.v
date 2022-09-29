@@ -479,25 +479,25 @@ Qed.
 #[export] Hint Extern 0 (liftState _ (match _ with None => _ | Some _ => _ end) = _) =>
   (rewrite liftState_opt_match; reflexivity) : liftState.
 
-Lemma Value_bindS_iff {Regs A B E} {f : A -> monadS Regs B E} {b m s s''} :
-  List.In (Value b, s'') (bindS m f s) <-> (exists a s', List.In (Value a, s') (m s) /\ List.In (Value b, s'') (f a s')).
+Lemma Value_bindS_iff {Regs A B E} {f : A -> monadS Regs B E} {b m s cs s'' cs''} :
+  List.In (Value b, s'', cs'') (bindS m f s cs) <-> (exists a s' cs', List.In (Value a, s', cs') (m s cs) /\ List.In (Value b, s'', cs'') (f a s' cs')).
 split.
 * intro H.
   apply bindS_cases in H.
-  destruct H as [(? & ? & ? & [= <-] & ? & ?) | [(? & [= <-] & ?) | (? & ? & ? & [= <-] & ? & ?)]];
+  destruct H as [(? & ? & ? & ? & [= <-] & ? & ?) | [(? & [= <-] & ?) | (? & ? & ? & ? & [= <-] & ? & ?)]];
   eauto.
-* intros (? & ? & ? & ?).
+* intros (? & ? & ? & ? & ?).
   eauto with bindS_intros.
 Qed.
 
-Lemma Ex_bindS_iff {Regs A B E} {f : A -> monadS Regs B E} {m e s s''} :
-  List.In (Ex e, s'') (bindS m f s) <-> List.In (Ex e, s'') (m s) \/ (exists a s', List.In (Value a, s') (m s) /\ List.In (Ex e, s'') (f a s')).
+Lemma Ex_bindS_iff {Regs A B E} {f : A -> monadS Regs B E} {m e s cs s'' cs''} :
+  List.In (Ex e, s'', cs'') (bindS m f s cs) <-> List.In (Ex e, s'', cs'') (m s cs) \/ (exists a s' cs', List.In (Value a, s', cs') (m s cs) /\ List.In (Ex e, s'', cs'') (f a s' cs')).
 split.
 * intro H.
   apply bindS_cases in H.
-  destruct H as [(? & ? & ? & [= <-] & ? & ?) | [(? & [= <-] & ?) | (? & ? & ? & [= <-] & ? & ?)]];
-  eauto.
-* intros [H | (? & ? & H1 & H2)];
+  destruct H as [(? & ? & ? & ? & [= <-] & ? & ?) | [(? & [= <-] & ?) | (? & ? & ? & ? & [= <-] & ? & ?)]];
+  eauto 10.
+* intros [H | (? & ? & ? & H1 & H2)];
   eauto with bindS_intros.
 Qed.
 
@@ -527,15 +527,6 @@ reflexivity.
 Qed.
 Lemma liftState_footprint Regs Regval E r :
   @liftState Regs Regval _ E r (footprint tt) = returnS tt.
-reflexivity.
-Qed.
-Lemma liftState_choose_bool Regs Regval E r descr :
-  @liftState Regs Regval _ E r (choose_bool descr) = choose_boolS tt.
-reflexivity.
-Qed.
-(*declare undefined_boolS_def[simp]*)
-Lemma liftState_undefined Regs Regval E r :
-  @liftState Regs Regval _ E r (undefined_bool tt) = undefined_boolS tt.
 reflexivity.
 Qed.
 Lemma liftState_maybe_fail Regs Regval A E r msg x :
@@ -594,21 +585,21 @@ Lemma liftState_build_trivial_ex Regs Regval E T r m :
     build_trivial_exS (liftState r m).
 unfold build_trivial_ex, build_trivial_exS.
 unfold ArithFact.
-intro.
+intros s cs.
 rewrite liftState_bind.
 reflexivity.
 Qed.
 
 #[export] Hint Rewrite liftState_throw liftState_assert liftState_assert' liftState_exit
              liftState_exclResult liftState_barrier liftState_footprint
-             liftState_choose_bool liftState_undefined liftState_maybe_fail
+             liftState_maybe_fail
              liftState_and_boolM liftState_and_boolMP
              liftState_or_boolM liftState_or_boolMP
              liftState_build_trivial_ex
            : liftState.
 #[export] Hint Resolve liftState_throw liftState_assert liftState_assert' liftState_exit
              liftState_exclResult liftState_barrier liftState_footprint
-             liftState_choose_bool liftState_undefined liftState_maybe_fail
+             liftState_maybe_fail
              liftState_and_boolM liftState_and_boolMP
              liftState_or_boolM liftState_or_boolMP
              liftState_build_trivial_ex
@@ -639,7 +630,7 @@ Lemma liftState_catch_early_return (*[liftState_simp]:*) Regs Regval A E r m :
 unfold catch_early_return, catch_early_returnS.
 rewrite_liftState.
 apply try_catchS_cong; auto.
-intros [a | e] s'; auto.
+intros [a | e] s' cs'; auto.
 Qed.
 #[export] Hint Rewrite liftState_catch_early_return : liftState.
 #[export] Hint Resolve liftState_catch_early_return : liftState.
@@ -657,17 +648,10 @@ Lemma liftState_try_catchR Regs Regval A R E1 E2 r m h :
   liftState (Regs := Regs) r (@try_catchR Regval A R E1 E2 m h) === try_catchRS (liftState r m) (fun x => liftState r (h x)).
 unfold try_catchR, try_catchRS. rewrite_liftState.
 apply try_catchS_cong; auto.
-intros [r' | e] s'; auto.
+intros [r' | e] s' cs'; auto.
 Qed.
 #[export] Hint Rewrite liftState_try_catchR : liftState.
 #[export] Hint Resolve liftState_try_catchR : liftState.
-
-Lemma liftState_bool_of_bitU_nondet Regs Regval E r b :
-  liftState (Regs := Regs) r (@bool_of_bitU_nondet Regval E b) = bool_of_bitU_nondetS b.
-destruct b; simpl; try reflexivity.
-Qed.
-#[export] Hint Rewrite liftState_bool_of_bitU_nondet : liftState.
-#[export] Hint Resolve liftState_bool_of_bitU_nondet : liftState.
 
 Lemma liftState_read_memt Regs Regval A B E H rk a sz r :
   liftState (Regs := Regs) r (@read_memt Regval A B E H rk a sz) === read_memtS rk a sz.
@@ -717,9 +701,9 @@ Qed.
 #[export] Hint Rewrite liftState_write_mem : liftState.
 #[export] Hint Resolve liftState_write_mem : liftState.
 
-Lemma bindS_rw_left Regs A B E m1 m2 (f : A -> monadS Regs B E) s :
-  m1 s = m2 s ->
-  bindS m1 f s = bindS m2 f s.
+Lemma bindS_rw_left Regs A B E m1 m2 (f : A -> monadS Regs B E) s cs :
+  m1 s cs = m2 s cs ->
+  bindS m1 f s cs = bindS m2 f s cs.
 intro H. unfold bindS. rewrite H. reflexivity.
 Qed. 
 
@@ -727,7 +711,7 @@ Lemma liftState_read_reg_readS Regs Regval A E reg get_regval' set_regval' :
   (forall s, map_bind reg.(of_regval) (get_regval' reg.(name) s) = Some (reg.(read_from) s)) ->
   liftState (Regs := Regs) (get_regval', set_regval') (@read_reg _ Regval A E reg) === readS (fun x => reg.(read_from) (ss_regstate x)).
 intros.
-unfold read_reg. simpl. unfold readS. intro s.
+unfold read_reg. simpl. unfold readS. intros s cs.
 erewrite bindS_rw_left. 2: {
   apply bindS_returnS_left.
 }
@@ -755,7 +739,7 @@ Ltac lift_read_reg :=
 Lemma liftState_write_reg_updateS Regs Regval A E get_regval' set_regval' reg (v : A) :
   (forall s, set_regval' (name reg) (regval_of reg v) s = Some (write_to reg v s)) ->
   liftState (Regs := Regs) (Regval := Regval) (E := E) (get_regval', set_regval') (write_reg reg v) === updateS (fun s => {| ss_regstate := (write_to reg v s.(ss_regstate)); ss_memstate := s.(ss_memstate); ss_tagstate := s.(ss_tagstate) |}).
-intros. intro s.
+intros. intros s cs.
 unfold write_reg. simpl. unfold readS, seqS.
 erewrite bindS_rw_left. 2: {
   apply bindS_returnS_left.
@@ -850,57 +834,6 @@ Qed.
 #[export] Hint Rewrite liftState_genlistM : liftState.
 #[export] Hint Resolve liftState_genlistM : liftState.
 
-Lemma liftState_choose_bools Regs Regval E descr n r :
-  liftState (Regs := Regs) r (@choose_bools Regval E descr n) === choose_boolsS n.
-unfold choose_bools, choose_boolsS.
-rewrite_liftState.
-reflexivity.
-Qed.
-#[export] Hint Rewrite liftState_choose_bools : liftState.
-#[export] Hint Resolve liftState_choose_bools : liftState.
-
-Lemma liftState_bools_of_bits_nondet Regs Regval E r bs :
-  liftState (Regs := Regs) r (@bools_of_bits_nondet Regval E bs) === bools_of_bits_nondetS bs.
-unfold bools_of_bits_nondet, bools_of_bits_nondetS.
-rewrite_liftState.
-reflexivity.
-Qed.
-#[export] Hint Rewrite liftState_bools_of_bits_nondet : liftState.
-#[export] Hint Resolve liftState_bools_of_bits_nondet : liftState.
-
-Lemma liftState_internal_pick Regs Regval A E r (xs : list A) :
-  liftState (Regs := Regs) (Regval := Regval) (E := E) r (internal_pick xs) === internal_pickS xs.
-unfold internal_pick, internal_pickS.
-unfold choose.
-rewrite_liftState.
-reflexivity.
-Qed.
-#[export] Hint Rewrite liftState_internal_pick : liftState.
-#[export] Hint Resolve liftState_internal_pick : liftState.
-
-Lemma liftState_undefined_word_nat Regs Regval E r n :
-  liftState (Regs := Regs) (Regval := Regval) (E := E) r (undefined_word_nat n) === undefined_word_natS n.
-induction n.
-* reflexivity.
-* simpl.
-  apply bindS_cong; auto.
-  intro. 
-  rewrite_liftState.
-  apply bindS_cong; auto.
-Qed.
-#[export] Hint Rewrite liftState_undefined_word_nat : liftState.
-#[export] Hint Resolve liftState_undefined_word_nat : liftState.
-
-Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >=? 0)} :
-  liftState (Regs := Regs) (Regval := Regval) (E := E) r (undefined_bitvector n) === undefined_bitvectorS n.
-unfold undefined_bitvector, undefined_bitvectorS.
-destruct n; auto.
-rewrite_liftState.
-reflexivity.
-Qed.
-#[export] Hint Rewrite liftState_undefined_bitvector : liftState.
-#[export] Hint Resolve liftState_undefined_bitvector : liftState.
-
 Lemma liftRS_returnS (*[simp]:*) A R Regs E x :
   @liftRS A R Regs E (returnS x) = returnS x.
 reflexivity.
@@ -915,9 +848,9 @@ Qed.
 
 Lemma liftRS_bindS Regs A B R E (m : monadS Regs A E) (f : A -> monadS Regs B E) :
   @liftRS B R Regs E (bindS m f) === bindS (liftRS m) (fun x => liftRS (f x)).
-intro s.
+intros s cs.
 unfold liftRS, try_catchS, bindS, throwS, returnS.
-induction (m s) as [ | [[a | [msg | e]] t]].
+induction (m s cs) as [ | [[[a | [msg | e]] t] cs']].
 * reflexivity.
 * simpl. rewrite flat_map_app. rewrite IHl. reflexivity.
 * simpl. rewrite IHl. reflexivity.
@@ -1036,7 +969,7 @@ destruct (Z.le_decidable 0 limit).
     intros. repeat destruct (_limit_reduces _). simpl.
     reflexivity.
   + clear limit H.
-    intros limit H IH [acc1] [acc2] vars s. simpl.
+    intros limit H IH [acc1] [acc2] vars s cs. simpl.
     destruct (Z_ge_dec _ _). 2: lia.
     rewrite_liftState.
     apply bindS_cong; auto.
@@ -1102,7 +1035,7 @@ destruct (Z.le_decidable 0 limit).
 * generalize (Zwf_guarded limit) at 1 as acc1.
   generalize (Zwf_guarded limit) at 1 as acc2.
   apply Wf_Z.natlike_ind with (x := limit).
-  + intros [acc1] [acc2] * s; simpl.
+  + intros [acc1] [acc2] * s cs; simpl.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros. apply bindS_cong; auto.
@@ -1110,7 +1043,7 @@ destruct (Z.le_decidable 0 limit).
     repeat destruct (_limit_reduces _). simpl.
     reflexivity.
   + clear limit H.
-    intros limit H IH [acc1] [acc2] vars s. simpl.
+    intros limit H IH [acc1] [acc2] vars s cs. simpl.
     destruct (Z_ge_dec _ _). 2: lia.
     rewrite_liftState.
     apply bindS_cong; auto.
