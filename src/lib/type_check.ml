@@ -715,7 +715,7 @@ end = struct
         ("float32", []);
         ("float64", []);
         ("float128", []);
-        ("rounding_mode", []);
+        ("float_rounding_mode", []);
       ]
 
   let bound_typ_id env id =

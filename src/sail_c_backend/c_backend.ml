@@ -147,7 +147,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
   | CT_poly _ -> true
-  | CT_float n -> n <> 128
+  | CT_float _ -> true
   | CT_rounding_mode -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 

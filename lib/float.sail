@@ -70,6 +70,9 @@ $sail_internal
 $ifndef _FLOATING_POINT
 $define _FLOATING_POINT
 
+// rounding_mode name already in use by various specifications
+type rounding_mode = float_rounding_mode
+
 val round_nearest_ties_to_even = pure "round_nearest_ties_to_even" : unit -> rounding_mode
 val round_nearest_ties_to_away = pure "round_nearest_ties_to_away" : unit -> rounding_mode
 val round_toward_positive = pure "round_toward_positive" : unit -> rounding_mode
