@@ -91,6 +91,7 @@
     (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
     (%{workspace_root}/lib/smt.sail as lib/smt.sail)
     (%{workspace_root}/lib/string.sail as lib/string.sail)
+    (%{workspace_root}/lib/float.sail as lib/float.sail)
     (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
     (%{workspace_root}/lib/generic_equality.sail as lib/generic_equality.sail)
     (%{workspace_root}/lib/trace.sail as lib/trace.sail)
