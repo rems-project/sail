@@ -65,54 +65,28 @@
 /*  SUCH DAMAGE.                                                            */
 /*==========================================================================*/
 
-$ifndef _RESULT
-$define _RESULT
-
 $sail_internal
 
+$ifndef _CONCURRENCY_INTERFACE_COMMON
+$define _CONCURRENCY_INTERFACE_COMMON
+
+$ifdef _DEFAULT_DEC
+$include <vector_dec.sail>
+$else
+$include <vector_inc.sail>
+$endif
+
 $include <option.sail>
+$include <result.sail>
+$include <concurrency_interface/emulator_memory.sail>
 
-// Like the option type, the result type may also be treated specially
-// by various Sail backends.
+val sail_instr_announce
+  = pure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  : forall 'n, 'n > 0.
+  bits('n) -> unit
 
-union result('a : Type, 'b : Type) = {
-    Ok : 'a,
-    Err : 'b
-}
-
-val is_ok : forall ('a 'b : Type). result('a, 'b) -> bool
-
-function is_ok r = match r {
-    Ok(_) => true,
-    Err(_) => false
-}
-
-val is_err : forall ('a 'b : Type). result('a, 'b) -> bool
-
-function is_err r = match r {
-    Ok(_) => false,
-    Err(_) => true
-}
-
-val ok_option : forall ('a 'b : Type). result('a, 'b) -> option('a)
-
-function ok_option r = match r {
-    Ok(x) => Some(x),
-    Err(_) => None()
-}
-
-val err_option : forall ('a 'b : Type). result('a, 'b) -> option('b)
-
-function err_option r = match r {
-    Ok(_) => None(),
-    Err(err) => Some(err)
-}
-
-val unwrap_or : forall ('a 'b : Type). (result('a, 'b), 'a) -> 'a
-
-function unwrap_or (r, y) = match r {
-    Ok(x) => x,
-    Err(_) => y
-}
+$target_set emulator_or_isla isla c ocaml interpreter
+$target_set emulator c ocaml interpreter
+$target_set prover lem coq
 
 $endif

@@ -82,6 +82,11 @@ let split_at_function id defs =
   | Some (pre_defs, def, post_defs) ->
      Some (List.rev pre_defs, def, post_defs)
 
+let rec last_env = function
+  | [] -> Type_check.initial_env
+  | [(_, env)] -> env
+  | _ :: xs -> last_env xs
+    
 let recheck ({ defs; _} as ast) =
   let defs = Type_check.check_with_envs Type_check.initial_env defs in
 
@@ -129,4 +134,4 @@ let recheck ({ defs; _} as ast) =
     | [] -> []
   in
 
-  { ast with defs = find_optimizations defs }
+  ({ ast with defs = find_optimizations defs }, last_env defs)

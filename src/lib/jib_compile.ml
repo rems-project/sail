@@ -1501,7 +1501,7 @@ and compile_def' n total ctx = function
      let instrs = unique_names instrs in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
-  | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
+  | DEF_spec (VS_aux (VS_val_spec (_, id, ext, _), _)) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let extern =
        if Env.is_extern id ctx.tc_env "c" then
@@ -1576,6 +1576,8 @@ and compile_def' n total ctx = function
   (* Only the parser and sail pretty printer care about this. *)
   | DEF_fixity _ -> [], ctx
 
+  | DEF_pragma ("abstract", id_str, _) -> [CDEF_pragma ("abstract", id_str)], ctx
+    
   (* We just ignore any pragmas we don't want to deal with. *)
   | DEF_pragma _ -> [], ctx
 
@@ -1781,7 +1783,21 @@ let rec specialize_variants ctx prior =
   function
   | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
-     
+
+     List.iter (function
+         | CDEF_spec (id, _, ctyps, ctyp) ->
+            let _ = List.map (map_ctyp (fun ctyp ->
+                                  match ctyp with
+                                  | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
+                                     let generic_ctors = Bindings.find var_id ctx.variants |> snd |> UBindings.bindings in
+                                     let unifiers = ctyp_unify (id_loc var_id') (CT_variant (var_id, generic_ctors)) (CT_variant (var_id, ctors)) |> KBindings.bindings |> List.map snd in
+                                     instantiations := CTListSet.add unifiers !instantiations;
+                                     ctyp
+                                  | ctyp -> ctyp
+                      )) (ctyp :: ctyps) in
+            ()
+         | _ -> ()
+       ) cdefs;
      let cdefs =
        List.fold_left
          (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx var_id ctor_id ctyp)) cdefs)

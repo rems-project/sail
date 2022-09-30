@@ -98,6 +98,15 @@ let instantiate_def target id substs = function
                                annot)))
   | def -> None
 
+let rec instantiated_or_abstract l = function
+  | [] -> None
+  | None :: xs -> instantiated_or_abstract l xs
+  | Some def :: xs ->
+     if List.for_all Util.is_none xs then
+       Some def
+     else
+       raise (Reporting.err_general l "Multiple instantiations found for target")
+         
 let instantiate target ast =
   let process_def outcomes = function
     | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs) ->
@@ -131,14 +140,20 @@ let instantiate target ast =
          fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg = pat_alg } exp
        in
 
-       let valspec =
-         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, None, false), (l, Type_check.empty_tannot)))
+       let valspec is_extern =
+         let extern = if is_extern then Some { pure = false; bindings = [("_", string_of_id id)] } else None in
+         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, Type_check.empty_tannot)))
+       in
+       let instantiated_def =
+         rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs
+         |> List.map (instantiate_def target id id_substs)
+         |> instantiated_or_abstract (id_loc id)
        in
        let outcome_defs, _ =
-         rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs
-         |> Util.map_filter (instantiate_def target id id_substs)
-         |> (fun defs -> valspec :: defs)
-         |> Type_error.check_defs env
+         (match instantiated_def with
+          | None -> [DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)); valspec true]
+          | Some def -> [valspec false; def]
+         ) |> Type_error.check_defs env
        in
        outcomes, outcome_defs
 

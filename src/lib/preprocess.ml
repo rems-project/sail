@@ -103,13 +103,13 @@ let cond_pragma l defs =
        (List.rev !then_defs, List.rev !else_defs, defs)
     | Parse_ast.DEF_pragma ("else", _, _) :: defs when !depth = 0 ->
        in_then := false; scan defs
-    | (Parse_ast.DEF_pragma (p, _, _) as def) :: defs when p = "ifdef" || p = "ifndef" ->
+    | (Parse_ast.DEF_pragma (p, _, _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
        incr depth; push_def def; scan defs
     | (Parse_ast.DEF_pragma ("endif", _, _) as def) :: defs->
        decr depth; push_def def; scan defs
     | def :: defs ->
        push_def def; scan defs
-    | [] -> raise (Reporting.err_general l "$ifdef or $ifndef never ended by $endif")
+    | [] -> raise (Reporting.err_general l "$ifdef, $ifndef, or $iftarget never ended by $endif")
   in
   scan defs
 

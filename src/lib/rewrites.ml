@@ -4577,8 +4577,6 @@ let rewrite_loops_with_escape_effect env defs =
   in
   rewrite_ast_base { rewriters_base with rewrite_exp } defs
 
-let recheck_defs env defs = Type_error.check initial_env defs
-
 (* In realize_mappings we may have duplicated a user-supplied val spec, which
    causes problems for some targets. Keep the first one, except use the externs
    from the last one, as subsequent redefinitions override earlier ones. *)
@@ -4795,8 +4793,8 @@ let instantiate_rewriter rewriter args =
      Reporting.unreachable Parse_ast.Unknown __POS__ "Rewrite not fully instantiated"
 
 let all_rewriters = [
-    ("recheck_defs", checking_rewriter recheck_defs);
-    ("optimize_recheck_defs", basic_rewriter (fun _ -> Optimize.recheck));
+    ("recheck_defs", checking_rewriter (fun _ -> Type_error.check initial_env));
+    ("optimize_recheck_defs", checking_rewriter (fun _ -> Optimize.recheck));
     ("realize_mappings", Base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", Base_rewriter rewrite_ast_toplevel_string_append);

@@ -67,22 +67,10 @@
 
 $sail_internal
 
-$ifndef _CONCURRENCY_INTERFACE
-$define _CONCURRENCY_INTERFACE
+$ifndef _CONCURRENCY_INTERFACE_READ_WRITE
+$define _CONCURRENCY_INTERFACE_READ_WRITE
 
-$ifdef _DEFAULT_DEC
-$include <vector_dec.sail>
-$else
-$include <vector_inc.sail>
-$endif
-
-$include <option.sail>
-$include <result.sail>
-$include <emulator_memory.sail>
-
-$target_set emulator_prover c ocaml interpreter lem coq
-$target_set emulator c isla ocaml interpreter
-$target_set prover lem coq
+$include <concurrency_interface/common.sail>
 
 enum Access_variety = {
   AV_plain,
@@ -155,7 +143,7 @@ with
 = {
     val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-    impl emulator(request) = {
+    impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
         let tag: option(bool) = if request.tag then {
             if length(pa) == 32 then {
@@ -213,19 +201,18 @@ function mem_write_request_is_exclusive(request) = {
 }
 
 // the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
-outcome sail_mem_write_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
+outcome sail_mem_write : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
   Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
       -> result(option(bool), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
   'arch_ak : Type,
-  'write_kind : Type,
   'abort : Type
 = {
     val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-    impl emulator(request) = {
+    impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
         let b: bool = match request.value {
             Some(value) => if mem_write_request_is_exclusive(request) then {

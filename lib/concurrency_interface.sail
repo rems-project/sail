@@ -1,1 +1,2 @@
-$include <concurrency_interface/v1.sail>
+$include <concurrency_interface/read_write.sail>
+$include <concurrency_interface/barrier.sail>

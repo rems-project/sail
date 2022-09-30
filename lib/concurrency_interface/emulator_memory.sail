@@ -65,54 +65,88 @@
 /*  SUCH DAMAGE.                                                            */
 /*==========================================================================*/
 
-$ifndef _RESULT
-$define _RESULT
-
 $sail_internal
 
-$include <option.sail>
+$ifndef _EMULATOR_MEMORY
 
-// Like the option type, the result type may also be treated specially
-// by various Sail backends.
+$ifdef _DEFAULT_DEC
+$include <vector_dec.sail>
+$else
+$include <vector_inc.sail>
+$endif
 
-union result('a : Type, 'b : Type) = {
-    Ok : 'a,
-    Err : 'b
-}
+//! Read memory
+$iftarget isla
+val read_mem# = monadic "read_mem" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
+$else
+val read_mem# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-val is_ok : forall ('a 'b : Type). result('a, 'b) -> bool
+val __read_mem# = monadic "emulator_read_mem" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-function is_ok r = match r {
-    Ok(_) => true,
-    Err(_) => false
-}
+function read_mem#(_, addrsize, addr, n) = __read_mem#(addrsize, addr, n)
+$endif
 
-val is_err : forall ('a 'b : Type). result('a, 'b) -> bool
+//! Read memory, but signal to the emulator that this is an ifetch read
+$iftarget isla
+val read_mem_ifetch# = monadic "read_mem_ifetch" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
+$else
+val read_mem_ifetch# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-function is_err r = match r {
-    Ok(_) => false,
-    Err(_) => true
-}
+val __read_mem_ifetch# = monadic "emulator_read_mem_ifetch" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-val ok_option : forall ('a 'b : Type). result('a, 'b) -> option('a)
+function read_mem_ifetch#(_, addrsize, addr, n) = __read_mem_ifetch#(addrsize, addr, n)
+$endif
 
-function ok_option r = match r {
-    Ok(x) => Some(x),
-    Err(_) => None()
-}
+//! Read memory, and signal to the emulator that this read should be treated as an exclusive access
+$iftarget isla
+val read_mem_exclusive# = monadic "read_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
+$else
+val read_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-val err_option : forall ('a 'b : Type). result('a, 'b) -> option('b)
+val __read_mem_exclusive# = monadic "emulator_read_mem_exclusive" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+    (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
-function err_option r = match r {
-    Ok(_) => None(),
-    Err(err) => Some(err)
-}
+function read_mem_exclusive#(_, addrsize, addr, n) = __read_mem_exclusive#(addrsize, addr, n)
+$endif
 
-val unwrap_or : forall ('a 'b : Type). (result('a, 'b), 'a) -> 'a
+//! Write memory
+$iftarget isla
+val write_mem# = monadic "write_mem" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
+$else
+val write_mem# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
-function unwrap_or (r, y) = match r {
-    Ok(x) => x,
-    Err(_) => y
-}
+val __write_mem# = monadic "emulator_write_mem" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
+
+function write_mem#(_, addrsize, addr, n, value) = __write_mem#(addrsize, addr, n, value)
+$endif
+
+//! Write memory, and signal to the emulator that this read should be treated as an exclusive access
+$iftarget isla
+val write_mem_exclusive# = monadic "write_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
+$else
+val write_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
+
+val __write_mem_exclusive# = monadic "emulator_write_mem_exclusive" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
+
+function write_mem_exclusive#(_, addrsize, addr, n, value) = __write_mem_exclusive#(addrsize, addr, n, value)
+$endif
+
+val read_tag# = monadic "read_tag_bool"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
+
+val write_tag# = monadic "write_tag_bool" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
 
 $endif
