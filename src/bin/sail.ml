@@ -258,11 +258,11 @@ let rec options = ref ([
 ])
 
 let register_default_target () =
-  Target.register ~name:"default" (fun _ _ _ _ -> ())
+  Target.register ~name:"default" (fun _ _ _ _ _ -> ())
   
 let run_sail tgt =
   Target.run_pre_parse_hook tgt ();
-  let ast, env, effect_info = Frontend.load_files ~target:tgt !options Type_check.initial_env !opt_file_arguments in
+  let ast, env, effect_info = Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments in
   let ast, env = Frontend.descatter effect_info env ast in
   let ast, env =
     List.fold_right (fun file (ast, _) -> Splice.splice ast file)
@@ -274,7 +274,7 @@ let run_sail tgt =
   Target.run_pre_rewrites_hook tgt ast effect_info env;
   let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
 
-  Target.action tgt !opt_file_out ast effect_info env;
+  Target.action tgt Manifest.dir !opt_file_out ast effect_info env;
 
   (ast, env, effect_info)
 
@@ -322,7 +322,7 @@ let main () =
   );
 
   if !opt_show_sail_dir then (
-    print_endline (Reporting.get_sail_dir ());
+    print_endline (Reporting.get_sail_dir Manifest.dir);
     exit 0
   );
  

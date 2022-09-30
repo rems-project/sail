@@ -269,15 +269,14 @@ let warn ?once_from short_str l explanation =
 
 let simple_warn str = warn str Parse_ast.Unknown ""
 
-let get_sail_dir () =
+let get_sail_dir default_sail_dir =
   match Sys.getenv_opt "SAIL_DIR" with
   | Some path -> path
   | None ->
-     let share_dir = Manifest.dir in
-     if Sys.file_exists share_dir then
-       share_dir
+     if Sys.file_exists default_sail_dir then
+       default_sail_dir
      else
        raise (err_general Parse_ast.Unknown
                 ("Sail share directory "
-                 ^ share_dir
+                 ^ default_sail_dir
                  ^ " does not exist. Make sure Sail is installed correctly, or try setting the SAIL_DIR environment variable"))

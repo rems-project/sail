@@ -72,14 +72,16 @@ open Type_check
 val opt_interactive : bool ref
 
 (** Each interactive command is passed this struct, containing the
-   abstract syntax tree, effect into and the type-checking environment *)
+   abstract syntax tree, effect into and the type-checking
+   environment. Also contains the default Sail directory *)
 type istate = {
     ast : Type_check.tannot ast;
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
+    default_sail_dir : string;
   }
 
-val initial_istate : unit -> istate
+val initial_istate : string -> istate
 
 val arg : string -> string
 val command : string -> string

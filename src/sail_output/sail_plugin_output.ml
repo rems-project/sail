@@ -73,7 +73,7 @@ let output_sail_options = [
     " set a directory to output pretty-printed Sail");
 ]
 
-let sail_target out_file ast _effect_info _env =
+let sail_target _ out_file ast _effect_info _env =
    let close, output_chan = match out_file with
      | Some f -> true, open_out (f ^ ".sail")
      | None -> false, stdout in

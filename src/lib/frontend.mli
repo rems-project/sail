@@ -76,6 +76,7 @@ val check_ast : bool -> Type_check.Env.t -> unit ast -> Type_check.tannot ast * 
    
 val load_files :
   ?target:Target.target ->
+  string ->
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->

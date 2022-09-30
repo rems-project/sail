@@ -162,5 +162,5 @@ val simple_warn: string -> unit
    $suppress_warnings directive in process_file.ml *)
 val suppress_warnings_for_file : string -> unit
 
-val get_sail_dir : unit -> string
+val get_sail_dir : string -> string
 

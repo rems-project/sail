@@ -1,7 +1,0 @@
-let dir = "%{libsail:share}%"
-
-let commit = "opam-v%{opam-version}%"
-
-let branch = "%{libsail:name}%"
-
-let version = "%{libsail:version}%"

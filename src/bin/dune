@@ -2,6 +2,14 @@
   (dev
     (flags (:standard -w -33))))
 
+(rule
+  (target manifest.ml)
+  (mode fallback)
+  (action
+    (with-outputs-to %{target}
+      (chdir %{workspace_root}
+        (run sail_manifest -gen_manifest)))))
+
 (executable
   (name sail)
   (public_name sail)
@@ -14,6 +22,9 @@
   (section share)
   (package sail)
   (files
+    (%{workspace_root}/src/lib/util.ml as src/lib/util.ml)
+    (%{workspace_root}/src/lib/sail_lib.ml as src/lib/sail_lib.ml)
+    (%{workspace_root}/src/lib/elf_loader.ml as src/lib/elf_loader.ml)
     (%{workspace_root}/lib/_tags as lib/_tags)
     (%{workspace_root}/lib/_tags_coverage as lib/_tags_coverage)
     (%{workspace_root}/lib/arith.sail as lib/arith.sail)

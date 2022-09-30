@@ -76,7 +76,7 @@ type target = {
     pre_parse_hook : (unit -> unit);
     pre_rewrites_hook : (tannot ast -> Effects.side_effect_info -> Env.t -> unit);
     rewrites : (string * Rewrites.rewriter_arg list) list;
-    action : string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+    action : string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
     asserts_termination : bool;
   }
 
@@ -160,7 +160,7 @@ let () =
     match get ~name:name with
     | Some tgt ->
        let ast, effect_info, env = Rewrites.rewrite istate.effect_info istate.env (rewrites tgt) istate.ast in
-       { ast = ast; env = env; effect_info = effect_info }
+       { istate with ast = ast; env = env; effect_info = effect_info }
     | None ->
        print_endline ("No target " ^ name);
        istate
@@ -168,6 +168,6 @@ let () =
                 
   ArgString ("target", fun name -> ArgString ("out", fun out -> ActionUnit (fun istate ->
     match get ~name:name with
-    | Some tgt -> action tgt (Some out) istate.ast istate.effect_info istate.env;
+    | Some tgt -> action tgt istate.default_sail_dir (Some out) istate.ast istate.effect_info istate.env;
     | None -> print_endline ("No target " ^ name)
   ))) |> register_command ~name:"target" ~help:"invoke Sail target. See :list_targets for a list of targets. out parameter is equivalent to command line -o option"

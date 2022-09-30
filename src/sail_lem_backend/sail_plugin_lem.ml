@@ -209,7 +209,7 @@ let output libs files =
       output_lem f' libs effect_info env ast)
     files
 
-let lem_target out_file ast effect_info env =
+let lem_target _ out_file ast effect_info env =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output (!opt_libs_lem) [(out_file, effect_info, env, ast)]
 

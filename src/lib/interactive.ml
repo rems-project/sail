@@ -76,12 +76,14 @@ type istate = {
     ast : Type_check.tannot ast;
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
+    default_sail_dir : string;
   }
 
-let initial_istate () = {
+let initial_istate default_sail_dir = {
     ast = empty_ast;
     effect_info = Effects.empty_side_effect_info;
     env = Type_check.initial_env;
+    default_sail_dir = default_sail_dir;
   }
  
 let arg str =

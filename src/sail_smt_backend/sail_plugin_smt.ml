@@ -119,7 +119,7 @@ let smt_rewrites =
     ("properties", [])
   ]
 
-let smt_target out_file ast effect_info env =
+let smt_target _ out_file ast effect_info env =
   let open Ast_util in
   let props = Property.find_properties ast in
   let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in

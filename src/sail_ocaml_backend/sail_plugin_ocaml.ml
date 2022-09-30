@@ -119,9 +119,9 @@ let ocaml_rewrites =
     ("overload_cast", [])
   ]
  
-let ocaml_target out_file ast effect_info env =
+let ocaml_target default_sail_dir out_file ast effect_info env =
   let out = match out_file with None -> "out" | Some s -> s in
-  Ocaml_backend.ocaml_compile out ast !ocaml_generator_info
+  Ocaml_backend.ocaml_compile default_sail_dir out ast !ocaml_generator_info
    
 let _ =
   Target.register
@@ -160,7 +160,7 @@ let tofrominterp_rewrites =
     ("simple_assignments", [])
   ]
     
-let tofrominterp_target out_file ast _ _ =
+let tofrominterp_target _ out_file ast _ _ =
   let out = match out_file with None -> "out" | Some s -> s in
   ToFromInterp_backend.tofrominterp_output !opt_tofrominterp_output_dir out ast
 
@@ -172,7 +172,7 @@ let _ =
     ~rewrites:tofrominterp_rewrites
     tofrominterp_target
 
-let marshal_target out_file ast _ env =
+let marshal_target _ out_file ast _ env =
   let out_filename = match out_file with None -> "out" | Some s -> s in
   let f = open_out_bin (out_filename ^ ".defs") in
   let remove_prover (l, tannot) =

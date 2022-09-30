@@ -32,7 +32,6 @@ depends: [
   "dune" {>= "3.0"}
   "dune-site" {>= "3.0.2"}
   "menhir" {build}
-  "sail_manifest" {= version & build}
   "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
@@ -59,4 +58,3 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/rems-project/sail.git"
-substs: [ "src/lib/manifest.ml" ]

@@ -91,32 +91,36 @@ type istate = {
     options : (Arg.key * Arg.spec * Arg.doc) list;
     mode : mode;
     clear : bool;
-    state : Interpreter.lstate * Interpreter.gstate
+    state : Interpreter.lstate * Interpreter.gstate;
+    default_sail_dir : string;
   }
 
 let shrink_istate istate = ({
     ast = istate.ast;
     effect_info = istate.effect_info;
-    env = istate.env
+    env = istate.env;
+    default_sail_dir = istate.default_sail_dir;
   } : Interactive.istate)
                         
 let initial_istate options env effect_info ast = {
     ast = ast;
     effect_info = effect_info;
     env = env;
-    ref_state = ref (Interactive.initial_istate ());
+    ref_state = ref (Interactive.initial_istate Manifest.dir);
     vs_ids = ref (val_spec_ids ast.defs);
     options = options;
     mode = Normal;
     clear = true;
-    state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops
+    state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops;
+    default_sail_dir = Manifest.dir;
   }
 
 let setup_interpreter_state istate =
   istate.ref_state := {
       ast = istate.ast;
       effect_info = istate.effect_info;
-      env = istate.env
+      env = istate.env;
+      default_sail_dir = istate.default_sail_dir
     };
   { istate with state = initial_state istate.ast istate.env !Value.primops }
 
@@ -170,7 +174,7 @@ let () =
     load_binary addr filename
   ))) |> register_command ~name:"bin" ~help:"Load a raw binary file at :0. Use :elf to load an ELF";
 
-  ActionUnit (fun _ -> print_endline (Reporting.get_sail_dir ()))
+  ActionUnit (fun istate -> print_endline (Reporting.get_sail_dir istate.default_sail_dir))
   |> register_command ~name:"sail_dir" ~help:"print Sail directory location"
 
 (* This is a feature that lets us take interpreter commands like :foo
@@ -557,7 +561,7 @@ let handle_input' istate input =
               failwith "Invalid arguments for :let";
            end
         | ":def" ->
-           let ast = Initial_check.ast_of_def_string_with __POS__ (Preprocess.preprocess None istate.options) arg in
+           let ast = Initial_check.ast_of_def_string_with __POS__ (Preprocess.preprocess istate.default_sail_dir None istate.options) arg in
            let ast, env = Type_check.check istate.env ast in
            { istate with ast = append_ast istate.ast ast; env = env }
         | ":rewrite" ->

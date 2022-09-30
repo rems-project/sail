@@ -82,7 +82,7 @@ val run_pre_rewrites_hook : target -> tannot ast -> Effects.side_effect_info -> 
 
 val rewrites : target -> Rewrites.rewrite_sequence
   
-val action : target -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
+val action : target -> string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
 val asserts_termination : target -> bool
 
@@ -114,7 +114,7 @@ val register :
   ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
-  (string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  (string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   target
 
 val get_the_target : unit -> target option

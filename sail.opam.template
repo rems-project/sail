@@ -1,0 +1,1 @@
+substs: [ "src/bin/manifest.ml" ]

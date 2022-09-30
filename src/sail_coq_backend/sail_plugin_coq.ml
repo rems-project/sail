@@ -187,7 +187,7 @@ let output libs files =
       output_coq !opt_coq_output_dir f' !opt_alt_modules_coq !opt_alt_modules2_coq libs effect_info ast)
     files
 
-let coq_target out_file ast effect_info env =
+let coq_target _ out_file ast effect_info env =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output (!opt_libs_coq) [(out_file, effect_info, env, ast)]
 

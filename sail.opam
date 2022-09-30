@@ -31,6 +31,7 @@ bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
   "libsail" {= version}
+  "sail_manifest" {= version & build}
   "sail_ocaml_backend" {= version & post}
   "sail_c_backend" {= version & post}
   "sail_smt_backend" {= version & post}
@@ -58,3 +59,4 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/rems-project/sail.git"
+substs: [ "src/bin/manifest.ml" ]

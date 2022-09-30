@@ -84,7 +84,7 @@ let latex_options = [
     " semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')");
 ]
 
-let latex_target out_file ast effect_info env =
+let latex_target _ out_file ast effect_info env =
   Reporting.opt_warnings := true;
   let latex_dir = match out_file with None -> "sail_latex" | Some s -> s in
   begin

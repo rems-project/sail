@@ -49,14 +49,6 @@
     (progn (run lem -ocaml %{jib} -lib . -lib lem/)
            (run sed -i.bak -f %{sed} %{target}))))
 
-(rule
-  (target manifest.ml)
-  (mode fallback)
-  (action
-    (with-outputs-to %{target}
-      (chdir %{workspace_root}
-        (run sail_manifest -gen_manifest)))))
-
 (menhir
   (modules parser))
 
@@ -70,34 +62,3 @@
   (name libsail)
   (public_name libsail)
   (libraries lem linksem pprint dune-site))
-
-(install
-  (section share)
-  (package libsail)
-  (files
-    (util.ml as src/lib/util.ml)
-    (sail_lib.ml as src/lib/sail_lib.ml)
-    (elf_loader.ml as src/lib/elf_loader.ml)
-    (%{workspace_root}/lib/flow.sail as lib/flow.sail)
-    (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
-    (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
-    (%{workspace_root}/lib/arith.sail as lib/arith.sail)
-    (%{workspace_root}/lib/elf.sail as lib/elf.sail)
-    (%{workspace_root}/lib/real.sail as lib/real.sail)
-    (%{workspace_root}/lib/option.sail as lib/option.sail)
-    (%{workspace_root}/lib/result.sail as lib/result.sail)
-    (%{workspace_root}/lib/mapping.sail as lib/mapping.sail)
-    (%{workspace_root}/lib/isla.sail as lib/isla.sail)
-    (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
-    (%{workspace_root}/lib/smt.sail as lib/smt.sail)
-    (%{workspace_root}/lib/string.sail as lib/string.sail)
-    (%{workspace_root}/lib/float.sail as lib/float.sail)
-    (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
-    (%{workspace_root}/lib/generic_equality.sail as lib/generic_equality.sail)
-    (%{workspace_root}/lib/trace.sail as lib/trace.sail)
-    (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
-    (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
-    (%{workspace_root}/lib/reverse_endianness.sail as lib/reverse_endianness.sail)
-    (%{workspace_root}/lib/concurrency_interface.sail as lib/concurrency_interface.sail)
-    (%{workspace_root}/lib/concurrency_interface/v1.sail as lib/concurrency_interface/v1.sail)
-    (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)))

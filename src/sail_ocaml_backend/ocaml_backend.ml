@@ -1043,8 +1043,8 @@ let system_checked str =
      prerr_endline (str ^ " was stopped by a signal");
      exit 1
 
-let ocaml_compile spec ast generator_types =
-  let sail_dir = Reporting.get_sail_dir () in
+let ocaml_compile default_sail_dir spec ast generator_types =
+  let sail_dir = Reporting.get_sail_dir default_sail_dir in
   if Sys.file_exists !opt_ocaml_build_dir then () else Unix.mkdir !opt_ocaml_build_dir 0o775;
   let cwd = Unix.getcwd () in
   Unix.chdir !opt_ocaml_build_dir;

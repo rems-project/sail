@@ -152,7 +152,7 @@ let c_rewrites =
     ("constant_fold", [String_arg "c"])
   ]
 
-let c_target out_file ast effect_info _ =
+let c_target _ out_file ast effect_info _ =
   let ast, env = Type_error.check Type_check.initial_env ast in
   let close, output_chan = match out_file with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
   Reporting.opt_warnings := true;

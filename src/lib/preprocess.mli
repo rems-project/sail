@@ -69,4 +69,4 @@ val clear_symbols : unit -> unit
 val have_symbol : string -> bool
 val add_symbol : string -> unit
 
-val preprocess : string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
+val preprocess : string -> string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
