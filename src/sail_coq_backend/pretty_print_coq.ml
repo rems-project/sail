@@ -1912,11 +1912,14 @@ let doc_exp, doc_let =
                calculating the instantiations. *)
             let vars_in_env n =
               let ekids = Env.get_typ_vars env in
-              KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
+              let frees = nexp_frees n in
+              not (KidSet.is_empty frees) &&
+              KidSet.for_all (fun kid -> KBindings.mem kid ekids) frees
             in
             match destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn with
             | Some n1, Some n2
                  when (not autocast) && vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
+               debug ctxt (lazy ("  leaving int arg implicit because of non-trivial types " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2));
                underscore
             | _ ->
                let want_parens1 = want_parens || autocast_arg in
@@ -2083,7 +2086,8 @@ let doc_exp, doc_let =
        in
        let epp =
          if autocast_in then
-           string "autocast" ^/^ parens epp
+           let cast = if effects then "autocast_m" else "autocast" in
+           string cast ^/^ parens epp
          else
            epp
        in
@@ -3186,8 +3190,10 @@ let doc_dec avoid_target_names (DEC_aux (reg, (l, _))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
+  (* For now treat configuration registers as regular registers *)
   | DEC_reg (typ, id, Some exp) ->
-     separate space [string "Definition"; doc_id bare_ctxt id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
+     empty
+     (*separate space [string "Definition"; doc_id bare_ctxt id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline*)
 
 let is_field_accessor regtypes fdef =
   let is_field_of regtyp field =

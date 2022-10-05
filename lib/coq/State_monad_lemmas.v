@@ -578,8 +578,8 @@ Lemma no_throw_mem_builtins_3 Regs A E1 E2 a :
 reflexivity. Qed.
 #[export] Hint Rewrite no_throw_mem_builtins_3 : ignore_throw.
 #[export] Hint Resolve no_throw_mem_builtins_3 : ignore_throw.
-Lemma no_throw_mem_builtins_4 Regs A V E1 E2 rk a sz H :
-  ignore_throw (E2 := E2) (@read_memtS Regs E1 A V rk a sz H) === read_memtS rk a sz.
+Lemma no_throw_mem_builtins_4 Regs A E1 E2 rk a sz H :
+  ignore_throw (E2 := E2) (@read_memtS Regs E1 A rk a sz H) === read_memtS rk a sz.
 unfold read_memtS. autorewrite with ignore_throw.
 apply bindS_cong; intros; autorewrite with ignore_throw.
 reflexivity. destruct a0; simpl. autorewrite with ignore_throw.
@@ -587,8 +587,8 @@ reflexivity.
 Qed.
 #[export] Hint Rewrite no_throw_mem_builtins_4 : ignore_throw.
 #[export] Hint Resolve no_throw_mem_builtins_4 : ignore_throw.
-Lemma no_throw_mem_builtins_5 Regs A V E1 E2 rk a sz H :
-  ignore_throw (E2 := E2) (@read_memS Regs E1 A V rk a sz H) === read_memS rk a sz.
+Lemma no_throw_mem_builtins_5 Regs A E1 E2 rk a sz H :
+  ignore_throw (E2 := E2) (@read_memS Regs E1 A rk a sz H) === read_memS rk a sz.
 unfold read_memS. autorewrite with ignore_throw.
 apply bindS_cong; intros; autorewrite with ignore_throw; auto.
 destruct a0; auto.

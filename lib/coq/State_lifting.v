@@ -80,6 +80,7 @@ Fixpoint liftState {Regval Regs A E} (ra : register_accessors Regs Regval) (m : 
   | (Read_memt rk a sz k)      => bindS (read_memt_bytesS rk a sz)      (fun v => liftState ra (k v))
   | (Write_mem wk a sz v k)    => bindS (write_mem_bytesS wk a sz v)    (fun v => liftState ra (k v))
   | (Write_memt wk a sz v t k) => bindS (write_memt_bytesS wk a sz v t) (fun v => liftState ra (k v))
+  | (Write_tag wk a t k)       => bindS (write_tag_rawS wk a t)         (fun v => liftState ra (k v))
   | (Read_reg r k)             => bindS (read_regvalS ra r)             (fun v => liftState ra (k v))
   | (Excl_res k)               => bindS (excl_resultS tt)               (fun v => liftState ra (k v))
   | (Choose _ ty k)            => bindS (chooseS ty)                    (fun v => liftState ra (k v))
@@ -107,6 +108,8 @@ match e with
      if success then Some (put_mem_bytes addr sz v B0 s) else None
   | E_write_memt _ addr sz v tag success =>
      if success then Some (put_mem_bytes addr sz v tag s) else None
+  | E_write_tag _ addr sz tag success =>
+     if success then Some (put_tag addr tag s) else None
   | E_read_reg r v =>
      let (read_reg, _) := ra in
      option_bind (read_reg r s.(ss_regstate)) (fun v' =>

@@ -286,14 +286,14 @@ Definition read_mem_bytesS {Regs E} (rk : read_kind) addr sz : monadS Regs (list
   returnS bytes).
 
 (*val read_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e*)
-Definition read_memtS {Regs E A B} (rk : read_kind) (a : mword A) sz `{ArithFact (B >=? 0)} : monadS Regs (mword B * bitU) E :=
+Definition read_memtS {Regs E A} (rk : read_kind) (a : mword A) sz `{ArithFact (sz >=? 0)} : monadS Regs (mword (8 * sz) * bitU) E :=
   let a := Word.wordToNat (get_word a) in
   read_memt_bytesS rk a (Z.to_nat sz) >>$= (fun '(bytes, tag) =>
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val =>
   returnS (mem_val, tag))).
 
 (*val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e*)
-Definition read_memS {Regs E A B} rk (a : mword A) sz `{ArithFact (B >=? 0)} : monadS Regs (mword B) E :=
+Definition read_memS {Regs E A} rk (a : mword A) sz `{ArithFact (sz >=? 0)} : monadS Regs (mword (8 * sz)) E :=
   read_memtS rk a sz >>$= (fun '(bytes, _) =>
   returnS bytes).
 
@@ -316,6 +316,12 @@ Definition put_mem_bytes {Regs} addr sz (v : list memory_byte) (tag : bitU) (s :
      ss_memstate := List.fold_left write_byte a_v s.(ss_memstate);
      ss_tagstate := List.fold_left write_tag addrs s.(ss_tagstate) |}.
 
+Definition put_tag {Regs} addr (tag : bitU) (s : sequential_state Regs) : sequential_state Regs :=
+  let write_tag mem addr := NatMap.add addr tag mem in
+  {| ss_regstate := s.(ss_regstate);
+     ss_memstate := s.(ss_memstate);
+     ss_tagstate := write_tag s.(ss_tagstate) addr |}.
+
 (*val write_memt_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e*)
 Definition write_memt_bytesS {Regs E} (_ : write_kind) addr sz (v : list memory_byte) (t : bitU) : monadS Regs bool E :=
   updateS (put_mem_bytes addr sz v t) >>$
@@ -332,6 +338,18 @@ Definition write_memtS {Regs E A B} wk (addr : mword A) sz (v : mword B) (t : bi
     | (addr, Some v) => write_memt_bytesS wk addr (Z.to_nat sz) v t
     | _ => failS "write_mem"
   end.
+
+Definition write_tag_rawS {Regs E} (wk:write_kind) (addr : nat) (tag : bitU) : monadS Regs bool E :=
+  updateS (put_tag addr tag) >>$
+  returnS true.
+
+Definition write_tagS {Regs E A} (wk:write_kind) (addr : mword A) (tag : bitU) : monadS Regs bool E :=
+  let addr := Word.wordToNat (get_word addr) in
+  write_tag_rawS wk addr tag.
+
+Definition write_tag_boolS {Regs E A} (addr : mword A) (tag : bool) : monadS Regs bool E :=
+  let addr := Word.wordToNat (get_word addr) in
+  write_tag_rawS Write_plain addr (bitU_of_bool tag).
 
 (*val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> monadS 'regs bool 'e*)

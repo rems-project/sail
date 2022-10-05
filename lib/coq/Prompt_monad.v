@@ -92,6 +92,7 @@ Inductive monad regval a e :=
      with or without a tag. *)
   | Write_mem : write_kind -> nat -> nat -> list memory_byte -> (bool -> monad regval a e) -> monad regval a e
   | Write_memt : write_kind -> nat -> nat -> list memory_byte -> bitU -> (bool -> monad regval a e) -> monad regval a e
+  | Write_tag : write_kind -> nat -> bitU -> (bool -> monad regval a e) -> monad regval a e
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint : monad regval a e -> monad regval a e
   (* Request a memory barrier *)
@@ -118,6 +119,7 @@ Arguments Write_ea [_ _ _].
 Arguments Excl_res [_ _ _].
 Arguments Write_mem [_ _ _].
 Arguments Write_memt [_ _ _].
+Arguments Write_tag [_ _ _].
 Arguments Footprint [_ _ _].
 Arguments Barrier [_ _ _].
 Arguments Read_reg [_ _ _].
@@ -132,6 +134,7 @@ Inductive event {regval} :=
   | E_read_memt : read_kind -> nat -> nat -> (list memory_byte * bitU) -> event
   | E_write_mem : write_kind -> nat -> nat -> list memory_byte -> bool -> event
   | E_write_memt : write_kind -> nat -> nat -> list memory_byte -> bitU -> bool -> event
+  | E_write_tag : write_kind -> nat -> nat -> bitU -> bool -> event
   | E_write_ea : write_kind -> nat -> nat -> event
   | E_excl_res : bool -> event
   | E_barrier : barrier_kind -> event
@@ -154,6 +157,7 @@ Fixpoint bind {rv A B E} (m : monad rv A E) (f : A -> monad rv B E) := match m w
   | Read_memt rk a sz k =>      Read_memt rk a sz      (fun v => bind (k v) f)
   | Write_mem wk a sz v k =>    Write_mem wk a sz v    (fun v => bind (k v) f)
   | Write_memt wk a sz v t k => Write_memt wk a sz v t (fun v => bind (k v) f)
+  | Write_tag wk a t k =>       Write_tag wk a t       (fun v => bind (k v) f)
   | Read_reg descr k =>         Read_reg descr         (fun v => bind (k v) f)
   | Excl_res k =>               Excl_res               (fun v => bind (k v) f)
   | Choose descr ty k =>        Choose descr ty        (fun v => bind (k v) f)
@@ -192,7 +196,10 @@ Definition choose_int descr : monad rv Z E := Choose descr ChooseInt returnm.
 Definition choose_nat descr : monad rv {n : Z & ArithFact (n >=? 0)} E := Choose descr ChooseNat returnm.
 Definition choose_real descr : monad rv _ E := Choose descr ChooseReal returnm.
 Definition choose_string descr : monad rv string E := Choose descr ChooseString returnm.
-Definition choose_range descr lo hi : monad rv Z E := Choose descr (ChooseRange lo hi) returnm.
+Definition choose_range descr lo hi : monad rv {rangevar : Z & ArithFact (lo <=? rangevar <=? hi)} E :=
+  if lo <=? hi
+  then Choose descr (ChooseRange lo hi) (fun v => if sumbool_of_bool ((lo <=? v) && (v <=? hi)) then returnm (build_ex v) else Fail "choose_range: Bad value")
+  else Fail "choose_range: Bad range".
 Definition choose_bitvector descr n : monad rv (mword n) E := Choose descr (ChooseBitvector n) returnm.
 
 End Choose.
@@ -217,6 +224,7 @@ Fixpoint try_catch {rv A E1 E2} (m : monad rv A E1) (h : E1 -> monad rv A E2) :=
   | Read_memt rk a sz k =>      Read_memt rk a sz      (fun v => try_catch (k v) h)
   | Write_mem wk a sz v k =>    Write_mem wk a sz v    (fun v => try_catch (k v) h)
   | Write_memt wk a sz v t k => Write_memt wk a sz v t (fun v => try_catch (k v) h)
+  | Write_tag wk a t k =>       Write_tag wk a t       (fun v => try_catch (k v) h)
   | Read_reg descr k =>         Read_reg descr         (fun v => try_catch (k v) h)
   | Excl_res k =>               Excl_res               (fun v => try_catch (k v) h)
   | Choose descr ty k =>        Choose descr ty        (fun v => try_catch (k v) h)
@@ -281,7 +289,7 @@ Definition read_memt_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memo
   Read_memt rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv ('b * bitU) 'e*)
-Definition read_memt {rv A B E} `{ArithFact (B >=? 0)} rk (addr : mword A) sz : monad rv (mword B * bitU) E :=
+Definition read_memt {rv A E} rk (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz) * bitU) E :=
   bind
     (read_memt_bytes rk addr sz)
     (fun '(bytes, tag) =>
@@ -295,7 +303,7 @@ Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memor
   Read_mem rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
-Definition read_mem {rv A B E} `{ArithFact (B >=? 0)} rk (addrsz : Z) (addr : mword A) sz : monad rv (mword B) E :=
+Definition read_mem {rv A E} rk (addrsz : Z) (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz)) E :=
   bind
     (read_mem_bytes rk addr sz)
     (fun bytes =>
@@ -326,6 +334,15 @@ Definition write_memt {rv a b E} wk (addr : mword a) sz (v : mword b) tag : mona
        Write_memt wk addr (Z.to_nat sz) v tag returnm
     | _ => Fail "write_mem"
   end.
+
+Definition write_tag {rv a E} wk (addr : mword a) tag : monad rv bool E :=
+  let addr := Word.wordToNat (get_word addr) in
+       Write_tag wk addr tag returnm.
+
+(* This alternate version is used in a few places, but should probably disappear *)
+Definition write_tag_bool {rv a E} (addr : mword a) tag : monad rv bool E :=
+  let addr := Word.wordToNat (get_word addr) in
+       Write_tag Write_plain addr (bitU_of_bool tag) returnm.
 
 Definition read_reg {s rv a e} (reg : register_ref s rv a) : monad rv a e :=
   let k v :=

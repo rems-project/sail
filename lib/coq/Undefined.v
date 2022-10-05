@@ -81,4 +81,6 @@ Definition undefined_real (_:unit) : monad rv _ E := choose_real "undefined_real
 Definition undefined_range i j `{ArithFact (i <=? j)}: monad rv _ E := choose_range "undefined_range" i j.
 Definition undefined_bitvector n : monad rv (mword n) E := choose_bitvector "undefined_bitvector" n.
 
+Definition undefined_vector {T} n `{ArithFact (n >=? 0)} (a:T) : monad rv (vec T n) E := returnm (vec_init a n).
+
 End Undef.

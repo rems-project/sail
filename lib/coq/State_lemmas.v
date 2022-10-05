@@ -653,18 +653,19 @@ Qed.
 #[export] Hint Rewrite liftState_try_catchR : liftState.
 #[export] Hint Resolve liftState_try_catchR : liftState.
 
-Lemma liftState_read_memt Regs Regval A B E H rk a sz r :
-  liftState (Regs := Regs) r (@read_memt Regval A B E H rk a sz) === read_memtS rk a sz.
+Lemma liftState_read_memt Regs Regval A E rk a sz H r :
+  liftState (Regs := Regs) r (@read_memt Regval A E rk a sz H) === read_memtS rk a sz.
 unfold read_memt, read_memt_bytes, read_memtS, maybe_failS. simpl.
 apply bindS_cong; auto.
 intros [byte bit].
+replace_ArithFact_proof.
 destruct (of_bits _); auto.
 Qed.
 #[export] Hint Rewrite liftState_read_memt : liftState.
 #[export] Hint Resolve liftState_read_memt : liftState.
 
-Lemma liftState_read_mem Regs Regval A B E H rk asz a sz r :
-  liftState (Regs := Regs) r (@read_mem Regval A B E H rk asz a sz) === read_memS rk a sz.
+Lemma liftState_read_mem Regs Regval A E rk asz a sz H r :
+  liftState (Regs := Regs) r (@read_mem Regval A E rk asz a sz H) === read_memS rk a sz.
 unfold read_mem, read_memS, read_memtS. simpl.
 unfold read_mem_bytesS, read_memt_bytesS.
 repeat rewrite bindS_assoc.
@@ -673,6 +674,7 @@ intros [ bytes | ]; auto. simpl.
 apply bindS_cong; auto.
 intros [byte bit].
 rewrite bindS_returnS_left. rewrite_liftState.
+replace_ArithFact_proof.
 destruct (of_bits _); auto.
 Qed.
 #[export] Hint Rewrite liftState_read_mem : liftState.

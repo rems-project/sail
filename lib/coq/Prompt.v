@@ -353,7 +353,7 @@ Definition choose_from_list {A} (descr : string) (xs : list A) : monad rv A E :=
   (* Use sufficiently many nondeterministically chosen bits and convert into an
      index into the list *)
   choose_range descr 0 (Z.of_nat (List.length xs) - 1) >>= fun idx =>
-  match List.nth_error xs (Z.to_nat idx) with
+  match List.nth_error xs (Z.to_nat (projT1 idx)) with
     | Some x => returnm x
     | None => Fail ("choose " ++ descr)
   end.
