@@ -245,6 +245,10 @@ val copy_file : string -> string -> unit
     fallback. *)
 val move_file : string -> string -> unit
 
+(** [input_byte_opt chan] tries to read a byte [b] from input channel [chan], and
+    returns [Some b] in case of success, or [None] if the end of the file was reached. *)
+val input_byte_opt : in_channel -> int option
+
 (** [same_content_files file1 file2] checks, whether the files [file1] and [file2] have the same content.
 If at least one of the files does not exist, [false] is returned. [same_content_files] throws an exception,
 if one of the files exists, but cannot be read. *)

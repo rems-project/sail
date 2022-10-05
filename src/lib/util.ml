@@ -406,16 +406,23 @@ let move_file src dst =
      Sys.remove src
    end
 
+let input_byte_opt chan = try Some (input_byte chan) with End_of_file -> None
+
 let same_content_files file1 file2 : bool =
   (Sys.file_exists file1) && (Sys.file_exists file2) && 
   begin
-    let s1 = Stream.of_channel (open_in_bin file1) in
-    let s2 = Stream.of_channel (open_in_bin file2) in
-    let stream_is_empty s = (try Stream.empty s; true with Stream.Failure -> false) in
-    try
-      while ((Stream.next s1) = (Stream.next s2)) do () done;
-      false
-    with Stream.Failure -> stream_is_empty s1 && stream_is_empty s2
+    let s1 = open_in_bin file1 in
+    let s2 = open_in_bin file2 in
+    let rec comp s1 s2 =
+      match (input_byte_opt s1, input_byte_opt s2) with
+      | None, None -> true
+      | Some b1, Some b2 -> if b1 = b2 then comp s1 s2 else false
+      | _, _ -> false
+    in
+    let result = comp s1 s2 in
+    close_in s1;
+    close_in s2;
+    result
   end
 
 (*String formatting *)
