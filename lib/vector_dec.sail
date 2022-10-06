@@ -301,6 +301,8 @@ val set_slice_int = pure "set_slice_int" : forall 'w. (int('w), int, int, bits('
 val set_slice_bits = pure "set_slice" : forall 'n 'm.
   (implicit('n), int('m), bits('n), int, bits('m)) -> bits('n)
 
+$ifndef NO_SIGNED_UNSIGNED
+
 /*!
 converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.
  */
@@ -320,6 +322,8 @@ val signed = pure {
   c: "sail_signed",
   _: "sint"
 } : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+
+$endif
 
 overload __size = {__id, bitvector_length}
 

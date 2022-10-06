@@ -10,6 +10,7 @@
 *.install
 
 a.out
+*.gch
 
 _build/
 _sbuild/

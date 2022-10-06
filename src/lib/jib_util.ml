@@ -648,18 +648,12 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify l ctyp1 ctyp2
 
   | CT_struct (id1, fields1), CT_struct (id2, fields2)
-       when Id.compare id1 id2 = 0 && List.length fields1 == List.length fields2 ->
-     if List.for_all2 (fun (x, _) (y, _) -> x = y) (List.map fst fields1) (List.map fst fields2) then
-       List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) (List.map snd fields1) (List.map snd fields2))
-     else
-       raise (Invalid_argument "ctyp_unify l (struct)")
+       when List.length fields1 == List.length fields2 ->
+     List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) (List.map snd fields1) (List.map snd fields2))
 
   | CT_variant (id1, ctors1), CT_variant (id2, ctors2)
-       when Id.compare id1 id2 = 0 && List.length ctors1 == List.length ctors2 ->
-     if List.for_all2 (fun (x, _) (y, _) -> x = y) (List.map fst ctors1) (List.map fst ctors2) then
-       List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) (List.map snd ctors1) (List.map snd ctors2))
-     else
-       raise (Invalid_argument "ctyp_unify l (variant)")
+       when List.length ctors1 == List.length ctors2 ->
+     List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) (List.map snd ctors1) (List.map snd ctors2))
     
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify l ctyp1 ctyp2
 
@@ -679,7 +673,7 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_fint _, CT_constant _ -> KBindings.empty
   | CT_constant _, CT_fint _ -> KBindings.empty
   | _, _ ->
-     Reporting.unreachable l __POS__ ("Invalid ctyp unifiers " ^ string_of_ctyp ctyp1 ^ " and " ^ string_of_ctyp ctyp2)
+     Reporting.unreachable l __POS__ ("Invalid ctyp unifiers " ^ full_string_of_ctyp ctyp1 ^ " and " ^ full_string_of_ctyp ctyp2)
  
 let rec ctyp_ids = function
   | CT_enum (id, _) -> IdSet.singleton id

@@ -224,7 +224,7 @@ let cast_deprecated l =
 
 let warn_extern_effect l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
-  
+ 
 %}
 
 /*Terminals with no content*/

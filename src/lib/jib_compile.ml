@@ -203,8 +203,12 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")" 
   | CT_struct (id, fields) ->
      let generic_fields = Bindings.find id ctx.records |> snd |> UBindings.bindings in
+     (* Note: It might be better to only do this if we actually have polymorphic fields *)
      let unifiers = ctyp_unify (id_loc id) (CT_struct (id, generic_fields)) (CT_struct (id, fields)) |> KBindings.bindings |> List.map snd in
-     "R" ^ string_of_id id ^ "<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) unifiers ^ ">"
+     begin match unifiers with
+     | [] -> "R" ^ string_of_id id
+     | _ -> "R" ^ string_of_id id ^ "<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) unifiers ^ ">"
+     end
   | CT_variant (id, ctors) ->
      let generic_ctors = Bindings.find id ctx.variants |> snd |> UBindings.bindings in
      let unifiers = ctyp_unify (id_loc id) (CT_variant (id, generic_ctors)) (CT_variant (id, ctors)) |> KBindings.bindings |> List.map snd in
@@ -1798,12 +1802,14 @@ let rec specialize_variants ctx prior =
             ()
          | _ -> ()
        ) cdefs;
+
      let cdefs =
        List.fold_left
          (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx var_id ctor_id ctyp)) cdefs)
          cdefs
          ctors
      in
+     
      let monomorphized_variants =
        List.map (fun inst ->
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
@@ -1811,22 +1817,22 @@ let rec specialize_variants ctx prior =
             List.map (fun ((ctor_id, _), ctyp) -> (mangle_mono_id ctor_id ctx inst, []), fix_variants ctx var_id (subst_poly substs ctyp)) ctors)
          ) (CTListSet.elements !instantiations)
      in
+     let ctx =
+       List.fold_left (fun ctx (id, ctors) ->
+           { ctx with variants = Bindings.add id ([], UBindings.of_seq (List.to_seq ctors)) ctx.variants })
+         ctx monomorphized_variants
+     in
      let mangled_ctors =
        List.map (fun (_, monomorphized_ctors) ->
            List.map2 (fun ((ctor_id, _), _) ((monomorphized_id, _), _) -> mangled_pragma ctor_id monomorphized_id) ctors monomorphized_ctors
          ) monomorphized_variants
        |> List.concat
      in
-
+     
      let prior = List.map (cdef_map_ctyp (fix_variants ctx var_id)) prior in
      let cdefs = List.map (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
-     let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp) ctx.valspecs } in
  
-     let ctx =
-       List.fold_left (fun ctx (id, ctors) ->
-           { ctx with variants = Bindings.add id ([], UBindings.of_seq (List.to_seq ctors)) ctx.variants })
-         ctx monomorphized_variants
-     in
+     let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp) ctx.valspecs } in
      let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
 
      specialize_variants ctx (List.concat (List.map (fun (id, ctors) -> [CDEF_type (CTD_variant (id, ctors)); mangled_pragma var_id id]) monomorphized_variants) @ mangled_ctors @ prior) cdefs

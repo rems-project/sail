@@ -129,6 +129,7 @@ type id_category =
   | Type
   | Let
   | Register
+  | Outcome
 
 let number_replacements =
     [ ("0", "Zero");
@@ -167,6 +168,7 @@ let category_name = function
   | FunclApp str -> "fcl" ^ str
   | Let -> "let"
   | Register -> "register"
+  | Outcome -> "outcome"
 
 let category_name_val = function
   | Val -> ""
@@ -182,6 +184,7 @@ let category_name_simple = function
   | FunclApp _ -> "fcl"
   | Let -> "let"
   | Register -> "register"
+  | Outcome -> "outcome"
 
 (* Generate a unique latex identifier from a Sail identifier. We store
    a mapping from identifiers to strings in state so we always return
@@ -391,7 +394,7 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
   ^^ colon ^^ space
   ^^ Pretty_print_sail.doc_typschm ~simple:true ts
 
-let latex_command cat id no_loc ((l, _) as annot) =
+let latex_command cat id no_loc l =
   state.this <- Some id;
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
@@ -437,7 +440,7 @@ let latex_funcls def =
     function
     | (FCL_aux (funcl_aux, annot) as funcl) :: funcls ->
        let cat, id = funcl_command funcl_aux in
-       let first = latex_command cat id (Pretty_print_sail.doc_funcl funcl) annot in
+       let first = latex_command cat id (Pretty_print_sail.doc_funcl funcl) (fst annot) in
        first ^^ next funcls
     | [] -> empty
   in
@@ -479,6 +482,7 @@ let defs { defs; _ } =
 
   let preamble = string ("\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}\n" ^
     "\\providecommand\\saildocval[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocoutcome[2]{#1 #2}\n" ^
     "\\providecommand\\saildocfcl[2]{#1 #2}\n" ^
     "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
     "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
@@ -496,6 +500,7 @@ let defs { defs; _ } =
   let typedefs = ref Bindings.empty in
   let letdefs = ref Bindings.empty in
   let regdefs = ref Bindings.empty in
+  let outcomedefs = ref Bindings.empty in
 
   let latex_def def =
     match def with
@@ -504,18 +509,18 @@ let defs { defs; _ } =
          string (Printf.sprintf "overload %s = {%s}" (string_of_id id) (Util.string_of_list ", " string_of_id ids))
        in
        incr overload_counter;
-       Some (latex_command (Overload !overload_counter) id doc (id_loc id, None))
+       Some (latex_command (Overload !overload_counter) id doc (id_loc id))
 
     | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
        valspecs := Bindings.add id id !valspecs;
        if !opt_simple_val then
-         Some (latex_command Val id (doc_spec_simple vs) annot)
+         Some (latex_command Val id (doc_spec_simple vs) (fst annot))
        else
-         Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) annot)
+         Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) (fst annot))
 
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
        fundefs := Bindings.add id id !fundefs;
-       Some (latex_command Function id (Pretty_print_sail.doc_def def) annot)
+       Some (latex_command Function id (Pretty_print_sail.doc_def def) (fst annot))
 
     | DEF_val (LB_aux (LB_val (pat, _), annot)) as def ->
        let ids = pat_ids pat in
@@ -523,13 +528,13 @@ let defs { defs; _ } =
        | None -> None
        | Some base_id ->
           letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
-          Some (latex_command Let base_id (Pretty_print_sail.doc_def def) annot)
+          Some (latex_command Let base_id (Pretty_print_sail.doc_def def) (fst annot))
        end
 
     | DEF_type (TD_aux (tdef, annot)) as def ->
        let id = tdef_id tdef in
        typedefs := Bindings.add id id !typedefs;
-       Some (latex_command Type id (Pretty_print_sail.doc_def def) annot)
+       Some (latex_command Type id (Pretty_print_sail.doc_def def) (fst annot))
 
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def ->
        Some (latex_funcls def funcls)
@@ -540,8 +545,12 @@ let defs { defs; _ } =
     | DEF_reg_dec (DEC_aux (_, annot) as dec) as def ->
        let id = id_of_dec_spec dec in
        regdefs := Bindings.add id id !regdefs;
-       Some (latex_command Register id (Pretty_print_sail.doc_def def) annot)
+       Some (latex_command Register id (Pretty_print_sail.doc_def def) (fst annot))
 
+    | DEF_outcome (OV_aux (OV_outcome (id, _, _), l), _) as def ->
+       outcomedefs := Bindings.add id id !outcomedefs;
+       Some (latex_command Outcome id (Pretty_print_sail.doc_def def) l)
+       
     | _ -> None
   in
 
@@ -566,7 +575,7 @@ let defs { defs; _ } =
      macros that might also typeset the argument. *)
   let add_encoded_ids ids =
     List.concat (List.map (fun (id,base) ->
-                     let s = string_of_id id in
+                     let s = Str.global_replace (Str.regexp_string "#") "\\#" (string_of_id id) in
                      let s' = text_code s in
                      if String.compare s s' == 0 then [(s,base)] else [(s,base); (s',base)]) ids)
   in
@@ -597,5 +606,7 @@ let defs { defs; _ } =
                                 id_command Let !letdefs;
                                 ref_command Let !letdefs;
                                 id_command Register !regdefs;
-                                ref_command Register !regdefs;]
+                                ref_command Register !regdefs;
+                                id_command Outcome !outcomedefs;
+                                ref_command Outcome !outcomedefs;]
   ^^ hardline
