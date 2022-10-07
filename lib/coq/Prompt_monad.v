@@ -74,25 +74,25 @@ Import ListNotations.
 Local Open Scope Z.
 
 Definition register_name := string.
-Definition address := list bitU.
+Definition address := N.
 
 Inductive monad regval a e :=
   | Done : a -> monad regval a e
   (* Read a number of bytes from memory, returned in little endian order,
      with or without a tag.  The first nat specifies the address, the second
      the number of bytes. *)
-  | Read_mem : read_kind -> nat -> nat -> (list memory_byte -> monad regval a e) -> monad regval a e
-  | Read_memt : read_kind -> nat -> nat -> ((list memory_byte * bitU) -> monad regval a e) -> monad regval a e
+  | Read_mem : read_kind -> N -> nat -> (list memory_byte -> monad regval a e) -> monad regval a e
+  | Read_memt : read_kind -> N -> nat -> ((list memory_byte * bitU) -> monad regval a e) -> monad regval a e
   (* Tell the system a write is imminent, at the given address and with the
      given size. *)
-  | Write_ea : write_kind -> nat -> nat -> monad regval a e -> monad regval a e
+  | Write_ea : write_kind -> N -> nat -> monad regval a e -> monad regval a e
   (* Request the result : store-exclusive *)
   | Excl_res : (bool -> monad regval a e) -> monad regval a e
   (* Request to write a memory value of the given size at the given address,
      with or without a tag. *)
-  | Write_mem : write_kind -> nat -> nat -> list memory_byte -> (bool -> monad regval a e) -> monad regval a e
-  | Write_memt : write_kind -> nat -> nat -> list memory_byte -> bitU -> (bool -> monad regval a e) -> monad regval a e
-  | Write_tag : write_kind -> nat -> bitU -> (bool -> monad regval a e) -> monad regval a e
+  | Write_mem : write_kind -> N -> nat -> list memory_byte -> (bool -> monad regval a e) -> monad regval a e
+  | Write_memt : write_kind -> N -> nat -> list memory_byte -> bitU -> (bool -> monad regval a e) -> monad regval a e
+  | Write_tag : write_kind -> N -> bitU -> (bool -> monad regval a e) -> monad regval a e
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint : monad regval a e -> monad regval a e
   (* Request a memory barrier *)
@@ -130,12 +130,12 @@ Arguments Fail [_ _ _].
 Arguments Exception [_ _ _].
 
 Inductive event {regval} :=
-  | E_read_mem : read_kind -> nat -> nat -> list memory_byte -> event
-  | E_read_memt : read_kind -> nat -> nat -> (list memory_byte * bitU) -> event
-  | E_write_mem : write_kind -> nat -> nat -> list memory_byte -> bool -> event
-  | E_write_memt : write_kind -> nat -> nat -> list memory_byte -> bitU -> bool -> event
-  | E_write_tag : write_kind -> nat -> nat -> bitU -> bool -> event
-  | E_write_ea : write_kind -> nat -> nat -> event
+  | E_read_mem : read_kind -> N -> nat -> list memory_byte -> event
+  | E_read_memt : read_kind -> N -> nat -> (list memory_byte * bitU) -> event
+  | E_write_mem : write_kind -> N -> nat -> list memory_byte -> bool -> event
+  | E_write_memt : write_kind -> N -> nat -> list memory_byte -> bitU -> bool -> event
+  | E_write_tag : write_kind -> N -> nat -> bitU -> bool -> event
+  | E_write_ea : write_kind -> N -> nat -> event
   | E_excl_res : bool -> event
   | E_barrier : barrier_kind -> event
   | E_footprint : event
@@ -286,7 +286,7 @@ Definition try_catchR {rv A R E1 E2} (m : monadR rv A R E1) (h : E1 -> monadR rv
 
 (*val read_memt_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte * bitU) 'e*)
 Definition read_memt_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memory_byte * bitU) E :=
-  Read_memt rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
+  Read_memt rk (Word.wordToN (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv ('b * bitU) 'e*)
 Definition read_memt {rv A E} rk (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz) * bitU) E :=
@@ -300,7 +300,7 @@ Definition read_memt {rv A E} rk (addr : mword A) sz `{ArithFact (sz >=? 0)} : m
 
 (*val read_mem_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte) 'e*)
 Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memory_byte) E :=
-  Read_mem rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
+  Read_mem rk (Word.wordToN (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
 Definition read_mem {rv A E} rk (addrsz : Z) (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz)) E :=
@@ -315,12 +315,12 @@ Definition excl_result {rv e} (_:unit) : monad rv bool e :=
   Excl_res k.
 
 Definition write_mem_ea {rv a E} wk (addrsz : Z) (addr: mword a) sz : monad rv unit E :=
- Write_ea wk (Word.wordToNat (get_word addr)) (Z.to_nat sz) (Done tt).
+ Write_ea wk (Word.wordToN (get_word addr)) (Z.to_nat sz) (Done tt).
 
 (*val write_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
   write_kind -> integer -> 'a -> integer -> 'b -> monad 'rv bool 'e*)
 Definition write_mem {rv a b E} wk (addrsz : Z) (addr : mword a) sz (v : mword b) : monad rv bool E :=
-  match (mem_bytes_of_bits v, Word.wordToNat (get_word addr)) with
+  match (mem_bytes_of_bits v, Word.wordToN (get_word addr)) with
     | (Some v, addr) =>
        Write_mem wk addr (Z.to_nat sz) v returnm
     | _ => Fail "write_mem"
@@ -329,19 +329,19 @@ Definition write_mem {rv a b E} wk (addrsz : Z) (addr : mword a) sz (v : mword b
 (*val write_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monad 'rv bool 'e*)
 Definition write_memt {rv a b E} wk (addr : mword a) sz (v : mword b) tag : monad rv bool E :=
-  match (mem_bytes_of_bits v, Word.wordToNat (get_word addr)) with
+  match (mem_bytes_of_bits v, Word.wordToN (get_word addr)) with
     | (Some v, addr) =>
        Write_memt wk addr (Z.to_nat sz) v tag returnm
     | _ => Fail "write_mem"
   end.
 
 Definition write_tag {rv a E} wk (addr : mword a) tag : monad rv bool E :=
-  let addr := Word.wordToNat (get_word addr) in
+  let addr := Word.wordToN (get_word addr) in
        Write_tag wk addr tag returnm.
 
 (* This alternate version is used in a few places, but should probably disappear *)
 Definition write_tag_bool {rv a E} (addr : mword a) tag : monad rv bool E :=
-  let addr := Word.wordToNat (get_word addr) in
+  let addr := Word.wordToN (get_word addr) in
        Write_tag Write_plain addr (bitU_of_bool tag) returnm.
 
 Definition read_reg {s rv a e} (reg : register_ref s rv a) : monad rv a e :=
@@ -409,19 +409,19 @@ Local Open Scope bool_scope.
 Definition emitEvent {Regval A E} `{forall (x y : Regval), Decidable (x = y)} (m : monad Regval A E) (e : event Regval) : option (monad Regval A E) :=
  match (e, m) with
   | (E_read_mem rk a sz v, Read_mem rk' a' sz' k) =>
-     if read_kind_beq rk' rk && Nat.eqb a' a && Nat.eqb sz' sz then Some (k v) else None
+     if read_kind_beq rk' rk && N.eqb a' a && Nat.eqb sz' sz then Some (k v) else None
   | (E_read_memt rk a sz vt, Read_memt rk' a' sz' k) =>
-     if read_kind_beq rk' rk && Nat.eqb a' a && Nat.eqb sz' sz then Some (k vt) else None
+     if read_kind_beq rk' rk && N.eqb a' a && Nat.eqb sz' sz then Some (k vt) else None
   | (E_write_mem wk a sz v r, Write_mem wk' a' sz' v' k) =>
-     if write_kind_beq wk' wk && Nat.eqb a' a && Nat.eqb sz' sz && generic_eq v' v then Some (k r) else None
+     if write_kind_beq wk' wk && N.eqb a' a && Nat.eqb sz' sz && generic_eq v' v then Some (k r) else None
   | (E_write_memt wk a sz v tag r, Write_memt wk' a' sz' v' tag' k) =>
-     if write_kind_beq wk' wk && Nat.eqb a' a && Nat.eqb sz' sz && generic_eq v' v && generic_eq tag' tag then Some (k r) else None
+     if write_kind_beq wk' wk && N.eqb a' a && Nat.eqb sz' sz && generic_eq v' v && generic_eq tag' tag then Some (k r) else None
   | (E_read_reg r v, Read_reg r' k) =>
      if generic_eq r' r then Some (k v) else None
   | (E_write_reg r v, Write_reg r' v' k) =>
      if generic_eq r' r && generic_eq v' v then Some k else None
   | (E_write_ea wk a sz, Write_ea wk' a' sz' k) =>
-     if write_kind_beq wk' wk && Nat.eqb a' a && Nat.eqb sz' sz then Some k else None
+     if write_kind_beq wk' wk && N.eqb a' a && Nat.eqb sz' sz then Some k else None
   | (E_barrier bk, Barrier bk' k) =>
      if barrier_kind_beq bk' bk then Some k else None
   | (E_print m, Print m' k) =>

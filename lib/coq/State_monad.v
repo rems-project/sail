@@ -67,7 +67,7 @@
 
 Require Import Sail.Instr_kinds.
 Require Import Sail.Values.
-Require FMapList.
+Require FMapAVL.
 Require Import OrderedType.
 Require OrderedTypeEx.
 Require Import List.
@@ -75,12 +75,12 @@ Require Import Rbase.  (* TODO would like to avoid this in models without reals 
 Require bbv.Word.
 Import ListNotations.
 Local Open Scope Z.
+Require OrderedTypeEx.
 
-(* TODO: revisit choice of FMapList *)
-Module NatMap := FMapList.Make(OrderedTypeEx.Nat_as_OT).
+Module NMap := FMapAVL.Make(OrderedTypeEx.N_as_OT).
 
-Definition Memstate : Type := NatMap.t memory_byte.
-Definition Tagstate : Type := NatMap.t bitU.
+Definition Memstate : Type := NMap.t memory_byte.
+Definition Tagstate : Type := NMap.t bitU.
 (* type regstate = map string (vector bitU) *)
 
 (* To avoid infinite sets in this state monad we parametrise on a choice
@@ -126,8 +126,8 @@ Arguments sequential_state : clear implicits.
 (*val init_state : forall 'regs. 'regs -> sequential_state 'regs*)
 Definition init_state {Regs} regs : sequential_state Regs :=
   {| ss_regstate := regs;
-     ss_memstate := NatMap.empty _;
-     ss_tagstate := NatMap.empty _ |}.
+     ss_memstate := NMap.empty _;
+     ss_tagstate := NMap.empty _ |}.
 
 Inductive ex E :=
   | Failure : string -> ex E
@@ -254,8 +254,8 @@ end.
 
 (*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e*)
 Definition read_tagS {Regs A E} (addr : mword A) : monadS Regs bitU E :=
-  let addr := Word.wordToNat (get_word addr) in
-  readS (fun s => opt_def B0 (NatMap.find addr s.(ss_tagstate))).
+  let addr := Word.wordToN (get_word addr) in
+  readS (fun s => opt_def B0 (NMap.find addr s.(ss_tagstate))).
 
 Fixpoint genlist_acc {A:Type} (f : nat -> A) n acc : list A :=
   match n with
@@ -268,9 +268,9 @@ Definition genlist {A} f n := @genlist_acc A f n [].
 (* Read bytes from memory and return in little endian order *)
 (*val get_mem_bytes : forall 'regs. nat -> nat -> sequential_state 'regs -> maybe (list memory_byte * bitU)*)
 Definition get_mem_bytes {Regs} addr sz (s : sequential_state Regs) : option (list memory_byte * bitU) :=
-  let addrs := genlist (fun n => addr + n)%nat sz in
-  let read_byte s addr := NatMap.find addr s.(ss_memstate) in
-  let read_tag s addr := opt_def B0 (NatMap.find addr s.(ss_tagstate)) in
+  let addrs := genlist (fun n => addr + N_of_nat n)%N sz in
+  let read_byte s addr := NMap.find addr s.(ss_memstate) in
+  let read_tag s addr := opt_def B0 (NMap.find addr s.(ss_tagstate)) in
   option_map
     (fun mem_val => (mem_val, List.fold_left and_bit (List.map (read_tag s) addrs) B1))
     (just_list (List.map (read_byte s) addrs)).
@@ -287,7 +287,7 @@ Definition read_mem_bytesS {Regs E} (rk : read_kind) addr sz : monadS Regs (list
 
 (*val read_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e*)
 Definition read_memtS {Regs E A} (rk : read_kind) (a : mword A) sz `{ArithFact (sz >=? 0)} : monadS Regs (mword (8 * sz) * bitU) E :=
-  let a := Word.wordToNat (get_word a) in
+  let a := Word.wordToN (get_word a) in
   read_memt_bytesS rk a (Z.to_nat sz) >>$= (fun '(bytes, tag) =>
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val =>
   returnS (mem_val, tag))).
@@ -308,16 +308,16 @@ Definition excl_resultS {Regs E} : unit -> monadS Regs bool E :=
 (* Write little-endian list of bytes to given address *)
 (*val put_mem_bytes : forall 'regs. nat -> nat -> list memory_byte -> bitU -> sequential_state 'regs -> sequential_state 'regs*)
 Definition put_mem_bytes {Regs} addr sz (v : list memory_byte) (tag : bitU) (s : sequential_state Regs) : sequential_state Regs :=
-  let addrs := genlist (fun n => addr + n)%nat sz in
+  let addrs := genlist (fun n => addr + N_of_nat n)%N sz in
   let a_v := List.combine addrs v in
-  let write_byte mem '(addr, v) := NatMap.add addr v mem in
-  let write_tag mem addr := NatMap.add addr tag mem in
+  let write_byte mem '(addr, v) := NMap.add addr v mem in
+  let write_tag mem addr := NMap.add addr tag mem in
   {| ss_regstate := s.(ss_regstate);
      ss_memstate := List.fold_left write_byte a_v s.(ss_memstate);
      ss_tagstate := List.fold_left write_tag addrs s.(ss_tagstate) |}.
 
 Definition put_tag {Regs} addr (tag : bitU) (s : sequential_state Regs) : sequential_state Regs :=
-  let write_tag mem addr := NatMap.add addr tag mem in
+  let write_tag mem addr := NMap.add addr tag mem in
   {| ss_regstate := s.(ss_regstate);
      ss_memstate := s.(ss_memstate);
      ss_tagstate := write_tag s.(ss_tagstate) addr |}.
@@ -334,21 +334,21 @@ Definition write_mem_bytesS {Regs E} wk addr sz (v : list memory_byte) : monadS 
 (*val write_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monadS 'regs bool 'e*)
 Definition write_memtS {Regs E A B} wk (addr : mword A) sz (v : mword B) (t : bitU) : monadS Regs bool E :=
-  match (Word.wordToNat (get_word addr), mem_bytes_of_bits v) with
+  match (Word.wordToN (get_word addr), mem_bytes_of_bits v) with
     | (addr, Some v) => write_memt_bytesS wk addr (Z.to_nat sz) v t
     | _ => failS "write_mem"
   end.
 
-Definition write_tag_rawS {Regs E} (wk:write_kind) (addr : nat) (tag : bitU) : monadS Regs bool E :=
+Definition write_tag_rawS {Regs E} (wk:write_kind) (addr : N) (tag : bitU) : monadS Regs bool E :=
   updateS (put_tag addr tag) >>$
   returnS true.
 
 Definition write_tagS {Regs E A} (wk:write_kind) (addr : mword A) (tag : bitU) : monadS Regs bool E :=
-  let addr := Word.wordToNat (get_word addr) in
+  let addr := Word.wordToN (get_word addr) in
   write_tag_rawS wk addr tag.
 
 Definition write_tag_boolS {Regs E A} (addr : mword A) (tag : bool) : monadS Regs bool E :=
-  let addr := Word.wordToNat (get_word addr) in
+  let addr := Word.wordToN (get_word addr) in
   write_tag_rawS Write_plain addr (bitU_of_bool tag).
 
 (*val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
