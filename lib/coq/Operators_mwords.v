@@ -281,13 +281,16 @@ Definition zero_extend {a} (v : mword a) (n : Z) : mword n := extz_vec n v.
 
 Definition sign_extend {a} (v : mword a) (n : Z) : mword n := exts_vec n v.
 
-Definition zeros (n : Z) `{ArithFact (n >=? 0)} : mword n.
-refine (cast_to_mword (Word.wzero (Z.to_nat n)) _).
-unwrap_ArithFacts.
-unbool_comparisons.
-apply Z2Nat.id.
-auto with zarith.
-Defined.
+Definition dummy_Zneg (p : positive) : mword (Zneg p).
+constructor.
+Qed.
+
+Definition zeros (n : Z) : mword n :=
+  match n with
+  | Zneg p => dummy_Zneg p
+  | Z0 => Word.WO
+  | Zpos p => Word.wzero (Pos.to_nat p)
+  end.
 
 Lemma truncate_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat.
 intros.
