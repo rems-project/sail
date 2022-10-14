@@ -207,6 +207,18 @@ let rec desugar_rchain chain s e =
      tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
   | _ -> assert false
 
+type vector_update =
+  VU_single of exp * exp
+| VU_range of exp * exp * exp
+
+let rec mk_vector_updates input updates n m =
+  match updates with
+  | VU_single (idx, value) :: updates ->
+     mk_vector_updates (mk_exp (E_vector_update (input, idx, value)) n m) updates n m
+  | VU_range (high, low, value) :: updates ->
+     mk_vector_updates (mk_exp (E_vector_update_subrange (input, high, low, value)) n m) updates n m
+  | [] -> input
+
 let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
   match typ with
   | ATyp_fn (_, _, ATyp_aux (ATyp_set effs, _)) -> effs = []
@@ -252,7 +264,7 @@ let warn_extern_effect l =
 %token <string> String Bin Hex Real
 
 %token <string> Amp At Caret Eq Gt Lt Plus Star EqGt Unit
-%token <string> Colon ColonColon TildeTilde ExclEq
+%token <string> Colon ColonColon ExclEq
 %token <string> EqEq
 %token <string> GtEq
 %token <string> LtEq
@@ -1135,10 +1147,8 @@ atomic_exp:
     { mk_exp (E_vector []) $startpos $endpos }
   | Lsquare exp_list Rsquare
     { mk_exp (E_vector $2) $startpos $endpos }
-  | Lsquare exp With atomic_exp Eq exp Rsquare
-    { mk_exp (E_vector_update ($2, $4, $6)) $startpos $endpos }
-  | Lsquare exp With atomic_exp DotDot atomic_exp Eq exp Rsquare
-    { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
+  | Lsquare exp With vector_update_list Rsquare
+    { mk_vector_updates $2 $4 $startpos $endpos }
   | LsquareBar RsquareBar
     { mk_exp (E_list []) $startpos $endpos }
   | LsquareBar exp_list RsquareBar
@@ -1151,8 +1161,8 @@ atomic_exp:
 fexp_exp:
   | atomic_exp Eq exp
     { mk_exp (E_app_infix ($1, mk_id (Id "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | TildeTilde id
-    { mk_exp (E_app_infix (mk_exp (E_id $2) $startpos($2) $endpos($2), mk_id (Id "=") $startpos $endpos, mk_exp (E_id $2) $startpos($2) $endpos($2))) $startpos $endpos }
+  | id
+    { mk_exp (E_app_infix (mk_exp (E_id $1) $startpos $endpos, mk_id (Id "=") $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)) $startpos $endpos }
 
 fexp_exp_list:
   | fexp_exp
@@ -1166,6 +1176,20 @@ exp_list:
   | exp
     { [$1] }
   | exp Comma exp_list
+    { $1 :: $3 }
+
+vector_update:
+  | atomic_exp Eq exp
+    { VU_single ($1, $3) }
+  | atomic_exp DotDot atomic_exp Eq exp
+    { VU_range ($1, $3, $5) }
+  | id
+    { VU_single (mk_exp (E_id $1) $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)}
+
+vector_update_list:
+  | vector_update
+    { [$1] }
+  | vector_update Comma vector_update_list
     { $1 :: $3 }
 
 funcl_patexp:

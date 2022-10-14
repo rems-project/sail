@@ -4229,9 +4229,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
              | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
-                let (hi, lo) = Env.get_bitfield_range f_l id field env in
-                let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
-                infer_exp env (E_aux (E_vector_subrange (E_aux (E_field (v, Id_aux (Id "bits", f_l)), (l, ())), hi, lo), (l, ())))
+                let access_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).get in
+                infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
              | _, _ ->
                 typ_error env l "Vector access could not be interpreted as a bitfield access"
              end
@@ -4240,7 +4239,24 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
               typ_raise err_env err_l (err_because (err, err_l', err')))
        | exn -> raise exn
      end
-  | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
+  | E_vector_update (v, n, exp) ->
+     begin
+       try infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ()))) with
+       | Type_error (err_env, err_l, err) ->
+          (try (
+             let inferred_v = infer_exp env v in
+             begin match typ_of inferred_v, n with
+             | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
+                let update_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).update in
+                infer_exp env (mk_exp ~loc:l (E_app (update_id, [v; exp])))
+             | _, _ ->
+                typ_error env l "Vector update could not be interpreted as a bitfield update"
+             end
+           ) with
+           | Type_error (_, err_l', err') ->
+              typ_raise err_env err_l (err_because (err, err_l', err')))
+       | exn -> raise exn
+     end
   | E_vector_update_subrange (v, n, m, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, ())))
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, ())))

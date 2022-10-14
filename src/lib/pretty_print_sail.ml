@@ -376,6 +376,20 @@ let fixities =
   in
   ref (fixities' : (prec * int) Bindings.t)
 
+type 'a vector_update =
+  | VU_single of 'a exp * 'a exp
+  | VU_range of 'a exp * 'a exp * 'a exp
+
+let rec get_vector_updates (E_aux (e_aux, _) as exp) =
+  match e_aux with
+  | E_vector_update (exp1, exp2, exp3) ->
+     let input, updates = get_vector_updates exp1 in
+     input, updates @ [VU_single (exp2, exp3)]
+  | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
+     let input, updates = get_vector_updates exp1 in
+     input, updates @ [VU_range (exp2, exp3, exp4)]
+  | _ -> exp, []
+
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_block [] -> string "()"
@@ -519,10 +533,11 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   | E_vector_access (exp1, exp2) -> doc_atomic_exp exp1 ^^ brackets (doc_exp exp2)
   | E_vector_subrange (exp1, exp2, exp3) -> doc_atomic_exp exp1 ^^ brackets (separate space [doc_exp exp2; string ".."; doc_exp exp3])
   | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
-  | E_vector_update (exp1, exp2, exp3) ->
-     brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
-  | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-     brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
+  | E_vector_update _
+  | E_vector_update_subrange _ ->
+     let input, updates = get_vector_updates exp in
+     let updates_doc = separate_map (comma ^^ space) doc_vector_update updates in
+     brackets (separate space ([doc_exp input; string "with"; updates_doc]))
   | E_internal_value v ->
      if !Interactive.opt_interactive then
        string (Value.string_of_value v |> Util.green |> Util.clear)
@@ -577,6 +592,15 @@ and doc_exp_as_block (E_aux (aux, _) as exp) =
   | _ when !opt_insert_braces ->
      group (lbrace ^^ nest 4 (hardline ^^ doc_block [exp]) ^^ hardline ^^ rbrace)
   | _ -> doc_exp exp
+and doc_vector_update = function
+  | VU_single (idx, value) ->
+     begin match unaux_exp idx, unaux_exp value with
+     | E_id id, E_id id' when Id.compare id id' == 0 ->
+        doc_atomic_exp idx
+     | _, _ ->
+        separate space [doc_atomic_exp idx; equals; doc_exp value]
+     end
+  | VU_range (high, low, value) -> separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
  
 let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
   match pexp with

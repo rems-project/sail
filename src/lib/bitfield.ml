@@ -82,18 +82,30 @@ let constructor name order start stop =
   List.concat [defs_of_string __POS__ constructor_val; defs_of_string __POS__ constructor_fun]
 
 (* For every index range, create a getter and setter *)
+
+type field_accessor_ids = { get : string; set : string; update: string; overload: string }
+
+let field_accessor_ids type_name field = {
+  get = Printf.sprintf "_get_%s_%s" type_name field;
+  set = Printf.sprintf "_set_%s_%s" type_name field;
+  update = Printf.sprintf "_update_%s_%s" type_name field;
+  overload = Printf.sprintf "_mod_%s" field
+}
+
 let index_range_getter name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let irg_val = Printf.sprintf "val _get_%s_%s : %s -> %s" name field name (bitvec size order) in
-  let irg_function = Printf.sprintf "function _get_%s_%s v = v.bits[%i .. %i]" name field start stop in
+  let fun_id = (field_accessor_ids name field).get in
+  let irg_val = Printf.sprintf "val %s : %s -> %s" fun_id name (bitvec size order) in
+  let irg_function = Printf.sprintf "function %s v = v.bits[%i .. %i]" fun_id start stop in
   List.concat [defs_of_string __POS__ irg_val; defs_of_string __POS__ irg_function]
 
 let index_range_setter name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let irs_val = Printf.sprintf "val _set_%s_%s : (register(%s), %s) -> unit" name field name (bitvec size order) in
+  let fun_id = (field_accessor_ids name field).set in
+  let irs_val = Printf.sprintf "val %s : (register(%s), %s) -> unit" fun_id name (bitvec size order) in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let irs_function = String.concat "\n"
-    [ Printf.sprintf "function _set_%s_%s (r_ref, v) = {" name field;
+    [ Printf.sprintf "function %s (r_ref, v) = {" fun_id;
                      "  r = __deref(r_ref);";
       Printf.sprintf "  r.bits = [r.bits with %i .. %i = v];" start stop;
                      "  (*r_ref) = r";
@@ -104,16 +116,20 @@ let index_range_setter name field order start stop =
 
 let index_range_update name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let iru_val = Printf.sprintf "val _update_%s_%s : (%s, %s) -> %s" name field name (bitvec size order) name in
+  let fun_id = (field_accessor_ids name field).update in
+  let iru_val = Printf.sprintf "val %s : (%s, %s) -> %s" fun_id name (bitvec size order) name in
   let iru_function =
-    Printf.sprintf "function _update_%s_%s (v, x) = { v with bits = [ v.bits with %i .. %i = x] }"
-      name field start stop
+    Printf.sprintf "function %s (v, x) = { v with bits = [ v.bits with %i .. %i = x] }"
+      fun_id start stop
   in
   let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
   List.concat [defs_of_string __POS__ iru_val; defs_of_string __POS__ iru_function; defs_of_string __POS__ iru_overload]
 
 let index_range_overload name field =
-  defs_of_string __POS__ (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
+  let fun_id = (field_accessor_ids name field).overload in
+  let get_id = (field_accessor_ids name field).get in
+  let set_id = (field_accessor_ids name field).set in
+  defs_of_string __POS__ (Printf.sprintf "overload %s = {%s, %s}" fun_id get_id set_id)
 
 let index_range_accessor name field order (n, m) =
   let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in
