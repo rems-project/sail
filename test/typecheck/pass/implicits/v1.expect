@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mimplicits/v1.sail[0m]:9:51-63
+[96mimplicits/v1.sail[0m:9.51-63:
 9[96m |[0mval EXTS : forall 'n 'm, 0 <= 'n <= 'm. (bits('n), implicit('m)) -> bits('m)
  [91m |[0m                                                   [91m^----------^[0m
  [91m |[0m Arguments are invalid, implicit arguments must come before all other arguments
- [91m |[0m 

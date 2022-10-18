@@ -1,16 +1,15 @@
 [93mType error[0m:
-[[96mmissing_tick.sail[0m]:5:0-18
+[96mmissing_tick.sail[0m:5.0-18:
 5[96m |[0mtype foo = bits(x)
  [91m |[0m[91m^----------------^[0m
  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[[96mmissing_tick.sail[0m]:5:11-18
+ [91m |[0m [93mCaused by [0m[96mmissing_tick.sail[0m:5.11-18:
  [91m |[0m 5[96m |[0mtype foo = bits(x)
  [91m |[0m  [91m |[0m           [91m^-----^[0m
  [91m |[0m  [91m |[0m Well-formedness check failed for type
  [91m |[0m  [91m |[0m 
- [91m |[0m  [91m |[0m [93mCaused by [0m[[96mmissing_tick.sail[0m]:5:16-17
+ [91m |[0m  [91m |[0m [93mCaused by [0m[96mmissing_tick.sail[0m:5.16-17:
  [91m |[0m  [91m |[0m 5[96m |[0mtype foo = bits(x)
  [91m |[0m  [91m |[0m  [91m |[0m                [91m^[0m
  [91m |[0m  [91m |[0m Undefined type synonym x
- [91m |[0m 

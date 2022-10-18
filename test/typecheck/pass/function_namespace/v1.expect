@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mfunction_namespace/v1.sail[0m]:9:6-10
+[96mfunction_namespace/v1.sail[0m:9.6-10:
 9[96m |[0m  let test = true;
  [91m |[0m      [91m^--^[0m
  [91m |[0m Local variable test is already bound as a function name
- [91m |[0m 

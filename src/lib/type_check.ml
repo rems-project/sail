@@ -413,7 +413,7 @@ let constraint_power_variables nc =
 
 let rec name_pat (P_aux (aux, _)) =
   match aux with
-  | P_id id | P_as (_, id) -> Some (string_of_id id ^ "#")
+  | P_id id | P_as (_, id) -> Some ("_" ^ string_of_id id)
   | P_typ (_, pat) | P_var (pat, _) -> name_pat pat
   | _ -> None
 
@@ -424,7 +424,7 @@ let fresh_existential l k =
   incr ex_counter; mk_kopt ~loc:l k fresh
 
 let named_existential l k = function
-  | Some n -> mk_kopt ~loc:(gen_loc l) k (mk_kid n)
+  | Some n -> mk_kopt ~loc:l k (mk_kid n)
   | None -> fresh_existential l k
 
 let destruct_exist_plain ?name:(name=None) typ =

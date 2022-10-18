@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96massignment_simple.sail[0m]:14:20-26
+[96massignment_simple.sail[0m:14.20-26:
 14[96m |[0mfunction test2 () = x = 10
   [91m |[0m                    [91m^----^[0m
   [91m |[0m Variable declaration with unclear (or no) scope. Use an explicit var statement instead, or place in a block
-  [91m |[0m 

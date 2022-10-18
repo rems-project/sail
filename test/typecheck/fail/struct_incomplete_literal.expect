@@ -1,8 +1,7 @@
 [93mType error[0m:
-[[96mstruct_incomplete_literal.sail[0m]:10:20-12:1
+[96mstruct_incomplete_literal.sail[0m:10.20-12.1:
 10[96m |[0mlet foo_val : foo = struct {
   [91m |[0m                    [91m^-------[0m
 12[96m |[0m}
   [91m |[0m[91m^[0m
   [91m |[0m struct literal missing fields: b
-  [91m |[0m 

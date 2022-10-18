@@ -121,8 +121,12 @@ let analyze_unresolved_quant locals ncs = function
      Suggest_none
 
 let readable_name (Kid_aux (Var str, l)) =
+  let str = String.concat "" (String.split_on_char '#' str) in
+  let str = if String.length str > 1 && str.[1] = '_' then String.sub str 0 1 ^ String.sub str 2 (String.length str - 2) else str in
   Kid_aux (Var (String.concat "" (String.split_on_char '#' str)), l)
 
+let has_underscore (Kid_aux (Var str, l)) = String.length str > 1 && str.[1] = '_'
+  
 let error_string_of_kid substs kid =
   match KBindings.find_opt kid substs with
   | Some nexp -> string_of_nexp nexp
@@ -162,12 +166,13 @@ let message_of_type_error =
        let nc_vars = match nc with Some nc -> tyvars_of_constraint nc | None -> KidSet.empty in
        let vars =
          KBindings.bindings all_vars
-         |> List.filter (fun (v, _) -> is_kid_generated v && KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))) in
+         |> List.filter (fun (v, _) -> (is_kid_generated v || has_underscore v)
+                                       && KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))) in
        let var_constraints = List.map (fun (v, l) -> (v, l, List.filter (fun nexp-> KidSet.mem v (tyvars_of_constraint nexp)) all_constraints)) vars in
 
        let substs =
          List.fold_left (fun (substs, new_vars) (v, _) ->
-             if is_kid_generated v then
+             if is_kid_generated v || has_underscore v then
                let v' = readable_name v in
                if not (KBindings.mem v' all_vars) && not (KidSet.mem v' new_vars) then
                  (KBindings.add v (nvar v') substs, KidSet.add v' new_vars)

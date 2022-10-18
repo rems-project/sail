@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mnexp_synonym/v2.sail[0m]:7:20-32
+[96mnexp_synonym/v2.sail[0m:7.20-32:
 7[96m |[0mlet v : bits(LEN) = 0xFFFF_FFFFF
  [91m |[0m                    [91m^----------^[0m
  [91m |[0m Failed to prove constraint: 36 == 32
- [91m |[0m 

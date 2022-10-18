@@ -1,7 +1,6 @@
 [93mType error[0m:
-[[96mexistential_ast/v3.sail[0m]:26:7-21
+[96mexistential_ast/v3.sail[0m:26.7-21:
 26[96m |[0m  Some(Ctor1(a, x, c))
   [91m |[0m       [91m^------------^[0m
   [91m |[0m Could not resolve quantifiers for Ctor1
   [91m |[0m [94m*[0m 'ex326# in {32, 64}
-  [91m |[0m 

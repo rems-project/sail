@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mduplicate_toplevel_let.sail[0m]:6:4-14
+[96mduplicate_toplevel_let.sail[0m:6.4-14:
 6[96m |[0mlet X: int = 4
  [91m |[0m    [91m^--------^[0m
  [91m |[0m Duplicate toplevel let binding X
- [91m |[0m 

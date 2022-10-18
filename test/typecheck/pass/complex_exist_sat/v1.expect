@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mcomplex_exist_sat/v1.sail[0m]:3:18-19
+[96mcomplex_exist_sat/v1.sail[0m:3.18-19:
 3[96m |[0mfunction foo(x) = 3
  [91m |[0m                  [91m^[0m
  [91m |[0m Constraint 3 == (2 * 'ex2#) is not satisfiable
- [91m |[0m 

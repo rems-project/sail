@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96moutcome_impl/v2.sail[0m]:28:14-27
+[96moutcome_impl/v2.sail[0m:28.14-27:
 28[96m |[0minstantiation test_outcome1 with
   [91m |[0m              [91m^-----------^[0m
   [91m |[0m Type variable ('a : Type) must be instantiated
-  [91m |[0m 

@@ -1,18 +1,27 @@
 [93mType error[0m:
-[[96mexistential_ast3/v1.sail[0m]:17:48-65
+[96mexistential_ast3/v1.sail[0m:17.48-65:
 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m                                                [91m^---------------^[0m
-  [91m |[0m (int(33), int('ex281#)) is not a subtype of (int('ex276#), int('ex277#))
-  [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
-  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
-  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex276# bound here
-  [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
-  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
-  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex277# bound here
-  [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
-  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
-  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex281# bound here
+  [91m |[0m (int(33), int('ex281)) is not a subtype of (int('ex276), int('ex277))
+  [91m |[0m as ((33 == 32 | 33 == 64) & (0 <= 'ex281 & 'ex281 < 33)) could not be proven
   [91m |[0m 
+  [91m |[0m Variable 'ex276:
+  [91m |[0m [96mexistential_ast3/v1.sail[0m:16.23-25:
+  [91m |[0m 16[96m |[0m  let (datasize, n) : {'d 'n, datasize('d) & 0 <= 'n < 'd. (int('d), int('n))} =
+  [91m |[0m   [92m |[0m                       [92m^^[0m [92mderived from here[0m
+  [91m |[0m [96mexistential_ast3/v1.sail[0m:17.48-65:
+  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
+  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m
+  [91m |[0m 
+  [91m |[0m Variable 'ex277:
+  [91m |[0m [96mexistential_ast3/v1.sail[0m:16.26-28:
+  [91m |[0m 16[96m |[0m  let (datasize, n) : {'d 'n, datasize('d) & 0 <= 'n < 'd. (int('d), int('n))} =
+  [91m |[0m   [92m |[0m                          [92m^^[0m [92mderived from here[0m
+  [91m |[0m [96mexistential_ast3/v1.sail[0m:17.48-65:
+  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
+  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m
+  [91m |[0m 
+  [91m |[0m Variable 'ex281:
+  [91m |[0m [96mexistential_ast3/v1.sail[0m:17.48-65:
+  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
+  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m

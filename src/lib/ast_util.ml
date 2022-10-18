@@ -2046,15 +2046,18 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
     | NC_bounded_lt (n1,n2) -> re (NC_bounded_lt (snexp n1, snexp n2))
     | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
-    | NC_set (kid,is) ->
+    | NC_set (kid, is) ->
        begin
          match KBindings.find kid substs with
          | Nexp_aux (Nexp_constant i,_) ->
             if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
-         | nexp -> 
-            raise (Reporting.err_general l
-                     ("Unable to substitute " ^ string_of_nexp nexp ^
-                        " into set constraint " ^ string_of_n_constraint n_constraint))
+         | nexp ->
+            begin match List.rev is with
+            | i :: is ->
+               let equal_num i = re (NC_equal (nexp, nconstant i)) in
+               List.fold_left (fun nc i -> re (NC_or (equal_num i, nc))) (equal_num i) is
+            | [] -> re NC_false
+            end
          | exception Not_found -> n_constraint
        end
     | NC_or (nc1,nc2) -> re (NC_or (snc nc1, snc nc2))

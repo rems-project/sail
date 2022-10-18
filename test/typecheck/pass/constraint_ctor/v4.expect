@@ -1,11 +1,10 @@
 [93mType error[0m:
-[[96mconstraint_ctor/v4.sail[0m]:17:33-40
+[96mconstraint_ctor/v4.sail[0m:17.33-40:
 17[96m |[0mfunction bar(Bar(x as int('x)) : Bar(23)) -> unit = {
   [91m |[0m                                 [91m^-----^[0m
   [91m |[0m Well-formedness check failed for type
   [91m |[0m 
-  [91m |[0m [93mCaused by [0m[[96mconstraint_ctor/v4.sail[0m]:17:33-36
+  [91m |[0m [93mCaused by [0m[96mconstraint_ctor/v4.sail[0m:17.33-36:
   [91m |[0m 17[96m |[0mfunction bar(Bar(x as int('x)) : Bar(23)) -> unit = {
   [91m |[0m   [91m |[0m                                 [91m^-^[0m
   [91m |[0m   [91m |[0m Could not prove 23 <= 22 for type constructor Bar
-  [91m |[0m 

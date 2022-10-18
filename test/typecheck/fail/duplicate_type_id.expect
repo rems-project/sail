@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mduplicate_type_id.sail[0m]:3:6-10
+[96mduplicate_type_id.sail[0m:3.6-10:
 3[96m |[0munion foo1 = { Bar2 : unit }
  [91m |[0m      [91m^--^[0m
  [91m |[0m Cannot create variant foo1, type name is already bound
- [91m |[0m 

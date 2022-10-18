@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mexist_synonym/v4.sail[0m]:9:35-44
+[96mexist_synonym/v4.sail[0m:9.35-44:
 9[96m |[0mval test : forall 'n, 0 <= 2 <= 4. regno('n) -> unit
  [91m |[0m                                   [91m^-------^[0m
  [91m |[0m Could not prove constraints (0 <= 'n & 'n < 32) in type synonym int('n) with (0 <= '_x & '_x <= 8), (0 <= '_x#0 & '_x#0 <= 8)
- [91m |[0m 

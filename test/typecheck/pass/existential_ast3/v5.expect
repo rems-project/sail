@@ -1,10 +1,16 @@
 [93mType error[0m:
-[[96mexistential_ast3/v5.sail[0m]:37:50-65
+[96mexistential_ast3/v5.sail[0m:37.50-65:
 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m                                                  [91m^-------------^[0m
   [91m |[0m range(0, (2 ^ (1 + 5) - 1)) is not a subtype of range(0, ('datasize - 2))
-  [91m |[0m [[96mexistential_ast3/v5.sail[0m]:35:6-15
-  [91m |[0m 35[96m |[0m  let 'datasize : {'d, ('is_64 & 'd == 64) | (not('is_64) & 'd == 32). int('d)} =
-  [91m |[0m   [93m |[0m      [93m^-------^[0m
-  [91m |[0m   [93m |[0m 'datasize bound here
+  [91m |[0m as (0 <= 'ex346 & 'ex346 <= ('datasize - 2)) could not be proven
   [91m |[0m 
+  [91m |[0m Variable 'ex346:
+  [91m |[0m Code generated nearby:
+  [91m |[0m [96mexistential_ast3/v5.sail[0m:37.10-33:
+  [91m |[0m 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
+  [91m |[0m   [92m |[0m          [92m^---------------------^[0m [92mderived from here[0m
+  [91m |[0m [96mexistential_ast3/v5.sail[0m:37.50-65:
+  [91m |[0m 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
+  [91m |[0m   [93m |[0m                                                  [93m^-------------^[0m [93mbound here[0m
+  [91m |[0m   [93m |[0m satisfies constraint: 'ex345# == 'ex346

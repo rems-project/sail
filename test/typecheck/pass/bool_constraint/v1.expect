@@ -1,24 +1,22 @@
-[93mWarning[0m: Deprecated [[96mbool_constraint/v1.sail[0m]:27:11-36
+[93mWarning[0m: Deprecated [96mbool_constraint/v1.sail[0m:27.11-36:
 27[96m |[0mval my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> not('q). bool('q)}
   [91m |[0m           [91m^-----------------------^[0m
   [91m |[0m 
 All external bindings should be marked as either monadic or pure
 
 [93mType error[0m:
-[[96mbool_constraint/v1.sail[0m]:12:19-20
+[96mbool_constraint/v1.sail[0m:12.19-20:
 12[96m |[0m  if b then n else 4
   [91m |[0m                   [91m^[0m
   [91m |[0m int(4) is not a subtype of {('m : Int), (('b & 'm == 'n) | (not('b) & 'm == 3)). int('m)}
-  [91m |[0m [[96mbool_constraint/v1.sail[0m]:11:0-13:1
-  [91m |[0m 11[96m |[0mfunction foo(b, n) = {
-  [91m |[0m   [93m |[0m[93m^---------------------[0m
-  [91m |[0m 13[96m |[0m}
-  [91m |[0m   [93m |[0m[93m^[0m
-  [91m |[0m   [93m |[0m 'b bound here
-  [91m |[0m [[96mbool_constraint/v1.sail[0m]:11:0-13:1
-  [91m |[0m 11[96m |[0mfunction foo(b, n) = {
-  [91m |[0m   [93m |[0m[93m^---------------------[0m
-  [91m |[0m 13[96m |[0m}
-  [91m |[0m   [93m |[0m[93m^[0m
-  [91m |[0m   [93m |[0m 'n bound here
+  [91m |[0m as (('b & 'ex231 == 'n) | (not('b) & 'ex231 == 3)) could not be proven
   [91m |[0m 
+  [91m |[0m Variable 'ex231:
+  [91m |[0m Code generated nearby:
+  [91m |[0m [96mbool_constraint/v1.sail[0m:9.25-73:
+  [91m |[0m 9[96m |[0m  (bool('b), int('n)) -> {'m, 'b & 'm == 'n | not('b) & 'm == 3. int('m)}
+  [91m |[0m  [92m |[0m                         [92m^----------------------------------------------^[0m [92mderived from here[0m
+  [91m |[0m [96mbool_constraint/v1.sail[0m:12.19-20:
+  [91m |[0m 12[96m |[0m  if b then n else 4
+  [91m |[0m   [93m |[0m                   [93m^[0m [93mbound here[0m
+  [91m |[0m   [93m |[0m satisfies constraint: 4 == 'ex231

@@ -1,6 +1,5 @@
 [93mType error[0m:
-[[96mrepeat_constraint/v1.sail[0m]:7:4-29
+[96mrepeat_constraint/v1.sail[0m:7.4-29:
 7[96m |[0m    _prove(constraint(false));
  [91m |[0m    [91m^-----------------------^[0m
  [91m |[0m Cannot prove false
- [91m |[0m 

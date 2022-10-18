@@ -1,10 +1,16 @@
 [93mType error[0m:
-[[96mexistential_ast3/v4.sail[0m]:36:18-20
+[96mexistential_ast3/v4.sail[0m:36.18-20:
 36[96m |[0m    if is_64 then 64 else 32;
   [91m |[0m                  [91m^^[0m
   [91m |[0m int(64) is not a subtype of {('d : Int), (('is_64 & 'd == 63) | (not('is_64) & 'd == 32)). int('d)}
-  [91m |[0m [[96mexistential_ast3/v4.sail[0m]:34:6-12
-  [91m |[0m 34[96m |[0m  let 'is_64 = b == 0b0;
-  [91m |[0m   [93m |[0m      [93m^----^[0m
-  [91m |[0m   [93m |[0m 'is_64 bound here
+  [91m |[0m as (('is_64 & 'ex340 == 63) | (not('is_64) & 'ex340 == 32)) could not be proven
   [91m |[0m 
+  [91m |[0m Variable 'ex340:
+  [91m |[0m Code generated nearby:
+  [91m |[0m [96mexistential_ast3/v4.sail[0m:35.18-79:
+  [91m |[0m 35[96m |[0m  let 'datasize : {'d, ('is_64 & 'd == 63) | (not('is_64) & 'd == 32). int('d)} =
+  [91m |[0m   [92m |[0m                  [92m^-----------------------------------------------------------^[0m [92mderived from here[0m
+  [91m |[0m [96mexistential_ast3/v4.sail[0m:36.18-20:
+  [91m |[0m 36[96m |[0m    if is_64 then 64 else 32;
+  [91m |[0m   [93m |[0m                  [93m^^[0m [93mbound here[0m
+  [91m |[0m   [93m |[0m satisfies constraint: 64 == 'ex340

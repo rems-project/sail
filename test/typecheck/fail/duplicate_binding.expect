@@ -1,11 +1,10 @@
 [93mType error[0m:
-[[96mduplicate_binding.sail[0m]:6:10-11
+[96mduplicate_binding.sail[0m:6.10-11:
 6[96m |[0m  let (x, x) = (true, false);
  [91m |[0m          [91m^[0m
  [91m |[0m Duplicate binding for x in pattern
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[[96mduplicate_binding.sail[0m]:6:7-8
+ [91m |[0m [93mCaused by [0m[96mduplicate_binding.sail[0m:6.7-8:
  [91m |[0m 6[96m |[0m  let (x, x) = (true, false);
  [91m |[0m  [91m |[0m       [91m^[0m
  [91m |[0m  [91m |[0m Previous binding of x here
- [91m |[0m 

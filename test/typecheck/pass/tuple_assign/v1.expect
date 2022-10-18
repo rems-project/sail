@@ -1,11 +1,10 @@
 [93mType error[0m:
-[[96mtuple_assign/v1.sail[0m]:29:5-6
+[96mtuple_assign/v1.sail[0m:29.5-6:
 29[96m |[0m  (x,y,z) = some_tuple();
   [91m |[0m     [91m^[0m
   [91m |[0m Assignment expression declaring new variable mixed with expression updating an existing variable
   [91m |[0m 
-  [91m |[0m [93mExisting variable [0m[[96mtuple_assign/v1.sail[0m]:29:3-4
+  [91m |[0m [93mExisting variable [0m[96mtuple_assign/v1.sail[0m:29.3-4:
   [91m |[0m 29[96m |[0m  (x,y,z) = some_tuple();
   [91m |[0m   [91m |[0m   [91m^[0m
   [91m |[0m   [91m |[0m This assignment is to an existing variable
-  [91m |[0m 
