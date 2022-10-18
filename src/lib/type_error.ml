@@ -120,13 +120,30 @@ let analyze_unresolved_quant locals ncs = function
   | QI_aux (QI_id _, _) ->
      Suggest_none
 
+let readable_name (Kid_aux (Var str, l)) =
+  Kid_aux (Var (String.concat "" (String.split_on_char '#' str)), l)
+
+let error_string_of_kid substs kid =
+  match KBindings.find_opt kid substs with
+  | Some nexp -> string_of_nexp nexp
+  | None -> string_of_kid kid
+
+let error_string_of_nexp substs nexp =
+  string_of_nexp (subst_kids_nexp substs nexp)
+
+let error_string_of_nc substs nexp =
+  string_of_n_constraint (subst_kids_nc substs nexp)
+  
+let error_string_of_typ substs typ =
+  string_of_typ (subst_kids_typ substs typ)
+  
 let message_of_type_error =
   let open Error_format in
   let rec msg = function
     | Err_inner (err, l', prefix, err') ->
        Seq [msg err;
             Line "";
-            Location (Util.((prefix ^ " ") |> yellow |> clear), l', msg err')]
+            Location (Util.((prefix ^ " ") |> yellow |> clear), None, l', msg err')]
 
     | Err_other str -> Line str
 
@@ -141,12 +158,41 @@ let message_of_type_error =
     | Err_failed_constraint (check, locals, ncs) ->
        Line ("Failed to prove constraint: " ^ string_of_n_constraint check)
 
-    | Err_subtype (typ1, typ2, _, vars) ->
-       let vars = KBindings.bindings vars in
-       let vars = List.filter (fun (v, _) -> KidSet.mem v (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2))) vars in
+    | Err_subtype (typ1, typ2, nc, all_constraints, all_vars) ->
+       let nc_vars = match nc with Some nc -> tyvars_of_constraint nc | None -> KidSet.empty in
+       let vars =
+         KBindings.bindings all_vars
+         |> List.filter (fun (v, _) -> is_kid_generated v && KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))) in
+       let var_constraints = List.map (fun (v, l) -> (v, l, List.filter (fun nexp-> KidSet.mem v (tyvars_of_constraint nexp)) all_constraints)) vars in
+
+       let substs =
+         List.fold_left (fun (substs, new_vars) (v, _) ->
+             if is_kid_generated v then
+               let v' = readable_name v in
+               if not (KBindings.mem v' all_vars) && not (KidSet.mem v' new_vars) then
+                 (KBindings.add v (nvar v') substs, KidSet.add v' new_vars)
+               else
+                 (substs, new_vars)
+             else
+               (substs, new_vars)
+           ) (KBindings.empty, KidSet.empty) vars
+         |> fst in
+       
+       let format_var_constraints l =
+         function
+         | [] -> Seq []
+         | [nc] -> Line ("satisfies constraint: " ^ error_string_of_nc substs nc)
+         | ncs -> Seq (Line "satisfies constraints:"
+                       :: List.map (fun nc -> Line (error_string_of_nc substs nc)) ncs)
+       in
        With ((fun ppf -> { ppf with loc_color = Util.yellow }),
-             Seq (Line (string_of_typ typ1 ^ " is not a subtype of " ^ string_of_typ typ2)
-                  :: List.map (fun (kid, l) -> Location ("", l, Line (string_of_kid kid ^ " bound here"))) vars))
+             Seq (Line (error_string_of_typ substs typ1 ^ " is not a subtype of " ^ error_string_of_typ substs typ2)
+                  :: (match nc with Some nc -> [Line ("as " ^ error_string_of_nc substs nc ^ " could not be proven")] | None -> [])
+                  @ List.map (fun (v, l, ncs) ->
+                        Seq [Line "";
+                             Line ("Variable " ^ error_string_of_kid substs v ^ ":");
+                             Location ("", Some "bound here", l, format_var_constraints l ncs)])
+                      var_constraints))
 
   | Err_no_num_ident id ->
      Line ("No num identifier " ^ string_of_id id)

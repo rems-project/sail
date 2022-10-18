@@ -117,24 +117,35 @@ let opt_backtrace_length = ref 10
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
+let fix_endline str =
+  if str.[String.length str - 1] = '\n' then
+    String.sub str 0 (String.length str - 1)
+  else
+    str
+                                            
 let print_err_internal p_l m1 m2 =
   let open Error_format in
   prerr_endline (m1 ^ ":");
   begin match p_l with
-  | Loc l -> format_message (Location ("", l, Line m2)) err_formatter
-  | Pos p -> format_message (Location ("", Parse_ast.Range (p, p), Line m2)) err_formatter
+  | Loc l -> format_message (Location ("", None, l, Line (fix_endline m2))) err_formatter
+  | Pos p -> format_message (Location ("", None, Parse_ast.Range (p, p), Line (fix_endline m2))) err_formatter
   end
 
 let loc_to_string l =
   let open Error_format in
   let b = Buffer.create 160 in
-  format_message (Location ("", l, Line "")) (buffer_formatter b);
+  format_message (Location ("", None, l, Line "")) (buffer_formatter b);
   Buffer.contents b
 
 let rec simp_loc = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> simp_loc l
   | Parse_ast.Generated l -> simp_loc l
+  | Parse_ast.Derived (l1, l2) ->
+     begin match simp_loc l1 with
+     | None -> simp_loc l2
+     | pos -> pos
+     end
   | Parse_ast.Range (p1, p2) -> Some (p1, p2)
   | Parse_ast.Documented (_, l) -> simp_loc l
 
@@ -142,6 +153,7 @@ let rec loc_file = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> loc_file l
   | Parse_ast.Generated l -> loc_file l
+  | Parse_ast.Derived (_, _) -> None
   | Parse_ast.Range (p1, _) -> Some p1.pos_fname
   | Parse_ast.Documented (_, l) -> loc_file l
                                  
@@ -149,7 +161,7 @@ let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"
   | Some (p1, p2) ->
-     Printf.sprintf "%s %d:%d - %d:%d"
+     Printf.sprintf "%s:%d.%d-%d.%d"
        p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
  
 let print_err l m1 m2 =
@@ -167,7 +179,7 @@ type error =
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
 let dest_err ?(interactive = false) = function
-  | Err_general (l, m) -> ("Error", Loc l, m)
+  | Err_general (l, m) -> (Util.("Error" |> yellow |> clear), Loc l, m)
   | Err_unreachable (l, (file, line, _, _), backtrace, m) ->
      if interactive then
        ("Error", Loc l, m)

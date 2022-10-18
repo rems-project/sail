@@ -90,10 +90,12 @@ val lvar_typ : ?loc:l -> 'a lvar -> 'a
 val no_annot : unit annot
 
 (** [gen_loc l] takes a location l and generates a location which
-   means 'generated from location l'. This is useful for debugging
+   means 'generated/derived from location l'. This is useful for debugging
    errors that occur in generated code. *)
 val gen_loc : Parse_ast.l -> Parse_ast.l
 
+val is_gen_loc : Parse_ast.l -> bool
+  
 (** {2 Functions for building (untyped) AST elements} *)
 
 val mk_id : string -> id
@@ -120,7 +122,7 @@ val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
 val mk_letbind : unit pat -> unit exp -> unit letbind
-val mk_kopt : kind_aux -> kid -> kinded_id
+val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 
 val inc_ord : order
 val dec_ord : order
@@ -373,6 +375,7 @@ val map_ast_annot : ('a annot -> 'b annot) -> 'a ast -> 'b ast
 (** {2 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
 val kid_loc : kid -> Parse_ast.l
+val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l

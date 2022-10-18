@@ -807,6 +807,7 @@ let split_defs target all_errors splits env ast =
       | Unknown -> []
       | Unique (_, l) -> match_l l
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
+      | Derived (_, _) -> [] (* same as above *)
       | Documented (_,l) -> match_l l
       | Range (p,q) ->
          let matches =
@@ -1696,13 +1697,6 @@ let string_of_argsplits s =
 let string_of_lx lx =
   let open Lexing in
   Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
-
-let rec simple_string_of_loc = function
-  | Parse_ast.Unknown -> "Unknown"
-  | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
-  | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
-  | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
-  | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
 
 let string_of_extra_splits s =
   String.concat ", "

@@ -107,7 +107,7 @@ type type_error =
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
-  | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
+  | Err_subtype of typ * typ * n_constraint option * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
   | Err_inner of type_error * Ast.l * string * type_error
@@ -450,7 +450,7 @@ val destruct_bitvector : Env.t -> typ -> (nexp * order) option
 
 (** Construct an existential type with a guaranteed fresh
    identifier. *)
-val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
+val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 

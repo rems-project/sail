@@ -120,7 +120,7 @@ type type_error =
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
-  | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
+  | Err_subtype of typ * typ * n_constraint option * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
   | Err_inner of type_error * Parse_ast.l * string * type_error
@@ -413,31 +413,31 @@ let constraint_power_variables nc =
 
 let rec name_pat (P_aux (aux, _)) =
   match aux with
-  | P_id id | P_as (_, id) -> Some ("_" ^ string_of_id id)
+  | P_id id | P_as (_, id) -> Some (string_of_id id ^ "#")
   | P_typ (_, pat) | P_var (pat, _) -> name_pat pat
   | _ -> None
 
 let ex_counter = ref 0
 
-let fresh_existential k =
-  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter ^ "#"), Parse_ast.Unknown) in
-  incr ex_counter; mk_kopt k fresh
+let fresh_existential l k =
+  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter ^ "#"), l) in
+  incr ex_counter; mk_kopt ~loc:l k fresh
 
-let named_existential k = function
-  | Some n -> mk_kopt k (mk_kid n)
-  | None -> fresh_existential k
+let named_existential l k = function
+  | Some n -> mk_kopt ~loc:(gen_loc l) k (mk_kid n)
+  | None -> fresh_existential l k
 
 let destruct_exist_plain ?name:(name=None) typ =
   match typ with
-  | Typ_aux (Typ_exist ([kopt], nc, typ), _) ->
-     let kid, fresh = kopt_kid kopt, named_existential (unaux_kind (kopt_kind kopt)) name in
+  | Typ_aux (Typ_exist ([kopt], nc, typ), l) ->
+     let kid, fresh = kopt_kid kopt, named_existential l (unaux_kind (kopt_kind kopt)) name in
      let nc = constraint_subst kid (arg_kopt fresh) nc in
      let typ = typ_subst kid (arg_kopt fresh) typ in
      Some ([fresh], nc, typ)
-  | Typ_aux (Typ_exist (kopts, nc, typ), _) ->
+  | Typ_aux (Typ_exist (kopts, nc, typ), l) ->
      let add_num i = match name with Some n -> Some (n ^ string_of_int i) | None -> None in 
      let fresh_kopts =
-       List.mapi (fun i kopt -> (kopt_kid kopt, named_existential (unaux_kind (kopt_kind kopt)) (add_num i))) kopts
+       List.mapi (fun i kopt -> (kopt_kid kopt, named_existential (kopt_loc kopt) (unaux_kind (kopt_kind kopt)) (add_num i))) kopts
      in
      let nc = List.fold_left (fun nc (kid, fresh) -> constraint_subst kid (arg_kopt fresh) nc) nc fresh_kopts in
      let typ = List.fold_left (fun typ (kid, fresh) -> typ_subst kid (arg_kopt fresh) typ) typ fresh_kopts in
@@ -458,20 +458,20 @@ let destruct_numeric ?name:(name=None) typ =
      Some (List.map kopt_kid kids, nc, nexp)
   | None, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _) when string_of_id id = "atom" ->
      Some ([], nc_true, nexp)
-  | None, Typ_aux (Typ_app (id, [A_aux (A_nexp lo, _); A_aux (A_nexp hi, _)]), _) when string_of_id id = "range" ->
-     let kid = kopt_kid (named_existential K_int name) in
+  | None, Typ_aux (Typ_app (id, [A_aux (A_nexp lo, _); A_aux (A_nexp hi, _)]), l) when string_of_id id = "range" ->
+     let kid = kopt_kid (named_existential l K_int name) in
      Some ([kid], nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi), nvar kid)
-  | None, Typ_aux (Typ_id id, _) when string_of_id id = "nat" ->
-     let kid = kopt_kid (named_existential K_int name) in
+  | None, Typ_aux (Typ_id id, l) when string_of_id id = "nat" ->
+     let kid = kopt_kid (named_existential l K_int name) in
      Some ([kid], nc_lteq (nint 0) (nvar kid), nvar kid)
-  | None, Typ_aux (Typ_id id, _) when string_of_id id = "int" ->
-     let kid = kopt_kid (named_existential K_int name) in
+  | None, Typ_aux (Typ_id id, l) when string_of_id id = "int" ->
+     let kid = kopt_kid (named_existential l K_int name) in
      Some ([kid], nc_true, nvar kid)
   | _, _ -> None
 
 let destruct_boolean ?name:(name=None) = function
-  | Typ_aux (Typ_id (Id_aux (Id "bool", _)), _) ->
-     let kid = kopt_kid (fresh_existential K_bool) in
+  | Typ_aux (Typ_id (Id_aux (Id "bool", _)), l) ->
+     let kid = kopt_kid (fresh_existential l K_bool) in
      Some (kid, nc_var kid)
   | _ -> None
 
@@ -775,7 +775,7 @@ end = struct
 
   let mk_synonym typq typ_arg =
     let kopts, ncs = quant_split typq in
-    let kopts = List.map (fun kopt -> kopt, fresh_existential (unaux_kind (kopt_kind kopt))) kopts in
+    let kopts = List.map (fun kopt -> kopt, fresh_existential (kopt_loc kopt) (unaux_kind (kopt_kind kopt))) kopts in
     let ncs = List.map (fun nc -> List.fold_left (fun nc (kopt, fresh) -> constraint_subst (kopt_kid kopt) (arg_kopt fresh) nc) nc kopts) ncs in
     let typ_arg = List.fold_left (fun typ_arg (kopt, fresh) -> typ_arg_subst (kopt_kid kopt) (arg_kopt fresh) typ_arg) typ_arg kopts in
     let kopts = List.map snd kopts in
@@ -1520,14 +1520,14 @@ let add_existential l kopts nc env =
   let env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts in
   Env.add_constraint nc env
 
-let add_typ_vars l kopts env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts
+let add_typ_vars l kopts env = List.fold_left (fun env (KOpt_aux (_, kl) as kopt) -> Env.add_typ_var (Parse_ast.Derived (kl, l)) kopt env) env kopts
 
 let is_exist = function
   | Typ_aux (Typ_exist (_, _, _), _) -> true
   | _ -> false
 
-let exist_typ constr typ =
-  let fresh = fresh_existential K_int in
+let exist_typ l constr typ =
+  let fresh = fresh_existential l K_int in
   mk_typ (Typ_exist ([fresh], constr (kopt_kid fresh), typ (kopt_kid fresh)))
 
 let bind_numeric l typ env =
@@ -1657,7 +1657,7 @@ and simp_typ_aux = function
      into a single one. Making this simplification allows us to avoid
      having to pass large numbers of pointless variables to SMT if we
      ever bind this existential. *)
-  | Typ_exist (vars, nc, Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool b, _)]), _)) ->
+  | Typ_exist (vars, nc, Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool b, _)]), l)) ->
      let kids = KidSet.of_list (List.map kopt_kid vars) in
      let constrained = tyvars_of_constraint nc in
      let conjs = constraint_conj b in
@@ -1672,7 +1672,7 @@ and simp_typ_aux = function
         Typ_exist (vars, nc, atom_bool_typ (List.fold_left nc_and conj conjs))
      | conjs ->
         let vars = List.filter (fun v -> not (KidSet.mem (kopt_kid v) redundant)) vars in
-        let var = fresh_existential K_bool in
+        let var = fresh_existential l K_bool in
         Typ_exist (var :: vars, nc, atom_bool_typ (List.fold_left nc_and (nc_var (kopt_kid var)) conjs))
      end
 
@@ -2240,10 +2240,10 @@ let canonicalize env typ =
     | Typ_var v -> Typ_aux (Typ_var v, l)
     | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
     | Typ_id id when string_of_id id = "int" ->
-       exist_typ (fun _ -> nc_true) (fun v -> atom_typ (nvar v))
+       exist_typ l (fun _ -> nc_true) (fun v -> atom_typ (nvar v))
     | Typ_id id -> Typ_aux (Typ_id id, l)
     | Typ_app (id, [A_aux (A_nexp lo, _); A_aux (A_nexp hi, _)]) when string_of_id id = "range" ->
-       exist_typ (fun v -> nc_and (nc_lteq lo (nvar v)) (nc_lteq (nvar v) hi)) (fun v -> atom_typ (nvar v))
+       exist_typ l (fun v -> nc_and (nc_lteq lo (nvar v)) (nc_lteq (nvar v) hi)) (fun v -> atom_typ (nvar v))
     | Typ_app (id, args) ->
        Typ_aux (Typ_app (id, List.map canon_arg args), l)
     | Typ_tup typs ->
@@ -2284,7 +2284,8 @@ let rec subtyp l env typ1 typ2 =
   (* Special cases for two numeric (atom) types *)
   | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
-     if prove __POS__ env (nc_eq nexp1 nexp2) then () else typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     let prop = nc_eq nexp1 nexp2 in
+     if prove __POS__ env prop then () else typ_raise env l (Err_subtype (typ1, typ2, Some prop, Env.get_constraints env, Env.get_typ_var_locs env))
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
      let env = add_typ_vars l (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2)))) env in
@@ -2298,7 +2299,7 @@ let rec subtyp l env typ1 typ2 =
         if prove __POS__ env nc2 then
           ()
         else
-          typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+          typ_raise env l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraints env, Env.get_typ_var_locs env))
      | _ ->
         typ_error env l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
      end
@@ -2331,6 +2332,7 @@ let rec subtyp l env typ1 typ2 =
      let env = add_existential l kopts nc env in subtyp l env typ1 typ2
   | None, Some (kopts, nc, typ2) ->
      typ_debug (lazy "Subtype check with unification");
+     let orig_env = env in
      let typ1, env = bind_existential l None (canonicalize env typ1) env in
      let env = add_typ_vars l kopts env in
      let kids' = KidSet.elements (KidSet.diff (KidSet.of_list (List.map kopt_kid kopts)) (tyvars_of_typ typ2)) in
@@ -2342,8 +2344,8 @@ let rec subtyp l env typ1 typ2 =
      let nc = List.fold_left (fun nc (kid, uvar) -> constraint_subst kid uvar nc) nc (KBindings.bindings unifiers) in
      let env = List.fold_left unifier_constraint env (KBindings.bindings unifiers) in
      if prove __POS__ env nc then ()
-     else typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
-  | None, None -> typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     else typ_raise env l (Err_subtype (typ1, typ2, Some nc, Env.get_constraints orig_env, Env.get_typ_var_locs env))
+  | None, None -> typ_raise env l (Err_subtype (typ1, typ2, None, Env.get_constraints env, Env.get_typ_var_locs env))
 
 and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   typ_print (lazy (("Subtype arg " |> Util.green |> Util.clear) ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2));
@@ -2740,7 +2742,7 @@ let union_simple_numeric ex1 ex2 =
 let typ_of_simple_numeric = function
   | Anything -> int_typ
   | Equal nexp -> atom_typ nexp
-  | Constraint c -> exist_typ c (fun kid -> atom_typ (nvar kid))
+  | Constraint c -> exist_typ Parse_ast.Unknown c (fun kid -> atom_typ (nvar kid))
 
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_constant c -> Some c
@@ -5060,16 +5062,17 @@ let check_default env (DT_aux (DT_order order, l)) =
   [DEF_default (DT_aux (DT_order order, l))], Env.set_default_order order env
 
 let kinded_id_arg kind_id =
-  let typ_arg arg = A_aux (arg, Parse_ast.Unknown) in
+  let typ_arg l arg = A_aux (arg, l) in
   match kind_id with
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) ->
-     typ_arg (A_nexp (nvar kid))
+     typ_arg (kid_loc kid) (A_nexp (nvar kid))
   | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) ->
-     typ_arg (A_order (Ord_aux (Ord_var kid, Parse_ast.Unknown)))
+     let l = kid_loc kid in
+     typ_arg l (A_order (Ord_aux (Ord_var kid, l)))
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) ->
-     typ_arg (A_typ (mk_typ (Typ_var kid)))
+     typ_arg (kid_loc kid) (A_typ (mk_typ (Typ_var kid)))
   | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) ->
-     typ_arg (A_bool (nc_var kid))
+     typ_arg (kid_loc kid) (A_bool (nc_var kid))
 
 let fold_union_quant quants (QI_aux (qi, _)) =
   match qi with

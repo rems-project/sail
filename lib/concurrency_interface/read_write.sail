@@ -132,6 +132,18 @@ function mem_read_request_is_ifetch(request) = {
     }
 }
 
+$ifdef SYMBOLIC
+
+register __monomorphize_reads: bool = false
+register __monomorphize_writes: bool = false
+
+$else
+
+let __monomorphize_reads: bool = false
+let __monomorphize_writes: bool = false
+
+$endif
+
 outcome sail_mem_read : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
   Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
       -> result((bits(8 * 'n), option(bool)), 'abort)
@@ -145,6 +157,8 @@ with
 
     impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
+        // In Isla, the address of an instruction fetch must be concrete
+        let pa = if mem_read_request_is_ifetch(request) | __monomorphize_reads then __monomorphize(pa) else pa;
         let tag: option(bool) = if request.tag then {
             if length(pa) == 32 then {
                 Some(read_tag#(32, pa))
@@ -214,6 +228,7 @@ with
 
     impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
+        let pa = if __monomorphize_writes then __monomorphize(pa) else pa;
         let b: bool = match request.value {
             Some(value) => if mem_write_request_is_exclusive(request) then {
                 if length(pa) == 32 then {

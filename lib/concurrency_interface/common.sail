@@ -170,6 +170,14 @@ val sail_ignore_write_to : forall ('a: Type). register('a) -> unit
 
 function sail_ignore_write_to(reg) = sail_mark_register(reg, "ignore_write")
 
+$ifdef SYMBOLIC
+val __monomorphize = pure "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
+$else
+val __monomorphize : forall 'n, 'n >= 0. bits('n) -> bits('n)
+
+function __monomorphize(bv) = bv
+$endif
+
 $target_set emulator_or_isla isla c ocaml interpreter
 $target_set emulator c ocaml interpreter
 $target_set prover lem coq

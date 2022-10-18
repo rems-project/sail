@@ -90,7 +90,35 @@ let lvar_typ ?loc:(l=Parse_ast.Unknown) = function
 
 let no_annot = (Parse_ast.Unknown, ())
 
-let gen_loc l = Parse_ast.Generated l
+let id_loc = function
+  | Id_aux (_, l) -> l
+
+let kid_loc = function
+  | Kid_aux (_, l) -> l
+
+let kopt_loc = function
+  | KOpt_aux (_, l) -> l
+                    
+let typ_loc = function
+  | Typ_aux (_, l) -> l
+
+let pat_loc = function
+  | P_aux (_, (l, _)) -> l
+
+let exp_loc = function
+  | E_aux (_, (l, _)) -> l
+             
+let gen_loc = function
+  | Parse_ast.Generated l -> Parse_ast.Generated l
+  | l -> Parse_ast.Generated l
+
+let rec is_gen_loc = function
+  | Parse_ast.Unknown -> false
+  | Parse_ast.Unique (_, l) -> is_gen_loc l
+  | Parse_ast.Generated l -> true
+  | Parse_ast.Derived (l1, l2) -> is_gen_loc l1 || is_gen_loc l2
+  | Parse_ast.Range (p1, p2) -> false
+  | Parse_ast.Documented (_, l) -> is_gen_loc l
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
@@ -404,8 +432,11 @@ let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
-let mk_kopt kind_aux id =
-  KOpt_aux (KOpt_kind (K_aux (kind_aux, Parse_ast.Unknown), id), Parse_ast.Unknown)
+let mk_kopt ?loc:(l = Parse_ast.Unknown) kind_aux id =
+  let l = match l with
+    | Parse_ast.Unknown -> gen_loc (kid_loc id)
+    | l -> l in
+  KOpt_aux (KOpt_kind (K_aux (kind_aux, l), id), l)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
@@ -726,21 +757,6 @@ and map_ast_annot f ast = { ast with defs = List.map (map_def_annot f) ast.defs 
 
 and map_loop_measure_annot f = function
   | Loop (loop, exp) -> Loop (loop, map_exp_annot f exp)
-
-let id_loc = function
-  | Id_aux (_, l) -> l
-
-let kid_loc = function
-  | Kid_aux (_, l) -> l
-
-let typ_loc = function
-  | Typ_aux (_, l) -> l
-
-let pat_loc = function
-  | P_aux (_, (l, _)) -> l
-
-let exp_loc = function
-  | E_aux (_, (l, _)) -> l
 
 let def_loc = function
   | DEF_type (TD_aux (_, (l, _)))
@@ -2204,6 +2220,7 @@ let rec simple_string_of_loc = function
   | Parse_ast.Unknown -> "Unknown"
   | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
+  | Parse_ast.Derived (l1, l2) -> "Derived(" ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
 

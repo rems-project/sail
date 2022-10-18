@@ -75,6 +75,7 @@ type l =
   | Unknown
   | Unique of int * l
   | Generated of l
+  | Derived of l * l
   | Range of Lexing.position * Lexing.position
   | Documented of string * l
 
