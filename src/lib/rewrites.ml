@@ -3364,6 +3364,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           |> mk_var_exps_pats pl env
         in
         let body = rewrite_var_updates (add_vars overwrite body vars) in
+        let body = add_e_cast env (typ_of body) body in
         let (E_aux (_,(_,bannot))) = body in
         let fname, measure = match loop, measure with
           | While, Measure_none -> "while#", []
