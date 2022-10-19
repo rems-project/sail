@@ -1450,7 +1450,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
   let rec convert_typ ctx typ =
     let open Ast in
     let open Type_check in
-    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
+    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
     | Typ_id id when string_of_id id = "bit"    -> CT_bit
     | Typ_id id when string_of_id id = "bool"   -> CT_bool
@@ -1465,7 +1465,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
     | Typ_app (id, args) when string_of_id id = "itself" ->
        convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
     | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-       begin match destruct_range Env.empty typ with
+       begin match destruct_range ctx.local_env typ with
        | None -> assert false (* Checked if range type in guard *)
        | Some (kids, constr, n, m) ->
           let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
@@ -1545,7 +1545,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
           ensure that we don't cause any type variable clashes in
           local_env, and that we can optimize the existential based
           upon it's constraints. *)
-       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
+       begin match destruct_exist typ with
        | Some (kids, nc, typ) ->
           let env = add_existential l kids nc ctx.local_env in
           convert_typ { ctx with local_env = env } typ
