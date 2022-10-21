@@ -105,7 +105,7 @@ let underline_single color cnum_from cnum_to =
 let format_hint color = function
   | Some hint -> " " ^ Util.(hint |> color |> clear)
   | None -> ""
-  
+ 
 let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf =
   skip_lines in_chan (lnum - 1);
   let line = input_line in_chan in
@@ -189,8 +189,8 @@ let rec format_loc prefix hint l contents =
   | Parse_ast.Range (p1, p2) -> format_pos prefix hint p1 p2 contents
   | Parse_ast.Unique (_, l) -> format_loc prefix hint l contents
   | Parse_ast.Documented (_, l) -> format_loc prefix hint l contents
-  | Parse_ast.Derived (l1, l2) ->
-     fun ppf -> format_loc prefix (Some "derived from here") l1 (fun _ -> ()) { ppf with loc_color = Util.green }; format_loc prefix hint l2 contents ppf
+  | Parse_ast.Hint (hint', l1, l2) ->
+     fun ppf -> format_loc prefix (Some hint') l1 (fun _ -> ()) { ppf with loc_color = Util.green }; format_loc prefix hint l2 contents ppf
   | Parse_ast.Generated l ->
      fun ppf ->
      format_endline "Code generated nearby:" ppf;

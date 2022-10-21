@@ -71,6 +71,9 @@ open Ast_defs
 open Ast_util
 open Type_check
 
+let opt_explain_all_variables = ref false
+let opt_explain_constraints = ref false
+   
 type suggestion =
   | Suggest_add_constraint of n_constraint
   | Suggest_none
@@ -140,16 +143,104 @@ let error_string_of_nc substs nexp =
   
 let error_string_of_typ substs typ =
   string_of_typ (subst_kids_typ substs typ)
+
+let error_string_of_typ_arg substs arg =
+  string_of_typ_arg (subst_kids_typ_arg substs arg)
+  
+let has_variable set nexp =
+  not (KidSet.is_empty (KidSet.inter set (tyvars_of_nexp nexp)))
+  
+let rewrite_equality preferred_on_right (NC_aux (aux, l) as nc) =
+  let equality = match aux with
+    | NC_equal (lhs, rhs) ->
+       if has_variable preferred_on_right lhs && not (has_variable preferred_on_right rhs) then
+         Some (rhs, lhs)
+       else
+         Some (lhs, rhs)
+    | _ -> None in
+  match equality with
+  | Some (lhs, rhs) ->
+     NC_aux (NC_equal (lhs, rhs), l) 
+  | None ->
+     nc
+
+let subst_preferred_variables prefs constraints =
+  let simplified_by v arg = function
+    | Some (l, str) -> Some (l, fun substs -> "simplified by " ^ str ^ " with " ^ error_string_of_kid substs v ^ " = " ^ error_string_of_typ_arg substs arg)
+    | None -> None in
+  let original_location = function
+    | Some (l, str) -> Some (l, fun _ -> "introduced here by " ^ str)
+    | None -> None in
+  let all_substs, constraints = 
+    Util.map_split (function
+        | (r, NC_aux (NC_equal (Nexp_aux (Nexp_var v, _), rhs), _))
+             when has_variable prefs rhs && not (KidSet.mem v (tyvars_of_nexp rhs)) ->
+           Ok (r, v, arg_nexp rhs)
+        | (r, NC_aux (NC_app (id, [A_aux (A_bool (NC_aux (NC_var v, _)), _)]), _)) when string_of_id id = "not" ->
+           Ok (r, v, arg_bool nc_false)
+        | (r, NC_aux (NC_var v, _)) ->
+           Ok (r, v, arg_bool nc_true)
+        | (r, nc) ->
+           Error (r, nc)
+      ) constraints in
+  (* Filter out any substitutions that just rename variables *)
+  let rename_substs, other_substs =
+    List.partition (function
+        | (_, _, A_aux (A_nexp (Nexp_aux (Nexp_var _, _)), _)) -> true
+        | _ -> false
+      ) all_substs in
+  (* and apply those renaming substitutions first *)
+  let constraints =
+    List.map (fun (r, nc) ->
+        (r, List.fold_left (fun nc (_, v, arg) -> constraint_subst v arg nc) nc rename_substs)
+      ) constraints in
+  (* now apply the more interesting substitutions, keeping track of the reasons for using them *)
+  List.map (fun (r, orig_nc) ->
+      List.fold_left (fun (rs, b, nc) (r', v, arg) ->
+          if KidSet.mem v (tyvars_of_constraint nc) then
+            (simplified_by v arg r' :: rs, true, constraint_subst v arg nc)
+          else
+            (rs, b, nc)
+        ) ([original_location r], false, orig_nc) other_substs
+      |> (fun (r, changed, nc) -> (r, (if changed then Some orig_nc else None), constraint_simp nc))
+    ) constraints
+
+let rec map_typ_arg ?under:(under = []) f (Typ_aux (aux, l)) =
+  let aux = match aux with
+    | Typ_internal_unknown -> Typ_internal_unknown
+    | Typ_id id -> Typ_id id
+    | Typ_var v -> Typ_var v
+    | Typ_fn (typs, typ) -> Typ_fn (List.map (map_typ_arg ~under:under f) typs, map_typ_arg ~under:under f typ)
+    | Typ_bidir (typ1, typ2) -> Typ_bidir (map_typ_arg ~under:under f typ1, map_typ_arg ~under:under f typ2)
+    | Typ_tup typs -> Typ_tup (List.map (map_typ_arg ~under:under f) typs)
+    | Typ_app (id, args) ->
+       List.map (function
+           | A_aux (A_typ typ, l) ->
+              let typ = map_typ_arg ~under:under f typ in
+              f under id (A_aux (A_typ typ, l))
+           | arg -> f under id arg
+         ) args
+       |> (fun args -> Typ_app (id, args))
+    | Typ_exist (vars, nc, typ) ->
+       Typ_exist (vars, nc, map_typ_arg ~under:((vars, nc) :: under) f typ)
+  in
+  Typ_aux (aux, l)
+
+let simp_typ = map_typ_arg (fun _ _ -> function
+                   | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (nexp_simp nexp), l)
+                   | A_aux (A_bool nc, l) -> A_aux (A_bool (constraint_simp nc), l)
+                   | arg -> arg)
   
 let message_of_type_error =
   let open Error_format in
   let rec msg = function
-    | Err_inner (err, l', prefix, err') ->
+    | Err_inner (err, l', prefix, hint, err') ->
+       let prefix = if prefix = "" then "" else Util.((prefix ^ " ") |> yellow |> clear) in
        Seq [msg err;
             Line "";
-            Location (Util.((prefix ^ " ") |> yellow |> clear), None, l', msg err')]
+            Location (prefix, hint, l', msg err')]
 
-    | Err_other str -> Line str
+    | Err_other str -> if str = "" then Seq [] else Line str
 
     | Err_no_overloading (id, errs) ->
        Seq [Line ("No overloading for " ^ string_of_id id ^ ", tried:");
@@ -163,12 +254,26 @@ let message_of_type_error =
        Line ("Failed to prove constraint: " ^ string_of_n_constraint check)
 
     | Err_subtype (typ1, typ2, nc, all_constraints, all_vars) ->
+       let nc = Util.option_map constraint_simp nc in
+       let typ1, typ2 = simp_typ typ1, simp_typ typ2 in
        let nc_vars = match nc with Some nc -> tyvars_of_constraint nc | None -> KidSet.empty in
-       let vars =
+       (* Variables appearing in the types and constraint *)
+       let appear_vars =
          KBindings.bindings all_vars
-         |> List.filter (fun (v, _) -> (is_kid_generated v || has_underscore v)
-                                       && KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))) in
-       let var_constraints = List.map (fun (v, l) -> (v, l, List.filter (fun nexp-> KidSet.mem v (tyvars_of_constraint nexp)) all_constraints)) vars in
+         |> List.filter (fun (v, _) -> KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))) in
+       let vars = List.filter (fun (v, _) -> is_kid_generated v || has_underscore v) appear_vars in
+
+       let preferred = KidSet.of_list (List.map fst appear_vars) in
+       let rewritten_constraints =
+         List.map (fun (reason, nc) ->
+             (reason, rewrite_equality preferred nc)
+           ) all_constraints
+         |> subst_preferred_variables preferred in
+
+       let var_constraints =
+         List.map (fun (v, l) ->
+             (v, l, List.filter (fun (_, _, nc) -> KidSet.mem v (tyvars_of_constraint nc)) rewritten_constraints)
+           ) (if !opt_explain_all_variables then appear_vars else vars) in
 
        let substs =
          List.fold_left (fun (substs, new_vars) (v, _) ->
@@ -182,21 +287,30 @@ let message_of_type_error =
                (substs, new_vars)
            ) (KBindings.empty, KidSet.empty) vars
          |> fst in
-       
-       let format_var_constraints l =
+
+       let format_var_constraint (reasons, original_nc, nc) =
+         if List.for_all (function None -> true | Some _ -> false) reasons || not !opt_explain_constraints then
+           Line ("has constraint: " ^ error_string_of_nc substs nc)
+         else
+           Seq (Line ("has constraint " ^ error_string_of_nc substs nc)
+                :: (match original_nc with Some nc -> [Line ("original constraint was " ^ error_string_of_nc substs nc)] | None -> [])
+                @ List.filter_map (function
+                       | None -> None
+                       | Some (l, hint) -> Some (Location ("", Some (hint substs), Reporting.start_loc l, Seq []))
+                     ) reasons)
+       in
+       let format_var_constraints =
          function
-         | [] -> Seq []
-         | [nc] -> Line ("satisfies constraint: " ^ error_string_of_nc substs nc)
-         | ncs -> Seq (Line "satisfies constraints:"
-                       :: List.map (fun nc -> Line (error_string_of_nc substs nc)) ncs)
+         | [info] -> format_var_constraint info
+         | infos -> Seq (List.map format_var_constraint infos)
        in
        With ((fun ppf -> { ppf with loc_color = Util.yellow }),
              Seq (Line (error_string_of_typ substs typ1 ^ " is not a subtype of " ^ error_string_of_typ substs typ2)
                   :: (match nc with Some nc -> [Line ("as " ^ error_string_of_nc substs nc ^ " could not be proven")] | None -> [])
                   @ List.map (fun (v, l, ncs) ->
                         Seq [Line "";
-                             Line ("Variable " ^ error_string_of_kid substs v ^ ":");
-                             Location ("", Some "bound here", l, format_var_constraints l ncs)])
+                             Line ("type variable " ^ error_string_of_kid substs v ^ ":");
+                             Location ("", Some "bound here", l, format_var_constraints ncs)])
                       var_constraints))
 
   | Err_no_num_ident id ->
@@ -245,13 +359,13 @@ let rec collapse_errors = function
         end
      | [] -> no_collapse
      end
-  | Err_inner (err1, l, prefix, err2) ->
+  | Err_inner (err1, l, prefix, hint, err2) ->
      let err1 = collapse_errors err1 in
      let err2 = collapse_errors err2 in
      if string_of_type_error err1 = string_of_type_error err2 then
        err1
      else
-       Err_inner (err1, l, prefix, err2)
+       Err_inner (err1, l, prefix, hint, err2)
   | err -> err
 
 let check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =

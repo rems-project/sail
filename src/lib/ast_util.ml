@@ -116,7 +116,7 @@ let rec is_gen_loc = function
   | Parse_ast.Unknown -> false
   | Parse_ast.Unique (_, l) -> is_gen_loc l
   | Parse_ast.Generated l -> true
-  | Parse_ast.Derived (l1, l2) -> is_gen_loc l1 || is_gen_loc l2
+  | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range (p1, p2) -> false
   | Parse_ast.Documented (_, l) -> is_gen_loc l
 
@@ -343,13 +343,20 @@ and nexp_simp_aux = function
        | Nexp_constant c -> Nexp_constant (Big_int.negate c)
        | _ -> Nexp_neg n
      end
-  | Nexp_app (Id_aux (Id "div",_) as id,[n1;n2]) ->
+  | Nexp_app (Id_aux (Id "div", _) as id, [n1; n2]) ->
      begin
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
        let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
        match n1_simp, n2_simp with
        | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
        | _, _ -> Nexp_app (id,[n1;n2])
+     end
+  | Nexp_exp nexp ->
+     let nexp = nexp_simp nexp in
+     begin match nexp with
+     | Nexp_aux (Nexp_constant c, _) when Big_int.greater_equal c Big_int.zero && Big_int.less_equal c (Big_int.of_int 7) ->
+        Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
+     | _ -> Nexp_exp nexp
      end
   | nexp -> nexp
 
@@ -367,6 +374,8 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        begin match nc1, nc2 with
        | NC_aux (NC_true, _), NC_aux (nc, _) -> nc
        | NC_aux (nc, _), NC_aux (NC_true, _) -> nc
+       | NC_aux (NC_false, _), NC_aux (_, _) -> NC_false
+       | NC_aux (_, _), NC_aux (NC_false, _) -> NC_false
        | _, _ -> NC_and (nc1, nc2)
        end
 
@@ -412,6 +421,16 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        | _, _ -> NC_bounded_lt (nexp1, nexp2)
        end
 
+    | NC_app (id, [A_aux (A_bool nc, arg_l)]) when Id.compare (mk_id "not") id = 0 ->
+       let nc = constraint_simp nc in
+       begin match nc with
+       | NC_aux (NC_false, _) -> NC_true
+       | NC_aux (NC_true, _) -> NC_false
+       | NC_aux (NC_app (id, [A_aux (A_bool (NC_aux (nc_aux, _)), _)]), _) when Id.compare (mk_id "not") id = 0 ->
+          nc_aux
+       | _ -> NC_app (id, [A_aux (A_bool nc, arg_l)])
+       end
+
     | _ -> nc_aux
   in
   NC_aux (nc_aux, l)
@@ -432,11 +451,11 @@ let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
-let mk_kopt ?loc:(l = Parse_ast.Unknown) kind_aux id =
+let mk_kopt ?loc:(l = Parse_ast.Unknown) kind_aux v =
   let l = match l with
-    | Parse_ast.Unknown -> gen_loc (kid_loc id)
+    | Parse_ast.Unknown -> kid_loc v
     | l -> l in
-  KOpt_aux (KOpt_kind (K_aux (kind_aux, l), id), l)
+  KOpt_aux (KOpt_kind (K_aux (kind_aux, l), v), l)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
@@ -2223,7 +2242,7 @@ let rec simple_string_of_loc = function
   | Parse_ast.Unknown -> "Unknown"
   | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
-  | Parse_ast.Derived (l1, l2) -> "Derived(" ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
+  | Parse_ast.Hint (_, l1, l2) -> "Hint(_," ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
 

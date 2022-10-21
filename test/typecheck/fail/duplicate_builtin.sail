@@ -1,0 +1,1 @@
+enum int = Foo | Bar

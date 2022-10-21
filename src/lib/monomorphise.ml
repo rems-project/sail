@@ -805,9 +805,9 @@ let split_defs target all_errors splits env ast =
   let map_locs ls defs =
     let rec match_l = function
       | Unknown -> []
-      | Unique (_, l) -> match_l l
+      | Unique (_,l) -> match_l l
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
-      | Derived (_, _) -> [] (* same as above *)
+      | Hint (_,_,l) -> match_l l
       | Documented (_,l) -> match_l l
       | Range (p,q) ->
          let matches =

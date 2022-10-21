@@ -250,6 +250,18 @@ let rec options = ref ([
   ( "-verbose",
     Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
     "<verbosity> produce verbose output");
+  ( "-explain_all_variables",
+    Arg.Set Type_error.opt_explain_all_variables,
+    " Explain all type variables in type error messages");
+  ( "-explain_constraints",
+    Arg.Set Type_error.opt_explain_constraints,
+    " Explain all type variables in type error messages");
+  ( "-explain_verbose",
+    Arg.Tuple [
+        Arg.Set Type_error.opt_explain_all_variables;
+        Arg.Set Type_error.opt_explain_constraints
+      ],
+    " Add the maximum amount of explanation to type errors");
   ( "-help",
     Arg.Unit (fun () -> help !options),
     " Display this list of options. Also available as -h or --help");

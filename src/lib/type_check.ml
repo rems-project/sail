@@ -112,6 +112,8 @@ let typ_debug ?level:(level=1) m = if !opt_tc_debug > level then prerr_endline (
 
 let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ Lazy.force m) else ()
 
+type constraint_reason = (Ast.l * string) option
+ 
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
@@ -120,12 +122,12 @@ type type_error =
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
-  | Err_subtype of typ * typ * n_constraint option * n_constraint list * Ast.l KBindings.t
+  | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_inner of type_error * Parse_ast.l * string * type_error
+  | Err_inner of type_error * Parse_ast.l * string * string option * type_error
 
-let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", error2)
+let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", None, error2)
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
@@ -149,7 +151,7 @@ type env =
     casts : id list;
     allow_casts : bool;
     allow_bindings : bool;
-    constraints : n_constraint list;
+    constraints : (constraint_reason * n_constraint) list;
     default_order : order option;
     ret_typ : typ option;
     poly_undefineds : bool;
@@ -547,7 +549,8 @@ module Env : sig
   val add_register : id -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
-  val add_constraint : n_constraint -> t -> t
+  val get_constraint_reasons : t -> (constraint_reason * n_constraint) list
+  val add_constraint : ?reason:(Ast.l * string) -> n_constraint -> t -> t
   val add_typquant : l -> typquant -> t -> t
   val get_typ_var : kid -> t -> kind_aux
   val get_typ_var_loc_opt : kid -> t -> Ast.l option
@@ -663,7 +666,7 @@ end = struct
         let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
         typ_print (lazy (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v) (string_of_kind_aux k)));
         { env with
-          constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
+          constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
           typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
           locals = Bindings.map (fun (mut, typ) -> mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ) env.locals;
           shadow_vars = KBindings.add v (n + 1) env.shadow_vars
@@ -725,6 +728,30 @@ end = struct
     || Bindings.mem id env.enums
     || Bindings.mem id builtin_typs
 
+  let get_binding_loc env id =
+    let has_key id' = Id.compare id id' = 0 in 
+    if Bindings.mem id builtin_typs then
+      None
+    else if Bindings.mem id env.variants then
+      Some (id_loc (fst (Bindings.find_first has_key env.variants)))
+    else if Bindings.mem id env.records then
+      Some (id_loc (fst (Bindings.find_first has_key env.records)))
+    else if Bindings.mem id env.enums then
+      Some (id_loc (fst (Bindings.find_first has_key env.enums)))
+    else if Bindings.mem id env.typ_synonyms then
+      Some (id_loc (fst (Bindings.find_first has_key env.typ_synonyms)))
+    else
+      None
+
+  let already_bound str id env =
+    match get_binding_loc env id with
+    | Some l ->
+       typ_raise env (id_loc id) (Err_inner (Err_other ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound"),
+                                             l, "", Some "previous binding", Err_other ""))
+    | None ->
+       let suffix = if Bindings.mem id builtin_typs then " as a built-in type" else "" in
+       typ_error env (id_loc id) ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound" ^ suffix)
+    
   let bound_ctor_fn env id =
     Bindings.mem id env.top_val_specs
     || Bindings.mem id env.union_ids
@@ -803,7 +830,7 @@ end = struct
     then typ_arg
     else typ_error env l ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs
                           ^ " in type synonym " ^ string_of_typ_arg typ_arg
-                          ^ " with " ^ Util.string_of_list ", " string_of_n_constraint env.constraints)
+                          ^ " with " ^ Util.string_of_list ", " string_of_n_constraint (List.map snd env.constraints))
 
   let get_typ_synonym id env =
     match Bindings.find_opt id env.typ_synonyms with
@@ -812,7 +839,9 @@ end = struct
 
   let get_typ_synonyms env = env.typ_synonyms
 
-  let get_constraints env = env.constraints
+  let get_constraints env = List.map snd (env.constraints)
+
+  let get_constraint_reasons env = env.constraints
 
   let wf_debug str f x exs =
     typ_debug ~level:2 (lazy ("wf_" ^ str ^ ": " ^ f x ^ " exs: " ^ Util.string_of_list ", " string_of_kid (KidSet.elements exs)))
@@ -1024,7 +1053,7 @@ end = struct
     | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
     | arg -> A_aux (arg, l)
 
-  and add_constraint constr env =
+  and add_constraint ?reason constr env =
     let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
     wf_constraint env constr;
     let power_vars = constraint_power_variables constr in
@@ -1044,7 +1073,7 @@ end = struct
              nc_false solutions
          in
          typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
-         { env with constraints = linearized :: env.constraints }
+         { env with constraints = (reason, linearized) :: env.constraints }
       | None ->
          typ_error env l ("Type variable " ^ string_of_kid v
                           ^ " must have a finite number of solutions to add " ^ string_of_n_constraint constr)
@@ -1054,7 +1083,7 @@ end = struct
       | NC_true -> env
       | _ ->
          typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
-         { env with constraints = constr :: env.constraints }
+         { env with constraints = (reason, constr) :: env.constraints }
 
   let add_typquant l quant env =
     let rec add_quant_item env = function
@@ -1245,18 +1274,18 @@ end = struct
   let is_mapping id env = Bindings.mem id env.mappings
 
   let add_enum id ids env =
-    if bound_typ_id env id
-    then typ_error env (id_loc id) ("Cannot create enum " ^ string_of_id id ^ ", type name is already bound")
-    else
-      begin
-        typ_print (lazy (adding ^ "enum " ^ string_of_id id));
-        { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
-      end
-
+    if bound_typ_id env id then (
+      already_bound "enum" id env
+    ) else (
+      typ_print (lazy (adding ^ "enum " ^ string_of_id id));
+      { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
+    )
+      
   let get_enum id env =
-    try IdSet.elements (Bindings.find id env.enums)
-    with
-    | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
+    match Bindings.find_opt id env.enums with
+    | Some enum -> IdSet.elements enum
+    | None ->
+       typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let get_enums env = env.enums
 
@@ -1269,34 +1298,33 @@ end = struct
   let get_records env = env.records
                         
   let add_record id typq fields env =
-    if bound_typ_id env id
-    then typ_error env (id_loc id) ("Cannot create record " ^ string_of_id id ^ ", type name is already bound")
-    else
-      begin
-        typ_print (lazy (adding ^ "record " ^ string_of_id id));
-        let rec record_typ_args = function
-          | [] -> []
-          | ((QI_aux (QI_id kopt, _)) :: qis) when is_int_kopt kopt ->
-             mk_typ_arg (A_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
-          | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
-             mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
-          | ((QI_aux (QI_id kopt, _)) :: qis) when is_order_kopt kopt ->
-             mk_typ_arg (A_order (mk_ord (Ord_var (kopt_kid kopt)))) :: record_typ_args qis
-          | (_ :: qis) -> record_typ_args qis
-        in
-        let rectyp = match record_typ_args (quant_items typq) with
-          | [] -> mk_id_typ id
-          | args -> mk_typ (Typ_app (id, args))
-        in
-        let fold_accessors accs (typ, fid) =
-          let acc_typ = mk_typ (Typ_fn ([rectyp], typ)) in
-          typ_print (lazy (indent 1 ^ adding ^ "accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ)));
-          Bindings.add (field_name id fid) (typq, acc_typ) accs
-        in
-        { env with records = Bindings.add id (typq, fields) env.records;
-                   accessors = List.fold_left fold_accessors env.accessors fields }
-      end
-
+    if bound_typ_id env id then (
+      already_bound "struct" id env
+    ) else (
+      typ_print (lazy (adding ^ "record " ^ string_of_id id));
+      let rec record_typ_args = function
+        | [] -> []
+        | ((QI_aux (QI_id kopt, _)) :: qis) when is_int_kopt kopt ->
+           mk_typ_arg (A_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
+        | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
+           mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
+        | ((QI_aux (QI_id kopt, _)) :: qis) when is_order_kopt kopt ->
+           mk_typ_arg (A_order (mk_ord (Ord_var (kopt_kid kopt)))) :: record_typ_args qis
+        | (_ :: qis) -> record_typ_args qis
+      in
+      let rectyp = match record_typ_args (quant_items typq) with
+        | [] -> mk_id_typ id
+        | args -> mk_typ (Typ_app (id, args))
+      in
+      let fold_accessors accs (typ, fid) =
+        let acc_typ = mk_typ (Typ_fn ([rectyp], typ)) in
+        typ_print (lazy (indent 1 ^ adding ^ "accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ)));
+        Bindings.add (field_name id fid) (typq, acc_typ) accs
+      in
+      { env with records = Bindings.add id (typq, fields) env.records;
+                 accessors = List.fold_left fold_accessors env.accessors fields }
+    )
+ 
   let get_accessor_fn rec_id id env =
     let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
     try freshen_bind (Bindings.find (field_name rec_id id) env.accessors)
@@ -1337,28 +1365,26 @@ end = struct
     { env with top_letbinds = IdSet.union ids env.top_letbinds }
 
   let get_toplevel_lets env = env.top_letbinds
-
+                                           
   let add_variant id variant env =
-    if bound_typ_id env id
-    then typ_error env (id_loc id) ("Cannot create variant " ^ string_of_id id ^ ", type name is already bound")
-    else
-      begin
-        typ_print (lazy (adding ^ "variant " ^ string_of_id id));
-        { env with variants = Bindings.add id variant env.variants }
-      end
-    
+    if bound_typ_id env id then (
+      already_bound "union" id env
+    ) else (
+      typ_print (lazy (adding ^ "variant " ^ string_of_id id));
+      { env with variants = Bindings.add id variant env.variants }
+    )
+      
   let add_scattered_variant id typq env =
-    if bound_typ_id env id
-    then typ_error env (id_loc id) ("Cannot create scattered variant " ^ string_of_id id ^ ", type name is already bound")
-    else
-      begin
-        typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
-        { env with
-          variants = Bindings.add id (typq, []) env.variants;
-          scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
-        }
-      end
-
+    if bound_typ_id env id then (
+      already_bound "scattered union" id env
+    ) else (
+      typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
+      { env with
+        variants = Bindings.add id (typq, []) env.variants;
+        scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
+      }
+    )
+ 
   let add_variant_clause id tu env =
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> { env with variants = Bindings.add id (typq, tus @ [tu]) env.variants }
@@ -1520,7 +1546,7 @@ let add_existential l kopts nc env =
   let env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts in
   Env.add_constraint nc env
 
-let add_typ_vars l kopts env = List.fold_left (fun env (KOpt_aux (_, kl) as kopt) -> Env.add_typ_var (Parse_ast.Derived (kl, l)) kopt env) env kopts
+let add_typ_vars l kopts env = List.fold_left (fun env (KOpt_aux (_, kl) as kopt) -> Env.add_typ_var (Parse_ast.Hint ("derived from here", kl, l)) kopt env) env kopts
 
 let is_exist = function
   | Typ_aux (Typ_exist (_, _, _), _) -> true
@@ -1719,7 +1745,7 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
   match nexp with
   | Nexp_aux (Nexp_constant n,_) -> Some n
   | _ ->
-    let env = Env.add_typ_var Parse_ast.Unknown (mk_kopt K_int (mk_kid "solve#")) env in
+    let env = Env.add_typ_var l (mk_kopt K_int (mk_kid "solve#")) env in
     let vars = Env.get_typ_vars env in
     let _vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
@@ -2285,7 +2311,7 @@ let rec subtyp l env typ1 typ2 =
   | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
      let prop = nc_eq nexp1 nexp2 in
-     if prove __POS__ env prop then () else typ_raise env l (Err_subtype (typ1, typ2, Some prop, Env.get_constraints env, Env.get_typ_var_locs env))
+     if prove __POS__ env prop then () else typ_raise env l (Err_subtype (typ1, typ2, Some prop, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
      let env = add_typ_vars l (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2)))) env in
@@ -2299,7 +2325,7 @@ let rec subtyp l env typ1 typ2 =
         if prove __POS__ env nc2 then
           ()
         else
-          typ_raise env l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraints env, Env.get_typ_var_locs env))
+          typ_raise env l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
      | _ ->
         typ_error env l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
      end
@@ -2344,8 +2370,8 @@ let rec subtyp l env typ1 typ2 =
      let nc = List.fold_left (fun nc (kid, uvar) -> constraint_subst kid uvar nc) nc (KBindings.bindings unifiers) in
      let env = List.fold_left unifier_constraint env (KBindings.bindings unifiers) in
      if prove __POS__ env nc then ()
-     else typ_raise env l (Err_subtype (typ1, typ2, Some nc, Env.get_constraints orig_env, Env.get_typ_var_locs env))
-  | None, None -> typ_raise env l (Err_subtype (typ1, typ2, None, Env.get_constraints env, Env.get_typ_var_locs env))
+     else typ_raise env l (Err_subtype (typ1, typ2, Some nc, Env.get_constraint_reasons orig_env, Env.get_typ_var_locs env))
+  | None, None -> typ_raise env l (Err_subtype (typ1, typ2, None, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
 
 and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   typ_print (lazy (("Subtype arg " |> Util.green |> Util.clear) ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2));
@@ -2797,10 +2823,10 @@ let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
   | _ ->
      None
 
-let add_opt_constraint constr env =
+let add_opt_constraint l reason constr env =
   match constr with
   | None -> env
-  | Some constr -> Env.add_constraint constr env
+  | Some constr -> Env.add_constraint ~reason:(l, reason) constr env
 
 let solve_quant env = function
   | QI_aux (QI_id _, _) -> false
@@ -2831,7 +2857,7 @@ let check_function_instantiation l id env bind1 bind2 =
   | Type_error (_, l1, err1) ->
      try direction (fun check_env typ1 typ2 -> subtyp l check_env typ2 typ1) bind2 bind1 with
      | Type_error (err_env, l2, err2) ->
-        typ_raise err_env l2 (Err_inner (err2, l1, "Also tried", err1))
+        typ_raise err_env l2 (Err_inner (err2, l1, "Also tried", None, err1))
  
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
@@ -3007,11 +3033,12 @@ let rec lexp_assignment_type env (LEXP_aux (aux, (l, ()))) =
      let lexp_is_update lexp = lexp_assignment_type env lexp |> is_update in
      let lexp_is_declaration lexp = lexp_assignment_type env lexp |> is_declaration in
      begin match List.find_opt lexp_is_update lexps, List.find_opt lexp_is_declaration lexps with
-     | Some (LEXP_aux (_, (l_u, _))), Some (LEXP_aux (_, (l_d, _))) ->
-        typ_raise env l_d (Err_inner (Err_other "Assignment expression declaring new variable mixed with expression updating an existing variable",
+     | Some (LEXP_aux (_, (l_u, _)) as lexp_u), Some (LEXP_aux (_, (l_d, _)) as lexp_d) ->
+        typ_raise env l_d (Err_inner (Err_other ("Assignment declaring new variable " ^ string_of_lexp lexp_d ^ " is also assigning to an existing variable"),
                                       l_u,
-                                      "Existing variable",
-                                      Err_other "This assignment is to an existing variable"))
+                                      "",
+                                      Some "existing variable",
+                                      Err_other ""))
      | None, _ -> Declaration
      | _, None -> Update
      end
@@ -3221,13 +3248,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin match destruct_exist (typ_of cond') with
      | Some (kopts, nc, Typ_aux (Typ_app (ab, [A_aux (A_bool flow, _)]), _)) when string_of_id ab = "atom_bool" ->
         let env = add_existential l kopts nc env in
-        let then_branch' = crule check_exp (Env.add_constraint flow env) then_branch typ in
-        let else_branch' = crule check_exp (Env.add_constraint (nc_not flow) env) else_branch typ in
+        let then_branch' = crule check_exp (Env.add_constraint ~reason:(l, "then branch") flow env) then_branch typ in
+        let else_branch' = crule check_exp (Env.add_constraint ~reason:(l, "else branch") (nc_not flow) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      | _ ->
         let cond' = type_coercion env cond' bool_typ in
-        let then_branch' = crule check_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch typ in
-        let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch typ in
+        let then_branch' = crule check_exp (add_opt_constraint l "then branch" (assert_constraint env true cond') env) then_branch typ in
+        let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      end
   | E_exit exp, _ ->
@@ -3275,7 +3302,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           begin
             match unaux_exp (fst (uncast_exp e_t)) with
             | E_throw _ | E_block [E_aux (E_throw _, _)] ->
-               add_opt_constraint (option_map nc_not (assert_constraint env false cond)) env
+               add_opt_constraint l "if-throw" (option_map nc_not (assert_constraint env false cond)) env
             | _ -> env
           end
        | _ -> env in
@@ -3341,7 +3368,7 @@ and check_block l env exps ret_typ =
      let env, added_constraint = match assert_constraint env true constr_exp with
        | Some nc ->
           typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
-          Env.add_constraint nc env, true
+          Env.add_constraint ~reason:(assert_l, "assertion") nc env, true
        | None -> env, false
      in
      let texp = annot_exp (E_assert (constr_exp, checked_msg)) unit_typ (Some unit_typ) in
@@ -3358,12 +3385,12 @@ and check_block l env exps ret_typ =
   | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in
+     let env = add_opt_constraint l "if-throw" (option_map nc_not (assert_constraint env false cond')) env in
      texp :: check_block l env exps ret_typ
-  | ((E_aux (E_if (cond, true_exp, _), _) as exp) :: exps) when exp_unconditionally_returns true_exp ->
+  | ((E_aux (E_if (cond, then_exp, _), _) as exp) :: exps) when exp_unconditionally_returns then_exp ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in
+     let env = add_opt_constraint l "unconditional if" (option_map nc_not (assert_constraint env false cond')) env in
      texp :: check_block l env exps ret_typ
   | (exp :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
@@ -3388,7 +3415,7 @@ and check_case env pat_typ pexp typ =
        | None -> None, env
        | Some guard ->
           let checked_guard = check_exp env guard bool_typ in
-          Some checked_guard, add_opt_constraint (assert_constraint env true checked_guard) env
+          Some checked_guard, add_opt_constraint l "guard pattern" (assert_constraint env true checked_guard) env
      in
      let checked_case = crule check_exp env' case typ in
      construct_pexp (tpat, checked_guard, checked_case, (l, None))
@@ -3807,11 +3834,11 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
        | [nexp], [] ->
           let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
           let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
-          Env.add_constraint (nc_eq (nvar kid) nexp) env, replace_nexp_typ nexp (Nexp_aux (Nexp_var kid, l)) typ
+          Env.add_constraint ~reason:(l, "type pattern") (nc_eq (nvar kid) nexp) env, replace_nexp_typ nexp (Nexp_aux (Nexp_var kid, l)) typ
        | [], [nc] ->
           let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_bool kid) env in
           let nc = match shadow with Some s_v -> constraint_subst kid (arg_bool (nc_var s_v)) nc | None -> nc in
-          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) env,
+          Env.add_constraint ~reason:(l, "type pattern") (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) env,
           replace_nc_typ nc (NC_aux (NC_var kid, l)) typ
        | [], [] ->
           typ_error env l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
@@ -3828,7 +3855,7 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   | TP_var kid, A_nexp nexp ->
      let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
      let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
-     Env.add_constraint (nc_eq (nvar kid) nexp) env, arg_nexp ~loc:l (nvar kid)
+     Env.add_constraint ~reason:(l, "type pattern") (nc_eq (nvar kid) nexp) env, arg_nexp ~loc:l (nvar kid)
   | _, A_typ typ -> let env, typ' = bind_typ_pat env typ_pat typ in env, A_aux (A_typ typ', l_arg)
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
@@ -4173,7 +4200,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | While -> assert_constraint env true checked_cond
        | Until -> None
      in
-     let checked_body = crule check_exp (add_opt_constraint nc env) body unit_typ in
+     let checked_body = crule check_exp (add_opt_constraint l "loop condition" nc env) body unit_typ in
      annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
@@ -4200,12 +4227,12 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_if (cond, then_branch, else_branch) ->
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let then_branch' = irule infer_exp (add_opt_constraint (assert_constraint env true cond') env) then_branch in
+     let then_branch' = irule infer_exp (add_opt_constraint l "then branch" (assert_constraint env true cond') env) then_branch in
      (* We don't have generic type union in Sail, but we can union simple numeric types. *)
      begin match destruct_numeric (Env.expand_synonyms env (typ_of then_branch')) with
      | Some (kids, nc, then_nexp) ->
         let then_sn = to_simple_numeric l kids nc then_nexp in
-        let else_branch' = irule infer_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch in
+        let else_branch' = irule infer_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch in
         begin match destruct_numeric (Env.expand_synonyms env (typ_of else_branch')) with
         | Some (kids, nc, else_nexp) ->
            let else_sn = to_simple_numeric l kids nc else_nexp in
@@ -4216,10 +4243,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      | None ->
         begin match typ_of then_branch' with
         | Typ_aux (Typ_app (f, [_]), _) when string_of_id f = "atom_bool" ->
-           let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch bool_typ in
+           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch bool_typ in
            annot_exp (E_if (cond', then_branch', else_branch')) bool_typ
         | _ ->
-           let else_branch' = crule check_exp (add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
+           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
            annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
         end
      end

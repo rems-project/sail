@@ -102,15 +102,17 @@ val opt_check_completeness : bool ref
   
 (** {2 Type errors} *)
 
+type constraint_reason = (Ast.l * string) option
+  
 type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
-  | Err_subtype of typ * typ * n_constraint option * n_constraint list * Ast.l KBindings.t
+  | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_inner of type_error * Ast.l * string * type_error
+  | Err_inner of type_error * Ast.l * string * string option * type_error
 
 type env
 
@@ -169,7 +171,7 @@ module Env : sig
   (** Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
-  val add_constraint : n_constraint -> t -> t
+  val add_constraint : ?reason:(Ast.l * string) -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into
       an environment *)

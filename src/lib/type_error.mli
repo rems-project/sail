@@ -71,6 +71,14 @@ This file wraps the functions in Type_check, so they return
 Fatal_error exceptions from the Reporting module rather than
 Type_errors. *)
 
+(** If false (default), we'll only explain generated variables, not
+   variables written explicitly by the user in the source. *)
+val opt_explain_all_variables : bool ref
+
+(** If false (default), we'll list relevant constraints, but not go
+   into detail about how they were derived *)
+val opt_explain_constraints : bool ref
+  
 type suggestion = 
   | Suggest_add_constraint of Ast.n_constraint
   | Suggest_none

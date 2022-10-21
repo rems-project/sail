@@ -1,8 +1,8 @@
 (env
   (dev
-    (flags (:standard -w -33 -w -27 -w -26 -w -39)))
+    (flags (:standard -w -33 -w -27 -w -26 -w -39 -w -32)))
   (release
-    (flags (:standard -w -33 -w -27 -w -26 -w -39))))
+    (flags (:standard -w -33 -w -27 -w -26 -w -39 -w -32))))
 
 (rule
   (target ast.lem)

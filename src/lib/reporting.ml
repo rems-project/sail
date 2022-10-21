@@ -141,7 +141,7 @@ let rec simp_loc = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> simp_loc l
   | Parse_ast.Generated l -> simp_loc l
-  | Parse_ast.Derived (l1, l2) ->
+  | Parse_ast.Hint (_, l1, l2) ->
      begin match simp_loc l1 with
      | None -> simp_loc l2
      | pos -> pos
@@ -153,10 +153,18 @@ let rec loc_file = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> loc_file l
   | Parse_ast.Generated l -> loc_file l
-  | Parse_ast.Derived (_, _) -> None
+  | Parse_ast.Hint (_, _, l) -> loc_file l
   | Parse_ast.Range (p1, _) -> Some p1.pos_fname
   | Parse_ast.Documented (_, l) -> loc_file l
-                                 
+
+let rec start_loc = function
+  | Parse_ast.Unknown -> Parse_ast.Unknown
+  | Parse_ast.Unique (u, l) -> Parse_ast.Unique (u, start_loc l)
+  | Parse_ast.Generated l -> Parse_ast.Generated (start_loc l)
+  | Parse_ast.Hint (hint, l1, l2) -> Parse_ast.Hint (hint, start_loc l1, start_loc l2)
+  | Parse_ast.Range (p1, _) -> Parse_ast.Range (p1, p1)
+  | Parse_ast.Documented (doc, l) -> Parse_ast.Documented (doc, start_loc l)
+                             
 let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"
@@ -174,7 +182,7 @@ type error =
   | Err_syntax of Lexing.position * string
   | Err_syntax_loc of Parse_ast.l * string
   | Err_lex of Lexing.position * string
-  | Err_type of Parse_ast.l * string
+  | Err_type of Parse_ast.l * string option * string
 
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
@@ -189,7 +197,7 @@ let dest_err ?(interactive = false) = function
   | Err_syntax (p, m) -> (Util.("Syntax error" |> yellow |> clear), Pos p, m)
   | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), Loc l, m)
   | Err_lex (p, s) -> (Util.("Lexical error" |> yellow |> clear), Pos p, s)
-  | Err_type (l, m) -> (Util.("Type error" |> yellow |> clear), Loc l, m)
+  | Err_type (l, _, m) -> (Util.("Type error" |> yellow |> clear), Loc l, m)
 
 exception Fatal_error of error
 
@@ -199,7 +207,7 @@ let err_unreachable l ocaml_pos m =
   let backtrace = Printexc.get_callstack !opt_backtrace_length in
   Fatal_error (Err_unreachable (l, ocaml_pos, backtrace, m))
 let err_general l m = Fatal_error (Err_general (l, m))
-let err_typ l m = Fatal_error (Err_type (l, m))
+let err_typ ?hint l m = Fatal_error (Err_type (l, hint, m))
 let err_syntax p m = Fatal_error (Err_syntax (p, m))
 let err_syntax_loc l m = Fatal_error (Err_syntax_loc (l, m))
 let err_lex p m = Fatal_error (Err_lex (p, m))
@@ -214,7 +222,7 @@ let forbid_errors ocaml_pos f x =
   | Fatal_error (Err_syntax (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
   | Fatal_error (Err_syntax_loc (l, m)) -> raise (err_unreachable l ocaml_pos m)
   | Fatal_error (Err_lex (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
-  | Fatal_error (Err_type (l, m)) -> raise (err_unreachable l ocaml_pos m)
+  | Fatal_error (Err_type (l, _, m)) -> raise (err_unreachable l ocaml_pos m)
  
 let print_error ?(interactive = false) e =
   let (m1, pos_l, m2) = dest_err ~interactive:interactive e in
