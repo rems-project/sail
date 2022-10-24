@@ -1,5 +1,5 @@
 [93mLexical error[0m:
-[[96munknown_operator.sail[0m]:6:12-12
+[96munknown_operator.sail[0m:6.12-12:
 6[96m |[0m  let _ = x <=|=> y;
  [91m |[0m            [91m^[0m
  [91m |[0m Operator fixity undeclared <=|=>

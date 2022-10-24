@@ -1,5 +1,5 @@
 [93mLexical error[0m:
-[[96mmodule_reserved.sail[0m]:3:0-0
+[96mmodule_reserved.sail[0m:3.0-0:
 3[96m |[0mmodule
  [91m |[0m[91m^[0m
  [91m |[0m module is a reserved keyword
