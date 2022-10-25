@@ -654,9 +654,17 @@ let value_of_sexpr sexpr =
           when int_of_string m = n && String.length v > 2 && String.sub v 0 2 = "bv" ->
         let v = String.sub v 2 (String.length v - 2) in
         mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string v, 0))
-     | _ -> failwith "Cannot parse sexpr as ctyp"
+     | Atom v
+          when String.length v > 2 && String.sub v 0 2 = "#b" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string ("0b" ^ v), 0))
+     | Atom v
+          when String.length v > 2 && String.sub v 0 2 = "#x" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string ("0x" ^ v), 0))
+     | _ -> failwith ("Cannot parse sexpr as ctyp: " ^ string_of_sexpr sexpr)
      end
-  | _ -> assert false
+  | cty -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp cty)
 
 let rec find_arg id ctyp arg_smt_names = function
   | List [Atom "define-fun"; Atom str; List []; _; value] :: _
