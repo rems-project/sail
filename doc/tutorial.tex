@@ -803,7 +803,7 @@ order, and vice-versa for an increasing vector. For the above example,
 the bitfield wrapper type will be the following:
 
 \begin{lstlisting}
-union cr = { Mk_cr(vector(8, dec, bit)) }
+struct cr = {bits : bitvector(8, dec)}
 \end{lstlisting}
 
 The complete vector can be accessed as \ll{CR.bits()}, and a register

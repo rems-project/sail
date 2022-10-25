@@ -96,6 +96,8 @@ manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex risc
 	pdflatex ${LATEXARG}
 	pdflatex ${LATEXARG}
 
+manual.pdf: examples/bitfield.sail
+
 anon_man: LATEXARG='\def\ANON{}\input{manual.tex}'
 anon_man: manual.pdf
 

@@ -1,4 +1,4 @@
-bitfield cr : vector(8, dec, bit) = {
+bitfield cr : bitvector(8,dec) = {
   CR0 : 7 .. 4,
   LT  : 7,
   GT  : 6,
