@@ -1,16 +1,21 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import re
 import sys
 import hashlib
 
-sail_dir = os.environ['SAIL_DIR']
-sail = os.environ['SAIL']
-os.chdir(os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(sail_dir, 'test'))
+mydir = os.path.dirname(__file__)
+os.chdir(mydir)
+sys.path.insert(0, os.path.join(mydir, '..'))
 
 from sailtest import *
+
+sail_dir = get_sail_dir()
+sail = get_sail()
+
+print("Sail is {}".format(sail))
+print("Sail dir is {}".format(sail_dir))
 
 def test_c_builtins(name, sail_opts):
     banner('Testing builtins: {} Sail options: {}'.format(name, sail_opts))
@@ -26,7 +31,7 @@ def test_c_builtins(name, sail_opts):
                 step('./{}'.format(basename))
                 step('rm {}.c'.format(basename))
                 step('rm {}'.format(basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -45,7 +50,7 @@ def test_ocaml_builtins(name, sail_opts):
                 step('./{}'.format(basename))
                 step('rm -r _sbuild_{}'.format(basename))
                 step('rm {}'.format(basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -82,7 +87,7 @@ def test_lem_builtins(name):
                 os.chdir('..')
                 step('rm -r _lbuild_{}'.format(basename))
 
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -113,7 +118,7 @@ def test_coq_builtins(name):
                 os.chdir('..')
                 step('rm -r _coqbuild_{}'.format(basename))
 
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -131,7 +136,7 @@ def test_isla_builtins(name):
                 step('{}/isla-sail/isla-sail {} {}/lib/vector_dec.sail {}/test/property/include/config.sail -o {}'.format(isla_dir, filename, sail_dir, isla_dir, basename))
                 step('{}/target/release/isla-execute-function -A {}.ir -C {}/configs/plain.toml main'.format(isla_dir, basename, isla_dir))
                 step('rm {}.ir'.format(basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()

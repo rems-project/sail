@@ -1,16 +1,21 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import re
 import sys
 import hashlib
 
-sail_dir = os.environ['SAIL_DIR']
-sail = os.environ['SAIL']
-os.chdir(os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(sail_dir, 'test'))
+mydir = os.path.dirname(__file__)
+os.chdir(mydir)
+sys.path.insert(0, os.path.join(mydir, '..'))
 
 from sailtest import *
+
+sail_dir = get_sail_dir()
+sail = get_sail()
+
+print("Sail is {}".format(sail))
+print("Sail dir is {}".format(sail_dir))
 
 def test_c(name, c_opts, sail_opts, valgrind):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
@@ -30,7 +35,7 @@ def test_c(name, c_opts, sail_opts, valgrind):
                 if valgrind and not basename.startswith('fail'):
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -51,7 +56,7 @@ def test_c2(name, c_opts, sail_opts, valgrind):
                 if valgrind:
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('rm {}.c {} {}.result'.format(basename, basename, basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -68,7 +73,7 @@ def test_interpreter(name):
                 step('{} -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 step('rm {}.iresult'.format(basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -87,7 +92,7 @@ def test_ocaml(name):
                 step('diff {}.oresult {}.expect'.format(basename, basename))
                 step('rm -r _sbuild_{}'.format(basename))
                 step('rm {}.oresult {}_ocaml'.format(basename, basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
@@ -111,7 +116,7 @@ def test_lem(name):
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
                 step('./main.native 1> {}.lresult'.format(basename))
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))
-                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()

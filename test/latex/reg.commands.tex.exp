@@ -1,5 +1,6 @@
 \providecommand\saildoclabelled[2]{\phantomsection\label{#1}#2}
 \providecommand\saildocval[2]{#1 #2}
+\providecommand\saildocoutcome[2]{#1 #2}
 \providecommand\saildocfcl[2]{#1 #2}
 \providecommand\saildoctype[2]{#1 #2}
 \providecommand\saildocfn[2]{#1 #2}
@@ -43,3 +44,9 @@
 \newcommand{\sailrefregister}[2]{
   \ifstrequal{#1}{big}{\hyperref[sailregisterzbig]{#2}}{}%
   \ifstrequal{#1}{small}{\hyperref[sailregisterzsmall]{#2}}{}}
+
+\newcommand{\sailoutcome}[1]{
+  }
+
+\newcommand{\sailrefoutcome}[2]{
+  }
