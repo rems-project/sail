@@ -1912,6 +1912,9 @@ Ltac sail_extra_tactic := fail.
 Ltac main_solver :=
  solve
  [ z_comparisons
+ | subst; match goal with |- context [ZEuclid.div] => solve_euclid
+                        | |- context [ZEuclid.modulo] => solve_euclid
+   end
  | lia
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
@@ -1919,9 +1922,6 @@ Ltac main_solver :=
  | subst; drop_Z_exists;
    repeat match goal with |- and _ _ => split end;
    eauto 3 with datatypes zarith sail
- | subst; match goal with |- context [ZEuclid.div] => solve_euclid
-                        | |- context [ZEuclid.modulo] => solve_euclid
-   end
  | match goal with |- context [Z.mul] => nia end
  (* If we have a disjunction from a set constraint on a variable we can often
     solve a goal by trying them (admittedly this is quite heavy handed...) *)

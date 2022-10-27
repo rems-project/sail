@@ -110,7 +110,7 @@ let opt_debug_on : string list ref = ref []
 
 type context = {
   types_mod : string; (* Name of the types module for disambiguation *)
-  early_ret : bool;
+  early_ret : typ option;
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames,
                                     used to avoid variable/type variable name clashes *)
   (* Note that as well as these kid renames, we also attempt to replace entire
@@ -128,7 +128,7 @@ type context = {
 }
 let empty_ctxt = {
   types_mod = "";
-  early_ret = false;
+  early_ret = None;
   kid_renames = KBindings.empty;
   kid_id_renames = KBindings.empty;
   kid_id_renames_rev = Bindings.empty;
@@ -917,11 +917,12 @@ let doc_tannot_core ctxt env eff typ =
   let of_typ typ =
     let ta = doc_typ ctxt env typ in
     if eff then
-      if ctxt.early_ret
-      then if ctxt.is_monadic
-           then string "MR " ^^ parens ta ^^ string " _"
-           else string "sum " ^^ string " _" ^^ parens ta
-      else string "M " ^^ parens ta
+      match ctxt.early_ret with
+      | Some ret_typ ->
+         if ctxt.is_monadic
+         then string "MR " ^^ parens ta ^^ string " " ^^ parens (doc_typ ctxt env ret_typ)
+         else string "sum " ^^ parens (doc_typ ctxt env ret_typ) ^^ string " " ^^ parens ta
+      | None -> string "M " ^^ parens ta
     else ta
   in of_typ typ
 
@@ -1435,60 +1436,8 @@ let doc_exp, doc_let =
       | Some _ ->
          wrap_parens (string "build_ex" ^/^ epp)
     in
-    let construct_dep_pairs ?(rawbools=false) env =
-      let rec aux want_parens (E_aux (e,_) as exp) typ =
-        match e with
-        | E_tuple exps
-        | E_cast (_, E_aux (E_tuple exps,_))
-          -> begin
-            match typ with
-            | Typ_aux (Typ_exist (kopts,nc,Typ_aux (Typ_tup typs,_)),_) ->
-               debug ctxt (lazy ("Constructing dependent tuple " ^
-                                   String.concat ", " (List.map string_of_exp exps) ^
-                                     " of type " ^ string_of_typ typ));
-               let ex_exp_typs, tup_exp_typs = filter_dep_tuple kopts (List.combine exps typs) in
-               let ex_exps = Util.map_filter (function Some x -> Some x | None -> None) ex_exp_typs in
-               let ex_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) ex_exps in
-               let tup_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) tup_exp_typs in
-               let pp = group (string "build_ex2" ^/^ ex_pp ^/^ tup_pp) in
-               if want_parens then parens pp else pp
-            | _ ->
-               let typs = List.map general_typ_of exps in
-               parens (separate (string ", ") (List.map2 (aux false) exps typs))
-          end
-        | _ ->
-           let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
-           debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ " at type " ^ string_of_typ typ));
-           let build_ex, out_typ =
-             match classify_ex_type ctxt (env_of exp) ~rawbools typ' with
-             | ExNone, _, _ -> None, typ'
-             | ExGeneral, _, typ' -> Some "build_ex", typ'
-           in
-           let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
-           let in_typ = match destruct_exist_plain in_typ with Some (_,_,t) -> t | None -> in_typ in
-           let autocast =
-             (* Avoid using helper functions which simplify the nexps *)
-             match in_typ, out_typ with
-             | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-               Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-                not (similar_nexps ctxt (env_of exp) n1 n2)
-             | _ -> false
-           in
-           let exp_pp = expV (want_parens || autocast || Util.is_some build_ex) exp in
-           let exp_pp =
-             if autocast then
-               let exp_pp = string "autocast" ^^ space ^^ exp_pp in
-               if want_parens || Util.is_some build_ex then parens exp_pp else exp_pp
-             else exp_pp
-           in match build_ex with
-              | Some s ->
-                let exp_pp = string s ^/^ exp_pp in
-                if want_parens then parens exp_pp else exp_pp
-              | None -> exp_pp
-      in aux
-    in
     let liftR doc =
-      if ctxt.early_ret && effectful (effect_of full_exp)
+      if Option.is_some ctxt.early_ret && effectful (effect_of full_exp)
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
@@ -1610,9 +1559,12 @@ let doc_exp, doc_let =
           let informative = Util.is_some (is_auto_decomposed_exist ctxt (env_of full_exp) (general_typ_of full_exp)) in
           let suffix = if informative then "MP" else "M" in
           let call = doc_id ctxt (append_id f suffix) in
+          debug ctxt (lazy ("Effectful boolean op: " ^ string_of_id f ^ if informative then " with property" else " plain"));
           let doc_arg exp =
+            let typ = general_typ_of exp in
+            debug ctxt (lazy ("Arg has type " ^ string_of_typ typ));
             let epp = expY exp in
-            match is_auto_decomposed_exist ctxt (env_of exp) ~rawbools:true (general_typ_of exp) with
+            match is_auto_decomposed_exist ctxt (env_of exp) ~rawbools:true typ with
             | Some _ ->
                if informative
                then parens (epp ^^ doc_tannot ctxt (env_of exp) true (general_typ_of exp))
@@ -1728,7 +1680,7 @@ let doc_exp, doc_let =
                whether a proof is necessary *)
             let body_pp =
               if body_effectful then expV false body
-              else construct_dep_pairs (env_of body) false body (general_typ_of full_exp) in
+              else construct_dep_pairs ctxt (env_of body) false body (general_typ_of full_exp) in
             let varstuple_retyped = check_exp env (strip_exp varstuple) (general_typ_of full_exp) in
             let varstuple_pp, lambda =
               make_loop_vars [] varstuple_retyped
@@ -1739,8 +1691,8 @@ let doc_exp, doc_let =
               | Some exp -> "T", [parens (prefix 2 1 (group lambda) (expN exp))]
             in
             let proj = match classify_ex_type ctxt env (general_typ_of full_exp) with
-              | ExGeneral, _, _ -> fun pp -> string "projT1 " ^^ parens pp
-              | ExNone, _, _ -> fun pp -> pp
+              | ExGeneral, _, _ when not ctxt.is_monadic -> fun pp -> string "projT1 " ^^ parens pp
+              | _ -> fun pp -> pp
             in
             parens (proj (
                 (prefix 2 1)
@@ -1924,7 +1876,7 @@ let doc_exp, doc_let =
             | _ ->
                let want_parens1 = want_parens || autocast_arg in
                let arg_pp =
-                 construct_dep_pairs inst_env want_parens1 arg typ_from_fn
+                 construct_dep_pairs ctxt inst_env want_parens1 arg typ_from_fn
                in
                if autocast_arg && false
                then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
@@ -1989,7 +1941,15 @@ let doc_exp, doc_let =
              if prefix_recordtype && string_of_id tid <> "regstate"
              then (string (string_of_id tid ^ "_")) ^^ doc_id ctxt id
              else doc_id ctxt id in
-           expY fexp ^^ dot ^^ parens fname
+           let exp_pp = expY fexp ^^ dot ^^ parens fname in
+           let field_typ = expand_range_type (Env.expand_synonyms env (typ_of_annot (l,annot))) in
+           begin
+             match classify_ex_type ctxt env field_typ with
+             | ExGeneral,_,_ ->
+                let exp_pp = string "projT1" ^/^ exp_pp in
+                if aexp_needed then parens exp_pp else exp_pp
+             | _ -> exp_pp
+           end
         | _ ->
            raise (report l __POS__ "E_field expression with no register or record type"))
     | E_block [] -> string "tt"
@@ -2034,7 +1994,7 @@ let doc_exp, doc_let =
     | E_lit lit -> doc_lit lit
     | E_tuple _
     | E_cast(_, E_aux (E_tuple _, _)) ->
-       construct_dep_pairs (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
+       construct_dep_pairs ctxt (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
     | E_cast(typ,e) ->
        let env = env_of_annot (l,annot) in
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
@@ -2093,7 +2053,7 @@ let doc_exp, doc_let =
        in
        let epp =
          if effects then
-           match inner_ex, cast_ex with
+           (*match inner_ex, cast_ex with
            | ExGeneral, ExGeneral ->
               (* If the types are the same use the cast as a hint to Coq,
                  otherwise derive the new type from the old one. *)
@@ -2104,7 +2064,7 @@ let doc_exp, doc_let =
               string "projT1_m" ^/^ epp
            | ExNone, ExGeneral ->
               string "build_ex_m" ^/^ epp
-           | ExNone, ExNone -> epp
+           | ExNone, ExNone ->*) epp
          else match cast_ex with
               | ExGeneral -> string "build_ex" ^/^ epp
               | ExNone -> epp
@@ -2202,7 +2162,7 @@ let doc_exp, doc_let =
        if aexp_needed then parens (align epp) else align epp
     | E_try (e, pexps) ->
        if effectful (effect_of e) then
-         let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
+         let try_catch = if Option.is_some ctxt.early_ret then "try_catchR" else "try_catch" in
          let epp =
            (* TODO capture avoidance for __catch_val *)
            group ((separate space [string try_catch; expY e; string "(fun __catch_val => match __catch_val with "]) ^/^
@@ -2339,9 +2299,9 @@ let doc_exp, doc_let =
        in
        let valpp =
          let env = env_of e1 in
-         construct_dep_pairs env true e1 ret_typ ~rawbools:true
+         construct_dep_pairs ctxt env true e1 ret_typ ~rawbools:true
        in
-       if ctxt.early_ret then
+       if Option.is_some ctxt.early_ret then
          if ctxt.is_monadic
          then wrap_parens (group (align (separate space [string "returnR"; parens ctxt.ret_typ_pp; valpp])))
          else wrap_parens (group (align (separate space [string "inr"; valpp])))
@@ -2374,6 +2334,59 @@ let doc_exp, doc_let =
     | E_internal_value _ ->
       raise (Reporting.err_unreachable l __POS__
         "unsupported internal expression encountered while pretty-printing")
+
+  and construct_dep_pairs ctxt ?(rawbools=false) env =
+    let rec aux want_parens (E_aux (e,_) as exp) typ =
+      match e with
+      | E_tuple exps
+        | E_cast (_, E_aux (E_tuple exps,_))
+        -> begin
+          match typ with
+          | Typ_aux (Typ_exist (kopts,nc,Typ_aux (Typ_tup typs,_)),_) ->
+             debug ctxt (lazy ("Constructing dependent tuple " ^
+                                 String.concat ", " (List.map string_of_exp exps) ^
+                                   " of type " ^ string_of_typ typ));
+             let ex_exp_typs, tup_exp_typs = filter_dep_tuple kopts (List.combine exps typs) in
+             let ex_exps = Util.map_filter (function Some x -> Some x | None -> None) ex_exp_typs in
+             let ex_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) ex_exps in
+             let tup_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) tup_exp_typs in
+             let pp = group (string "build_ex2" ^/^ ex_pp ^/^ tup_pp) in
+             if want_parens then parens pp else pp
+          | _ ->
+             let typs = List.map general_typ_of exps in
+             parens (separate (string ", ") (List.map2 (aux false) exps typs))
+        end
+      | _ ->
+         let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
+         debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ " at type " ^ string_of_typ typ));
+         let build_ex, out_typ =
+           match classify_ex_type ctxt (env_of exp) ~rawbools typ' with
+           | ExNone, _, _ -> None, typ'
+           | ExGeneral, _, typ' -> Some "build_ex", typ'
+         in
+         let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
+         let in_typ = match destruct_exist_plain in_typ with Some (_,_,t) -> t | None -> in_typ in
+         let autocast =
+           (* Avoid using helper functions which simplify the nexps *)
+           match in_typ, out_typ with
+           | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+             Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
+              not (similar_nexps ctxt (env_of exp) n1 n2)
+           | _ -> false
+         in
+         let exp_pp = top_exp ctxt (want_parens || autocast || Util.is_some build_ex) exp in
+         let exp_pp =
+           if autocast then
+             let exp_pp = string "autocast" ^^ space ^^ exp_pp in
+             if want_parens || Util.is_some build_ex then parens exp_pp else exp_pp
+           else exp_pp
+         in match build_ex with
+            | Some s ->
+               let exp_pp = string s ^/^ exp_pp in
+               if want_parens then parens exp_pp else exp_pp
+            | None -> exp_pp
+    in aux
+
   and if_exp ctxt full_env full_typ (elseif : bool) c t e =
     let if_pp = string (if elseif then "else if" else "if") in
     let use_sumbool = condition_produces_constraint ctxt c in
@@ -2440,7 +2453,8 @@ let doc_exp, doc_let =
       if prefix_recordtype && string_of_id recordtyp <> "regstate"
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id ctxt id
       else doc_id ctxt id in
-    group (doc_op coloneq fname (top_exp ctxt true e))
+    let e_pp = construct_dep_pairs ctxt (env_of e) false e (general_typ_of e) in
+    group (doc_op coloneq fname e_pp)
 
   and doc_case ctxt old_env typ = function
   | Pat_aux(Pat_exp(pat,e),_) ->
@@ -2753,7 +2767,7 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
 
 let doc_fun_body ctxt is_monadic exp =
   let doc_exp = doc_exp ctxt false exp in
-  if ctxt.early_ret
+  if Option.is_some ctxt.early_ret
   then
     if is_monadic
     then align (string "catch_early_return" ^//^ parens (doc_exp))
@@ -2949,7 +2963,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   in
   let ctxt0 =
     { types_mod = types_mod;
-      early_ret = contains_early_return exp;
+      early_ret = None; (* filled in below *)
       kid_renames = mk_kid_renames avoid_target_names ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
@@ -2969,6 +2983,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   in
   let ctxt = { ctxt0 with
       build_at_return = build_ex;
+      early_ret = if contains_early_return exp then Some ret_typ else None;
       ret_typ_pp = doc_typ ctxt0 Env.empty ret_typ
              } in
   let () =
@@ -3108,7 +3123,7 @@ let doc_funcl_body ctxt (exp, is_monadic, build_ex, fixupspp) =
       if not (effectful (effect_of exp))
       then string "returnM" ^/^ parens bodypp
       else bodypp
-    else if ctxt.early_ret then bodypp
+    else if Option.is_some ctxt.early_ret then bodypp
     else match build_ex with
          | Some s -> surround 3 0 (string (s ^ " (")) bodypp (string ")")
          | None -> bodypp in
