@@ -110,18 +110,31 @@ destruct m.
 * simpl. rewrite cast_positive_refl. reflexivity.
 Qed.
 
-Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m =? n)} : T n.
-refine (cast_T x _).
-apply Z.eqb_eq.
-apply (use_ArithFact H).
-Defined.
+(* To avoid carrying around proofs that bitvector sizes are correct everywhere,
+   we extend many operations to cover nonsensical sizes.  To help, we have a
+   typeclass of inhabited types so that we can pick a default value, and an
+   opaque function that returns it - well typed Sail code reduction
+   should never reach this definition. *)
+
+Class Inhabited (T:Type) := { inhabitant : T }.
+Definition dummy_value {T:Type} `{Inhabited T} := inhabitant.
+Global Opaque dummy_value.
+
+Instance dummy_mword {n} : Inhabited (mword n) := {
+  inhabitant := match n with
+  | Zpos _ => wzero _
+  | _ => WO
+  end
+}.
+
+Definition autocast {T : Z -> Type} {m n} `{Inhabited (T n)} (x : T m) : T n :=
+match Z.eq_dec m n with
+| left eq => cast_T x eq
+| right _ => dummy_value
+end.
 Arguments autocast _ _ & _ _.
 
-Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m =? n)} : monad rv (mword n) e.
-refine (x >>= fun x => returnm (cast_T x _)).
-apply Z.eqb_eq.
-apply (use_ArithFact H).
-Defined.
+Definition autocast_m {rv e m n} (x : monad rv (mword m) e) : monad rv (mword n) e := x >>= fun x => returnm (autocast x).
 
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
   DepEqNat.nat_cast _ eq x.
@@ -150,24 +163,11 @@ intro eq.
 exfalso. destruct m; simpl in *; congruence.
 Defined.
 
-(* To avoid carrying around proofs that bitvector sizes are correct everywhere,
-   we extend many operations to cover nonsensical sizes.  To help, we have a
-   family of dummy mwords that are opaque - well typed Sail code reduction
-   should never reach this definition. *)
-
-Definition dummy_mword {n : Z} : mword n.
-refine (
-  match n with
-  | Zpos _ => wzero _
-  | _ => WO
-  end
-).
-Qed.
-
+(* TODO: remove *)
 Definition fit_mword {a b : Z} (v : mword a) : mword b :=
   match Z.eq_dec a b with
   | left e => match e with eq_refl => v end
-  | right _ => dummy_mword
+  | right _ => dummy_value
   end.
 
 Definition fit_word {a : nat} {b : Z} (v : word a) : mword b := fit_mword (cast_to_mword v eq_refl).
@@ -225,7 +225,7 @@ Definition subrange_vec_dec_precise {n} (v : mword n) m o `{ArithFact (0 <=? o)}
                                    (subrange_lemma2 prf))) subrange_lemma3.
 
 Definition subrange_vec_dec {n} (v : mword n) m o : mword (m - o + 1) :=
-  if sumbool_of_bool (andb (0 <=? o) (o <=? m <? n)) then subrange_vec_dec_precise v m o else dummy_mword.
+  if sumbool_of_bool (andb (0 <=? o) (o <=? m <? n)) then subrange_vec_dec_precise v m o else dummy_value.
 
 Definition subrange_vec_inc {n} (v : mword n) m o : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
 
@@ -246,7 +246,7 @@ apply Z2Nat.inj_lt; lia.
 apply Z2Nat.inj_le; lia.
 Qed.
 
-Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - (o - 1))) : mword n.
+Definition update_subrange_vec_dec_precise {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - (o - 1))) : mword n.
 refine (
   let n := Z.to_nat n in
   let m := Z.to_nat m in
@@ -264,10 +264,10 @@ refine (
   cast_to_mword z (update_subrange_vec_dec_pf _ _)).
 Defined.
 
-Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
-  if sumbool_of_bool ((0 <=? j) && (j <=? i) && (i <? a) && (b =? i - j + 1))%bool then update_subrange_vec_dec v i j (autocast w) else dummy v.
+Definition update_subrange_vec_dec {n} (v : mword n) m o (w : mword (m - (o - 1))) : mword n :=
+  if sumbool_of_bool ((0 <=? o) && (o <=? m) && (m <? n))%bool then update_subrange_vec_dec_precise v m o (autocast w) else dummy v.
 
-Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
+Definition update_subrange_vec_inc {n} (v : mword n) m o (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 (*val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 Definition extz_vec {a b} (n : Z) (v : mword a) : mword b :=
@@ -305,16 +305,18 @@ assert ((Z.to_nat m <= Z.to_nat n)%nat).
 lia.
 Qed.
 
-Definition vector_truncate {n} (v : mword n) (m : Z) `{ArithFact (m >=? 0)} `{ArithFact (m <=? n)} : mword m.
+Definition vector_truncate {n} (v : mword n) (m : Z) : mword m.
+refine (if sumbool_of_bool ((m >=? 0) && (m <=? n)) then _ else dummy_value).
 refine (cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (_ : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
-abstract (unwrap_ArithFacts; unbool_comparisons; apply truncate_eq; auto with zarith).
-abstract (unwrap_ArithFacts; unbool_comparisons; apply Z2Nat.id; lia).
+abstract (unbool_comparisons; apply truncate_eq; auto with zarith).
+abstract (unbool_comparisons; apply Z2Nat.id; lia).
 Defined.
 
-Definition vector_truncateLSB {n} (v : mword n) (m : Z) `{ArithFact (m >=? 0)} `{ArithFact (m <=? n)} : mword m.
+Definition vector_truncateLSB {n} (v : mword n) (m : Z) : mword m.
+refine (if sumbool_of_bool ((m >=? 0) && (m <=? n)) then _ else dummy_value).
 refine (cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (_ : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
-abstract (unwrap_ArithFacts; unbool_comparisons; apply truncateLSB_eq; auto with zarith).
-abstract (unwrap_ArithFacts; unbool_comparisons; apply Z2Nat.id; lia).
+abstract (unbool_comparisons; apply truncateLSB_eq; auto with zarith).
+abstract (unbool_comparisons; apply Z2Nat.id; lia).
 Defined.
 
 Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
@@ -566,8 +568,10 @@ rewrite <- Z2Nat.id. 2: solve [ auto with zarith ].
 rewrite Z2Nat.inj_mul. 2,3: solve [ auto with zarith ].
 rewrite Nat.mul_comm. reflexivity.
 Qed.
-Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >=? 0)} : mword (a * n) :=
- fit_word (replicate_bits_aux (get_word w) (Z.to_nat n)).
+Definition replicate_bits {a} (w : mword a) (n : Z) : mword (a * n) :=
+ if sumbool_of_bool (n >=? 0) then
+   fit_word (replicate_bits_aux (get_word w) (Z.to_nat n))
+ else dummy_value.
 
 (*val duplicate : forall 'a. Size 'a => bitU -> integer -> mword 'a
 Definition duplicate := duplicate_bit_bv
@@ -641,13 +645,15 @@ Qed.
 
 Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
-Definition get_slice_int {a} `{ArithFact (a >=? 0)} (len : Z) (n : Z) (lo : Z) : mword a :=
-  let hi := lo + len - 1 in
-  let bs := bools_of_int (hi + 1) n in
-  of_bools (subrange_list false bs hi lo).
+Definition get_slice_int {a} (len : Z) (n : Z) (lo : Z) : mword a :=
+  if sumbool_of_bool (a >=? 0) then
+    let hi := lo + len - 1 in
+    let bs := bools_of_int (hi + 1) n in
+    of_bools (subrange_list false bs hi lo)
+  else dummy_value.
 
 Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
-  update_subrange_vec_dec_unchecked v (x + m - 1) x w.
+  update_subrange_vec_dec v (x + m - 1) x (autocast w).
 
 Definition set_slice_int len n lo (v : mword len) : Z :=
   let hi := lo + len - 1 in
@@ -655,11 +661,12 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
      avoid one here. *)
   if sumbool_of_bool (Z.gtb hi 0) then
     let bs : mword (hi + 1) := mword_of_int n in
-    (int_of_mword true (update_subrange_vec_dec_unchecked bs hi lo v))
+    (int_of_mword true (update_subrange_vec_dec bs hi lo (autocast v)))
   else n.
 
 (* Variant of bitvector slicing for the ARM model with few constraints *)
-Definition slice {m} (v : mword m) lo len `{ArithFact (0 <=? len)} : mword len :=
+(* TODO: remove *)
+Definition slice {m} (v : mword m) lo len : mword len :=
   if sumbool_of_bool (orb (len =? 0) (lo <? 0))
   then zeros len
   else

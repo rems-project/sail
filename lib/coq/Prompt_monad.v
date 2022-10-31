@@ -319,7 +319,7 @@ Definition write_mem_ea {rv a E} wk (addrsz : Z) (addr: mword a) sz : monad rv u
 
 (*val write_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
   write_kind -> integer -> 'a -> integer -> 'b -> monad 'rv bool 'e*)
-Definition write_mem {rv a b E} wk (addrsz : Z) (addr : mword a) sz (v : mword b) : monad rv bool E :=
+Definition write_mem {rv a E} wk (addrsz : Z) (addr : mword a) sz (v : mword (8 * sz)) : monad rv bool E :=
   match (mem_bytes_of_bits v, Word.wordToN (get_word addr)) with
     | (Some v, addr) =>
        Write_mem wk addr (Z.to_nat sz) v returnm
@@ -328,7 +328,7 @@ Definition write_mem {rv a b E} wk (addrsz : Z) (addr : mword a) sz (v : mword b
 
 (*val write_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monad 'rv bool 'e*)
-Definition write_memt {rv a b E} wk (addr : mword a) sz (v : mword b) tag : monad rv bool E :=
+Definition write_memt {rv a E} wk (addr : mword a) sz (v : mword (8 * sz)) tag : monad rv bool E :=
   match (mem_bytes_of_bits v, Word.wordToN (get_word addr)) with
     | (Some v, addr) =>
        Write_memt wk addr (Z.to_nat sz) v tag returnm

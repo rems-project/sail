@@ -687,16 +687,16 @@ Qed.
 #[export] Hint Rewrite liftState_write_mem_ea : liftState.
 #[export] Hint Resolve liftState_write_mem_ea : liftState.
 
-Lemma liftState_write_memt Regs Regval A B E wk addr sz v t r :
-  liftState (Regs := Regs) r (@write_memt Regval A B E wk addr sz v t) = write_memtS wk addr sz v t.
+Lemma liftState_write_memt Regs Regval A E wk addr sz v t r :
+  liftState (Regs := Regs) r (@write_memt Regval A E wk addr sz v t) = write_memtS wk addr sz v t.
 unfold write_memt, write_memtS.
 destruct (Sail.Values.mem_bytes_of_bits v); auto.
 Qed.
 #[export] Hint Rewrite liftState_write_memt : liftState.
 #[export] Hint Resolve liftState_write_memt : liftState.
 
-Lemma liftState_write_mem Regs Regval A B E wk addrsize addr sz v r :
-  liftState (Regs := Regs) r (@write_mem Regval A B E wk addrsize addr sz v) = write_memS wk addr sz v.
+Lemma liftState_write_mem Regs Regval A E wk addrsize addr sz v r :
+  liftState (Regs := Regs) r (@write_mem Regval A E wk addrsize addr sz v) = write_memS wk addr sz v.
 unfold write_mem, write_memS, write_memtS.
 destruct (Sail.Values.mem_bytes_of_bits v); simpl; auto.
 Qed.

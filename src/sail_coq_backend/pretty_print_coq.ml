@@ -1436,6 +1436,29 @@ let doc_exp, doc_let =
       | Some _ ->
          wrap_parens (string "build_ex" ^/^ epp)
     in
+    let maybe_cast descr typ pp =
+      let env = env_of full_exp in
+      let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
+      let ann_typ = general_typ_of full_exp in
+      let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
+      let autocast =
+        (* Avoid using helper functions which simplify the nexps *)
+        match exp_typ, ann_typ with
+        | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+          Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
+           not (similar_nexps ctxt env n1 n2)
+        | _ -> false
+      in
+      let () =
+        debug ctxt (lazy (descr ^ " with type " ^ string_of_typ typ));
+        debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ));
+        debug ctxt (lazy (" autocast " ^ string_of_bool autocast))
+      in
+      if autocast then
+        wrap_parens (string "autocast" ^/^ pp)
+      else
+        pp
+    in
     let liftR doc =
       if Option.is_some ctxt.early_ret && effectful (effect_of full_exp)
       then separate space [string "liftR"; parens (doc)]
@@ -1849,14 +1872,6 @@ let doc_exp, doc_let =
             let typ_of_arg = expand_range_type typ_of_arg in
             let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
             let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
-            let autocast_arg =
-              (* Avoid using helper functions which simplify the nexps *)
-              match typ_of_arg', typ_from_fn' with
-              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-                 not (similar_nexps ctxt env n1 n2)
-              | _ -> false
-            in
             (* If the argument is an integer that can be inferred from the
                context in a different form, let Coq fill it in.  E.g.,
                when "64" is really "8 * width".  Avoid cases where the
@@ -1874,14 +1889,7 @@ let doc_exp, doc_let =
                debug ctxt (lazy ("  leaving int arg implicit because of non-trivial types " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2));
                underscore
             | _ ->
-               let want_parens1 = want_parens || autocast_arg in
-               let arg_pp =
-                 construct_dep_pairs ctxt inst_env want_parens1 arg typ_from_fn
-               in
-               if autocast_arg && false
-               then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
-                    if want_parens then parens arg_pp else arg_pp
-               else arg_pp
+                 construct_dep_pairs ctxt inst_env want_parens arg typ_from_fn
           in
           let epp =
             if is_ctor
@@ -1969,29 +1977,13 @@ let doc_exp, doc_let =
        else begin
          match Env.lookup_id id env with
          | Local (_,typ) ->
-            let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
-            let ann_typ = general_typ_of full_exp in
-            let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
-            let autocast =
-              (* Avoid using helper functions which simplify the nexps *)
-              match exp_typ, ann_typ with
-              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-                 not (similar_nexps ctxt env n1 n2)
-              | _ -> false
-            in
-            let () =
-              debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
-              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ));
-              debug ctxt (lazy (" autocast " ^ string_of_bool autocast))
-            in
-            if autocast then
-              wrap_parens (string "autocast" ^/^ doc_id ctxt id)
-            else
-              doc_id ctxt id
+            let id_pp = doc_id ctxt id in
+            maybe_cast ("Variable " ^ string_of_id id) typ id_pp
          | _ -> doc_id ctxt id
        end
-    | E_lit lit -> doc_lit lit
+    | E_lit lit ->
+       let lit_pp = doc_lit lit in
+       maybe_cast "Literal" (typ_of full_exp) lit_pp
     | E_tuple _
     | E_cast(_, E_aux (E_tuple _, _)) ->
        construct_dep_pairs ctxt (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
@@ -2019,37 +2011,18 @@ let doc_exp, doc_let =
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
-       let autocast_in =
-         (* Avoid using helper functions which simplify the nexps *)
-         match inner_typ', cast_typ' with
-         | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-           Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-              not (similar_nexps ctxt env n1 n2)
-           | _ -> false
-       in
        let effects = effectful (effect_of e) in
        (* We don't currently have a version of autocast under existentials,
           but they're rare and may be unnecessary *)
        let autocast_out =
          if effects && outer_ex = ExGeneral then false else autocast_out
        in
-       let autocast_in =
-         if effects && inner_ex = ExGeneral then false else autocast_in
-       in
        let () =
          debug ctxt (lazy (" effectful: " ^ string_of_bool effects ^
                            " outer_ex: " ^ string_of_ex_kind outer_ex ^
                            " cast_ex: " ^ string_of_ex_kind cast_ex ^
                            " inner_ex: " ^ string_of_ex_kind inner_ex ^
-                           " autocast_in: " ^ string_of_bool autocast_in ^
                            " autocast_out: " ^ string_of_bool autocast_out))
-       in
-       let epp =
-         if autocast_in then
-           let cast = if effects then "autocast_m" else "autocast" in
-           string cast ^/^ parens epp
-         else
-           epp
        in
        let epp =
          if effects then
@@ -2366,25 +2339,12 @@ let doc_exp, doc_let =
          in
          let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
          let in_typ = match destruct_exist_plain in_typ with Some (_,_,t) -> t | None -> in_typ in
-         let autocast =
-           (* Avoid using helper functions which simplify the nexps *)
-           match in_typ, out_typ with
-           | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-             Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-              not (similar_nexps ctxt (env_of exp) n1 n2)
-           | _ -> false
-         in
-         let exp_pp = top_exp ctxt (want_parens || autocast || Util.is_some build_ex) exp in
-         let exp_pp =
-           if autocast then
-             let exp_pp = string "autocast" ^^ space ^^ exp_pp in
-             if want_parens || Util.is_some build_ex then parens exp_pp else exp_pp
-           else exp_pp
-         in match build_ex with
-            | Some s ->
-               let exp_pp = string s ^/^ exp_pp in
-               if want_parens then parens exp_pp else exp_pp
-            | None -> exp_pp
+         let exp_pp = top_exp ctxt (want_parens || Util.is_some build_ex) exp in
+         match build_ex with
+         | Some s ->
+            let exp_pp = string s ^/^ exp_pp in
+            if want_parens then parens exp_pp else exp_pp
+         | None -> exp_pp
     in aux
 
   and if_exp ctxt full_env full_typ (elseif : bool) c t e =

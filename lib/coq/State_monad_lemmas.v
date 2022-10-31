@@ -608,15 +608,15 @@ unfold write_mem_bytesS. autorewrite with ignore_throw. reflexivity.
 Qed.
 #[export] Hint Rewrite no_throw_mem_builtins_7 : ignore_throw.
 #[export] Hint Resolve no_throw_mem_builtins_7 : ignore_throw.
-Lemma no_throw_mem_builtins_8 Regs E1 E2 A B wk addr sz v t :
-  ignore_throw (E2 := E2) (@write_memtS Regs E1 A B wk addr sz v t) === write_memtS wk addr sz v t.
+Lemma no_throw_mem_builtins_8 Regs E1 E2 A wk addr sz v t :
+  ignore_throw (E2 := E2) (@write_memtS Regs E1 A wk addr sz v t) === write_memtS wk addr sz v t.
 unfold write_memtS. rewrite ignore_throw_option_case_distrib_2.
 destruct (Sail.Values.mem_bytes_of_bits v); autorewrite with ignore_throw; auto.
 Qed.
 #[export] Hint Rewrite no_throw_mem_builtins_8 : ignore_throw.
 #[export] Hint Resolve no_throw_mem_builtins_8 : ignore_throw.
-Lemma no_throw_mem_builtins_9 Regs E1 E2 A B wk addr sz v :
-  ignore_throw (E2 := E2) (@write_memS Regs E1 A B wk addr sz v) === write_memS wk addr sz v.
+Lemma no_throw_mem_builtins_9 Regs E1 E2 A wk addr sz v :
+  ignore_throw (E2 := E2) (@write_memS Regs E1 A wk addr sz v) === write_memS wk addr sz v.
 unfold write_memS. autorewrite with ignore_throw; auto.
 Qed.
 #[export] Hint Rewrite no_throw_mem_builtins_9 : ignore_throw.

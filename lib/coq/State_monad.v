@@ -333,7 +333,7 @@ Definition write_mem_bytesS {Regs E} wk addr sz (v : list memory_byte) : monadS 
 
 (*val write_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monadS 'regs bool 'e*)
-Definition write_memtS {Regs E A B} wk (addr : mword A) sz (v : mword B) (t : bitU) : monadS Regs bool E :=
+Definition write_memtS {Regs E A} wk (addr : mword A) sz (v : mword (8 * sz)) (t : bitU) : monadS Regs bool E :=
   match (Word.wordToN (get_word addr), mem_bytes_of_bits v) with
     | (addr, Some v) => write_memt_bytesS wk addr (Z.to_nat sz) v t
     | _ => failS "write_mem"
@@ -353,7 +353,7 @@ Definition write_tag_boolS {Regs E A} (addr : mword A) (tag : bool) : monadS Reg
 
 (*val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> monadS 'regs bool 'e*)
-Definition write_memS {Regs E A B} wk (addr : mword A) sz (v : mword B) : monadS Regs bool E :=
+Definition write_memS {Regs E A} wk (addr : mword A) sz (v : mword (8 * sz)) : monadS Regs bool E :=
  write_memtS wk addr sz v B0.
 
 (*val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e*)
