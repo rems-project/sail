@@ -61,7 +61,6 @@
     (%{workspace_root}/lib/elf.c as lib/elf.c)
     (%{workspace_root}/lib/elf.h as lib/elf.h)
     (%{workspace_root}/lib/elf.sail as lib/elf.sail)
-    (%{workspace_root}/lib/emulator_memory.sail as lib/emulator_memory.sail)
     (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
     (%{workspace_root}/lib/exception_result.sail as lib/exception_result.sail)
     (%{workspace_root}/lib/exception.sail as lib/exception.sail)
