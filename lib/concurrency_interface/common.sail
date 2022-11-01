@@ -67,6 +67,10 @@
 
 $sail_internal
 
+$target_set emulator_or_isla isla c ocaml interpreter
+$target_set emulator c ocaml interpreter
+$target_set prover lem coq
+
 $ifndef _CONCURRENCY_INTERFACE_COMMON
 $define _CONCURRENCY_INTERFACE_COMMON
 
@@ -78,6 +82,7 @@ $endif
 
 $include <option.sail>
 $include <result.sail>
+
 $include <concurrency_interface/emulator_memory.sail>
 
 /*! Each cycle (see [sail_end_cycle]) the model must announce the
@@ -177,9 +182,5 @@ val __monomorphize : forall 'n, 'n >= 0. bits('n) -> bits('n)
 
 function __monomorphize(bv) = bv
 $endif
-
-$target_set emulator_or_isla isla c ocaml interpreter
-$target_set emulator c ocaml interpreter
-$target_set prover lem coq
 
 $endif
