@@ -98,6 +98,25 @@ Definition dummy {T:Type} (t:T) : T.
 exact t.
 Qed.
 
+(* To avoid carrying around proofs that vector sizes are correct everywhere,
+   we extend many operations to cover nonsensical sizes.  To help, we have a
+   typeclass of inhabited types so that we can pick a default value, and an
+   opaque function that returns it - well typed Sail code reduction
+   should never reach this definition. *)
+
+Class Inhabited (T:Type) := { inhabitant : T }.
+Definition dummy_value {T:Type} `{Inhabited T} := inhabitant.
+Global Opaque dummy_value.
+
+#[export] Instance unit_inhabited : Inhabited unit := { inhabitant := tt }.
+#[export] Instance z_inhabited : Inhabited Z := { inhabitant := 0 }.
+#[export] Instance string_inhabited : Inhabited string := { inhabitant := "" }.
+#[export] Instance bool_inhabited : Inhabited bool := { inhabitant := false }.
+#[export] Instance pair_inhabited {X Y} `{Inhabited X} `{Inhabited Y} : Inhabited (X * Y) := {
+  inhabitant := (inhabitant, inhabitant)
+}.
+#[export] Instance list_inhabited {X} : Inhabited (list X) := { inhabitant := [] }.
+#[export] Instance option_inhabited {X} : Inhabited (option X) := { inhabitant := None }.
 
 (* Constraint solving basics.  A HintDb which unfolding hints and lemmata
    can be added to, and a typeclass to wrap constraint arguments in to
@@ -112,6 +131,13 @@ Class ArithFact (P : bool) := ArithFactClass : ArithFactP (P = true).
 Lemma use_ArithFact {P} `(ArithFact P) : P = true.
 unfold ArithFact in *.
 apply fact.
+Defined.
+
+#[export] Instance nat_inhabited : Inhabited {n : Z & ArithFact (n >=? 0)}.
+constructor.
+refine (existT _ 0 _).
+constructor.
+reflexivity.
 Defined.
 
 Lemma ArithFact_irrelevant (P : bool) (p q : ArithFact P) : p = q.
@@ -404,9 +430,16 @@ induction n.
   auto with arith.
 Qed.
 Definition repeat {a} (xs : list a) (n : Z) :=
-  if n <=? 0 then []
+  if n <? 0 then []
   else repeat' xs (Z.to_nat n).
-Lemma repeat_length {a} {xs : list a} {n : Z} (H : n >= 0) : length_list (repeat xs n) = n * length_list xs.
+Lemma repeat_length {a} {xs : list a} {n : Z} (H : n >= 0) : (List.length (repeat xs n) = (Z.to_nat n) * List.length xs)%nat.
+unfold repeat.
+apply Z.ge_le in H.
+rewrite <- Z.ltb_ge in H.
+rewrite H.
+apply repeat'_length.
+Qed.
+Lemma repeat_length_list {a} {xs : list a} {n : Z} (H : n >= 0) : length_list (repeat xs n) = n * length_list xs.
 unfold length_list, repeat.
 destruct n.
 + reflexivity. 
@@ -528,6 +561,10 @@ Scheme Equality for bitU.
 Definition eq_bit := bitU_beq.
 #[export] Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
   Decidable_eq_from_dec bitU_eq_dec.
+
+#[export] Instance dummy_bitU : Inhabited bitU := {
+  inhabitant := BU
+}.
 
 Definition showBitU b :=
 match b with
@@ -936,25 +973,25 @@ Qed.
 Close Scope nat.
 
 (*val access_list_inc : forall a. list a -> Z -> a*)
-Definition access_list_inc {A} (xs : list A) n `{ArithFact (0 <=? n)} `{ArithFact (n <? length_list xs)} : A.
-refine (nth_in_range (Z.to_nat n) xs (nth_Z_nat _ _)).
-* apply Z.leb_le.
-  auto using use_ArithFact.
-* apply Z.ltb_lt.
-  auto using use_ArithFact.
+Definition access_list_inc {A} (xs : list A) `{Inhabited A} (n : Z) : A.
+refine (
+  let i := Z.to_nat n in
+  if sumbool_of_bool ((0 <=? n) && (i <? List.length xs)%nat) then
+    nth_in_range i xs _
+  else dummy_value
+).
+rewrite Bool.andb_true_iff in e.
+rewrite Nat.ltb_lt in e.
+tauto.
 Defined.
 
 (*val access_list_dec : forall a. list a -> Z -> a*)
-Definition access_list_dec {A} (xs : list A) n `{H1:ArithFact (0 <=? n)} `{H2:ArithFact (n <? length_list xs)} : A.
-refine (
+Definition access_list_dec {A} (xs : list A) n `{Inhabited A} : A :=
   let top := (length_list xs) - 1 in
-  @access_list_inc A xs (top - n) _ _).
-abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.leb_le; lia).
-abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.ltb_lt; lia).
-Defined.
+  access_list_inc xs (top - n).
 
 (*val access_list : forall a. bool -> list a -> Z -> a*)
-Definition access_list {A} (is_inc : bool) (xs : list A) n `{ArithFact (0 <=? n)} `{ArithFact (n <? length_list xs)} :=
+Definition access_list {A} (is_inc : bool) (xs : list A) n `{Inhabited A} :=
   if is_inc then access_list_inc xs n else access_list_dec xs n.
 
 Definition access_list_opt_inc {A} (xs : list A) n := nth_error xs (Z.to_nat n).
@@ -1000,6 +1037,13 @@ Definition mword (n : Z) :=
   | Z0 => word 0
   | Zpos p => word (Pos.to_nat p)
   end.
+
+#[export] Instance dummy_mword {n} : Inhabited (mword n) := {
+  inhabitant := match n with
+  | Zpos _ => wzero _
+  | _ => WO
+  end
+}.
 
 Definition get_word {n} : mword n -> word (Z.to_nat n) :=
   match n with
@@ -2222,12 +2266,20 @@ end.
 (*declare {isabelle} termination_argument byte_chunks = automatic*)
 
 Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (bitlistFromWord (get_word v)).
-Lemma isPositive {n} `{ArithFact (n >=? 0)} : n >=? 0 = true.
-destruct H.
-assumption.
-Qed.
-Definition of_bits {n} v `{ArithFact (n >=? 0)} : option (mword n) := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v)).
-Definition of_bools {n} v `{ArithFact (n >=? 0)} : mword n := to_word isPositive (fit_bbv_word (wordFromBitlist v)).
+Definition of_bits {n} v : option (mword n) :=
+  match just_list (List.map bool_of_bitU v) with
+  | Some bl =>
+    match sumbool_of_bool (n >=? 0) with
+    | left H => Some (to_word H (fit_bbv_word (wordFromBitlist bl)))
+    | right _ => None
+    end
+  | None => None
+  end.
+Definition of_bools {n} v : mword n :=
+  match sumbool_of_bool (n >=? 0) with
+  | left H => to_word H (fit_bbv_word (wordFromBitlist v))
+  | right _ => dummy_value
+  end.
 
 
 (*val bytes_of_bits : forall a. Bitvector a => a -> option (list memory_byte)*)
@@ -2321,6 +2373,12 @@ Arguments read_from [_ _ _].
 Arguments write_to [_ _ _].
 Arguments of_regval [_ _ _].
 Arguments regval_of [_ _ _].
+
+(* Remember that these inhabitants are not used by well typed Sail
+code, so it doesn't matter that it's not useful. *)
+#[export] Instance dummy_register_ref {T regstate regval} `{Inhabited T} `{Inhabited regval} : Inhabited (register_ref regstate regval T) := {
+  inhabitant := {| name := ""; read_from := fun _ => dummy_value; write_to := fun _ s => s; of_regval := fun _ => None; regval_of := fun _ => dummy_value |}
+}.
 
 (* Register accessors: pair of functions for reading and writing register values *)
 Definition register_accessors regstate regval : Type :=
@@ -2660,35 +2718,47 @@ Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (((c =? a) || (c =? b))
 
 (*** Generic vectors *)
 
-Definition vec (T:Type) (n:Z) := { l : list T & length_list l = n }.
+Definition vec (T:Type) (n:Z) := { l : list T & List.length l = Z.to_nat n }.
 Definition vec_length {T n} (v : vec T n) := n.
-Definition vec_access_dec {T n} (v : vec T n) m `{ArithFact ((0 <=? m <? n))} : T :=
+Definition vec_access_dec {T n} (v : vec T n) m `{Inhabited T} : T :=
   access_list_dec (projT1 v) m.
 
-Definition vec_access_inc {T n} (v : vec T n) m `{ArithFact (0 <=? m <? n)} : T :=
+Definition vec_access_inc {T n} (v : vec T n) m `{Inhabited T} : T :=
   access_list_inc (projT1 v) m.
 
-Program Definition vec_init {T} (t : T) (n : Z) `{ArithFact (n >=? 0)} : vec T n :=
-  existT _ (repeat [t] n) _.
-Next Obligation.
-intros.
-cbv beta.
-rewrite repeat_length. 2: apply Z_geb_ge, fact.
-unfold length_list.
-simpl.
-auto with zarith.
+#[export] Instance dummy_vec {T:Type} `{Inhabited T} n : Inhabited (vec T n).
+refine (Build_Inhabited _
+  (if sumbool_of_bool (n >=? 0) then existT _ (repeat [dummy_value] n) _ else existT _ [] _)
+).
+* rewrite repeat_length.
+  - simpl.
+    apply Nat.mul_1_r.
+  - auto with zarith.
+* rewrite Z_to_nat_neg.
+  - reflexivity.
+  - auto with zarith.
 Qed.
 
-Definition vec_concat {T m n} (v : vec T m) (w : vec T n) : vec T (m + n).
-refine (existT _ (projT1 v ++ projT1 w) _).
-destruct v.
-destruct w.
-simpl.
-unfold length_list in *.
-rewrite <- e, <- e0.
+Definition vec_init {T} (t : T) `{Inhabited T} (n : Z) : vec T n.
+refine (
+  if sumbool_of_bool (n >=? 0) then
+    existT _ (repeat [t] n) _
+  else dummy_value
+).
+rewrite repeat_length.
+- simpl.
+  apply Nat.mul_1_r.
+- auto with zarith.
+Defined.
+
+Definition vec_concat {T m n} `{Inhabited T} (v : vec T m) (w : vec T n) : vec T (m + n).
+refine (
+  if sumbool_of_bool ((m >=? 0) && (n >=? 0)) then
+     existT _ (projT1 v ++ projT1 w) _
+  else dummy_value).
+destruct v,w.
 rewrite app_length.
-rewrite Nat2Z.inj_add.
-reflexivity.
+rewrite Z2Nat.inj_add; auto with zarith.
 Defined.
 
 Lemma skipn_length {A n} {l: list A} : (n <= List.length l -> List.length (skipn n l) = List.length l - n)%nat.
@@ -2702,10 +2772,9 @@ induction n.
     simpl.
     rewrite IHn; auto with arith.
 Qed.
-Lemma update_list_inc_length {T} {l:list T} {m x} : 0 <= m < length_list l -> length_list (update_list_inc l m x) = length_list l.
-unfold update_list_inc, list_update, length_list.
+Lemma update_list_inc_length {T} {l:list T} {m x} : 0 <= m < length_list l -> List.length (update_list_inc l m x) = List.length l.
+unfold update_list_inc, list_update.
 intro H.
-f_equal.
 assert ((0 <= Z.to_nat m < Datatypes.length l)%nat).
 { destruct H as [H1 H2].
   split.
@@ -2721,31 +2790,41 @@ rewrite skipn_length;
 lia.
 Qed.
 
-Program Definition vec_update_dec {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_dec (projT1 v) m t) _.
-Next Obligation.
-intros; cbv beta.
+Definition vec_update_dec {T n} `{Inhabited T} (v : vec T n) (m : Z) (t : T) : vec T n.
+refine (
+  if sumbool_of_bool (0 <=? m <? n) then
+    existT _ (update_list_dec (projT1 v) m t) _
+  else dummy_value
+).
 unfold update_list_dec.
+destruct v as [v' L].
 rewrite update_list_inc_length.
-+ destruct v. apply e.
-+ destruct H as [H].
++ apply L.
++ simpl.
+  unfold length_list.
   unbool_comparisons.
-  destruct v. simpl (projT1 _). rewrite e.
+  rewrite L.
   lia.
 Qed.
 
-Program Definition vec_update_inc {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_inc (projT1 v) m t) _.
-Next Obligation.
-intros; cbv beta.
+Definition vec_update_inc {T n} `{Inhabited T} (v : vec T n) (m : Z) (t : T) : vec T n.
+refine (
+  if sumbool_of_bool (0 <=? m <? n) then
+    existT _ (update_list_inc (projT1 v) m t) _
+  else dummy_value
+).
+destruct v as [v' L].
 rewrite update_list_inc_length.
-+ destruct v. apply e.
-+ destruct H.
++ apply L.
++ unfold length_list.
+  simpl.
   unbool_comparisons.
-  destruct v. simpl (projT1 _). rewrite e.
-  auto.
+  rewrite L.
+  lia.
 Qed.
 
-Program Definition vec_map {S T} (f : S -> T) {n} (v : vec S n) : vec T n := existT _ (List.map f (projT1 v)) _.
-Next Obligation.
+Definition vec_map {S T} (f : S -> T) {n} (v : vec S n) : vec T n.
+refine (existT _ (List.map f (projT1 v)) _).
 destruct v as [l H].
 cbn.
 unfold length_list.
@@ -2759,8 +2838,7 @@ Program Definition just_vec {A n} (v : vec (option A) n) : option (vec A n) :=
   | Some v' => Some (existT _ v' _)
   end.
 Next Obligation.
-intros; cbv beta.
-rewrite <- (just_list_length_Z _ _ Heq_anonymous).
+rewrite <- (just_list_length _ _ Heq_anonymous).
 destruct v.
 assumption.
 Qed.
@@ -2770,7 +2848,7 @@ Definition list_of_vec {A n} (v : vec A n) : list A := projT1 v.
 Definition vec_eq_dec {T n} (D : forall x y : T, {x = y} + {x <> y}) (x y : vec T n) :
   {x = y} + {x <> y}.
 refine (if List.list_eq_dec D (projT1 x) (projT1 y) then left _ else right _).
-* apply eq_sigT_hprop; auto using ZEqdep.UIP.
+* apply eq_sigT_hprop; auto using UIP_nat.
 * contradict n0. rewrite n0. reflexivity.
 Defined.
 
@@ -2786,11 +2864,19 @@ Program Definition vec_of_list {A} n (l : list A) : option (vec A n) :=
   if sumbool_of_bool (n =? length_list l) then Some (existT _ l _) else None.
 Next Obligation.
 symmetry.
-apply Z.eqb_eq.
-assumption.
+apply Z.eqb_eq in H.
+rewrite H.
+unfold length_list.
+rewrite Nat2Z.id.
+reflexivity.
 Qed.
 
-Definition vec_of_list_len {A} (l : list A) : vec A (length_list l) := existT _ l (eq_refl _).
+Definition vec_of_list_len {A} (l : list A) : vec A (length_list l). 
+refine (existT _ l _).
+unfold length_list.
+rewrite Nat2Z.id.
+reflexivity.
+Defined.
 
 Definition map_bind {A B} (f : A -> option B) (a : option A) : option B :=
 match a with

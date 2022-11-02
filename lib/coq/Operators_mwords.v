@@ -110,23 +110,6 @@ destruct m.
 * simpl. rewrite cast_positive_refl. reflexivity.
 Qed.
 
-(* To avoid carrying around proofs that bitvector sizes are correct everywhere,
-   we extend many operations to cover nonsensical sizes.  To help, we have a
-   typeclass of inhabited types so that we can pick a default value, and an
-   opaque function that returns it - well typed Sail code reduction
-   should never reach this definition. *)
-
-Class Inhabited (T:Type) := { inhabitant : T }.
-Definition dummy_value {T:Type} `{Inhabited T} := inhabitant.
-Global Opaque dummy_value.
-
-Instance dummy_mword {n} : Inhabited (mword n) := {
-  inhabitant := match n with
-  | Zpos _ => wzero _
-  | _ => WO
-  end
-}.
-
 Definition autocast {T : Z -> Type} {m n} `{Inhabited (T n)} (x : T m) : T n :=
 match Z.eq_dec m n with
 | left eq => cast_T x eq

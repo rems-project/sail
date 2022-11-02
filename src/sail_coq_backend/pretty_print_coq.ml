@@ -2576,6 +2576,11 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
       | [] -> empty
       | _ -> space ^^ separate_map space (fun _ -> underscore) kopts
     in
+    let doc_inhabited_req = function
+      | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type,_),kid),_)),_) ->
+         Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
+      | _ -> None
+    in
     let doc_update_field (_,fid) =
       let idpp = fname fid in
       let pp_field alt i (_,fid') =
@@ -2614,12 +2619,24 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
         string "Defined." ^^ twice hardline
       else empty
     in
+    let typqs_pp = doc_typquant_items bare_ctxt Env.empty braces typq in
+    let inhabited_pp =
+      let reqs_pp = separate (break 1) (Util.map_filter doc_inhabited_req (quant_items typq)) in
+      let params_pp = separate space (Util.map_filter (quant_item_id_name bare_ctxt) (quant_items typq)) in
+      let field_pp (_,fid) = fname fid ^^ string " := inhabitant" in
+      group (prefix 2 1 (group (string "#[export] Instance dummy_" ^^ type_id_pp ^/^ typqs_pp ^/^ reqs_pp ^^ colon ^/^
+                                  string "Inhabited (" ^^ type_id_pp ^^ space ^^ params_pp ^^ string ") := {"))
+               (prefix 2 1 (string "inhabitant := {|")
+                  (separate_map (string ";" ^^ break 1) field_pp fs)) ^/^
+               string "|} }.") ^^ hardline
+    in
     let reset_implicits_pp = doc_reset_implicits type_id_pp typq in
     doc_op coloneq
-           (separate space [string "Record"; type_id_pp; doc_typquant_items bare_ctxt Env.empty braces typq])
+           (separate space [string "Record"; type_id_pp; typqs_pp])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^
-        twice hardline
+      dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^
+        eq_pp ^^ updates_pp ^^ hardline ^^
+        inhabited_pp ^^ twice hardline
   | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2648,11 +2665,16 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
               Some (string "`{forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)}")
            | _ -> None
          in
+         let doc_inhabited_req = function
+           | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type,_),kid),_)),_) ->
+              Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
+           | _ -> None
+         in
+         let typ_use_pp =
+           separate space (id_pp::Util.map_filter (quant_item_id_name bare_ctxt) (quant_items typq))
+         in
          let eq_pp =
            if IdSet.mem id generic_eq_types then
-             let typ_use_pp =
-               separate space (id_pp::Util.map_filter (quant_item_id_name bare_ctxt) (quant_items typq))
-             in
              let eq_reqs_pp =
                separate (break 1) (Util.map_filter doc_dec_eq_req (quant_items typq))
              in
@@ -2663,7 +2685,24 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
                      string "Defined." ^^ hardline
            else empty
          in
-         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline)
+         let inhabited_pp =
+           match ar with
+           | Tu_aux (Tu_ty_id(typ,example_id),_)::_ ->
+              let reqs_pp =
+                separate (break 1) (Util.map_filter doc_inhabited_req (quant_items typq))
+              in
+              group (prefix 2 1 (group (string "#[export] Instance dummy_" ^^ typ_nm ^^ space ^^ reqs_pp ^^ colon ^/^
+                            string "Inhabited (" ^^ typ_use_pp ^^ string ") := {"))
+                (prefix 2 1 (string "inhabitant :=")
+                   (doc_id_ctor bare_ctxt example_id ^^ string " inhabitant")) ^/^
+                string "}.") ^^ hardline
+           | [] -> Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
+                   empty
+         in
+         typ_pp ^^ dot ^^ hardline ^^
+         reset_implicits_pp ^^ hardline ^^
+         eq_pp ^^ hardline ^^
+         inhabited_pp ^^ hardline)
   | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2687,7 +2726,17 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
          let eq2_pp = string "#[export] Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
            string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
            string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
-          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ twice hardline)
+         let inhabited_pp =
+           match enums with
+           | example_id::_ ->
+              group (prefix 2 1 (group (string "#[export] Instance dummy_" ^^ id_pp ^^ space ^^ colon ^/^
+                            string "Inhabited " ^^ id_pp ^^ string " := {"))
+                (string "inhabitant :=" ^/^ doc_id_ctor bare_ctxt example_id) ^/^
+                string "}.") ^^ hardline
+           | [] -> Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
+                   empty
+         in
+          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline)
 
 let args_of_typ l env typs =
   let arg i typ =
