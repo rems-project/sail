@@ -1166,6 +1166,8 @@ let rec sgen_cval = function
      Printf.sprintf "%s.%s"
        (sgen_cval f)
        (sgen_uid ctor)
+  | V_tuple _ ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for a tuple literal"
 
 and sgen_call op cvals =
   let open Printf in

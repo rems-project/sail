@@ -110,6 +110,7 @@ uid :: 'UId_' ::=
 cval :: 'V_' ::=
   | name : ctyp                                       :: :: id
   | value : ctyp                                      :: :: lit
+  | ( cval0 , ... , cvaln ) ctyp                      :: :: tuple
   | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
   | cval is id ( ctyp0 , ... , ctypn ) ctyp           :: :: ctor_kind
   | cval as uid ctyp                                  :: :: ctor_unwrap

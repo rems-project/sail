@@ -188,6 +188,7 @@ let rec cval_subst id subst = function
   | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, unifiers, ctyp)
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_subst id subst cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
+  | V_tuple (members, ctyp) -> V_tuple (List.map (cval_subst id subst) members, ctyp)
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
@@ -199,6 +200,8 @@ let rec cval_map_id f = function
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_map_id f cval, ctor, ctyp)
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun (field, cval) -> field, cval_map_id f cval) fields, ctyp)
+  | V_tuple (members, ctyp) ->
+     V_tuple (List.map (cval_map_id f) members, ctyp)
 
 let rec instrs_subst id subst =
   function
@@ -456,8 +459,7 @@ let remove_tuples cdefs ctx =
     | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _
        | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode) as ctyp ->
        ctyp
-  in
-  let rec fix_cval = function
+  and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_ctor_kind (cval, id, unifiers, ctyp) ->
@@ -478,6 +480,15 @@ let remove_tuples cdefs ctx =
     | V_field (cval, field) ->
        V_field (fix_cval cval, field)
     | V_struct (fields, ctyp) -> V_struct (List.map (fun (id, cval) -> id, fix_cval cval) fields, ctyp)
+    | V_tuple (members, ctyp) ->
+       begin match ctyp with
+       | CT_tup ctyps ->
+          let ctyps = List.map fix_tuples ctyps in
+          let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
+          let struct_ctyp = CT_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps) in
+          V_struct (List.mapi (fun n member -> (mk_id (name ^ string_of_int n), []), fix_cval member) members, struct_ctyp)
+       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple without tuple type"
+       end
   in
   let rec fix_clexp = function
     | CL_id (id, ctyp) -> CL_id (id, ctyp)

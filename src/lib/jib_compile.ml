@@ -370,7 +370,7 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (_, l) as lit, _) ->
      raise (Reporting.err_general l ("Encountered unexpected literal " ^ string_of_lit lit ^ " when converting ANF represention into IR"))
-
+ 
   | AV_tuple avals ->
      let elements = List.map (compile_aval l ctx) avals in
      let cvals = List.map (fun (_, cval, _) -> cval) elements in
@@ -378,12 +378,18 @@ let rec compile_aval l ctx = function
      let cleanup = List.concat (List.rev (List.map (fun (_, _, cleanup) -> cleanup) elements)) in
      let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
      let gs = ngensym () in
-     setup
-     @ [idecl l tup_ctyp gs]
-     @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
-     V_id (gs, CT_tup (List.map cval_ctyp cvals)),
-     [iclear tup_ctyp gs]
-     @ cleanup
+     if C.struct_value then (
+       setup,
+       V_tuple (cvals, tup_ctyp),
+       cleanup
+     ) else (
+       setup
+       @ [idecl l tup_ctyp gs]
+       @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
+       V_id (gs, CT_tup (List.map cval_ctyp cvals)),
+       [iclear tup_ctyp gs]
+       @ cleanup
+     )
 
   | AV_record (fields, typ) when C.struct_value ->
      let ctyp = ctyp_of_typ ctx typ in

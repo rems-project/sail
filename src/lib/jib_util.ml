@@ -201,6 +201,8 @@ let rec cval_rename from_id to_id = function
   | V_ctor_unwrap (f, ctor, ctyp) -> V_ctor_unwrap (cval_rename from_id to_id f, ctor, ctyp)
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun (field, cval) -> field, cval_rename from_id to_id cval) fields, ctyp)
+  | V_tuple (members, ctyp) ->
+     V_tuple (List.map (cval_rename from_id to_id) members, ctyp)
 
 let rec map_cval g = function
   | V_id (id, ctyp) -> g (V_id (id, ctyp))
@@ -212,6 +214,8 @@ let rec map_cval g = function
   | V_ctor_unwrap (f, ctor, ctyp) -> g (V_ctor_unwrap (map_cval g f, ctor, ctyp))
   | V_struct (fields, ctyp) ->
      g (V_struct (List.map (fun (field, cval) -> field, map_cval g cval) fields, ctyp))
+  | V_tuple (members, ctyp) ->
+     g (V_tuple (List.map (map_cval g) members, ctyp))
  
 let rec clexp_rename from_id to_id = function
   | CL_id (id, ctyp) when Name.compare id from_id = 0 -> CL_id (to_id, ctyp)
@@ -433,10 +437,18 @@ let rec string_of_cval = function
      string_of_cval f ^ " is " ^ string_of_uid (ctor, unifiers)
   | V_ctor_unwrap (f, ctor, _) ->
      string_of_cval f ^ " as " ^ string_of_uid ctor
-  | V_struct (fields, _) ->
-     Printf.sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> string_of_uid field ^ " = " ^ string_of_cval cval) fields)
-
+  | V_struct (fields, ctyp) ->
+     begin match ctyp with
+     | CT_struct (id, _) ->
+        Printf.sprintf "struct %s {%s}"
+          (Util.zencode_string (string_of_id id))
+          (Util.string_of_list ", " (fun (field, cval) -> string_of_uid field ^ " = " ^ string_of_cval cval) fields)
+     | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
+     end
+  | V_tuple (members, _) ->
+     "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
+       
 let rec map_ctyp f = function
   | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode
      | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _) as ctyp -> f ctyp
@@ -723,7 +735,7 @@ let rec cval_deps = function
   | V_id (id, _) -> NameSet.singleton id
   | V_lit _ -> NameSet.empty
   | V_field (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
-  | V_call (_, cvals) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
+  | V_call (_, cvals) | V_tuple (cvals, _) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
   | V_ctor_kind (cval, _, _, _) -> cval_deps cval
   | V_ctor_unwrap (cval, _, _) -> cval_deps cval
   | V_struct (fields, _) -> List.fold_left (fun ns (_, cval) -> NameSet.union ns (cval_deps cval)) NameSet.empty fields
@@ -807,6 +819,8 @@ let rec map_cval_ctyp f = function
      V_field (map_cval_ctyp f cval, (id, List.map f ctyps))
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun ((id, ctyps), cval) -> (id, List.map f ctyps), map_cval_ctyp f cval) fields, f ctyp)
+  | V_tuple (members, ctyp) ->
+     V_tuple (List.map (map_cval_ctyp f) members, f ctyp)
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -1104,7 +1118,8 @@ and cval_ctyp = function
         end
      | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Inavlid type for V_field " ^ full_string_of_ctyp ctyp)
      end
-  | V_struct (fields, ctyp) -> ctyp
+  | V_struct (_, ctyp) -> ctyp
+  | V_tuple (_, ctyp) -> ctyp
   | V_call (op, vs) -> infer_call op vs
 
 let rec clexp_ctyp = function
