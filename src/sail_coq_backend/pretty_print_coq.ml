@@ -2392,7 +2392,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
     let fs_doc = group (separate_map (break 1) f_pp fs) in
     let type_id_pp = doc_id_type types_mod avoid_target_names None id in
     let match_parameters =
-      match quant_items typq with
+      match quant_kopts typq with
       | [] -> empty
       | l -> space ^^ separate_map space (fun _ -> underscore) l
     in
