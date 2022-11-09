@@ -609,7 +609,7 @@ int process_arguments(int argc, char *argv[])
 
   while (true) {
     int option_index = 0;
-    c = getopt_long(argc, argv, "e:n:i:b:l:C:h", options, &option_index);
+    c = getopt_long(argc, argv, "e:n:i:b:l:C:v:h", options, &option_index);
 
     if (c == -1) break;
 
