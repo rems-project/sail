@@ -852,15 +852,12 @@ apply PrePost_foreachS_invariant with (Q := fun v => match v with Value a => Q a
 auto.
 Qed.
 
-Lemma PrePostE_foreach_ZS_up_invariant Regs Vars Ety from to step (H : Sail.Values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
-  (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
+Lemma PrePostE_foreach_ZS_up_invariant Regs Vars Ety from to step vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+  (forall i vars, PrePostE (Q vars) (body i vars) Q E) ->
   PrePostE (Q vars) (foreach_ZS_up from to step vars body) Q E.
 intro INV.
 unfold foreach_ZS_up.
-match goal with
-| |- context[@foreach_ZS_up' _ _ _ _ _ _ _ _ _ ?pf _ _] => generalize pf
-end.
-generalize 0%Z at 2 3 as off.
+generalize 0%Z as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z); apply PrePostE_returnS.
@@ -871,15 +868,12 @@ induction (S (Z.abs_nat (from - to))); intros.
   + apply PrePostE_returnS.
 Qed.
 
-Lemma PrePostE_foreach_ZS_down_invariant Regs Vars Ety from to step (H : Sail.Values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
-  (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
+Lemma PrePostE_foreach_ZS_down_invariant Regs Vars Ety from to step vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+  (forall i vars, PrePostE (Q vars) (body i vars) Q E) ->
   PrePostE (Q vars) (foreach_ZS_down from to step vars body) Q E.
 intro INV.
 unfold foreach_ZS_down.
-match goal with
-| |- context[@foreach_ZS_down' _ _ _ _ _ _ _ _ _ ?pf _ _] => generalize pf
-end.
-generalize 0%Z at 1 3 as off.
+generalize 0%Z as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z); apply PrePostE_returnS.

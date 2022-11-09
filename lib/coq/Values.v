@@ -287,28 +287,13 @@ Notation "x <=? y <? z" := ((x <=? y) && (y <? z)) (at level 70, y at next level
 Notation "x <? y <? z" := ((x <? y) && (y <? z)) (at level 70, y at next level) : Z_scope.
 Notation "x <? y <=? z" := ((x <? y) && (y <=? z)) (at level 70, y at next level) : Z_scope.
 
-(* Project away range constraints in comparisons *)
-Definition ltb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.ltb (projT1 l) r.
-Definition leb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.leb (projT1 l) r.
-Definition gtb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.gtb (projT1 l) r.
-Definition geb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.geb (projT1 l) r.
-Definition ltb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.ltb l (projT1 r).
-Definition leb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.leb l (projT1 r).
-Definition gtb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.gtb l (projT1 r).
-Definition geb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.geb l (projT1 r).
-
 Definition ii := Z.
 Definition nn := nat.
 
 (*val pow : Z -> Z -> Z*)
 Definition pow m n := m ^ n.
 
-Program Definition pow2 n : {z : Z & ArithFact (2 ^ n <=? z <=? 2 ^ n)} := existT _ (pow 2 n) _.
-Next Obligation.
-constructor.
-unfold pow.
-auto using Z.leb_refl with bool.
-Qed.
+Definition pow2 n := pow 2 n.
 
 Lemma ZEuclid_div_pos : forall x y, 0 < y -> 0 <= x -> 0 <= ZEuclid.div x y.
 intros.
@@ -2241,8 +2226,6 @@ Qed.
 Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
 #[export] Hint Unfold neq_atom : sail.
 
-Definition to_range (x : Z) : {y : Z & ArithFact ((x <=? y <=? x))} := build_ex x.
-
 Definition opt_def {a} (def:a) (v:option a) :=
 match v with
 | Some x => x
@@ -2531,7 +2514,7 @@ Inductive ChooseType : Type :=
 Scheme Equality for ChooseType.
 Definition choose_type ty :=
   match ty with
-  | ChooseBool => bool | ChooseBit => bitU | ChooseInt => Z | ChooseNat => {n : Z & ArithFact (n >=? 0)}
+  | ChooseBool => bool | ChooseBit => bitU | ChooseInt => Z | ChooseNat => Z
   | ChooseReal => R | ChooseString => string
   | ChooseRange _ _ => Z | ChooseBitvector n => mword n
   end.
@@ -2572,34 +2555,27 @@ Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Var
 Definition foreach_Z {Vars} from to step vars body :=
   foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
 
-(* Define these in proof mode to avoid anomalies related to abstract.
-   (See https://github.com/coq/coq/issues/10959) *)
-
-Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars.
-refine (
+Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) (* 0 <? step *) (* 0 <=? off *) (vars : Vars) (body : forall (z : Z) (* from <=? z <=? to *), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => vars
-    | S n => let vars := body (from + off) _ vars in foreach_Z_up' _ from to step (off + step) n _ _ vars body
+    | S n => let vars := body (from + off) vars in foreach_Z_up' from to step (off + step) n vars body
     end
   else vars
-).
-Defined.
+.
 
-Fixpoint foreach_Z_down' {Vars} from to step off (n:nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((to <=? z <=? from))), Vars -> Vars) {struct n} : Vars.
-refine (
+Fixpoint foreach_Z_down' {Vars} from to step off (n:nat) (* 0 <? step *) (* off <=? 0 *) (vars : Vars) (body : forall (z : Z) (* to <=? z <=? from *), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => vars
-    | S n => let vars := body (from + off) _ vars in foreach_Z_down' _ from to step (off - step) n _ _ vars body
+    | S n => let vars := body (from + off) vars in foreach_Z_down' from to step (off - step) n vars body
     end
   else vars
-).
-Defined.
+.
 
-Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 <? step)} :=
+Definition foreach_Z_up {Vars} from to step vars body (* 0 <? step *) :=
     foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (0 <? step)} :=
+Definition foreach_Z_down {Vars} from to step vars body (* 0 <? step *) :=
     foreach_Z_down' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val while : forall vars. vars -> (vars -> bool) -> (vars -> vars) -> vars
@@ -2689,31 +2665,9 @@ end
 *)
 *)
 
-(* Arithmetic functions which return proofs that match the expected Sail
-   types in smt.sail. *)
-
-Definition ediv_with_eq n m : {o : Z & ArithFact (o =? ZEuclid.div n m)} := build_ex (ZEuclid.div n m).
-Definition emod_with_eq n m : {o : Z & ArithFact (o =? ZEuclid.modulo n m)} := build_ex (ZEuclid.modulo n m).
-Definition abs_with_eq n   : {o : Z & ArithFact (o =? Z.abs n)} := build_ex (Z.abs n).
-
-(* Similarly, for ranges (currently in MIPS) *)
-
-Definition eq_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)}) : bool :=
-  (projT1 l) =? (projT1 r).
-Definition add_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)})
-  : {x & ArithFact (n+o <=? x <=? m+p)} :=
-  build_ex ((projT1 l) + (projT1 r)).
-Definition sub_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)})
-  : {x & ArithFact (n-p <=? x <=? m-o)} :=
-  build_ex ((projT1 l) - (projT1 r)).
-Definition negate_range {n m} (l : {l : Z & ArithFact (n <=? l <=? m)})
-  : {x : Z & ArithFact ((- m) <=? x <=? (- n))} :=
-  build_ex (- (projT1 l)).
-
-Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (((c =? a) || (c =? b)) && (c <=? a) && (c <=? b))} :=
-  build_ex (Z.min a b).
-Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (((c =? a) || (c =? b)) && (c >=? a) && (c >=? b))} :=
-  build_ex (Z.max a b).
+(* TODO: make all Sail model preludes use the Z definitions directly, preferably by having them in the standard library *)
+Definition min_atom (a : Z) (b : Z) : Z := Z.min a b.
+Definition max_atom (a : Z) (b : Z) : Z := Z.max a b.
 
 
 (*** Generic vectors *)
@@ -2884,78 +2838,6 @@ match a with
 | None => None
 end.
 
-Definition sub_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
-  {z : Z & ArithFact (z >=? 0)} :=
-  let z := x - y in
-  if sumbool_of_bool (z >=? 0) then build_ex z else build_ex 0.
-
-Definition min_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
-  {z : Z & ArithFact (z >=? 0)} :=
-  build_ex (Z.min x y).
-
-Definition max_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
-  {z : Z & ArithFact (z >=? 0)} :=
-  build_ex (Z.max x y).
-
-Definition shl_int_1 (x y : Z) `{HE:ArithFact (x =? 1)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [1;2;4;8])}.
-refine (existT _ (shl_int x y) _).
-destruct HE as [HE].
-destruct HR as [HR].
-unbool_comparisons.
-assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by lia.
-constructor.
-intuition (subst; compute; auto).
-Defined.
-
-Definition shl_int_8 (x y : Z) `{HE:ArithFact (x =? 8)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [8;16;32;64])}.
-refine (existT _ (shl_int x y) _).
-destruct HE as [HE].
-destruct HR as [HR].
-unbool_comparisons.
-assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by lia.
-constructor.
-intuition (subst; compute; auto).
-Defined.
-
-Definition shl_int_32 (x y : Z) `{HE:ArithFact (x =? 32)} `{HR:ArithFact (member_Z_list y [0;1])}: {z : Z & ArithFact (member_Z_list z [32;64])}.
-refine (existT _ (shl_int x y) _).
-destruct HE as [HE].
-destruct HR as [HR].
-constructor.
-unbool_comparisons.
-destruct HR as [HR | [HR | []]];
-subst; compute;
-auto.
-Defined.
-
-Definition shr_int_32 (x y : Z) `{HE:ArithFact (0 <=? x <=? 31)} `{HR:ArithFact (y =? 1)}: {z : Z & ArithFact (0 <=? z <=? 15)}.
-refine (existT _ (shr_int x y) _).
-abstract (
-  destruct HE as [HE];
-  destruct HR as [HR];
-  unbool_comparisons;
-  subst;
-  constructor;
-  unbool_comparisons_goal;
-  unfold shr_int;
-  rewrite <- Z.div2_spec;
-  rewrite Z.div2_div;
-  specialize (Z.div_mod x 2);
-  specialize (Z.mod_pos_bound x 2);
-  generalize (Z.div x 2);
-  generalize (x mod 2);
-  intros;
-  nia).
-Defined.
-
-Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.
-unfold shl_int.
-apply Z.le_ge.  
-apply <- Z.shiftl_nonneg.
-lia.
-Qed.
-(* #[export] Hint Resolve shl_8_ge_0 : sail.
- *)
 (* Limits for remainders *)
 
 Require Zquot.

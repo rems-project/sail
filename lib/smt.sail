@@ -76,7 +76,7 @@ val ediv_int = pure {
   interpreter: "quotient",
   lem: "integerDiv",
   c: "ediv_int",
-  coq: "ediv_with_eq"
+  coq: "ZEuclid.div"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
 val emod_int = pure {
@@ -84,7 +84,7 @@ val emod_int = pure {
   interpreter: "modulus",
   lem: "integerMod",
   c: "emod_int",
-  coq: "emod_with_eq"
+  coq: "ZEuclid.modulo"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
 val abs_int_atom = pure {
@@ -92,7 +92,7 @@ val abs_int_atom = pure {
   interpreter: "abs_int",
   lem: "integerAbs",
   c: "abs_int",
-  coq: "abs_with_eq"
+  coq: "Z.abs"
 } : forall 'n. int('n) -> int(abs('n))
 
 overload abs_int = {abs_int_atom}

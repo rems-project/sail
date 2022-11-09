@@ -193,12 +193,12 @@ Context {rv E : Type}.
 Definition choose_bool descr : monad rv bool E := Choose descr ChooseBool returnm.
 Definition choose_bit descr : monad rv bitU E := Choose descr ChooseBit returnm.
 Definition choose_int descr : monad rv Z E := Choose descr ChooseInt returnm.
-Definition choose_nat descr : monad rv {n : Z & ArithFact (n >=? 0)} E := Choose descr ChooseNat returnm.
+Definition choose_nat descr : monad rv Z E := Choose descr ChooseNat returnm.
 Definition choose_real descr : monad rv _ E := Choose descr ChooseReal returnm.
 Definition choose_string descr : monad rv string E := Choose descr ChooseString returnm.
-Definition choose_range descr lo hi : monad rv {rangevar : Z & ArithFact (lo <=? rangevar <=? hi)} E :=
+Definition choose_range descr lo hi : monad rv Z E :=
   if lo <=? hi
-  then Choose descr (ChooseRange lo hi) (fun v => if sumbool_of_bool ((lo <=? v) && (v <=? hi)) then returnm (build_ex v) else Fail "choose_range: Bad value")
+  then Choose descr (ChooseRange lo hi) (fun v => if sumbool_of_bool ((lo <=? v) && (v <=? hi)) then returnm v else Fail "choose_range: Bad value")
   else Fail "choose_range: Bad range".
 Definition choose_bitvector descr n : monad rv (mword n) E := Choose descr (ChooseBitvector n) returnm.
 
@@ -289,7 +289,7 @@ Definition read_memt_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memo
   Read_memt rk (Word.wordToN (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv ('b * bitU) 'e*)
-Definition read_memt {rv A E} rk (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz) * bitU) E :=
+Definition read_memt {rv A E} rk (addr : mword A) sz : monad rv (mword (8 * sz) * bitU) E :=
   bind
     (read_memt_bytes rk addr sz)
     (fun '(bytes, tag) =>
@@ -303,7 +303,7 @@ Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memor
   Read_mem rk (Word.wordToN (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
-Definition read_mem {rv A E} rk (addrsz : Z) (addr : mword A) sz `{ArithFact (sz >=? 0)} : monad rv (mword (8 * sz)) E :=
+Definition read_mem {rv A E} rk (addrsz : Z) (addr : mword A) sz : monad rv (mword (8 * sz)) E :=
   bind
     (read_mem_bytes rk addr sz)
     (fun bytes =>

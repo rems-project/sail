@@ -91,6 +91,7 @@ overload operator - = {sub_atom, sub_int}
 val sub_nat = pure {
   ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
   lem: "integerMinus",
+  coq: "Z.sub",
   _: "sub_nat"
 } : (nat, nat) -> nat
 
@@ -128,18 +129,18 @@ Similarly, we define shifts of 32 and 1 (i.e., powers of two).
 
 The most general shift operations also allow negative shifts which go in the opposite direction, for compatibility with ASL.
 */
-val _shl8 = pure {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
+val _shl8 = pure {c: "shl_mach_int", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
-val _shl32 = pure {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
+val _shl32 = pure {c: "shl_mach_int", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
-val _shl1 = pure {c: "shl_mach_int", coq: "shl_int_1", _: "shl_int"} :
+val _shl1 = pure {c: "shl_mach_int", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
 
 val _shl_int = pure "shl_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
 
-val _shr32 = pure {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
+val _shr32 = pure {c: "shr_mach_int", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
 val _shr_int = pure "shr_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
 

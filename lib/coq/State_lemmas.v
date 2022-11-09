@@ -97,15 +97,12 @@ Add Parametric Morphism {Regs A Vars E : Type} : (@foreachS A Regs Vars E)
 apply foreachS_cong.
 Qed.
 
-Lemma foreach_ZS_up_cong rv e Vars from to step vars body body' H :
-  (forall a pf vars, body a pf vars === body' a pf vars) ->
-  @foreach_ZS_up rv e Vars from to step vars body H === foreach_ZS_up from to step vars body'.
+Lemma foreach_ZS_up_cong rv e Vars from to step vars body body' :
+  (forall a vars, body a vars === body' a vars) ->
+  @foreach_ZS_up rv e Vars from to step vars body === foreach_ZS_up from to step vars body'.
 intro EQ.
 unfold foreach_ZS_up.
-match goal with
-| |- @foreach_ZS_up' _ _ _ _ _ _ _ _ _ ?pf _ _ === _ => generalize pf
-end.
-generalize 0 at 2 3 4 as off.
+generalize 0 as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros; simpl.
 * reflexivity.
@@ -115,15 +112,12 @@ induction (S (Z.abs_nat (from - to))); intros; simpl.
   reflexivity.
 Qed.
 
-Lemma foreach_ZS_down_cong rv e Vars from to step vars body body' H :
-  (forall a pf vars, body a pf vars === body' a pf vars) ->
-  @foreach_ZS_down rv e Vars from to step vars body H === foreach_ZS_down from to step vars body'.
+Lemma foreach_ZS_down_cong rv e Vars from to step vars body body' :
+  (forall a vars, body a vars === body' a vars) ->
+  @foreach_ZS_down rv e Vars from to step vars body === foreach_ZS_down from to step vars body'.
 intro EQ.
 unfold foreach_ZS_down.
-match goal with
-| |- @foreach_ZS_down' _ _ _ _ _ _ _ _ _ ?pf _ _ === _ => generalize pf
-end.
-generalize 0 at 1 3 4 as off.
+generalize 0 as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros; simpl.
 * reflexivity.
@@ -653,8 +647,8 @@ Qed.
 #[export] Hint Rewrite liftState_try_catchR : liftState.
 #[export] Hint Resolve liftState_try_catchR : liftState.
 
-Lemma liftState_read_memt Regs Regval A E rk a sz H r :
-  liftState (Regs := Regs) r (@read_memt Regval A E rk a sz H) === read_memtS rk a sz.
+Lemma liftState_read_memt Regs Regval A E rk a sz r :
+  liftState (Regs := Regs) r (@read_memt Regval A E rk a sz) === read_memtS rk a sz.
 unfold read_memt, read_memt_bytes, read_memtS, maybe_failS. simpl.
 apply bindS_cong; auto.
 intros [byte bit].
@@ -663,8 +657,8 @@ Qed.
 #[export] Hint Rewrite liftState_read_memt : liftState.
 #[export] Hint Resolve liftState_read_memt : liftState.
 
-Lemma liftState_read_mem Regs Regval A E rk asz a sz H r :
-  liftState (Regs := Regs) r (@read_mem Regval A E rk asz a sz H) === read_memS rk a sz.
+Lemma liftState_read_mem Regs Regval A E rk asz a sz r :
+  liftState (Regs := Regs) r (@read_mem Regval A E rk asz a sz) === read_memS rk a sz.
 unfold read_mem, read_memS, read_memtS. simpl.
 unfold read_mem_bytesS, read_memt_bytesS.
 repeat rewrite bindS_assoc.
@@ -779,15 +773,12 @@ Qed.
 #[export] Hint Rewrite liftState_foreachM : liftState.
 #[export] Hint Resolve liftState_foreachM : liftState.
 
-Lemma liftState_foreach_ZM_up Regs Regval Vars E from to step vars body H r :
+Lemma liftState_foreach_ZM_up Regs Regval Vars E from to step vars body r :
   liftState (Regs := Regs) r
-    (@foreach_ZM_up Regval E Vars from to step vars body H) ===
-     foreach_ZS_up from to step vars (fun z H' a => liftState r (body z H' a)).
+    (@foreach_ZM_up Regval E Vars from to step vars body) ===
+     foreach_ZS_up from to step vars (fun z a => liftState r (body z a)).
 unfold foreach_ZM_up, foreach_ZS_up.
-match goal with
-| |- liftState _ (@foreach_ZM_up' _ _ _ _ _ _ _ _ _ ?pf _ _) === _ => generalize pf
-end.
-generalize 0 at 2 3 4 as off.
+generalize 0 as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl.
@@ -796,21 +787,16 @@ induction (S (Z.abs_nat (from - to))); intros.
 * simpl.
   rewrite_liftState.
   destruct (sumbool_of_bool (from + off <=? to)); auto.
-  repeat replace_ArithFact_proof.
-  reflexivity.
 Qed.
 #[export] Hint Rewrite liftState_foreach_ZM_up : liftState.
 #[export] Hint Resolve liftState_foreach_ZM_up : liftState.
 
-Lemma liftState_foreach_ZM_down Regs Regval Vars E from to step vars body H r :
+Lemma liftState_foreach_ZM_down Regs Regval Vars E from to step vars body r :
   liftState (Regs := Regs) r
-    (@foreach_ZM_down Regval E Vars from to step vars body H) ===
-     foreach_ZS_down from to step vars (fun z H' a => liftState r (body z H' a)).
+    (@foreach_ZM_down Regval E Vars from to step vars body) ===
+     foreach_ZS_down from to step vars (fun z a => liftState r (body z a)).
 unfold foreach_ZM_down, foreach_ZS_down.
-match goal with
-| |- liftState _ (@foreach_ZM_down' _ _ _ _ _ _ _ _ _ ?pf _ _) === _ => generalize pf
-end.
-generalize 0 at 1 3 4 as off.
+generalize 0 as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl.
@@ -819,8 +805,6 @@ induction (S (Z.abs_nat (from - to))); intros.
 * simpl.
   rewrite_liftState.
   destruct (sumbool_of_bool (to <=? from + off)); auto.
-  repeat replace_ArithFact_proof.
-  reflexivity.
 Qed.
 #[export] Hint Rewrite liftState_foreach_ZM_down : liftState.
 #[export] Hint Resolve liftState_foreach_ZM_down : liftState.

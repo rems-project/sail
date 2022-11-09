@@ -97,31 +97,27 @@ Fixpoint foreachS {A RV Vars E} (xs : list A) (vars : Vars) (body : A -> Vars ->
      foreachS xs vars body
 end.
 
-Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
-exact (
+Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) (* 0 <? step *) (* 0 <=? off *) (vars : Vars) (body : forall (z : Z) (* from <=? z <=? to *), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e :=
   match sumbool_of_bool (from + off <=? to) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ _ vars body
+    | S n => body (from + off) vars >>$= fun vars => foreach_ZS_up' from to step (off + step) n vars body
     end
   | right _ => returnS vars
-  end).
-Defined.
+  end.
 
-Fixpoint foreach_ZS_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <=? z <=? from)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
-exact (
+Fixpoint foreach_ZS_down' {rv e Vars} (from to step off : Z) (n : nat) (* 0 <? step *) (* off <=? 0 *) (vars : Vars) (body : forall (z : Z) (* to <=? z <=? from *), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e :=
   match sumbool_of_bool (to <=? from + off) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ _ vars body
+    | S n => body (from + off) vars >>$= fun vars => foreach_ZS_down' from to step (off - step) n vars body
     end
   | right _ => returnS vars
-  end).
-Defined.
+  end.
 
-Definition foreach_ZS_up {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
+Definition foreach_ZS_up {rv e Vars} from to step vars body (* 0 <? step *) :=
     foreach_ZS_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_ZS_down {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
+Definition foreach_ZS_down {rv e Vars} from to step vars body (* 0 <? step *) :=
     foreach_ZS_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e*)

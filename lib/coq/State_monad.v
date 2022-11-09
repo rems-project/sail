@@ -103,7 +103,7 @@ Definition default_choice_fn ty (_:unit) : unit * choose_type ty :=
   | ChooseBool        => (tt, false)
   | ChooseBit         => (tt, BU)
   | ChooseInt         => (tt, 0)
-  | ChooseNat         => (tt, build_ex 0)
+  | ChooseNat         => (tt, 0)
   | ChooseReal        => (tt, R0)
   | ChooseString      => (tt, "")
   | ChooseRange lo _  => (tt, lo)
@@ -286,14 +286,14 @@ Definition read_mem_bytesS {Regs E} (rk : read_kind) addr sz : monadS Regs (list
   returnS bytes).
 
 (*val read_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e*)
-Definition read_memtS {Regs E A} (rk : read_kind) (a : mword A) sz `{ArithFact (sz >=? 0)} : monadS Regs (mword (8 * sz) * bitU) E :=
+Definition read_memtS {Regs E A} (rk : read_kind) (a : mword A) sz : monadS Regs (mword (8 * sz) * bitU) E :=
   let a := Word.wordToN (get_word a) in
   read_memt_bytesS rk a (Z.to_nat sz) >>$= (fun '(bytes, tag) =>
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val =>
   returnS (mem_val, tag))).
 
 (*val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e*)
-Definition read_memS {Regs E A} rk (a : mword A) sz `{ArithFact (sz >=? 0)} : monadS Regs (mword (8 * sz)) E :=
+Definition read_memS {Regs E A} rk (a : mword A) sz : monadS Regs (mword (8 * sz)) E :=
   read_memtS rk a sz >>$= (fun '(bytes, _) =>
   returnS bytes).
 

@@ -6,31 +6,14 @@ patternrefinement.sail
 vector_subrange_gen.sail
 XXXXX unsupported existential quantification of a vector length
 bind_typ_var.sail
-XXXXX needs some smart existential instantiation
-complex_exist_sat.sail
 XXXXX needs name collision avoidance due to type/constructor punning
 constraint_ctor.sail
 mapping_clause.sail
 XXXXX Complex existential type - probably going to need this for ARM instruction ASTs
 execute_decode_hard.sail
-existential_ast.sail
 existential_ast3.sail
 XXXXX Needs an existential witness
 exist1.sail
-exist2.sail
-XXXXX Needs a type synonym expanded - awkward because we don't attach environments everywhere
-exist_synonym.sail
-XXXXX Examples where int(...) should be expanded internally, but not yet supported
-exit1.sail
-exit2.sail
-inline_typ.sail
-XXXXX Examples with exponentials that the solver can't handle
-pow_32_64.sail
-XXXXX Register constructor doesn't use expanded type from type checker - need environment for type definition to fix this easily
-reg_mod.sail
-reg_ref.sail
-XXXXX Dodgy division/modulo stuff
-Replicate.sail
 XXXXX Non-terminating loops - I've written terminating versions of these
 while_MM.sail
 while_MP.sail
@@ -45,3 +28,13 @@ floor_pow2.sail
 try_while_try.sail
 XXXXX not yet supported existential type (probably quite easy?)
 existential_constraint_synonym.sail
+XXXXX Type variables that need to be filled in
+eqn_inst.sail
+phantom_option.sail
+plus_one_unify.sail
+XXXXX Variable shadowing
+rebind.sail
+XXXXX Existential that should produce a pair
+exist_tlb.sail
+XXXXX A use of an existential type that's not supported yet
+ast_with_dep_tuple.sail

@@ -338,24 +338,15 @@ induction n.
   reflexivity.
 Qed.
 
-Definition uint_plain {a} (x : mword a) : Z :=
-  Z.of_N (Word.wordToN (get_word x)).
+Definition uint {a} (x : mword a) : Z := Z.of_N (Word.wordToN (get_word x)).
 
-Lemma max_of_N {n} : Z.max (Z.of_N n) 0 = Z.of_N n.
-destruct n; auto.
-Qed.
-
-Program Definition uint {a} (x : mword a) : {z : Z & ArithFact (0 <=? z <=? Z.max (2 ^ a - 1) 0)} :=
- existT _ (uint_plain x) _.
-Next Obligation.
-constructor.
-apply Bool.andb_true_iff.
-constructor.
-* apply Z.leb_le. apply N2Z.is_nonneg.
+Lemma uint_range {a} (x : mword a) : a >= 0 -> 0 <= uint x <= 2 ^ a - 1.
+intro a_ge_0.
+split.
+* apply N2Z.is_nonneg.
 * destruct a.
   - simpl in * |- *. shatter_word x. reflexivity.
-  - apply Z.leb_le.
-    assert (2 ^ (Z.pos p) - 1 = Z.of_N (2 ^ (Z.to_N (Z.pos p)) - 1)). {
+  - assert (2 ^ (Z.pos p) - 1 = Z.of_N (2 ^ (Z.to_N (Z.pos p)) - 1)). {
       rewrite N2Z.inj_sub.
       * rewrite N2Z.inj_pow.
         rewrite Z2N.id. solve [ auto ].
@@ -366,15 +357,15 @@ constructor.
         apply N.le_0_l.
     }
     rewrite H.
-    rewrite max_of_N.
     apply N2Z.inj_le.
     rewrite N.sub_1_r.
     apply N.lt_le_pred.
     rewrite <- Z_nat_N.
     rewrite Npow2_pow.
     apply Word.wordToN_bound.
-  - simpl in * |- *. shatter_word x. reflexivity.
-Defined.
+  - contradiction a_ge_0.
+    reflexivity.
+Qed.
 
 Lemma Zpow_pow2 {n} : 2 ^ Z.of_nat n = Z.of_nat (pow2 n).
 induction n.
@@ -384,18 +375,12 @@ induction n.
   rewrite Z.pow_succ_r; auto with zarith.
 Qed.
 
-Definition sint_plain {a} (x : mword a) : Z :=
-  Word.wordToZ (get_word x).
+Definition sint {a} (x : mword a) : Z := Word.wordToZ (get_word x).
 
-Program Definition sint {a} `{ArithFact (a >? 0)} (x : mword a) : {z : Z & ArithFact (-(2^(a-1)) <=? z <=? 2 ^ (a-1) - 1)} :=
-  existT _ (sint_plain x) _.
-Next Obligation.
-unfold sint_plain.
-destruct H.
-unbool_comparisons.
-destruct a; try inversion fact.
-constructor.
-unbool_comparisons_goal.
+Lemma sint_range {a} (x : mword a) : a > 0 -> -(2^(a-1)) <= sint x <= 2 ^ (a-1) - 1.
+intro a_gt_0.
+destruct a; try inversion a_gt_0.
+unfold sint.
 generalize (get_word x).
 rewrite <- positive_nat_Z.
 destruct (Pos2Nat.is_succ p) as [n eq].
@@ -411,10 +396,7 @@ rewrite Zpow_pow2.
 rewrite Z.sub_1_r.
 rewrite <- Z.lt_le_pred.
 auto.
-Defined.
-
-Definition sint0 {a} `{ArithFact (a >=? 0)} (x : mword a) : Z :=
-  if sumbool_of_bool (Z.eqb a 0) then 0 else projT1 (sint x).
+Qed.
 
 Lemma length_list_pos : forall {A} {l:list A}, 0 <= Z.of_nat (List.length l).
 unfold length_list.
@@ -676,15 +658,13 @@ destruct (sumbool_of_bool _).
 Qed.
 
 Import ListNotations.
-Definition count_leading_zeros {N : Z} (x : mword N) `{ArithFact (N >=? 1)} 
-: {n : Z & ArithFact (0 <=? n <=? N)} :=
-  let r : {n : Z & ArithFact (0 <=? n <=? N)} := build_ex N in
-  foreach_Z_up 0 (N - 1) 1 r
-    (fun i _ r =>
+Definition count_leading_zeros {N : Z} (x : mword N) (* N >=? 1 *)
+: Z (* n. (0 <=? n <=? N) *) :=
+  foreach_Z_up 0 (N - 1) 1 N
+    (fun i r =>
       (if ((eq_vec (vec_of_bits [access_vec_dec x i]  : mword 1) (vec_of_bits [B1]  : mword 1)))
-       then build_ex
+       then 
             (Z.sub (Z.sub (length_mword x) i) 1)
-             : {n : Z & ArithFact (0 <=? n <=? N)}
        else r))
    .
 
