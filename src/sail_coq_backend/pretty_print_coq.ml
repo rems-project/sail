@@ -87,6 +87,13 @@ let rec list_contains cmp l1 = function
                    else Util.option_map (List.cons h') (remove t')
      in Util.option_bind (fun l1' -> list_contains cmp l1' t) (remove l1)
 
+(* We currently support OCaml versions that are too old for KBindings.filter_opt *)
+let kbindings_filter_map f m =
+  KBindings.fold
+    (fun kid v m -> match f kid v with None -> m | Some v' -> KBindings.add kid v' m)
+    m
+    KBindings.empty
+
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 
@@ -2796,7 +2803,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   in
   let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tq) in
   let constant_kids =
-    KBindings.filter_map (fun kid inst ->
+    kbindings_filter_map (fun kid inst ->
         match inst with
         | A_aux (A_nexp (Nexp_aux (Nexp_constant value, _)), _) -> Some value
         | _ -> None) simple_type_equations
