@@ -2011,6 +2011,9 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "  if (rop->data != NULL) sail_free(rop->data);\n"
       ^^ string "}"
     in
+    let vector_reinit =
+      string (Printf.sprintf "static void RECREATE(%s)(%s *rop) { KILL(%s)(rop); CREATE(%s)(rop); }" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_id id))
+    in
     let vector_update =
       string (Printf.sprintf "static void vector_update_%s(%s *rop, %s op, sail_int n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
       ^^ string "  int m = sail_int_get_ui(n);\n"
@@ -2093,6 +2096,7 @@ let codegen_vector ctx (direction, ctyp) =
       vector_typedef ^^ twice hardline
       ^^ vector_init ^^ twice hardline
       ^^ vector_clear ^^ twice hardline
+      ^^ vector_reinit ^^ twice hardline
       ^^ vector_undefined ^^ twice hardline
       ^^ vector_access ^^ twice hardline
       ^^ vector_set ^^ twice hardline
