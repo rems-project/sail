@@ -2814,16 +2814,20 @@ refine (fun x y => {|
 destruct (vec_eq_dec _ x y); simpl; split; congruence.
 Defined.
 
-Program Definition vec_of_list {A} n (l : list A) : option (vec A n) :=
-  if sumbool_of_bool (n =? length_list l) then Some (existT _ l _) else None.
-Next Obligation.
+Definition vec_of_list {A} n (l : list A) : option (vec A n).
+refine (
+  match sumbool_of_bool (n =? length_list l) with
+  | left H => Some (existT _ l _)
+  | right _ => None
+  end
+).
 symmetry.
 apply Z.eqb_eq in H.
 rewrite H.
 unfold length_list.
 rewrite Nat2Z.id.
 reflexivity.
-Qed.
+Defined.
 
 Definition vec_of_list_len {A} (l : list A) : vec A (length_list l). 
 refine (existT _ l _).
