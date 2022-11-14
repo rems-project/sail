@@ -293,7 +293,7 @@ lemma access_list_dec_rev_nth:
 lemma access_bv_dec_mword[simp]:
   fixes w :: "('a::len) word"
   assumes "0 \<le> n" and "nat n < LENGTH('a)"
-  shows "access_bv_dec BC_mword w n = bitU_of_bool (w !! (nat n))"
+  shows "access_bv_dec BC_mword w n = bitU_of_bool (bit w (nat n))"
   using assms unfolding access_bv_dec_def access_list_def
   by (auto simp: access_list_dec_rev_nth BC_mword_defs rev_map test_bit_bl)
 

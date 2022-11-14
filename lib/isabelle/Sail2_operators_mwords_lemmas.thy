@@ -45,7 +45,7 @@ lemmas access_vec_dec_test_bit[simp] = access_bv_dec_mword[folded access_vec_dec
 lemma access_vec_inc_test_bit[simp]:
   fixes w :: "('a::len) word"
   assumes "n \<ge> 0" and "nat n < LENGTH('a)"
-  shows "access_vec_inc w n = bitU_of_bool (w !! (LENGTH('a) - 1 - nat n))"
+  shows "access_vec_inc w n = bitU_of_bool (bit w (LENGTH('a) - 1 - nat n))"
   using assms
   by (auto simp: access_vec_inc_def access_bv_inc_def access_list_def BC_mword_defs rev_nth test_bit_bl)
 
@@ -175,7 +175,7 @@ termination shl_int
 declare shl_int.simps[simp del]
 
 lemma shl_int[simp]:
-  "shl_int x y = Bits.shiftl x (nat y)"
+  "shl_int x y = x << (nat y)"
   apply (induct n \<equiv> "nat y" arbitrary: x y)
    apply (simp add: shl_int.simps)
   apply (subst shl_int.simps)
@@ -191,7 +191,7 @@ termination shr_int
 declare shr_int.simps[simp del]
 
 lemma shr_int[simp]:
-  "shr_int x i = Bits.shiftr x (nat i)"
+  "shr_int x i = x >> (nat i)"
   apply (induct x i rule: shr_int.induct)
   apply (subst shr_int.simps)
   apply (clarsimp simp: shiftr_int_def zdiv_zmult2_eq[symmetric])
