@@ -1044,15 +1044,15 @@ match n with
 | Zpos _ => fun f w => f w
 end.
 
-Program Definition to_word {n} : n >=? 0 = true -> word (Z.to_nat n) -> mword n :=
+Definition to_word {n} : word (Z.to_nat n) -> mword n :=
   match n with
-  | Zneg _ => fun H _ => _
-  | Z0 => fun _ w => w
-  | Zpos _ => fun _ w => w
+  | Zneg _ => fun _ => WO
+  | Z0 => fun w => w
+  | Zpos _ => fun w => w
   end.
 
-Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >=? 0)} : mword n :=
-  to_word (use_ArithFact H) w.
+Definition word_to_mword {n} (w : word (Z.to_nat n)) : mword n :=
+  to_word w.
 
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
@@ -2252,18 +2252,11 @@ Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (bitlistFromWord (
 Definition of_bits {n} v : option (mword n) :=
   match just_list (List.map bool_of_bitU v) with
   | Some bl =>
-    match sumbool_of_bool (n >=? 0) with
-    | left H => Some (to_word H (fit_bbv_word (wordFromBitlist bl)))
-    | right _ => None
-    end
+    if n >=? 0 then Some (to_word (fit_bbv_word (wordFromBitlist bl))) else None
   | None => None
   end.
 Definition of_bools {n} v : mword n :=
-  match sumbool_of_bool (n >=? 0) with
-  | left H => to_word H (fit_bbv_word (wordFromBitlist v))
-  | right _ => dummy_value
-  end.
-
+  to_word (fit_bbv_word (wordFromBitlist v)).
 
 (*val bytes_of_bits : forall a. Bitvector a => a -> option (list memory_byte)*)
 Definition bytes_of_bits {n} (bs : mword n) := byte_chunks (bits_of bs).
