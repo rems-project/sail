@@ -70,7 +70,6 @@ Require Import Sail.Prompt_monad.
 Require Import Sail.Prompt.
 Require Import bbv.Word.
 Require bbv.BinNotation.
-Require Import Arith.
 Require Import ZArith.
 Require Import Lia.
 Require Import Eqdep_dec.
@@ -173,9 +172,8 @@ Definition update_vec_inc {a} (w : mword a) i b : mword a :=
 (*val update_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a*)
 Definition update_vec_dec {a} (w : mword a) i b : mword a := opt_def w (update_mword_dec w i b).
 
-Lemma subrange_lemma0 {n m o} `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} : (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
+Lemma subrange_lemma0 {n m o} : andb (0 <=? o) (o <=? m <? n) = true -> (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
 intros.
-unwrap_ArithFacts.
 unbool_comparisons.
 split.
 + apply Z2Nat.inj_le; lia.
@@ -187,9 +185,8 @@ Qed.
 Lemma subrange_lemma2 {n m o} : (o <= m < n -> m+1 = o+(m-o+1))%nat.
 lia.
 Qed.
-Lemma subrange_lemma3 {m o} `{ArithFact (0 <=? o)} `{ArithFact (o <=? m)} :
-  Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
-unwrap_ArithFacts.
+Lemma subrange_lemma3 {m o n} : andb (0 <=? o) (o <=? m <? n) = true -> Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
+intros.
 unbool_comparisons.
 rewrite Nat2Z.inj_add.
 rewrite Nat2Z.inj_sub.
@@ -197,29 +194,31 @@ repeat rewrite Z2Nat.id; lia.
 apply Z2Nat.inj_le; lia.
 Qed.
 
-Definition subrange_vec_dec_precise {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} : mword (m - o + 1) :=
+Definition subrange_vec_dec_precise {n} (v : mword n) m o (H: andb (0 <=? o) (o <=? m <? n) = true) : mword (m - o + 1) :=
   let n := Z.to_nat n in
   let m := Z.to_nat m in
   let o := Z.to_nat o in
-  let prf : (o <= m < n)%nat := subrange_lemma0 in
+  let prf : (o <= m < n)%nat := subrange_lemma0 H in
   let w := get_word v in
   cast_to_mword (split2 o (m-o+1)
                         (cast_word (split1 (m+1) (n-(m+1)) (cast_word w (subrange_lemma1 prf)))
-                                   (subrange_lemma2 prf))) subrange_lemma3.
+                                   (subrange_lemma2 prf))) (subrange_lemma3 H).
 
 Definition subrange_vec_dec {n} (v : mword n) m o : mword (m - o + 1) :=
-  if sumbool_of_bool (andb (0 <=? o) (o <=? m <? n)) then subrange_vec_dec_precise v m o else dummy_value.
+  match sumbool_of_bool (andb (0 <=? o) (o <=? m <? n)) with
+  | left H => subrange_vec_dec_precise v m o H
+  | right _ => dummy_value
+  end.
 
 Definition subrange_vec_inc {n} (v : mword n) m o : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
 
 Lemma update_subrange_vec_dec_pf {o m n} :
-ArithFact (0 <=? o) ->
-ArithFact (o <=? m <? n) ->
+andb (0 <=? o) (o <=? m <? n) = true ->
 Z.of_nat (Z.to_nat o + (Z.to_nat (m - (o - 1)) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
-intros [H1] [H2].
-unbool_comparisons.
+intros.
 rewrite Z.sub_sub_distr.
-rewrite <- subrange_lemma3.
+rewrite <- (subrange_lemma3 H).
+unbool_comparisons.
 rewrite !Nat2Z.inj_add.
 rewrite !Nat2Z.inj_sub.
 rewrite Nat2Z.inj_add.
@@ -229,12 +228,11 @@ apply Z2Nat.inj_lt; lia.
 apply Z2Nat.inj_le; lia.
 Qed.
 
-Definition update_subrange_vec_dec_precise {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - (o - 1))) : mword n.
-refine (
+Definition update_subrange_vec_dec_precise {n} (v : mword n) m o (H: andb (0 <=? o) (o <=? m <? n) = true) (w : mword (m - (o - 1))) : mword n :=
   let n := Z.to_nat n in
   let m := Z.to_nat m in
   let o := Z.to_nat o in
-  let prf : (o <= m < n)%nat := subrange_lemma0 in
+  let prf : (o <= m < n)%nat := subrange_lemma0 H in
   let v' := get_word v in
   let w' := get_word w in
   let x :=
@@ -244,11 +242,13 @@ refine (
   let y :=
       split2 (m+1) (n-(m+1)) (cast_word v' (subrange_lemma1 prf)) in
   let z := combine x (combine w' y) in
-  cast_to_mword z (update_subrange_vec_dec_pf _ _)).
-Defined.
+  cast_to_mword z (update_subrange_vec_dec_pf H).
 
 Definition update_subrange_vec_dec {n} (v : mword n) m o (w : mword (m - (o - 1))) : mword n :=
-  if sumbool_of_bool ((0 <=? o) && (o <=? m) && (m <? n))%bool then update_subrange_vec_dec_precise v m o (autocast w) else dummy v.
+  match sumbool_of_bool ((0 <=? o) && (o <=? m <? n))%bool with
+  | left H => update_subrange_vec_dec_precise v m o H (autocast w)
+  | right _ => dummy v
+  end.
 
 Definition update_subrange_vec_inc {n} (v : mword n) m o (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
@@ -391,7 +391,7 @@ destruct (Word.wordToZ_size' w) as [LO HI].
 replace 1 with (Z.of_nat 1). 2: solve [ auto ].
 rewrite <- Nat2Z.inj_sub. 2: solve [ auto with arith ].
 simpl.
-rewrite <- minus_n_O.
+rewrite Nat.sub_0_r.
 rewrite Zpow_pow2.
 rewrite Z.sub_1_r.
 rewrite <- Z.lt_le_pred.
@@ -526,13 +526,7 @@ match n with
 | O => Word.WO
 | S m => Word.combine w (replicate_bits_aux w m)
 end.
-Lemma replicate_ok {n a} `{ArithFact (n >=? 0)} `{ArithFact (a >=? 0)} :
-   Z.of_nat (Z.to_nat n * Z.to_nat a) = a * n.
-destruct H. destruct H0. unbool_comparisons.
-rewrite <- Z2Nat.id. 2: solve [ auto with zarith ].
-rewrite Z2Nat.inj_mul. 2,3: solve [ auto with zarith ].
-rewrite Nat.mul_comm. reflexivity.
-Qed.
+
 Definition replicate_bits {a} (w : mword a) (n : Z) : mword (a * n) :=
  if sumbool_of_bool (n >=? 0) then
    fit_word (replicate_bits_aux (get_word w) (Z.to_nat n))
@@ -653,8 +647,7 @@ destruct (sumbool_of_bool _).
   + exfalso.
     unbool_comparisons.  
     lia.
-  + repeat replace_ArithFact_proof.
-    reflexivity.
+  + reflexivity.
 Qed.
 
 Import ListNotations.

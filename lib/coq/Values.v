@@ -117,6 +117,8 @@ Global Opaque dummy_value.
 }.
 #[export] Instance list_inhabited {X} : Inhabited (list X) := { inhabitant := [] }.
 #[export] Instance option_inhabited {X} : Inhabited (option X) := { inhabitant := None }.
+(* TODO: try to split out reals again. *)
+#[export] Instance R_inhabited : Inhabited R := { inhabitant := R0 }.
 
 (* Constraint solving basics.  A HintDb which unfolding hints and lemmata
    can be added to, and a typeclass to wrap constraint arguments in to
@@ -2512,6 +2514,9 @@ Definition choose_type ty :=
   | ChooseRange _ _ => Z | ChooseBitvector n => mword n
   end.
 
+#[export] Instance choose_type_inhabited {ty} : Inhabited (choose_type ty).
+destruct ty; simpl; constructor; apply inhabitant.
+Defined.
 
 (*val foreach : forall a vars.
   (list a) -> vars -> (a -> vars -> vars) -> vars*)
