@@ -23,6 +23,9 @@ install: [make "install"]
 depends: [
   "coq" {>= "8.9.0"}
   "coq-bbv" {>= "1.1"}
+  # The sail package isn't strictly required, but this is the easiest way for
+  # models' opam files to ensure that the version matches
+  "sail" {= version}
 ]
 synopsis:
   "Support library for Sail, a language for describing the instruction semantics of processors"
