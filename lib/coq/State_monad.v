@@ -72,7 +72,6 @@ Require Import OrderedType.
 Require OrderedTypeEx.
 Require Import List.
 Require Import Rbase.  (* TODO would like to avoid this in models without reals *)
-Require bbv.Word.
 Import ListNotations.
 Local Open Scope Z.
 Require OrderedTypeEx.
@@ -105,7 +104,7 @@ Definition default_choice_fn ty (_:unit) : unit * choose_type ty :=
   | ChooseInt         => (tt, 0)
   | ChooseNat         => (tt, 0)
   | ChooseReal        => (tt, R0)
-  | ChooseString      => (tt, "")
+  | ChooseString      => (tt, ""%string)
   | ChooseRange lo _  => (tt, lo)
   | ChooseBitvector n => (tt, mword_of_int 0)
   end.
@@ -254,7 +253,7 @@ end.
 
 (*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e*)
 Definition read_tagS {Regs A E} (addr : mword A) : monadS Regs bitU E :=
-  let addr := Word.wordToN (get_word addr) in
+  let addr := mword_to_N addr in
   readS (fun s => opt_def B0 (NMap.find addr s.(ss_tagstate))).
 
 Fixpoint genlist_acc {A:Type} (f : nat -> A) n acc : list A :=
@@ -287,7 +286,7 @@ Definition read_mem_bytesS {Regs E} (rk : read_kind) addr sz : monadS Regs (list
 
 (*val read_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e*)
 Definition read_memtS {Regs E A} (rk : read_kind) (a : mword A) sz : monadS Regs (mword (8 * sz) * bitU) E :=
-  let a := Word.wordToN (get_word a) in
+  let a := mword_to_N a in
   read_memt_bytesS rk a (Z.to_nat sz) >>$= (fun '(bytes, tag) =>
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val =>
   returnS (mem_val, tag))).
@@ -334,7 +333,7 @@ Definition write_mem_bytesS {Regs E} wk addr sz (v : list memory_byte) : monadS 
 (*val write_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
   write_kind -> 'a -> integer -> 'b -> bitU -> monadS 'regs bool 'e*)
 Definition write_memtS {Regs E A} wk (addr : mword A) sz (v : mword (8 * sz)) (t : bitU) : monadS Regs bool E :=
-  match (Word.wordToN (get_word addr), mem_bytes_of_bits v) with
+  match (mword_to_N addr, mem_bytes_of_bits v) with
     | (addr, Some v) => write_memt_bytesS wk addr (Z.to_nat sz) v t
     | _ => failS "write_mem"
   end.
@@ -344,11 +343,11 @@ Definition write_tag_rawS {Regs E} (wk:write_kind) (addr : N) (tag : bitU) : mon
   returnS true.
 
 Definition write_tagS {Regs E A} (wk:write_kind) (addr : mword A) (tag : bitU) : monadS Regs bool E :=
-  let addr := Word.wordToN (get_word addr) in
+  let addr := mword_to_N addr in
   write_tag_rawS wk addr tag.
 
 Definition write_tag_boolS {Regs E A} (addr : mword A) (tag : bool) : monadS Regs bool E :=
-  let addr := Word.wordToN (get_word addr) in
+  let addr := mword_to_N addr in
   write_tag_rawS Write_plain addr (bitU_of_bool tag).
 
 (*val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>

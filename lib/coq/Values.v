@@ -71,9 +71,7 @@
 Require Export ZArith.
 Require Import Ascii.
 Require Export String.
-Require Import bbv.Word.
-Require Import bbv.BinNotation.
-Require Export bbv.HexNotationWord.
+From bbv Require Word BinNotation HexNotationWord.
 Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.
@@ -734,17 +732,34 @@ Definition bools_of_int len n :=
   if n >=? 0 then bs_abs
   else add_one_bool_ignore_overflow (List.map negb bs_abs).
 *)
-Fixpoint bitlistFromWord_rev {n} w :=
-match w with
-| WO => []
-| WS b w => b :: bitlistFromWord_rev w
-end.
-Definition bitlistFromWord {n} w :=
-  List.rev (@bitlistFromWord_rev n w).
+Local Fixpoint bools_of_pos_aux len p acc :=
+  match len with
+  | O => acc
+  | S len' =>
+     match p with
+     | xI p' => bools_of_pos_aux len' p' (true::acc)
+     | xO p' => bools_of_pos_aux len' p' (false::acc)
+     | xH    => List.repeat false len' ++ true :: acc
+     end
+  end. 
 
 Definition bools_of_int len n :=
-  let w := Word.ZToWord (Z.to_nat len) n in
-  bitlistFromWord w.
+  let len := Z.to_nat len in
+  match n with
+  | Zpos p => bools_of_pos_aux len p []
+  | Z0     => List.repeat false len
+  | Zneg p => match Pos.pred_N p with
+              | Npos p' => List.map negb (bools_of_pos_aux len p' [])
+              | N0 => List.repeat true len
+              end
+  end.
+
+Lemma bools_of_int_len_0 len n : len <= 0 -> bools_of_int len n = [].
+intro H.
+destruct len; simpl in H.
+1,3: destruct n as [|n|[n|n|]]; try reflexivity.
+lia.
+Qed.
 
 (*** Bit lists ***)
 
@@ -1014,6 +1029,10 @@ end*)
 
 (*** Machine words *)
 
+Section MachineWords.
+
+Import Word.
+
 (* ISA models tend to use integers for sizes, so Sail's bitvectors are integer
    indexed.  To avoid carrying around proofs that sizes are non-negative
    everywhere we define negative sized machine words to be a trivial value. *)
@@ -1133,6 +1152,147 @@ val make_the_value : forall n. Z -> itself n
 Definition inline make_the_value x := the_value
 *)
 
+Local Fixpoint bitlistFromWord_rev {n} w :=
+match w with
+| WO => []
+| WS b w => b :: bitlistFromWord_rev w
+end.
+
+Definition bitlistFromWord {n} w :=
+  List.rev (@bitlistFromWord_rev n w).
+
+Definition alt_bools_of_int len n :=
+  let w := Word.ZToWord (Z.to_nat len) n in
+  bitlistFromWord w.
+
+Local Lemma list_repeat_app A (a : A) n : List.repeat a n ++ [a] = List.repeat a (S n).
+induction n.
+- reflexivity.
+- simpl.
+  rewrite IHn.
+  reflexivity.
+Qed.
+
+Local Lemma list_repeat_rev {A} (a : A) n : rev (List.repeat a n) = List.repeat a n.
+induction n.
+- reflexivity.
+- rewrite <- list_repeat_app at 2.
+  rewrite <- IHn.
+  reflexivity.
+Qed.
+
+Local Lemma repeat_zero n l :
+  List.repeat false n ++ l = rev (bitlistFromWord_rev (wzero' n)) ++ l.
+revert l.
+induction n.
++ auto.
++ simpl. rewrite <- IHn. rewrite list_repeat_app.
+  reflexivity.
+Qed.
+
+Local Lemma bools_of_int_aux_equiv n p l :
+  bools_of_pos_aux n p l = rev (bitlistFromWord_rev (posToWord n p)) ++ l.
+revert p l.
+induction n.
+- intros. rewrite posToWord_sz0. reflexivity.
+- intros [p|p|] l.
+  * simpl.
+    rewrite <- app_assoc.
+    rewrite IHn.
+    reflexivity.
+  * simpl.
+    rewrite <- app_assoc.
+    rewrite IHn.
+    reflexivity.
+  * simpl.
+    rewrite <- app_assoc.
+    apply repeat_zero.
+Qed.
+
+Lemma bitlistFromWord_not n (w : word n) : bitlistFromWord (wnot w) = map negb (bitlistFromWord w).
+unfold bitlistFromWord.
+induction w.
+- reflexivity.
+- simpl.
+  rewrite map_app.
+  rewrite IHw.
+  reflexivity.
+Qed.
+
+Lemma wneg_wnot n (w : word n) : wneg w  = wnot (wplus w (wones n)).
+rewrite wones_wneg_one.
+rewrite wneg_wnot.
+ring_sz n.
+Qed.
+
+Lemma pred_N_split p : p = 1%positive \/ exists p', Pos.pred_N p = N.pos p' /\ p = Pos.succ p'.
+destruct (Pos.succ_pred_or p).
+* auto.
+* right. exists (Pos.pred p).
+  split.
+  - rewrite <- H at 1.
+    rewrite Pos.pred_N_succ.
+    reflexivity.
+  - auto.
+Qed.
+
+Lemma list_repeat_map A B a (f : A -> B) n : List.repeat (f a) n = List.map f (List.repeat a n).
+induction n.
+- reflexivity.
+- simpl. rewrite IHn. reflexivity.
+Qed.
+
+Lemma bools_of_int_equiv len n : bools_of_int len n = alt_bools_of_int len n.
+unfold alt_bools_of_int.
+destruct len; simpl.
+* rewrite bools_of_int_len_0, ZToWord_sz0; auto with zarith.
+* destruct n; simpl.
+  - unfold bitlistFromWord.
+    rewrite <- app_nil_r.
+    rewrite <- repeat_zero.
+    rewrite app_nil_r.
+    reflexivity.
+  - unfold bitlistFromWord.
+    rewrite <- app_nil_r.
+    apply bools_of_int_aux_equiv.
+  - destruct (pred_N_split p0) as [H|[p' [H1 H2]]].
+    + subst. cbn -[posToWord].
+      change true with (negb false) at 1.
+      rewrite list_repeat_map.
+      rewrite wneg_wnot.
+      rewrite bitlistFromWord_not.
+      f_equal.
+      rewrite wones_wneg_one.
+      rewrite posToWord_nat.
+      rewrite wminus_inv.
+      rewrite <- app_nil_r.
+      unfold bitlistFromWord.
+      rewrite <- wzero'_def.
+      rewrite <- repeat_zero.
+      rewrite app_nil_r.
+      reflexivity.
+    + rewrite H1.
+      rewrite wneg_wnot.
+      rewrite bitlistFromWord_not.
+      f_equal.
+      rewrite bools_of_int_aux_equiv.
+      rewrite wones_wneg_one.
+      rewrite <- wminus_def.
+      rewrite (posToWord_nat p0).
+      rewrite H2.
+      rewrite Pos2Nat.inj_succ.
+      rewrite natToWord_S.
+      rewrite wminus_def.
+      rewrite <- wplus_assoc.
+      rewrite wplus_comm.
+      rewrite <- wminus_def.
+      rewrite wminus_wplus_undo.
+      rewrite app_nil_r.
+      rewrite <- posToWord_nat.
+      reflexivity.
+* rewrite bools_of_int_len_0, ZToWord_sz0; auto with zarith.
+Qed.
+
 Fixpoint wordFromBitlist_rev l : word (length l) :=
 match l with
 | [] => WO
@@ -1162,6 +1322,11 @@ nat_diff n m
  (fun p w => split2 _ _ (nat_cast _ (Nat.add_comm _ _) w)).
 
 Local Close Scope nat.
+
+Definition mword_to_N {n} (w : mword n) : N :=
+  Word.wordToN (get_word w).
+
+End MachineWords.
 
 (*** Bitvectors *)
 
@@ -2686,9 +2851,8 @@ refine (Build_Inhabited _
   - simpl.
     apply Nat.mul_1_r.
   - auto with zarith.
-* rewrite Z_to_nat_neg.
-  - reflexivity.
-  - auto with zarith.
+* destruct n; try reflexivity.
+  compute in e. congruence.
 Qed.
 
 Definition vec_init {T} (t : T) `{Inhabited T} (n : Z) : vec T n.
@@ -2875,6 +3039,6 @@ Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
 Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a) :
                        mword (ltac:(let sz := eval cbv in (Z.of_nat (String.length a)) in exact sz)))
                      (at level 50, only parsing).
-Notation "'Ox' a" := (NToWord _ (hex a) :
+Notation "'Ox' a" := (Word.NToWord _ (HexNotation.hex a) :
                        mword (ltac:(let sz := eval cbv in (4 * (Z.of_nat (String.length a))) in exact sz)))
                      (at level 50, only parsing).
