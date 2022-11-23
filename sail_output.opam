@@ -15,6 +15,7 @@ authors: [
   "Peter Sewell"
   "Mark Wassell"
 ]
+license: "BSD-2-Clause"
 homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
