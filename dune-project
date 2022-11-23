@@ -15,6 +15,8 @@
 
 (maintainers "Sail Devs <cl-sail-dev@lists.cam.ac.uk>")
 
+(license BSD-2-Clause)
+
 (authors
   "Alasdair Armstrong"
   "Thomas Bauereiss"

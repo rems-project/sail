@@ -37,6 +37,15 @@ default and this flag is ignored. The `-allow_deprecated_casts` flag
 must be used to enable this now. Implicit casts will be fully removed
 in the next Sail release.
 
+##### New concurrency interface (EXPERIMENTAL)
+
+This release contains a new way of interfacing with external
+concurrency models by way of user defined effects. See
+lib/concurrency_interface for an example. This is currently
+experimental and not fully supported in all backends. Definition of
+new effects is currently only allowed with the `$sail_internal`
+directive (see below).
+
 ##### No more explicit effect annotations (DEPRECATION)
 
 Explicit effect annotations are now deprecated and do nothing. This
