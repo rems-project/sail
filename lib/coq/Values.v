@@ -263,6 +263,21 @@ split.
   tauto.
 Qed.
 
+#[export] Instance Decidable_eq_option {A : Type} `(D: forall x y : A, Decidable (x = y)) : forall x y : option A, Decidable (x = y).
+refine (fun x y => {| Decidable_witness :=
+  match x with
+  | None => match y with None => true | Some _ => false end
+  | Some x' => match y with None => false | Some y' => (@Decidable_witness _ (D x' y')) end
+  end |}).
+destruct x as [x'|]; destruct y as [y'|].
+- destruct (D x' y') as [b H]; simpl.
+  rewrite H.
+  split; congruence.
+- split; congruence.
+- split; congruence.
+- split; congruence.
+Defined.
+
 Definition generic_dec {T:Type} (x y:T) `{Decidable (x = y)} : {x = y} + {x <> y}.
 refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' => _ else fun H' => _) Decidable_spec).
 * left. tauto.
