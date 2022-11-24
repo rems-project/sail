@@ -303,7 +303,15 @@ let add_def_to_graph graph def =
     | _ ->
        Reporting.unreachable l __POS__ "Unexpected definition in outcome block"
   in
-         
+
+  let scan_fundef_tannot self (FD_aux (FD_function (_, Typ_annot_opt_aux (tannotopt, _), _), _)) =
+    match tannotopt with
+    | Typ_annot_opt_none -> ()
+    | Typ_annot_opt_some (typq, typ) ->
+       scan_typquant self typq;
+       IdSet.iter (fun typ_id -> graph := G.add_edge self (Type typ_id) !graph) (typ_ids typ)
+  in
+
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _, _), _)) ->
      graph := G.add_edges (Mapping id) [] !graph;
@@ -319,6 +327,7 @@ let add_def_to_graph graph def =
   | DEF_fundef fdef ->
      let id = id_of_fundef fdef in
      graph := G.add_edges (Function id) [] !graph;
+     scan_fundef_tannot (Function id) fdef;
      ignore (rewrite_fun (rewriters (Function id)) fdef)
   | DEF_mapdef mdef ->
      let id = id_of_mapdef mdef in
