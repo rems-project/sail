@@ -49,7 +49,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
     (dune-site (>= 3.0.2))
-    (menhir :build)
+    (menhir (and (>= 20180523) :build))
     (ott (and (>= 0.28) :build))
     (lem (>= "2018-12-14"))
     (linksem (>= "0.3"))

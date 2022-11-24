@@ -32,7 +32,7 @@ bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
   "dune-site" {>= "3.0.2"}
-  "menhir" {build}
+  "menhir" {>= "20180523" & build}
   "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
