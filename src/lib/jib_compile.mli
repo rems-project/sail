@@ -140,6 +140,9 @@ module type Config = sig
   (** If false we won't generate any V_struct values *)
   val struct_value : bool
 
+  (** If false we won't generate any V_tuple values *)
+  val tuple_value : bool
+
   (** Allow real literals *)
   val use_real : bool
 
