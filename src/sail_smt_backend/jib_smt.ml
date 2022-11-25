@@ -1633,6 +1633,7 @@ let unroll_static_foreach ctx = function
   let ignore_64 = true
   let unroll_loops = Some Opts.unroll_limit
   let struct_value = true
+  let tuple_value = false
   let use_real = true
   let branch_coverage = None
   let track_throw = false

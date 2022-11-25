@@ -611,6 +611,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
   let specialize_calls = false
   let ignore_64 = false
   let struct_value = false
+  let tuple_value = false
   let use_real = false
   let branch_coverage = Opts.branch_coverage
   let track_throw = true

@@ -230,6 +230,7 @@ module type Config = sig
   val specialize_calls : bool
   val ignore_64 : bool
   val struct_value : bool
+  val tuple_value : bool
   val use_real : bool
   val branch_coverage : out_channel option
   val track_throw : bool
@@ -378,7 +379,7 @@ let rec compile_aval l ctx = function
      let cleanup = List.concat (List.rev (List.map (fun (_, _, cleanup) -> cleanup) elements)) in
      let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
      let gs = ngensym () in
-     if C.struct_value then (
+     if C.tuple_value then (
        setup,
        V_tuple (cvals, tup_ctyp),
        cleanup
