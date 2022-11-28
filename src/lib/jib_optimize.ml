@@ -358,24 +358,32 @@ let inline cdefs should_inline instrs =
   in
   go instrs
 
-let rec remove_pointless_goto = function
-  | I_aux (I_goto label, _) :: I_aux (I_label label', aux) :: instrs when label = label' ->
-     I_aux (I_label label', aux) :: remove_pointless_goto instrs
-  | I_aux (I_goto label, aux) :: I_aux (I_goto _, _) :: instrs ->
-     I_aux (I_goto label, aux) :: remove_pointless_goto instrs
-  | instr :: instrs ->
-     instr :: remove_pointless_goto instrs
-  | [] -> []
+let remove_pointless_goto instrs =
+  let rec go acc = function
+    | I_aux (I_goto label, _) :: I_aux (I_label label', aux) :: instrs when label = label' ->
+       go (I_aux (I_label label', aux) :: acc) instrs
+    | I_aux (I_goto label, aux) :: I_aux (I_goto _, _) :: instrs ->
+       go (I_aux (I_goto label, aux) :: acc) instrs
+    | instr :: instrs ->
+       go (instr :: acc) instrs
+    | [] ->
+       List.rev acc
+  in
+  go [] instrs
 
-let rec remove_pointless_exit = function
-  | I_aux (I_end id, aux) :: I_aux (I_end _, _) :: instrs  ->
-     I_aux (I_end id, aux) :: remove_pointless_exit instrs
-  | I_aux (I_end id, aux) :: I_aux (I_undefined _, _) :: instrs  ->
-     I_aux (I_end id, aux) :: remove_pointless_exit instrs
-  | instr :: instrs ->
-     instr :: remove_pointless_exit instrs
-  | [] -> []
-
+let remove_pointless_exit instrs =
+  let rec go acc = function
+    | I_aux (I_end id, aux) :: I_aux (I_end _, _) :: instrs  ->
+       go (I_aux (I_end id, aux) :: acc) instrs
+    | I_aux (I_end id, aux) :: I_aux (I_undefined _, _) :: instrs  ->
+       go (I_aux (I_end id, aux) :: acc) instrs
+    | instr :: instrs ->
+       go (instr :: acc) instrs
+    | [] ->
+       List.rev acc
+  in
+  go [] instrs
+ 
 module StringSet = Set.Make(String)
 
 let rec get_used_labels set = function
