@@ -147,6 +147,7 @@ let doc_reg_dec doc (DEC_aux (d, l)) = DEC_aux (d, doc_loc doc l)
 let doc_mapcl doc (MCL_aux (d, l)) = MCL_aux (d, doc_loc doc l)
 let doc_map doc (MD_aux (m, l)) = MD_aux (m, doc_loc doc l)
 let doc_tu doc (Tu_aux (tu, l)) = Tu_aux (tu, doc_loc doc l)
+let doc_id doc (Id_aux (id, l)) = Id_aux (id, doc_loc doc l)
 
 let doc_sd doc (SD_aux (sd, l)) =
   match sd with
@@ -1579,6 +1580,16 @@ instantiation_def:
   | Instantiation id With separated_nonempty_list(Comma, subst)
     { ($2, $4) }
 
+overload_def:
+  | Doc Overload id Eq Lcurly id_list Rcurly
+    { (doc_id $1 $3, $6) }
+  | Overload id Eq Lcurly id_list Rcurly
+    { ($2, $5) }
+  | Doc Overload id Eq enum_bar
+    { (doc_id $1 $3, List.map fst $5) }
+  | Overload id Eq enum_bar
+    { ($2, List.map fst $4) }
+
 def:
   | fun_def
     { DEF_fundef $1 }
@@ -1602,10 +1613,8 @@ def:
     { DEF_val $1 }
   | register_def
     { DEF_reg_dec $1 }
-  | Overload id Eq Lcurly id_list Rcurly
-    { DEF_overload ($2, $5) }
-  | Overload id Eq enum_bar
-    { DEF_overload ($2, List.map fst $4) }
+  | overload_def
+    { let (id, ids) = $1 in DEF_overload (id, ids) }
   | scattered_def
     { DEF_scattered $1 }
   | default_def

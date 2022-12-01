@@ -733,7 +733,7 @@ let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
-     if comment then docstring annot else empty
+     (if comment then docstring annot else empty)
      ^^ string "val" ^^ space
      ^^ (if is_cast then (string "cast" ^^ space) else empty)
      ^^ doc_id id ^^ space
@@ -778,9 +778,9 @@ let doc_filter = function
   | DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _) -> false
   | _ -> true
     
-let rec doc_def_no_hardline = function
+let rec doc_def_no_hardline ?comment:(comment=false) = function
   | DEF_default df -> doc_default df
-  | DEF_spec v_spec -> doc_spec v_spec
+  | DEF_spec v_spec -> doc_spec ~comment:comment v_spec
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
@@ -813,12 +813,13 @@ let rec doc_def_no_hardline = function
   | DEF_fixity (prec, n, id) ->
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
-  | DEF_overload (id, ids) ->
+  | DEF_overload (Id_aux (_, l) as id, ids) ->
+     (if comment then docstring (l, no_annot) else empty) ^^
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
-and doc_def def = group (doc_def_no_hardline def ^^ hardline)
+and doc_def ?comment:(comment=false) def = group (doc_def_no_hardline ~comment:comment def ^^ hardline)
 
-let doc_ast { defs; _ } =
-  separate_map hardline doc_def (List.filter doc_filter defs)
+let doc_ast ?comment:(comment=false) { defs; _ } =
+  separate_map hardline (doc_def ~comment:comment) (List.filter doc_filter defs)
 
 let reformat dir { defs; _ } =
   let file_stack = ref [] in
@@ -843,7 +844,7 @@ let reformat dir { defs; _ } =
 
   let output_def def = match !file_stack with
     | Some chan :: _ ->
-       ToChannel.pretty 1. 120 chan (hardline ^^ doc_def def)
+       ToChannel.pretty 1. 120 chan (hardline ^^ doc_def ~comment:true def)
     | None :: _ -> ()
     | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "No file for definition"
   in
