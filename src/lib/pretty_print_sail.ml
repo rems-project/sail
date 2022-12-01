@@ -97,7 +97,7 @@ let doc_kopt = function
 let doc_int n = string (Big_int.to_string n)
 
 let docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
+  | Parse_ast.Documented (str, _) -> string "/*! " ^^ string str ^^ string " */" ^^ hardline
   | _ -> empty
 
 let doc_ord (Ord_aux(o,_)) = match o with
