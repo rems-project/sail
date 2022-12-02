@@ -18,6 +18,8 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
+	@echo 'Please make sure that the "Word_Lib" entry of the AFP (https://www.isa-afp.org/) is installed'
+	@echo 'and set up, e.g. by adding its path to "$$ISABELLE_HOME_USER/ROOTS".'
 	if [ -z "$(wildcard $(LEM_ISA_LIB)/ROOT)" ]; \
 	then echo isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable; false; \
 	else isabelle build -b -d $(LEM_ISA_LIB) -D . ; \

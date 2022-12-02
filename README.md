@@ -43,7 +43,7 @@ some Sail specifications and related tools.
 * Generated Isabelle snapshots of some ISA models, in [snapshots/isabelle](snapshots/isabelle)
 
 * Documentation for generating Isabelle and working with the ISA specs
-  in Isabelle in [snapshots/isabelle/Manual.pdf](snapshots/isabelle/Manual.pdf)
+  in Isabelle in [lib/isabelle/manual.pdf](lib/isabelle/manual.pdf)
 
 * A simple emacs mode with syntax highlighting (in [editors/](editors/))
 
