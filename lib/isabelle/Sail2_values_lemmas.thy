@@ -100,9 +100,6 @@ termination index_list
 lemma index_list_Zero[simp]: "index_list i j 0 = []"
   by auto
 
-lemma index_list_singleton[simp]: "n \<noteq> 0 \<Longrightarrow> index_list i i n = [i]"
-  by auto
-
 lemma index_list_simps:
   "0 < step \<Longrightarrow> from \<le> to \<Longrightarrow> index_list from to step = from # index_list (from + step) to step"
   "0 < step \<Longrightarrow> from > to \<Longrightarrow> index_list from to step = []"
@@ -122,6 +119,9 @@ lemma nth_upto[simp]: "i + int n \<le> j \<Longrightarrow> [i..j] ! n = i + int 
      (auto simp: upto.simps nth_Cons split: nat.splits)
 
 declare index_list.simps[simp del]
+
+lemma index_list_singleton[simp]: "n \<noteq> 0 \<Longrightarrow> index_list i i n = [i]"
+  by (auto simp: index_list.simps[of i i n] index_list.simps[of "i + n" i n])
 
 lemma genlist_add_upt[simp]: "genlist ((+) start) len = [start..<start + len]"
   by (auto simp: genlist_def map_add_upt add.commute cong: map_cong)
@@ -236,8 +236,7 @@ lemma of_bits_mword_of_bl[simp]:
 
 lemma nat_of_bits_aux_bl_to_bin_aux:
   "nat_of_bools_aux acc bs = nat (bl_to_bin_aux bs (int acc))"
-  by (induction acc bs rule: nat_of_bools_aux.induct)
-     (auto simp: Bit_def intro!: arg_cong[where f = nat] arg_cong2[where f = bl_to_bin_aux] split: if_splits)
+  by (induction acc bs rule: nat_of_bools_aux.induct) auto
 
 lemma nat_of_bits_bl_to_bin[simp]:
   "nat_of_bools bs = nat (bl_to_bin bs)"
@@ -294,7 +293,7 @@ lemma access_list_dec_rev_nth:
 lemma access_bv_dec_mword[simp]:
   fixes w :: "('a::len) word"
   assumes "0 \<le> n" and "nat n < LENGTH('a)"
-  shows "access_bv_dec BC_mword w n = bitU_of_bool (w !! (nat n))"
+  shows "access_bv_dec BC_mword w n = bitU_of_bool (bit w (nat n))"
   using assms unfolding access_bv_dec_def access_list_def
   by (auto simp: access_list_dec_rev_nth BC_mword_defs rev_map test_bit_bl)
 
@@ -336,7 +335,7 @@ proof (cases len)
     case (Suc len'' n acc)
     then show ?case
       using zmod_int[of n 2]
-      by (auto simp del: of_nat_simps simp add: bin_rest_def bin_last_def zdiv_int)
+      by (cases "odd n") (auto simp del: of_nat_simps simp add: zdiv_int)
   qed auto
 qed auto
 
@@ -358,7 +357,7 @@ proof (induction len arbitrary: n acc)
   case (Suc len n acc)
   moreover have "(- (n div 2) - 1) = ((-n - 1) div 2)" by auto
   moreover have "(n mod 2 = 0) = ((- n - 1) mod 2 = 1)" by presburger
-  ultimately show ?case by (auto simp: bin_rest_def bin_last_def)
+  ultimately show ?case by (auto simp: bin_last_def)
 qed auto
 
 lemma bools_of_int_bin_to_bl[simp]:

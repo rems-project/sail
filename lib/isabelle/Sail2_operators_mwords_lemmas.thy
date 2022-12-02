@@ -45,7 +45,7 @@ lemmas access_vec_dec_test_bit[simp] = access_bv_dec_mword[folded access_vec_dec
 lemma access_vec_inc_test_bit[simp]:
   fixes w :: "('a::len) word"
   assumes "n \<ge> 0" and "nat n < LENGTH('a)"
-  shows "access_vec_inc w n = bitU_of_bool (w !! (LENGTH('a) - 1 - nat n))"
+  shows "access_vec_inc w n = bitU_of_bool (bit w (LENGTH('a) - 1 - nat n))"
   using assms
   by (auto simp: access_vec_inc_def access_bv_inc_def access_list_def BC_mword_defs rev_nth test_bit_bl)
 
@@ -134,7 +134,7 @@ declare exts_vec_def[simp]
 declare concat_vec_def[simp]
 
 lemma msb_Bits_msb[simp]:
-  "msb w = bitU_of_bool (Bits.msb w)"
+  "msb w = bitU_of_bool (Most_significant_bit.msb w)"
   by (auto simp: msb_def most_significant_def BC_mword_defs word_msb_alt split: list.splits)
 
 declare and_vec_def[simp]
@@ -147,7 +147,7 @@ lemma arith_vec_simps[simp]:
   "sub_vec l r = l - r"
   "mult_vec l r = (ucast l) * (ucast r)"
   unfolding add_vec_def sub_vec_def mult_vec_def
-  by (auto simp: int_of_mword_def word_add_def word_sub_wi word_mult_def)
+  by auto
 
 declare adds_vec_def[simp]
 declare subs_vec_def[simp]
@@ -158,7 +158,7 @@ lemma arith_vec_int_simps[simp]:
   "sub_vec_int l r = l - (word_of_int r)"
   "mult_vec_int l r = (ucast l) * (word_of_int r)"
   unfolding add_vec_int_def sub_vec_int_def mult_vec_int_def
-  by (auto simp: arith_op_bv_int_def BC_mword_defs word_add_def word_sub_wi word_mult_def)
+  by (auto simp: arith_op_bv_int_def BC_mword_defs)
 
 lemma shiftl_simp[simp]: "shiftl w l = w << (nat l)"
   by (auto simp: shiftl_def shiftl_mword_def)
@@ -175,7 +175,7 @@ termination shl_int
 declare shl_int.simps[simp del]
 
 lemma shl_int[simp]:
-  "shl_int x y = Bits.shiftl x (nat y)"
+  "shl_int x y = x << (nat y)"
   apply (induct n \<equiv> "nat y" arbitrary: x y)
    apply (simp add: shl_int.simps)
   apply (subst shl_int.simps)
@@ -191,7 +191,7 @@ termination shr_int
 declare shr_int.simps[simp del]
 
 lemma shr_int[simp]:
-  "shr_int x i = Bits.shiftr x (nat i)"
+  "shr_int x i = x >> (nat i)"
   apply (induct x i rule: shr_int.induct)
   apply (subst shr_int.simps)
   apply (clarsimp simp: shiftr_int_def zdiv_zmult2_eq[symmetric])
