@@ -4,7 +4,7 @@ ifeq ($(HAVE_OPAM_BBV),no)
 BBV_DIR?=../../../bbv/src/bbv
 endif
 
-CORESRC=Prompt_monad.v  Prompt.v  Impl_base.v  Instr_kinds.v  Operators_mwords.v  Values.v  State_monad.v  State.v  State_lifting.v  String.v  Real.v  Undefined.v  Base.v
+CORESRC=MachineWordInterface.v MachineWord.v Prompt_monad.v  Prompt.v  Impl_base.v  Instr_kinds.v  Operators_mwords.v  Values.v  State_monad.v  State.v  State_lifting.v  String.v  Real.v  Undefined.v  Base.v
 PROOFSRC=Values_lemmas.v State_monad_lemmas.v State_lemmas.v Hoare.v
 SRC=$(CORESRC) $(PROOFSRC)
 

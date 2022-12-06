@@ -71,7 +71,8 @@
 Require Export ZArith.
 Require Import Ascii.
 Require Export String.
-From bbv Require Word BinNotation HexNotationWord.
+Require BinaryString.
+Require HexString.
 Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.
@@ -80,7 +81,9 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 Require Import Rbase.  (* TODO would like to avoid this in models without reals *)
+Require EqdepFacts.
 
+Require Import Sail.MachineWord.
 
 Local Open Scope Z.
 Local Open Scope bool.
@@ -741,41 +744,6 @@ end.
 Definition add_one_bool_ignore_overflow bits :=
   List.rev (add_one_bool_ignore_overflow_aux (List.rev bits)).
 
-(* Ported from Lem, bad for large n.
-Definition bools_of_int len n :=
-  let bs_abs := bools_of_nat len (Z.abs_nat n) in
-  if n >=? 0 then bs_abs
-  else add_one_bool_ignore_overflow (List.map negb bs_abs).
-*)
-Local Fixpoint bools_of_pos_aux len p acc :=
-  match len with
-  | O => acc
-  | S len' =>
-     match p with
-     | xI p' => bools_of_pos_aux len' p' (true::acc)
-     | xO p' => bools_of_pos_aux len' p' (false::acc)
-     | xH    => List.repeat false len' ++ true :: acc
-     end
-  end. 
-
-Definition bools_of_int len n :=
-  let len := Z.to_nat len in
-  match n with
-  | Zpos p => bools_of_pos_aux len p []
-  | Z0     => List.repeat false len
-  | Zneg p => match Pos.pred_N p with
-              | Npos p' => List.map negb (bools_of_pos_aux len p' [])
-              | N0 => List.repeat true len
-              end
-  end.
-
-Lemma bools_of_int_len_0 len n : len <= 0 -> bools_of_int len n = [].
-intro H.
-destruct len; simpl in H.
-1,3: destruct n as [|n|[n|n|]]; try reflexivity.
-lia.
-Qed.
-
 (*** Bit lists ***)
 
 (*val bits_of_nat_aux : natural -> list bitU*)
@@ -1042,11 +1010,102 @@ Definition update_list {A} (is_inc : bool) (xs : list A) n x :=
   | _ => failwith "extract_only_element called for list with more elements"
 end*)
 
+(* For the indexed machine words we sometimes need to change to an
+   equivalent index.  These provide nat and Z casts that compute. *)
+
+Section TypeCasts.
+
+Fixpoint cast_nat {T : nat -> Type} {m n : nat} : T m -> m = n -> T n :=
+  match m, n return T m -> m = n -> T n with
+  | O, O => fun x _ => x
+  | S m', S n' => fun x e => @cast_nat (fun o => T (S o)) m' n' x ltac:(congruence)
+  | S m', O => fun x e => ltac:(congruence)
+  | O, S n' => fun x e => ltac:(congruence)
+  end.
+
+Lemma cast_nat_refl n T (x : T n) (e : n = n) : cast_nat x e = x.
+revert T x e.
+induction n.
+- reflexivity.
+- intros.
+  simpl.
+  apply IHn with (T := fun m => T (S m)).
+Qed.
+
+Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
+refine (
+match p, q with
+| xH, xH => fun x _ => x
+| xO p', xO q' => fun x e => cast_positive (fun x => T (xO x)) p' q' x _
+| xI p', xI q' => fun x e => cast_positive (fun x => T (xI x)) p' q' x _
+| _, _ => _
+end); congruence.
+Defined.
+
+Definition cast_Z {T : Z -> Type} {m n} : forall (x : T m) (eq : m = n), T n.
+refine (match m,n with
+| Z0, Z0 => fun x _ => x
+| Zneg p1, Zneg p2 => fun x e => cast_positive (fun p => T (Zneg p)) p1 p2 x _
+| Zpos p1, Zpos p2 => fun x e => cast_positive (fun p => T (Zpos p)) p1 p2 x _
+| _,_ => _
+end); congruence.
+Defined.
+
+Lemma cast_positive_refl : forall p T x (e : p = p),
+  cast_positive T p p x e = x.
+induction p.
+* intros. simpl. rewrite IHp; auto.
+* intros. simpl. rewrite IHp; auto.
+* reflexivity.
+Qed.
+
+Lemma cast_Z_refl {T : Z -> Type} {m} {H:m = m} (x : T m) : cast_Z x H = x.
+destruct m.
+* reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
+Qed.
+
+Definition autocast {T : Z -> Type} {m n} `{Inhabited (T n)} (x : T m) : T n :=
+match Z.eq_dec m n with
+| left eq => cast_Z x eq
+| right _ => dummy_value
+end.
+#[global] Arguments autocast _ _ & _ _.
+
+Lemma autocast_refl {T} n `{Inhabited (T n)} (x : T n) : autocast x = x.
+unfold autocast.
+apply (decide_left (Z.eq_dec n n)); auto.
+intro.
+apply cast_Z_refl.
+Qed.
+
+(* Note that `rewrite` won't automatically open a subgoal for `EQ` because it's
+   named, so either give it up-front or use erwrite.  In general it's probably
+   better to avoid using this in favour of autocast_refl or autocast_eq_dep, which
+   don't need to mention the equality proof in the result. *)
+Lemma autocast_eq {T m n} `{Inhabited (T n)} (x : T m) : forall EQ : m = n, autocast x = cast_Z x EQ.
+intros.
+subst.
+rewrite autocast_refl.
+rewrite cast_Z_refl.
+reflexivity.
+Qed.
+
+Lemma autocast_eq_dep T m n `{Inhabited (T n)} x : m = n -> EqdepFacts.eq_dep Z T m x n (autocast x).
+intro EQ.
+subst.
+rewrite autocast_refl.
+constructor.
+Qed.
+
+End TypeCasts.
+
 (*** Machine words *)
 
 Section MachineWords.
 
-Import Word.
+Import MachineWord.
 
 (* ISA models tend to use integers for sizes, so Sail's bitvectors are integer
    indexed.  To avoid carrying around proofs that sizes are non-negative
@@ -1061,8 +1120,8 @@ Definition mword (n : Z) :=
 
 #[export] Instance dummy_mword {n} : Inhabited (mword n) := {
   inhabitant := match n with
-  | Zpos _ => wzero _
-  | _ => WO
+  | Zpos _ => zeros _
+  | _ => zeros _
   end
 }.
 
@@ -1073,6 +1132,10 @@ Definition get_word {n} : mword n -> word (Z.to_nat n) :=
   | Zpos p => fun x => x
   end.
 
+Lemma get_word_inj {n} (w v : mword n) : get_word w = get_word v -> w = v.
+destruct n; simpl; auto.
+Qed.
+
 Definition with_word {n} {P : Type -> Type} : (word (Z.to_nat n) -> P (word (Z.to_nat n))) -> mword n -> P (mword n) :=
 match n with
 | Zneg _ => fun f w => f w
@@ -1082,10 +1145,60 @@ end.
 
 Definition to_word {n} : word (Z.to_nat n) -> mword n :=
   match n with
-  | Zneg _ => fun _ => WO
+  | Zneg _ => fun _ => zeros _
   | Z0 => fun w => w
   | Zpos _ => fun w => w
   end.
+
+Definition to_word_nat {n} (w : word n) : mword (Z.of_nat n) :=
+  to_word (cast_nat w (eq_sym (Nat2Z.id n))).
+
+(* Establish the relationship between to_word and to_word_nat, starting with some
+   reasoning using dependent equality, but ultimately finishing with a directly
+   usably plain equality result. *)
+
+Lemma to_word_eq_dep m n (w : MachineWord.word (Z.to_nat m)) (v : MachineWord.word (Z.to_nat n)) :
+  m > 0 ->
+  n > 0 ->
+  EqdepFacts.eq_dep Z (fun n => MachineWord.word (Z.to_nat n)) m w n v ->
+  EqdepFacts.eq_dep Z mword _ (to_word w) _ (to_word v).
+intros M N EQ.
+destruct m,n; try lia.
+inversion EQ. subst.
+constructor.
+Qed.
+
+Lemma cast_nat_eq_dep T m n o (x : T m) (y : T n) EQ : EqdepFacts.eq_dep _ _ _ x _ y -> EqdepFacts.eq_dep _ _ _ x o (cast_nat y EQ).
+intros.
+subst.
+rewrite cast_nat_refl.
+assumption.
+Qed.
+
+Lemma Z_nat_eq_dep T m n (x : T (Z.to_nat m)) (y : T (Z.to_nat n)) : m > 0 -> n > 0 -> EqdepFacts.eq_dep nat T _ x _ y -> EqdepFacts.eq_dep Z (fun n => T (Z.to_nat n)) _ x _ y.
+intros M N EQ.
+assert (m = n). {
+  inversion EQ.
+  apply Z2Nat.inj; auto with zarith.
+}
+subst.
+apply Eqdep.EqdepTheory.eq_dep_eq in EQ.
+subst.
+constructor.
+Qed.
+
+Lemma to_word_to_word_nat n (w : MachineWord.word (Z.to_nat n)) :
+  n > 0 ->
+  to_word w = autocast (to_word_nat w).
+intros.
+apply Eqdep_dec.eq_dep_eq_dec; auto using Z.eq_dec.
+eapply EqdepFacts.eq_dep_trans. 2: apply autocast_eq_dep. 2: auto with zarith.
+unfold to_word_nat.
+apply to_word_eq_dep; auto with zarith.
+apply Z_nat_eq_dep; auto with zarith.
+apply cast_nat_eq_dep.
+constructor.
+Qed.
 
 Definition word_to_mword {n} (w : word (Z.to_nat n)) : mword n :=
   to_word w.
@@ -1093,13 +1206,7 @@ Definition word_to_mword {n} (w : word (Z.to_nat n)) : mword n :=
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
 
-Definition getBit {n} :=
-match n with
-| O => fun (w : word O) i => dummy false
-| S n => fun (w : word (S n)) i => wlsb (wrshift' w i)
-end.
-
-Definition access_mword_dec {m} (w : mword m) n := bitU_of_bool (getBit (get_word w) (Z.to_nat n)).
+Definition access_mword_dec {m} (w : mword m) n := bitU_of_bool (get_bit (get_word w) (Z.to_nat n)).
 
 (*val access_mword_inc : forall a. mword a -> Z -> bitU*)
 Definition access_mword_inc {m} (w : mword m) n :=
@@ -1110,19 +1217,9 @@ Definition access_mword_inc {m} (w : mword m) n :=
 Definition access_mword {a} (is_inc : bool) (w : mword a) n :=
   if is_inc then access_mword_inc w n else access_mword_dec w n.
 
-Definition setBit {n} :=
-match n with
-| O => fun (w : word O) i b => w
-| S n => fun (w : word (S n)) i (b : bool) =>
-  let bit : word (S n) := wlshift' (natToWord _ 1) i in
-  let mask : word (S n) := wnot bit in
-  let masked := wand mask w in
-  if b then wor masked bit else masked
-end. 
-
 (*val update_mword_bool_dec : forall 'a. mword 'a -> integer -> bool -> mword 'a*)
 Definition update_mword_bool_dec {a} (w : mword a) n b : mword a :=
-  with_word (P := id) (fun w => setBit w (Z.to_nat n) b) w.
+  with_word (P := id) (fun w => set_bit w (Z.to_nat n) b) w.
 Definition update_mword_dec {a} (w : mword a) n b :=
  match bool_of_bitU b with
  | Some bl => Some (update_mword_bool_dec w n bl)
@@ -1140,7 +1237,7 @@ Definition update_mword {a} (is_inc : bool) (w : mword a) n b :=
 
 (*val int_of_mword : forall 'a. bool -> mword 'a -> integer*)
 Definition int_of_mword {a} (sign : bool) (w : mword a) :=
-  if sign then wordToZ (get_word w) else Z.of_N (wordToN (get_word w)).
+  if sign then word_to_Z (get_word w) else Z.of_N (word_to_N (get_word w)).
 
 
 (*val mword_of_int : forall a. Size a => Z -> Z -> mword a
@@ -1150,9 +1247,9 @@ Definition mword_of_int len n :=
 *)
 Definition mword_of_int {len} n : mword len :=
 match len with
-| Zneg _ => WO
-| Z0 => ZToWord 0 n
-| Zpos p => ZToWord (Pos.to_nat p) n
+| Zneg _ => zeros _
+| Z0 => Z_to_word 0 n
+| Zpos p => Z_to_word (Pos.to_nat p) n
 end.
 
 (*
@@ -1167,179 +1264,11 @@ val make_the_value : forall n. Z -> itself n
 Definition inline make_the_value x := the_value
 *)
 
-Local Fixpoint bitlistFromWord_rev {n} w :=
-match w with
-| WO => []
-| WS b w => b :: bitlistFromWord_rev w
-end.
-
-Definition bitlistFromWord {n} w :=
-  List.rev (@bitlistFromWord_rev n w).
-
-Definition alt_bools_of_int len n :=
-  let w := Word.ZToWord (Z.to_nat len) n in
-  bitlistFromWord w.
-
-Local Lemma list_repeat_app A (a : A) n : List.repeat a n ++ [a] = List.repeat a (S n).
-induction n.
-- reflexivity.
-- simpl.
-  rewrite IHn.
-  reflexivity.
-Qed.
-
-Local Lemma list_repeat_rev {A} (a : A) n : rev (List.repeat a n) = List.repeat a n.
-induction n.
-- reflexivity.
-- rewrite <- list_repeat_app at 2.
-  rewrite <- IHn.
-  reflexivity.
-Qed.
-
-Local Lemma repeat_zero n l :
-  List.repeat false n ++ l = rev (bitlistFromWord_rev (wzero' n)) ++ l.
-revert l.
-induction n.
-+ auto.
-+ simpl. rewrite <- IHn. rewrite list_repeat_app.
-  reflexivity.
-Qed.
-
-Local Lemma bools_of_int_aux_equiv n p l :
-  bools_of_pos_aux n p l = rev (bitlistFromWord_rev (posToWord n p)) ++ l.
-revert p l.
-induction n.
-- intros. rewrite posToWord_sz0. reflexivity.
-- intros [p|p|] l.
-  * simpl.
-    rewrite <- app_assoc.
-    rewrite IHn.
-    reflexivity.
-  * simpl.
-    rewrite <- app_assoc.
-    rewrite IHn.
-    reflexivity.
-  * simpl.
-    rewrite <- app_assoc.
-    apply repeat_zero.
-Qed.
-
-Lemma bitlistFromWord_not n (w : word n) : bitlistFromWord (wnot w) = map negb (bitlistFromWord w).
-unfold bitlistFromWord.
-induction w.
-- reflexivity.
-- simpl.
-  rewrite map_app.
-  rewrite IHw.
-  reflexivity.
-Qed.
-
-Lemma wneg_wnot n (w : word n) : wneg w  = wnot (wplus w (wones n)).
-rewrite wones_wneg_one.
-rewrite wneg_wnot.
-ring_sz n.
-Qed.
-
-Lemma pred_N_split p : p = 1%positive \/ exists p', Pos.pred_N p = N.pos p' /\ p = Pos.succ p'.
-destruct (Pos.succ_pred_or p).
-* auto.
-* right. exists (Pos.pred p).
-  split.
-  - rewrite <- H at 1.
-    rewrite Pos.pred_N_succ.
-    reflexivity.
-  - auto.
-Qed.
-
-Lemma list_repeat_map A B a (f : A -> B) n : List.repeat (f a) n = List.map f (List.repeat a n).
-induction n.
-- reflexivity.
-- simpl. rewrite IHn. reflexivity.
-Qed.
-
-Lemma bools_of_int_equiv len n : bools_of_int len n = alt_bools_of_int len n.
-unfold alt_bools_of_int.
-destruct len; simpl.
-* rewrite bools_of_int_len_0, ZToWord_sz0; auto with zarith.
-* destruct n; simpl.
-  - unfold bitlistFromWord.
-    rewrite <- app_nil_r.
-    rewrite <- repeat_zero.
-    rewrite app_nil_r.
-    reflexivity.
-  - unfold bitlistFromWord.
-    rewrite <- app_nil_r.
-    apply bools_of_int_aux_equiv.
-  - destruct (pred_N_split p0) as [H|[p' [H1 H2]]].
-    + subst. cbn -[posToWord].
-      change true with (negb false) at 1.
-      rewrite list_repeat_map.
-      rewrite wneg_wnot.
-      rewrite bitlistFromWord_not.
-      f_equal.
-      rewrite wones_wneg_one.
-      rewrite posToWord_nat.
-      rewrite wminus_inv.
-      rewrite <- app_nil_r.
-      unfold bitlistFromWord.
-      rewrite <- wzero'_def.
-      rewrite <- repeat_zero.
-      rewrite app_nil_r.
-      reflexivity.
-    + rewrite H1.
-      rewrite wneg_wnot.
-      rewrite bitlistFromWord_not.
-      f_equal.
-      rewrite bools_of_int_aux_equiv.
-      rewrite wones_wneg_one.
-      rewrite <- wminus_def.
-      rewrite (posToWord_nat p0).
-      rewrite H2.
-      rewrite Pos2Nat.inj_succ.
-      rewrite natToWord_S.
-      rewrite wminus_def.
-      rewrite <- wplus_assoc.
-      rewrite wplus_comm.
-      rewrite <- wminus_def.
-      rewrite wminus_wplus_undo.
-      rewrite app_nil_r.
-      rewrite <- posToWord_nat.
-      reflexivity.
-* rewrite bools_of_int_len_0, ZToWord_sz0; auto with zarith.
-Qed.
-
-Fixpoint wordFromBitlist_rev l : word (length l) :=
-match l with
-| [] => WO
-| b::t => WS b (wordFromBitlist_rev t)
-end.
-Definition wordFromBitlist l : word (length l) :=
-  nat_cast _ (List.rev_length l) (wordFromBitlist_rev (List.rev l)).
-
-Local Open Scope nat.
-
-Fixpoint nat_diff {T : nat -> Type} n m {struct n} :
-forall
- (lt : forall p, T n -> T (n + p))
- (eq : T m -> T m)
- (gt : forall p, T (m + p) -> T m), T n -> T m :=
-(match n, m return (forall p, T n -> T (n + p)) -> (T m -> T m) -> (forall p, T (m + p) -> T m) -> T n -> T m with
-| O, O => fun lt eq gt => eq
-| S n', O => fun lt eq gt => gt _
-| O, S m' => fun lt eq gt => lt _
-| S n', S m' => @nat_diff (fun x => T (S x)) n' m'
-end).
-
-Definition fit_bbv_word {n m} : word n -> word m :=
-nat_diff n m
- (fun p w => nat_cast _ (Nat.add_comm _ _) (extz w p))
- (fun w => w)
- (fun p w => split2 _ _ (nat_cast _ (Nat.add_comm _ _) w)).
-
-Local Close Scope nat.
-
 Definition mword_to_N {n} (w : mword n) : N :=
-  Word.wordToN (get_word w).
+  word_to_N (get_word w).
+
+Definition mword_to_bools {n} (w : mword n) : list bool := word_to_bools (get_word w).
+Definition bools_to_mword (l : list bool) : mword (length_list l) := to_word_nat (bools_to_word l).
 
 End MachineWords.
 
@@ -2430,15 +2359,17 @@ Fixpoint byte_chunks {a} (bs : list a) := match bs with
 end.
 (*declare {isabelle} termination_argument byte_chunks = automatic*)
 
-Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (bitlistFromWord (get_word v)).
+Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (mword_to_bools v).
 Definition of_bits {n} v : option (mword n) :=
   match just_list (List.map bool_of_bitU v) with
   | Some bl =>
-    if n >=? 0 then Some (to_word (fit_bbv_word (wordFromBitlist bl))) else None
+    match Z.eq_dec (length_list bl) n with
+    | left H => Some (cast_Z (bools_to_mword bl) H)
+    | right _ => None
+    end
   | None => None
   end.
-Definition of_bools {n} v : mword n :=
-  to_word (fit_bbv_word (wordFromBitlist v)).
+Definition of_bools {n} v : mword n := autocast (bools_to_mword v).
 
 (*val bytes_of_bits : forall a. Bitvector a => a -> option (list memory_byte)*)
 Definition bytes_of_bits {n} (bs : mword n) := byte_chunks (bits_of bs).
@@ -3048,12 +2979,11 @@ lia.
 Qed.
 #[export] Hint Resolve sail_lt_ge : sail.
 
-
 (* Override expensive unary exponential notation for binary, fill in sizes too *)
-Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
-Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a) :
+Notation "sz ''b' a" := (MachineWord.N_to_word sz (BinaryString.Raw.to_N a N0)) (at level 50).
+Notation "''b' a" := (MachineWord.N_to_word _ (BinaryString.Raw.to_N a N0) :
                        mword (ltac:(let sz := eval cbv in (Z.of_nat (String.length a)) in exact sz)))
                      (at level 50, only parsing).
-Notation "'Ox' a" := (Word.NToWord _ (HexNotation.hex a) :
+Notation "'Ox' a" := (MachineWord.N_to_word _ (HexString.Raw.to_N a N0) :
                        mword (ltac:(let sz := eval cbv in (4 * (Z.of_nat (String.length a))) in exact sz)))
                      (at level 50, only parsing).

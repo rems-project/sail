@@ -68,73 +68,21 @@
 Require Import Sail.Values.
 Require Import Sail.Prompt_monad.
 Require Import Sail.Prompt.
-Require Import bbv.Word.
-Require bbv.BinNotation.
+Require Import Sail.MachineWord.
 Require Import ZArith.
 Require Import Lia.
 Require Import Eqdep_dec.
 Local Open Scope Z.
 
-Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
-refine (
-match p, q with
-| xH, xH => fun x _ => x
-| xO p', xO q' => fun x e => cast_positive (fun x => T (xO x)) p' q' x _
-| xI p', xI q' => fun x e => cast_positive (fun x => T (xI x)) p' q' x _
-| _, _ => _
-end); congruence.
-Defined.
-
-Definition cast_T {T : Z -> Type} {m n} : forall (x : T m) (eq : m = n), T n.
-refine (match m,n with
-| Z0, Z0 => fun x _ => x
-| Zneg p1, Zneg p2 => fun x e => cast_positive (fun p => T (Zneg p)) p1 p2 x _
-| Zpos p1, Zpos p2 => fun x e => cast_positive (fun p => T (Zpos p)) p1 p2 x _
-| _,_ => _
-end); congruence.
-Defined.
-
-Lemma cast_positive_refl : forall p T x (e : p = p),
-  cast_positive T p p x e = x.
-induction p.
-* intros. simpl. rewrite IHp; auto.
-* intros. simpl. rewrite IHp; auto.
-* reflexivity.
-Qed.
-
-Lemma cast_T_refl {T : Z -> Type} {m} {H:m = m} (x : T m) : cast_T x H = x.
-destruct m.
-* reflexivity.
-* simpl. rewrite cast_positive_refl. reflexivity.
-* simpl. rewrite cast_positive_refl. reflexivity.
-Qed.
-
-Definition autocast {T : Z -> Type} {m n} `{Inhabited (T n)} (x : T m) : T n :=
-match Z.eq_dec m n with
-| left eq => cast_T x eq
-| right _ => dummy_value
-end.
-Arguments autocast _ _ & _ _.
-
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) : monad rv (mword n) e := x >>= fun x => returnm (autocast x).
 
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
-  DepEqNat.nat_cast _ eq x.
+  cast_nat x eq.
 
-Lemma cast_word_refl {m} {H:m = m} (x : word m) : cast_word x H = x.
-rewrite (UIP_refl_nat _ H).
-apply nat_cast_same.
+Lemma cast_word_refl {m} {H:m = m} (x : MachineWord.word m) : cast_word x H = x.
+apply cast_nat_refl.
 Qed.
-
-Definition mword_of_nat {m} : Word.word m -> mword (Z.of_nat m).
-refine (match m return word m -> mword (Z.of_nat m) with
-| O => fun x => x
-| S m' => fun x => nat_cast _ _ x
-end).
-rewrite SuccNat2Pos.id_succ.
-reflexivity.
-Defined.
-
+(*
 Definition cast_to_mword {m n} (x : Word.word m) : Z.of_nat m = n -> mword n.
 refine (match n return Z.of_nat m = n -> mword n with
 | Z0 => fun _ => WO
@@ -144,15 +92,7 @@ end).
 intro eq.
 exfalso. destruct m; simpl in *; congruence.
 Defined.
-
-(* TODO: remove *)
-Definition fit_mword {a b : Z} (v : mword a) : mword b :=
-  match Z.eq_dec a b with
-  | left e => match e with eq_refl => v end
-  | right _ => dummy_value
-  end.
-
-Definition fit_word {a : nat} {b : Z} (v : word a) : mword b := fit_mword (cast_to_mword v eq_refl).
+*)
 
 (*
 (* Specialisation of operators to machine words *)
@@ -172,146 +112,46 @@ Definition update_vec_inc {a} (w : mword a) i b : mword a :=
 (*val update_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a*)
 Definition update_vec_dec {a} (w : mword a) i b : mword a := opt_def w (update_mword_dec w i b).
 
-Lemma subrange_lemma0 {n m o} : andb (0 <=? o) (o <=? m <? n) = true -> (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
-intros.
-unbool_comparisons.
-split.
-+ apply Z2Nat.inj_le; lia.
-+ apply Z2Nat.inj_lt; lia.
-Qed.
-Lemma subrange_lemma1 {n m o} : (o <= m < n -> n = m + 1 + (n - (m + 1)))%nat.
-intros. lia.
-Qed.
-Lemma subrange_lemma2 {n m o} : (o <= m < n -> m+1 = o+(m-o+1))%nat.
-lia.
-Qed.
-Lemma subrange_lemma3 {m o n} : andb (0 <=? o) (o <=? m <? n) = true -> Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
-intros.
-unbool_comparisons.
-rewrite Nat2Z.inj_add.
-rewrite Nat2Z.inj_sub.
-repeat rewrite Z2Nat.id; lia.
-apply Z2Nat.inj_le; lia.
-Qed.
-
-Definition subrange_vec_dec_precise {n} (v : mword n) m o (H: andb (0 <=? o) (o <=? m <? n) = true) : mword (m - o + 1) :=
-  let n := Z.to_nat n in
-  let m := Z.to_nat m in
-  let o := Z.to_nat o in
-  let prf : (o <= m < n)%nat := subrange_lemma0 H in
-  let w := get_word v in
-  cast_to_mword (split2 o (m-o+1)
-                        (cast_word (split1 (m+1) (n-(m+1)) (cast_word w (subrange_lemma1 prf)))
-                                   (subrange_lemma2 prf))) (subrange_lemma3 H).
-
 Definition subrange_vec_dec {n} (v : mword n) m o : mword (m - o + 1) :=
-  match sumbool_of_bool (andb (0 <=? o) (o <=? m <? n)) with
-  | left H => subrange_vec_dec_precise v m o H
-  | right _ => dummy_value
-  end.
+  let m' := Z.to_nat m in
+  let o' := Z.to_nat o in
+  autocast (to_word_nat (MachineWord.slice (m' - o' + 1) (get_word v) o')).
 
 Definition subrange_vec_inc {n} (v : mword n) m o : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
 
-Lemma update_subrange_vec_dec_pf {o m n} :
-andb (0 <=? o) (o <=? m <? n) = true ->
-Z.of_nat (Z.to_nat o + (Z.to_nat (m - (o - 1)) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
-intros.
-rewrite Z.sub_sub_distr.
-rewrite <- (subrange_lemma3 H).
-unbool_comparisons.
-rewrite !Nat2Z.inj_add.
-rewrite !Nat2Z.inj_sub.
-rewrite Nat2Z.inj_add.
-repeat rewrite Z2Nat.id; lia.
-rewrite Nat.add_1_r.
-apply Z2Nat.inj_lt; lia.
-apply Z2Nat.inj_le; lia.
-Qed.
-
-Definition update_subrange_vec_dec_precise {n} (v : mword n) m o (H: andb (0 <=? o) (o <=? m <? n) = true) (w : mword (m - (o - 1))) : mword n :=
-  let n := Z.to_nat n in
-  let m := Z.to_nat m in
-  let o := Z.to_nat o in
-  let prf : (o <= m < n)%nat := subrange_lemma0 H in
-  let v' := get_word v in
-  let w' := get_word w in
-  let x :=
-    split1 o (m-o+1)
-      (cast_word (split1 (m+1) (n-(m+1)) (cast_word v' (subrange_lemma1 prf)))
-        (subrange_lemma2 prf)) in
-  let y :=
-      split2 (m+1) (n-(m+1)) (cast_word v' (subrange_lemma1 prf)) in
-  let z := combine x (combine w' y) in
-  cast_to_mword z (update_subrange_vec_dec_pf H).
-
 Definition update_subrange_vec_dec {n} (v : mword n) m o (w : mword (m - (o - 1))) : mword n :=
-  match sumbool_of_bool ((0 <=? o) && (o <=? m <? n))%bool with
-  | left H => update_subrange_vec_dec_precise v m o H (autocast w)
-  | right _ => dummy v
-  end.
+  autocast (to_word_nat (MachineWord.update_slice (get_word v) (Z.to_nat o) (get_word w))).
 
 Definition update_subrange_vec_inc {n} (v : mword n) m o (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 (*val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 Definition extz_vec {a b} (n : Z) (v : mword a) : mword b :=
-  fit_word (Word.zext (get_word v) (Z.to_nat (b - a))).
+  to_word (MachineWord.zero_extend (Z.to_nat b) (get_word v)).
 
 (*val exts_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
 Definition exts_vec {a b} (n : Z) (v : mword a) : mword b :=
-  fit_word (Word.sext (get_word v) (Z.to_nat (b - a))).
+  to_word (MachineWord.sign_extend (Z.to_nat b) (get_word v)).
 
 Definition zero_extend {a} (v : mword a) (n : Z) : mword n := extz_vec n v.
 
 Definition sign_extend {a} (v : mword a) (n : Z) : mword n := exts_vec n v.
 
-Definition dummy_Zneg (p : positive) : mword (Zneg p).
-constructor.
-Qed.
-
 Definition zeros (n : Z) : mword n :=
   match n with
-  | Zneg p => dummy_Zneg p
-  | Z0 => Word.WO
-  | Zpos p => Word.wzero (Pos.to_nat p)
+  | Zneg p => MachineWord.zeros _
+  | Z0 => MachineWord.zeros _
+  | Zpos p => MachineWord.zeros _
   end.
 
-Lemma truncate_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat.
-intros.
-assert ((Z.to_nat m <= Z.to_nat n)%nat).
-{ apply Z2Nat.inj_le; lia. }
-lia.
-Qed.
-Lemma truncateLSB_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat.
-intros.
-assert ((Z.to_nat m <= Z.to_nat n)%nat).
-{ apply Z2Nat.inj_le; lia. }
-lia.
-Qed.
+Definition slice {n} (v : mword n) i len : mword len :=
+  to_word (MachineWord.slice (Z.to_nat len) (get_word v) (Z.to_nat i)).
 
-Definition vector_truncate {n} (v : mword n) (m : Z) : mword m.
-refine (if sumbool_of_bool ((m >=? 0) && (m <=? n)) then _ else dummy_value).
-refine (cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (_ : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
-abstract (unbool_comparisons; apply truncate_eq; auto with zarith).
-abstract (unbool_comparisons; apply Z2Nat.id; lia).
-Defined.
-
-Definition vector_truncateLSB {n} (v : mword n) (m : Z) : mword m.
-refine (if sumbool_of_bool ((m >=? 0) && (m <=? n)) then _ else dummy_value).
-refine (cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (_ : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
-abstract (unbool_comparisons; apply truncateLSB_eq; auto with zarith).
-abstract (unbool_comparisons; apply Z2Nat.id; lia).
-Defined.
-
-Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
-intros.
-rewrite Nat2Z.inj_add.
-rewrite Z2Nat.id. 2: solve [ auto with zarith ].
-rewrite Z2Nat.id; auto with zarith.
-Qed.
+Definition vector_truncate {n} (v : mword n) (m : Z) : mword m := slice v 0 m.
+Definition vector_truncateLSB {n} (v : mword n) (m : Z) : mword m := slice v (n - m) m.
 
 (*val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => mword 'a -> mword 'b -> mword 'c*)
 Definition concat_vec {a b} (v : mword a) (w : mword b) : mword (a + b) :=
- fit_word (Word.combine (get_word w) (get_word v)).
+ autocast (to_word_nat (MachineWord.concat (get_word w) (get_word v))).
 
 (*val cons_vec : forall 'a 'b 'c. Size 'a, Size 'b => bitU -> mword 'a -> mword 'b*)
 (*Definition cons_vec {a b} : bitU -> mword a -> mword b := cons_bv.*)
@@ -325,77 +165,38 @@ Definition cast_unit_vec := cast_unit_bv
 val vec_of_bit : forall 'a. Size 'a => integer -> bitU -> mword 'a
 Definition vec_of_bit := bv_of_bit*)
 
-Require Import bbv.NatLib.
+Definition uint {a} (x : mword a) : Z := Z.of_N (MachineWord.word_to_N (get_word x)).
 
-Lemma Npow2_pow {n} : (2 ^ (N.of_nat n) = Npow2 n)%N.
-induction n.
-* reflexivity.
-* rewrite Nnat.Nat2N.inj_succ.
-  rewrite N.pow_succ_r'.
-  rewrite IHn.
-  rewrite Npow2_S.
-  rewrite Word.Nmul_two.
-  reflexivity.
-Qed.
-
-Definition uint {a} (x : mword a) : Z := Z.of_N (Word.wordToN (get_word x)).
-
+(* Demonstrate that uint has the range expected by the Sail type. *)
 Lemma uint_range {a} (x : mword a) : a >= 0 -> 0 <= uint x <= 2 ^ a - 1.
 intro a_ge_0.
 split.
 * apply N2Z.is_nonneg.
-* destruct a.
-  - simpl in * |- *. shatter_word x. reflexivity.
-  - assert (2 ^ (Z.pos p) - 1 = Z.of_N (2 ^ (Z.to_N (Z.pos p)) - 1)). {
-      rewrite N2Z.inj_sub.
-      * rewrite N2Z.inj_pow.
-        rewrite Z2N.id. solve [ auto ].
-        lia.
-      * apply N.le_trans with (m := (2^0)%N). solve [ auto using N.le_refl ].
-        apply N.pow_le_mono_r.
-        inversion 1.
-        apply N.le_0_l.
-    }
-    rewrite H.
-    apply N2Z.inj_le.
-    rewrite N.sub_1_r.
-    apply N.lt_le_pred.
-    rewrite <- Z_nat_N.
-    rewrite Npow2_pow.
-    apply Word.wordToN_bound.
-  - contradiction a_ge_0.
-    reflexivity.
+* unfold uint.
+  assert (LELT: forall x y, x <= y - 1 <-> x < y) by lia.
+  rewrite LELT.
+  replace (2 ^ a) with (Z.of_N (2 ^ (Z.to_N a))). 2: {
+    rewrite N2Z.inj_pow.
+    rewrite Z2N.id; auto with zarith.
+  }
+  apply N2Z.inj_lt.
+  rewrite <- Z_nat_N.
+  apply MachineWord.word_to_N_range.
 Qed.
 
-Lemma Zpow_pow2 {n} : 2 ^ Z.of_nat n = Z.of_nat (pow2 n).
-induction n.
-* reflexivity.
-* rewrite pow2_S_z.
-  rewrite Nat2Z.inj_succ.
-  rewrite Z.pow_succ_r; auto with zarith.
-Qed.
+Definition sint {a} (x : mword a) : Z := MachineWord.word_to_Z (get_word x).
 
-Definition sint {a} (x : mword a) : Z := Word.wordToZ (get_word x).
-
+(* Demonstrate that sint has the range expected by the Sail type. *)
 Lemma sint_range {a} (x : mword a) : a > 0 -> -(2^(a-1)) <= sint x <= 2 ^ (a-1) - 1.
 intro a_gt_0.
-destruct a; try inversion a_gt_0.
 unfold sint.
+assert (LELT: forall x y, x <= y - 1 <-> x < y) by lia.
+rewrite LELT.
+set (n := Z.to_nat (a - 1)).
 generalize (get_word x).
-rewrite <- positive_nat_Z.
-destruct (Pos2Nat.is_succ p) as [n eq].
-rewrite eq.
-rewrite Nat2Z.id.
-intro w.
-destruct (Word.wordToZ_size' w) as [LO HI].
-replace 1 with (Z.of_nat 1). 2: solve [ auto ].
-rewrite <- Nat2Z.inj_sub. 2: solve [ auto with arith ].
-simpl.
-rewrite Nat.sub_0_r.
-rewrite Zpow_pow2.
-rewrite Z.sub_1_r.
-rewrite <- Z.lt_le_pred.
-auto.
+replace (a - 1) with (Z.of_nat n) by lia.
+replace (Z.to_nat a) with (S n) by lia.
+apply MachineWord.word_to_Z_range.
 Qed.
 
 Lemma length_list_pos : forall {A} {l:list A}, 0 <= Z.of_nat (List.length l).
@@ -417,192 +218,70 @@ Definition int_of_vec := int_of_bv
 
 *)
 
-Definition with_word' {n} (P : Type -> Type) : (forall n, Word.word n -> P (Word.word n)) -> mword n -> P (mword n) := fun f w => @with_word n _ (f (Z.to_nat n)) w.
-Definition word_binop {n} (f : forall n, Word.word n -> Word.word n -> Word.word n) : mword n -> mword n -> mword n := with_word' (fun x => x -> x) f.
-Definition word_unop {n} (f : forall n, Word.word n -> Word.word n) : mword n -> mword n := with_word' (fun x => x) f.
+Definition with_word' {n} (P : Type -> Type) : (forall n, MachineWord.word n -> P (MachineWord.word n)) -> mword n -> P (mword n) := fun f w => @with_word n _ (f (Z.to_nat n)) w.
+Definition word_binop {n} (f : forall n, MachineWord.word n -> MachineWord.word n -> MachineWord.word n) : mword n -> mword n -> mword n := with_word' (fun x => x -> x) f.
+Definition word_unop {n} (f : forall n, MachineWord.word n -> MachineWord.word n) : mword n -> mword n := with_word' (fun x => x) f.
 
 
-(*
-val and_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val or_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val xor_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val not_vec : forall 'a. Size 'a => mword 'a -> mword 'a*)
-Definition and_vec {n} : mword n -> mword n -> mword n := word_binop Word.wand.
-Definition or_vec  {n} : mword n -> mword n -> mword n := word_binop Word.wor.
-Definition xor_vec {n} : mword n -> mword n -> mword n := word_binop Word.wxor.
-Definition not_vec {n} : mword n -> mword n := word_unop Word.wnot.
+Definition and_vec {n} : mword n -> mword n -> mword n := word_binop MachineWord.and.
+Definition or_vec  {n} : mword n -> mword n -> mword n := word_binop MachineWord.or.
+Definition xor_vec {n} : mword n -> mword n -> mword n := word_binop MachineWord.xor.
+Definition not_vec {n} : mword n -> mword n := word_unop MachineWord.not.
 
-(*val add_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val sadd_vec  : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val sub_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val mult_vec  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b
-val smult_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 'b*)
-Definition add_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wplus.
+Definition add_vec   {n} : mword n -> mword n -> mword n := word_binop MachineWord.add.
 (*Definition sadd_vec  {n} : mword n -> mword n -> mword n := sadd_bv w.*)
-Definition sub_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wminus.
+Definition sub_vec   {n} : mword n -> mword n -> mword n := word_binop MachineWord.sub.
 Definition mult_vec  {n m} (l : mword n) (r : mword n) : mword m :=
-  word_binop Word.wmult (zero_extend l _) (zero_extend r _).
+  word_binop MachineWord.mul (zero_extend l _) (zero_extend r _).
 Definition mults_vec  {n m} (l : mword n) (r : mword n) : mword m :=
-  word_binop Word.wmult (sign_extend l _) (sign_extend r _).
+  word_binop MachineWord.mul (sign_extend l _) (sign_extend r _).
 
-(*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val sadd_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
-val smult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
 Definition add_vec_int   {a} (l : mword a) (r : Z) : mword a := add_vec l (mword_of_int r).
 Definition sub_vec_int   {a} (l : mword a) (r : Z) : mword a := sub_vec l (mword_of_int r).
-(*Definition mult_vec_int  {a b} : mword a -> Z -> mword b := mult_bv_int.
-Definition smult_vec_int {a b} : mword a -> Z -> mword b := smult_bv_int.*)
 
-(*val add_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val sadd_int_vec  : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val sub_int_vec   : forall 'a. Size 'a => integer -> mword 'a -> mword 'a
-val mult_int_vec  : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-val smult_int_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
-Definition add_int_vec   := add_int_bv
-Definition sadd_int_vec  := sadd_int_bv
-Definition sub_int_vec   := sub_int_bv
-Definition mult_int_vec  := mult_int_bv
-Definition smult_int_vec := smult_int_bv
-
-val add_vec_bit  : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-val sadd_vec_bit : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-val sub_vec_bit  : forall 'a. Size 'a => mword 'a -> bitU -> mword 'a
-Definition add_vec_bit  := add_bv_bit
-Definition sadd_vec_bit := sadd_bv_bit
-Definition sub_vec_bit  := sub_bv_bit
-
-val add_overflow_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val add_overflow_vec_signed  : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val sub_overflow_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val sub_overflow_vec_signed  : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val mult_overflow_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-val mult_overflow_vec_signed : forall 'a. Size 'a => mword 'a -> mword 'a -> (mword 'a * bitU * bitU)
-Definition add_overflow_vec         := add_overflow_bv
-Definition add_overflow_vec_signed  := add_overflow_bv_signed
-Definition sub_overflow_vec         := sub_overflow_bv
-Definition sub_overflow_vec_signed  := sub_overflow_bv_signed
-Definition mult_overflow_vec        := mult_overflow_bv
-Definition mult_overflow_vec_signed := mult_overflow_bv_signed
-
-val add_overflow_vec_bit         : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
-val add_overflow_vec_bit_signed  : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
-val sub_overflow_vec_bit         : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
-val sub_overflow_vec_bit_signed  : forall 'a. Size 'a => mword 'a -> bitU -> (mword 'a * bitU * bitU)
-Definition add_overflow_vec_bit         := add_overflow_bv_bit
-Definition add_overflow_vec_bit_signed  := add_overflow_bv_bit_signed
-Definition sub_overflow_vec_bit         := sub_overflow_bv_bit
-Definition sub_overflow_vec_bit_signed  := sub_overflow_bv_bit_signed
-
-val shiftl       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val shiftr       : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val arith_shiftr : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val rotl         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
 (* TODO: check/redefine behaviour on out-of-range n *)
-Definition shiftl       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wlshift' w (Z.to_nat n)) v.
-Definition shiftr       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshift' w (Z.to_nat n)) v.
-Definition arith_shiftr {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshifta' w (Z.to_nat n)) v.
-(*
-Definition rotl         := rotl_bv
-Definition rotr         := rotr_bv
-
-val mod_vec         : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quot_vec        : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-val quot_vec_signed : forall 'a. Size 'a => mword 'a -> mword 'a -> mword 'a
-Definition mod_vec         := mod_bv
-Definition quot_vec        := quot_bv
-Definition quot_vec_signed := quot_bv_signed
-
-val mod_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-val quot_vec_int : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
-Definition mod_vec_int  := mod_bv_int
-Definition quot_vec_int := quot_bv_int
-
-val replicate_bits : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
-Fixpoint replicate_bits_aux {a} (w : Word.word a) (n : nat) : Word.word (n * a) :=
-match n with
-| O => Word.WO
-| S m => Word.combine w (replicate_bits_aux w m)
-end.
+Definition shiftl       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => MachineWord.logical_shift_left w (Z.to_nat n)) v.
+Definition shiftr       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => MachineWord.logical_shift_right w (Z.to_nat n)) v.
+Definition arith_shiftr {a} (v : mword a) n : mword a := with_word (P := id) (fun w => MachineWord.arith_shift_right w (Z.to_nat n)) v.
 
 Definition replicate_bits {a} (w : mword a) (n : Z) : mword (a * n) :=
  if sumbool_of_bool (n >=? 0) then
-   fit_word (replicate_bits_aux (get_word w) (Z.to_nat n))
+   autocast (to_word_nat (MachineWord.replicate (Z.to_nat n) (get_word w)))
  else dummy_value.
 
-(*val duplicate : forall 'a. Size 'a => bitU -> integer -> mword 'a
-Definition duplicate := duplicate_bit_bv
-
-val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ult_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val slt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ugt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val sgt_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ulteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val slteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val ugteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
-val sgteq_vec : forall 'a. Size 'a => mword 'a -> mword 'a -> bool*)
-Definition eq_vec  {n} (x : mword n) (y : mword n) : bool := Word.weqb (get_word x) (get_word y).
+Definition eq_vec  {n} (x : mword n) (y : mword n) : bool := MachineWord.eqb (get_word x) (get_word y).
 Definition neq_vec {n} (x : mword n) (y : mword n) : bool := negb (eq_vec x y).
-(*Definition ult_vec   := ult_bv.
-Definition slt_vec   := slt_bv.
-Definition ugt_vec   := ugt_bv.
-Definition sgt_vec   := sgt_bv.
-Definition ulteq_vec := ulteq_bv.
-Definition slteq_vec := slteq_bv.
-Definition ugteq_vec := ugteq_bv.
-Definition sgteq_vec := sgteq_bv.
 
-*)
 Lemma eq_vec_true_iff {n} (v w : mword n) :
   eq_vec v w = true <-> v = w.
 unfold eq_vec.
-destruct n.
-1,3:
-  simpl in v,w; shatter_word v; shatter_word w;
-  compute; intuition.
-* simpl in *. destruct (weq v w).
-  + subst. rewrite weqb_eq; tauto.
-  + rewrite weqb_ne; auto. split; congruence.
+rewrite MachineWord.eqb_true_iff.
+split.
+* apply get_word_inj.
+* intros []. reflexivity.
 Qed.
 
 Lemma eq_vec_false_iff {n} (v w : mword n) :
   eq_vec v w = false <-> v <> w.
 specialize (eq_vec_true_iff v w).
-destruct (eq_vec v w).
-intuition.
-intros [H1 H2].
-split.
-* intros _ EQ. intuition.
-* auto.
+destruct (eq_vec v w); intuition.
 Qed.
 
 Definition eq_vec_dec {n} : forall (x y : mword n), {x = y} + {x <> y} :=
   match n with
-  | Z0 => @Word.weq _
-  | Zpos m => @Word.weq _
-  | Zneg m => @Word.weq _
+  | Z0 => @MachineWord.eq_dec _
+  | Zpos m => @MachineWord.eq_dec _
+  | Zneg m => @MachineWord.eq_dec _
   end.
 
 #[export] Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
   Decidable_eq_from_dec eq_vec_dec.
 
-Program Fixpoint reverse_endianness_word {n} (bits : word n) : word n :=
-  match n with
-  | S (S (S (S (S (S (S (S m))))))) =>
-    combine
-      (reverse_endianness_word (split2 8 m bits))
-      (split1 8 m bits)
-  | _ => bits
-  end.
-Next Obligation.
-lia.
-Qed.
+Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) MachineWord.reverse_endian bits.
 
-Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
+Definition bools_of_int len n :=
+  let w := MachineWord.Z_to_word (Z.to_nat len) n in
+  MachineWord.word_to_bools w.
 
 Definition get_slice_int {a} (len : Z) (n : Z) (lo : Z) : mword a :=
   if sumbool_of_bool (a >=? 0) then
@@ -623,31 +302,18 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
     (int_of_mword true (update_subrange_vec_dec bs hi lo (autocast v)))
   else n.
 
-(* Variant of bitvector slicing for the ARM model with few constraints *)
-(* TODO: remove *)
-Definition slice {m} (v : mword m) lo len : mword len :=
-  if sumbool_of_bool (orb (len =? 0) (lo <? 0))
-  then zeros len
-  else
-    if sumbool_of_bool (lo + len - 1 >=? m)
-    then if sumbool_of_bool (lo <? m)
-         then zero_extend (subrange_vec_dec v (m - 1) lo) len
-         else zeros len
-    else autocast (subrange_vec_dec v (lo + len - 1) lo).
+
 
 Lemma slice_is_ok m (v : mword m) lo len
                   (H1 : 0 <= lo) (H2 : 0 < len) (H3: lo + len < m) :
   slice v lo len = autocast (subrange_vec_dec v (lo + len - 1) lo).
-unfold slice.
-destruct (sumbool_of_bool _).
-* exfalso.
-  unbool_comparisons.
-  lia.
-* destruct (sumbool_of_bool _).
-  + exfalso.
-    unbool_comparisons.  
-    lia.
-  + reflexivity.
+unfold slice, subrange_vec_dec.
+assert (EQ1: (Z.to_nat (lo + len - 1) - Z.to_nat lo + 1)%nat = Z.to_nat len) by lia.
+assert (EQ2: lo + len - 1 - lo + 1 = len) by lia.
+rewrite EQ1, EQ2.
+rewrite autocast_refl.
+apply to_word_to_word_nat.
+lia.
 Qed.
 
 Import ListNotations.
