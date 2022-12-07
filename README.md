@@ -18,15 +18,16 @@ been used for several papers, available from
 <p>
 
 Given a Sail definition, the tool will type-check it and generate
-executable emulators, in C and OCaml, theorem-prover definitions for
-Isabelle, HOL4, and Coq, and definitions to integrate with our 
+documentation, executable emulators (in C and OCaml), theorem-prover definitions (for
+Isabelle, HOL4, and Coq), and definitions to integrate with our 
 <a href="http://www.cl.cam.ac.uk/users/pes20/rmem">RMEM</a>
 and
-<a href="https://isla-axiomatic.cl.cam.ac.uk/">isla-axiomatic</a>
+<a href="https://github.com/rems-project/isla">isla-axiomatic</a>
 tools for
-concurrency semantics.  This is all work in progress, and some
-theorem-prover definitions do not yet work for the more complex
-models; see the most recent papers and the ARMv8.5-A model for
+concurrency semantics.
+The <a href="https://github.com/rems-project/isla">Isla</a> engine provides SMT-based symbolic evaluation for Sail models,
+and the <a href="https://github.com/rems-project/islaris">Islaris</a> verification tool integrates Isla output with the Iris program logic to support proof about binary code in Coq. 
+Not all models are integrated with all tools - see the most recent papers and models for
 descriptions of the current state.
 <p>
 
@@ -45,24 +46,26 @@ some Sail specifications and related tools.
 * Documentation for generating Isabelle and working with the ISA specs
   in Isabelle in [lib/isabelle/manual.pdf](lib/isabelle/manual.pdf)
 
-* A simple emacs mode with syntax highlighting (in [editors/](editors/))
+* Simple emacs and VSCode modes with syntax highlighting (in [editors/](editors/))
 
 * A test suite for Sail (in [test/](test/))
 
 Sail ISA Models
 ===============
 
-Sail is currently being used for Arm, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions to core user-mode fragments, and either here or in separate repositories:
+Sail is currently being used for Arm-A, Morello (CHERI-Arm), RISC-V, CHERI-RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions (able to boot an OS in the Sail-generated emulator) to core user-mode fragments:
 
 ### REMS Models
 
-* [Sail Armv8.5-A ISA model, automatically generated from the Arm-internal ASL reference, as used in the Arm ARM](https://github.com/rems-project/sail-arm).
+* [Sail Armv9.3-A and Armv8.5-A ISA models, automatically generated from the Arm-internal ASL reference, as used in the Arm ARM](https://github.com/rems-project/sail-arm).
 
 * [Sail Armv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/aarch64). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
 
 * [Sail Armv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/aarch64_small). This is a handwritten user-mode fragment.
 
-* [Sail RISC-V ISA model, handwritten](https://github.com/riscv/sail-riscv). 
+* [Sail Morello (CHERI-Arm) ISA model](https://github.com/CTSRD-CHERI/sail-morello), automatically generated from the Arm-internal ASL definition.  This was the basis for our [Morello security proofs](https://github.com/CTSRD-CHERI/sail-morello-proofs/blob/public/README.md).
+
+* [Sail RISC-V ISA model, handwritten](https://github.com/riscv/sail-riscv). This has been adopted by the RISC-V Foundation.
 
 * [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips).
 
@@ -142,12 +145,13 @@ The models in separate repositories are licensed as described in each.
 
 ## Funding 
 
-This work was partially supported by EPSRC grant EP/K008528/1 <a href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous Engineering for
-  Mainstream Systems</a>,
-an ARM iCASE award, EPSRC IAA KTF funding, and donations from Arm.
+This work was partially supported by the UK Government Industrial Strategy Challenge Fund (ISCF) under the Digital Security by Design (DSbD) Programme, to deliver a DSbDtech enabled digital platform (grant 105694).
 This project has received funding from the European Research Council
 (ERC) under the European Union’s Horizon 2020 research and innovation programme (grant agreement No 789108, ELVER).
-
+This work was partially supported by EPSRC grant EP/K008528/1 <a href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous Engineering for
+  Mainstream Systems</a>,
+an ARM iCASE award, and EPSRC IAA KTF funding.
+This work was partially supported by donations from Arm and Google.
 Approved for public release; distribution is unlimited. This research
 is sponsored by the Defense Advanced Research Projects Agency (DARPA)
 and the Air Force Research Laboratory (AFRL), under contracts
