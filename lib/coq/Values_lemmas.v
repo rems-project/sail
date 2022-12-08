@@ -66,6 +66,7 @@
 (*==========================================================================*)
 
 Require Import Sail.Values.
+Require Program.
 
 (*
 
@@ -102,6 +103,9 @@ induction xs.
       apply Nat.lt_lt_succ_r.
       apply IHxs; congruence.
 Qed.
+
+(* If we're using stdpp bitvectors then it will have changed the default. *)
+Local Obligation Tactic := Program.Tactics.program_simpl.
 
 Program Fixpoint take_chunks {a} (n : nat) (xs : list a) {measure (List.length xs)} : list (list a) :=
   match xs with

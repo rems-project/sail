@@ -366,8 +366,8 @@ Ltac statecong db :=
        eapply (@equiv_transitive _ _ _ _ (let '(matchvar1,matchvar2) := e1 in _) _);
        [ destruct e1; etransitivity; [ statecong db | apply equiv_reflexive ]
        | apply equiv_reflexive ]
-  | |- (let '(existT _ matchvar1 matchvar2) := ?e1 in _) === _ =>
-       eapply (@equiv_transitive _ _ _ _ (let '(existT _ matchvar1 matchvar2) := e1 in _) _);
+  | |- (let '(@existT _ _ matchvar1 matchvar2) := ?e1 in _) === _ =>
+       eapply (@equiv_transitive _ _ _ _ (let '(@existT _ _ matchvar1 matchvar2) := e1 in _) _);
        [ destruct e1; etransitivity; [ statecong db | apply equiv_reflexive ]
        | apply equiv_reflexive ]
   | |- (match ?e1 with None => _ | Some _ => _ end) === _ =>
@@ -457,12 +457,12 @@ Qed.
   (rewrite liftState_let_pair; reflexivity) : liftState.
 
 Lemma liftState_let_Tpair Regs RegVal A B (P : B -> Prop) E r (x : sigT P) M :
-  @liftState Regs RegVal A E r (let '(existT _ y z) := x in M y z) =
-  let '(existT _ y z) := x in liftState r (M y z).
+  @liftState Regs RegVal A E r (let '(@existT _ _ y z) := x in M y z) =
+  let '(@existT _ _ y z) := x in liftState r (M y z).
 destruct x.
 reflexivity.
 Qed.
-#[export] Hint Extern 0 (liftState _ (let '(existT _ x y) := _ in _) = _) =>
+#[export] Hint Extern 0 (liftState _ (let '(@existT _ _ x y) := _ in _) = _) =>
   (rewrite liftState_let_Tpair; reflexivity) : liftState.
 
 Lemma liftState_opt_match Regs RegVal A B E (x : option A) m f r :

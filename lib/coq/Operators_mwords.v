@@ -76,7 +76,7 @@ Local Open Scope Z.
 
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) : monad rv (mword n) e := x >>= fun x => returnm (autocast x).
 
-Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
+Definition cast_word {m n} (x : MachineWord.word m) (eq : m = n) : MachineWord.word n :=
   cast_nat x eq.
 
 Lemma cast_word_refl {m} {H:m = m} (x : MachineWord.word m) : cast_word x H = x.
@@ -277,7 +277,7 @@ Definition eq_vec_dec {n} : forall (x y : mword n), {x = y} + {x <> y} :=
 #[export] Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
   Decidable_eq_from_dec eq_vec_dec.
 
-Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) MachineWord.reverse_endian bits.
+Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) (MachineWord.reverse_endian (n:=_)) bits.
 
 Definition bools_of_int len n :=
   let w := MachineWord.Z_to_word (Z.to_nat len) n in

@@ -186,9 +186,9 @@ Qed.
 Definition and_boolMP {rv E} {P Q R:bool->Prop} (x : monad rv {b:bool & ArithFactP (P b)} E) (y : monad rv {b:bool & ArithFactP (Q b)} E)
   `{H:forall l r, ArithFactP ((P l) -> ((l = true -> (Q r)) -> (R (andb l r))))}
   : monad rv {b:bool & ArithFactP (R b)} E :=
-  x >>= fun '(existT _ x p) => (if x return ArithFactP (P x) -> _ then
-    fun p => y >>= fun '(existT _ y q) => returnm (existT _ y (and_bool_full_proof p q H))
-  else fun p => returnm (existT _ false (and_bool_left_proof p H))) p.
+  x >>= fun '(@existT _ _ x p) => (if x return ArithFactP (P x) -> _ then
+    fun p => y >>= fun '(@existT _ _ y q) => returnm (@existT _ _ y (and_bool_full_proof p q H))
+  else fun p => returnm (@existT _ _ false (and_bool_left_proof p H))) p.
 
 (*val or_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
 Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
@@ -220,12 +220,12 @@ Qed.
 Definition or_boolMP {rv E} {P Q R:bool -> Prop} (l : monad rv {b : bool & ArithFactP (P b)} E) (r : monad rv {b : bool & ArithFactP (Q b)} E)
  `{forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))}
  : monad rv {b : bool & ArithFactP (R b)} E :=
- l >>= fun '(existT _ l p) =>
-  (if l return ArithFactP (P l) -> _ then fun p => returnm (existT _ true (or_bool_left_proof p H))
-   else fun p => r >>= fun '(existT _ r q) => returnm (existT _ r (or_bool_full_proof p q H))) p.
+ l >>= fun '(@existT _ _ l p) =>
+  (if l return ArithFactP (P l) -> _ then fun p => returnm (@existT _ _ true (or_bool_left_proof p H))
+   else fun p => r >>= fun '(@existT _ _ r q) => returnm (@existT _ _ r (or_bool_full_proof p q H))) p.
 
 Definition build_trivial_ex {rv E} {T:Type} (x:monad rv T E) : monad rv {x : T & ArithFact true} E :=
-  x >>= fun x => returnm (existT _ x (Build_ArithFactP _ eq_refl)).
+  x >>= fun x => returnm (@existT _ _ x (Build_ArithFactP _ eq_refl)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
 Definition bool_of_bitU_fail {rv E} (b : bitU) : monad rv bool E :=
@@ -359,10 +359,10 @@ End Choose.
    we can do it entirely from the type. *)
 
 Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFactP (P x)} : monad rv {x : T & ArithFactP (P x)} e :=
-  x >>= fun y => returnm (existT _ y (H y)).
+  x >>= fun y => returnm (@existT _ _ y (H y)).
 
 Definition projT1_m {rv e} {T:Type} {P:T -> Prop} (x: monad rv {x : T & P x} e) : monad rv T e :=
   x >>= fun y => returnm (projT1 y).
 
 Definition derive_m {rv e} {T:Type} {P Q:T -> Prop} (x : monad rv {x : T & ArithFactP (P x)} e) `{H:forall x, ArithFactP (P x) -> ArithFactP (Q x)} : monad rv {x : T & (ArithFactP (Q x))} e :=
-  x >>= fun y => returnm (existT _ (projT1 y) (H _ _)).
+  x >>= fun y => returnm (@existT _ _ (projT1 y) (H (projT1 y) (projT2 y))).

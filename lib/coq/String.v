@@ -66,6 +66,7 @@
 (*==========================================================================*)
 
 Require Import Sail.Values.
+Require Import Sail.MachineWord.
 Require Import Coq.Strings.Ascii.
 Local Open Scope Z.
 
@@ -266,12 +267,7 @@ end.
 
 Definition decimal_string_of_bits {n} (bv : mword n) : string := string_of_int (int_of_mword false bv).
 
-Fixpoint string_of_word_acc {n} (w : Word.word n) (s : string) :=
-  match w with
-  | Word.WO => s
-  | Word.WS b w' => string_of_word_acc w' (String (if b then "1" else "0")%char s)
-  end.
-Definition string_of_word {n} (bv : Word.word n) := String "0" (String "b" (string_of_word_acc bv "")).
+Definition string_of_word {n} (bv : MachineWord.word n) := String "0" (String "b" (MachineWord.word_to_binary_string bv)).
 Definition string_of_bits {n} (w : mword n) : string := string_of_word (get_word w).
 
 (* Some aliases for compatibility. *)

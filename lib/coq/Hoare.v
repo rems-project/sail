@@ -268,12 +268,12 @@ Lemma PrePost_and_boolSP (*[PrePost_compositeI]:*) Regs E PP QQ RR H
       PrePost R r
               (fun r =>
                  match r with
-                 | Value (existT _ r q) => Q (Value (existT _ r (and_bool_full_proof p q H)))
+                 | Value (@existT _ _ r q) => Q (Value (@existT _ _ r (and_bool_full_proof p q H)))
                  | Ex e => Q (Ex e) end)) ->
   PrePost P l
           (fun r => match r with
-                    | Value (existT _ true _) => R
-                    | Value (existT _ false p) => Q (Value (existT _ _ (and_bool_left_proof p H)))
+                    | Value (@existT _ _ true _) => R
+                    | Value (@existT _ _ false p) => Q (Value (@existT _ _ _ (and_bool_left_proof p H)))
                     | Ex e => Q (Ex e) end) ->
   PrePost P (@and_boolSP _ _ PP QQ RR l r H) Q.
 intros Hr Hl.
@@ -312,12 +312,12 @@ Lemma PrePost_or_boolSP (*[PrePost_compositeI]:*) Regs E PP QQ RR H
       PrePost R r
               (fun r =>
                  match r with
-                 | Value (existT _ r q) => Q (Value (existT _ r (or_bool_full_proof p q H)))
+                 | Value (@existT _ _ r q) => Q (Value (@existT _ _ r (or_bool_full_proof p q H)))
                  | Ex e => Q (Ex e) end)) ->
   PrePost P l
           (fun r => match r with
-                    | Value (existT _ false _) => R
-                    | Value (existT _ true p) => Q (Value (existT _ _ (or_bool_left_proof p H)))
+                    | Value (@existT _ _ false _) => R
+                    | Value (@existT _ _ true p) => Q (Value (@existT _ _ _ (or_bool_left_proof p H)))
                     | Ex e => Q (Ex e) end) ->
   PrePost P (@or_boolSP _ _ PP QQ RR l r H) Q.
 intros Hr Hl.
@@ -689,11 +689,11 @@ Lemma PrePostE_and_boolSP (*[PrePost_compositeI]:*) Regs Ety PP QQ RR H
   (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} Ety)
   (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} Ety)
   P (Q : {b : bool & Sail.Values.ArithFactP (RR b)} -> predS Regs) E R :
-  PrePostE R r (fun r s => forall pf, Q (existT _ (projT1 r) pf) s) E ->
+  PrePostE R r (fun r s => forall pf, Q (@existT _ _ (projT1 r) pf) s) E ->
   PrePostE P l
           (fun r s => match r with
-                    | existT _ true _ => R s
-                    | existT _ false _ => (forall pf, Q (existT _ false pf) s)
+                    | @existT _ _ true _ => R s
+                    | @existT _ _ false _ => (forall pf, Q (@existT _ _ false pf) s)
                     end) E ->
   PrePostE P (@and_boolSP _ _ PP QQ RR l r H) Q E.
 intros Hr Hl.
@@ -726,11 +726,11 @@ Lemma PrePostE_or_boolSP (*[PrePost_compositeI]:*) Regs Ety PP QQ RR H
   (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} Ety)
   (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} Ety)
   P (Q : {b : bool & Sail.Values.ArithFactP (RR b)} -> predS Regs) E R :
-  PrePostE R r (fun r s => forall pf, Q (existT _ (projT1 r) pf) s) E ->
+  PrePostE R r (fun r s => forall pf, Q (@existT _ _ (projT1 r) pf) s) E ->
   PrePostE P l
           (fun r s => match r with
-                    | existT _ false _ => R s
-                    | existT _ true _ => (forall pf, Q (existT _ true pf) s)
+                    | @existT _ _ false _ => R s
+                    | @existT _ _ true _ => (forall pf, Q (@existT _ _ true pf) s)
                     end) E ->
   PrePostE P (@or_boolSP _ _ PP QQ RR l r H) Q E.
 intros Hr Hl.
@@ -1127,7 +1127,7 @@ simpl; auto.
 Qed.
 *)
 Lemma PrePostE_build_trivial_exS Regs (T:Type) Ety (m : monadS Regs T Ety) P (Q : {T & Sail.Values.ArithFact true} -> predS Regs) E :
-  PrePostE P m (fun v => Q (existT _ v (Sail.Values.Build_ArithFactP _ eq_refl))) E ->
+  PrePostE P m (fun v => Q (@existT _ _ v (Sail.Values.Build_ArithFactP _ eq_refl))) E ->
   PrePostE P (build_trivial_exS m) Q E.
 intro H.
 unfold build_trivial_exS.
@@ -1232,10 +1232,10 @@ Ltac PrePostE_step :=
          assert (PAIR : x = (fst x, snd x)) by (destruct x; reflexivity);
          rewrite PAIR at - 1;
          clear PAIR
-  | |- PrePostE _ (let '(existT _ _ _) := ?x in _) _ _ =>
+  | |- PrePostE _ (let '(@existT _ _ _ _) := ?x in _) _ _ =>
          is_var x;
          let PAIR := fresh "PAIR" in
-         assert (PAIR : x = existT _ (projT1 x) (projT2 x)) by (destruct x; reflexivity);
+         assert (PAIR : x = @existT _ _ (projT1 x) (projT2 x)) by (destruct x; reflexivity);
          rewrite PAIR at - 1;
          clear PAIR
   (* Applying specifications from the hintdb.  For performance,

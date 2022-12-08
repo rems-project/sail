@@ -136,19 +136,19 @@ Definition or_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
 Definition and_boolSP {rv E} {P Q R:bool->Prop} (x : monadS rv {b:bool & ArithFactP (P b)} E) (y : monadS rv {b:bool & ArithFactP (Q b)} E)
   `{H:forall l r, ArithFactP ((P l) -> ((l = true -> (Q r)) -> (R (andb l r))))}
   : monadS rv {b:bool & ArithFactP (R b)} E :=
-  x >>$= fun '(existT _ x p) => (if x return ArithFactP (P x) -> _ then
-    fun p => y >>$= fun '(existT _ y q) => returnS (existT _ y (and_bool_full_proof p q H))
-  else fun p => returnS (existT _ false (and_bool_left_proof p H))) p.
+  x >>$= fun '(@existT _ _ x p) => (if x return ArithFactP (P x) -> _ then
+    fun p => y >>$= fun '(@existT _ _ y q) => returnS (@existT _ _ y (and_bool_full_proof p q H))
+  else fun p => returnS (@existT _ _ false (and_bool_left_proof p H))) p.
 
 Definition or_boolSP {rv E} {P Q R:bool -> Prop} (l : monadS rv {b : bool & ArithFactP (P b)} E) (r : monadS rv {b : bool & ArithFactP (Q b)} E)
  `{forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))}
  : monadS rv {b : bool & ArithFactP (R b)} E :=
- l >>$= fun '(existT _ l p) =>
-  (if l return ArithFactP (P l) -> _ then fun p => returnS (existT _ true (or_bool_left_proof p H))
-   else fun p => r >>$= fun '(existT _ r q) => returnS (existT _ r (or_bool_full_proof p q H))) p.
+ l >>$= fun '(@existT _ _ l p) =>
+  (if l return ArithFactP (P l) -> _ then fun p => returnS (@existT _ _ true (or_bool_left_proof p H))
+   else fun p => r >>$= fun '(@existT _ _ r q) => returnS (@existT _ _ r (or_bool_full_proof p q H))) p.
 
 Definition build_trivial_exS {rv E} {T:Type} (x : monadS rv T E) : monadS rv {x : T & ArithFact true} E :=
- x >>$= fun x => returnS (existT _ x (Build_ArithFactP _ eq_refl)).
+ x >>$= fun x => returnS (@existT _ _ x (Build_ArithFactP _ eq_refl)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
 Definition bool_of_bitU_fail {RV E} (b : bitU) : monadS RV bool E :=

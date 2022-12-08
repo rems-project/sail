@@ -81,7 +81,7 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 Require Import Rbase.  (* TODO would like to avoid this in models without reals *)
-Require EqdepFacts.
+Require Eqdep EqdepFacts.
 
 Require Import Sail.MachineWord.
 
@@ -134,13 +134,6 @@ Class ArithFact (P : bool) := ArithFactClass : ArithFactP (P = true).
 Lemma use_ArithFact {P} `(ArithFact P) : P = true.
 unfold ArithFact in *.
 apply fact.
-Defined.
-
-#[export] Instance nat_inhabited : Inhabited {n : Z & ArithFact (n >=? 0)}.
-constructor.
-refine (existT _ 0 _).
-constructor.
-reflexivity.
 Defined.
 
 Lemma ArithFact_irrelevant (P : bool) (p q : ArithFact P) : p = q.
@@ -197,7 +190,7 @@ Local Obligation Tactic := try solve [simpl_relation | firstorder auto].
 End Morphism.
 
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFactP (P n)} : {x : T & ArithFactP (P x)} :=
-  existT _ n H.
+  @existT _ _ n H.
 
 Definition build_ex2 {T:Type} {T':T -> Type} (n:T) (m:T' n) {P:T -> Prop} `{H:ArithFactP (P n)} : {x : T & T' x & ArithFactP (P x)} :=
   existT2 _ _ n m H.
@@ -449,6 +442,7 @@ destruct n.
 + simpl (List.length _).
   rewrite repeat'_length.
   rewrite Nat2Z.inj_mul.
+  unfold Z.to_nat.
   rewrite positive_nat_Z.
   reflexivity.  
 + exfalso.
@@ -2791,7 +2785,7 @@ Definition vec_access_inc {T n} (v : vec T n) m `{Inhabited T} : T :=
 
 #[export] Instance dummy_vec {T:Type} `{Inhabited T} n : Inhabited (vec T n).
 refine (Build_Inhabited _
-  (if sumbool_of_bool (n >=? 0) then existT _ (repeat [dummy_value] n) _ else existT _ [] _)
+  (if sumbool_of_bool (n >=? 0) then @existT _ _ (repeat [dummy_value] n) _ else @existT _ _ [] _)
 ).
 * rewrite repeat_length.
   - simpl.
@@ -2804,7 +2798,7 @@ Qed.
 Definition vec_init {T} (t : T) `{Inhabited T} (n : Z) : vec T n.
 refine (
   if sumbool_of_bool (n >=? 0) then
-    existT _ (repeat [t] n) _
+    @existT _ _ (repeat [t] n) _
   else dummy_value
 ).
 rewrite repeat_length.
@@ -2816,7 +2810,7 @@ Defined.
 Definition vec_concat {T m n} `{Inhabited T} (v : vec T m) (w : vec T n) : vec T (m + n).
 refine (
   if sumbool_of_bool ((m >=? 0) && (n >=? 0)) then
-     existT _ (projT1 v ++ projT1 w) _
+     @existT _ _ (projT1 v ++ projT1 w) _
   else dummy_value).
 destruct v,w.
 rewrite app_length.
@@ -2855,7 +2849,7 @@ Qed.
 Definition vec_update_dec {T n} `{Inhabited T} (v : vec T n) (m : Z) (t : T) : vec T n.
 refine (
   if sumbool_of_bool (0 <=? m <? n) then
-    existT _ (update_list_dec (projT1 v) m t) _
+    @existT _ _ (update_list_dec (projT1 v) m t) _
   else dummy_value
 ).
 unfold update_list_dec.
@@ -2872,7 +2866,7 @@ Qed.
 Definition vec_update_inc {T n} `{Inhabited T} (v : vec T n) (m : Z) (t : T) : vec T n.
 refine (
   if sumbool_of_bool (0 <=? m <? n) then
-    existT _ (update_list_inc (projT1 v) m t) _
+    @existT _ _ (update_list_inc (projT1 v) m t) _
   else dummy_value
 ).
 destruct v as [v' L].
@@ -2886,7 +2880,7 @@ rewrite update_list_inc_length.
 Qed.
 
 Definition vec_map {S T} (f : S -> T) {n} (v : vec S n) : vec T n.
-refine (existT _ (List.map f (projT1 v)) _).
+refine (@existT _ _ (List.map f (projT1 v)) _).
 destruct v as [l H].
 cbn.
 unfold length_list.
@@ -2897,7 +2891,7 @@ Qed.
 Program Definition just_vec {A n} (v : vec (option A) n) : option (vec A n) :=
   match just_list (projT1 v) with
   | None => None
-  | Some v' => Some (existT _ v' _)
+  | Some v' => Some (@existT _ _ v' _)
   end.
 Next Obligation.
 rewrite <- (just_list_length _ _ Heq_anonymous).
@@ -2925,7 +2919,7 @@ Defined.
 Definition vec_of_list {A} n (l : list A) : option (vec A n).
 refine (
   match sumbool_of_bool (n =? length_list l) with
-  | left H => Some (existT _ l _)
+  | left H => Some (@existT _ _ l _)
   | right _ => None
   end
 ).
@@ -2938,7 +2932,7 @@ reflexivity.
 Defined.
 
 Definition vec_of_list_len {A} (l : list A) : vec A (length_list l). 
-refine (existT _ l _).
+refine (@existT _ _ l _).
 unfold length_list.
 rewrite Nat2Z.id.
 reflexivity.
