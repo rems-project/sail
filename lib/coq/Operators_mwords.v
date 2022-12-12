@@ -150,7 +150,7 @@ Definition vector_truncate {n} (v : mword n) (m : Z) : mword m := slice v 0 m.
 Definition vector_truncateLSB {n} (v : mword n) (m : Z) : mword m := slice v (n - m) m.
 
 (*val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => mword 'a -> mword 'b -> mword 'c*)
-Definition concat_vec {a b} (v : mword a) (w : mword b) : mword (a + b) :=
+Definition concat_vec {a b} (w : mword a) (v : mword b) : mword (a + b) :=
  autocast (to_word_nat (MachineWord.concat (get_word w) (get_word v))).
 
 (*val cons_vec : forall 'a 'b 'c. Size 'a, Size 'b => bitU -> mword 'a -> mword 'b*)

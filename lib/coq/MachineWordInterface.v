@@ -7,6 +7,8 @@ Parameter zeros : forall n, word n.
 Parameter ones : forall n, word n.
 Parameter get_bit : forall [n], word n -> nat -> bool.
 Parameter set_bit : forall [n], word n -> nat -> bool -> word n.
+
+(* These are big-endian, in keeping with the Lem backend. *)
 Parameter word_to_bools : forall [n], word n -> list bool.
 Parameter bools_to_word : forall l : list bool, word (List.length l).
 

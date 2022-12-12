@@ -44,8 +44,8 @@ Qed.
 
 Definition ones n : word n := bitvector.Z_to_bv _ (-1).
 
-Definition word_to_bools [n] (w : word n) : list bool := bitvector.bv_to_bits w.
-Definition bools_to_word (l : list bool) : word (List.length l) := N_to_word (List.length l) (Ascii.N_of_digits l).
+Definition word_to_bools [n] (w : word n) : list bool := List.rev (bitvector.bv_to_bits w).
+Definition bools_to_word (l : list bool) : word (List.length l) := N_to_word (List.length l) (Ascii.N_of_digits (List.rev l)).
 
 Definition slice {m} n (w : word m) i : word n := bitvector.bv_extract (N.of_nat i) _ w.
 Definition update_slice {m n} (w : word m) i (v : word n) : word m :=
