@@ -18,8 +18,8 @@ homepage: "http://www.cl.cam.ac.uk/~pes20/sail/"
 bug-reports: "https://github.com/rems-project/sail/issues"
 license: "BSD-3-clause"
 dev-repo: "git+https://github.com/rems-project/sail.git"
-build: [make "HAVE_OPAM_BBV=yes"]
-install: [make "install"]
+build: [make "-C" "lib/coq" "HAVE_OPAM_BBV=yes"]
+install: [make "-C" "lib/coq" "install"]
 depends: [
   "coq" {>= "8.9.0"}
   "coq-bbv" {>= "1.1"}
