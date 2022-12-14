@@ -31,7 +31,7 @@
     (%{workspace_root}/lib/concurrency_interface.sail as lib/concurrency_interface.sail)
     (%{workspace_root}/lib/concurrency_interface/v1.sail as lib/concurrency_interface/v1.sail)
     (%{workspace_root}/lib/concurrency_interface/emulator_memory.sail as lib/concurrency_interface/emulator_memory.sail)
-    (%{workspace_root}/lib/concurrency_interface/eret.sail as lib/concurrency_interface/eret.sail)
+    (%{workspace_root}/lib/concurrency_interface/exception.sail as lib/concurrency_interface/exception.sail)
     (%{workspace_root}/lib/concurrency_interface/tlbi.sail as lib/concurrency_interface/tlbi.sail)
     (%{workspace_root}/lib/concurrency_interface/barrier.sail as lib/concurrency_interface/barrier.sail)
     (%{workspace_root}/lib/concurrency_interface/cache_op.sail as lib/concurrency_interface/cache_op.sail)
