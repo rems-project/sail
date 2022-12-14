@@ -72,7 +72,14 @@ $define _CONCURRENCY_INTERFACE_ERET
 
 $include <concurrency_interface/common.sail>
 
-outcome sail_eret : 'pa -> unit with 'pa : Type
+outcome sail_take_exception : 'fault -> unit
+    with 'fault : Type
+= {
+    impl emulator(_) = ()
+}
+
+outcome sail_return_exception : 'pa -> unit
+    with 'pa : Type
 = {
     impl emulator(_) = ()
 }
