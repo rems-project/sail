@@ -72,8 +72,6 @@ $include <flow.sail>
 
 type bits ('n : Int) = bitvector('n, inc)
 
-val eq_bit = pure "eq_bit" : (bit, bit) -> bool
-
 val eq_bits = pure {
   ocaml: "eq_list",
   interpreter: "eq_list",

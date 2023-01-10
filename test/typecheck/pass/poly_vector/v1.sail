@@ -8,8 +8,6 @@ $endif
 
 val "to_generic" : forall 'n. bitvector('n, dec) -> vector('n, dec, bit)
 
-val "print_endline" : string -> unit
-
 function my_length forall 'n ('a : Type). (xs: vector('n, dec, 'a)) -> int('n) = {
   length(xs)
 }

@@ -287,6 +287,31 @@ let warn ?once_from short_str l explanation =
     | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n" ^ explanation ^ "\n")
   )
 
+let format_warn ?once_from short_str l explanation =
+  let already_shown = match once_from with
+    | Some (file, lnum, cnum, enum) ->
+       let key = Printf.sprintf "%d:%d:%d:%s" lnum cnum enum file in
+       if StringSet.mem key !once_from_warnings then (
+         true
+       ) else (
+         once_from_warnings := StringSet.add key !once_from_warnings;
+         false
+       )
+    | None -> false
+  in
+  if !opt_warnings && not already_shown then (
+    match simp_loc l with
+    | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
+       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Util.option_default [] in
+       if not (List.exists (fun s -> s = short_str) shorts) then (
+         let open Error_format in
+         prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str);
+         format_message (Location ("", None, l, explanation)) err_formatter;
+         seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
+       )
+    | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n")
+  )
+
 let simple_warn str = warn str Parse_ast.Unknown ""
 
 let get_sail_dir default_sail_dir =

@@ -1201,9 +1201,19 @@ end = struct
     end
 
   and add_val_spec id (bind_typq, bind_typ) env =
-    if not (Bindings.mem id env.top_val_specs)
-    then update_val_spec id (bind_typq, bind_typ) env
-    else env
+    if not (Bindings.mem id env.top_val_specs) then (
+      update_val_spec id (bind_typq, bind_typ) env
+    ) else (
+      let previous_loc =
+        match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.top_val_specs) with
+        | Some (prev_id, _) -> id_loc prev_id
+        | None -> Parse_ast.Unknown in
+      let open Error_format in
+      Reporting.format_warn ("Duplicate function type definition for " ^ string_of_id id) (id_loc id)
+        (Seq [Line "This duplicate definition is being ignored!";
+              Location ("", Some "previous definition here", previous_loc, Seq [])]);
+      env
+    )
 
   and add_outcome id (typq, typ, params, vals, outcome_env) env =
     { env with outcomes = Bindings.add id (typq, typ, params, vals, outcome_env) env.outcomes }

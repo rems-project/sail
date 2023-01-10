@@ -158,6 +158,8 @@ val forbid_errors : (string * int * int * int) -> ('a -> 'b) -> 'a -> 'b
    location, the second after. *)
 val warn : ?once_from:(string * int * int * int) -> string -> Parse_ast.l -> string -> unit
 
+val format_warn : ?once_from:(string * int * int * int) -> string -> Parse_ast.l -> Error_format.message -> unit
+
 (** Print a simple one-line warning without a location. *)
 val simple_warn: string -> unit
   
