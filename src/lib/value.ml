@@ -545,6 +545,10 @@ let value_putchar = function
      V_unit
   | _ -> failwith "value putchar"
 
+let value_dec_str = function
+  | [n] -> V_string (string_of_value n)
+  | _ -> failwith "value print_int"
+
 let value_print_bits = function
   | [msg; bits] -> output_endline (coerce_string msg ^ string_of_value bits); V_unit
   | _ -> failwith "value print_bits"
@@ -665,7 +669,7 @@ let primops = ref
        ("or_bool", or_bool);
        ("print", value_print);
        ("prerr", fun vs -> (prerr_string (string_of_value (List.hd vs)); V_unit));
-       ("dec_str", fun _ -> V_string "X");
+       ("dec_str", value_dec_str);
        ("print_endline", value_print_endline);
        ("prerr_endline", fun vs -> (prerr_endline (string_of_value (List.hd vs)); V_unit));
        ("putchar", value_putchar);

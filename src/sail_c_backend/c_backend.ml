@@ -2372,9 +2372,9 @@ let compile_ast env effect_info output_chan c_includes ast =
            "  setup_rts();" ]
        @ fst exn_boilerplate
        @ startup cdefs
+       @ letbind_initializers
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers")) ])
-       @ letbind_initializers
        @ [ "}" ] ))
     in
 
