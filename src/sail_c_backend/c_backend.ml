@@ -2260,7 +2260,7 @@ let is_cdef_startup = function
 
 let sgen_startup = function
   | CDEF_startup (id, _) ->
-     Printf.sprintf "  startup_%s();" (sgen_id id)
+     Printf.sprintf "  startup_%s();" (sgen_function_id id)
   | _ -> assert false
 
 let sgen_instr id ctx instr =
@@ -2272,7 +2272,7 @@ let is_cdef_finish = function
 
 let sgen_finish = function
   | CDEF_startup (id, _) ->
-     Printf.sprintf "  finish_%s();" (sgen_id id)
+     Printf.sprintf "  finish_%s();" (sgen_function_id id)
   | _ -> assert false
 
 let rec get_recursive_functions defs =
