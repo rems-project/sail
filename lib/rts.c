@@ -81,7 +81,6 @@ extern void model_pre_exit();
 
 unit sail_exit(unit u)
 {
-  fprintf(stderr, "[Sail] Exiting after %" PRIu64 " cycles\n", g_cycle_count);
   model_pre_exit();
   exit(EXIT_SUCCESS);
   return UNIT;
@@ -98,14 +97,12 @@ bool g_sleeping = false;
 
 unit sleep_request(const unit u)
 {
-  fprintf(stderr, "Sail CPU model going to sleep\n");
   g_sleeping = true;
   return UNIT;
 }
 
 unit wakeup_request(const unit u)
 {
-  fprintf(stderr, "Sail CPU model waking up\n");
   g_sleeping = false;
   return UNIT;
 }
@@ -151,11 +148,6 @@ void write_mem(uint64_t address, uint64_t byte)
   uint64_t mask = address & ~MASK;
   uint64_t offset = address & MASK;
 
-  /* if ((byte >= 97 && byte <= 122) || (byte >= 64 && byte <= 90) || (byte >= 48 && byte <= 57) || byte == 10 || byte == 32) {
-    fprintf(stderr, "%" PRIx64 "\n", address);
-    fprintf(stderr, "%c", (char) byte);
-  } */
-
   struct block *current = sail_memory;
 
   while (current != NULL) {
@@ -171,7 +163,6 @@ void write_mem(uint64_t address, uint64_t byte)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  fprintf(stderr, "[Sail] Allocating new block 0x%" PRIx64 "\n", mask);
   struct block *new_block = malloc(sizeof(struct block));
   new_block->block_id = mask;
   new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
@@ -218,7 +209,6 @@ unit write_tag_bool(const uint64_t address, const bool tag)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  fprintf(stderr, "[Sail] Allocating new tag block 0x%" PRIx64 "\n", mask);
   struct tag_block *new_block = malloc(sizeof(struct tag_block));
   new_block->block_id = mask;
   new_block->mem = calloc(MASK + 1, sizeof(bool));
@@ -618,10 +608,8 @@ int process_arguments(int argc, char *argv[])
         char arg[100];
         uint64_t value;
         if (sscanf(optarg, "%99[a-zA-Z0-9_-.]=0x%" PRIx64, arg, &value) == 2) {
-            // fprintf(stderr, "Got hex flag %s %" PRIx64 "\n", arg, value);
             // do nothing
         } else if (sscanf(optarg, "%99[a-zA-Z0-9_-.]=%" PRId64, arg, &value) == 2) {
-            // fprintf(stderr, "Got decimal flag %s %" PRIx64 "\n", arg, value);
             // do nothing
         } else {
           fprintf(stderr, "Could not parse argument %s\n", optarg);
