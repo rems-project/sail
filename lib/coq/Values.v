@@ -1261,6 +1261,20 @@ Definition inline make_the_value x := the_value
 Definition mword_to_N {n} (w : mword n) : N :=
   word_to_N (get_word w).
 
+Lemma word_to_N_cast_nat {m n w} {E : m = n} :
+  word_to_N (cast_nat w E) = word_to_N w.
+subst.
+rewrite cast_nat_refl.
+reflexivity.
+Qed.
+
+Lemma mword_to_N_cast_Z {m n w} {E : m = n} :
+  mword_to_N (cast_Z w E) = mword_to_N w.
+subst.
+rewrite cast_Z_refl.
+reflexivity.
+Qed.
+
 Definition mword_to_bools {n} (w : mword n) : list bool := word_to_bools (get_word w).
 Definition bools_to_mword (l : list bool) : mword (length_list l) := to_word_nat (bools_to_word l).
 
