@@ -491,7 +491,7 @@ let defs { defs; _ } =
     "\\providecommand\\saildoclet[2]{#1 #2}\n" ^
     "\\providecommand\\saildocregister[2]{#1 #2}\n\n") in
 
-  let overload_counter = ref 0 in
+  let overload_counters = ref Bindings.empty in
 
   (* These map each id to the canonical id used for the LaTeX macro; usually the
      identity, but let bindings can produce multiple entries. *)
@@ -508,8 +508,9 @@ let defs { defs; _ } =
        let doc =
          string (Printf.sprintf "overload %s = {%s}" (string_of_id id) (Util.string_of_list ", " string_of_id ids))
        in
-       incr overload_counter;
-       Some (latex_command (Overload !overload_counter) id doc (id_loc id))
+       overload_counters := Bindings.update id (function None -> Some 0 | Some n -> Some (n + 1)) !overload_counters;
+       let count = Bindings.find id !overload_counters in
+       Some (latex_command (Overload count) id doc (id_loc id))
 
     | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
        valspecs := Bindings.add id id !valspecs;
