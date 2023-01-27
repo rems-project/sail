@@ -193,7 +193,7 @@ let infer_def_direct_effects asserts_termination def =
 
   let scan_pat p_aux annot =
     begin match p_aux with
-    | P_string_append _ -> (prerr_endline "NE"; effects := EffectSet.add NonExec !effects)
+    | P_string_append _ -> effects := EffectSet.add NonExec !effects
     | _ -> ()
     end;
     P_aux (p_aux, annot)

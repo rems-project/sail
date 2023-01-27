@@ -84,8 +84,12 @@ let rec fix_options = function
   | [] -> []
 
 let load_plugin opts plugin =
-  Dynlink.loadfile_private plugin;
-  opts := Arg.align (!opts @ fix_options (Target.extract_options ()))
+  try
+    Dynlink.loadfile_private plugin;
+    opts := Arg.align (!opts @ fix_options (Target.extract_options ()))
+  with
+  | Dynlink.Error _ ->
+     prerr_endline ("Failed to load plugin " ^ plugin)
 
 let version =
   let open Manifest in
