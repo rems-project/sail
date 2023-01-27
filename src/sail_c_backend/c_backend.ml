@@ -2380,6 +2380,8 @@ let compile_ast env effect_info output_chan c_includes ast =
         [ Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id) ]
     in
 
+    let init_config_id = mk_id "__InitConfig" in
+
     let model_init = separate hardline (List.map string
        ( [ Printf.sprintf "%svoid model_init(void)" (static ());
            "{";
@@ -2389,6 +2391,7 @@ let compile_ast env effect_info output_chan c_includes ast =
        @ letbind_initializers
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers")) ])
+       @ (if ctx_has_val_spec init_config_id ctx then [ Printf.sprintf "  %s(UNIT);" (sgen_function_id init_config_id) ] else [])
        @ [ "}" ] ))
     in
 

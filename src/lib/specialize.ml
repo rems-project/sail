@@ -518,6 +518,7 @@ let specialize_id_overloads instantiations id ast =
 
 let initial_calls = ref (IdSet.of_list
   [ mk_id "main";
+    mk_id "__InitConfig";
     mk_id "__SetConfig";
     mk_id "__ListConfig";
     mk_id "execute";

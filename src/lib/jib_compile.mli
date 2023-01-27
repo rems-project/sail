@@ -111,6 +111,8 @@ val ctx_is_extern : id -> ctx -> bool
 
 val ctx_get_extern : id -> ctx -> string
 
+val ctx_has_val_spec : id -> ctx -> bool
+
 val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
 
 (** {2 Compilation functions} *)

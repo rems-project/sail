@@ -164,7 +164,10 @@ let ctx_get_extern id ctx =
   | Some (None, _, _) ->
      Reporting.unreachable (id_loc id) __POS__ ("Tried to get extern information for non-extern function " ^ string_of_id id)
   | None -> Env.get_extern id ctx.tc_env "c"
-    
+
+let ctx_has_val_spec id ctx =
+  Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
+
 let initial_ctx env effect_info =
   let initial_valspecs = [
       (mk_id "size_itself_int", (Some "size_itself_int", [CT_lint], CT_lint));
