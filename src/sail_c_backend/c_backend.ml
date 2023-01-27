@@ -606,7 +606,6 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
   let optimize_anf ctx aexp =
     analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
-
   let unroll_loops = None
   let specialize_calls = false
   let ignore_64 = false
@@ -1499,7 +1498,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      let fname =
        match fname, ctyp with
        | "internal_pick", _ -> Printf.sprintf "pick_%s" (sgen_ctyp_name ctyp)
-       | "cons", _ ->
+       | "sail_cons", _ ->
           begin match snd f with
           | [ctyp] -> Util.zencode_string ("cons#" ^ string_of_ctyp ctyp)
           | _ -> c_error "cons without specified type"
@@ -1891,7 +1890,7 @@ let codegen_tup ctx ctyps =
     end
 
 let codegen_node id ctyp =
-  string (Printf.sprintf "struct node_%s {\n  %s hd;\n  struct node_%s *tl;\n};\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  string (Printf.sprintf "struct node_%s {\n  unsigned int rc;\n  %s hd;\n  struct node_%s *tl;\n};\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
   ^^ string (Printf.sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id))
 
 let codegen_list_init id =
@@ -1899,11 +1898,15 @@ let codegen_list_init id =
 
 let codegen_list_clear id ctyp =
   string (Printf.sprintf "static void KILL(%s)(%s *rop) {\n" (sgen_id id) (sgen_id id))
-  ^^ string (Printf.sprintf "  if (*rop == NULL) return;")
+  ^^ string (Printf.sprintf "  if (*rop == NULL) return;\n")
+  ^^ string "  if ((*rop)->rc == 0) {\n"
   ^^ (if is_stack_ctyp ctyp then empty
-      else string (Printf.sprintf "  KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
+      else string (Printf.sprintf "    KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
+  ^^ string "    sail_free(*rop);\n"
+  ^^ string "  } else {\n"
+  ^^ string "    (*rop)->rc = (*rop)->rc - 1;\n"
+  ^^ string "  }\n"
   ^^ string (Printf.sprintf "  KILL(%s)(&(*rop)->tl);\n" (sgen_id id))
-  ^^ string "  sail_free(*rop);"
   ^^ string "}"
 
 let codegen_list_recreate id =
@@ -1926,15 +1929,24 @@ let codegen_list_set id ctyp =
   ^^ string (Printf.sprintf "  internal_set_%s(rop, op);\n" (sgen_id id))
   ^^ string "}"
 
+let codegen_inc_reference_count id =
+  string (Printf.sprintf "static void internal_inc_rc_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
+  ^^ string "  if (*rop == NULL) return;\n"
+  ^^ string "  (*rop)->rc = (*rop)->rc + 1;\n"
+  ^^ string (Printf.sprintf "  internal_inc_rc_%s(&(*rop)->tl);\n" (sgen_id id))
+  ^^ string "}"
+  
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
-  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  string (Printf.sprintf "static void %s(%s *rop, %s x, %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
   ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ string "  (*rop)->rc = 0;\n"
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
       else
         string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
         ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
+  ^^ string (Printf.sprintf "  internal_inc_rc_%s(&(*rop)->tl);\n" (sgen_id id))
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
 
@@ -1970,6 +1982,7 @@ let codegen_list ctx ctyp =
       ^^ codegen_list_clear id ctyp ^^ twice hardline
       ^^ codegen_list_recreate id ^^ twice hardline
       ^^ codegen_list_set id ctyp ^^ twice hardline
+      ^^ codegen_inc_reference_count id ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
       ^^ codegen_pick id ctyp ^^ twice hardline
       ^^ codegen_list_equal id ctyp ^^ twice hardline

@@ -545,7 +545,7 @@ let rec compile_aval l ctx = function
      let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
-       setup @ [iextern l (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
+       setup @ [iextern l (CL_id (gs, CT_list ctyp)) (mk_id "sail_cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
      [idecl l (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),
@@ -1892,7 +1892,7 @@ let make_calls_precise ctx cdefs =
     match call with
     | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr ->
        begin match get_function_typ id with
-       | None when string_of_id id = "cons" ->
+       | None when string_of_id id = "sail_cons" ->
           begin match ctyp_args, args with
           | ([ctyp_arg], [hd_arg; tl_arg]) ->
              if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then

@@ -99,11 +99,11 @@ val opt_no_bitfield_expansion : bool ref
 
 (** Check pattern-match completeness when type-checking *)
 val opt_check_completeness : bool ref
-  
+
 (** {2 Type errors} *)
 
 type constraint_reason = (Ast.l * string) option
-  
+
 type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
@@ -153,14 +153,14 @@ module Env : sig
      error if the enumeration doesn't exist. *)
   val get_enum : id -> t -> id list
 
-  val get_enums : t -> IdSet.t Bindings.t 
+  val get_enums : t -> IdSet.t Bindings.t
 
   val get_locals : t -> (mut * typ) Bindings.t
 
   val add_local : id -> mut * typ -> t -> t
 
   val get_default_order_option : t -> order option
-    
+
   val add_scattered_variant : id -> typquant -> t -> t
 
   (** Check if a local variable is mutable. Throws Type_error if it
@@ -176,7 +176,7 @@ module Env : sig
   (** Push all the type variables and constraints from a typquant into
       an environment *)
   val add_typquant : Ast.l -> typquant -> t -> t
-    
+
   val get_typ_var : kid -> t -> kind_aux
 
   val get_typ_vars : t -> kind_aux KBindings.t
@@ -226,12 +226,12 @@ module Env : sig
   val get_toplevel_lets : t -> IdSet.t
 
   val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
-    
+
   (** Check if id is a constructor, then if it is return a (n, m,
      id, type_union) triple where the values represent it's position (n) in the
      list of (m) constructors, the union name, and the type_union entry itself *)
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
-    
+
   val is_union_constructor : id -> t -> bool
 
   (** Check if the id is both a constructor, and the only constructor of that
@@ -304,7 +304,7 @@ val destruct_tannot : tannot -> (Env.t * typ) option
 val mk_tannot : Env.t -> typ -> tannot
 
 val get_instantiations : tannot -> typ_arg KBindings.t option
-  
+
 val empty_tannot : tannot
 val is_empty_tannot : tannot -> bool
 
@@ -381,7 +381,7 @@ val canonicalize : Env.t -> typ -> typ
 val subtype_check : Env.t -> typ -> typ -> bool
 
 val is_enum_member : id -> Env.t -> bool
-  
+
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
 
 (** Variant that doesn't introduce new guards for literal patterns,
@@ -392,7 +392,7 @@ val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 val typ_error : Env.t -> Ast.l -> string -> 'a
 
 val tc_assume : n_constraint -> tannot exp -> tannot exp
-  
+
 (** {2 Destructuring type annotations}
 
    Partial functions: The expressions and patterns passed to these
@@ -423,7 +423,7 @@ val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
-  
+
 (* Returns the type that an expression was checked against, if any.
    Note that these may be removed if an expression is rewritten. *)
 val expected_typ_of : Ast.l * tannot -> typ option
@@ -505,7 +505,7 @@ Some invariants that will hold of a fully checked AST are:
 val check : Env.t -> 'a ast -> tannot ast * Env.t
 
 val check_defs : Env.t -> 'a def list -> tannot def list * Env.t
-  
+
 (** The same as [check], but exposes the intermediate type-checking
    environments so we don't have to always re-check the entire AST *)
 val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
@@ -513,4 +513,4 @@ val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
 (** The initial type checking environment *)
 val initial_env : Env.t
 
-val prove_smt : Env.t -> n_constraint -> bool                    
+val prove_smt : Env.t -> n_constraint -> bool

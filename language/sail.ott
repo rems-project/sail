@@ -367,7 +367,7 @@ pat :: 'P_' ::=
     {{ com typed pattern }}
   | id                                      :: :: id
     {{ com identifier  }}
-  | pat typ_pat :: :: var
+  | pat typ_pat                             :: :: var
     {{ com bind pattern to type variable }}
   | id ( pat1 , .. , patn )                 :: :: app
     {{ com union constructor pattern }}

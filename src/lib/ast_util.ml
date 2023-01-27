@@ -1073,7 +1073,7 @@ let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
              | None -> Some id) funcls None)
   with
   | Some id -> id
-  | None -> raise (Reporting.err_typ l "funcl list is empty")
+  | None -> raise (Reporting.err_typ l "Function clause list is empty")
 
 let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
           
