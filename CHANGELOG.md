@@ -1,6 +1,16 @@
 Changelog
 =========
 
+Sail 0.15.1
+-----------
+
+This is a bugfix release for the following issues:
+
+* Issue 203: https://github.com/rems-project/sail/issues/203
+* Issue 202: https://github.com/rems-project/sail/issues/202
+* Issue 188: https://github.com/rems-project/sail/issues/188
+* Issue 187: https://github.com/rems-project/sail/issues/187
+
 Sail 0.15
 ---------
 

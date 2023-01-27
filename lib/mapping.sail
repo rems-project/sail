@@ -71,11 +71,11 @@ $define _MAPPING
 $include <arith.sail>
 $include <option.sail>
 
-val string_take = "string_take" : (string, nat) -> string
-val string_drop = "string_drop" : (string, nat) -> string
-val string_length = "string_length" : string -> nat
-val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
-val string_startswith = "string_startswith" : (string, string) -> bool
+val string_take = pure "string_take" : (string, nat) -> string
+val string_drop = pure "string_drop" : (string, nat) -> string
+val string_length = pure "string_length" : string -> nat
+val string_append = pure {c: "concat_str", _: "string_append"} : (string, string) -> string
+val string_startswith = pure "string_startswith" : (string, string) -> bool
 
 val n_leading_spaces = pure { coq: "n_leading_spaces_Z" } : string -> nat
 function n_leading_spaces s =
@@ -86,10 +86,6 @@ function n_leading_spaces s =
       _ => 0
     }
   }
-
-val spc     : unit <-> string
-val opt_spc : unit <-> string
-val def_spc : unit <-> string
 
 val spc_forwards : unit -> string
 function spc_forwards () = " "
@@ -119,6 +115,10 @@ function def_spc_backwards s = ()
 val def_spc_matches_prefix : string -> option((unit, nat))
 function def_spc_matches_prefix s = opt_spc_matches_prefix(s)
 
+val spc     : unit <-> string
+val opt_spc : unit <-> string
+val def_spc : unit <-> string
+
 val sep : unit <-> string
 mapping sep : unit <-> string = {
   ()     <-> opt_spc() ^ "," ^ def_spc()
@@ -128,7 +128,7 @@ $ifdef _DEFAULT_DEC
 $include <vector_dec.sail>
 
 val hex_bits_20 : bits(20) <-> string
-val hex_bits_20_forwards = "decimal_string_of_bits" : bits(20) -> string
+val hex_bits_20_forwards = pure "decimal_string_of_bits" : bits(20) -> string
 val hex_bits_20_forwards_matches : bits(20) -> bool
 function hex_bits_20_forwards_matches bv = true
 val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))

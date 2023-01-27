@@ -510,7 +510,7 @@ let freshen_bind env bind =
 
 module Env : sig
   type t = env
-  val add_val_spec : id -> typquant * typ -> t -> t
+  val add_val_spec : ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
   val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
@@ -1200,16 +1200,18 @@ end = struct
     | _ -> typ_error env (id_loc id) "val definition must have a mapping or function type"
     end
 
-  and add_val_spec id (bind_typq, bind_typ) env =
-    if not (Bindings.mem id env.top_val_specs) then (
+  and add_val_spec ?(ignore_duplicate=false) id (bind_typq, bind_typ) env =
+    if not (Bindings.mem id env.top_val_specs) || ignore_duplicate then (
       update_val_spec id (bind_typq, bind_typ) env
+    ) else if ignore_duplicate then (
+      env
     ) else (
       let previous_loc =
         match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.top_val_specs) with
         | Some (prev_id, _) -> id_loc prev_id
         | None -> Parse_ast.Unknown in
       let open Error_format in
-      Reporting.format_warn ("Duplicate function type definition for " ^ string_of_id id) (id_loc id)
+      Reporting.format_warn ~once_from:__POS__ ("Duplicate function type definition for " ^ string_of_id id) (id_loc id)
         (Seq [Line "This duplicate definition is being ignored!";
               Location ("", Some "previous definition here", previous_loc, Seq [])]);
       env
@@ -1236,18 +1238,18 @@ end = struct
     let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), Parse_ast.Unknown) in
     let env =
       { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
-      |> add_val_spec forwards_id (typq, forwards_typ)
-      |> add_val_spec backwards_id (typq, backwards_typ)
-      |> add_val_spec forwards_matches_id (typq, forwards_matches_typ)
-      |> add_val_spec backwards_matches_id (typq, backwards_matches_typ)
+      |> add_val_spec ~ignore_duplicate:true forwards_id (typq, forwards_typ)
+      |> add_val_spec ~ignore_duplicate:true backwards_id (typq, backwards_typ)
+      |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)
+      |> add_val_spec ~ignore_duplicate:true backwards_matches_id (typq, backwards_matches_typ)
     in
     let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
     if strip_typ typ1 = string_typ then
       let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-      add_val_spec prefix_id (typq, forwards_prefix_typ) env
+      add_val_spec ~ignore_duplicate:true prefix_id (typq, forwards_prefix_typ) env
     else if strip_typ typ2 = string_typ then
       let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-      add_val_spec prefix_id (typq, backwards_prefix_typ) env
+      add_val_spec ~ignore_duplicate:true prefix_id (typq, backwards_prefix_typ) env
     else
       env
 
