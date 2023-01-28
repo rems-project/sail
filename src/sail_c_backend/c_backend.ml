@@ -1898,55 +1898,55 @@ let codegen_list_init id =
 
 let codegen_list_clear id ctyp =
   string (Printf.sprintf "static void KILL(%s)(%s *rop) {\n" (sgen_id id) (sgen_id id))
-  ^^ string (Printf.sprintf "  if (*rop == NULL) return;\n")
-  ^^ string "  if ((*rop)->rc == 0) {\n"
-  ^^ (if is_stack_ctyp ctyp then empty
-      else string (Printf.sprintf "    KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
-  ^^ string "    sail_free(*rop);\n"
-  ^^ string "  } else {\n"
-  ^^ string "    (*rop)->rc = (*rop)->rc - 1;\n"
+  ^^ string "  if (*rop == NULL) return;\n"
+  ^^ string "  if ((*rop)->rc >= 1) {\n"
+  ^^ string "    (*rop)->rc -= 1;\n"
   ^^ string "  }\n"
-  ^^ string (Printf.sprintf "  KILL(%s)(&(*rop)->tl);\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  %s node = *rop;\n" (sgen_id id))
+  ^^ string "  while (node != NULL && node->rc == 0) {\n"
+  ^^ (if is_stack_ctyp ctyp then empty
+      else string (Printf.sprintf "    KILL(%s)(&node->hd);\n" (sgen_ctyp_name ctyp)))
+  ^^ string (Printf.sprintf "    %s next = node->tl;\n" (sgen_id id))
+  ^^ string "    sail_free(node);\n"
+  ^^ string "    node = next;\n"
+  ^^ string (Printf.sprintf "    internal_dec_%s(node);\n" (sgen_id id))
+  ^^ string "  }\n"
   ^^ string "}"
 
 let codegen_list_recreate id =
   string (Printf.sprintf "static void RECREATE(%s)(%s *rop) { KILL(%s)(rop); *rop = NULL; }" (sgen_id id) (sgen_id id) (sgen_id id))
-
-let codegen_list_set id ctyp =
-  string (Printf.sprintf "static void internal_set_%s(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
-  ^^ string "  if (op == NULL) { *rop = NULL; return; };\n"
-  ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
-  ^^ (if is_stack_ctyp ctyp then
-        string "  (*rop)->hd = op->hd;\n"
-      else
-        string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
-        ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, op->hd);\n" (sgen_ctyp_name ctyp)))
-  ^^ string (Printf.sprintf "  internal_set_%s(&(*rop)->tl, op->tl);\n" (sgen_id id))
-  ^^ string "}"
-  ^^ twice hardline
-  ^^ string (Printf.sprintf "static void COPY(%s)(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
-  ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
-  ^^ string (Printf.sprintf "  internal_set_%s(rop, op);\n" (sgen_id id))
-  ^^ string "}"
-
-let codegen_inc_reference_count id =
-  string (Printf.sprintf "static void internal_inc_rc_%s(%s *rop) {\n" (sgen_id id) (sgen_id id))
-  ^^ string "  if (*rop == NULL) return;\n"
-  ^^ string "  (*rop)->rc = (*rop)->rc + 1;\n"
-  ^^ string (Printf.sprintf "  internal_inc_rc_%s(&(*rop)->tl);\n" (sgen_id id))
-  ^^ string "}"
   
+let codegen_inc_reference_count id =
+  string (Printf.sprintf "static void internal_inc_%s(%s l) {\n" (sgen_id id) (sgen_id id))
+  ^^ string "  if (l == NULL) return;\n"
+  ^^ string "  l->rc += 1;\n"
+  ^^ string "}"
+
+let codegen_dec_reference_count id =
+  string (Printf.sprintf "static void internal_dec_%s(%s l) {\n" (sgen_id id) (sgen_id id))
+  ^^ string "  if (l == NULL) return;\n"
+  ^^ string "  l->rc -= 1;\n"
+  ^^ string "}"
+
+let codegen_list_copy id ctyp =
+  string (Printf.sprintf "static void COPY(%s)(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
+  ^^ string (Printf.sprintf "  internal_inc_%s(op);\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
+  ^^ string "  *rop = op;\n"
+  ^^ string "}"
+ 
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
   string (Printf.sprintf "static void %s(%s *rop, %s x, %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  ^^ string "  bool same = *rop == xs;\n"
   ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
-  ^^ string "  (*rop)->rc = 0;\n"
+  ^^ string "  (*rop)->rc = 1;\n"
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
       else
         string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
         ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
-  ^^ string (Printf.sprintf "  internal_inc_rc_%s(&(*rop)->tl);\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  if (!same) internal_inc_%s(xs);\n" (sgen_id id))
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
 
@@ -1979,10 +1979,11 @@ let codegen_list ctx ctyp =
       generated := IdSet.add id !generated;
       codegen_node id ctyp ^^ twice hardline
       ^^ codegen_list_init id ^^ twice hardline
+      ^^ codegen_inc_reference_count id ^^ twice hardline
+      ^^ codegen_dec_reference_count id ^^ twice hardline
       ^^ codegen_list_clear id ctyp ^^ twice hardline
       ^^ codegen_list_recreate id ^^ twice hardline
-      ^^ codegen_list_set id ctyp ^^ twice hardline
-      ^^ codegen_inc_reference_count id ^^ twice hardline
+      ^^ codegen_list_copy id ctyp ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
       ^^ codegen_pick id ctyp ^^ twice hardline
       ^^ codegen_list_equal id ctyp ^^ twice hardline

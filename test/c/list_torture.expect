@@ -1,0 +1,5 @@
+hd_or_zero(zs) = 5
+list_length(xs) = 4
+list_length(ys) = 4
+list_length(zs) = 5
+32 == 32
