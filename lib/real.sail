@@ -86,13 +86,13 @@ val "div_real" : (real, real) -> real
 
 overload operator / = {div_real}
 
-val sqrt = "sqrt_real" : real -> real
+val sqrt = pure "sqrt_real" : real -> real
 
 val "abs_real" : real -> real
 
-val floor = "round_down" : real -> int
+val floor = pure "round_down" : real -> int
 
-val ceil = "round_up" : real -> int
+val ceil = pure "round_up" : real -> int
 
 val "to_real" : int -> real
 
@@ -108,7 +108,7 @@ overload operator > = {gt_real}
 overload operator <= = {lteq_real}
 overload operator >= = {gteq_real}
 
-val pow_real = "real_power" : (real, int) -> real
+val pow_real = pure "real_power" : (real, int) -> real
 
 val "print_real" : (string, real) -> unit
 val "prerr_real" : (string, real) -> unit
