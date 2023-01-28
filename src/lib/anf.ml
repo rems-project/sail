@@ -721,7 +721,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let aexp2 = anf exp2 in
      let aval1, wrap1 = to_aval aexp1 in
      let aval2, wrap2 = to_aval aexp2 in
-     wrap1 (wrap2 (mk_aexp (AE_app (mk_id "sail_cons", [aval1; aval2], unit_typ))))
+     wrap1 (wrap2 (mk_aexp (AE_app (mk_id "sail_cons", [aval1; aval2], typ_of exp))))
 
   | E_id id ->
      let lvar = Env.lookup_id id (env_of exp) in

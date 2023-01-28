@@ -1456,7 +1456,7 @@ let compile_funcl ctx id pat guard exp =
 
   (* Optimize and compile the expression to ANF. *)
   let aexp = C.optimize_anf ctx (no_shadow (IdSet.union (pat_ids pat) !guard_bindings) (anf exp)) in
-  
+
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =
     compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
