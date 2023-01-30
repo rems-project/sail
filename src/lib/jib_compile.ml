@@ -660,36 +660,36 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   match apat_aux with
   | AP_global (pid, typ) ->
      let global_ctyp = ctyp_of_typ ctx typ in
-     [icopy l (CL_id (global pid, global_ctyp)) cval], [], ctx
+     [], [icopy l (CL_id (global pid, global_ctyp)) cval], [], ctx
 
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
-     | Unbound _ -> [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
-     | _ -> [ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
+     | Unbound _ -> [], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
+     | _ -> [ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], [], ctx
      end
 
   | AP_id (pid, typ) ->
      let id_ctyp = ctyp_of_typ ctx typ in
      let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
-     [idecl l id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
+     [], [idecl l id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
 
   | AP_as (apat, id, typ) ->
      let id_ctyp = ctyp_of_typ ctx typ in
-     let instrs, cleanup, ctx = compile_match ctx apat cval case_label in
+     let pre, instrs, cleanup, ctx = compile_match ctx apat cval case_label in
      let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
-     instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
+     pre, instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
 
   | AP_tup apats ->
      begin
        let get_tup n = V_tuple_member (cval, List.length apats, n) in
-       let fold (instrs, cleanup, n, ctx) apat ctyp =
-         let instrs', cleanup', ctx = compile_match ctx apat (get_tup n) case_label in
-         instrs @ instrs', cleanup' @ cleanup, n + 1, ctx
+       let fold (pre, instrs, cleanup, n, ctx) apat ctyp =
+         let pre', instrs', cleanup', ctx = compile_match ctx apat (get_tup n) case_label in
+         pre @ pre', instrs @ instrs', cleanup' @ cleanup, n + 1, ctx
        in
        match ctyp with
        | CT_tup ctyps ->
-          let instrs, cleanup, _, ctx = List.fold_left2 fold ([], [], 0, ctx) apats ctyps in
-          instrs, cleanup, ctx
+          let pre, instrs, cleanup, _, ctx = List.fold_left2 fold ([], [], [], 0, ctx) apats ctyps in
+          pre, instrs, cleanup, ctx
        | _ -> failwith ("AP_tup with ctyp " ^ string_of_ctyp ctyp)
      end
 
@@ -708,9 +708,9 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
           let is_poly_ctor = List.exists (fun ((id, _), ctyp) -> Id.compare id ctor = 0 && is_polymorphic ctyp) generic_ctors in
           unifiers, if is_poly_ctor then ctyp_suprema pat_ctyp else pat_ctyp
         in
-        let instrs, cleanup, ctx = compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label in
-        [ijump l (V_ctor_kind (cval, ctor, unifiers, pat_ctyp)) case_label]
-        @ instrs,
+        let pre, instrs, cleanup, ctx = compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label in
+        [ijump l (V_ctor_kind (cval, ctor, unifiers, pat_ctyp)) case_label] @ pre,
+        instrs,
         cleanup,
         ctx
      | ctyp ->
@@ -721,19 +721,19 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
                                                        (string_of_ctyp ctyp)))
      end
 
-  | AP_wild _ -> [], [], ctx
+  | AP_wild _ -> [], [], [], ctx
 
   | AP_cons (hd_apat, tl_apat) ->
      begin match ctyp with
      | CT_list ctyp ->
-        let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
-        let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-        [ijump l (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
+        let tl_pre, tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
+        [ijump l (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_pre @ tl_pre, hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump l (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], ctx
+  | AP_nil _ -> [ijump l (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], [], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -796,12 +796,13 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) -> true
            | _ -> false
          in
-         let destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
+         let pre_destructure, destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
          let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
          let body_setup, body_call, body_cleanup = compile_aexp ctx body in
          let gs = ngensym () in
          let case_instrs =
-           destructure
+           pre_destructure
+           @ destructure
            @ (if not trivial_guard then
                 guard_setup @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
                 @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
@@ -838,16 +839,16 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        in
        let try_label = label "try_" in
        let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
-       let destructure, destructure_cleanup, ctx = compile_match ctx apat exn_cval try_label in
+       let pre_destructure, destructure, destructure_cleanup, ctx = compile_match ctx apat exn_cval try_label in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
        let body_setup, body_call, body_cleanup = compile_aexp ctx body in
        let gs = ngensym () in
        let case_instrs =
-         destructure @ [icomment "end destructuring"]
+         pre_destructure
+         @ destructure
          @ (if not trivial_guard then
               guard_setup @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [ijump l (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
-              @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto post_exception_handlers_label]
@@ -1272,8 +1273,8 @@ let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
   | _ ->
      let apat = anf_pat pat in
      let gs = gensym () in
-     let destructure, cleanup, _ = compile_match ctx apat (V_id (name gs, ctyp)) label in
-     (gs, (destructure, cleanup))
+     let pre_destructure, destructure, cleanup, _ = compile_match ctx apat (V_id (name gs, ctyp)) label in
+     (gs, (pre_destructure @ destructure, cleanup))
 
 let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
   match p_aux with
@@ -1561,7 +1562,7 @@ and compile_def' n total ctx = function
      let apat = anf_pat ~global:true pat in
      let gs = ngensym () in
      let end_label = label "let_end_" in
-     let destructure, destructure_cleanup, _ = compile_match ctx apat (V_id (gs, ctyp)) end_label in
+     let pre_destructure, destructure, destructure_cleanup, _ = compile_match ctx apat (V_id (gs, ctyp)) end_label in
      let gs_setup, gs_cleanup =
        [idecl (exp_loc exp) ctyp gs], [iclear ctyp gs]
      in
@@ -1572,6 +1573,7 @@ and compile_def' n total ctx = function
        gs_setup @ setup
        @ [call (CL_id (gs, ctyp))]
        @ cleanup
+       @ pre_destructure
        @ destructure
        @ destructure_cleanup @ gs_cleanup
        @ [ilabel end_label]
