@@ -11,6 +11,8 @@ This is a bugfix release for the following issues:
 * Issue 188: https://github.com/rems-project/sail/issues/188
 * Issue 187: https://github.com/rems-project/sail/issues/187
 
+As well as other minor issues
+
 Sail 0.15
 ---------
 

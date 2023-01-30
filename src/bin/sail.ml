@@ -251,6 +251,9 @@ let rec options = ref ([
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
+  ( "-version",
+    Arg.Set opt_print_version,
+    " print version");
   ( "-verbose",
     Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
     "<verbosity> produce verbose output");
