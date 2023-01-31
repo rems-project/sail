@@ -757,8 +757,13 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
      end
   | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->
-     let matches = List.map2 (pattern_match env) pats (coerce_listlike value) in
-     List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
+     let values = coerce_listlike value in
+     if List.compare_lengths pats values = 0 then (
+       let matches = List.map2 (pattern_match env) pats values in
+       List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
+     ) else (
+       false, Bindings.empty
+     )
   | P_cons (hd_pat, tl_pat) ->
      begin match coerce_cons value with
      | Some (hd_value, tl_values) ->

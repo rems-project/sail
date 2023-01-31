@@ -100,6 +100,8 @@ module type S =
 
     val remove_self_loops : graph -> graph
 
+    val self_loops : graph -> node list
+
     val reverse : graph -> graph
 
     exception Not_a_DAG of node * graph;;
@@ -189,6 +191,15 @@ module Make(Ord: OrderedType) = struct
 
   let remove_self_loops cg =
     NM.mapi (fun fn callees -> NS.remove fn callees) cg
+
+  let self_loops cg =
+    NM.fold (fun fn callees nodes ->
+        if NS.mem fn callees then (
+          fn :: nodes
+        ) else (
+          nodes
+        )
+      ) cg []
 
   let reverse cg =
     let rcg = ref NM.empty in

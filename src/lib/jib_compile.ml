@@ -245,6 +245,24 @@ let name_or_global ctx id =
   else
     name id
 
+
+module IdGraph = Graph.Make(Id)
+module IdGraphNS = Set.Make(Id)
+
+let callgraph cdefs =
+  List.fold_left (fun graph cdef ->
+      match cdef with
+      | CDEF_fundef (id, _, _, body) ->
+         let graph = ref graph in
+         List.iter (iter_instr (function
+                       | I_aux (I_funcall (_, _, (call, _), _), _) ->
+                          graph := IdGraph.add_edge id call !graph
+                       | _ -> ()
+           )) body;
+         !graph
+      | _ -> graph
+    ) IdGraph.empty cdefs
+ 
 module Make(C: Config) = struct
 
 let ctyp_of_typ ctx typ = C.convert_typ ctx typ
@@ -1608,23 +1626,6 @@ and compile_def' n total ctx = function
   (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
   | (DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _) as def ->
      Reporting.unreachable (def_loc def) __POS__ ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
-
-module IdGraph = Graph.Make(Id)
-module IdGraphNS = Set.Make(Id)
-
-let callgraph cdefs =
-  List.fold_left (fun graph cdef ->
-      match cdef with
-      | CDEF_fundef (id, _, _, body) ->
-         let graph = ref graph in
-         List.iter (iter_instr (function
-                       | I_aux (I_funcall (_, _, (call, _), _), _) ->
-                          graph := IdGraph.add_edge id call !graph
-                       | _ -> ()
-           )) body;
-         !graph
-      | _ -> graph
-    ) IdGraph.empty cdefs
 
 let mangle_mono_id id ctx ctyps =
   append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")

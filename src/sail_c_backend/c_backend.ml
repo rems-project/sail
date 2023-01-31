@@ -2289,46 +2289,28 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_function_id id)
   | _ -> assert false
 
-let rec get_recursive_functions defs =
-  match defs with
-  | DEF_internal_mutrec fundefs :: defs ->
-     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions defs)
-
-  | (DEF_fundef fdef as def) :: defs ->
-     let open Rewriter in
-     let ids = ref IdSet.empty in
-     let collect_funcalls e_aux annot =
-       match e_aux with
-       | E_app (id, args) -> (ids := IdSet.add id !ids; E_aux (e_aux, annot))
-       | _ -> E_aux (e_aux, annot)
-     in
-     let map_exp = {
-         id_exp_alg with
-         e_aux = (fun (e_aux, annot) -> collect_funcalls e_aux annot)
-       } in
-     let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in
-     let _ = rewrite_def map_defs def in
-     if IdSet.mem (id_of_fundef fdef) !ids then
-       IdSet.add (id_of_fundef fdef) (get_recursive_functions defs)
-     else
-       get_recursive_functions defs
-
-  | _ :: defs -> get_recursive_functions defs
-  | [] -> IdSet.empty
+let rec get_recursive_functions cdefs =
+  let graph = Jib_compile.callgraph cdefs in
+  let rf = IdGraph.self_loops graph in
+  (* Use strongly-connected components for mutually recursive functions *)
+  List.fold_left (fun rf component ->
+      match component with [_] -> rf | mutual -> mutual @ rf
+    ) rf (IdGraph.scc graph)
+  |> IdSet.of_list
 
 let jib_of_ast env effect_info ast =
   let module Jibc = Make(C_config(struct let branch_coverage = !opt_branch_coverage end)) in
   let env, effect_info = add_special_functions env effect_info in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
- 
+  
 let compile_ast env effect_info output_chan c_includes ast =
   try
-    let recursive_functions = (Spec_analysis.top_sort_defs ast).defs |> get_recursive_functions in
-
     let cdefs, ctx = jib_of_ast env effect_info ast in
     let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
     let cdefs = insert_heap_returns Bindings.empty cdefs in
+
+    let recursive_functions = get_recursive_functions cdefs in
     let cdefs = optimize recursive_functions cdefs in
 
     let docs = separate_map (hardline ^^ hardline) (codegen_def ctx) cdefs in

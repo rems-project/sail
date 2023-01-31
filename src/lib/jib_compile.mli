@@ -157,6 +157,12 @@ module type Config = sig
   val track_throw : bool
 end
 
+module IdGraph : sig
+  include Graph.S with type node = id
+end
+                   
+val callgraph : cdef list -> IdGraph.graph
+
 module Make(C: Config) : sig
   (** Compile a Sail definition into a Jib definition. The first two
        arguments are is the current definition number and the total

@@ -102,6 +102,8 @@ module type S =
 
     val remove_self_loops : graph -> graph
 
+    val self_loops : graph -> node list
+
     val reverse : graph -> graph
 
     exception Not_a_DAG of node * graph;;
