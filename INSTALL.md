@@ -89,7 +89,7 @@ make install
 ### Some opam information
 
 For full information see the
-[https://opam.ocaml.org/doc/Usage.html](opam user manual here). This
+[opam documentation here](https://opam.ocaml.org/doc/Usage.html). This
 section just describes the high level details of what you might need
 to know about opam when working with Sail coming from another language
 ecosystem.
@@ -120,4 +120,4 @@ $(opam env)` to update the current shell environment.
 `opam pin` is a very flexible command that allows you to override an
 existing package to use a git repository directly, or force a specific
 version. It is best explained by the
-[https://opam.ocaml.org/doc/Usage.html#opam-pin](documentation here).
+[documentation here](https://opam.ocaml.org/doc/Usage.html#opam-pin).
