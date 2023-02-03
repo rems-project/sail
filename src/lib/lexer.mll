@@ -243,6 +243,7 @@ rule token = parse
   | ws
     { token lexbuf }
   | "\n"
+  | "\r\n"
     { Lexing.new_line lexbuf;
       token lexbuf }
   | "&"					{ (Amp(r"&")) }
