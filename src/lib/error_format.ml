@@ -76,6 +76,46 @@ let rec read_lines in_chan = function
      let ls = read_lines in_chan (n - 1) in
      l :: ls
 
+(* Replace unprintable ASCII characters with an escape
+   sequence. Optional color argument lets us change the color of the
+   escape sequence in the output. Note that rather than using \t for
+   tabs, we replace tabs with error_tabwidth spaces.
+
+   The unprintable_escape function also returns a function for adjusting
+   column numbers based on the inserted escape sequences. *)
+
+let error_tabwidth = 4
+
+let unprintable_notation ?(color=(fun x -> x)) c =
+  let n = Char.code c in
+  if n = 9 then
+    Some (String.make error_tabwidth ' ')
+  else if n <= 30 || n = 127 then
+    Some (color (Char.escaped c))
+  else
+    None
+
+let unprintable_escape ?(color=(fun x -> x)) str =
+  let rec adjuster adjs cnum =
+    match adjs with
+    | (i, shift) :: rest ->
+       if cnum > i then cnum + shift else adjuster rest cnum
+    | [] ->
+       cnum
+  in
+  let buf = Buffer.create (String.length str) in
+  let shift = ref 0 in
+  let adjusts = ref [] in
+  String.iteri (fun i c ->
+      match unprintable_notation c with
+      | Some escaped ->
+         shift := !shift + (String.length escaped - 1);
+         adjusts := (i, !shift) :: !adjusts;
+         Buffer.add_string buf (color escaped)
+      | None -> Buffer.add_char buf c
+    ) str;
+  Buffer.contents buf, adjuster !adjusts
+
 type formatter = {
     indent : string;
     endline : string -> unit;
@@ -105,15 +145,16 @@ let underline_single color cnum_from cnum_to =
 let format_hint color = function
   | Some hint -> " " ^ Util.(hint |> color |> clear)
   | None -> ""
- 
+
 let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf =
   skip_lines in_chan (lnum - 1);
   let line = input_line in_chan in
   let line_prefix = string_of_int lnum ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
+  let line, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line in
   format_endline (line_prefix ^ line) ppf;
-  format_endline (blank_prefix ^ underline_single ppf.loc_color cnum_from cnum_to ^ format_hint ppf.loc_color hint) ppf;
+  format_endline (blank_prefix ^ underline_single ppf.loc_color (adjust cnum_from) (adjust cnum_to) ^ format_hint ppf.loc_color hint) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 
 let underline_double_from color cnum_from eol =
@@ -135,10 +176,13 @@ let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to
   let line_from_prefix = string_of_int lnum_from ^ line_from_padding ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to) ppf;
+  let cnum_end = String.length line_from in
+  let line_from, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line_from in
   format_endline (line_from_prefix ^ line_from) ppf;
-  format_endline (blank_prefix ^ underline_double_from ppf.loc_color cnum_from (String.length line_from)) ppf;
+  format_endline (blank_prefix ^ underline_double_from ppf.loc_color (adjust cnum_from) (adjust cnum_end)) ppf;
+  let line_to, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line_to in
   format_endline (line_to_prefix ^ line_to) ppf;
-  format_endline (blank_prefix ^ underline_double_to ppf.loc_color cnum_to) ppf;
+  format_endline (blank_prefix ^ underline_double_to ppf.loc_color (adjust cnum_to)) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 
 let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf =

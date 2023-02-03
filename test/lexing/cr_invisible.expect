@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[96mcr_invisible.sail[0m:5.10-10:
+5[96m |[0mval main[95m    [0m [95m\r[0m : unit -> unit
+ [91m |[0m             [91m^[0m
+ [91m |[0m Unexpected character: \r
