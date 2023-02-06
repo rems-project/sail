@@ -65,6 +65,7 @@
 (*  SUCH DAMAGE.                                                            *)
 (*==========================================================================*)
 
+Require Export Sail.TypeCasts.
 Require Export Sail.Instr_kinds.
 Require Export Sail.Values.
 Require Export Sail.String.

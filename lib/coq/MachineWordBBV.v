@@ -1,3 +1,4 @@
+From Sail Require Import TypeCasts.
 From Sail Require MachineWordInterface.
 From bbv Require Word.
 Require Arith.
@@ -12,14 +13,6 @@ Import List.ListNotations.
 
 Definition dummy {T:Type} (t:T) : T.
 exact t.
-Qed.
-
-Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
-  DepEqNat.nat_cast _ eq x.
-
-Lemma cast_word_refl n (w : Word.word n) :
-  cast_word w eq_refl = w.
-apply DepEqNat.nat_cast_same.
 Qed.
 
 Definition word := Word.word.
@@ -259,12 +252,12 @@ match l with
 | b::t => Word.WS b (bools_to_word_rev t)
 end%list.
 Definition bools_to_word l : word (length l) :=
-  cast_word (bools_to_word_rev (List.rev l)) (List.rev_length l).
+  cast_nat (bools_to_word_rev (List.rev l)) (List.rev_length l).
 
 Lemma get_bit_cast_word m n (w : word m) (E : m = n) i :
-  get_bit (cast_word w E) i = get_bit w i.
+  get_bit (cast_nat w E) i = get_bit w i.
 subst.
-rewrite cast_word_refl.
+rewrite cast_nat_refl.
 reflexivity.
 Qed.
 
@@ -402,7 +395,7 @@ Qed.
 Definition slice [m] n (w : word m) (i : nat) : word n :=
   match Compare_dec.le_lt_dec (i + n) m with
   | left H =>
-      let w : word (i + (n + (m - n - i))) := cast_word w (slice_equality H) in
+      let w : word (i + (n + (m - n - i))) := cast_nat w (slice_equality H) in
       Word.split1 n _ (Word.split2 i _ w)
   | right _ => dummy (zeros _)
   end.
@@ -410,30 +403,30 @@ Definition slice [m] n (w : word m) (i : nat) : word n :=
 Definition update_slice [m] [n] (w : word m) (i : nat) (v : word n) : word m :=
   match Compare_dec.le_lt_dec (i + n) m with
   | left H =>
-    let w : word (i + (n + (m - n - i))) := cast_word w (slice_equality H) in
+    let w : word (i + (n + (m - n - i))) := cast_nat w (slice_equality H) in
     let pre := Word.split1 i _ w in
     let post := Word.split2 n _ (Word.split2 i _ w) in
     let w' := Word.combine pre (Word.combine v post) in
-    cast_word w' (eq_sym (slice_equality H))
+    cast_nat w' (eq_sym (slice_equality H))
   | right _ => dummy (zeros _)
   end.
 
 Definition zero_extend [m] n (w : word m) : word n :=
   match Compare_dec.le_lt_dec m n with
   | left H =>
-      cast_word (Word.zext w (n - m)) (Arith_prebase.le_plus_minus_r_stt _ _ H)
+      cast_nat (Word.zext w (n - m)) (Arith_prebase.le_plus_minus_r_stt _ _ H)
   | right _ => dummy (zeros _)
   end.
 
 Definition sign_extend [m] n (w : word m) : word n :=
   match Compare_dec.le_lt_dec m n with
   | left H =>
-      cast_word (Word.sext w (n - m)) (Arith_prebase.le_plus_minus_r_stt _ _ H)
+      cast_nat (Word.sext w (n - m)) (Arith_prebase.le_plus_minus_r_stt _ _ H)
   | right _ => dummy (zeros _)
   end.
 
 Definition concat [m n] (w: word m) (v: word n) : word (m + n) :=
-  cast_word (Word.combine v w) (Nat.add_comm _ _).
+  cast_nat (Word.combine v w) (Nat.add_comm _ _).
 
 Definition and : forall [n], word n -> word n -> word n := Word.wand.
 Definition or  : forall [n], word n -> word n -> word n := Word.wor.
@@ -465,7 +458,7 @@ Definition eq_dec [n] (w v : word n) : {w = v} + {w <> v} := Word.weq w v.
 Fixpoint reverse_endian [n] (bits : word n) : word n :=
   match n return word n -> word n with
   | S (S (S (S (S (S (S (S m))))))) => fun bits =>
-    cast_word
+    cast_nat
       (Word.combine
          (reverse_endian (Word.split2 8 m bits))
          (Word.split1 8 m bits))

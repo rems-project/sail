@@ -65,7 +65,7 @@
 (*  SUCH DAMAGE.                                                            *)
 (*==========================================================================*)
 
-From Sail Require Import Prompt_monad Prompt Values.
+From Sail Require Import TypeCasts Prompt_monad Prompt Values.
 Require Import String ZArith.
 Local Open Scope Z.
 

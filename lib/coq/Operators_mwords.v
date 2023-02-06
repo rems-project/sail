@@ -65,6 +65,7 @@
 (*  SUCH DAMAGE.                                                            *)
 (*==========================================================================*)
 
+Require Import Sail.TypeCasts.
 Require Import Sail.Values.
 Require Import Sail.Prompt_monad.
 Require Import Sail.Prompt.
@@ -75,24 +76,6 @@ Require Import Eqdep_dec.
 Local Open Scope Z.
 
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) : monad rv (mword n) e := x >>= fun x => returnm (autocast x).
-
-Definition cast_word {m n} (x : MachineWord.word m) (eq : m = n) : MachineWord.word n :=
-  cast_nat x eq.
-
-Lemma cast_word_refl {m} {H:m = m} (x : MachineWord.word m) : cast_word x H = x.
-apply cast_nat_refl.
-Qed.
-(*
-Definition cast_to_mword {m n} (x : Word.word m) : Z.of_nat m = n -> mword n.
-refine (match n return Z.of_nat m = n -> mword n with
-| Z0 => fun _ => WO
-| Zpos p => fun eq => cast_T (mword_of_nat x) eq
-| Zneg p => _
-end).
-intro eq.
-exfalso. destruct m; simpl in *; congruence.
-Defined.
-*)
 
 (*
 (* Specialisation of operators to machine words *)
