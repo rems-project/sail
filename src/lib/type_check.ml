@@ -5218,9 +5218,9 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
                     also be caused by using a type defined after the \
                     'scattered union' declaration" in
          raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg))))
-  | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
+  | SD_funcl (FCL_aux (FCL_Funcl (id, _), (fcl_l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let funcl_env = Env.add_typquant l typq env in
+     let funcl_env = Env.add_typquant fcl_l typq env in
      let funcl = check_funcl funcl_env funcl typ in
      [DEF_scattered (SD_aux (SD_funcl funcl, (l, None)))], env
   | SD_mapcl (id, mapcl) ->

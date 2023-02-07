@@ -65,103 +65,46 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Ast
-open Ast_defs
-open Ast_util
+open Libsail
 
-let funcl_id (FCL_aux (FCL_Funcl (id, _), _)) = id
+let opt_doc_format = ref "asciidoc"
+let opt_doc_files = ref []
+               
+let doc_options = [
+  ( "-doc_format",
+    Arg.String (fun format -> opt_doc_format := format),
+    "<format> Output documentation in the chosen format, either latex or asciidoc (default asciidoc)");
+  ( "-doc_file",
+    Arg.String (fun file -> opt_doc_files := file :: !opt_doc_files),
+    "<file> Document only the provided files")
+]
 
-let rec last_scattered_funcl id = function
-  | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: _
-       when Id.compare (funcl_id funcl) id = 0 -> false
-  | _ :: defs -> last_scattered_funcl id defs
-  | [] -> true
-
-let rec last_scattered_mapcl id = function
-  | DEF_scattered (SD_aux (SD_mapcl (mid, _), _)) :: _
-       when Id.compare mid id = 0 -> false
-  | _ :: defs -> last_scattered_mapcl id defs
-  | [] -> true
-
-(* Nothing cares about these and the AST should be changed *)
-let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
-
-let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
-
-let rec get_union_clauses id = function
-  | DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)) :: defs when Id.compare id uid = 0 ->
-     tu :: get_union_clauses id defs
-  | _ :: defs ->
-     get_union_clauses id defs
-  | [] -> []
-
-let rec filter_union_clauses id = function
-  | DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)) :: defs when Id.compare id uid = 0 ->
-     filter_union_clauses id defs
-  | def :: defs ->
-     def :: filter_union_clauses id defs
-  | [] -> []
-
-let patch_funcl_loc l (FCL_aux (aux, (lold, tannot))) =
-  FCL_aux (aux, (l, tannot))
-
-let rec descatter' funcls mapcls = function
-  (* For scattered functions we collect all the seperate function
-     clauses until we find the last one, then we turn that function
-     clause into a DEF_fundef containing all the clauses. *)
-  | DEF_scattered (SD_aux (SD_funcl funcl, (l, _))) :: defs
-       when last_scattered_funcl (funcl_id funcl) defs ->
-     let funcl = patch_funcl_loc l funcl in
-     let clauses = match Bindings.find_opt (funcl_id funcl) funcls with
-       | Some clauses -> List.rev (funcl :: clauses)
-       | None -> [funcl]
-     in
-     DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses),
-                         (gen_loc l, Type_check.empty_tannot)))
-     :: descatter' funcls mapcls defs
-
-  | DEF_scattered (SD_aux (SD_funcl funcl, (l, _))) :: defs ->
-     let id = funcl_id funcl in
-     let funcl = patch_funcl_loc l funcl in
-     begin match Bindings.find_opt id funcls with
-     | Some clauses -> descatter' (Bindings.add id (funcl :: clauses) funcls) mapcls defs
-     | None -> descatter' (Bindings.add id [funcl] funcls) mapcls defs
-     end
-
-  (* Scattered mappings are handled the same way as scattered functions *)
-  | DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, tannot))) :: defs
-       when last_scattered_mapcl id defs ->
-     let clauses = match Bindings.find_opt id mapcls with
-       | Some clauses -> List.rev (mapcl :: clauses)
-       | None -> [mapcl]
-     in
-     DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses),
-                         (gen_loc l, tannot)))
-     :: descatter' funcls mapcls defs
-
-  | DEF_scattered (SD_aux (SD_mapcl (id, mapcl), _)) :: defs ->
-     begin match Bindings.find_opt id mapcls with
-     | Some clauses -> descatter' funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
-     | None -> descatter' funcls (Bindings.add id [mapcl] mapcls) defs
-     end
-
-  (* For scattered unions, when we find a union declaration we
-     immediately grab all the future clauses and turn it into a
-     regular union declaration. *)
-  | DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))) :: defs ->
-     let tus = get_union_clauses id defs in
-     begin match tus with
-     | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
-     | _ ->
-        DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
-        :: descatter' funcls mapcls (filter_union_clauses id defs)
-     end
-       
-  (* Therefore we should never see SD_unioncl... *)
-  | DEF_scattered (SD_aux (SD_unioncl _, (l, _))) :: _ ->
-     raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")
-
-  | def :: defs -> def :: descatter' funcls mapcls defs
-  | [] -> []
-
-let descatter ast = { ast with defs = descatter' Bindings.empty Bindings.empty ast.defs }
+let doc_target _ out_file ast effect_info env =
+  Reporting.opt_warnings := true;
+  let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
+  begin
+    try
+      if not (Sys.is_directory doc_dir) then (
+        prerr_endline ("Failure: documentation output location exists and is not a directory: " ^ doc_dir);
+        exit 1
+      )
+    with Sys_error(_) -> Unix.mkdir doc_dir 0o755
+  end;
+  if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then (
+    let docinfo = Docinfo.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in
+    let chan = open_out (Filename.concat doc_dir "doc.json") in
+    Yojson.pretty_to_channel ~std:true chan (Docinfo.docinfo_to_json docinfo);
+    close_out chan
+  ) else (
+    Printf.eprintf "Unknown documentation format: %s" !opt_doc_format
+  )
+ 
+let _ =
+  Target.register
+    ~name:"doc"
+    ~options:doc_options
+    ~pre_parse_hook:(fun () ->
+      Type_check.opt_expand_valspec := false;
+      Type_check.opt_no_bitfield_expansion := true
+    )
+    doc_target

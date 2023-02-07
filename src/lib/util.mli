@@ -154,6 +154,8 @@ val is_none : 'a option -> bool
 
 (** {2 List Functions} *)
 
+val list_empty : 'a list -> bool
+  
 (** [list_index p l] returns the first index [i] such that
     the predicate [p (l!i)] holds. If no such [i] exists,
     [None] is returned. *)

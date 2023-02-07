@@ -3728,7 +3728,20 @@ let merge_funcls env ast =
     | d -> d
   in { ast with defs = List.map merge_in_def ast.defs }
 
-
+let rec pat_of_mpat (MP_aux (mpat, annot)) =
+  match mpat with
+  | MP_lit lit                      -> P_aux (P_lit lit, annot)
+  | MP_id id                        -> P_aux (P_id id, annot)
+  | MP_app (id, args)               -> P_aux (P_app (id, (List.map pat_of_mpat args)), annot)
+  | MP_vector mpats                 -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
+  | MP_vector_concat mpats          -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
+  | MP_tup mpats                    -> P_aux (P_tup (List.map pat_of_mpat mpats), annot)
+  | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
+  | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
+  | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
+  | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
+  | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
+ 
 let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l,())) in
   let concat_vectors vec1 vec2 =
@@ -3752,20 +3765,6 @@ let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
                                                     Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
                                                 ]), (l,annot)) (* TODO FIXME location information? *)
-
-and pat_of_mpat (MP_aux (mpat, annot)) =
-  match mpat with
-  | MP_lit lit                      -> P_aux (P_lit lit, annot)
-  | MP_id id                        -> P_aux (P_id id, annot)
-  | MP_app (id, args)               -> P_aux (P_app (id, (List.map pat_of_mpat args)), annot)
-  | MP_vector mpats                 -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
-  | MP_vector_concat mpats          -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
-  | MP_tup mpats                    -> P_aux (P_tup (List.map pat_of_mpat mpats), annot)
-  | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
-  | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
-  | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
-  | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
-  | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
 
 let rewrite_ast_realize_mappings effect_info env ast =
   let effect_info = ref effect_info in
