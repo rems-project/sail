@@ -3511,7 +3511,7 @@ let simplify_size_nexp env quant_kids nexp =
           | Nexp_sum(n1,n2) ->
              re (fun n1 n2 -> Nexp_sum(n1,n2)) (aux n1, aux n2)
           | Nexp_minus(n1,n2) ->
-             re (fun n1 n2 -> Nexp_times(n1,n2)) (aux n1, aux n2)
+             re (fun n1 n2 -> Nexp_minus(n1,n2)) (aux n1, aux n2)
           | Nexp_exp n ->
              Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
           | Nexp_neg n ->
