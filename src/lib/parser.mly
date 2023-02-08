@@ -162,13 +162,14 @@ let doc_sd doc (SD_aux (sd, l)) =
 
 let qi_id_of_kopt (KOpt_aux (_, l) as kopt) = QI_aux (QI_id kopt, l)
 
-let mk_recr r n m = (Rec_aux(r, loc n m))
+let mk_recr r n m = Rec_aux (r, loc n m)
+let mk_recn = Rec_aux (Rec_none, Unknown)
 
-let mk_recn = (Rec_aux((Rec_nonrec), Unknown))
-let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
-let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
-let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), loc n m)
-let mk_eannotn = Effect_opt_aux(Effect_opt_none,Unknown)
+let mk_typqn = TypQ_aux (TypQ_no_forall, Unknown)
+
+let mk_tannotn = Typ_annot_opt_aux (Typ_annot_opt_none, Unknown)
+let mk_tannot typq typ n m = Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), loc n m)
+let mk_eannotn = Effect_opt_aux (Effect_opt_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 
@@ -620,8 +621,6 @@ atomic_typ:
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kopt_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
-  | Lcurly id Colon typ Dot typ Rcurly
-    { mk_typ (ATyp_base ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
   | typ
@@ -1208,6 +1207,8 @@ funcl_patexp_typ:
     { (mk_pexp (Pat_exp ($4, $8)) $startpos $endpos, mk_tannot $2 $6 $startpos $endpos($6)) }
   | Lparen pat If_ exp Rparen Eq exp
     { (mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos, mk_tannotn) }
+  | Lparen pat If_ exp Rparen MinusGt typ Eq exp
+    { (mk_pexp (Pat_when ($2, $4, $9)) $startpos $endpos, mk_tannot mk_typqn $7 $startpos $endpos($7)) }
   | Forall typquant Dot Lparen pat If_ exp Rparen MinusGt typ Eq exp
     { (mk_pexp (Pat_when ($5, $7, $12)) $startpos $endpos, mk_tannot $2 $10 $startpos $endpos($10)) }
 

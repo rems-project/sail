@@ -77,6 +77,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
+let opt_format = ref false
                      
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
@@ -132,6 +133,9 @@ let rec options = ref ([
     " drop to an interactive session after running Sail. Differs from \
      -i in that it does not set up the interpreter in the interactive \
      shell.");
+  ( "-fmt",
+    Arg.Set opt_format,
+    " format input source code");
   ( "-D",
     Arg.String (fun symbol -> Preprocess.add_symbol symbol),
     "<symbol> define a symbol for the preprocessor, as $define does in the source code");
@@ -298,6 +302,12 @@ let run_sail tgt =
 
   (ast, env, effect_info)
 
+let run_sail_format () =
+  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
+  List.iter (fun (f, (comments, parse_ast)) ->
+      Format_sail.chunk_ast comments parse_ast
+    ) parsed_files
+  
 let feature_check () =
   match !opt_have_feature with
   | None -> ()
@@ -343,6 +353,11 @@ let main () =
 
   if !opt_show_sail_dir then (
     print_endline (Reporting.get_sail_dir Manifest.dir);
+    exit 0
+  );
+
+  if !opt_format then (
+    run_sail_format ();
     exit 0
   );
  

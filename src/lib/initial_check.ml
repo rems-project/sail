@@ -183,8 +183,6 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
            ) kopts ([], ctx)
        in
        Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
-    | P.ATyp_base (id, kind, nc) ->
-       raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
   in
   Typ_aux (aux, l)
@@ -328,8 +326,6 @@ let rec to_ast_pat ctx (P.P_aux (pat, l)) =
   P_aux ((match pat with
           | P.P_lit lit -> P_lit (to_ast_lit lit)
           | P.P_wild -> P_wild
-          | P.P_or (pat1, pat2) ->
-             P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
           | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
              P_as (to_ast_pat ctx pat, to_ast_id ctx id)
           | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
@@ -728,8 +724,7 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit def list ctx_
 
 let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : unit rec_opt =
   Rec_aux((match r with
-  | P.Rec_nonrec -> Rec_nonrec
-  | P.Rec_rec -> Rec_rec
+  | P.Rec_none -> Rec_nonrec
   | P.Rec_measure (p,e) ->
      Rec_measure (to_ast_pat ctx p, to_ast_exp ctx e)
   ),l)
@@ -765,7 +760,7 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : unit funcl list =
           ) targets
      | None ->
         [FCL_aux (FCL_Funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, ()))]
-    
+ 
 let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : unit fundef =
   match fd with
   | P.FD_function (rec_opt, tannot_opt, _, funcls) ->
