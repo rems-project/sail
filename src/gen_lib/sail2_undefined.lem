@@ -1,7 +1,9 @@
 open import Pervasives_extra
 open import Sail2_values
-open import Sail2_prompt_monad
-open import Sail2_prompt
+(*open import Sail2_prompt_monad
+open import Sail2_prompt*)
+open import Sail2_concurrency_interface
+open import Sail2_monadic_combinators
 
 (* Default implementations of "undefined" functions for builtin types via
    nondeterministic choice, for use with the -undefined_gen option of Sail.
@@ -9,7 +11,8 @@ open import Sail2_prompt
    Changes here need to be reflected in ../../lib/hol/sail2_undefined.lem
    (identical except for type class constraints). *)
 
-val undefined_bitvector : forall 'rv 'a 'e. Bitvector 'a, Register_Value 'rv => integer -> monad 'rv 'a 'e
+val undefined_bitvector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Bitvector 'a, Register_Value 'rv =>
+  integer -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
 let undefined_bitvector n = choose_bitvector "undefined_bitvector" (natFromInteger n)
 
 let undefined_unit () = return ()
@@ -24,5 +27,6 @@ let undefined_range i j = choose_int_in_range "undefined_range" i j
 let undefined_atom i = return i
 
 (* TODO: Choose each vector element individually *)
-val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e
+val undefined_vector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e.
+  integer -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list 'a) 'e
 let undefined_vector len u = return (repeat [u] len)

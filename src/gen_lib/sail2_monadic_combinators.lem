@@ -1,0 +1,234 @@
+open import Pervasives_extra
+(*open import Sail_impl_base*)
+open import Sail2_values
+open import Sail2_concurrency_interface
+open import {isabelle} `Sail2_concurrency_interface_lemmas`
+
+val (>>=) : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'b 'e.
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+  -> ('a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'b 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'b 'e
+declare isabelle target_rep function (>>=) = infix `\<bind>`
+let inline ~{isabelle} (>>=) = bind
+
+val (>>$=) : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
+declare isabelle target_rep function (>>$=) = infix `\<bind>\<^sub>R`
+let inline ~{isabelle} (>>$=) = either_bind
+
+val (>>) : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'b 'e.
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'b 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'b 'e
+declare isabelle target_rep function (>>) = infix `\<then>`
+let inline ~{isabelle} (>>) m n = m >>= fun (_ : unit) -> n
+
+val (>>$) : forall 'e 'a. either 'e unit -> either 'e 'a -> either 'e 'a
+declare isabelle target_rep function (>>$) = infix `\<then>\<^sub>R`
+let inline ~{isabelle} (>>$) m n = m >>$= fun (_ : unit) -> n
+
+val iter_aux : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e.
+  integer
+  -> (integer -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e)
+  -> list 'a
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e
+let rec iter_aux i f xs = match xs with
+  | x :: xs -> f i x >> iter_aux (i + 1) f xs
+  | [] -> return ()
+  end
+
+declare {isabelle} termination_argument iter_aux = automatic
+
+val iteri : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e.
+  (integer -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e)
+  -> list 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e
+let iteri f xs = iter_aux 0 f xs
+
+val iter : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e.
+  ('a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e)
+  -> list 'a
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv unit 'e
+let iter f xs = iteri (fun _ x -> f x) xs
+
+val foreachM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'a 'rv 'vars 'e.
+  list 'a -> 'vars
+  -> ('a -> 'vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let rec foreachM l vars body =
+match l with
+| [] -> return vars
+| (x :: xs) ->
+  body x vars >>= fun vars ->
+  foreachM xs vars body
+end
+
+val foreachE : forall 'a 'vars 'e.
+  list 'a -> 'vars -> ('a -> 'vars -> either 'e 'vars) -> either 'e 'vars
+let rec foreachE l vars body =
+match l with
+| [] -> Right vars
+| (x :: xs) ->
+  body x vars >>$= fun vars ->
+  foreachE xs vars body
+end
+
+declare {isabelle} termination_argument foreachM = automatic
+
+val genlistM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'a 'rv 'e.
+  (nat -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e)
+  -> nat
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list 'a) 'e
+let genlistM f n =
+  let indices = genlist (fun n -> n) n in
+  foreachM indices [] (fun n xs -> (f n >>= (fun x -> return (xs ++ [x]))))
+
+val and_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+let and_boolM l r = l >>= (fun l -> if l then r else return false)
+
+val or_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+let or_boolM l r = l >>= (fun l -> if l then return true else r)
+
+val bool_of_bitU_fail : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
+  bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+let bool_of_bitU_fail = function
+  | B0 -> return false
+  | B1 -> return true
+  | BU -> Fail "bool_of_bitU"
+end
+
+val bool_of_bitU_nondet : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
+  bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
+let bool_of_bitU_nondet = function
+  | B0 -> return false
+  | B1 -> return true
+  | BU -> choose_bool "bool_of_bitU"
+end
+
+val bools_of_bits_nondet : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
+  list bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list bool) 'e
+let bools_of_bits_nondet bits =
+  foreachM bits []
+    (fun b bools ->
+      bool_of_bitU_nondet b >>= (fun b ->
+      return (bools ++ [b])))
+
+val of_bits_nondet : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Bitvector 'a, Register_Value 'rv =>
+  list bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+let of_bits_nondet bits =
+  bools_of_bits_nondet bits >>= (fun bs ->
+  return (of_bools bs))
+
+val of_bits_fail : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Bitvector 'a =>
+  list bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+let of_bits_fail bits = maybe_fail "of_bits" (of_bits bits)
+
+val mword_nondet : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Size 'a, Register_Value 'rv =>
+  unit -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (mword 'a) 'e
+let mword_nondet () =
+  bools_of_bits_nondet (repeat [BU] (integerFromNat size)) >>= (fun bs ->
+  return (wordFromBitlist bs))
+
+val whileM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  'vars
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let rec whileM vars cond body =
+  cond vars >>= fun cond_val ->
+  if cond_val then
+    body vars >>= fun vars -> whileM vars cond body
+  else return vars
+
+val whileMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  nat
+  -> 'vars
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let rec whileMT limit vars cond body =
+  cond vars >>= fun cond_val ->
+  if cond_val && limit > 0 then
+    body vars >>= fun vars -> whileMT (limit - 1) vars cond body
+  else return vars
+
+declare {isabelle} termination_argument whileMT = automatic
+
+val untilM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  'vars
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let rec untilM vars cond body =
+  body vars >>= fun vars ->
+  cond vars >>= fun cond_val ->
+  if cond_val then return vars else untilM vars cond body
+
+val untilMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  nat
+  -> 'vars
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let rec untilMT limit vars cond body =
+  body vars >>= fun vars ->
+  cond vars >>= fun cond_val ->
+  if cond_val || limit = 0 then return vars else untilMT (limit - 1) vars cond body
+
+declare {isabelle} termination_argument untilMT = automatic
+
+val choose_bools : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
+  string -> nat -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list bool) 'e
+let choose_bools descr n = genlistM (fun _ -> choose_bool descr) n
+
+val choose_bitvector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Bitvector 'a, Register_Value 'rv =>
+  string -> nat -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+let choose_bitvector descr n = choose_bools descr n >>= fun v -> return (of_bools v)
+
+val choose_from_list : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Register_Value 'rv =>
+  string -> list 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+let choose_from_list descr xs =
+  choose_int ("choose_from_list " ^ descr) >>= fun idx ->
+  match index xs (natFromInteger idx mod List.length xs) with
+    | Just x -> return x
+    | Nothing -> Fail ("choose_from_list " ^ descr)
+  end
+
+val choose_int_in_range : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
+  string -> integer -> integer -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv integer 'e
+let choose_int_in_range descr i j =
+  choose_int descr >>= fun k ->
+  return (max i (min j k))
+
+val choose_nat : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
+  string -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv integer 'e
+let choose_nat descr = choose_int descr >>= fun i -> return (max 0 i)
+
+val internal_pick : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Register_Value 'rv =>
+  list 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+let internal_pick xs = choose_from_list "internal_pick" xs
+
+(*let write_two_regs r1 r2 vec =
+  let is_inc =
+    let is_inc_r1 = is_inc_of_reg r1 in
+    let is_inc_r2 = is_inc_of_reg r2 in
+    let () = ensure (is_inc_r1 = is_inc_r2)
+                    "write_two_regs called with vectors of different direction" in
+    is_inc_r1 in
+
+  let (size_r1 : integer) = size_of_reg r1 in
+  let (start_vec : integer) = get_start vec in
+  let size_vec = length vec in
+  let r1_v =
+    if is_inc
+    then slice vec start_vec (size_r1 - start_vec - 1)
+    else slice vec start_vec (start_vec - size_r1 - 1) in
+  let r2_v =
+    if is_inc
+    then slice vec (size_r1 - start_vec) (size_vec - start_vec)
+    else slice vec (start_vec - size_r1) (start_vec - size_vec) in
+  write_reg r1 r1_v >> write_reg r2 r2_v*)

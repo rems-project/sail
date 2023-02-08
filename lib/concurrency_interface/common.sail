@@ -89,14 +89,14 @@ $include <concurrency_interface/emulator_memory.sail>
   current opcode being executed. This is so each event within a cycle
   can be associated with an instruction. */
 val sail_instr_announce
-  = pure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  = monadic { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
   : forall 'n, 'n > 0.
   bits('n) -> unit
 
 /*! For keeping track of control dependencies, when we take a branch
   we announce the address we are branching to. */
 val sail_branch_announce
-  = pure { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  = monadic { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
 

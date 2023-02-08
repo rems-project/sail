@@ -156,7 +156,8 @@ let output_lem filename libs effect_info type_env ast =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = filename ^ "_types" in
-  let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"] in
+  (* TODO: Support both old monad and new concurrency interface *)
+  let monad_modules = ["Sail2_concurrency_interface"; "Sail2_monadic_combinators"] in
   let undefined_modules = if !Initial_check.opt_undefined_gen then ["Sail2_undefined"] else [] in
   let operators_module = if !Monomorphise.opt_mwords then "Sail2_operators_mwords" else "Sail2_operators_bitlists" in
   (* let libs = List.map (fun lib -> lib ^ seq_suffix) libs in *)
@@ -207,3 +208,18 @@ let lem_target _ out_file ast effect_info env =
   output !opt_libs_lem [(out_file, effect_info, env, ast)]
 
 let _ = Target.register ~name:"lem" ~options:lem_options ~rewrites:lem_rewrites lem_target
+
+(* The code below and in gen_lem_monad.ml was used to generate a first version
+   of the monad for the new concurrency interface, but that has since been
+   edited manually *)
+(*
+let lem_monad_target _ out_file ast effect_info env =
+  Gen_lem_monad.output_lem_monad effect_info env ast
+
+let _ =
+  Target.register
+    ~name:"lem_monad"
+    ~options:lem_options
+    ~rewrites:[]
+    lem_monad_target
+ *)

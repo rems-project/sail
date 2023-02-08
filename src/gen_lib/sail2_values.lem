@@ -87,6 +87,9 @@ let rec shr_int x s = if s > 0 then shr_int (x / 2) (s - 1) else x
 val shl_int : integer -> integer -> integer
 let rec shl_int i shift = if shift > 0 then 2 * shl_int i (shift - 1) else i
 
+val align_int : integer -> integer -> integer
+let align_int x y = integerMult (integerDiv x y) y
+
 let inline or_bool l r = (l || r)
 let inline and_bool l r = (l && r)
 let inline xor_bool l r = xor l r
@@ -753,6 +756,14 @@ let decimal_string_of_bv bv =
   in
   let sum = List.foldl (+) 0 place_values in
   show sum
+
+val align_bits : forall 'a. Bitvector 'a => 'a -> integer -> 'a
+let align_bits x y =
+  let len = length x in
+  match unsigned x with
+  | Just x -> of_int len (align_int x y)
+  | Nothing -> failwith "align_bits: failed to convert bitvector"
+  end
 
 (*** Bytes and addresses *)
 

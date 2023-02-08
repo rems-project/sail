@@ -1880,6 +1880,7 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
          hardline;
          register_refs;
          hardline;
+         (* TODO: Support for new concurrency interface *)
          concat
            [
              string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ);
