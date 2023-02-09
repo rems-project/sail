@@ -3026,6 +3026,21 @@ let rec rewrite_app env typ (id,args) =
         | None -> E_app (id, args)
       end
 
+    (* ones @ variable *)
+    | [E_aux (E_app (ones1, [len1]), _); (E_aux (E_id _,_) as vector2)]
+        when is_ones ones1
+          && not (is_constant len1) ->
+       let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
+       let len2 = mk_exp (E_app (mk_id "length", [vector2])) in
+       let total = mk_exp (E_app_infix (len1, mk_id "+", len2)) in
+       try_cast_to_typ
+         (E_aux (E_app (mk_id "update_subrange_bits",
+                        [E_aux (E_app (ones1, [total]), (Unknown,empty_tannot));
+                         mk_exp (E_app_infix (len2, mk_id "-", one));
+                         mk_exp (E_lit (mk_lit (L_num Big_int.zero)));
+                         vector2]),
+                 (Unknown, empty_tannot)))
+
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
                      [vector1; start1; end1]),_) as exp1;
@@ -3167,6 +3182,19 @@ let rec rewrite_app env typ (id,args) =
         && not (is_constant_vec_typ env (typ_of e1)) && is_bitvector_typ (typ_of vector1) ->
        let op' = if is_subrange op then "is_zero_subrange" else "is_zeros_slice" in
        wrap (E_app (mk_id op', [vector1; start1; len1]))
+
+    (* subrange == ones *)
+    | [E_aux (E_app (subrange1, [vector1; start1; end1]),_);
+       E_aux (E_app (ones2, [_]),_)]
+        when is_id env (Id "vector_subrange") subrange1 && is_bitvector_typ (typ_of vector1) &&
+          not (is_constant_range (start1,end1)) ->
+       E_app (mk_id "is_ones_subrange",
+              [vector1; start1; end1])
+    (* slice == ones *)
+    | [E_aux (E_app (slice1, [vector1; start1; len1]),_);
+       E_aux (E_app (ones2, [_]),_)]
+        when is_slice slice1 && not (is_constant len1) && is_bitvector_typ (typ_of vector1) ->
+       E_app (mk_id "is_ones_slice", [vector1; start1; len1])
 
     (* Arm specs sometimes check for overflows on values that can be either 32 or 64 bits
        by converting to unbounded integers and asking for the top slice. *)
