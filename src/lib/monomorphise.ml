@@ -3783,7 +3783,23 @@ let rec extract (E_aux (e,_)) =
    we just use two names for the cast, bitvector_cast_in and bitvector_cast_out,
    to let the pretty printer know whether to use the top-level environment. *)
 let add_bitvector_casts global_env ({ defs; _ } as ast) =
-  let rewrite_body id quant_kids top_env ret_typ exp =
+  let rewrite_body id quant_kids top_env defining_eqns ret_typ exp =
+
+    (* Extract instantiations from a guard, then see if that fills in some equations *)
+    let extract env exp =
+      let direct_insts = extract exp in
+      let direct_insts = List.fold_left (fun insts (kid,i) ->
+                             KBindings.add kid (nconstant i) insts) KBindings.empty direct_insts in
+      KBindings.fold (fun k nexp new_insts ->
+          let nexp_subst = subst_kids_nexp direct_insts nexp in
+          if Nexp.compare nexp nexp_subst <> 0 then
+            let nexp_simp = simplify_size_nexp env quant_kids nexp_subst in
+            match nexp_simp with
+            | Some (Nexp_aux (Nexp_constant i, _) as nexp') -> KBindings.add k nexp' new_insts
+            | _ -> new_insts
+        else new_insts) defining_eqns direct_insts
+    in
+
     let rewrite_aux (e,ann) =
       match e with
       | E_case (E_aux (e',ann') as exp',cases) -> begin
@@ -3829,9 +3845,7 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
       | E_if (e1,e2,e3) ->
          let env = env_of_annot ann in
          let result_typ = Env.base_typ_of env (typ_of_annot ann) in
-         let insts = extract e1 in
-         let insts = List.fold_left (fun insts (kid,i) ->
-           KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+         let insts = extract env e1 in
          let e2' = make_bitvector_env_casts env (env_of e2) quant_kids insts e2 in
          let src_typ = subst_kids_typ insts result_typ in
          let e2' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ e2' in
@@ -3907,6 +3921,7 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
     let (tq,typ) = Env.get_val_spec_orig id global_env in
     let fun_env = List.fold_right (Env.add_typ_var l) (quant_kopts tq) global_env in
     let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in
+
     let ret_typ =
       match typ with
       | Typ_aux (Typ_fn (_,ret),_) -> ret
@@ -3923,15 +3938,19 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
       | e -> e, fun e -> e
     in
     let body, restore_assumes = strip_assumes body in
-    let body = rewrite_body id quant_kids fun_env ret_typ body in
-    (* Cast function arguments, if necessary *)
+
     let add_constraint insts = function
       | NC_aux (NC_equal (Nexp_aux (Nexp_var kid,_), nexp), _) -> KBindings.add kid nexp insts
       | _ -> insts
     in
-    let insts = List.fold_left add_constraint KBindings.empty (Env.get_constraints (env_of body)) in
+    let defining_eqns = List.fold_left add_constraint KBindings.empty (Env.get_constraints (env_of body)) in
+
+    let body = rewrite_body id quant_kids fun_env defining_eqns ret_typ body in
+
+    (* Cast function arguments, if necessary *)
     let src_typ = fill_in_type (env_of body) (typ_of body) in
-    let body = make_bitvector_env_casts fun_env (env_of body) quant_kids insts body in
+    let body = make_bitvector_env_casts fun_env (env_of body) quant_kids defining_eqns body in
+
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
       make_bitvector_cast_exp "bitvector_cast_out" fun_env quant_kids src_typ ret_typ body
