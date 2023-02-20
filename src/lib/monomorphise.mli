@@ -78,6 +78,7 @@ type options = {
 
 val monomorphise :
   string -> (* Target backend *)
+  Effects.side_effect_info ->
   options ->
   ((string * int) * string) list -> (* List of splits from the command line *)
   Type_check.tannot ast ->

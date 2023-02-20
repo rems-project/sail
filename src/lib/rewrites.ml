@@ -4721,16 +4721,17 @@ let opt_auto_mono = ref false
 let opt_dall_split_errors = ref false
 let opt_dmono_continue = ref false
 
-let monomorphise target env defs =
+let monomorphise target effect_info env defs =
   let open Monomorphise in
   monomorphise
     target
+    effect_info
     { auto = !opt_auto_mono;
       debug_analysis = !opt_dmono_analysis;
       all_split_errors = !opt_dall_split_errors;
       continue_anyway = !opt_dmono_continue }
     !opt_mono_split
-    defs
+    defs, effect_info, env
 
 let if_mono f effect_info env ast =
   match !opt_mono_split, !opt_auto_mono with
@@ -4805,7 +4806,7 @@ let all_rewriters = [
     ("mono_rewrites", basic_rewriter mono_rewrites);
     ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);
     ("toplevel_consts", String_rewriter (fun target -> basic_rewriter (rewrite_toplevel_consts target)));
-    ("monomorphise", String_rewriter (fun target -> basic_rewriter (monomorphise target)));
+    ("monomorphise", String_rewriter (fun target -> Base_rewriter (monomorphise target)));
     ("atoms_to_singletons", String_rewriter (fun target -> (basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))));
     ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
