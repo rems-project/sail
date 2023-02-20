@@ -5188,11 +5188,15 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
                  typ_error env l "Bitfield concatenation ranges are not supported"
             ) Bindings.empty ranges
         in
-        let defs, env =
+        let defs =
           (DEF_type (TD_aux (record_tdef, (l, ()))) :: Bitfield.macro id size order ranges)
-          |> Initial_check.generate_undefineds IdSet.empty
-          |> check_defs env
         in
+        let defs =
+          if !Initial_check.opt_undefined_gen
+          then Initial_check.generate_undefineds IdSet.empty defs
+          else defs
+        in
+        let defs, env = check_defs env defs in
         let env = Env.add_bitfield id ranges env in
         if !opt_no_bitfield_expansion
         then [DEF_type (TD_aux (unexpanded, (l, None)))], env
