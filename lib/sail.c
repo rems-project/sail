@@ -242,7 +242,7 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
   }
   *dst = realloc(*dst, to_copy + 1);
   memcpy(*dst, s, to_copy);
-  *dst[to_copy] = '\0';
+  (*dst)[to_copy] = '\0';
 }
 
 /* ***** Sail integers ***** */
