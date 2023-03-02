@@ -80,6 +80,12 @@ open Type_check
 
 let opt_mwords = ref false
 
+(* From the command line we take vague file/line locations, but from
+   the analysis we can use exact locations. *)
+type split_loc =
+| Line of string * int
+| Exact of Parse_ast.l
+
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
@@ -668,7 +674,9 @@ let apply_pat_choices choices =
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
-let split_defs target all_errors splits env ast =
+type split_req = split_loc * string * (tannot pat list * Parse_ast.l) option
+
+let split_defs target all_errors (splits : split_req list) env ast =
   let no_errors_happened = ref true in
   let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors defs =
@@ -803,18 +811,25 @@ let split_defs target all_errors splits env ast =
   (* Split variable patterns at the given locations *)
 
   let map_locs ls defs =
-    let rec match_l = function
-      | Unknown -> []
-      | Unique (_,l) -> match_l l
-      | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
-      | Hint (_,_,l) -> match_l l
-      | Documented (_,l) -> match_l l
-      | Range (p,q) ->
-         let matches =
-           List.filter (fun ((filename,line),_,_) ->
-             p.Lexing.pos_fname = filename &&
-               p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum) ls
-         in List.map (fun (_,var,optpats) -> (var,optpats)) matches
+    let match_file_line filename line =
+      let rec aux = function
+        | Unknown -> false
+        | Unique (_,l) -> aux l
+        | Generated l -> false (* Could do match_l l, but only want to split user-written patterns *)
+        | Hint (_,_,l) -> aux l
+        | Documented (_,l) -> aux l
+        | Range (p,q) ->
+           p.Lexing.pos_fname = filename &&
+             p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum
+      in aux
+    in
+    let match_l l =
+      let matches =
+        List.filter (function
+            | (Exact l',_,_) -> l = l'
+            | (Line (filename,line),_,_) -> match_file_line filename line l)
+          ls
+      in List.map (fun (_,var,optpats) -> (var,optpats)) matches
     in 
 
     let split_pat vars p =
@@ -1070,7 +1085,36 @@ let split_defs target all_errors splits env ast =
         | E_record_update (e,fes) -> re (E_record_update (map_exp e, List.map map_fexp fes))
         | E_field (e,id) -> re (E_field (map_exp e,id))
         | E_case (e,cases) -> re (E_case (map_exp e, List.concat (List.map map_pexp cases)))
-        | E_let (lb,e) -> re (E_let (map_letbind lb, map_exp e))
+        | E_let (lb,e) ->
+           let lb' = map_letbind lb in
+           let e' = map_exp e in
+           (* Add a case split in the right hand side, e.g. for let 'n = get_vector_size() in ... *)
+           let e' = match match_l (match lb with LB_aux (_, (l, _)) -> l) with
+             | [] -> e'
+             | [(kid_string,splits)] as vars ->
+                let l' = Generated (fst annot) in
+                let size_nexp = Nexp_aux (Nexp_var (Kid_aux (Var kid_string, l')),l') in
+                let size_annot = mk_tannot (env_of e) (atom_typ size_nexp) in
+                let match_exp = E_aux (E_sizeof size_nexp, (l',size_annot)) in
+                let dummy_id = mk_id "boundsz#" in
+                let pat_to_split = P_aux (P_id dummy_id, (l',size_annot)) in
+                let patsubsts = split_pat [(string_of_id dummy_id, splits)] pat_to_split in
+                let patsubsts = match patsubsts with Some x -> x | None -> assert false (* TODO *) in
+                let pexps =
+                  List.map (fun (pat',substs,pchoices,ksubsts) ->
+                      let plain_ksubsts = KBindings.map fst ksubsts in
+                      let exp' = Spec_analysis.nexp_subst_exp plain_ksubsts e' in
+                      let exp' = apply_pat_choices pchoices exp' in
+                      let exp' = subst_exp ref_vars substs ksubsts exp' in
+                      let exp' = stop_at_false_assertions exp' in
+                      let annot = match e' with E_aux (_,(_,a)) -> a in
+                      Pat_aux (Pat_exp (pat', map_exp exp'),(l',annot)))
+                    patsubsts
+                in
+                E_aux (E_case (match_exp, pexps), annot)
+             | _ -> assert false (* TODO: should just have an error here...? *)
+           in
+           re (E_let (lb', e'))
         | E_assign (le,e) -> re (E_assign (map_lexp le, map_exp e))
         | E_exit e -> re (E_exit (map_exp e))
         | E_throw e -> re (E_throw e)
@@ -1621,9 +1665,14 @@ let rec pat_eq (P_aux (p1,_)) (P_aux (p2,_)) =
 module Analysis =
 struct
 
-type loc = string * int (* filename, line *)
-
-let string_of_loc (s,l) = s ^ "." ^ string_of_int l
+(* Does a location contain enough information to identify the syntax again? *)
+let rec useful_loc = function
+  | Unknown -> false
+  | Unique (_,l) -> useful_loc l
+  | Generated l -> useful_loc l
+  | Hint (_,_,l) -> useful_loc l
+  | Documented (_,l) -> useful_loc l
+  | Range (_,_) -> true
 
 let id_pair_compare (id,l) (id',l') =
     match Id.compare id id' with
@@ -1637,28 +1686,42 @@ type match_detail =
   | Total
   | Partial of tannot pat list * Parse_ast.l
 
-(* Arguments that we might split on *)
-module ArgSplits = Map.Make (struct
-  type t = id * loc
-  let compare = id_pair_compare
-end)
-type arg_splits = match_detail ArgSplits.t
-
-(* Function id, funcl loc for adding splits on sizes in the body when
-   there's no corresponding argument *)
-module ExtraSplits = Map.Make (struct
+module IdLocMap = Map.Make (struct
   type t = id * Parse_ast.l
   let compare (id,l) (id',l') =
     let x = Id.compare id id' in
     if x <> 0 then x else
       compare l l'
 end)
+
+(* Arguments that we might split on *)
+module ArgSplits = IdLocMap
+type arg_splits = match_detail ArgSplits.t
+
+(* Function id, funcl loc for adding splits on sizes in the body when
+   there's no corresponding argument *)
+module ExtraSplits = IdLocMap
 type extra_splits = (match_detail KBindings.t) ExtraSplits.t
+
+(* For a case split after a type variable is let-bound; in particular when
+   a function is called to provide a size via a side effect (e.g., reading
+   a vector size register). *)
+module KidLocMap = Map.Make (struct
+  type t= kid * Parse_ast.l
+  let compare (kid,l) (kid',l') =
+    let x = Kid.compare kid kid' in
+    if x <> 0 then x else
+      compare l l'
+end)
+module LetSplits = KidLocMap
+type let_binding_splits = match_detail LetSplits.t
 
 (* Arguments that we should look at in callers *)
 module CallerArgSet = Set.Make (struct
   type t = id * int
-  let compare = id_pair_compare
+  let compare (id,i) (id',i') =
+    let x= Id.compare id id' in
+    if x <> 0 then x else compare i i'
 end)
 
 (* Type variables that we should look at in callers *)
@@ -1681,7 +1744,7 @@ module StringSet = Set.Make (struct
 end)
 
 type dependencies =
-  | Have of arg_splits * extra_splits
+  | Have of arg_splits * extra_splits * let_binding_splits
   | Unknown of Parse_ast.l * string
 
 let string_of_match_detail = function
@@ -1691,7 +1754,7 @@ let string_of_match_detail = function
 let string_of_argsplits s =
   String.concat ", "
     (List.map (fun ((id,l),detail) ->
-      string_of_id id ^ "." ^ string_of_loc l ^ string_of_match_detail detail)
+      string_of_id id ^ "." ^ simple_string_of_loc l ^ string_of_match_detail detail)
                         (ArgSplits.bindings s))
 
 let string_of_lx lx =
@@ -1707,6 +1770,12 @@ let string_of_extra_splits s =
                               (KBindings.bindings ks))))
        (ExtraSplits.bindings s))
 
+let string_of_let_binding_splits s =
+  String.concat ", "
+    (List.map (fun ((kid,l),detail) ->
+         string_of_kid kid ^ "." ^ simple_string_of_loc l ^ "." ^ string_of_match_detail detail)
+     (LetSplits.bindings s))
+
 let _string_of_callerset s =
   String.concat ", " (List.map (fun (id,arg) -> string_of_id id ^ "." ^ string_of_int arg)
                         (CallerArgSet.elements s))
@@ -1716,8 +1785,8 @@ let string_of_callerkidset s =
                         (CallerKidSet.elements s))
 
 let string_of_dep = function
-  | Have (args,extras) ->
-     "Have (" ^ string_of_argsplits args ^ ";" ^ string_of_extra_splits extras ^ ")"
+  | Have (args,extras,letbinds) ->
+     "Have (" ^ string_of_argsplits args ^ ";" ^ string_of_extra_splits extras ^ ";" ^ string_of_let_binding_splits letbinds ^ ")"
   | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting.loc_to_string l
 
 (* If a callee uses a type variable as a size, does it need to be split in the
@@ -1743,6 +1812,7 @@ let parents_call_dep cks = { in_fun = None; parents = cks }
 type result = {
   split : arg_splits;
   extra_splits : extra_splits;
+  let_binding_splits : let_binding_splits;
   failures : StringSet.t Failures.t;
   (* Dependencies for type variables of each fn called, so that
      if the fn uses one for a bitvector size we can track it back *)
@@ -1753,6 +1823,7 @@ type result = {
 let empty = {
   split = ArgSplits.empty;
   extra_splits = ExtraSplits.empty;
+  let_binding_splits = LetSplits.empty;
   failures = Failures.empty;
   split_on_call = Bindings.empty;
   kid_in_caller = CallerKidSet.empty
@@ -1778,11 +1849,12 @@ let dmerge x y =
   match x,y with
   | Unknown (l,s), _ -> Unknown (l,s)
   | _, Unknown (l,s) -> Unknown (l,s)
-  | Have (args,extras), Have (args',extras') ->
+  | Have (args,extras,lets), Have (args',extras',lets') ->
      Have (ArgSplits.merge merge_detail args args',
-           merge_extras extras extras')
+           merge_extras extras extras',
+           LetSplits.merge merge_detail lets lets')
 
-let dempty = Have (ArgSplits.empty, ExtraSplits.empty)
+let dempty = Have (ArgSplits.empty, ExtraSplits.empty, LetSplits.empty)
 
 let dep_bindings_merge a1 a2 =
   Bindings.merge (opt_merge dmerge) a1 a2
@@ -1817,6 +1889,7 @@ let failure_merge _ x y =
 let merge rs rs' = {
   split = ArgSplits.merge merge_detail rs.split rs'.split;
   extra_splits = merge_extras rs.extra_splits rs'.extra_splits;
+  let_binding_splits = LetSplits.merge merge_detail rs.let_binding_splits rs'.let_binding_splits;
   failures = Failures.merge failure_merge rs.failures rs'.failures;
   split_on_call = Bindings.merge call_arg_merge rs.split_on_call rs'.split_on_call;
   kid_in_caller = CallerKidSet.union rs.kid_in_caller rs'.kid_in_caller
@@ -2009,9 +2082,9 @@ let mk_subrange_pattern vannot vstart vend =
 let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
   let check_dep id ctx =
     match Bindings.find id env.var_deps with
-    | Have (args,extras) -> begin
-      match ArgSplits.bindings args, ExtraSplits.bindings extras with
-      | [(id',loc),Total], [] when Id.compare id id' == 0 ->
+    | Have (args,extras,lets) -> begin
+      match ArgSplits.bindings args, ExtraSplits.is_empty extras, LetSplits.is_empty lets with
+      | [(id',loc),Total], true, true when Id.compare id id' == 0 ->
          (match Util.map_all (function
          | Pat_aux (Pat_exp (pat,_),_) -> Some (ctx pat)
          | Pat_aux (Pat_when (_,_,_),_) -> None) pexps
@@ -2022,7 +2095,8 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
                 None)
              else
                Some (Have (ArgSplits.singleton (id,loc) (Partial (pats,l)),
-                           ExtraSplits.empty))
+                           ExtraSplits.empty,
+                           LetSplits.empty))
           | None -> None)
       | _ -> None
     end
@@ -2291,9 +2365,10 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
        (merge_deps (deps::ds),
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
-    | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
+    | E_let (LB_aux (LB_val (pat,e1),(lb_l,_)),e2) ->
        let d1,assigns,r1 = analyse_sub env assigns e1 in
        let env = update_env env d1 pat (env_of_annot (l,annot)) (env_of e2) in
+       let unknown_deps = match d1 with Unknown _ -> true | Have _ -> false in
        let env =
          (* As a special case, detect
               let 'size = if ... then 'typaram1 else 'typaram2;
@@ -2306,6 +2381,43 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
               when is_toplevel_int annot1 && is_toplevel_int annot2 ->
             let guard_deps, _, _ = analyse_sub env assigns guard_exp in
             { env with kid_deps = KBindings.add kid guard_deps env.kid_deps }
+
+         (* Add a new case split after the let if necessary *)
+         (* Potential improvements: match on more patterns (especially plain ids, or
+            tuples); allow disjunctions of equalities as well as set constraints;
+            allow set constraint to be part of a larger constraint. *)
+         | P_aux (P_var (_, TP_aux (TP_var kid, _)), _), _ when unknown_deps ->
+            let l' = Generated l in
+            let kid_set = KidSet.singleton kid in
+            let equiv_vars, split = match typ_of e1 with
+              | Typ_aux (Typ_exist ([kdid], NC_aux (NC_set (kid, sizes), _), typ), _)
+                   when Kid.compare (kopt_kid kdid) kid == 0 ->
+                 begin match Type_check.destruct_atom_nexp (env_of e1) typ with
+                 | Some nexp when Nexp.compare (nvar kid) nexp == 0 ->
+                    let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',annot))) sizes in
+                    kid_set, Partial (pats,l)
+                 | _ -> kid_set, Total
+                 end
+
+              | Typ_aux (Typ_app (Id_aux (Id "atom", _),
+                                  [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
+                 let typ_env = env_of_annot (l,annot) in
+                 let constraints = Type_check.Env.get_constraints typ_env in
+                 let vars = Spec_analysis.equal_kids_ncs kid' constraints in
+                 begin match Util.find_map (function
+                                 | NC_aux (NC_set (kid'', is),_) when KidSet.mem kid'' vars -> Some is
+                                 | _ -> None) constraints with
+                 | Some sizes ->
+                    let pats = List.map (fun n -> P_aux (P_lit (L_aux (L_num n,l')),(l',annot))) sizes in
+                    KidSet.union kid_set vars, Partial (pats,l)
+                 | None -> KidSet.union kid_set vars, Total
+                 end
+
+              | _ -> kid_set, Total
+            in
+            let d = Have (ArgSplits.empty, ExtraSplits.empty, LetSplits.singleton (kid,lb_l) split) in
+            let kid_deps = KidSet.fold (fun kid ds -> KBindings.add kid d ds) equiv_vars env.kid_deps in
+            { env with kid_deps }
          | _, _ ->
             env
        in
@@ -2399,10 +2511,11 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
                { r with kid_in_caller = CallerKidSet.add (fn_id,v) r.kid_in_caller }
            | _ ->
                match deps_of_nexp l env.kid_deps [] size_nexp with
-               | Have (args,extras) ->
+               | Have (args,extras,lets) ->
                   { r with
                     split = ArgSplits.merge merge_detail r.split args;
-                    extra_splits = merge_extras r.extra_splits extras
+                    extra_splits = merge_extras r.extra_splits extras;
+                    let_binding_splits = LetSplits.merge merge_detail r.let_binding_splits lets
                   }
                | Unknown (l,msg) ->
                   { r with
@@ -2450,14 +2563,11 @@ and analyse_lexp fn_id effect_info env assigns deps (LEXP_aux (lexp,(l,_))) =
      assigns, r
 
 
-let rec translate_loc l =
-  match l with
-  | Range (pos,_) -> Some (pos.Lexing.pos_fname,pos.Lexing.pos_lnum)
-  | Generated l -> translate_loc l
-  | _ -> None
-
 let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
-  let pats = 
+  (* The splitter always uses the outermost location *)
+  let top_pat_loc = pat_loc pat in
+
+  let pats =
     match pat with
     | P_aux (P_tup pats,_) -> pats
     | _ -> [pat]
@@ -2512,41 +2622,35 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
          (ArgSplits.merge merge_detail s1 s2, dep_bindings_merge v1 v2, dep_kbindings_merge k1 k2)
       | P_not p -> aux p
       | P_as (pat,id) ->
-         begin
-           let s,v,k = aux pat in
-           match translate_loc (id_loc id) with
-           | Some loc ->
-              ArgSplits.add (id,loc) Total s,
-              Bindings.add id (Have (ArgSplits.singleton (id,loc) Total, ExtraSplits.empty)) v,
-              k
-           | None ->
-              s,
-              Bindings.add id (Unknown (l, ("Unable to give location for " ^ string_of_id id))) v,
-              k
-         end
+         let s,v,k = aux pat in
+         if useful_loc top_pat_loc then
+           ArgSplits.add (id,top_pat_loc) Total s,
+           Bindings.add id (Have (ArgSplits.singleton (id,top_pat_loc) Total, ExtraSplits.empty, LetSplits.empty)) v,
+           k
+         else
+           s,
+           Bindings.add id (Unknown (l, ("Unable to give location for " ^ string_of_id id))) v,
+           k
       | P_typ (_,pat) -> aux pat
       | P_id id ->
-         begin
-         match translate_loc (id_loc id) with
-         | Some loc ->
-            let kids = kids_of_annot (l,annot) in
-            let split = default_split annot kids in
-            let s = ArgSplits.singleton (id,loc) split in
-            s,
-            Bindings.singleton id (Have (s, ExtraSplits.empty)),
-            KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids KBindings.empty
-         | None ->
-            ArgSplits.empty,
-            Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))),
-            KBindings.empty
-         end
+         if useful_loc top_pat_loc then
+           let kids = kids_of_annot (l,annot) in
+           let split = default_split annot kids in
+           let s = ArgSplits.singleton (id,top_pat_loc) split in
+           s,
+           Bindings.singleton id (Have (s, ExtraSplits.empty, LetSplits.empty)),
+           KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty, LetSplits.empty)) k) kids KBindings.empty
+         else
+           ArgSplits.empty,
+           Bindings.singleton id (Unknown (l, ("Unable to give location for " ^ string_of_id id))),
+           KBindings.empty
       | P_var (pat, tpat) ->
          let s,v,k = aux pat in
          let kids = kids_bound_by_typ_pat tpat in
          let kids = KidSet.fold (fun kid s ->
            KidSet.union s (Spec_analysis.equal_kids (env_of_annot (l,annot)) kid))
            kids kids in
-         s,v,KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids k
+         s,v,KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty, LetSplits.empty)) k) kids k
       | P_app (_,pats) -> of_list pats
       | P_vector pats
       | P_vector_concat pats
@@ -2574,7 +2678,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
       let split = default_split (mk_tannot env int_typ) (KidSet.singleton kid) in
       let extra_splits = ExtraSplits.singleton (fn_id, fn_l)
         (KBindings.singleton kid split) in
-      KBindings.add kid (Have (ArgSplits.empty, extra_splits)) kid_deps
+      KBindings.add kid (Have (ArgSplits.empty, extra_splits, LetSplits.empty)) kid_deps
   in
   let kid_deps = List.fold_left note_no_arg kid_deps top_kids in
   let merge_kid_deps_eqns k kdeps eqn_kids =
@@ -2754,9 +2858,14 @@ let detail_to_split = function
 let argset_to_list splits =
   let l = ArgSplits.bindings splits in
   let argelt  = function
-    | ((id,(file,loc)),detail) -> ((file,loc),string_of_id id,detail_to_split detail)
+    | ((id,loc),detail) -> (Exact loc,string_of_id id,detail_to_split detail)
   in
   List.map argelt l
+
+let let_binding_splits_to_list lets =
+  List.map (fun ((kid,loc), detail) ->
+      (Exact loc, string_of_kid kid, detail_to_split detail))
+    (LetSplits.bindings lets)
 
 let analyse_defs debug effect_info env ast =
   let total_defs = List.length ast.defs in
@@ -2775,40 +2884,43 @@ let analyse_defs debug effect_info env ast =
   (* Resolve the interprocedural dependencies *)
 
   let rec separate_deps = function
-    | Have (splits, extras) ->
-       splits, extras, Failures.empty
+    | Have (splits, extras, lets) ->
+       splits, extras, lets, Failures.empty
     | Unknown (l,msg) ->
-       ArgSplits.empty, ExtraSplits.empty,
+       ArgSplits.empty, ExtraSplits.empty, LetSplits.empty,
       Failures.singleton l (StringSet.singleton ("Unable to monomorphise dependency: " ^ msg))
   and chase_kid_caller (id,kid) =
     match Bindings.find id r.split_on_call with
     | kid_deps -> begin
       match KBindings.find kid kid_deps with
       | call_dep ->
-         let (splits, extras, fails) = match call_dep.in_fun with
+         let (splits, extras, lets, fails) = match call_dep.in_fun with
            | Some deps -> separate_deps deps
-           | None -> (ArgSplits.empty, ExtraSplits.empty, Failures.empty)
+           | None -> (ArgSplits.empty, ExtraSplits.empty, LetSplits.empty, Failures.empty)
          in
-         CallerKidSet.fold add_kid call_dep.parents (splits, extras, fails)
-      | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
+         CallerKidSet.fold add_kid call_dep.parents (splits, extras, lets, fails)
+      | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,LetSplits.empty,Failures.empty
     end
-    | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
-  and add_kid k (splits,extras,fails) =
-    let splits',extras',fails' = chase_kid_caller k in
+    | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,LetSplits.empty,Failures.empty
+  and add_kid k (splits,extras,lets,fails) =
+    let splits',extras',lets',fails' = chase_kid_caller k in
     ArgSplits.merge merge_detail splits splits',
     merge_extras extras extras',
+    LetSplits.merge merge_detail lets lets',
     Failures.merge failure_merge fails fails'
   in
   let _ = if debug > 1 then print_result r else () in
-  let splits,extras,fails = CallerKidSet.fold add_kid r.kid_in_caller (r.split,r.extra_splits,r.failures) in
+  let splits,extras,lets,fails =
+    CallerKidSet.fold add_kid r.kid_in_caller (r.split,r.extra_splits,r.let_binding_splits,r.failures) in
   let _ =
     if debug > 0 then
       (print_endline "Final splits:";
        print_endline (string_of_argsplits splits);
-       print_endline (string_of_extra_splits extras))
+       print_endline (string_of_extra_splits extras);
+       print_endline (string_of_let_binding_splits lets))
     else ()
   in
-  let splits = argset_to_list splits in
+  let splits = argset_to_list splits @ let_binding_splits_to_list lets in
   if Failures.is_empty fails
   then (true,splits,extras) else
     begin
@@ -2835,16 +2947,9 @@ let add_extra_splits extras defs =
          let nexp = Nexp_aux (Nexp_var kid,l) in
          let var = fresh_sz_var () in
          let size_annot = mk_tannot (env_of e) (atom_typ nexp) in
-         let loc = match Analysis.translate_loc l with
-           | Some l -> l
-           | None ->
-              (Reporting.print_err l "Monomorphisation"
-                 "Internal error: bad location for added case";
-               ("",0))
-         in
          let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l,size_annot)),exp),(l',annot))] in
          E_aux (E_case (E_aux (E_sizeof nexp, (l',size_annot)), pexps),(l',annot)),
-         ((loc, string_of_id var, Analysis.detail_to_split detail)::split_list)
+         ((Exact l, string_of_id var, Analysis.detail_to_split detail)::split_list)
     ) extras (e,[])
   in
   let add_to_funcl (FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
@@ -4236,7 +4341,7 @@ let monomorphise target effect_info opts splits ast =
       then f, r, ex
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
     else true, [], Analysis.ExtraSplits.empty in
-  let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
+  let splits = new_splits @ (List.map (fun ((file,line),id) -> (Line (file,line),id,None)) splits) in
   let ok_extras, defs, extra_splits = add_extra_splits extra_splits ast.defs in
   let ast = { ast with defs = defs } in
   let splits = splits @ extra_splits in

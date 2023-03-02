@@ -52,12 +52,13 @@ do
                "$OUTPUTDIR/out_types.lem" "$OUTPUTDIR/out.lem" &>>log;
 	then
             cd "$OUTPUTDIR"
+            if grep -q initial_regstate out.lem; then TESTML=../test_with_state.ml; else TESTML=../test.ml; fi
             if ocamlfind ocamlc -linkpkg -package zarith -package lem \
                          sail2_values.ml sail2_operators.ml \
                          sail2_instr_kinds.ml sail2_prompt_monad.ml sail2_prompt.ml \
                          sail2_operators_mwords.ml sail2_state_monad.ml sail2_state.ml \
                          sail2_string.ml sail2_undefined.ml \
-                         test_extra.ml out_types.ml out.ml ../test.ml \
+                         test_extra.ml out_types.ml out.ml $TESTML \
                          -o test &>>"$DIR/log"
             then
                 if ./test &>>"$DIR/log"
