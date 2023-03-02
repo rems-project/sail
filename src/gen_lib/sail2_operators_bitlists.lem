@@ -121,6 +121,9 @@ let int_of_vec sign v = maybe_failwith (int_of_vec_maybe sign v)
 val string_of_bits : list bitU -> string
 let string_of_bits = string_of_bv
 
+val string_of_bits_subrange : list bitU -> integer -> integer -> string
+let string_of_bits_subrange = string_of_bv_subrange
+
 val decimal_string_of_bits : list bitU -> string
 let decimal_string_of_bits = decimal_string_of_bv
 

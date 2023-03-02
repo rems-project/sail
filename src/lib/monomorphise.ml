@@ -3536,6 +3536,15 @@ let rec rewrite_app env typ (id,args) =
 
     | _ -> E_app (id, args)
 
+  else if is_id env (Id "string_of_bits") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vec1; start1; end1]), a1) as exp1]
+         when is_subrange subrange1 && is_bitvector_typ (typ_of vec1) &&
+                not (is_constant_vec_typ env (typ_of exp1))
+      ->
+       E_app (mk_id "string_of_bits_subrange", [vec1; start1; end1])
+    | _ -> E_app (id, args)
+
   else E_app (id,args)
 
 (* A deeper rewrite may have removed the type information, so try reinferring it *)
