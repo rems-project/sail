@@ -72,77 +72,161 @@ open Ast
 open Ast_defs
 open Ast_util
 
-let bitvec size order =
-  Printf.sprintf "bitvector(%i, %s)" size (string_of_order order)
+let bitvec_typ size order = bitvector_typ (nconstant size) order
+let fun_typschm arg_typs ret_typ = mk_typschm (mk_typquant []) (function_typ arg_typs ret_typ)
 
-let constructor name order start stop =
-  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let constructor_val = Printf.sprintf "val Mk_%s : %s -> %s" name (bitvec size order) name in
-  let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" name in
-  List.concat [defs_of_string __POS__ constructor_val; defs_of_string __POS__ constructor_fun]
+let exp_of_index_nexp nexp =
+  match int_of_nexp_opt (nexp_simp nexp) with
+  | Some i -> mk_lit_exp (L_num i)
+  | None -> raise (Reporting.err_typ (nexp_loc nexp) "non-constant bitfield index")
 
-(* For every index range, create a getter and setter *)
+let index_of_nexp nexp =
+  match int_of_nexp_opt (nexp_simp nexp) with
+  | Some i -> i
+  | None -> raise (Reporting.err_typ (nexp_loc nexp) "non-constant bitfield index")
 
-type field_accessor_ids = { get : string; set : string; update: string; overload: string }
+let mk_num_exp i = mk_lit_exp (L_num i)
+let mk_id_exp id = mk_exp (E_id id)
+let mk_id_pat id = mk_pat (P_id id)
 
-let field_accessor_ids type_name field = {
-  get = Printf.sprintf "_get_%s_%s" type_name field;
-  set = Printf.sprintf "_set_%s_%s" type_name field;
-  update = Printf.sprintf "_update_%s_%s" type_name field;
-  overload = Printf.sprintf "_mod_%s" field
-}
+let rec indices_of_range = function
+  | BF_aux (BF_single i, _) -> [(index_of_nexp i, index_of_nexp i)]
+  | BF_aux (BF_range (i, j), _) -> [(index_of_nexp i, index_of_nexp j)]
+  | BF_aux (BF_concat (l, r), _) -> indices_of_range l @ indices_of_range r
 
-let index_range_getter name field order start stop =
-  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let fun_id = (field_accessor_ids name field).get in
-  let irg_val = Printf.sprintf "val %s : %s -> %s" fun_id name (bitvec size order) in
-  let irg_function = Printf.sprintf "function %s v = v.bits[%i .. %i]" fun_id start stop in
-  List.concat [defs_of_string __POS__ irg_val; defs_of_string __POS__ irg_function]
+let slice_width (i, j) = Big_int.succ (Big_int.abs (Big_int.sub i j))
+let range_width r =
+  List.map slice_width (indices_of_range r)
+  |> List.fold_left Big_int.add Big_int.zero
 
-let index_range_setter name field order start stop =
-  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let fun_id = (field_accessor_ids name field).set in
-  let irs_val = Printf.sprintf "val %s : (register(%s), %s) -> unit" fun_id name (bitvec size order) in
+(* Generate a constructor function for a bitfield type *)
+let constructor name order size =
+  let typschm = fun_typschm [bitvec_typ size order] (mk_id_typ name) in
+  let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None, false)) in
+  let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" (string_of_id name) in
+  (constructor_val :: defs_of_string __POS__ constructor_fun)
+
+(* Helper functions to generate different kinds of field accessor exps and lexps *)
+let get_field_exp range inner_exp =
+  let mk_slice (i, j) = mk_exp (E_vector_subrange (inner_exp, mk_num_exp i, mk_num_exp j)) in
+  let rec aux = function
+    | [e] -> e
+    | (e :: es) -> mk_exp (E_vector_append (e, aux es))
+    | [] -> assert false (* unreachable *)
+  in
+  aux (List.map mk_slice (indices_of_range range))
+
+let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
+
+let set_field_lexp range inner_lexp =
+  let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, mk_num_exp j)) in
+  match List.map mk_slice (indices_of_range range) with
+  | [e] -> e
+  | es -> mk_lexp (LE_vector_concat es)
+
+let set_bits_field_lexp inner_lexp = mk_lexp (LE_field (inner_lexp, mk_id "bits"))
+
+let get_bits_field exp = mk_exp (E_field (exp, mk_id "bits"))
+
+let set_bits_field exp value =
+  mk_exp (E_struct_update (exp, [mk_fexp (mk_id "bits") value]))
+
+let update_field_exp range order inner_exp new_value =
+  let single = (List.length (indices_of_range range) == 1) in
+  let mk_update e vi vj i j =
+    let rhs =
+      if single then new_value else begin
+        mk_exp (E_vector_subrange (new_value, mk_num_exp vi, mk_num_exp vj))
+      end
+    in
+    mk_exp (E_vector_update_subrange (e, mk_num_exp i, mk_num_exp j, rhs))
+  in
+  let rec aux e vi = function
+    | (i, j) :: is ->
+       let w = slice_width (i, j) in
+       let vi' = if is_order_inc order then Big_int.add vi w else Big_int.sub vi w in
+       let rhs =
+         if single then new_value else begin
+           let vj = if is_order_inc order then Big_int.pred vi' else Big_int.succ vi' in
+           mk_exp (E_vector_subrange (new_value, mk_num_exp vi, mk_num_exp vj))
+         end
+       in
+       let update = mk_exp (E_vector_update_subrange (e, mk_num_exp i, mk_num_exp j, rhs)) in
+       aux update vi' is
+    | [] -> e
+  in
+  let vi = if is_order_inc order then Big_int.zero else Big_int.pred (range_width range) in
+  aux inner_exp vi (indices_of_range range)
+
+(* For every field, create getter and setter functions *)
+type field_accessor_ids = { get : id; set : id; update: id; overload: id }
+
+let field_accessor_ids type_name field =
+  let type_name = string_of_id type_name in
+  let field = string_of_id field in
+  { get = mk_id (Printf.sprintf "_get_%s_%s" type_name field);
+    set = mk_id (Printf.sprintf "_set_%s_%s" type_name field);
+    update = mk_id (Printf.sprintf "_update_%s_%s" type_name field);
+    overload = mk_id (Printf.sprintf "_mod_%s" field)
+  }
+
+let field_getter typ_name field order range =
+  let size = range_width range in
+  let typschm = fun_typschm [mk_id_typ typ_name] (bitvec_typ size order) in
+  let fun_id = (field_accessor_ids typ_name field).get in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let body = get_field_exp range (get_bits_field (mk_exp (E_id (mk_id "v")))) in
+  let funcl = mk_funcl fun_id (mk_pat (P_id (mk_id "v"))) body in
+  [spec; mk_fundef [funcl]]
+
+let field_updater typ_name field order range =
+  let size = range_width range in
+  let typ = mk_id_typ typ_name in
+  let typschm = fun_typschm [typ; bitvec_typ size order] typ in
+  let fun_id = (field_accessor_ids typ_name field).update in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let orig_var = mk_id "v" in
+  let new_val_var = mk_id "x" in
+  let bits_exp = get_bits_field (mk_id_exp orig_var) in
+  let new_bits = update_field_exp range order bits_exp (mk_id_exp new_val_var) in
+  let body = set_bits_field (mk_id_exp orig_var) new_bits in
+  let funcl = mk_funcl fun_id (mk_pat (P_tuple [mk_id_pat orig_var; mk_id_pat new_val_var])) body in
+  [spec; mk_fundef [funcl]]
+
+let register_field_setter typ_name field order range =
+  let size = range_width range in
+  let fun_id = string_of_id (field_accessor_ids typ_name field).set in
+  let update_fun_id = string_of_id (field_accessor_ids typ_name field).update in
+  let typ_name = string_of_id typ_name in
+  let field_typ = string_of_typ (bitvec_typ size order) in
+  let rfs_val = Printf.sprintf "val %s : (register(%s), %s) -> unit" fun_id typ_name field_typ in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
-  let irs_function = String.concat "\n"
+  let rfs_function = String.concat "\n"
     [ Printf.sprintf "function %s (r_ref, v) = {" fun_id;
                      "  r = __deref(r_ref);";
-      Printf.sprintf "  r.bits = [r.bits with %i .. %i = v];" start stop;
-                     "  (*r_ref) = r";
+      Printf.sprintf "  (*r_ref) = %s(r, v)" update_fun_id;
                      "}"
     ]
   in
-  List.concat [defs_of_string __POS__ irs_val; defs_of_string __POS__ irs_function]
+  List.concat [defs_of_string __POS__ rfs_val; defs_of_string __POS__ rfs_function]
 
-let index_range_update name field order start stop =
-  let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
-  let fun_id = (field_accessor_ids name field).update in
-  let iru_val = Printf.sprintf "val %s : (%s, %s) -> %s" fun_id name (bitvec size order) name in
-  let iru_function =
-    Printf.sprintf "function %s (v, x) = { v with bits = [ v.bits with %i .. %i = x] }"
-      fun_id start stop
-  in
-  let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
-  List.concat [defs_of_string __POS__ iru_val; defs_of_string __POS__ iru_function; defs_of_string __POS__ iru_overload]
-
-let index_range_overload name field =
-  let fun_id = (field_accessor_ids name field).overload in
-  let get_id = (field_accessor_ids name field).get in
-  let set_id = (field_accessor_ids name field).set in
+let field_overload name field =
+  let fun_id = string_of_id (field_accessor_ids name field).overload in
+  let get_id = string_of_id (field_accessor_ids name field).get in
+  let set_id = string_of_id (field_accessor_ids name field).set in
   defs_of_string __POS__ (Printf.sprintf "overload %s = {%s, %s}" fun_id get_id set_id)
 
-let index_range_accessor name field order (n, m) =
-  let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let setter n m = index_range_setter name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let update n m = index_range_update name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let overload = index_range_overload name field in
-  List.concat [getter n m; setter n m; update n m; overload]
+let field_accessors typ_name field order range =
+  List.concat [
+    field_getter typ_name field order range;
+    field_updater typ_name field order range;
+    register_field_setter typ_name field order range;
+    field_overload typ_name field
+  ]
 
-let field_accessor name order (id, ir) =
-  index_range_accessor name (string_of_id id) order ir
-
+(* Generate all accessor functions for a given bitfield type *)
 let macro id size order ranges =
-  let name = string_of_id id in
-  let ranges = (mk_id "bits", (Big_int.of_int (size - 1), Big_int.of_int 0)) :: Bindings.bindings ranges in
-  List.concat ([constructor name order (size - 1) 0]
-               @ List.map (field_accessor name order) ranges)
+  let full_range = BF_aux (BF_range (nconstant (Big_int.pred size), nconstant Big_int.zero), Parse_ast.Unknown) in
+  let ranges = (mk_id "bits", full_range) :: (Bindings.bindings ranges) in
+  let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
+  List.concat ([constructor id order size] @ accessors)

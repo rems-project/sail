@@ -696,7 +696,7 @@ let rec doc_index_range (BF_aux (ir, _)) =
   match ir with
   | BF_single i -> doc_nexp i
   | BF_range (i, j) -> doc_nexp i ^^ string ".." ^^ doc_nexp j
-  | BF_concat (i, j) -> doc_index_range i ^^ comma ^^ space ^^ doc_index_range j
+  | BF_concat (i, j) -> parens (doc_index_range i ^^ space ^^ at ^^ space ^^ doc_index_range j)
 
 let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with

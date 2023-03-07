@@ -1251,6 +1251,8 @@ index_range:
     { mk_ir (BF_single $1) $startpos $endpos }
   | typ DotDot typ
     { mk_ir (BF_range ($1, $3)) $startpos $endpos }
+  | Lparen index_range At index_range Rparen
+    { mk_ir (BF_concat ($2, $4)) $startpos $endpos }
 
 r_id_def:
   | id Colon index_range

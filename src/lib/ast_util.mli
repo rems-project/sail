@@ -408,6 +408,7 @@ val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
+val nexp_loc : nexp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
 
 (** {1 Printing utilities}

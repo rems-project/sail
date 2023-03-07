@@ -1,7 +1,3 @@
-default Order dec
-
-$include <prelude.sail>
-
 bitfield B : bits(32) = {
   Field0: (31..16 @ 7..0),
   Field1: 15..8

@@ -131,7 +131,10 @@ let pat_loc = function
 
 let exp_loc = function
   | E_aux (_, (l, _)) -> l
-             
+
+let nexp_loc = function
+  | Nexp_aux (_, l) -> l
+
 let gen_loc = function
   | Parse_ast.Generated l -> Parse_ast.Generated l
   | l -> Parse_ast.Generated l
@@ -1059,7 +1062,7 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
   | BF_single n -> string_of_nexp n
   | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
-  | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
+  | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ " @ " ^ string_of_index_range ir2 ^ ")"
 
 
 let rec pat_ids (P_aux (pat_aux, _)) =

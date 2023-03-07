@@ -154,7 +154,7 @@ type env =
     poly_undefineds : bool;
     prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
-    bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
+    bitfields : index_range Bindings.t Bindings.t;
     toplevel : l option;
     outcomes : (typquant * typ * kinded_id list * id list * env) Bindings.t;
     outcome_typschm : (typquant * typ) option;
@@ -587,8 +587,8 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
-  val add_bitfield : id -> (Big_int.num * Big_int.num) Bindings.t -> t -> t
-  val get_bitfield_range : l -> id -> id -> t -> (Big_int.num * Big_int.num)
+  val add_bitfield : id -> index_range Bindings.t -> t -> t
+  val get_bitfield_range : l -> id -> id -> t -> index_range
 
   val no_bindings : t -> t
 
@@ -4193,9 +4193,8 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
        | Typ_id id ->
           begin match exp with
           | E_aux (E_id field, _) ->
-             let (hi, lo) = Env.get_bitfield_range l id field env in
-             let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
-             infer_lexp env (LE_aux (LE_vector_range (LE_aux (LE_field (v_lexp, Id_aux (Id "bits", l)), (l, empty_uannot)), hi, lo), (l, uannot)))
+             let field_lexp = mk_lexp (LE_field (v_lexp, Id_aux (Id "bits", l))) in
+             infer_lexp env (Bitfield.set_field_lexp (Env.get_bitfield_range l id field env) field_lexp)
           | _ ->
              typ_error env l (string_of_exp exp ^ " is not a bitfield accessor")
           end
@@ -4439,7 +4438,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
              | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
-                let access_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).get in
+                let access_id = (Bitfield.field_accessor_ids id field).get in
                 infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
              | _, _ ->
                 typ_error env l "Vector access could not be interpreted as a bitfield access"
@@ -4457,7 +4456,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
              | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
-                let update_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).update in
+                let update_id = (Bitfield.field_accessor_ids id field).update in
                 infer_exp env (mk_exp ~loc:l (E_app (update_id, [v; exp])))
              | _, _ ->
                 typ_error env l "Vector update could not be interpreted as a bitfield update"
@@ -5349,25 +5348,20 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> (tannot def) li
      | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
                              A_aux (A_order order, _)]), _)
           when string_of_id v = "bitvector" ->
-        let size = Big_int.to_int size in
-        let eval_index_nexp l nexp =
-          match int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) with
-          | Some i -> i
-          | None -> typ_error env l ("This numeric expression must evaluate to a constant: " ^ string_of_nexp nexp)
+        let rec expand_range_synonyms = function
+          | BF_aux (BF_single nexp, l) ->
+             BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
+          | BF_aux (BF_range (nexp1, nexp2), l) ->
+             let nexp1 = Env.expand_nexp_synonyms env nexp1 in
+             let nexp2 = Env.expand_nexp_synonyms env nexp2 in
+             BF_aux (BF_range (nexp1, nexp2), l)
+          | BF_aux (BF_concat (r1, r2), l) ->
+             BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
         in
         let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
         let ranges =
-          List.fold_left (fun ranges (field, range) ->
-              match range with
-              | BF_aux (BF_single nexp, l) ->
-                 let n = eval_index_nexp l nexp in
-                 Bindings.add field (n, n) ranges
-              | BF_aux (BF_range (hi, lo), l) ->
-                 let hi, lo = eval_index_nexp l hi, eval_index_nexp l lo in
-                 Bindings.add field (hi, lo) ranges
-              | BF_aux (BF_concat _, _) ->
-                 typ_error env l "Bitfield concatenation ranges are not supported"
-            ) Bindings.empty ranges
+          List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges
+          |> List.to_seq |> Bindings.of_seq
         in
         let defs =
           DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
