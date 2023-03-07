@@ -44,6 +44,23 @@ function f() -> int = {
   unsigned(c)
 }
 
+// Similar test, but makes both explicit type variables
+
+function g() -> int = {
+  let sz = get_size();
+  let sz2 = 2 * sz;
+
+  let 'm = sz;
+  let 'n = sz2;
+
+  let a : bits('m) = sail_zeros(sz);
+  let b : bits('n) = add_bits(sail_zero_extend(a, sz2), sail_zero_extend(0x3, sz2));
+  let c : bits('m) = add_bits_int(b[sz - 1 .. 0], use_size(sz));
+
+  unsigned(c)
+}
+
 function run() -> unit = {
   assert(f() == 2);
+  assert(g() == 4);
 }
