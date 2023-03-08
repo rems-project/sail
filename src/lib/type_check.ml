@@ -587,8 +587,9 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
+  val is_bitfield : id -> t -> bool
   val add_bitfield : id -> index_range Bindings.t -> t -> t
-  val get_bitfield_range : l -> id -> id -> t -> index_range
+  val get_bitfield_ranges : id -> t -> index_range Bindings.t
 
   val no_bindings : t -> t
 
@@ -1523,14 +1524,9 @@ end = struct
       | targ -> rewrap targ in
     aux (expand_synonyms env typ)
 
-  let get_bitfield_range l id field env =
-    match Bindings.find_opt id env.bitfields with
-    | Some ranges ->
-       begin match Bindings.find_opt field ranges with
-       | Some range -> range
-       | None -> typ_error env l (Printf.sprintf "Field %s does not exist in the bitfield %s" (string_of_id field) (string_of_id id))
-       end
-    | None -> typ_error env l (Printf.sprintf "%s is not a bitfield" (string_of_id id))
+  let is_bitfield id env = Bindings.mem id env.bitfields
+
+  let get_bitfield_ranges id env = Bindings.find id env.bitfields
 
   let add_bitfield id ranges env =
     { env with bitfields = Bindings.add id ranges env.bitfields }
@@ -1541,6 +1537,10 @@ end = struct
   let polymorphic_undefineds env = env.poly_undefineds
 
 end
+
+let get_bitfield_range id field env =
+  try Bindings.find_opt field (Env.get_bitfield_ranges id env)
+  with Not_found -> None
 
 let expand_bind_synonyms l env (typq, typ) =
   typq, Env.expand_synonyms (Env.add_typquant l typq env) typ
@@ -4193,8 +4193,12 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
        | Typ_id id ->
           begin match exp with
           | E_aux (E_id field, _) ->
-             let field_lexp = mk_lexp (LE_field (v_lexp, Id_aux (Id "bits", l))) in
-             infer_lexp env (Bitfield.set_field_lexp (Env.get_bitfield_range l id field env) field_lexp)
+             let field_lexp = Bitfield.set_bits_field_lexp v_lexp in
+             let index_range = match get_bitfield_range id field env with
+               | Some range -> range
+               | None -> typ_error env l (Printf.sprintf "Unknown field %s in bitfield %s" (string_of_id field) (string_of_id id))
+             in
+             infer_lexp env (Bitfield.set_field_lexp index_range field_lexp)
           | _ ->
              typ_error env l (string_of_exp exp ^ " is not a bitfield accessor")
           end
