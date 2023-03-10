@@ -1095,7 +1095,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
            let e' = match match_l lb_l with
              | [] -> e'
              | [(id_string,splits)] ->
-                let l' = Generated (fst annot) in
+                let l' = Generated lb_l in
                 let id = mk_id id_string in
                 let match_exp = E_aux (E_id id, (l',binding_exp_annot)) in
                 let pat_to_split = P_aux (P_id id, (l',binding_exp_annot)) in
@@ -2386,7 +2386,8 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
          (* Potential improvements: match on more patterns (e.g. tuples);
             allow disjunctions of equalities as well as set constraints;
             allow set constraint to be part of a larger constraint. *)
-         | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), _ when unknown_deps ->
+         | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), _
+              when unknown_deps && useful_loc lb_l ->
             let l' = Generated l in
             let split = match typ_of e1 with
               | Typ_aux (Typ_exist ([kdid], NC_aux (NC_set (kid, sizes), _), typ), _)
@@ -2941,14 +2942,14 @@ let fresh_sz_var =
 let add_extra_splits extras defs =
   let success = ref true in
   let add_to_body extras (E_aux (_,(l,annot)) as e) =
-    let l' = Generated l in
+    let l' = unique (Generated l) in
     KBindings.fold (fun kid detail (exp,split_list) ->
          let nexp = Nexp_aux (Nexp_var kid,l) in
          let var = fresh_sz_var () in
          let size_annot = mk_tannot (env_of e) (atom_typ nexp) in
-         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l,size_annot)),exp),(l',annot))] in
+         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l',size_annot)),exp),(l',annot))] in
          E_aux (E_match (E_aux (E_sizeof nexp, (l',size_annot)), pexps),(l',annot)),
-         ((Exact l, string_of_id var, Analysis.detail_to_split detail)::split_list)
+         ((Exact l', string_of_id var, Analysis.detail_to_split detail)::split_list)
     ) extras (e,[])
   in
   let add_to_funcl (FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
