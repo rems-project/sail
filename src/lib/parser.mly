@@ -1513,19 +1513,15 @@ register_def:
   | Doc register_def
     { doc_reg_dec $1 $2 }
   | Register id Colon typ
-    { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      mk_reg_dec (DEC_reg (rreg, wreg, $4, $2, None)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($4, $2, None)) $startpos $endpos }
   | Register id Colon typ Eq exp
-    { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      mk_reg_dec (DEC_reg (rreg, wreg, $4, $2, Some $6)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($4, $2, Some $6)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ
-    { mk_reg_dec (DEC_reg ($2, $3, $6, $4, None)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($6, $4, None)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ Eq exp
-    { mk_reg_dec (DEC_reg ($2, $3, $6, $4, Some $8)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($6, $4, Some $8)) $startpos $endpos }
   | Register Configuration id Colon typ Eq exp
-    { mk_reg_dec (DEC_config ($3, $5, $7)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($5, $3, Some $7)) $startpos $endpos }
 
 default_def:
   | Default kind Inc

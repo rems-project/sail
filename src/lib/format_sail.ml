@@ -117,7 +117,7 @@ let comment_type_delimiters = function
   | Lexer.Comment_block -> "/*", "*/"
 
 type chunk =
-  | Comment of Lexer.comment_type * string
+  | Comment of Lexer.comment_type * int * string
   | Spacer of bool * int
   | Function of {
       id : id;
@@ -143,11 +143,13 @@ type chunk =
   | Atom of string
   | String_literal of string
   | Pragma of string * string
-  | Unop of string * chunks
-  | Binop of chunks * string * chunks
+  | Unary of string * chunks
+  | Binary of chunks * string * chunks
+  | Ternary of chunks * string * chunks * string * chunks
+  | Index of chunks * chunks
   | Delim of string
   | Opt_delim of string
-  | Block of (line_num * chunks) list
+  | Block of (bool * chunks list)
   | Binder of binder * chunks * chunks * chunks
   | Block_binder of binder * chunks * chunks
   | If_then of bool * chunks * chunks
@@ -159,6 +161,8 @@ type chunk =
       aligned : bool;
       cases : pexp_chunks list
     }
+  | Vector_updates of chunks * chunk list
+  | Chunks of chunks
 
 and chunks = chunk Queue.t
 
@@ -173,9 +177,9 @@ let add_chunk q chunk =
   Queue.add chunk q
 
 let rec prerr_chunk indent = function
-  | Comment (comment_type, contents) ->
+  | Comment (comment_type, n, contents) ->
      let s, e = comment_type_delimiters comment_type in
-     Printf.eprintf "%sComment:%s%s%s\n" indent s contents e
+     Printf.eprintf "%sComment:%d %s%s%s\n" indent n s contents e
   | Spacer (line, w) ->
      Printf.eprintf "%sSpacer:%b %d\n" indent line w;
   | Atom str ->
@@ -200,10 +204,10 @@ let rec prerr_chunk indent = function
          Printf.eprintf "%s  %d:\n" indent i;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) args
-  | Block args ->
-     Printf.eprintf "%sBlock:\n" indent;
-     List.iteri (fun i (ln, arg) ->
-         Printf.eprintf "%s  %d: %s\n" indent i (string_of_line_num ln);
+  | Block (always_hardline, args) ->
+     Printf.eprintf "%sBlock: %b\n" indent always_hardline;
+     List.iteri (fun i arg ->
+         Printf.eprintf "%s  %d:\n" indent i;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) args
   | Function fn ->
@@ -250,15 +254,21 @@ let rec prerr_chunk indent = function
        ) [("lhs", fn_typ.lhs); ("rhs", fn_typ.rhs)]
   | Pragma (pragma, arg) ->
      Printf.eprintf "%sPragma:$%s %s\n" indent pragma arg
-  | Unop (op, arg) ->
-     Printf.eprintf "%sUnop:%s\n" indent op;
+  | Unary (op, arg) ->
+     Printf.eprintf "%sUnary:%s\n" indent op;
      Queue.iter (prerr_chunk (indent ^ "  ")) arg
-  | Binop (lhs, op, rhs) ->
-     Printf.eprintf "%sBinop:%s\n" indent op;
+  | Binary (lhs, op, rhs) ->
+     Printf.eprintf "%sBinary:%s\n" indent op;
      List.iter (fun (name, arg) ->
          Printf.eprintf "%s  %s:\n" indent name;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) [("lhs", lhs); ("rhs", rhs)]
+  | Ternary (x, op1, y, op2, z) ->
+     Printf.eprintf "%sTernary:%s %s\n" indent op1 op2;
+     List.iter (fun (name, arg) ->
+         Printf.eprintf "%s  %s:\n" indent name;
+         Queue.iter (prerr_chunk (indent ^ "    ")) arg
+       ) [("x", x); ("y", y); ("z", z)]
   | Delim str ->
      Printf.eprintf "%sDelim:%s\n" indent str
   | Opt_delim str ->
@@ -298,9 +308,18 @@ let rec prerr_chunk indent = function
      List.iter (fun exp ->
          Queue.iter (prerr_chunk (indent ^ "    ")) exp
        ) exps
-         
-     
-     
+  | Vector_updates (exp, updates) ->
+     Printf.eprintf "%sVector_updates:\n" indent
+  | Index (exp, ix) ->
+     Printf.eprintf "%sIndex:\n" indent;
+     List.iter (fun (name, arg) ->
+         Printf.eprintf "%s  %s:\n" indent name;
+         Queue.iter (prerr_chunk (indent ^ "    ")) arg
+       ) [("exp", exp); ("ix", ix)]
+  | Chunks chunks ->
+     Printf.eprintf "%sChunks:\n" indent;
+     Queue.iter (prerr_chunk (indent ^ "  ")) chunks
+ 
 let string_of_var (Kid_aux (Var v, _)) = v
 
 (* Pop comments preceeding location into the chunkstream *)
@@ -311,20 +330,24 @@ let rec pop_comments comments chunks l =
      begin match Reporting.simp_loc l with
      | Some (s, _) when e.pos_cnum <= s.pos_cnum ->
         let _ = Stack.pop comments in
-        Queue.add (Comment (comment_type, contents)) chunks;
+        Queue.add (Comment (comment_type, 0, contents)) chunks;
         pop_comments comments chunks l
      | _ -> ()
      end
 
-let pop_trailing_comment comments chunks line_num =
+let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
   match line_num with
-  | None -> ()
+  | None -> false
   | Some lnum ->
      begin match Stack.top_opt comments with
      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum ->
         let _ = Stack.pop comments in
-        Queue.add (Comment (comment_type, contents)) chunks
-     | _ -> ()
+        Queue.add (Comment (comment_type, n, contents)) chunks;
+        begin match comment_type with
+        | Lexer.Comment_line -> true
+        | _ -> false
+        end
+     | _ -> false
      end
 
 let string_of_kind (K_aux (k, _)) =
@@ -368,11 +391,23 @@ let rec map_peek f = function
   | [x] -> [f None x]
   | [] -> []
 
+let rec map_peek_acc f acc = function
+  | x1 :: x2 :: xs ->
+     let x1, acc = f acc (Some x2) x1 in
+     x1 :: map_peek_acc f acc (x2 ::xs)
+  | [x] -> [fst (f acc None x)]
+  | [] -> []
+        
 let have_linebreak line_num1 line_num2 =
   match line_num1, line_num2 with
   | Some p1, Some p2 -> p1 < p2
   | _, _ -> false
 
+let have_blank_linebreak line_num1 line_num2 =
+  match line_num1, line_num2 with
+  | Some p1, Some p2 -> p1 + 1 < p2
+  | _, _ -> false
+          
 let chunk_delimit ?delim ~get_loc ~chunk comments chunks xs =
   map_peek (fun next x ->
       let l = get_loc x in
@@ -403,7 +438,7 @@ let chunk_delimit ?delim ~get_loc ~chunk comments chunks xs =
          block comment to arg1 *)
       let next_line_num = Option.bind next (fun x2 -> starting_line_num (get_loc x2)) in
       if have_linebreak (ending_line_num l) next_line_num then (
-        pop_trailing_comment comments chunks (ending_line_num l)
+        ignore (pop_trailing_comment comments chunks (ending_line_num l))
       );
       
       chunks
@@ -432,12 +467,12 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
        | ATyp_times _ -> "*" | ATyp_sum _ -> "+" | ATyp_minus _ -> "-" | _ -> Reporting.unreachable l __POS__ "Invalid binary atyp" in
      let lhs_chunks = rec_chunk_atyp lhs in
      let rhs_chunks = rec_chunk_atyp rhs in
-     Queue.add (Binop (lhs_chunks, op_symbol, rhs_chunks)) chunks
+     Queue.add (Binary (lhs_chunks, op_symbol, rhs_chunks)) chunks
   | (ATyp_exp arg | ATyp_neg arg) as unop->
      let op_symbol = match unop with
        | ATyp_exp _ -> "2^" | ATyp_neg _ -> "-" | _ -> Reporting.unreachable l __POS__ "Invalid unary atyp" in
      let arg_chunks = rec_chunk_atyp arg in
-     Queue.add (Unop (op_symbol, arg_chunks)) chunks
+     Queue.add (Unary (op_symbol, arg_chunks)) chunks
   | ATyp_inc ->
      Queue.add (Atom "inc") chunks
   | ATyp_dec ->
@@ -453,7 +488,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_app (Id_aux (Operator op, _), [lhs; rhs]) ->
      let lhs_chunks = rec_chunk_atyp lhs in
      let rhs_chunks = rec_chunk_atyp rhs in
-     Queue.add (Binop (lhs_chunks, op, rhs_chunks)) chunks
+     Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
   | ATyp_app (id, args) ->
      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args in
      Queue.add (App (id, args)) chunks
@@ -506,16 +541,16 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
      let pat_chunks = rec_chunk_pat pat in
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
-     Queue.add (Binop (pat_chunks, ":", typ_chunks)) chunks
+     Queue.add (Binary (pat_chunks, ":", typ_chunks)) chunks
   | P_var (pat, typ) ->
      let pat_chunks = rec_chunk_pat pat in
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
-     Queue.add (Binop (pat_chunks, "as", typ_chunks)) chunks
+     Queue.add (Binary (pat_chunks, "as", typ_chunks)) chunks
   | P_cons (hd_pat, tl_pat) ->
      let hd_pat_chunks = rec_chunk_pat hd_pat in
      let tl_pat_chunks = rec_chunk_pat tl_pat in
-     Queue.add (Binop (hd_pat_chunks, "::", tl_pat_chunks)) chunks
+     Queue.add (Binary (hd_pat_chunks, "::", tl_pat_chunks)) chunks
 
 type block_exp =
   | Block_exp of exp
@@ -607,20 +642,20 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_app_infix (lhs, op, rhs) ->
      let lhs_chunks = rec_chunk_exp lhs in
      let rhs_chunks = rec_chunk_exp rhs in
-     Queue.add (Binop (lhs_chunks, string_of_id op, rhs_chunks)) chunks
+     Queue.add (Binary (lhs_chunks, string_of_id op, rhs_chunks)) chunks
   | E_cons (lhs, rhs) ->
      let lhs_chunks = rec_chunk_exp lhs in
      let rhs_chunks = rec_chunk_exp rhs in
-     Queue.add (Binop (lhs_chunks, "::", rhs_chunks)) chunks
+     Queue.add (Binary (lhs_chunks, "::", rhs_chunks)) chunks
   | E_vector_append (lhs, rhs) ->
      let lhs_chunks = rec_chunk_exp lhs in
      let rhs_chunks = rec_chunk_exp rhs in
-     Queue.add (Binop (lhs_chunks, "@", rhs_chunks)) chunks
+     Queue.add (Binary (lhs_chunks, "@", rhs_chunks)) chunks
   | E_cast (typ, exp) ->
      let exp_chunks = rec_chunk_exp exp in
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
-     Queue.add (Binop (exp_chunks, ":", typ_chunks)) chunks
+     Queue.add (Binary (exp_chunks, ":", typ_chunks)) chunks
   | E_tuple exps -> 
      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks exps in
      Queue.add (Tuple ("(", ")", 0, exps)) chunks
@@ -644,10 +679,14 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_block exps ->
      let block_exps = flatten_block exps in
      let block_chunks =
-       map_peek (fun next block_exp ->
+       map_peek_acc (fun need_spacer next block_exp ->
            let s_l, e_l = block_exp_locs block_exp in
            let chunks = Queue.create () in
 
+           if need_spacer then (
+             Queue.add (Spacer (true, 1)) chunks
+           );
+           
            begin match block_exp with
            | Block_exp exp ->
               chunk_exp comments chunks exp;
@@ -662,15 +701,15 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
               Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
            end;
               
-           let next_line_num = Option.bind next (fun bexp -> block_exp_locs bexp |> fst |> starting_line_num) in
            (* TODO: Do we need to do something different for multiple trailing comments at end of a block? *)
+           let next_line_num = Option.bind next (fun bexp -> block_exp_locs bexp |> fst |> starting_line_num) in
            if have_linebreak (ending_line_num e_l) next_line_num || Util.is_none next then (
-             pop_trailing_comment comments chunks (ending_line_num e_l)
+             ignore (pop_trailing_comment comments chunks (ending_line_num e_l))
            );
 
-           (starting_line_num s_l, chunks)
-         ) block_exps in
-     Queue.add (Block block_chunks) chunks
+           (chunks, have_blank_linebreak (ending_line_num e_l) next_line_num)
+         ) false block_exps in
+     Queue.add (Block (false, block_chunks)) chunks
   | (E_let (LB_aux (LB_val (pat, exp), _), body) | E_internal_plet (pat, exp, body)) as binder ->
      let binder = match binder with E_let _ -> Let_binder | E_internal_plet _ -> Internal_plet_binder | _ -> Reporting.unreachable l __POS__ "Unknown binder" in
      let pat_chunks = Queue.create () in
@@ -686,7 +725,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_assign (lexp, exp) ->
      let lexp_chunks = rec_chunk_exp lexp in
      let exp_chunks = rec_chunk_exp exp in
-     Queue.add (Binop (lexp_chunks, "=", exp_chunks)) chunks
+     Queue.add (Binary (lexp_chunks, "=", exp_chunks)) chunks
   | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) ->
      let then_brace = (match t with E_aux (E_block _, _) -> true | _ -> false) in
      let i_chunks = rec_chunk_exp i in
@@ -708,13 +747,13 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
        | E_deref _ -> "*"
        | _ -> Reporting.unreachable l __POS__ "invalid unop" in
      let e_chunks = rec_chunk_exp exp in
-     Queue.add (Unop ("unop", e_chunks)) chunks
+     Queue.add (Unary (unop, e_chunks)) chunks
   | E_field (exp, id) ->
      let exp_chunks = rec_chunk_exp exp in
      Queue.add (Field (exp_chunks, id)) chunks
   | E_internal_return exp ->
      let e_chunks = rec_chunk_exp exp in
-     Queue.add (Unop ("internal_return", e_chunks)) chunks
+     Queue.add (Unary ("internal_return", e_chunks)) chunks
   | (E_case (exp, cases) | E_try (exp, cases)) as match_exp ->
      let kind = match match_exp with E_case _ -> Match_match | _ -> Try_match in
      let exp_chunks = rec_chunk_exp exp in
@@ -726,6 +765,43 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
          aligned = aligned;
          cases = cases
      }) |> add_chunk chunks
+  | (E_vector_update _ | E_vector_update_subrange _) ->
+     let (vec_chunks, updates) = chunk_vector_update comments (E_aux (aux, l)) in
+     Queue.add (Vector_updates (vec_chunks, List.rev updates)) chunks
+  | E_vector_access (exp, ix) ->
+     let exp_chunks = rec_chunk_exp exp in
+     let ix_chunks = rec_chunk_exp ix in
+     Queue.add (Index (exp_chunks, ix_chunks)) chunks
+  | E_vector_subrange (exp, ix1, ix2) ->
+     let exp_chunks = rec_chunk_exp exp in
+     let ix1_chunks = rec_chunk_exp ix1 in
+     let ix2_chunks = rec_chunk_exp ix2 in
+     let ix_chunks = Queue.create () in
+     Queue.add (Binary (ix1_chunks, "..", ix2_chunks)) ix_chunks;
+     Queue.add (Index (exp_chunks, ix_chunks)) chunks
+
+and chunk_vector_update comments (E_aux (aux, l) as exp) =
+  let rec_chunk_exp exp =
+    let chunks = Queue.create () in
+    chunk_exp comments chunks exp;
+    chunks
+  in
+  match aux with
+  | E_vector_update (vec, ix, exp) ->
+     let (vec_chunks, update) = chunk_vector_update comments vec in
+     let ix = rec_chunk_exp ix in
+     let exp = rec_chunk_exp exp in
+     (vec_chunks, Binary (ix, "=", exp) :: update)
+  | E_vector_update_subrange (vec, ix1, ix2, exp) ->
+     let (vec_chunks, update) = chunk_vector_update comments vec in
+     let ix1 = rec_chunk_exp ix1 in
+     let ix2 = rec_chunk_exp ix2 in
+     let exp = rec_chunk_exp exp in
+     (vec_chunks, Ternary (ix1, "..", ix2, "=", exp) :: update)
+  | _ ->
+     let exp_chunks = Queue.create () in
+     chunk_exp comments exp_chunks exp;
+     (exp_chunks, [])
 
 and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
   match aux with
@@ -736,7 +812,7 @@ and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
      let exp_chunks = Queue.create () in
      chunk_exp comments exp_chunks exp;
      (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
-     pop_trailing_comment comments exp_chunks (ending_line_num l);
+     ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
      { funcl_space = funcl_space; pat = pat_chunks; guard = None; body = exp_chunks } 
   | Pat_when (pat, guard, exp) ->
      let pat_chunks = Queue.create () in
@@ -746,7 +822,7 @@ and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
      let exp_chunks = Queue.create () in
      chunk_exp comments exp_chunks exp;
      (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
-     pop_trailing_comment comments exp_chunks (ending_line_num l);
+     ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
      { funcl_space = true; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks } 
  
 let chunk_funcl comments (FCL_aux (FCL_Funcl (_, pexp), _)) = chunk_pexp comments pexp
@@ -790,6 +866,32 @@ let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, f
        funcls = funcls;
   }) |> add_chunk chunks
 
+let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
+  pop_comments comments chunks l;
+  let def_chunks = Queue.create () in
+  Queue.push (Atom "register") def_chunks;
+  Queue.push (Spacer (false, 1)) def_chunks;
+
+  let id_chunks = Queue.create () in
+  pop_comments comments id_chunks (id_loc id);
+  Queue.push (Atom (string_of_id id)) id_chunks;
+ 
+  let typ_chunks = Queue.create () in
+  chunk_atyp comments typ_chunks typ;
+  let skip_spacer = match opt_exp with
+    | Some (E_aux (_, exp_l) as exp) ->
+       let exp_chunks = Queue.create () in
+       chunk_exp comments exp_chunks exp;
+       Queue.push (Ternary (id_chunks, ":", typ_chunks, "=", exp_chunks)) def_chunks;
+       pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num exp_l)
+    | None -> 
+       Queue.push (Binary (id_chunks, ":", typ_chunks)) def_chunks;
+       pop_trailing_comment ~space:1 comments typ_chunks (ending_line_num typ_l) in
+  Queue.push (Chunks def_chunks) chunks;
+  if not skip_spacer then (
+    Queue.push (Spacer (true, 1)) chunks
+  )
+
 let def_span = function
   | DEF_type (TD_aux (_, l))
   | DEF_fundef (FD_aux (_, l))
@@ -820,7 +922,10 @@ let def_spacer (_, e) (s, _) =
  
 let chunk_def last_line_span comments chunks def =
   let line_span = def_span def in
-  Queue.add (Spacer (true, def_spacer last_line_span line_span)) chunks;
+  let spacing = def_spacer last_line_span line_span in
+  if spacing > 0 then (
+    Queue.add (Spacer (true, spacing)) chunks
+  );
   begin match def with
   | DEF_fundef fdef ->
      chunk_fundef comments chunks fdef
@@ -836,6 +941,8 @@ let chunk_def last_line_span comments chunks def =
        | InfixR -> "infixr" in
      Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) (string_of_id id))) chunks;
      Queue.add (Spacer (true, 1)) chunks
+  | DEF_reg_dec reg ->
+     chunk_register comments chunks reg
   | _ ->
      Queue.add (Atom "DEF") chunks
   end;
@@ -897,7 +1004,7 @@ let rec map_sep_last ~default:d ~last:g f = function
      (x :: xs, l)
      
 let line_comment_opt = function
-  | Comment (Lexer.Comment_line, contents) -> Some contents
+  | Comment (Lexer.Comment_line, _, contents) -> Some contents
   | _ -> None
 
 type opts = {
@@ -947,6 +1054,11 @@ let operator_precedence = function
   | "=" -> 10, atomic, nonatomic 
   | ":" -> 0, subatomic, subatomic
   | _ -> 10, subatomic, subatomic
+
+let ternary_operator_precedence = function
+  | ("..", "=") -> 0, atomic, atomic, nonatomic
+  | (":", "=") -> 0, atomic, nonatomic, nonatomic
+  | _ -> 10, subatomic, subatomic, subatomic
        
 let opt_delim s = ifflat empty (string s)
 
@@ -956,7 +1068,7 @@ let prefix_parens n x y =
   group (x ^^ ifflat space (space ^^ lparen) ^^ nest n (softline ^^ y) ^^ softline ^^ ifflat empty rparen)
              
 let chunk_inserts_trailing_hardline = function
-  | Comment (Lexer.Comment_line, _) -> true
+  | Comment (Lexer.Comment_line, _, _) -> true
   | _ -> false
 
 (* This function inserts linebreaks (b) in a sequence of documents
@@ -979,9 +1091,14 @@ let rec softbroken_sep sep f = function
   | x :: xs ->
      let doc, already_have_hardline = f x in
      doc ^^ (if already_have_hardline then sep else (break 1 ^^ sep)) ^^ space ^^ softbroken_sep sep f xs
+
+let surround_hardline h n b opening contents closing =
+  let b = if h then hardline else break b in
+  group (opening ^^ nest n (b ^^ contents) ^^ b ^^ closing)
      
 let rec doc_chunk ?toplevel:(toplevel=false) opts = function
   | Atom s -> string s
+  | Chunks chunks -> doc_chunks opts chunks
   | Delim s -> string s ^^ space
   | Opt_delim s -> opt_delim s
   | String_literal s ->
@@ -999,7 +1116,7 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
        repeat n hardline
      else
        repeat n space
-  | Binop (lhs, op, rhs) ->
+  | Binary (lhs, op, rhs) ->
      let outer_prec, lhs_prec, rhs_prec = operator_precedence op in
      let doc =
        infix tabwidth 1 (string op)
@@ -1011,6 +1128,60 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      ) else (
        doc
      )
+  | Ternary (x, op1, y, op2, z) ->
+     let outer_prec, x_prec, y_prec, z_prec = ternary_operator_precedence (op1, op2) in
+     let doc =
+       prefix tabwidth 1 (doc_chunks (opts |> x_prec |> expression_like) x
+                          ^^ space ^^ string op1 ^^ space
+                          ^^ doc_chunks (opts |> y_prec |> expression_like) y
+                          ^^ space ^^ string op2)
+         (doc_chunks (opts |> z_prec |> expression_like) z)
+     in
+     if outer_prec > opts.precedence then (
+       parens doc
+     ) else (
+       doc
+     )
+  | If_then_else (bracing, i, t, e) ->
+     let insert_braces = opts.statement || bracing.then_brace || bracing.else_brace in
+     let i = doc_chunks (opts |> nonatomic |> expression_like) i in
+     let t =
+       if insert_braces && not preserve_structure && not bracing.then_brace then (
+         doc_chunk opts (Block (true, [t]))
+       ) else (
+         doc_chunks (opts |> nonatomic |> expression_like) t
+       ) in
+     let e =
+       if insert_braces && not preserve_structure && not bracing.else_brace then (
+         doc_chunk opts (Block (true, [e]))
+       ) else (
+         doc_chunks (opts |> nonatomic |> expression_like) e
+       ) in
+     separate space [string "if"; i; string "then"; t; string "else"; e]
+     |> atomic_parens opts
+  | If_then (bracing, i, t) ->
+     let i = doc_chunks (opts |> nonatomic |> expression_like) i in
+     let t =
+       if opts.statement && not preserve_structure && not bracing then (
+         doc_chunk opts (Block (true, [t]))
+       ) else (
+         doc_chunks (opts |> nonatomic |> expression_like) t
+       ) in
+     separate space [string "if"; i; string "then"; t]
+     |> atomic_parens opts
+  | Vector_updates (exp, updates) ->
+     let opts = opts |> nonatomic |> expression_like in
+     let exp_doc = doc_chunks opts exp in
+     surround tabwidth 0
+       (lbracket ^^ exp_doc ^^ space ^^ string "with" ^^ space)
+       (group (separate_map (comma ^^ break 1) (doc_chunk opts) updates))
+       rbracket
+     |> atomic_parens opts
+  | Index (exp, ix) ->
+     let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
+     let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
+     exp_doc ^^ surround tabwidth 0 lbracket ix_doc rbracket
+     |> atomic_parens opts
   | Exists ex ->
      let ex_doc =
        doc_chunks (atomic opts) ex.vars
@@ -1020,10 +1191,10 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
        ^^ doc_chunks (nonatomic opts) ex.typ
      in
      enclose lbrace rbrace (align ex_doc)
-  | Comment (comment_type, contents) ->
+  | Comment (comment_type, n, contents) ->
      begin match comment_type with
      | Lexer.Comment_line ->
-        string "//" ^^ string contents ^^ hardline
+        blank n ^^ string "//" ^^ string contents ^^ hardline
      | Lexer.Comment_block ->
         (* Allow a linebreak after a block comment with newlines. This prevents formatting like:
            /* comment line 1
@@ -1031,9 +1202,9 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
            by forcing exp on a newline if the comment contains linebreaks
          *)
         match lines contents with
-        | [l] -> string "/*" ^^ l ^^ string "*/" ^^ space
+        | [l] -> blank n ^^ string "/*" ^^ l ^^ string "*/" ^^ space
         | ls ->
-           align (string "/*" ^^ separate hardline ls ^^ string "*/")
+           align (blank n ^^ string "/*" ^^ separate hardline ls ^^ string "*/")
            ^^ softline
      end
   | Function f ->
@@ -1046,12 +1217,12 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      string "function" ^^ space ^^ doc_id f.id ^^ clauses ^^ hardline
   | Pragma (pragma, arg) ->
      string "$pragma" ^^ space ^^ string arg ^^ hardline
-  | Block exps ->
-     let exps = map_last (fun no_semi (_, chunks) -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks) exps in
-     let require_hardline = List.exists snd exps in
+  | Block (always_hardline, exps) ->
+     let exps = map_last (fun no_semi chunks -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks) exps in
+     let require_hardline = always_hardline || List.exists snd exps in
      let exps = List.map fst exps in
      let sep = if require_hardline then hardline else break 1 in
-     surround tabwidth 1 lbrace (separate sep exps) rbrace
+     surround_hardline always_hardline tabwidth 1 lbrace (separate sep exps) rbrace
      |> atomic_parens opts
   | Block_binder (binder, x, y) ->
      separate space [string (string_of_binder binder); doc_chunks (atomic opts) x; equals; doc_chunks (nonatomic opts) y]
@@ -1159,5 +1330,7 @@ let chunk_ast comments defs =
   let chunks = Queue.create () in
   let _ = List.fold_left (fun last_span def -> chunk_def last_span comments chunks def) (None, Some 0) defs in
   Queue.iter (prerr_chunk "") chunks;
-  let doc = Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
-  prerr_string (to_string (doc ^^ hardline))
+  let doc = Queue.fold (fun doc chunk -> doc ^^ char 'X' ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
+  prerr_string (to_string (doc ^^ hardline));
+
+  prerr_endline (to_string (nest 2 (char 'a' ^^ hardline) ^^ char 'b'));

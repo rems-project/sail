@@ -804,16 +804,16 @@ let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
      MD_aux(MD_mapping(to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l,()))
 
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
-  DEC_aux((match regdec with
-           | P.DEC_reg (reffect, weffect, typ, id, opt_exp) ->
-              let opt_exp = match opt_exp with
-                | None -> None
-                | Some exp -> Some (to_ast_exp ctx exp)
-              in
-              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
-           | P.DEC_config (id, typ, exp) ->
-              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
-          ),(l,()))
+  DEC_aux (
+      (match regdec with
+       | P.DEC_reg (typ, id, opt_exp) ->
+          let opt_exp = match opt_exp with
+            | None -> None
+            | Some exp -> Some (to_ast_exp ctx exp)
+          in
+          DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
+      ), (l, ())
+    )
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
   let aux, ctx = match aux with

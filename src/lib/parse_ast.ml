@@ -462,8 +462,7 @@ val_spec_aux =  (* Value type specification *)
 
 type 
 dec_spec_aux =  (* Register declarations *)
-   DEC_reg of atyp * atyp * atyp * id * exp option
- | DEC_config of id * atyp * exp
+   DEC_reg of atyp * id * exp option
 
 type 
 scattered_def_aux =  (* Function and type union definitions that can be spread across
