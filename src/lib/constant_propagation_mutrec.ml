@@ -214,8 +214,8 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
     | [] -> []
     | DEF_internal_mutrec mutrecs :: ds ->
        let mutrec_ids = IdSet.of_list (List.map id_of_fundef mutrecs) in
-       let valspecs = ref ([] : unit def list) in
-       let fundefs = ref ([] : unit def list) in
+       let valspecs = ref ([] : uannot def list) in
+       let fundefs = ref ([] : uannot def list) in
        (* Try to replace mutually recursive calls that have some constant arguments *)
        let rec e_app (id, args) (l, annot) =
          if IdSet.mem id mutrec_ids && List.exists is_const_exp args then
@@ -237,7 +237,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
                  |> rewrite_pexp
                  |> strip_pexp
                in
-               FCL_aux (FCL_Funcl (id', pexp'), (Parse_ast.Generated l, ()))
+               FCL_aux (FCL_Funcl (id', pexp'), (Parse_ast.Generated l, empty_uannot))
              in
              valspecs := valspec :: !valspecs;
              let fundef = mk_fundef (List.map const_prop_funcl fcls) in

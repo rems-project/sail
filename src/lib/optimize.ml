@@ -88,7 +88,7 @@ let rec last_env = function
   | _ :: xs -> last_env xs
     
 let recheck ({ defs; _} as ast) =
-  let defs = Type_check.check_with_envs Type_check.initial_env defs in
+  let defs = Type_check.check_with_envs Type_check.initial_env (List.map Type_check.strip_def defs) in
 
   let rec find_optimizations = function
     | ([DEF_pragma ("optimize", pragma, p_l)], env) :: ([DEF_spec vs as def1], _) :: defs ->

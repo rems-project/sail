@@ -1589,7 +1589,7 @@ in *)
               so re-check the function clause *)
            let (tq, typ) = Env.get_val_spec id type_env' in
            let env = Env.add_typquant l tq type_env' in
-           const_prop_funcl (Type_check.check_funcl env funcl typ)
+           const_prop_funcl (Type_check.check_funcl env (strip_funcl funcl) typ)
          else funcl
        in
        let funcls = List.map check_funcl funcls in
@@ -4340,7 +4340,7 @@ type options = {
 let mono_rewrites = MonoRewrites.mono_rewrite
 
 let monomorphise target effect_info opts splits ast =
-  let ast, env = Type_check.check Type_check.initial_env ast in
+  let ast, env = Type_check.check Type_check.initial_env (strip_ast ast) in
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
     then
@@ -4364,6 +4364,6 @@ let monomorphise target effect_info opts splits ast =
   in ast
 
 let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts
-let rewrite_atoms_to_singletons target defs =
-  let defs, env = Type_check.check Type_check.initial_env defs in
-  AtomToItself.rewrite_size_parameters target env defs
+let rewrite_atoms_to_singletons target ast =
+  let ast, env = Type_check.check Type_check.initial_env (strip_ast ast) in
+  AtomToItself.rewrite_size_parameters target env ast

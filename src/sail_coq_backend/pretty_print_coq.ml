@@ -3150,7 +3150,7 @@ let doc_val_spec unimplemented avoid_target_names effect_info (VS_aux (VS_val_sp
     let typ_env = env_of_annot (l,ann) in
     (* The type checker will expand the type scheme, and we need to look at the
        environment afterwards to find it. *)
-    let _, next_env = check_val_spec typ_env vs in
+    let _, next_env = check_val_spec typ_env (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id effect_info) in
     group (separate space

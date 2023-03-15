@@ -286,6 +286,8 @@ rule token = parse
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
+  | "$[" (ident+ as i)
+    { let attr = attribute (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Attribute(i, String.trim attr) }
   | "$" (ident+ as i)
     { let p = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in Pragma(i, String.trim p) }
   | "infix" ws (digit as p) ws (operator as op)
@@ -320,6 +322,19 @@ rule token = parse
   | _  as c                               { raise (Reporting.err_lex
                                               (Lexing.lexeme_start_p lexbuf)
                                               (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
+
+and attribute pos b = parse
+  | "]"                                 { Buffer.contents b }
+  | "\n"                                { Buffer.add_char b '\n'; Lexing.new_line lexbuf; attribute pos b lexbuf }
+  | "//"                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Line comment is not allowed within an attribute") }
+  | "/*"                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Block comment is not allowed within an attribute") }
+  | _ as c                              { Buffer.add_char b c; attribute pos b lexbuf }
+  | eof                                 { raise (Reporting.err_lex pos "File ended before this attribute has been closed") }
+
+(* The after_block logic here allows a pragma to end with either a
+line comment or a block comment, but the pragma cannot continue after
+a block comment. This ensures that `$pragma fo/* comment */o` is not
+allowed (it would otherwise have value `foo`) *)
 
 and pragma pos b after_block = parse
   | "\n"                                { Lexing.new_line lexbuf; Buffer.contents b }

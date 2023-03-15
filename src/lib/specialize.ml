@@ -609,7 +609,7 @@ let specialize_ids spec ids ast effect_info =
      opt_ddump_spec_ast := Some (f, i + 1)
   | None -> ()
   end;
-  let ast, _ = Type_error.check Type_check.initial_env ast in
+  let ast, _ = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let _, ast =
     List.fold_left
       (fun (n, ast) id ->
@@ -617,7 +617,7 @@ let specialize_ids spec ids ast effect_info =
         (n + 1, rewrite_polymorphic_calls spec id ast))
       (1, ast) (IdSet.elements ids)
   in
-  let ast, env = Type_error.check Type_check.initial_env ast in
+  let ast, env = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let ast = remove_unused_valspecs env ast in
   Profile.finish "specialization pass" t;
   ast, env, effect_info

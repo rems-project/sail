@@ -142,7 +142,7 @@ let instantiate target ast =
 
        let valspec is_extern =
          let extern = if is_extern then Some { pure = false; bindings = [("_", string_of_id id)] } else None in
-         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, Type_check.empty_tannot)))
+         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, empty_uannot)))
        in
        let instantiated_def =
          rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs
@@ -152,7 +152,7 @@ let instantiate target ast =
        let outcome_defs, _ =
          (match instantiated_def with
           | None -> [DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)); valspec true]
-          | Some def -> [valspec false; def]
+          | Some def -> [valspec false; strip_def def]
          ) |> Type_error.check_defs env
        in
        outcomes, outcome_defs

@@ -277,6 +277,7 @@ let warn_extern_effect l =
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
 %token <string * string> Pragma
+%token <string * string> Attribute
 
 %token <Parse_ast.fixity_token> Fixity
 
@@ -835,6 +836,8 @@ internal_loop_measure:
 exp:
   | exp0
     { $1 }
+  | Attribute exp
+    { mk_exp (E_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
   | atomic_exp Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
   | Let_ letbind In exp

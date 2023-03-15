@@ -312,7 +312,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin
        let env = Type_check.env_of_annot annot in
        let typ = Type_check.typ_of_annot annot in
-       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> ()) typ in
+       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
        let undef_exp = Type_check.check_exp env undef_exp typ in
        return undef_exp
      end

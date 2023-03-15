@@ -593,7 +593,7 @@ let handle_input' istate input =
         | ":sync_script" ->
            { istate with ast = !(istate.ref_state).ast; effect_info = !(istate.ref_state).effect_info; env = !(istate.ref_state).env }
         | ":recheck" | ":recheck_types" ->
-           let ast, env = Type_check.check Type_check.initial_env istate.ast in
+           let ast, env = Type_check.check Type_check.initial_env (Type_check.strip_ast istate.ast) in
            { istate with env = env; ast = ast }
         | _ ->
            match Interactive.get_command cmd with

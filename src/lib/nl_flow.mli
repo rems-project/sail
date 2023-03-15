@@ -66,6 +66,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_util
 
 (** [opt_nl_flow] must be true for [analyze] to do anything. *)
 val opt_nl_flow : bool ref
@@ -74,4 +75,4 @@ val opt_nl_flow : bool ref
    follow the lexical structure of the code (and therefore the
    syntax-directed typing rules), and insert assertions for discovered
    constraints *)
-val analyze : unit exp list -> unit exp list
+val analyze : uannot exp list -> uannot exp list

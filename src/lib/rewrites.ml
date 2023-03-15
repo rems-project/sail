@@ -794,9 +794,9 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
   | P_vector_concat pats -> begin
-      let empty_vec = E_aux (E_vector [], (l,())) in
+      let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
       let concat_vectors vec1 vec2 =
-        E_aux (E_vector_append (vec1, vec2), (l, ()))
+        E_aux (E_vector_append (vec1, vec2), (l, empty_uannot))
       in
       check_exp env (List.fold_right concat_vectors (List.map (fun p -> strip_exp (pat_to_exp p)) pats) empty_vec) typ
     end
@@ -1010,7 +1010,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
      bindings for the bits bound by P_id or P_as patterns *)
 
   (* Helper functions for generating guard expressions *)
-  let mk_exp e_aux = E_aux (e_aux, (l, ())) in
+  let mk_exp e_aux = E_aux (e_aux, (l, empty_uannot)) in
   let mk_num_exp i = mk_lit_exp (L_num i) in
   let check_eq_exp l r =
     let exp = mk_exp (E_app_infix (l, Id_aux (Operator "==", Parse_ast.Unknown), r)) in
@@ -1849,7 +1849,7 @@ let rewrite_undefined mwords env =
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_lit (L_aux (L_undef, l)) ->
-       check_exp (env_of exp) (undefined_of_typ mwords l (fun _ -> ()) (Env.expand_synonyms (env_of exp) (typ_of exp))) (typ_of exp)
+       check_exp (env_of exp) (undefined_of_typ mwords l (fun _ -> empty_uannot) (Env.expand_synonyms (env_of exp) (typ_of exp))) (typ_of exp)
     | _ -> exp
   in
   let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
@@ -2585,7 +2585,7 @@ let construct_toplevel_string_append_func effect_info env f_id pat =
                                                           ), unk)]
   in
   let fun_typ = (mk_typ (Typ_fn ([string_typ], option_typ))) in
-  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, None, false), unkt) in
+  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, None, false), no_annot) in
   let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
   let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
   let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
@@ -2695,7 +2695,7 @@ let construct_toplevel_string_append_func effect_info env f_id pat =
   in
   let wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit])))) in
   let new_match = mk_exp (E_case (mk_exp (E_id s_id), [strip_pexp new_pexp; wildcard])) in
-  let new_fun_def = FD_aux (FD_function (non_rec, no_tannot, [mk_funcl f_id arg_pat new_match]), (unk,())) in
+  let new_fun_def = FD_aux (FD_function (non_rec, no_tannot, [mk_funcl f_id arg_pat new_match]), no_annot) in
   let new_fun_def, env = Type_check.check_fundef env new_fun_def in
   List.flatten [new_val_spec; new_fun_def]
 
@@ -3271,7 +3271,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
     |> IdSet.elements
     |> List.map
         (fun id ->
-          let (E_aux (_, a) as exp) = infer_exp env (E_aux (E_id id, (l, ()))) in
+          let (E_aux (_, a) as exp) = infer_exp env (E_aux (E_id id, (l, empty_uannot))) in
           exp, P_aux (P_id id, a))
     |> List.split in
 
@@ -3728,30 +3728,29 @@ let merge_funcls env ast =
     | d -> d
   in { ast with defs = List.map merge_in_def ast.defs }
 
-
-let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
-  let empty_vec = E_aux (E_vector [], (l,())) in
+let rec exp_of_mpat ((MP_aux (mpat, (l, annot))) as mp_aux) =
+  let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
   let concat_vectors vec1 vec2 =
-    E_aux (E_vector_append (vec1, vec2), (l,()))
+    E_aux (E_vector_append (vec1, vec2), (l, empty_uannot))
   in
-  let empty_string = E_aux (E_lit (L_aux (L_string "", Parse_ast.Unknown)), (l,())) in
+  let empty_string = E_aux (E_lit (L_aux (L_string "", Parse_ast.Unknown)), (l, empty_uannot)) in
   let string_append str1 str2 =
-    E_aux (E_app (mk_id "string_append", [str1; str2]), (l,()))
+    E_aux (E_app (mk_id "string_append", [str1; str2]), (l, empty_uannot))
   in
   match mpat with
   | MP_lit lit                      -> E_aux (E_lit lit, (l,annot))
   | MP_id id                        -> E_aux (E_id id, (l,annot))
   | MP_app (id, args)               -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
   | MP_vector mpats                 -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
-  | MP_vector_concat mpats          -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_vec
+  | MP_vector_concat mpats          -> List.fold_right concat_vectors (List.map (fun m -> exp_of_mpat m) mpats) empty_vec
   | MP_tup mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
   | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), (l,annot))
   | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l,annot))
-  | MP_string_append mpats          -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_string
+  | MP_string_append mpats          -> List.fold_right string_append (List.map (fun m -> exp_of_mpat m) mpats) empty_string
   | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), (l,annot))
   | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
                                                     Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
-                                                ]), (l,annot)) (* TODO FIXME location information? *)
+                                                ]), (l, annot)) (* TODO FIXME location information? *)
 
 and pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with
@@ -3791,14 +3790,14 @@ let rewrite_ast_realize_mappings effect_info env ast =
   in
   let realize_mapcl forwards id mapcl =
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) ->
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) ->
        [realize_mpexps forwards mpexp1 mpexp2]
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) ->
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) ->
        if forwards then
          [realize_single_mpexp mpexp exp]
        else
          []
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) ->
        if forwards then
          []
        else
@@ -3806,15 +3805,15 @@ let rewrite_ast_realize_mappings effect_info env ast =
   in
   let realize_bool_mapcl forwards id mapcl =
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) ->
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) ->
        let mpexp = if forwards then mpexp1 else mpexp2 in
        [realize_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))]
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) ->
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) ->
        if forwards then
          [realize_single_mpexp mpexp (mk_lit_exp L_true)]
        else
          []
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) ->
        if forwards then
          []
        else
@@ -3844,7 +3843,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
           ))
       ) in
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))) -> begin
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) -> begin
        let mpexp = if forwards then mpexp1 else mpexp2 in
        let other = if forwards then mpexp2 else mpexp1 in
        match other with
@@ -3852,13 +3851,13 @@ let rewrite_ast_realize_mappings effect_info env ast =
          | MPat_aux (MPat_when (mpat2, _), _)->
           [realize_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tup [mpat2; strlen]) ])))))]
       end
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, ()))) -> begin
+    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) -> begin
         if forwards then
           [realize_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
         else
           []
       end
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) -> begin
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) -> begin
         if forwards then
           []
         else
@@ -3880,10 +3879,10 @@ let rewrite_ast_realize_mappings effect_info env ast =
       let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1), l) in
       let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), l) in
 
-      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, None, false), (Parse_ast.Unknown,())) in
-      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, None, false), (Parse_ast.Unknown,())) in
-      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, None, false), (Parse_ast.Unknown,())) in
-      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, None, false), (Parse_ast.Unknown,())) in
+      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, None, false), no_annot) in
+      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, None, false), no_annot) in
+      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, None, false), no_annot) in
+      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, None, false), no_annot) in
 
       let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
       let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
@@ -3895,14 +3894,14 @@ let rewrite_ast_realize_mappings effect_info env ast =
         begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then begin
                 effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                 let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
+                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None, false), no_annot) in
                 let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
                 forwards_prefix_spec
               end else
                 if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then begin
                   effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                   let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
+                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None, false), no_annot) in
                   let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                   backwards_prefix_spec
                 end else
@@ -3949,10 +3948,10 @@ let rewrite_ast_realize_mappings effect_info env ast =
     let forwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_bool_mapcl true forwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
     let backwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_bool_mapcl false backwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
 
-    let forwards_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl forwards_id arg_pat forwards_match]), (l, ()))) in
-    let backwards_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl backwards_id arg_pat backwards_match]), (l, ()))) in
-    let forwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl forwards_matches_id arg_pat forwards_matches_match]), (l, ()))) in
-    let backwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl backwards_matches_id arg_pat backwards_matches_match]), (l, ()))) in
+    let forwards_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl forwards_id arg_pat forwards_match]), (l, empty_uannot))) in
+    let backwards_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl backwards_id arg_pat backwards_match]), (l, empty_uannot))) in
+    let forwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl forwards_matches_id arg_pat forwards_matches_match]), (l, empty_uannot))) in
+    let backwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl backwards_matches_id arg_pat backwards_matches_match]), (l, empty_uannot))) in
 
     typ_debug (lazy (Printf.sprintf "forwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string)));
     typ_debug (lazy (Printf.sprintf "backwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string)));
@@ -3970,7 +3969,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
               effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
               let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
-              let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
+              let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, empty_uannot))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
               forwards_prefix_fun
@@ -3979,7 +3978,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
                 effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                 let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
-                let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
+                let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, empty_uannot))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
                 backwards_prefix_fun
@@ -4795,7 +4794,7 @@ let instantiate_rewriter rewriter args =
      Reporting.unreachable Parse_ast.Unknown __POS__ "Rewrite not fully instantiated"
 
 let all_rewriters = [
-    ("recheck_defs", checking_rewriter (fun _ -> Type_error.check initial_env));
+    ("recheck_defs", checking_rewriter (fun _ ast -> Type_error.check initial_env (strip_ast ast)));
     ("optimize_recheck_defs", checking_rewriter (fun _ -> Optimize.recheck));
     ("realize_mappings", Base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);

@@ -71,6 +71,13 @@ open Ast
 open Ast_defs
 module Big_int = Nat_big_num
 
+(** The type of annotations for untyped AST nodes *)
+type uannot
+
+val empty_uannot : uannot
+
+val add_attribute : l -> string -> string -> uannot -> uannot
+
 type mut = Immutable | Mutable
 
 (** [lvar] is the type of variables - they can either be registers,
@@ -87,7 +94,7 @@ val lvar_typ : ?loc:l -> 'a lvar -> 'a
    result in unhelpful error messgaes. However a common pattern is
    generating code with [no_annot], then adding location information
    with the various [locate_] functions in this module. *)
-val no_annot : unit annot
+val no_annot : l * uannot
 
 (** [gen_loc l] takes a location l and generates a location which
    means 'generated/derived from location l'. This is useful for debugging
@@ -103,25 +110,25 @@ val mk_kid : string -> kid
 val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
-val mk_exp : ?loc:l -> unit exp_aux -> unit exp
-val mk_pat : unit pat_aux -> unit pat
-val mk_mpat : unit mpat_aux -> unit mpat
-val mk_pexp : ?loc:l -> unit pexp_aux -> unit pexp
-val mk_mpexp : unit mpexp_aux -> unit mpexp
-val mk_lexp : unit lexp_aux -> unit lexp
+val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
+val mk_pat : uannot pat_aux -> uannot pat
+val mk_mpat : uannot mpat_aux -> uannot mpat
+val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
+val mk_mpexp : uannot mpexp_aux -> uannot mpexp
+val mk_lexp : uannot lexp_aux -> uannot lexp
 val mk_lit : lit_aux -> lit
-val mk_lit_exp : lit_aux -> unit exp
+val mk_lit_exp : lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
-val mk_funcl : id -> unit pat -> unit exp -> unit funcl
-val mk_fundef : (unit funcl) list -> unit def
-val mk_val_spec : val_spec_aux -> unit def
+val mk_funcl : id -> uannot pat -> uannot exp -> uannot funcl
+val mk_fundef : (uannot funcl) list -> uannot def
+val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
 val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
-val mk_fexp : id -> unit exp -> unit fexp
-val mk_letbind : unit pat -> unit exp -> unit letbind
+val mk_fexp : id -> uannot exp -> uannot fexp
+val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 
 val inc_ord : order

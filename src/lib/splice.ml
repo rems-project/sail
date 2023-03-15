@@ -117,5 +117,5 @@ let splice ast file =
   let repl_ids, repl_specs = scan_ast repl_ast in
   let defs1, specs_found = filter_old_ast repl_ids repl_specs ast in
   let defs2 = filter_replacements specs_found repl_ast in
-  Type_error.check Type_check.initial_env { ast with defs = defs1 @ defs2 }
+  Type_error.check Type_check.initial_env (Type_check.strip_ast { ast with defs = defs1 @ defs2 })
 

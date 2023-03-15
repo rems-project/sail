@@ -368,13 +368,13 @@ let rec collapse_errors = function
        Err_inner (err1, l, prefix, hint, err2)
   | err -> err
 
-let check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =
+let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
   fun env defs ->
   try Type_check.check_defs env defs with
   | Type_error (env, l, err) ->
      raise (Reporting.err_typ l (string_of_type_error err))
          
-let check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
+let check : Env.t -> uannot ast -> tannot ast * Env.t =
   fun env defs ->
   try Type_check.check env defs with
   | Type_error (env, l, err) -> raise (Reporting.err_typ l (string_of_type_error err))

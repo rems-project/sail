@@ -137,7 +137,7 @@ let generate_regstate registers =
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
   in
-  [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
+  [DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot)))]
 
 let generate_initial_regstate defs =
   let registers = find_registers defs in

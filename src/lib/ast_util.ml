@@ -70,6 +70,18 @@ open Ast_defs
 open Util
 module Big_int = Nat_big_num
 
+(* The type of annotations for untyped AST nodes *)
+type uannot = {
+    attrs : (l * string * string) list
+  }
+
+let empty_uannot = {
+    attrs = []
+  }
+
+let add_attribute l attr arg annot =
+  { attrs = (l, attr, arg) :: annot.attrs }
+
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
@@ -88,7 +100,7 @@ let lvar_typ ?loc:(l=Parse_ast.Unknown) = function
   | Enum typ -> typ
   | Unbound id -> Reporting.unreachable l __POS__ ("No type for unbound variable " ^ string_of_id id)
 
-let no_annot = (Parse_ast.Unknown, ())
+let no_annot = (Parse_ast.Unknown, empty_uannot)
 
 let id_loc = function
   | Id_aux (_, l) -> l
@@ -129,7 +141,7 @@ let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
 let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
 
-let mk_exp ?loc:(l=Parse_ast.Unknown) exp_aux = E_aux (exp_aux, (l, ()))
+let mk_exp ?loc:(l=Parse_ast.Unknown) exp_aux = E_aux (exp_aux, (l, empty_uannot))
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 let uncast_exp = function
   | E_aux (E_internal_return (E_aux (E_cast (typ, exp), _)), a) ->
@@ -143,7 +155,7 @@ let untyp_pat = function
   | P_aux (P_typ (typ, pat), _) -> pat, Some typ
   | pat -> pat, None
 
-let mk_pexp ?loc:(l=Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, ()))
+let mk_pexp ?loc:(l=Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, empty_uannot))
 
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
