@@ -101,7 +101,7 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
      List.fold_left Nameset.union (free_type_names_t consider_var ret_typ) (List.map (free_type_names_t consider_var) arg_typs)
   | Typ_bidir (t1,t2) -> Nameset.union (free_type_names_t consider_var t1)
                            (free_type_names_t consider_var t2)
-  | Typ_tup ts -> free_type_names_ts consider_var ts
+  | Typ_tuple ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
@@ -123,7 +123,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   | Typ_fn(arg,ret) ->
      fv_of_typ consider_var bound (List.fold_left Nameset.union Nameset.empty (List.map (fv_of_typ consider_var bound used) arg)) ret
   | Typ_bidir(t1,t2) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
-  | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
+  | Typ_tuple ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
   | Typ_exist (kopts,_,t') ->
@@ -217,7 +217,7 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   | P_app(id,pats) ->
      let used = fv_of_tannot consider_var bound used tannot in
     list_fv bound (Nameset.add (string_of_id id) used) pats
-  | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats | P_string_append pats -> list_fv bound used pats
+  | P_vector pats | Ast.P_vector_concat pats | Ast.P_tuple pats | Ast.P_list pats | P_string_append pats -> list_fv bound used pats
   | P_cons (p1,p2) ->
     let b1, u1 = pat_bindings consider_var bound used p1 in
     pat_bindings consider_var b1 u1 p2
@@ -233,7 +233,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
      let used = conditional_add_exp bound used id in
      let used = fv_of_tannot consider_var bound used tannot in
      bound,used,set
-  | E_cast (t,e) ->
+  | E_typ (t,e) ->
     let u = fv_of_typ consider_var (if consider_var then bound else mt) used t in
     fv_of_exp consider_var bound u set e
   | E_app(id,es) ->
@@ -256,16 +256,16 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
   | E_vector_update_subrange(v,i1,i2,e) -> list_fv bound used set [v;i1;i2;e]
   | E_vector_append(e1,e2) | E_cons(e1,e2) -> list_fv bound used set [e1;e2]
-  | E_record fexps ->
+  | E_struct fexps ->
      let used = fv_of_tannot consider_var bound used tannot in
      List.fold_right
        (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
-  | E_record_update(e, fexps) ->
+  | E_struct_update(e, fexps) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     List.fold_right
       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
   | E_field(e,_) -> fv_of_exp consider_var bound used set e
-  | E_case(e,pes)
+  | E_match(e,pes)
   | E_try(e,pes) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     fv_of_pes consider_var b u s pes
@@ -324,14 +324,14 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
     else Nameset.add i bound, Nameset.add i used, set
   | LEXP_deref exp ->
     fv_of_exp consider_var bound used set exp
-  | LEXP_cast(typ,id) ->
+  | LEXP_typ(typ,id) ->
     let used = fv_of_tannot consider_var bound used tannot in
     let i = string_of_id id in
     let used_t = fv_of_typ consider_var bound used typ in
     if Nameset.mem i bound
     then bound, used_t, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used_t, set
-  | LEXP_tup(tups) ->
+  | LEXP_tuple(tups) ->
     List.fold_right (fun l (b,u,s) -> fv_of_lexp consider_var b u s l) tups (bound,used,set)
   | LEXP_memory(id,args) ->
     let (bound,used,set) =
@@ -384,7 +384,7 @@ let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,funcls),_) as fd) =
   let fun_name = match funcls with
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
-    | FCL_aux(FCL_Funcl(id,_),_)::_ -> string_of_id id in
+    | FCL_aux(FCL_funcl(id,_),_)::_ -> string_of_id id in
   let base_bounds = match rec_opt with
     (* Current Sail does not require syntax for declaring functions as recursive,
        and type checker does not check whether functions are recursive, so
@@ -407,7 +407,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,funcls),_) as
        exp_ns
     | _ -> mt
   in
-  let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
+  let ns = List.fold_right (fun (FCL_aux(FCL_funcl(_,pexp),_)) ns ->
     match pexp with
     | Pat_aux(Pat_exp (pat,exp),_) ->
        let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
@@ -432,7 +432,7 @@ let rec find_scattered_of name = function
   | DEF_scattered (SD_aux(sda,_) as sd):: defs ->
     (match sda with
      | SD_function(_,_,id)
-     | SD_funcl(FCL_aux(FCL_Funcl(id,_),_))
+     | SD_funcl(FCL_aux(FCL_funcl(id,_),_))
      | SD_unioncl(id,_) ->
        if name = string_of_id id
        then [sd] else []
@@ -449,7 +449,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
           mt, mt) in
     init_env (string_of_id id),ns
-  | SD_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
+  | SD_funcl (FCL_aux(FCL_funcl(id,pexp),_)) ->
      begin
        match pexp with
        | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -514,8 +514,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_mapdef mdef -> mt,mt (* fv_of_map consider_var mdef *)
-  | DEF_val lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
-  | DEF_spec vspec -> fv_of_vspec consider_var vspec
+  | DEF_let lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
+  | DEF_val vspec -> fv_of_vspec consider_var vspec
   | DEF_fixity _ -> mt,mt
   | DEF_overload (id,ids) ->
      init_env (string_of_id id),
@@ -526,7 +526,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      List.fold_left Nameset.union Nameset.empty (List.map fst fvs),
      List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
-  | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
+  | DEF_register rdec -> fv_of_rd consider_var rdec
   | DEF_pragma _ -> mt,mt
   (* removed beforehand for Coq, but may still be present otherwise *)
   | DEF_measure(id,pat,exp) ->
@@ -556,7 +556,7 @@ let add_def_to_map id d defset =
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
-    | DEF_reg_dec (DEC_aux (DEC_reg (typ, _, _), annot)) ->
+    | DEF_register (DEC_aux (DEC_reg (typ, _, _), annot)) ->
        (* For a register, we need to ensure that any undefined_type
           functions for types used by the register are placed before
           the register declaration. *)
@@ -642,8 +642,8 @@ let assigned_vars_in_pexp (Pat_aux (p,_)) =
 let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   match le with
   | LEXP_id id
-  | LEXP_cast (_,id) -> IdSet.singleton id
-  | LEXP_tup lexps
+  | LEXP_typ (_,id) -> IdSet.singleton id
+  | LEXP_tuple lexps
   | LEXP_vector_concat lexps -> 
      List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
   | LEXP_memory (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
@@ -692,7 +692,7 @@ let bindings_from_pat p =
     | P_vector_concat ps
     | P_string_append ps
     | P_app (_,ps)
-    | P_tup ps
+    | P_tuple ps
     | P_list ps
       -> List.concat (List.map aux_pat ps)
     | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
@@ -751,7 +751,7 @@ let nexp_subst_fns substs =
     | P_vector ps -> re (P_vector (List.map s_pat ps))
     | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
     | P_string_append ps -> re (P_string_append (List.map s_pat ps))
-    | P_tup ps -> re (P_tup (List.map s_pat ps))
+    | P_tuple ps -> re (P_tuple (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
   in
@@ -771,7 +771,7 @@ let nexp_subst_fns substs =
          | _ -> re (E_sizeof ne')
       end
       | E_constraint nc -> re (E_constraint (subst_kids_nc substs nc))
-      | E_cast (t,e') -> re (E_cast (s_t t, s_exp e'))
+      | E_typ (t,e') -> re (E_typ (s_t t, s_exp e'))
       | E_app (id,es) -> re (E_app (id, List.map s_exp es))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
       | E_tuple es -> re (E_tuple (List.map s_exp es))
@@ -786,10 +786,10 @@ let nexp_subst_fns substs =
       | E_vector_append (e1,e2) -> re (E_vector_append (s_exp e1,s_exp e2))
       | E_list es -> re (E_list (List.map s_exp es))
       | E_cons (e1,e2) -> re (E_cons (s_exp e1,s_exp e2))
-      | E_record fes -> re (E_record (List.map s_fexp fes))
-      | E_record_update (e,fes) -> re (E_record_update (s_exp e, List.map s_fexp fes))
+      | E_struct fes -> re (E_struct (List.map s_fexp fes))
+      | E_struct_update (e,fes) -> re (E_struct_update (s_exp e, List.map s_fexp fes))
       | E_field (e,id) -> re (E_field (s_exp e,id))
-      | E_case (e,cases) -> re (E_case (s_exp e, List.map s_pexp cases))
+      | E_match (e,cases) -> re (E_match (s_exp e, List.map s_pexp cases))
       | E_let (lb,e) -> re (E_let (s_letbind lb, s_exp e))
       | E_assign (le,e) -> re (E_assign (s_lexp le, s_exp e))
       | E_exit e -> re (E_exit (s_exp e))
@@ -821,9 +821,9 @@ let nexp_subst_fns substs =
       let re e = LEXP_aux (e,(l,s_tannot annot)) in
       match e with
       | LEXP_id _ -> re e
-      | LEXP_cast (typ,id) -> re (LEXP_cast (s_t typ, id))
+      | LEXP_typ (typ,id) -> re (LEXP_typ (s_t typ, id))
       | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map s_exp es))
-      | LEXP_tup les -> re (LEXP_tup (List.map s_lexp les))
+      | LEXP_tuple les -> re (LEXP_tuple (List.map s_lexp les))
       | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
       | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (s_lexp le, s_exp e1, s_exp e2))
       | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map s_lexp les))

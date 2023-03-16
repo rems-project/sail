@@ -254,7 +254,7 @@ module Env : sig
   (** no_casts removes all the implicit type casts/coercions from the
      environment, so checking a term with such an environment will
      guarantee not to insert any casts. Not that this is only about
-     the implicit casting and has nothing to do with the E_cast AST
+     the implicit casting and has nothing to do with the E_typ AST
      node. *)
   val no_casts : t -> t
 

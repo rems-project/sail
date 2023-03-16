@@ -212,7 +212,7 @@ let rec map_typ_arg ?under:(under = []) f (Typ_aux (aux, l)) =
     | Typ_var v -> Typ_var v
     | Typ_fn (typs, typ) -> Typ_fn (List.map (map_typ_arg ~under:under f) typs, map_typ_arg ~under:under f typ)
     | Typ_bidir (typ1, typ2) -> Typ_bidir (map_typ_arg ~under:under f typ1, map_typ_arg ~under:under f typ2)
-    | Typ_tup typs -> Typ_tup (List.map (map_typ_arg ~under:under f) typs)
+    | Typ_tuple typs -> Typ_tuple (List.map (map_typ_arg ~under:under f) typs)
     | Typ_app (id, args) ->
        List.map (function
            | A_aux (A_typ typ, l) ->

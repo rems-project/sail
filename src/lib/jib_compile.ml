@@ -305,7 +305,7 @@ let rec find_aexp_loc (AE_aux (e, _, l)) =
   | Some _ -> l
   | None ->
     match e with
-    | AE_cast (e',_) -> find_aexp_loc e'
+    | AE_typ (e',_) -> find_aexp_loc e'
     | _ -> l
 
 let coverage_branch_taken branch_id aexp =
@@ -665,7 +665,7 @@ let compile_funcall l ctx id args =
 let rec apat_ctyp ctx (AP_aux (apat, env, _)) =
   let ctx = { ctx with local_env = env } in
   match apat with
-  | AP_tup apats -> CT_tup (List.map (apat_ctyp ctx) apats)
+  | AP_tuple apats -> CT_tup (List.map (apat_ctyp ctx) apats)
   | AP_global (_, typ) -> ctyp_of_typ ctx typ
   | AP_cons (apat, _) -> CT_list (ctyp_suprema (apat_ctyp ctx apat))
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
@@ -697,7 +697,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
      pre, instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
 
-  | AP_tup apats ->
+  | AP_tuple apats ->
      begin
        let get_tup n = V_tuple_member (cval, List.length apats, n) in
        let fold (pre, instrs, cleanup, n, ctx) apat ctyp =
@@ -708,7 +708,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | CT_tup ctyps ->
           let pre, instrs, cleanup, _, ctx = List.fold_left2 fold ([], [], [], 0, ctx) apats ctyps in
           pre, instrs, cleanup, ctx
-       | _ -> failwith ("AP_tup with ctyp " ^ string_of_ctyp ctyp)
+       | _ -> failwith ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
      end
 
   | AP_app (ctor, apat, variant_typ) ->
@@ -795,7 +795,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      setup, (fun clexp -> icopy l clexp cval), cleanup
 
   (* Compile case statements *)
-  | AE_case (aval, cases, typ) ->
+  | AE_match (aval, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
      (* Get the number of cases, because we don't want to check branch
@@ -907,8 +907,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               if_ctyp)),
        cleanup
 
-  (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)
-  | AE_record_update (aval, fields, typ) ->
+  (* FIXME: AE_struct_update could be AV_record_update - would reduce some copying. *)
+  | AE_struct_update (aval, fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let _ctors = match ctyp with
        | CT_struct (_, ctors) -> List.fold_left (fun m (k, v) -> UBindings.add k v m) UBindings.empty ctors
@@ -965,7 +965,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
   (* This is a faster assignment rule for updating fields of a
      struct. *)
-  | AE_assign (AL_id (id, assign_typ), AE_aux (AE_record_update (AV_id (rid, _), fields, typ), _, _))
+  | AE_assign (AL_id (id, assign_typ), AE_aux (AE_struct_update (AV_id (rid, _), fields, typ), _, _))
        when Id.compare id rid = 0 ->
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
@@ -1030,7 +1030,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icopy l clexp unit_cval),
      []
 
-  | AE_cast (aexp, typ) -> compile_aexp ctx aexp
+  | AE_typ (aexp, typ) -> compile_aexp ctx aexp
 
   | AE_return (aval, typ) ->
      let fn_return_ctyp = match Env.get_ret_typ env with
@@ -1285,7 +1285,7 @@ let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
   match p_aux with
   | P_id id -> (id, ([], []))
   | P_wild -> let gs = gensym () in (gs, ([], []))
-  | P_tup [] | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in (gs, ([], []))
+  | P_tuple [] | P_lit (L_aux (L_unit, _)) -> let gs = gensym () in (gs, ([], []))
   | P_var (pat, _) -> compile_arg_pat ctx label pat ctyp
   | P_typ (_, pat) -> compile_arg_pat ctx label pat ctyp
   | _ ->
@@ -1297,7 +1297,7 @@ let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
 let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
   match p_aux with
   | P_typ (_, pat) -> compile_arg_pats ctx label pat ctyps
-  | P_tup pats when List.length pats = List.length ctyps ->
+  | P_tuple pats when List.length pats = List.length ctyps ->
      [], List.map2 (fun pat ctyp -> compile_arg_pat ctx label pat ctyp) pats ctyps, []
   | _ when List.length ctyps = 1 ->
      [], [compile_arg_pat ctx label pat (List.nth ctyps 0)], []
@@ -1492,7 +1492,7 @@ let compile_funcl ctx id pat guard exp =
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
   match def with
-  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _))
        when !opt_memo_cache ->
      let digest =
        def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
@@ -1525,16 +1525,16 @@ let rec compile_def n total ctx def =
   | _ -> compile_def' n total ctx def
 
 and compile_def' n total ctx = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, None), _)) ->
-     [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
+  | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
+     [CDEF_register (id, ctyp_of_typ ctx typ, [])], ctx
+  | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
      let instrs = unique_names instrs in
-     [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
+     [CDEF_register (id, ctyp_of_typ ctx typ, instrs)], ctx
 
-  | DEF_spec (VS_aux (VS_val_spec (_, id, ext, _), _)) ->
+  | DEF_val (VS_aux (VS_val_spec (_, id, ext, _), _)) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let extern =
        if Env.is_extern id ctx.tc_env "c" then
@@ -1548,14 +1548,14 @@ and compile_def' n total ctx = function
      in
      let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-     [CDEF_spec (id, extern, arg_ctyps, ret_ctyp)],
+     [CDEF_val (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp) ctx.valspecs }
  
-  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat None exp
 
-  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat (Some guard) exp
 
@@ -1573,7 +1573,7 @@ and compile_def' n total ctx = function
      let tdef, ctx = compile_type_def ctx type_def in
      [CDEF_type tdef], ctx
 
-  | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
+  | DEF_let (LB_aux (LB_val (pat, exp), _)) ->
      let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
@@ -1636,7 +1636,7 @@ let mangle_mono_id id ctx ctyps =
 let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
   let polymorphic_functions =
     Util.map_filter (function
-        | CDEF_spec (id, _, param_ctyps, ret_ctyp) ->
+        | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              Some id
            else
@@ -1664,7 +1664,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
      each of the monomorphic calls we just found. *)
   let spec_tyargs = ref Bindings.empty in
   let rec specialize_fundefs ctx prior = function
-    | (CDEF_spec (id, extern, param_ctyps, ret_ctyp) as orig_cdef) :: cdefs when Bindings.mem id !monomorphic_calls ->
+    | (CDEF_val (id, extern, param_ctyps, ret_ctyp) as orig_cdef) :: cdefs when Bindings.mem id !monomorphic_calls ->
        let tyargs = List.fold_left (fun set ctyp -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty (ret_ctyp :: param_ctyps) in
        spec_tyargs := Bindings.add id tyargs !spec_tyargs;
        let specialized_specs =
@@ -1674,7 +1674,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
                let substs = List.fold_left2 (fun substs tyarg ty -> KBindings.add tyarg ty substs) KBindings.empty (KidSet.elements tyargs) instantiation in
                let param_ctyps = List.map (subst_poly substs) param_ctyps in
                let ret_ctyp = subst_poly substs ret_ctyp in
-               Some (CDEF_spec (specialized_id, extern, param_ctyps, ret_ctyp))
+               Some (CDEF_val (specialized_id, extern, param_ctyps, ret_ctyp))
              ) else
                None
            ) (CTListSet.elements (Bindings.find id !monomorphic_calls))
@@ -1682,7 +1682,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
        let ctx =
          List.fold_left (fun ctx cdef ->
              match cdef with
-             | CDEF_spec (id, _, param_ctyps, ret_ctyp) -> { ctx with valspecs = Bindings.add id (extern, param_ctyps, ret_ctyp) ctx.valspecs }
+             | CDEF_val (id, _, param_ctyps, ret_ctyp) -> { ctx with valspecs = Bindings.add id (extern, param_ctyps, ret_ctyp) ctx.valspecs }
              | cdef -> ctx
            ) ctx specialized_specs
        in                                                 
@@ -1717,7 +1717,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
   let graph = callgraph cdefs in
   let monomorphic_roots =
     Util.map_filter (function
-        | CDEF_spec (id, _, param_ctyps, ret_ctyp) ->
+        | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              None
            else
@@ -1732,7 +1732,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
   let cdefs =
     Util.map_filter (function
         | CDEF_fundef (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
-        | CDEF_spec (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
+        | CDEF_val (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | cdef -> Some cdef
       ) cdefs
   in
@@ -1814,7 +1814,7 @@ let rec specialize_variants ctx prior =
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
 
      List.iter (function
-         | CDEF_spec (id, _, ctyps, ctyp) ->
+         | CDEF_val (id, _, ctyps, ctyp) ->
             let _ = List.map (map_ctyp (fun ctyp ->
                                   match ctyp with
                                   | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
@@ -2026,7 +2026,7 @@ let sort_ctype_defs reverse cdefs =
 
 let toplevel_lets_of_ast ast =
   let toplevel_lets_of_def = function
-    | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
+    | DEF_let (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
     | _ -> IdSet.empty
   in
   let toplevel_lets_of_defs defs =

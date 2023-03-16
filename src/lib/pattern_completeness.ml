@@ -151,7 +151,7 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_app (ctor, ps) -> P_app (ctor, List.map (go counter) ps)
       | P_vector ps -> P_vector (List.map (go counter) ps)
       | P_vector_concat ps -> P_vector_concat (List.map (go counter) ps)
-      | P_tup ps -> P_tup (List.map (go counter) ps)
+      | P_tuple ps -> P_tuple (List.map (go counter) ps)
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
       | P_string_append ps -> P_string_append (List.map (go counter) ps)
@@ -230,7 +230,7 @@ module Make(C: Config) = struct
         | P_app (ctor, ps) -> P_app (ctor, List.map (go wild) ps)
         | P_vector ps -> P_vector (List.map (go wild) ps)
         | P_vector_concat ps -> P_vector_concat (List.map (go wild) ps)
-        | P_tup ps -> P_tup (List.map (go wild) ps)
+        | P_tuple ps -> P_tuple (List.map (go wild) ps)
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
@@ -247,7 +247,7 @@ module Make(C: Config) = struct
     | GP_wild
     | GP_unknown
     | GP_lit of lit
-    | GP_tup of gpat list
+    | GP_tuple of gpat list
     | GP_app of id * id * gpat list
     | GP_bitvector of int * int * (bv_constraint -> bv_constraint)
     | GP_enum of id * id
@@ -258,7 +258,7 @@ module Make(C: Config) = struct
     | GP_wild -> "_"
     | GP_unknown -> "?"
     | GP_lit lit -> string_of_lit lit
-    | GP_tup gpats -> "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
+    | GP_tuple gpats -> "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
     | GP_app (_, ctor, gpats) ->
        string_of_id ctor ^ "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
     | GP_bitvector (_, _, bvc) -> string_of_bv_constraint (bvc (BVC_lit "x"))
@@ -327,8 +327,8 @@ module Make(C: Config) = struct
           GP_wild
        end
 
-    | P_tup pats ->
-       GP_tup (List.map (generalize ctx) pats)
+    | P_tuple pats ->
+       GP_tuple (List.map (generalize ctx) pats)
        
     | P_app (id, pats) ->
        let typ_id = match typ with
@@ -365,7 +365,7 @@ module Make(C: Config) = struct
     | _ -> false
 
   let rec column_type = function
-    | (_, GP_tup gpats) :: _ -> Tuple_column (List.length gpats)
+    | (_, GP_tuple gpats) :: _ -> Tuple_column (List.length gpats)
     | (_, GP_app (typ_id, _, _)) :: _ -> App_column typ_id
     | (_, GP_bool _) :: _ -> Bool_column
     | (_, GP_enum (typ_id, _)) :: _ -> Enum_column typ_id
@@ -471,7 +471,7 @@ module Make(C: Config) = struct
 
   let flatten_tuple_column width i matrix =
     let flatten = function
-      | GP_tup gpats -> gpats
+      | GP_tuple gpats -> gpats
       | GP_wild -> List.init width (fun _ -> GP_wild)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern"
     in
@@ -482,7 +482,7 @@ module Make(C: Config) = struct
   let split_matrix_ctor ctx c ctor ctor_rows matrix =
     let row_indices = List.fold_left (fun set (r, _) -> IntSet.add r set) IntSet.empty ctor_rows in
     let flatten = function
-      | GP_app (_, _, gpats) -> GP_tup gpats
+      | GP_app (_, _, gpats) -> GP_tuple gpats
       | GP_wild -> GP_wild
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern"
     in

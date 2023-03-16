@@ -105,7 +105,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
     | Typ_id v -> Typ_id v
     | Typ_var kid -> Typ_var kid
-    | Typ_tup typs -> Typ_tup (List.map nexp_simp_typ typs)
+    | Typ_tuple typs -> Typ_tuple (List.map nexp_simp_typ typs)
     | Typ_app (f, args) -> Typ_app (f, List.map nexp_simp_typ_arg args)
     | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
     | Typ_fn (arg_typs, ret_typ) ->
@@ -136,7 +136,7 @@ let fix_instantiation spec instantiation =
    return all Int-polymorphic functions. *)
 let rec polymorphic_functions ctx defs =
   match defs with
-  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)) :: defs ->
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)) :: defs ->
      let is_polymorphic = List.exists ctx.is_polymorphic (quant_kopts typq) in
      if is_polymorphic && not (ctx.extern_filter externs) then
        IdSet.add id (polymorphic_functions ctx defs)
@@ -184,7 +184,7 @@ let string_of_instantiation instantiation =
   and string_of_typ_aux = function
     | Typ_id id -> string_of_id id
     | Typ_var kid -> kid_name (mk_kopt K_type kid)
-    | Typ_tup typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
+    | Typ_tuple typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list "," string_of_typ_arg args ^ ")"
     | Typ_fn (arg_typs, ret_typ) ->
        "(" ^ Util.string_of_list ", " string_of_typ arg_typs ^ ") -> " ^ string_of_typ ret_typ
@@ -303,7 +303,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_id v -> KidSet.empty
   | Typ_var kid when KidSet.mem kid exs -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
-  | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
+  | Typ_tuple typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kopts, nc, typ) -> typ_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ) ->
@@ -321,7 +321,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
   | Typ_var kid -> KidSet.empty
-  | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
+  | Typ_tuple typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_int_frees ~exs:exs) args)
   | Typ_exist (kopts, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ) ->
@@ -341,7 +341,7 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
 let rec remove_implicit (Typ_aux (aux, l)) =
   match aux with
   | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
-  | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)
+  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map remove_implicit typs), l)
   | Typ_fn (arg_typs, ret_typ) -> Typ_aux (Typ_fn (List.map remove_implicit arg_typs, remove_implicit ret_typ), l)
   | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2), l)
   | Typ_app (Id_aux (Id "implicit", _), args) -> Typ_aux (Typ_app (mk_id "atom", List.map remove_implicit_arg args), l)
@@ -389,7 +389,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_defs, vs, post_defs) ->
      let typschm, externs, is_cast, annot = match vs with
-       | DEF_spec (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) -> typschm, externs, is_cast, annot
+       | DEF_val (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) -> typschm, externs, is_cast, annot
        | _ -> Reporting.unreachable (id_loc id) __POS__ "val-spec is not actually a val-spec"
      in
      let TypSchm_aux (TypSchm_ts (typq, typ), _) = typschm in
@@ -439,7 +439,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
-           [DEF_spec (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot))]
+           [DEF_val (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot))]
          end
      in
 
@@ -461,8 +461,8 @@ let specialize_annotations instantiation fdef =
     } in
   let rw_exp = {
       id_exp_alg with
-      e_cast = (fun (typ, exp) -> E_cast (subst_unifiers instantiation typ, exp));
-      lEXP_cast = (fun (typ, lexp) -> LEXP_cast (subst_unifiers instantiation typ, lexp));
+      e_cast = (fun (typ, exp) -> E_typ (subst_unifiers instantiation typ, exp));
+      lEXP_cast = (fun (typ, lexp) -> LEXP_typ (subst_unifiers instantiation typ, lexp));
       pat_alg = rw_pat
     } in
   let fdef =

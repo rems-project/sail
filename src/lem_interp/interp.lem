@@ -439,7 +439,7 @@ let rec string_of_typ typ' =
        | Typ_id id -> "(Typ_id " ^ (string_of_id id) ^ ")"
        | Typ_var kid -> "(Typ_var " ^ (string_of_kid kid) ^ ")"
        | Typ_fn typ1 typ2 eff -> "(Typ_fn _ _ _)"
-       | Typ_tup typs -> "(Typ_tup [" ^ String.concat "; " (List.map string_of_typ typs) ^ "])"
+       | Typ_tuple typs -> "(Typ_tuple [" ^ String.concat "; " (List.map string_of_typ typs) ^ "])"
        | Typ_app id args -> "(Typ_app " ^ string_of_id id ^ " _)"
        end)
    end)
@@ -454,8 +454,8 @@ let rec string_of_lexp l' =
       (match l with
        | LEXP_id id -> "(LEXP_id " ^ string_of_id id ^ ")"
        | LEXP_memory id exps -> "(LEXP_memory " ^ string_of_id id ^ " _)"
-       | LEXP_cast typ id -> "(LEXP_cast " ^ string_of_typ typ ^ " " ^ string_of_id id ^ ")"
-       | LEXP_tup lexps -> "(LEXP_tup [" ^ String.concat "; " (List.map string_of_lexp lexps) ^ "])"
+       | LEXP_typ typ id -> "(LEXP_typ " ^ string_of_typ typ ^ " " ^ string_of_id id ^ ")"
+       | LEXP_tuple lexps -> "(LEXP_tuple [" ^ String.concat "; " (List.map string_of_lexp lexps) ^ "])"
        | LEXP_vector lexps exps -> "(LEXP_vector _ _)"
        | LEXP_vector_range lexp exp1 exp2 -> "(LEXP_vector_range _ _ _)"
        | LEXP_field lexp id -> "(LEXP_field " ^ string_of_lexp lexp ^ "." ^ string_of_id id ^ ")"
@@ -509,7 +509,7 @@ let rec string_of_exp e' =
        | E_nondet exps -> "(E_nondet [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
        | E_id id -> "(E_id \"" ^ string_of_id id ^ "\")"
        | E_lit lit -> "(E_lit " ^ string_of_lit lit ^ ")"
-       | E_cast typ exp -> "(E_cast " ^ string_of_typ typ ^ " " ^ string_of_exp exp ^ ")"
+       | E_typ typ exp -> "(E_typ " ^ string_of_typ typ ^ " " ^ string_of_exp exp ^ ")"
        | E_app id exps -> "(E_app " ^ string_of_id id ^ " [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
        | E_app_infix exp1 id exp2 -> "(E_app_infix " ^ string_of_exp exp1 ^ " " ^ string_of_id id ^ " " ^ string_of_exp exp2 ^ ")"
        | E_tuple exps -> "(E_tuple [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
@@ -523,10 +523,10 @@ let rec string_of_exp e' =
        | E_vector_append exp1 exp2 -> "(E_vector_append " ^ string_of_exp exp1 ^ " " ^ string_of_exp exp2 ^ ")"
        | E_list exps -> "(E_list [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
        | E_cons exp1 exp2 -> "(E_cons " ^ string_of_exp exp1 ^ " :: " ^ string_of_exp exp2 ^ ")"
-       | E_record _ -> "(E_record)"
-       | E_record_update _ _ -> "(E_record_update)"
+       | E_struct _ -> "(E_struct)"
+       | E_struct_update _ _ -> "(E_struct_update)"
        | E_field _ _ -> "(E_field)"
-       | E_case _ _ -> "(E_case)"
+       | E_match _ _ -> "(E_match)"
        | E_let _ _ -> "(E_let)"
        | E_assign lexp exp -> "(E_assign " ^ string_of_lexp lexp ^ " := " ^ string_of_exp exp ^ ")"
        | E_sizeof _ -> "(E_sizeof _)"
@@ -600,7 +600,7 @@ let rec string_of_pat (P_aux pat _) =
    | P_record _ _ -> "(P_record _ _)"
    | P_vector pats -> "(P_vector [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
    | P_vector_concat pats -> "(P_vector_concat [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
-   | P_tup pats -> "(P_tup [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   | P_tuple pats -> "(P_tuple [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
    | P_list pats -> "(P_list [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
    end)
 
@@ -656,7 +656,7 @@ let rec to_fdefs (Defs defs) =
             | FD_aux (FD_function _ _ _ fcls) _ ->
               match fcls with
                 | [] -> to_fdefs (Defs defs)
-                | (FCL_aux (FCL_Funcl name _) _)::_  ->
+                | (FCL_aux (FCL_funcl name _) _)::_  ->
                   Map.insert (get_id name) fcls (to_fdefs (Defs defs)) end end)
         | _ -> to_fdefs (Defs defs) end end
 
@@ -680,13 +680,13 @@ let rec to_registers dd (Defs defs) =
   | [ ] -> Map.empty
   | def::defs ->
     match def with
-    | DEF_reg_dec (DEC_aux (DEC_reg typ id) (l,tannot)) ->
+    | DEF_register (DEC_aux (DEC_reg typ id) (l,tannot)) ->
       let dir =  match tannot with
         | Nothing -> dd
         | Just(t, _, _, _,_) -> dd (*TODO, lets pull the direction out properly*)
       end in
       Map.insert (get_id id) (V_register(Form_Reg id tannot dir)) (to_registers dd (Defs defs))
-    | DEF_reg_dec (DEC_aux (DEC_alias id aspec) (l,tannot)) ->
+    | DEF_register (DEC_aux (DEC_alias id aspec) (l,tannot)) ->
       Map.insert (get_id id) (V_register_alias aspec tannot) (to_registers dd (Defs defs))
     | _ -> to_registers dd (Defs defs)
     end
@@ -698,9 +698,9 @@ let rec to_aliases (Defs defs) =
     | [] -> Map.empty
     | def::defs ->
       match def with
-        | DEF_reg_dec (DEC_aux (DEC_alias id aspec) _) ->
+        | DEF_register (DEC_aux (DEC_alias id aspec) _) ->
           Map.insert (get_id id) aspec (to_aliases (Defs defs))
-        | DEF_reg_dec (DEC_aux (DEC_typ_alias typ id aspec) _) ->
+        | DEF_register (DEC_aux (DEC_typ_alias typ id aspec) _) ->
           Map.insert (get_id id) aspec (to_aliases (Defs defs))
         | _ -> to_aliases (Defs defs)
       end
@@ -1365,7 +1365,7 @@ let env_to_let mode (LEnv _ env) (E_aux e annot) taint_env =
       let es = List.map snd pes in
       let t = mk_typ_tup ts in
       let tan = val_annot t in
-      (E_aux (E_let (LB_aux (LB_val (P_aux (P_tup ps) (Unknown,tan))
+      (E_aux (E_let (LB_aux (LB_val (P_aux (P_tuple ps) (Unknown,tan))
                                (E_aux (E_tuple es) (Unknown,tan))) (Unknown,tan))
                     (E_aux e annot))
         annot, taint_env)
@@ -1517,7 +1517,7 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
    | V_unknown -> (true,true,eenv)
    | _ -> (false,false, eenv)
    end
- | P_tup(pats) ->
+ | P_tuple(pats) ->
    match value with
    | V_tuple(vals) ->
      if ((List.length pats)= (List.length vals))
@@ -1642,7 +1642,7 @@ val find_funcl : top_level -> list (funcl tannot) -> value -> list (lenv * bool 
 let rec find_funcl t_level funcls value =
   match funcls with
   | [] -> []
-  | (FCL_aux (FCL_Funcl id (Pat_aux (Pat_exp pat exp) _)) _)::funcls ->
+  | (FCL_aux (FCL_funcl id (Pat_aux (Pat_exp pat exp) _)) _)::funcls ->
     let (is_matching,used_unknown,env) = match_pattern t_level pat value in
     if (is_matching && used_unknown)
     then (env,used_unknown,exp)::(find_funcl t_level funcls value)
@@ -1765,7 +1765,7 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                         | _ -> lit end)), l_mem,l_env)
     | E_comment _ -> (Value unitv, l_mem,l_env)
     | E_comment_struc _ -> (Value unitv, l_mem, l_env)
-    | E_cast ((Typ_aux typ _) as ctyp) exp ->
+    | E_typ ((Typ_aux typ _) as ctyp) exp ->
       (*Cast is either a no-op, a signal to read a register, or a signal to change the start of a vector *)
       resolve_outcome
         (interp_main mode t_level l_env l_mem exp)
@@ -1792,7 +1792,7 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               (Action (Read_reg regform Nothing) (mk_hole l (val_annot (reg_to_t regform)) t_level le lm), lm,le)
             (*Cast is changing vector start position, potentially*)
             | (_,v) -> conditional_update_vstart () end))
-        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_cast ctyp e) (l,annot), env))))
+        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_typ ctyp e) (l,annot), env))))
     | E_id id ->
       let name = get_id id in
       match tag with
@@ -1927,7 +1927,7 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             | _ -> (Error l "internal error: from must be a number",lm,le) end)
           (fun a -> update_stack a
               (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
-    | E_case exp pats ->
+    | E_match exp pats ->
       resolve_outcome
         (interp_main mode t_level l_env l_mem exp)
         (fun v lm le ->
@@ -1944,19 +1944,19 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
               interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,(non_det_annot annot maybe_id)))
          end)
-        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_case e pats) (l,annot), env))))
-    | E_record(FES_aux (FES_Fexps fexps _) fes_annot) ->
+        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_match e pats) (l,annot), env))))
+    | E_struct(FES_aux (FES_Fexps fexps _) fes_annot) ->
       let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
       exp_list mode t_level
         (fun es env' ->
           ((E_aux
-              (E_record
+              (E_struct
                  (FES_aux (FES_Fexps
                              (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es)
                              false) fes_annot))
                   (l,annot)), env'))
         (fun vs -> (V_record typ (List.zip fields vs))) l_env l_mem [] exps
-    | E_record_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
+    | E_struct_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
       resolve_outcome
         (interp_main mode t_level l_env l_mem exp)
         (fun rv lm le -> match rv with
@@ -1966,7 +1966,7 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               (exp_list mode t_level
                         (fun es env'->
                           let (e,env'') = (to_exp mode env' rv) in
-                          ((E_aux (E_record_update e
+                          ((E_aux (E_struct_update e
                                     (FES_aux (FES_Fexps
                                                 (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing)))
                                                    fields es) false) fes_annot))
@@ -1978,7 +1978,7 @@ and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | _ -> (Error l "internal error: record update requires record",lm,le) end)
         (fun a -> update_stack a
           (add_to_top_frame
-             (fun e env -> (E_aux(E_record_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot), env))))
+             (fun e env -> (E_aux(E_struct_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot), env))))
     | E_list(exps) ->
       exp_list mode t_level (fun exps env' -> (E_aux (E_list exps) (l,annot),env')) V_list l_env l_mem [] exps
     | E_cons hd tl ->
@@ -2854,7 +2854,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
                 (match e with | E_tuple es -> (LEXP_aux (LEXP_memory id es) (l,annot), env)
                               | _ -> Assert_extra.failwith "Lexp builder not well formed" end)), Nothing)
       | e -> (e,Nothing,Nothing) end
-    | LEXP_cast typc id ->
+    | LEXP_typ typc id ->
       let name = get_id id in
       match tag with
       | Tag_intro ->
@@ -2870,7 +2870,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
               else ((Error l ("LEXP:cast1: Undefined id " ^ (get_id id)),l_mem,l_env),Nothing, Nothing)
             | v ->
               if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing, Nothing)
-              else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)), Nothing)
+              else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_typ typc id) (l,annot), env)), Nothing)
           end
        | Tag_set ->
           match detaint (in_lenv l_env id) with
@@ -2879,7 +2879,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
               then ((Value (V_lit (L_aux L_unit l)),
                      update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing,Nothing)
               else ((Value v, l_mem, l_env),
-                    Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)), Nothing)
+                    Just (fun e env -> (LEXP_aux (LEXP_typ typc id) (l,annot), env)), Nothing)
             | V_unknown ->
               if is_top_level
               then begin
@@ -2892,7 +2892,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
             | v ->
               if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing,Nothing)
               else ((Value v,l_mem,l_env),
-                    Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)),Nothing)
+                    Just (fun e env -> (LEXP_aux(LEXP_typ typc id) (l,annot), env)),Nothing)
           end
         | Tag_empty ->
           match detaint (in_lenv l_env id) with
@@ -2901,7 +2901,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
               then ((Value (V_lit (L_aux L_unit l)),
                      update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing,Nothing)
               else ((Value v, l_mem, l_env),
-                    Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)), Nothing)
+                    Just (fun e env -> (LEXP_aux (LEXP_typ typc id) (l,annot), env)), Nothing)
             | V_unknown ->
               if is_top_level
               then begin
@@ -2913,7 +2913,7 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
               else ((Error l ("LEXP:cast3: Undefined id " ^ (get_id id)),l_mem,l_env),Nothing,Nothing)
             | v ->
               if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing,Nothing)
-              else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)),Nothing)
+              else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_typ typc id) (l,annot), env)),Nothing)
           end
         | Tag_extern _ ->
            let regf =
@@ -2930,12 +2930,12 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
                (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
              l_mem,l_env) in
           if is_top_level then (request,Nothing,Nothing)
-          else (request,Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)),Nothing)
+          else (request,Just (fun e env -> (LEXP_aux (LEXP_typ typc id) (l,annot), env)),Nothing)
         | _ ->
           ((Error l ("Internal error: writing to id not extern or empty " ^(get_id id)),l_mem,l_env),
            Nothing,Nothing)
         end
-    | LEXP_tup ltups ->
+    | LEXP_tuple ltups ->
       match (ltups,value) with
       | ([],_) ->
         ((Error l "Internal error: found an empty tuple of assignments as an lexp", l_mem, l_env), Nothing,Nothing)
@@ -2944,22 +2944,22 @@ and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
         let new_v = V_tuple vs in
         (match (create_write_message_or_update mode t_level v l_env l_mem true le) with
          | ((Value v_whole,lm,le),Nothing,Nothing) ->
-           create_write_message_or_update mode t_level new_v le lm true (LEXP_aux (LEXP_tup ltups) (l,annot))
+           create_write_message_or_update mode t_level new_v le lm true (LEXP_aux (LEXP_tuple ltups) (l,annot))
          | ((Action act stack,lm,le),Nothing,Nothing) ->
-           ((Action act stack,lm,le), Just (fun e env -> (LEXP_aux (LEXP_tup ltups) (l,annot),env)), Just new_v)
+           ((Action act stack,lm,le), Just (fun e env -> (LEXP_aux (LEXP_tuple ltups) (l,annot),env)), Just new_v)
          | ((Action act stack,lm,le), Just le_builder, Nothing) ->
            ((Action act stack,lm,le),
             Just (fun e env ->
                 let (lexp,env) = le_builder e env in
-                (LEXP_aux (LEXP_tup (lexp::ltups)) (l,annot),env)), Just value)
+                (LEXP_aux (LEXP_tuple (lexp::ltups)) (l,annot),env)), Just value)
          | ((Action act stack, lm,le), Just le_builder, Just v) ->
            ((Action act stack, lm, le),
             Just (fun e env ->
                 let (lexp,env) = le_builder e env in
-                (LEXP_aux (LEXP_tup (lexp::ltups)) (l,annot),env)), Just (V_tuple (v::vs)))
+                (LEXP_aux (LEXP_tuple (lexp::ltups)) (l,annot),env)), Just (V_tuple (v::vs)))
          | ((Error l msg,lm,le),_,_) -> ((Error l msg,lm,le),Nothing,Nothing)
          | _ ->
-           ((Error l "Internal error: Unexpected pattern match failure in LEXP_tup",l_mem,l_env),Nothing,Nothing)
+           ((Error l "Internal error: Unexpected pattern match failure in LEXP_tuple",l_mem,l_env),Nothing,Nothing)
         end)
       end
     | LEXP_vector lexp exp ->
@@ -3288,7 +3288,7 @@ let rec to_global_letbinds handle_action (Defs defs) t_level =
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)), (emem "global_letbinds"), eenv),t_level)
   | def::defs ->
     match def with
-    | DEF_val lbind ->
+    | DEF_let lbind ->
       match eval_toplevel_let handle_action t_level eenv (emem "global_letbinds") lbind with
         | Just le ->
           to_global_letbinds handle_action

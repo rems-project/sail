@@ -6,8 +6,8 @@ $include <prelude.sail>
 
 enum E = {A, B, C}
 
-val cast E_cast : E -> {'e, 0 <= 'e <= 2. atom('e)}
-function E_cast(e) = num_of_E(e)
+val cast E_typ : E -> {'e, 0 <= 'e <= 2. atom('e)}
+function E_typ(e) = num_of_E(e)
 
 val main : unit -> unit
 

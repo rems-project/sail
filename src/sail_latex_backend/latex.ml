@@ -424,7 +424,7 @@ let latex_funcls def =
   let rec latex_funcls' def =
     let counter = ref (-1) in
     let next funcls = twice hardline ^^ latex_funcls' def funcls in
-    let funcl_command (FCL_Funcl (id, pexp)) =
+    let funcl_command (FCL_funcl (id, pexp)) =
       match pexp with
       | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) ->
          let n = try Bindings.find ctor !ctors with Not_found -> -1 in
@@ -512,18 +512,18 @@ let defs { defs; _ } =
        let count = Bindings.find id !overload_counters in
        Some (latex_command (Overload count) id doc (id_loc id))
 
-    | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
+    | DEF_val (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
        valspecs := Bindings.add id id !valspecs;
        if !opt_simple_val then
          Some (latex_command Val id (doc_spec_simple vs) (fst annot))
        else
          Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) (fst annot))
 
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) as def ->
        fundefs := Bindings.add id id !fundefs;
        Some (latex_command Function id (Pretty_print_sail.doc_def def) (fst annot))
 
-    | DEF_val (LB_aux (LB_val (pat, _), annot)) as def ->
+    | DEF_let (LB_aux (LB_val (pat, _), annot)) as def ->
        let ids = pat_ids pat in
        begin match IdSet.min_elt_opt ids with
        | None -> None
@@ -543,7 +543,7 @@ let defs { defs; _ } =
     | DEF_pragma ("latex", command, l) ->
        process_pragma l command
 
-    | DEF_reg_dec (DEC_aux (_, annot) as dec) as def ->
+    | DEF_register (DEC_aux (_, annot) as dec) as def ->
        let id = id_of_dec_spec dec in
        regdefs := Bindings.add id id !regdefs;
        Some (latex_command Register id (Pretty_print_sail.doc_def def) (fst annot))

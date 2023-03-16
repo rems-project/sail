@@ -69,7 +69,7 @@ open Ast
 open Ast_defs
 open Ast_util
 
-let funcl_id (FCL_aux (FCL_Funcl (id, _), _)) = id
+let funcl_id (FCL_aux (FCL_funcl (id, _), _)) = id
 
 let rec last_scattered_funcl id = function
   | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: _

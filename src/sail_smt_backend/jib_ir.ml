@@ -194,11 +194,11 @@ module Ir_formatter = struct
       sprintf "%s: %s" (string_of_uid uid) (C.typ ctyp)
 
     let output_def buf = function
-      | CDEF_reg_dec (id, ctyp, _) ->
+      | CDEF_register (id, ctyp, _) ->
          Buffer.add_string buf (sprintf "%s %s : %s" (C.keyword "register") (zencode_id id) (C.typ ctyp))
-      | CDEF_spec (id, None, ctyps, ctyp) ->
+      | CDEF_val (id, None, ctyps, ctyp) ->
          Buffer.add_string buf (sprintf "%s %s : (%s) ->  %s" (C.keyword "val") (zencode_id id) (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
-      | CDEF_spec (id, Some extern, ctyps, ctyp) ->
+      | CDEF_val (id, Some extern, ctyps, ctyp) ->
          Buffer.add_string buf (sprintf "%s %s = \"%s\" : (%s) ->  %s" (C.keyword "val") (zencode_id id) extern (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
       | CDEF_fundef (id, ret, args, instrs) ->
          let instrs = C.modify_instrs instrs in

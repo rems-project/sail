@@ -229,7 +229,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_id _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1,t2) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
-  | Typ_tup ts ->
+  | Typ_tuple ts ->
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
   | Typ_app(Id_aux (Id "bitvector", _), [
@@ -284,7 +284,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
-      | Typ_tup typs ->
+      | Typ_tuple typs ->
          parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
@@ -327,7 +327,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
          then string "register"
          else*) doc_id_lem_type id
       | Typ_var v -> doc_var v
-      | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+      | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
          let tpp = typ true ty in
@@ -378,9 +378,9 @@ let rec replace_typ_size ctxt env (Typ_aux (t, a) as typ) =
   let rewrap t = Typ_aux (t, a) in
   let recur = replace_typ_size ctxt env in
   match t with
-  | Typ_tup typs ->
+  | Typ_tuple typs ->
      begin match Util.option_all (List.map recur typs) with
-       | Some typs' -> Some (rewrap (Typ_tup typs'))
+       | Some typs' -> Some (rewrap (Typ_tuple typs'))
        | None -> None
      end
   | Typ_app (id, args) when contains_t_pp_var ctxt typ ->
@@ -499,7 +499,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     | Typ_var _
       -> NexpSet.empty
     | Typ_fn (ts,t) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
-    | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
+    | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
     | Typ_app (Id_aux (Id "bitvector",_),
                [A_aux (A_nexp size_nexp,_); _])
     | Typ_app (Id_aux (Id "itself",_),
@@ -556,7 +556,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_id id -> doc_id_lem id
   | P_var(p,_) -> doc_pat_lem ctxt true p
   | P_as(p,id) -> parens (separate space [doc_pat_lem ctxt true p; string "as"; doc_id_lem id])
-  | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
+  | P_typ(Typ_aux (Typ_tuple typs, _), P_aux (P_tuple pats, _)) ->
      (* Isabelle does not seem to like type-annotated tuple patterns;
         it gives a syntax error. Avoid this by annotating the tuple elements instead *)
      let env = env_of_pat pa in
@@ -573,7 +573,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_vector_concat pats ->
      raise (Reporting.err_unreachable l __POS__
       "vector concatenation patterns should have been removed before pretty-printing")
-  | P_tup pats  ->
+  | P_tuple pats  ->
      (match pats with
       | [p] -> doc_pat_lem ctxt apat_needed p
       | _ -> parens (separate_map comma_sp (doc_pat_lem ctxt false) pats))
@@ -584,7 +584,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 
 let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
-  | Typ_tup ts -> List.exists typ_needs_printed ts
+  | Typ_tuple ts -> List.exists typ_needs_printed ts
   | Typ_app (Id_aux (Id "itself",_),_) -> true
   | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
   | Typ_fn (ts,t) -> List.exists typ_needs_printed ts || typ_needs_printed t
@@ -619,7 +619,7 @@ let is_bitvector_cast_out exp =
   let rec aux (E_aux (e,_)) =
     match e with
     | E_tuple es -> List.fold_left merge BVC_allowed (List.map aux es)
-    | E_cast (_,e) -> aux e
+    | E_typ (_,e) -> aux e
     | E_app (Id_aux (Id "bitvector_cast_out",_),_) -> BVC_yes
     | E_id _ -> BVC_allowed
     | _ -> BVC_not
@@ -923,10 +923,10 @@ let doc_exp_lem, doc_let_lem =
        if typ_needs_printed typ
        then parens (doc_lit_lem lit ^^ doc_tannot_lem ctxt env (effectful eff) typ)
        else doc_lit_lem lit
-    | E_cast (typ,e) -> expV aexp_needed e (*parens (expN e ^^ doc_tannot_lem ctxt (env_of full_exp) (effectful (effect_of full_exp)) typ)*)
+    | E_typ (typ,e) -> expV aexp_needed e (*parens (expN e ^^ doc_tannot_lem ctxt (env_of full_exp) (effectful (effect_of full_exp)) typ)*)
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
-    | E_record fexps ->
+    | E_struct fexps ->
        let recordtyp, annotation_needed, env, typ = match destruct_tannot annot with
          | Some (env, (Typ_aux (Typ_id tid,_) as typ)) -> tid, false, env, typ
          (* We need an annotation here because some record type parameters may be phantom *)
@@ -937,7 +937,7 @@ let doc_exp_lem, doc_let_lem =
                                         (semi_sp ^^ break 1)
                                         (doc_fexp ctxt recordtyp) fexps)) ^^ space)
                     ^^ if annotation_needed then doc_tannot_lem ctxt env false typ else empty)
-    | E_record_update(e, fexps) ->
+    | E_struct_update(e, fexps) ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_))
          | Some (env, Typ_aux (Typ_app (tid, _), _))
@@ -983,7 +983,7 @@ let doc_exp_lem, doc_let_lem =
        "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps ->
        brackets (separate_map semi (expN) exps)
-    | E_case(e,pexps) ->
+    | E_match(e,pexps) ->
        let only_integers e = expY e in
        wrap_parens
          (group ((separate space [string "match"; only_integers e; string "with"]) ^/^
@@ -1016,7 +1016,7 @@ let doc_exp_lem, doc_let_lem =
            | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)
                 when is_unit_typ (typ_of_pat pat) ->
               string bind_unit
-           | P_aux (P_tup _, _)
+           | P_aux (P_tuple _, _)
                 when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating
                  tuple patterns to Isabelle *)
@@ -1062,11 +1062,11 @@ let doc_exp_lem, doc_let_lem =
     let if_pp = string (if elseif then "else if" else "if") in
     let else_pp = match e with
       | E_aux (E_if (c', t', e'), _)
-      | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
+      | E_aux (E_typ (_, E_aux (E_if (c', t', e'), _)), _) ->
          if_exp ctxt true c' t' e'
       (* Special case to prevent current arm decoder becoming a staircase *)
       (* TODO: replace with smarter pretty printing *)
-      | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
+      | E_aux (E_internal_plet (pat,exp1,E_aux (E_typ (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
          string "else" ^/^ top_exp ctxt false (E_aux (E_internal_plet (pat,exp1,exp2),ann))
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
@@ -1101,8 +1101,8 @@ let doc_exp_lem, doc_let_lem =
     | LEXP_field (le,id) ->
        parens (separate empty [doc_lexp_deref_lem ctxt le;dot;doc_id_lem id])
     | LEXP_id id -> doc_id_lem (append_id id "_ref")
-    | LEXP_cast (typ,id) -> doc_id_lem (append_id id "_ref")
-    | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem ctxt) lexps)
+    | LEXP_typ (typ,id) -> doc_id_lem (append_id id "_ref")
+    | LEXP_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem ctxt) lexps)
     | _ ->
        raise (Reporting.err_unreachable l __POS__ ("doc_lexp_deref_lem: Unsupported lexp"))
              (* expose doc_exp_lem and doc_let *)
@@ -1383,7 +1383,7 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   let env = env_of_annot annot in
   let identity = (fun body -> body) in
   match paux, arg_typs with
-  | P_tup [], _ ->
+  | P_tuple [], _ ->
      let annot = (l, mk_tannot Env.empty unit_typ) in
      [P_aux (P_lit (mk_lit L_unit), annot)], identity
   | P_wild, (_::_::_) ->
@@ -1399,8 +1399,8 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
      argpats, bindargs
   (* The type checker currently has a special case for a single arg type; if
      that is removed, then remove the next case. *)
-  | P_tup pats, [_] -> [pat], identity
-  | P_tup pats, _ -> pats, identity
+  | P_tuple pats, [_] -> [pat], identity
+  | P_tuple pats, _ -> pats, identity
   | _, _ ->
      [pat], identity
 
@@ -1417,7 +1417,7 @@ let doc_fun_body_lem ctxt exp =
   else
     doc_exp
 
-let doc_funcl_lem monadic type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
+let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((l, _) as annot))) =
   let (tq, typ) =
     try Env.get_val_spec_orig id type_env with
     | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
@@ -1449,7 +1449,7 @@ let doc_funcl_lem monadic type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as anno
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
-  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
+  | (FCL_aux (FCL_funcl (id,_),_))::_ -> id
 
 module StringSet = Set.Make(String)
 
@@ -1470,7 +1470,7 @@ let doc_mutrec_lem effect_info env = function
 let doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot) as fd) =
   match fcls with
   | [] -> Reporting.unreachable (fst fannot) __POS__ "FD_function with empty function list"
-  | FCL_aux (FCL_Funcl (id, pexp), annot) :: _
+  | FCL_aux (FCL_funcl (id, pexp), annot) :: _
        when not (Env.is_extern id env "lem") ->
      (* A function is required to be monadic if Sail thinks it is impure *)
      let required_monadic = not (Effects.function_is_pure id effect_info) in
@@ -1575,15 +1575,15 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
 
 let doc_def_lem effect_info type_env def =
   match def with
-  | DEF_spec v_spec -> doc_spec_lem effect_info type_env v_spec
+  | DEF_val v_spec -> doc_spec_lem effect_info type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> group (doc_typdef_lem type_env t_def) ^/^ hardline
-  | DEF_reg_dec dec -> group (doc_dec_lem dec)
+  | DEF_register dec -> group (doc_dec_lem dec)
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info type_env fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info type_env fundefs ^/^ hardline
-  | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
+  | DEF_let (LB_aux (LB_val (pat, _), _) as lbind) ->
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
@@ -1605,7 +1605,7 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
     | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in

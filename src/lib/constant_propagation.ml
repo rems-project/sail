@@ -117,13 +117,13 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_id id -> is_constructor id
   | E_lit _ -> true
   | E_tuple es | E_vector es -> List.for_all is_value es
-  | E_record fes ->
+  | E_struct fes ->
      List.for_all (fun (FE_aux (FE_Fexp (_, e), _)) -> is_value e) fes
   | E_app (id,es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
-  | E_cast (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
+  | E_typ (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
   (* Also keep casts around records, as type inference fails without *)
-  | E_cast (_, (E_aux (E_record _, _) as e')) -> is_value e'
+  | E_typ (_, (E_aux (E_struct _, _) as e')) -> is_value e'
   (* TODO: more? *)
   | _ -> false
 
@@ -212,14 +212,14 @@ let reduce_cast typ exp l annot =
   | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
      let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
      let newtyp = subst_kids_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
-     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
-  | E_aux (E_cast (_,
+     E_aux (E_typ (newtyp, exp), (Generated l,replace_typ newtyp annot))
+  | E_aux (E_typ (_,
                    (E_aux (E_lit (L_aux (L_undef,_)),_) as exp)),_),
      Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
      let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
      let newtyp = subst_kids_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
-     E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
-  | _ -> E_aux (E_cast (typ,exp),(l,annot))
+     E_aux (E_typ (newtyp, exp), (Generated l,replace_typ newtyp annot))
+  | _ -> E_aux (E_typ (typ,exp),(l,annot))
 
 (* Used for constant propagation in pattern matches *)
 type 'a matchresult =
@@ -231,7 +231,7 @@ type 'a matchresult =
    subexpressions to reduce something, but could break type-checking if we used
    it everywhere. *)
 let rec drop_casts = function
-  | E_aux (E_cast (_,e),_) -> drop_casts e
+  | E_aux (E_typ (_,e),_) -> drop_casts e
   | exp -> exp
 
 let construct_lit_vector args =
@@ -249,10 +249,10 @@ let keep_undef_typ value =
     match e with
     | E_lit (L_aux (L_undef, _)) ->
        (* Add cast to undefined... *)
-       E_aux (E_cast (typ_of_annot ann, E_aux (e, ann)), ann)
-    | E_cast (typ, E_aux (E_cast (_, e), _)) ->
+       E_aux (E_typ (typ_of_annot ann, E_aux (e, ann)), ann)
+    | E_typ (typ, E_aux (E_typ (_, e), _)) ->
        (* ... unless there was a cast already *)
-       E_aux (E_cast (typ, e), ann)
+       E_aux (E_typ (typ, e), ann)
     | _ -> E_aux (e, ann)
   in
   let open Rewriter in
@@ -297,7 +297,7 @@ let const_props target ast =
 
   let constants =
     let add m = function
-      | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_))
+      | DEF_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_))
            when Constant_fold.is_constant exp ->
          Bindings.add id exp m
       | _ -> m
@@ -371,11 +371,11 @@ let const_props target ast =
     | E_sizeof _
     | E_constraint _
       -> exp,assigns
-    | E_cast (t,e') ->
+    | E_typ (t,e') ->
        let e'',assigns = const_prop_exp substs assigns e' in
        if is_value e''
        then reduce_cast t e'' l annot, assigns
-       else re (E_cast (t, e'')) assigns
+       else re (E_typ (t, e'')) assigns
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
        let env = Type_check.env_of_annot (l, annot) in
@@ -475,18 +475,18 @@ let const_props target ast =
     | E_cons (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_cons (e1',e2')) assigns
-    | E_record fes ->
+    | E_struct fes ->
        let assigned_in_fes = assigned_vars_in_fexps fes in
        let assigns = isubst_minus_set assigns assigned_in_fes in
-       re (E_record (const_prop_fexps substs assigns fes)) assigns
-    | E_record_update (e,fes) ->
+       re (E_struct (const_prop_fexps substs assigns fes)) assigns
+    | E_struct_update (e,fes) ->
        let assigned_in = IdSet.union (assigned_vars_in_fexps fes) (assigned_vars e) in
        let assigns = isubst_minus_set assigns assigned_in in
        let e',_ = const_prop_exp substs assigns e in
        let fes' = const_prop_fexps substs assigns fes in
        begin
          match unaux_exp (fst (uncast_exp e')) with
-         | E_record (fes0) ->
+         | E_struct (fes0) ->
             let apply_fexp (FE_aux (FE_Fexp (id, e), _)) (FE_aux (FE_Fexp (id', e'), ann)) =
               if Id.compare id id' = 0 then
                 FE_aux (FE_Fexp (id', e), ann)
@@ -495,22 +495,22 @@ let const_props target ast =
             in
             let update_fields fexp = List.map (apply_fexp fexp) in
             let fes0' = List.fold_right update_fields fes' fes0 in
-            re (E_record fes0') assigns
+            re (E_struct fes0') assigns
          | _ ->
-            re (E_record_update (e', fes')) assigns
+            re (E_struct_update (e', fes')) assigns
        end
     | E_field (e,id) ->
        let e',assigns = const_prop_exp substs assigns e in
        begin
          let is_field (FE_aux (FE_Fexp (id', _), _)) = Id.compare id id' = 0 in
          match unaux_exp e' with
-         | E_record fes0 when List.exists is_field fes0 ->
+         | E_struct fes0 when List.exists is_field fes0 ->
             let (FE_aux (FE_Fexp (_, e), _)) = List.find is_field fes0 in
             re (unaux_exp e) assigns
          | _ ->
             re (E_field (e',id)) assigns
        end
-    | E_case (e,cases) ->
+    | E_match (e,cases) ->
        let e',assigns = const_prop_exp substs assigns e in
        (match can_match e' cases substs assigns with
        | None ->
@@ -519,7 +519,7 @@ let const_props target ast =
               IdSet.empty cases
           in
           let assigns' = isubst_minus_set assigns assigned_in in
-          re (E_case (e', List.map (const_prop_pexp substs assigns) cases)) assigns'
+          re (E_match (e', List.map (const_prop_pexp substs assigns) cases)) assigns'
        | Some (E_aux (_,(_,annot')) as exp,newbindings,kbindings) ->
           let exp = nexp_subst_exp (kbindings_from_list kbindings) exp in
           let newbindings_env = bindings_from_list newbindings in
@@ -598,7 +598,7 @@ let const_props target ast =
        (* TODO: try and preserve *any* assignment info; note the special case in E_if if
           one of the branches throws. *)
        let e',_ = const_prop_exp substs assigns e in
-       re (E_case (e', List.map (const_prop_pexp substs Bindings.empty) cases)) Bindings.empty
+       re (E_match (e', List.map (const_prop_pexp substs Bindings.empty) cases)) Bindings.empty
     | E_return e ->
        let e',_ = const_prop_exp substs assigns e in
        re (E_return e') Bindings.empty
@@ -630,11 +630,11 @@ let const_props target ast =
     let re e = LEXP_aux (e,annot), None in
     match e with
     | LEXP_id id (* shouldn't end up substituting here *)
-    | LEXP_cast (_,id)
+    | LEXP_typ (_,id)
       -> le, Some id
     | LEXP_memory (id,es) ->
        re (LEXP_memory (id,List.map (fun e -> fst (const_prop_exp substs assigns e)) es)) (* or here *)
-    | LEXP_tup les -> re (LEXP_tup (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
+    | LEXP_tuple les -> re (LEXP_tuple (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
     | LEXP_vector (le,e) -> re (LEXP_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))
     | LEXP_vector_range (le,e1,e2) ->
        re (LEXP_vector_range (fst (const_prop_lexp substs assigns le),
@@ -698,7 +698,7 @@ let const_props target ast =
          in
          let kbindings = Util.map_filter is_nexp (KBindings.bindings unifiers) in
          DoesMatch ([id',exp],kbindings)
-      | E_tuple es, P_tup ps ->
+      | E_tuple es, P_tuple ps ->
          let check = function
            | DoesNotMatch -> fun _ -> DoesNotMatch
            | GiveUp -> fun _ -> GiveUp
@@ -735,7 +735,7 @@ let const_props target ast =
            | L_undef ->
               let nexp = fabricate_nexp l annot in
               let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
-              DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
+              DoesMatch ([id, E_aux (E_typ (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
                          [kid,nexp])
            | _ ->
               (Reporting.print_err lit_l "Monomorphisation"
@@ -776,10 +776,10 @@ let const_props target ast =
       | E_vector _, _ ->
          (Reporting.print_err l "Monomorphisation"
             ("Unexpected kind of pattern for vector literal: " ^ string_of_pat pat); GiveUp)
-      | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))),
+      | E_typ (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))),
         P_lit (L_aux (lit_p, _))
         -> DoesNotMatch
-      | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)),
+      | E_typ (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)),
         P_var (P_aux (P_id id,p_id_annot), TP_aux (TP_var kid, _)) ->
            (* For undefined we fix the type-level size (because there's no good
               way to construct an undefined size), but leave the term as undefined
@@ -788,12 +788,12 @@ let const_props target ast =
          let kids = equal_kids (env_of_annot p_id_annot) kid in
          let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
          let typ = subst_kids_typ ksubst (typ_of_annot p_id_annot) in
-         DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
+         DoesMatch ([id, E_aux (E_typ (typ,e_undef),(l,empty_tannot))],
                     KBindings.bindings ksubst)
-      | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))), _ ->
+      | E_typ (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))), _ ->
              (Reporting.print_err l' "Monomorphisation"
                 ("Unexpected kind of pattern for literal: " ^ string_of_pat pat); GiveUp)
-      | E_record _,_ | E_cast (_, E_aux (E_record _, _)),_ -> DoesNotMatch
+      | E_struct _,_ | E_typ (_, E_aux (E_struct _, _)),_ -> DoesNotMatch
       | _ -> GiveUp
     in
     let check_pat = check_exp_pat exp0 in
@@ -880,13 +880,13 @@ let remove_impossible_int_cases _ =
   let must_keep_case exp (Pat_aux ((Pat_exp (p,_) | Pat_when (p,_,_)),_)) =
     let rec aux (E_aux (exp,_)) (P_aux (p,_)) =
       match exp, p with
-      | E_tuple exps, P_tup ps -> List.for_all2 aux exps ps
+      | E_tuple exps, P_tuple ps -> List.for_all2 aux exps ps
       | E_lit (L_aux (lit,_)), P_lit (L_aux (lit',_)) -> lit_match (lit, lit')
       | _ -> true
     in aux exp p
   in
   let e_case (exp,cases) =
-    E_case (exp, List.filter (must_keep_case exp) cases)
+    E_match (exp, List.filter (must_keep_case exp) cases)
   in
   let e_if (cond, e_then, e_else) =
     match destruct_atom_bool (env_of cond) (typ_of cond) with

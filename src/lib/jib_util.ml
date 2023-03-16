@@ -909,12 +909,12 @@ let rec iter_instr f (I_aux (instr, aux)) =
 
 (** Map over each instruction in a cdef using map_instr *)
 let cdef_map_instr f = function
-  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, List.map (map_instr f) instrs)
+  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.map (map_instr f) instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr f) instrs)
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
-  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
+  | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
@@ -945,19 +945,19 @@ let rec map_funcall f instrs =
 
 (** Map over each function call in a cdef using map_funcall *)
 let cdef_map_funcall f = function
-  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, map_funcall f instrs)
+  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, map_funcall f instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, map_funcall f instrs)
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, map_funcall f instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, map_funcall f instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, map_funcall f instrs)
-  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
+  | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 (** Map over each instruction in a cdef using concatmap_instr *)
 let cdef_concatmap_instr f = function
-  | CDEF_reg_dec (id, ctyp, instrs) ->
-     CDEF_reg_dec (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
+  | CDEF_register (id, ctyp, instrs) ->
+     CDEF_register (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_let (n, bindings, instrs) ->
      CDEF_let (n, bindings, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_fundef (id, heap_return, args, instrs) ->
@@ -966,7 +966,7 @@ let cdef_concatmap_instr f = function
      CDEF_startup (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_finish (id, instrs) ->
      CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
-  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
+  | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
@@ -977,12 +977,12 @@ let ctype_def_map_ctyp f = function
 
 (** Map over each ctyp in a cdef using map_instr_ctyp *)
 let cdef_map_ctyp f = function
-  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, f ctyp, List.map (map_instr_ctyp f) instrs)
+  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, f ctyp, List.map (map_instr_ctyp f) instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr_ctyp f) instrs)
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr_ctyp f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
-  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, List.map f ctyps, f ctyp)
+  | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, List.map f ctyps, f ctyp)
   | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
@@ -1181,9 +1181,9 @@ let ctype_def_ctyps = function
   | CTD_variant (_, ctors) -> List.map snd ctors
 
 let cdef_ctyps = function
-  | CDEF_reg_dec (_, ctyp, instrs) ->
+  | CDEF_register (_, ctyp, instrs) ->
      CTSet.add ctyp (instrs_ctyps instrs)
-  | CDEF_spec (_, _, ctyps, ctyp) ->
+  | CDEF_val (_, _, ctyps, ctyp) ->
      CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
   | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
      instrs_ctyps instrs
@@ -1195,7 +1195,7 @@ let cdef_ctyps = function
   | CDEF_pragma (_, _) -> CTSet.empty
 
 let rec c_ast_registers = function
-  | CDEF_reg_dec (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
+  | CDEF_register (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
   | _ :: ast -> c_ast_registers ast
   | [] -> []
 

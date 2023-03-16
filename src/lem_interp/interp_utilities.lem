@@ -87,7 +87,7 @@ let mk_typ_app str args = Typ_aux (Typ_app (Id_aux (Id str) Unknown) (List.map (
 let mk_typ_id str = Typ_aux (Typ_id (Id_aux (Id str) Unknown)) Unknown
 
 let mk_typ_var str = Typ_aux (Typ_var (Kid_aux (Var ("'" ^ str)) Unknown)) Unknown
-let mk_typ_tup typs = Typ_aux (Typ_tup typs) Unknown
+let mk_typ_tup typs = Typ_aux (Typ_tuple typs) Unknown
 
 let nconstant n = Nexp_aux (Nexp_constant n) Unknown
 
@@ -193,7 +193,7 @@ val find_type_def : defs tannot -> id -> maybe (type_def tannot)
 val find_function : defs tannot -> id -> maybe (list (funcl tannot))
 
 let get_funcls id (FD_aux (FD_function _ _ _ fcls) _) =
-  List.filter (fun (FCL_aux (FCL_Funcl name pexp) _) -> (get_id id) = (get_id name)) fcls
+  List.filter (fun (FCL_aux (FCL_funcl name pexp) _) -> (get_id id) = (get_id name)) fcls
 
 let rec find_function (Defs defs) id =
   match defs with 

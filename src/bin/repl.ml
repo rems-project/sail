@@ -555,7 +555,7 @@ let handle_input' istate input =
            begin match args with
            | v :: "=" :: args ->
               let exp = Initial_check.exp_of_string (String.concat " " args) in
-              let defs, env = Type_check.check_defs istate.env [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
+              let defs, env = Type_check.check_defs istate.env [DEF_let (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
               { istate with ast = append_ast_defs istate.ast defs; env = env }
            | _ ->
               failwith "Invalid arguments for :let";

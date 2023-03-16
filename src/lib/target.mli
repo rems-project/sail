@@ -65,7 +65,13 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Infrastructure for registering Sail targets/backends *)
+(** Infrastructure for plugins to register Sail targets.
+
+   A {e target} is essentially a custom backend for the Sail compiler,
+   along with various hooks and options that toggle various frontend
+   behaviours. A target therefore specifies what kind of output Sail
+   will produce. For example, we provide default plugins that define
+   targets to output Lem, C, OCaml, Coq, and so on. *)
 
 open Ast_defs
 open Type_check
@@ -96,16 +102,20 @@ val asserts_termination : target -> bool
    that will run the provided action on the Sail abstract syntax tree
    after performing common frontend processing.
 
-   The various optional arguments can be used to further control the
+   The various arguments can be used to further control the
    behavior of the target:
 
-   @param ?flag A custom flag. By default it will use the name parameter
+   @param ~name The name of the target
+   @param ?flag A custom command line flag to invoke the target. By default it will use the name parameter
    @param ?description A custom description for the command line flag
    @param ?options Additional options for the Sail executable
    @param ?pre_parse_hook A function to call right at the start, before parsing
    @param ?pre_rewrites_hook A function to call before doing any rewrites
    @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
    @param ?asserts_termination Whether termination measures are enforced by assertions in the target
+
+   The final unnamed parameter is the main backend function that is called after the frontend
+   has finished processing the input.
  *)
 val register :
   name:string ->
@@ -120,8 +130,11 @@ val register :
   (string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   target
 
+(** Return the current target. For example, if we register a 'coq'
+   target, and Sail is invoked with `sail -coq`, then this function
+   will return the coq target. *)
 val get_the_target : unit -> target option
-  
+
 val get : name:string -> target option
 
 (** Used internally to dynamically update the option list when loading plugins *)

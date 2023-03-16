@@ -90,11 +90,11 @@ let instantiate_typ substs typ =
     ) typ (KBindings.bindings substs)
  
 let instantiate_def target id substs = function
-  | DEF_impl (FCL_aux (FCL_Funcl (target_id, pexp), annot)) when string_of_id target_id = target ->
+  | DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), annot)) when string_of_id target_id = target ->
      let l = gen_loc (id_loc id) in
      Some (DEF_fundef (FD_aux (FD_function (Rec_aux (Rec_nonrec, l),
                                             Typ_annot_opt_aux (Typ_annot_opt_none, l),
-                                            [FCL_aux (FCL_Funcl (id, pexp), annot)]),
+                                            [FCL_aux (FCL_funcl (id, pexp), annot)]),
                                annot)))
   | def -> None
 
@@ -129,7 +129,7 @@ let instantiate target ast =
        let rewrite_e_aux (exp, annot) =
          match exp with
          | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
-         | E_cast (typ, exp) -> E_aux (E_cast (instantiate_typ substs typ, exp), annot)
+         | E_typ (typ, exp) -> E_aux (E_typ (instantiate_typ substs typ, exp), annot)
          | _ -> E_aux (exp, annot)
        in
        let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
@@ -142,7 +142,7 @@ let instantiate target ast =
 
        let valspec is_extern =
          let extern = if is_extern then Some { pure = false; bindings = [("_", string_of_id id)] } else None in
-         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, empty_uannot)))
+         DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, empty_uannot)))
        in
        let instantiated_def =
          rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs

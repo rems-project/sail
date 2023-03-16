@@ -83,7 +83,7 @@ type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 and 'a aexp_aux =
   | AE_val of 'a aval
   | AE_app of id * ('a aval) list * 'a
-  | AE_cast of 'a aexp * 'a
+  | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
@@ -92,9 +92,9 @@ and 'a aexp_aux =
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
+  | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
   | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
+  | AE_struct_update of 'a aval * ('a aval) Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
@@ -104,7 +104,7 @@ and sc_op = SC_and | SC_or
 and 'a apat = AP_aux of 'a apat_aux * Env.t * l
 
 and 'a apat_aux =
-  | AP_tup of ('a apat) list
+  | AP_tuple of ('a apat) list
   | AP_id of id * 'a
   | AP_global of id * 'a
   | AP_app of id * 'a apat * 'a
@@ -134,7 +134,7 @@ let aexp_loc (AE_aux (_, _, l)) = l
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
-  | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
+  | AP_tuple apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
   | AP_id (id, _) -> IdSet.singleton id
   | AP_global (id, _) -> IdSet.empty
   | AP_app (id, apat, _) -> apat_bindings apat
@@ -154,7 +154,7 @@ let rec apat_types (AP_aux (apat_aux, env, _)) =
     | Some _, Some _ -> assert false
   in
   match apat_aux with
-  | AP_tup apats -> List.fold_left (Bindings.merge merge) Bindings.empty (List.map apat_types apats)
+  | AP_tuple apats -> List.fold_left (Bindings.merge merge) Bindings.empty (List.map apat_types apats)
   | AP_id (id, typ) when not (is_enum_member id env) -> Bindings.singleton id typ
   | AP_id _ -> Bindings.empty
   | AP_global (id, _) -> Bindings.empty
@@ -166,7 +166,7 @@ let rec apat_types (AP_aux (apat_aux, env, _)) =
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
   let apat_aux = match apat_aux with
-    | AP_tup apats -> AP_tup (List.map (apat_rename from_id to_id) apats)
+    | AP_tuple apats -> AP_tuple (List.map (apat_rename from_id to_id) apats)
     | AP_id (id, typ) when Id.compare id from_id = 0 -> AP_id (to_id, typ)
     | AP_id (id, typ) -> AP_id (id, typ)
     | AP_global (id, typ) -> AP_global (id, typ)
@@ -193,7 +193,7 @@ let aexp_typ (AE_aux (aux, _, _)) =
   match aux with
   | AE_val aval -> aval_typ aval
   | AE_app (_, _, typ) -> typ
-  | AE_cast (_, typ) -> typ
+  | AE_typ (_, typ) -> typ
   | AE_assign _ -> unit_typ
   | AE_let (_, _, _, _, _, typ) -> typ
   | AE_block (_, _, typ) -> typ
@@ -202,9 +202,9 @@ let aexp_typ (AE_aux (aux, _, _)) =
   | AE_throw (_, typ) -> typ
   | AE_if (_, _, _, typ) -> typ
   | AE_field (_, _, typ) -> typ
-  | AE_case (_, _, typ) -> typ
+  | AE_match (_, _, typ) -> typ
   | AE_try (_, _, typ) -> typ
-  | AE_record_update (_, _, typ) -> typ
+  | AE_struct_update (_, _, typ) -> typ
   | AE_for _ -> unit_typ
   | AE_loop _ -> unit_typ
   | AE_short_circuit _ -> bool_typ
@@ -233,7 +233,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_val aval -> AE_val (aval_rename from_id to_id aval)
     | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
-    | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
+    | AE_typ (aexp, typ) -> AE_typ (recur aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp_rename from_id to_id alexp, aexp_rename from_id to_id aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (mut, id, typ1, recur aexp1, aexp2, typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, recur aexp1, recur aexp2, typ2)
@@ -243,9 +243,9 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
     | AE_throw (aval, typ) -> AE_throw (aval_rename from_id to_id aval, typ)
     | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval_rename from_id to_id aval, recur then_aexp, recur else_aexp, typ)
     | AE_field (aval, id, typ) -> AE_field (aval_rename from_id to_id aval, id, typ)
-    | AE_case (aval, apexps, typ) -> AE_case (aval_rename from_id to_id aval, List.map (apexp_rename from_id to_id) apexps, typ)
+    | AE_match (aval, apexps, typ) -> AE_match (aval_rename from_id to_id aval, List.map (apexp_rename from_id to_id) apexps, typ)
     | AE_try (aexp, apexps, typ) -> AE_try (aexp_rename from_id to_id aexp, List.map (apexp_rename from_id to_id) apexps, typ)
-    | AE_record_update (aval, avals, typ) -> AE_record_update (aval_rename from_id to_id aval, Bindings.map (aval_rename from_id to_id) avals, typ)
+    | AE_struct_update (aval, avals, typ) -> AE_struct_update (aval_rename from_id to_id aval, Bindings.map (aval_rename from_id to_id) avals, typ)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Id.compare from_id to_id = 0 -> AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) -> AE_for (id, recur aexp1, recur aexp2, recur aexp3, order, recur aexp4)
     | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, recur aexp1, recur aexp2)
@@ -262,7 +262,7 @@ and apexp_rename from_id to_id (apat, aexp1, aexp2) =
 let rec fold_aexp f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_app (id, vs, typ) -> AE_app (id, vs, typ)
-    | AE_cast (aexp, typ) -> AE_cast (fold_aexp f aexp, typ)
+    | AE_typ (aexp, typ) -> AE_typ (fold_aexp f aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp, fold_aexp f aexp)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, fold_aexp f aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, fold_aexp f aexp1, fold_aexp f aexp2, typ2)
@@ -272,11 +272,11 @@ let rec fold_aexp f (AE_aux (aexp, env, l)) =
     | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, fold_aexp f aexp1, fold_aexp f aexp2)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
        AE_for (id, fold_aexp f aexp1, fold_aexp f aexp2, fold_aexp f aexp3, order, fold_aexp f aexp4)
-    | AE_case (aval, cases, typ) ->
-       AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
+    | AE_match (aval, cases, typ) ->
+       AE_match (aval, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
     | AE_try (aexp, cases, typ) ->
        AE_try (fold_aexp f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
-    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
+    | AE_field _ | AE_struct_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
   in
   f (AE_aux (aexp, env, l))
 
@@ -302,7 +302,7 @@ let rec no_shadow ids (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_val aval -> AE_val aval
     | AE_app (id, avals, typ) -> AE_app (id, avals, typ)
-    | AE_cast (aexp, typ) -> AE_cast (no_shadow ids aexp, typ)
+    | AE_typ (aexp, typ) -> AE_typ (no_shadow ids aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp, no_shadow ids aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when IdSet.mem id ids ->
        let shadow_id = new_shadow id in
@@ -317,9 +317,9 @@ let rec no_shadow ids (AE_aux (aexp, env, l)) =
     | AE_throw (aval, typ) -> AE_throw (aval, typ)
     | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval, no_shadow ids then_aexp, no_shadow ids else_aexp, typ)
     | AE_field (aval, id, typ) -> AE_field (aval, id, typ)
-    | AE_case (aval, apexps, typ) -> AE_case (aval, List.map (no_shadow_apexp ids) apexps, typ)
+    | AE_match (aval, apexps, typ) -> AE_match (aval, List.map (no_shadow_apexp ids) apexps, typ)
     | AE_try (aexp, apexps, typ) -> AE_try (no_shadow ids aexp, List.map (no_shadow_apexp ids) apexps, typ)
-    | AE_record_update (aval, avals, typ) -> AE_record_update (aval, avals, typ)
+    | AE_struct_update (aval, avals, typ) -> AE_struct_update (aval, avals, typ)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when IdSet.mem id ids ->
        let shadow_id = new_shadow id in
        let aexp1 = no_shadow ids aexp1 in
@@ -348,7 +348,7 @@ and no_shadow_apexp ids (apat, aexp1, aexp2) =
 let rec map_aval f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_val v -> AE_val (f env l v)
-    | AE_cast (aexp, typ) -> AE_cast (map_aval f aexp, typ)
+    | AE_typ (aexp, typ) -> AE_typ (map_aval f aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp, map_aval f aexp)
     | AE_app (id, vs, typ) -> AE_app (id, List.map (f env l) vs, typ)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) ->
@@ -362,12 +362,12 @@ let rec map_aval f (AE_aux (aexp, env, l)) =
     | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, map_aval f aexp1, map_aval f aexp2)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
        AE_for (id, map_aval f aexp1, map_aval f aexp2, map_aval f aexp3, order, map_aval f aexp4)
-    | AE_record_update (aval, updates, typ) ->
-       AE_record_update (f env l aval, Bindings.map (f env l) updates, typ)
+    | AE_struct_update (aval, updates, typ) ->
+       AE_struct_update (f env l aval, Bindings.map (f env l) updates, typ)
     | AE_field (aval, field, typ) ->
        AE_field (f env l aval, field, typ)
-    | AE_case (aval, cases, typ) ->
-       AE_case (f env l aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
+    | AE_match (aval, cases, typ) ->
+       AE_match (f env l aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
     | AE_try (aexp, cases, typ) ->
        AE_try (map_aval f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, f env l aval, map_aval f aexp)
@@ -378,7 +378,7 @@ let rec map_aval f (AE_aux (aexp, env, l)) =
 let rec map_functions f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_app (id, vs, typ) -> f env l id vs typ
-    | AE_cast (aexp, typ) -> AE_cast (map_functions f aexp, typ)
+    | AE_typ (aexp, typ) -> AE_typ (map_functions f aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp, map_functions f aexp)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, map_functions f aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, map_functions f aexp1, map_functions f aexp2, typ2)
@@ -388,11 +388,11 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
     | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, map_functions f aexp1, map_functions f aexp2)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
        AE_for (id, map_functions f aexp1, map_functions f aexp2, map_functions f aexp3, order, map_functions f aexp4)
-    | AE_case (aval, cases, typ) ->
-       AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
+    | AE_match (aval, cases, typ) ->
+       AE_match (aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
     | AE_try (aexp, cases, typ) ->
        AE_try (map_functions f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
-    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
+    | AE_field _ | AE_struct_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
   in
   AE_aux (aexp, env, l)
 
@@ -432,7 +432,7 @@ let rec pp_alexp = function
 let rec pp_aexp (AE_aux (aexp, _, _)) =
   match aexp with
   | AE_val v -> pp_aval v
-  | AE_cast (aexp, typ) ->
+  | AE_typ (aexp, typ) ->
      pp_annot typ (string "$" ^^ pp_aexp aexp)
   | AE_assign (alexp, aexp) ->
      pp_alexp alexp ^^ string " := " ^^ pp_aexp aexp
@@ -478,11 +478,11 @@ let rec pp_aexp (AE_aux (aexp, _, _)) =
      in
      header ^//^ pp_aexp aexp4
   | AE_field (aval, field, typ) -> pp_annot typ (parens (pp_aval aval ^^ string "." ^^ pp_id field))
-  | AE_case (aval, cases, typ) ->
+  | AE_match (aval, cases, typ) ->
      pp_annot typ (separate space [string "match"; pp_aval aval; pp_cases cases])
   | AE_try (aexp, cases, typ) ->
      pp_annot typ (separate space [string "try"; pp_aexp aexp; pp_cases cases])
-  | AE_record_update (aval, updates, typ) ->
+  | AE_struct_update (aval, updates, typ) ->
      braces (pp_aval aval ^^ string " with "
              ^^ separate (string ", ") (List.map (fun (id, aval) -> pp_id id ^^ string " = " ^^ pp_aval aval)
                                                  (Bindings.bindings updates)))
@@ -492,7 +492,7 @@ and pp_apat (AP_aux (apat_aux, _, _)) =
   | AP_wild _ -> string "_"
   | AP_id (id, typ) -> pp_annot typ (pp_id id)
   | AP_global (id, _) -> pp_id id
-  | AP_tup apats -> parens (separate_map (comma ^^ space) pp_apat apats)
+  | AP_tuple apats -> parens (separate_map (comma ^^ space) pp_apat apats)
   | AP_app (id, apat, typ) -> pp_annot typ (pp_id id ^^ parens (pp_apat apat))
   | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
@@ -544,9 +544,9 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_id id when global -> mk_apat (AP_global (id, typ_of_pat pat))
   | P_id id -> mk_apat (AP_id (id, typ_of_pat pat))
   | P_wild -> mk_apat (AP_wild (typ_of_pat pat))
-  | P_tup pats -> mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats))
+  | P_tuple pats -> mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global:global pat) pats))
   | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global:global subpat, typ_of_pat pat))
-  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tup (List.map (fun pat -> anf_pat ~global:global pat) pats)), typ_of_pat pat))
+  | P_app (id, pats) -> mk_apat (AP_app (id, mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global:global pat) pats)), typ_of_pat pat))
   | P_typ (_, pat) -> anf_pat ~global:global pat
   | P_var (pat, _) -> anf_pat ~global:global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
@@ -561,7 +561,7 @@ let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with
   | AP_nil _ | AP_wild _ | AP_id _ -> []
   | AP_global (id, typ) -> [(id, typ)]
-  | AP_tup apats -> List.concat (List.map apat_globals apats)
+  | AP_tuple apats -> List.concat (List.map apat_globals apats)
   | AP_app (_, apat, _) -> apat_globals apat
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
   | AP_as (apat, _, _) -> apat_globals apat
@@ -571,7 +571,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   let rec anf_lexp env (LEXP_aux (aux, (l, _)) as lexp) =
     match aux with
-    | LEXP_id id | LEXP_cast (_, id) ->
+    | LEXP_id id | LEXP_typ (_, id) ->
        (fun x -> x), AL_id (id, lvar_typ ~loc:l (Env.lookup_id id env))
     | LEXP_field (lexp, field_id) ->
        let wrap, alexp = anf_lexp env lexp in
@@ -597,12 +597,12 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
       | AE_return (_, typ)
       | AE_exit (_, typ)
       | AE_throw (_, typ)
-      | AE_cast (_, typ)
+      | AE_typ (_, typ)
       | AE_if (_, _, _, typ)
       | AE_field (_, _, typ)
-      | AE_case (_, _, typ)
+      | AE_match (_, _, typ)
       | AE_try (_, _, typ)
-      | AE_record_update (_, _, typ)
+      | AE_struct_update (_, _, typ)
       | AE_block (_, _, typ) ->
        let id = gensym () in
        (AV_id (id, Local (Immutable, typ)), fun x -> mk_aexp x (AE_let (Immutable, id, typ, aexp, x, typ_of exp)))
@@ -665,7 +665,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let aval, wrap = to_aval (anf field_exp) in
      wrap (mk_aexp (AE_field (aval, id, typ_of exp)))
 
-  | E_record_update (exp, fexps) ->
+  | E_struct_update (exp, fexps) ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
@@ -674,7 +674,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let fexps = List.map anf_fexp fexps in
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd fexps) in
      let record = List.fold_left (fun r (id, aval) -> Bindings.add id aval r) Bindings.empty (List.map fst fexps) in
-     exp_wrap (wrap (mk_aexp (AE_record_update (aval, record, typ_of exp))))
+     exp_wrap (wrap (mk_aexp (AE_struct_update (aval, record, typ_of exp))))
 
   | E_app (id, [exp1; exp2]) when string_of_id id = "and_bool" ->
      let aexp1 = anf exp1 in
@@ -733,7 +733,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let lvar = Env.lookup_id id (env_of exp) in
      mk_aexp (AE_val (AV_ref (id, lvar)))
 
-  | E_case (match_exp, pexps) ->
+  | E_match (match_exp, pexps) ->
      let match_aval, match_wrap = to_aval (anf match_exp) in
      let anf_pexp (Pat_aux (pat_aux, _)) =
        match pat_aux with
@@ -742,7 +742,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
        | Pat_exp (pat, body) ->
           (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body)
      in
-     match_wrap (mk_aexp (AE_case (match_aval, List.map anf_pexp pexps, typ_of exp)))
+     match_wrap (mk_aexp (AE_match (match_aval, List.map anf_pexp pexps, typ_of exp)))
 
   | E_try (match_exp, pexps) ->
      let match_aexp = anf match_exp in
@@ -756,7 +756,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
 
   | E_var (LEXP_aux (LEXP_id id, _), binding, body)
-    | E_var (LEXP_aux (LEXP_cast (_, id), _), binding, body)
+    | E_var (LEXP_aux (LEXP_typ (_, id), _), binding, body)
     | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
     | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ->
      let env = env_of body in
@@ -768,7 +768,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
        ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
-     anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
+     anf (E_aux (E_match (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
 
   | E_tuple exps ->
      let aexps = List.map anf exps in
@@ -776,7 +776,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
      wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
 
-  | E_record fexps ->
+  | E_struct fexps ->
      let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
@@ -786,7 +786,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let record = List.fold_left (fun r (id, aval) -> Bindings.add id aval r) Bindings.empty (List.map fst fexps) in
      wrap (mk_aexp (AE_val (AV_record (record, typ_of exp))))
 
-  | E_cast (typ, exp) -> mk_aexp (AE_cast (anf exp, typ))
+  | E_typ (typ, exp) -> mk_aexp (AE_typ (anf exp, typ))
 
   | E_internal_assume (_nc, exp) -> anf exp
 

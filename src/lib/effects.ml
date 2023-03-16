@@ -136,12 +136,12 @@ end
 module PC = Pattern_completeness.Make(PC_config)
 
 let rec funcls_to_pexps = function
-  | FCL_aux (FCL_Funcl (_, pexp), _) :: funcls -> pexp :: funcls_to_pexps funcls
+  | FCL_aux (FCL_funcl (_, pexp), _) :: funcls -> pexp :: funcls_to_pexps funcls
   | [] -> []
 
 let funcls_info = function
-  | FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
-  | FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, _, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
+  | FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
+  | FCL_aux (FCL_funcl (id, Pat_aux (Pat_when (pat, _, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
   | _ -> None
 
 let infer_def_direct_effects asserts_termination def =
@@ -150,7 +150,7 @@ let infer_def_direct_effects asserts_termination def =
   let scan_lexp lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (_, id) | LEXP_id id ->
+    | LEXP_typ (_, id) | LEXP_id id ->
        begin match Env.lookup_id id env with
        | Register _ ->
           effects := EffectSet.add Register !effects
@@ -176,7 +176,7 @@ let infer_def_direct_effects asserts_termination def =
     | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
     | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 ->
        effects := EffectSet.add Register !effects
-    | E_case (exp, cases) ->
+    | E_match (exp, cases) ->
        let ctx = {
            Pattern_completeness.variants = Env.get_variants env;
            Pattern_completeness.enums = Env.get_enums env
@@ -209,7 +209,7 @@ let infer_def_direct_effects asserts_termination def =
                                                  rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
 
   begin match def with
-  | DEF_spec (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
+  | DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
      effects := EffectSet.add External !effects
   | DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) ->
      begin match funcls_info funcls with
@@ -278,8 +278,8 @@ let can_have_direct_side_effect = function
   | DEF_fundef _ -> true
   | DEF_mapdef _ -> false 
   | DEF_impl _ -> true
+  | DEF_let _ -> true
   | DEF_val _ -> true
-  | DEF_spec _ -> true
   | DEF_outcome _ -> true
   | DEF_instantiation _ -> false
   | DEF_fixity _ -> false
@@ -288,7 +288,7 @@ let can_have_direct_side_effect = function
   | DEF_scattered _ -> true
   | DEF_measure _ -> true
   | DEF_loop_measures _ -> true
-  | DEF_reg_dec _ -> true
+  | DEF_register _ -> true
   | DEF_internal_mutrec _ -> true
   | DEF_pragma _ -> false
  
@@ -417,7 +417,7 @@ let check_side_effects effect_info ast =
   List.iter (fun def ->
       match def with
       | DEF_pragma ("non_exec", name, _) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
-      | DEF_val _ ->
+      | DEF_let _ ->
          IdSet.iter (fun id ->
              match Bindings.find_opt id effect_info.letbinds with
              | Some eff when not (pure eff) ->
@@ -468,7 +468,7 @@ let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
     let eff = match lexp_aux with
-      | LEXP_cast (_, id) | LEXP_id id ->
+      | LEXP_typ (_, id) | LEXP_id id ->
          begin match Env.lookup_id id env with
          | Register _ -> monadic_effect
          | _ -> no_effect

@@ -93,7 +93,7 @@ let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ)
 
 let rec is_src_typ typ =
   match typ with
-  | Typ_aux (Typ_tup typs, l) -> List.for_all is_src_typ typs
+  | Typ_aux (Typ_tuple typs, l) -> List.for_all is_src_typ typs
   | _ ->
      match destruct_exist typ with
      | Some (kopts, nc, typ') ->
@@ -115,12 +115,12 @@ let add_p_typ env typ (P_aux (paux, annot) as pat) =
   if is_src_typ typ' then P_aux (P_typ (typ', remove_p_typ pat), annot) else pat
 
 let rec remove_e_cast = function
-  | E_aux (E_cast (_, exp), _) -> remove_e_cast exp
+  | E_aux (E_typ (_, exp), _) -> remove_e_cast exp
   | exp -> exp
 
 let add_e_cast env typ (E_aux (eaux, annot) as exp) =
   let typ' = resolve_generated_kids env typ in
-  if is_src_typ typ' then E_aux (E_cast (typ', remove_e_cast exp), annot) else exp
+  if is_src_typ typ' then E_aux (E_typ (typ', remove_e_cast exp), annot) else exp
 
 let add_typs_let env ltyp rtyp exp =
   let aux pat lhs rhs =
@@ -156,7 +156,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
   | P_vector pats -> rewrap (P_vector(List.map rewrite pats))
   | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
-  | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
+  | P_tuple pats -> rewrap (P_tuple (List.map rewrite pats))
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
@@ -167,7 +167,7 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
   | E_id _ | E_lit _  -> rewrap exp
-  | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite exp))
+  | E_typ (typ, exp) -> rewrap (E_typ (typ, rewrite exp))
   | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite exps))
   | E_app_infix(el,id,er) -> rewrap (E_app_infix(rewrite el,id,rewrite er))
   | E_tuple exps -> rewrap (E_tuple (List.map rewrite exps))
@@ -191,17 +191,17 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_vector_append (v1,v2) -> rewrap (E_vector_append (rewrite v1,rewrite v2))
   | E_list exps -> rewrap (E_list (List.map rewrite exps))
   | E_cons(h,t) -> rewrap (E_cons (rewrite h,rewrite t))
-  | E_record fexps ->
-    rewrap (E_record
+  | E_struct fexps ->
+    rewrap (E_struct
               (List.map (fun (FE_aux(FE_Fexp(id,e),fannot)) ->
                    FE_aux(FE_Fexp(id,rewrite e),fannot)) fexps))
-  | E_record_update (re, fexps) ->
-    rewrap (E_record_update ((rewrite re),
+  | E_struct_update (re, fexps) ->
+    rewrap (E_struct_update ((rewrite re),
                              (List.map (fun (FE_aux(FE_Fexp(id,e),fannot)) ->
                                   FE_aux(FE_Fexp(id,rewrite e),fannot)) fexps)))
   | E_field(exp,id) -> rewrap (E_field(rewrite exp,id))
-  | E_case (exp,pexps) ->
-    rewrap (E_case (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
+  | E_match (exp,pexps) ->
+    rewrap (E_match (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
   | E_try (exp,pexps) ->
     rewrap (E_try (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters letbind,rewrite body))
@@ -227,9 +227,9 @@ let rewrite_let rewriters (LB_aux(letbind,(l,annot))) =
 let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   let rewrap le = LEXP_aux(le,(l,annot)) in
   match lexp with
-  | LEXP_id _ | LEXP_cast _ -> rewrap lexp
+  | LEXP_id _ | LEXP_typ _ -> rewrap lexp
   | LEXP_deref exp -> rewrap (LEXP_deref (rewriters.rewrite_exp rewriters exp))
-  | LEXP_tup tupls -> rewrap (LEXP_tup (List.map (rewriters.rewrite_lexp rewriters) tupls))
+  | LEXP_tuple tupls -> rewrap (LEXP_tuple (List.map (rewriters.rewrite_lexp rewriters) tupls))
   | LEXP_memory (id,exps) -> rewrap (LEXP_memory(id,List.map (rewriters.rewrite_exp rewriters) exps))
   | LEXP_vector (lexp,exp) ->
     rewrap (LEXP_vector (rewriters.rewrite_lexp rewriters lexp,rewriters.rewrite_exp rewriters exp))
@@ -240,8 +240,8 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   | LEXP_vector_concat lexps -> rewrap (LEXP_vector_concat (List.map (rewriters.rewrite_lexp rewriters) lexps))
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters lexp,id))
 
-let rewrite_funcl rewriters (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
-  FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot))
+let rewrite_funcl rewriters (FCL_aux (FCL_funcl(id,pexp),(l,annot))) =
+  FCL_aux (FCL_funcl (id, rewrite_pexp rewriters pexp),(l,annot))
 
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdannot))) = 
   let recopt = match recopt with
@@ -279,14 +279,14 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
   SD_aux (sd, (l, annot))
   
 let rec rewrite_def rewriters d = match d with
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
-     DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
+  | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
+     DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
+  | DEF_type _ | DEF_mapdef _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
   | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
-  | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
+  | DEF_let letbind -> DEF_let (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
   | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
@@ -359,7 +359,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat_aux -> 'pat_aux
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
   | P_vector ps         -> alg.p_vector (List.map (fold_pat alg) ps)
   | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
-  | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
+  | P_tuple ps          -> alg.p_tup (List.map (fold_pat alg) ps)
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
@@ -377,7 +377,7 @@ let rec fold_mpat_aux (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat_aux -> 'mpa
   | MP_app (id, ps)     -> alg.p_app (id,List.map (fold_mpat alg) ps)
   | MP_vector ps        -> alg.p_vector (List.map (fold_mpat alg) ps)
   | MP_vector_concat ps -> alg.p_vector_concat (List.map (fold_mpat alg) ps)
-  | MP_tup ps           -> alg.p_tup (List.map (fold_mpat alg) ps)
+  | MP_tuple ps         -> alg.p_tup (List.map (fold_mpat alg) ps)
   | MP_list ps          -> alg.p_list (List.map (fold_mpat alg) ps)
   | MP_cons (ph, pt)    -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
   | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
@@ -399,7 +399,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_vector         = (fun ps -> P_vector ps)
   ; p_vector_concat  = (fun ps -> P_vector_concat ps)
-  ; p_tup            = (fun ps -> P_tup ps)
+  ; p_tup            = (fun ps -> P_tuple ps)
   ; p_list           = (fun ps -> P_list ps)
   ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
   ; p_string_append  = (fun ps -> P_string_append ps)
@@ -418,7 +418,7 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
   ; p_app            = (fun (id, ps) -> Util.option_map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
   ; p_vector         = (fun ps -> Util.option_map (fun ps -> MP_vector ps) (Util.option_all ps))
   ; p_vector_concat  = (fun ps -> Util.option_map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
-  ; p_tup            = (fun ps -> Util.option_map (fun ps -> MP_tup ps) (Util.option_all ps))
+  ; p_tup            = (fun ps -> Util.option_map (fun ps -> MP_tuple ps) (Util.option_all ps))
   ; p_list           = (fun ps -> Util.option_map (fun ps -> MP_list ps) (Util.option_all ps))
   ; p_cons           = (fun (ph, pt) -> Util.option_bind (fun ph -> Util.option_map (fun pt -> MP_cons (ph, pt)) pt) ph)
   ; p_string_append  = (fun ps -> Util.option_map (fun ps -> MP_string_append ps) (Util.option_all ps))
@@ -460,7 +460,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   ; e_throw                  : 'exp -> 'exp_aux
   ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
-  ; e_var           : 'lexp * 'exp * 'exp -> 'exp_aux
+  ; e_var                    : 'lexp * 'exp * 'exp -> 'exp_aux
   ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
   ; e_internal_return        : 'exp -> 'exp_aux
   ; e_internal_value         : Value.value -> 'exp_aux
@@ -470,7 +470,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   ; lEXP_deref               : 'exp -> 'lexp_aux
   ; lEXP_memory              : id * 'exp list -> 'lexp_aux
   ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
-  ; lEXP_tup                 : 'lexp list -> 'lexp_aux
+  ; lEXP_tuple               : 'lexp list -> 'lexp_aux
   ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
   ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
   ; lEXP_vector_concat       : 'lexp list -> 'lexp_aux
@@ -494,7 +494,7 @@ let rec fold_exp_aux alg = function
   | E_id id -> alg.e_id id
   | E_ref id -> alg.e_ref id
   | E_lit lit -> alg.e_lit lit
-  | E_cast (typ,e) -> alg.e_cast (typ, fold_exp alg e)
+  | E_typ (typ,e) -> alg.e_cast (typ, fold_exp alg e)
   | E_app (id,es) -> alg.e_app (id, List.map (fold_exp alg) es)
   | E_app_infix (e1,id,e2) -> alg.e_app_infix (fold_exp alg e1, id, fold_exp alg e2)
   | E_tuple es -> alg.e_tuple (List.map (fold_exp alg) es)
@@ -518,10 +518,10 @@ let rec fold_exp_aux alg = function
   | E_vector_append (e1,e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
   | E_list es -> alg.e_list (List.map (fold_exp alg) es)
   | E_cons (e1,e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
-  | E_record fexps -> alg.e_record (List.map (fold_fexp alg) fexps)
-  | E_record_update (e,fexps) -> alg.e_record_update (fold_exp alg e, List.map (fold_fexp alg) fexps)
+  | E_struct fexps -> alg.e_record (List.map (fold_fexp alg) fexps)
+  | E_struct_update (e,fexps) -> alg.e_record_update (fold_exp alg e, List.map (fold_fexp alg) fexps)
   | E_field (e,id) -> alg.e_field (fold_exp alg e, id)
-  | E_case (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
+  | E_match (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
   | E_try (e,pexps) -> alg.e_try (fold_exp alg e, List.map (fold_pexp alg) pexps)
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
@@ -543,8 +543,8 @@ and fold_lexp_aux alg = function
   | LEXP_id id -> alg.lEXP_id id
   | LEXP_deref exp -> alg.lEXP_deref (fold_exp alg exp)
   | LEXP_memory (id,es) -> alg.lEXP_memory (id, List.map (fold_exp alg) es)
-  | LEXP_tup les -> alg.lEXP_tup (List.map (fold_lexp alg) les)
-  | LEXP_cast (typ,id) -> alg.lEXP_cast (typ,id)
+  | LEXP_tuple les -> alg.lEXP_tuple (List.map (fold_lexp alg) les)
+  | LEXP_typ (typ,id) -> alg.lEXP_cast (typ,id)
   | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
   | LEXP_vector_range (lexp,e1,e2) ->
      alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
@@ -562,8 +562,8 @@ and fold_letbind_aux alg = function
   | LB_val (pat,e) -> alg.lB_val (fold_pat alg.pat_alg pat, fold_exp alg e)
 and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
 
-let fold_funcl alg (FCL_aux (FCL_Funcl (id, pexp), annot)) =
-  FCL_aux (FCL_Funcl (id, fold_pexp alg pexp), annot)
+let fold_funcl alg (FCL_aux (FCL_funcl (id, pexp), annot)) =
+  FCL_aux (FCL_funcl (id, fold_pexp alg pexp), annot)
 
 let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, funcls), annot)) =
   FD_aux (FD_function (rec_opt, tannot_opt, List.map (fold_funcl alg) funcls), annot)
@@ -573,7 +573,7 @@ let id_exp_alg =
   ; e_id = (fun id -> E_id id)
   ; e_ref = (fun id -> E_ref id)
   ; e_lit = (fun lit -> (E_lit lit))
-  ; e_cast = (fun (typ,e) -> E_cast (typ,e))
+  ; e_cast = (fun (typ,e) -> E_typ (typ,e))
   ; e_app = (fun (id,es) -> E_app (id,es))
   ; e_app_infix = (fun (e1,id,e2) -> E_app_infix (e1,id,e2))
   ; e_tuple = (fun es -> E_tuple es)
@@ -590,10 +590,10 @@ let id_exp_alg =
   ; e_vector_append = (fun (e1,e2) -> E_vector_append (e1,e2))
   ; e_list = (fun es -> E_list es)
   ; e_cons = (fun (e1,e2) -> E_cons (e1,e2))
-  ; e_record = (fun fexps -> E_record fexps)
-  ; e_record_update = (fun (e1,fexp) -> E_record_update (e1,fexp))
+  ; e_record = (fun fexps -> E_struct fexps)
+  ; e_record_update = (fun (e1,fexp) -> E_struct_update (e1,fexp))
   ; e_field = (fun (e1,id) -> (E_field (e1,id)))
-  ; e_case = (fun (e1,pexps) -> E_case (e1,pexps))
+  ; e_case = (fun (e1,pexps) -> E_match (e1,pexps))
   ; e_try = (fun (e1,pexps) -> E_try (e1,pexps))
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
@@ -612,8 +612,8 @@ let id_exp_alg =
   ; lEXP_id = (fun id -> LEXP_id id)
   ; lEXP_deref = (fun e -> LEXP_deref e)
   ; lEXP_memory = (fun (id,es) -> LEXP_memory (id,es))
-  ; lEXP_cast = (fun (typ,id) -> LEXP_cast (typ,id))
-  ; lEXP_tup = (fun tups -> LEXP_tup tups)
+  ; lEXP_cast = (fun (typ,id) -> LEXP_typ (typ,id))
+  ; lEXP_tuple = (fun tups -> LEXP_tuple tups)
   ; lEXP_vector = (fun (lexp,e2) -> LEXP_vector (lexp,e2))
   ; lEXP_vector_range = (fun (lexp,e2,e3) -> LEXP_vector_range (lexp,e2,e3))
   ; lEXP_vector_concat = (fun lexps -> LEXP_vector_concat lexps)
@@ -652,7 +652,7 @@ let compute_pat_alg bot join =
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
   ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
-  ; p_tup            = split_join (fun ps -> P_tup ps)
+  ; p_tup            = split_join (fun ps -> P_tuple ps)
   ; p_list           = split_join (fun ps -> P_list ps)
   ; p_cons           = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
   ; p_string_append  = split_join (fun ps -> P_string_append ps)
@@ -666,7 +666,7 @@ let compute_exp_alg bot join =
   ; e_id = (fun id -> (bot, E_id id))
   ; e_ref = (fun id -> (bot, E_ref id))
   ; e_lit = (fun lit -> (bot, E_lit lit))
-  ; e_cast = (fun (typ,(v,e)) -> (v, E_cast (typ,e)))
+  ; e_cast = (fun (typ,(v,e)) -> (v, E_typ (typ,e)))
   ; e_app = (fun (id,es) -> split_join (fun es -> E_app (id,es)) es)
   ; e_app_infix = (fun ((v1,e1),id,(v2,e2)) -> (join v1 v2, E_app_infix (e1,id,e2)))
   ; e_tuple = split_join (fun es -> E_tuple es)
@@ -689,14 +689,14 @@ let compute_exp_alg bot join =
   ; e_cons = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_cons (e1,e2)))
   ; e_record = (fun fexps ->
     let vs, fexps = List.split fexps in
-    (join_list vs, E_record fexps))
+    (join_list vs, E_struct fexps))
   ; e_record_update = (fun ((v1,e1),fexps) ->
     let (vps,fexps) = List.split fexps in
-    (join_list (v1::vps), E_record_update (e1,fexps)))
+    (join_list (v1::vps), E_struct_update (e1,fexps)))
   ; e_field = (fun ((v1,e1),id) -> (v1, E_field (e1,id)))
   ; e_case = (fun ((v1,e1),pexps) ->
     let (vps,pexps) = List.split pexps in
-    (join_list (v1::vps), E_case (e1,pexps)))
+    (join_list (v1::vps), E_match (e1,pexps)))
   ; e_try = (fun ((v1,e1),pexps) ->
     let (vps,pexps) = List.split pexps in
     (join_list (v1::vps), E_try (e1,pexps)))
@@ -719,10 +719,10 @@ let compute_exp_alg bot join =
   ; lEXP_id = (fun id -> (bot, LEXP_id id))
   ; lEXP_deref = (fun (v, e) -> (v, LEXP_deref e))
   ; lEXP_memory = (fun (id,es) -> split_join (fun es -> LEXP_memory (id,es)) es)
-  ; lEXP_cast = (fun (typ,id) -> (bot, LEXP_cast (typ,id)))
-  ; lEXP_tup = (fun ls ->
+  ; lEXP_cast = (fun (typ,id) -> (bot, LEXP_typ (typ,id)))
+  ; lEXP_tuple = (fun ls ->
     let (vs,ls) = List.split ls in
-    (join_list vs, LEXP_tup ls))
+    (join_list vs, LEXP_tuple ls))
   ; lEXP_vector = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, LEXP_vector (lexp,e2)))
   ; lEXP_vector_range = (fun ((vl,lexp),(v2,e2),(v3,e3)) ->
     (join_list [vl;v2;v3], LEXP_vector_range (lexp,e2,e3)))
@@ -809,7 +809,7 @@ let pure_exp_alg bot join =
   ; lEXP_deref = (fun v -> v)
   ; lEXP_memory = (fun (id,es) -> join_list es)
   ; lEXP_cast = (fun (typ,id) -> bot)
-  ; lEXP_tup = join_list
+  ; lEXP_tuple = join_list
   ; lEXP_vector = (fun (vl,v2) -> join vl v2)
   ; lEXP_vector_range = (fun (vl,v2,v3) -> join_list [vl;v2;v3])
   ; lEXP_vector_concat = join_list
@@ -851,7 +851,7 @@ let rec default_fold_lexp f x (LEXP_aux (le,ann) as lexp) =
   let re le = LEXP_aux (le,ann) in
   match le with
   | LEXP_id _
-  | LEXP_cast _
+  | LEXP_typ _
     -> x, lexp
   | LEXP_deref e ->
      let x, e = f x e in
@@ -860,10 +860,10 @@ let rec default_fold_lexp f x (LEXP_aux (le,ann) as lexp) =
      let x,es = List.fold_left (fun (x,es) e ->
                     let x,e' = f x e in x,e'::es) (x,[]) es in
      x, re (LEXP_memory (id, List.rev es))
-  | LEXP_tup les ->
+  | LEXP_tuple les ->
      let x,les = List.fold_left (fun (x,les) le ->
                     let x,le' = default_fold_lexp f x le in x,le'::les) (x,[]) les in
-     x, re (LEXP_tup (List.rev les))
+     x, re (LEXP_tuple (List.rev les))
   | LEXP_vector_concat les ->
      let x,les = List.fold_left (fun (x,les) le ->
                     let x,le' = default_fold_lexp f x le in x,le'::les) (x,[]) les in
@@ -891,9 +891,9 @@ let default_fold_exp f x (E_aux (e,ann) as exp) =
   | E_id _
   | E_ref _
   | E_lit _ -> x, exp
-  | E_cast (typ,e) ->
+  | E_typ (typ,e) ->
      let x,e = f x e in
-     x, re (E_cast (typ,e))
+     x, re (E_typ (typ,e))
   | E_app (id,es) ->
      let x,es = List.fold_left (fun (x,es) e ->
                     let x,e' = f x e in x,e'::es) (x,[]) es in
@@ -963,22 +963,22 @@ let default_fold_exp f x (E_aux (e,ann) as exp) =
      let x,e1 = f x e1 in
      let x,e2 = f x e2 in
      x, re (E_cons (e1,e2))
-  | E_record fexps ->
+  | E_struct fexps ->
      let x,fexps = List.fold_left (fun (x,fes) fe ->
                        let x,fe' = default_fold_fexp f x fe in x,fe'::fes) (x,[]) fexps in
-     x, re (E_record (List.rev fexps))
-  | E_record_update (e,fexps) ->
+     x, re (E_struct (List.rev fexps))
+  | E_struct_update (e,fexps) ->
      let x,e = f x e in
      let x,fexps = List.fold_left (fun (x,fes) fe ->
                        let x,fe' = default_fold_fexp f x fe in x,fe'::fes) (x,[]) fexps in
-     x, re (E_record_update (e, List.rev fexps))
+     x, re (E_struct_update (e, List.rev fexps))
   | E_field (e,id) ->
      let x,e = f x e in x, re (E_field (e,id))
-  | E_case (e,pexps) ->
+  | E_match (e,pexps) ->
      let x,e = f x e in
      let x,pexps = List.fold_left (fun (x,pes) pe ->
                        let x,pe' = default_fold_pexp f x pe in x,pe'::pes) (x,[]) pexps in
-     x, re (E_case (e, List.rev pexps))
+     x, re (E_match (e, List.rev pexps))
   | E_try (e,pexps) ->
      let x,e = f x e in
      let x,pexps = List.fold_left (fun (x,pes) pe ->
