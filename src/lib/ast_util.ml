@@ -160,7 +160,7 @@ let mk_pexp ?loc:(l=Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, empty_u
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
 
-let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
+let mk_lexp lexp_aux = LE_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
 
@@ -558,7 +558,7 @@ let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown
 
 let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
 
-let mk_fexp id exp = FE_aux (FE_Fexp (id, exp), no_annot)
+let mk_fexp id exp = FE_aux (FE_fexp (id, exp), no_annot)
 
 type effect = bool
                    
@@ -657,7 +657,7 @@ and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_au
 and map_measure_annot_aux f = function
   | Measure_none -> Measure_none
   | Measure_some exp -> Measure_some (map_exp_annot f exp)
-and map_fexp_annot f (FE_aux (FE_Fexp (id, exp), annot)) = FE_aux (FE_Fexp (id, map_exp_annot f exp), f annot)
+and map_fexp_annot f (FE_aux (FE_fexp (id, exp), annot)) = FE_aux (FE_fexp (id, map_exp_annot f exp), f annot)
 and map_pexp_annot f (Pat_aux (pexp, annot)) = Pat_aux (map_pexp_annot_aux f pexp, f annot)
 and map_pexp_annot_aux f = function
   | Pat_exp (pat, exp) -> Pat_exp (map_pat_annot f pat, map_exp_annot f exp)
@@ -710,17 +710,17 @@ and map_mpat_annot_aux f = function
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
   | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
-and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
+and map_lexp_annot f (LE_aux (lexp, annot)) = LE_aux (map_lexp_annot_aux f lexp, f annot)
 and map_lexp_annot_aux f = function
-  | LEXP_id id -> LEXP_id id
-  | LEXP_deref exp -> LEXP_deref (map_exp_annot f exp)
-  | LEXP_memory (id, exps) -> LEXP_memory (id, List.map (map_exp_annot f) exps)
-  | LEXP_typ (typ, id) -> LEXP_typ (typ, id)
-  | LEXP_tuple lexps -> LEXP_tuple (List.map (map_lexp_annot f) lexps)
-  | LEXP_vector_concat lexps -> LEXP_vector_concat (List.map (map_lexp_annot f) lexps)
-  | LEXP_vector (lexp, exp) -> LEXP_vector (map_lexp_annot f lexp, map_exp_annot f exp)
-  | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
-  | LEXP_field (lexp, id) -> LEXP_field (map_lexp_annot f lexp, id)
+  | LE_id id -> LE_id id
+  | LE_deref exp -> LE_deref (map_exp_annot f exp)
+  | LE_app (id, exps) -> LE_app (id, List.map (map_exp_annot f) exps)
+  | LE_typ (typ, id) -> LE_typ (typ, id)
+  | LE_tuple lexps -> LE_tuple (List.map (map_lexp_annot f) lexps)
+  | LE_vector_concat lexps -> LE_vector_concat (List.map (map_lexp_annot f) lexps)
+  | LE_vector (lexp, exp) -> LE_vector (map_lexp_annot f lexp, map_exp_annot f exp)
+  | LE_vector_range (lexp, exp1, exp2) -> LE_vector_range (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
+  | LE_field (lexp, id) -> LE_field (map_lexp_annot f lexp, id)
 
 and map_typedef_annot f = function
   | TD_aux (td_aux, annot) -> TD_aux (td_aux, f annot)
@@ -990,7 +990,7 @@ and string_of_measure (Measure_aux (m,_)) =
   | Measure_none -> ""
   | Measure_some exp -> "termination_measure { " ^ string_of_exp exp ^ "}"
 
-and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
+and string_of_fexp (FE_aux (FE_fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
@@ -1035,19 +1035,19 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
 
-and string_of_lexp (LEXP_aux (lexp, _)) =
+and string_of_lexp (LE_aux (lexp, _)) =
   match lexp with
-  | LEXP_id v -> string_of_id v
-  | LEXP_deref exp -> "*(" ^ string_of_exp exp ^ ")"
-  | LEXP_typ (typ, v) -> string_of_id v ^ " : " ^ string_of_typ typ
-  | LEXP_tuple lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
-  | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
-  | LEXP_vector_range (lexp, exp1, exp2) ->
+  | LE_id v -> string_of_id v
+  | LE_deref exp -> "*(" ^ string_of_exp exp ^ ")"
+  | LE_typ (typ, v) -> string_of_id v ^ " : " ^ string_of_typ typ
+  | LE_tuple lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
+  | LE_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
+  | LE_vector_range (lexp, exp1, exp2) ->
      string_of_lexp lexp ^ "[" ^ string_of_exp exp1 ^ " .. " ^ string_of_exp exp2 ^ "]"
-  | LEXP_vector_concat lexps ->
+  | LE_vector_concat lexps ->
      string_of_list " @ " string_of_lexp lexps
-  | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
-  | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
+  | LE_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
+  | LE_app (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
 and string_of_letbind (LB_aux (lb, _)) =
   match lb with
   | LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
@@ -1272,25 +1272,25 @@ let rec nexp_frees (Nexp_aux (nexp, l)) =
   | Nexp_neg n -> nexp_frees n
   | Nexp_app (_, nexps) -> List.fold_left KidSet.union KidSet.empty (List.map nexp_frees nexps)
 
-let rec lexp_to_exp (LEXP_aux (lexp_aux, annot)) =
+let rec lexp_to_exp (LE_aux (lexp_aux, annot)) =
   let rewrap e_aux = E_aux (e_aux, annot) in
   match lexp_aux with
-  | LEXP_id id | LEXP_typ (_, id) -> rewrap (E_id id)
-  | LEXP_tuple les ->
-    let get_id (LEXP_aux(lexp,((l,_) as annot)) as le) = match lexp with
-      | LEXP_id id | LEXP_typ (_, id) -> E_aux (E_id id, annot)
+  | LE_id id | LE_typ (_, id) -> rewrap (E_id id)
+  | LE_tuple les ->
+    let get_id (LE_aux(lexp,((l,_) as annot)) as le) = match lexp with
+      | LE_id id | LE_typ (_, id) -> E_aux (E_id id, annot)
       | _ ->
         raise (Reporting.err_unreachable l __POS__
          ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
     rewrap (E_tuple (List.map get_id les))
-  | LEXP_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
-  | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
-  | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
-  | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
-  | LEXP_vector_concat [] -> rewrap (E_vector [])
-  | LEXP_vector_concat (lexp :: lexps) ->
+  | LE_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
+  | LE_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
+  | LE_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
+  | LE_app (id, exps) -> rewrap (E_app (id, exps))
+  | LE_vector_concat [] -> rewrap (E_vector [])
+  | LE_vector_concat (lexp :: lexps) ->
      List.fold_left (fun exp lexp -> rewrap (E_vector_append (exp, lexp_to_exp lexp))) (lexp_to_exp lexp) lexps
-  | LEXP_deref exp -> rewrap (E_app (mk_id "__deref", [exp]))
+  | LE_deref exp -> rewrap (E_app (mk_id "__deref", [exp]))
 
 let is_unit_typ = function
   | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
@@ -1668,22 +1668,22 @@ and subst_pexp id value (Pat_aux (pexp_aux, annot)) =
   in
   Pat_aux (pexp_aux, annot)
 
-and subst_fexp id value (FE_aux (FE_Fexp (id', exp), annot)) =
-  FE_aux (FE_Fexp (id', subst id value exp), annot)
+and subst_fexp id value (FE_aux (FE_fexp (id', exp), annot)) =
+  FE_aux (FE_fexp (id', subst id value exp), annot)
 
-and subst_lexp id value (LEXP_aux (lexp_aux, annot)) =
-  let wrap lexp_aux = LEXP_aux (lexp_aux, annot) in
+and subst_lexp id value (LE_aux (lexp_aux, annot)) =
+  let wrap lexp_aux = LE_aux (lexp_aux, annot) in
   let lexp_aux = match lexp_aux with
-    | LEXP_deref exp -> LEXP_deref (subst id value exp)
-    | LEXP_id id' -> LEXP_id id'
-    | LEXP_memory (f, exps) -> LEXP_memory (f, List.map (subst id value) exps)
-    | LEXP_typ (typ, id') -> LEXP_typ (typ, id')
-    | LEXP_tuple lexps -> LEXP_tuple (List.map (subst_lexp id value) lexps)
-    | LEXP_vector (lexp, exp) -> LEXP_vector (subst_lexp id value lexp, subst id value exp)
-    | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
-    | LEXP_vector_concat lexps ->
-       LEXP_vector_concat (List.map (subst_lexp id value) lexps)
-    | LEXP_field (lexp, id') -> LEXP_field (subst_lexp id value lexp, id')
+    | LE_deref exp -> LE_deref (subst id value exp)
+    | LE_id id' -> LE_id id'
+    | LE_app (f, exps) -> LE_app (f, List.map (subst id value) exps)
+    | LE_typ (typ, id') -> LE_typ (typ, id')
+    | LE_tuple lexps -> LE_tuple (List.map (subst_lexp id value) lexps)
+    | LE_vector (lexp, exp) -> LE_vector (subst_lexp id value lexp, subst id value exp)
+    | LE_vector_range (lexp, exp1, exp2) -> LE_vector_range (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
+    | LE_vector_concat lexps ->
+       LE_vector_concat (List.map (subst_lexp id value) lexps)
+    | LE_field (lexp, id') -> LE_field (subst_lexp id value lexp, id')
   in
   wrap lexp_aux
 
@@ -1894,22 +1894,22 @@ and locate_pexp : 'a. (l -> l) -> 'a pexp -> 'a pexp = fun f (Pat_aux (pexp_aux,
   in
   Pat_aux (pexp_aux, (f l, annot))
 
-and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp = fun f (LEXP_aux (lexp_aux, (l, annot))) ->
+and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp = fun f (LE_aux (lexp_aux, (l, annot))) ->
   let lexp_aux = match lexp_aux with
-    | LEXP_id id -> LEXP_id (locate_id f id)
-    | LEXP_deref exp -> LEXP_deref (locate f exp)
-    | LEXP_memory (id, exps) -> LEXP_memory (locate_id f id, List.map (locate f) exps)
-    | LEXP_typ (typ, id) -> LEXP_typ (locate_typ f typ, locate_id f id)
-    | LEXP_tuple lexps -> LEXP_tuple (List.map (locate_lexp f) lexps)
-    | LEXP_vector_concat lexps -> LEXP_vector_concat (List.map (locate_lexp f) lexps)
-    | LEXP_vector (lexp, exp) -> LEXP_vector (locate_lexp f lexp, locate f exp)
-    | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (locate_lexp f lexp, locate f exp1, locate f exp2)
-    | LEXP_field (lexp, id) -> LEXP_field (locate_lexp f lexp, locate_id f id)
+    | LE_id id -> LE_id (locate_id f id)
+    | LE_deref exp -> LE_deref (locate f exp)
+    | LE_app (id, exps) -> LE_app (locate_id f id, List.map (locate f) exps)
+    | LE_typ (typ, id) -> LE_typ (locate_typ f typ, locate_id f id)
+    | LE_tuple lexps -> LE_tuple (List.map (locate_lexp f) lexps)
+    | LE_vector_concat lexps -> LE_vector_concat (List.map (locate_lexp f) lexps)
+    | LE_vector (lexp, exp) -> LE_vector (locate_lexp f lexp, locate f exp)
+    | LE_vector_range (lexp, exp1, exp2) -> LE_vector_range (locate_lexp f lexp, locate f exp1, locate f exp2)
+    | LE_field (lexp, id) -> LE_field (locate_lexp f lexp, locate_id f id)
   in
-  LEXP_aux (lexp_aux, (f l, annot))
+  LE_aux (lexp_aux, (f l, annot))
 
-and locate_fexp : 'a. (l -> l) -> 'a fexp -> 'a fexp = fun f (FE_aux (FE_Fexp (id, exp), (l, annot))) ->
-  FE_aux (FE_Fexp (locate_id f id, locate f exp), (f l, annot))
+and locate_fexp : 'a. (l -> l) -> 'a fexp -> 'a fexp = fun f (FE_aux (FE_fexp (id, exp), (l, annot))) ->
+  FE_aux (FE_fexp (locate_id f id, locate f exp), (f l, annot))
 
 let unique_ref = ref 0
 
@@ -2171,16 +2171,16 @@ let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
     | None -> Some (l, annot)
     | _ -> result
 
-and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
+and find_annot_lexp sl (LE_aux (aux, (l, annot))) =
   if not (subloc sl l) then None else
     let result = match aux with
-      | LEXP_vector_range (lexp, exp1, exp2) ->
+      | LE_vector_range (lexp, exp1, exp2) ->
          option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
-      | LEXP_deref exp ->
+      | LE_deref exp ->
          find_annot_exp sl exp
-      | LEXP_tuple lexps ->
+      | LE_tuple lexps ->
          option_mapm (find_annot_lexp sl) lexps
-      | LEXP_memory (_, exps) ->
+      | LE_app (_, exps) ->
          option_mapm (find_annot_exp sl) exps
       | _ -> None
     in

@@ -486,9 +486,9 @@ let doc_exp, doc_let =
       atomic_exp env mem add_red show_hole_contents e
   | E_tuple exps ->
       parens (separate_map comma (exp env mem add_red show_hole_contents) exps)
-  | E_struct(FES_aux(FES_Fexps(fexps,_),_)) ->
+  | E_struct(FES_aux(FES_fexps(fexps,_),_)) ->
       braces (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps)
-  | E_struct_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+  | E_struct_update(e,(FES_aux(FES_fexps(fexps,_),_))) ->
     braces (doc_op (string "with")
               (exp env mem add_red show_hole_contents e)
               (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps))
@@ -573,7 +573,7 @@ let doc_exp, doc_let =
         (separate space [string "let"; doc_atomic_pat pat; equals])
         (exp env mem add_red show_hole_contents e)
 
-  and doc_fexp env mem add_red show_hole_contents (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp env mem add_red show_hole_contents (FE_aux(FE_fexp(id,e),_)) =
     doc_op equals (doc_id id) (exp env mem add_red show_hole_contents e)
 
   and doc_case env mem add_red show_hole_contents (Pat_aux(Pat_exp(pat,e),_)) =
@@ -582,25 +582,25 @@ let doc_exp, doc_let =
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
   and doc_lexp env mem add_red show_hole_contents le = app_lexp env mem add_red show_hole_contents le
-  and app_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) args)
+  and app_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_app(id,args) -> doc_id id ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) args)
   | _ -> vaccess_lexp env mem add_red show_hole_contents le
-  and vaccess_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-    | LEXP_vector(v,e) ->
+  and vaccess_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+    | LE_vector(v,e) ->
       (atomic_lexp env mem add_red show_hole_contents v) ^^ brackets (exp env mem add_red show_hole_contents e)
-    | LEXP_vector_range(v,e1,e2) ->
+    | LE_vector_range(v,e1,e2) ->
       (atomic_lexp env mem add_red show_hole_contents v) ^^
       brackets ((exp env mem add_red show_hole_contents e1) ^^ dotdot ^^ (exp env mem add_red show_hole_contents e2))
     | _ -> field_lexp env mem add_red show_hole_contents le
-  and field_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_field(v,id) -> (atomic_lexp env mem add_red show_hole_contents v) ^^ dot ^^ doc_id id
+  and field_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_field(v,id) -> (atomic_lexp env mem add_red show_hole_contents v) ^^ dot ^^ doc_id id
   | _ -> atomic_lexp env mem add_red show_hole_contents le
-  and atomic_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_id id -> doc_id id
-  | LEXP_typ(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
-  | LEXP_tuple(lexps) -> group (parens (separate_map comma (doc_lexp env mem add_red show_hole_contents) lexps))
-  | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
-  | LEXP_field _ -> group (parens (doc_lexp env mem add_red show_hole_contents le))
+  and atomic_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_id id -> doc_id id
+  | LE_typ(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
+  | LE_tuple(lexps) -> group (parens (separate_map comma (doc_lexp env mem add_red show_hole_contents) lexps))
+  | LE_app _ | LE_vector _ | LE_vector_range _
+  | LE_field _ -> group (parens (doc_lexp env mem add_red show_hole_contents le))
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp

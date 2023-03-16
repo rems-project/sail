@@ -305,7 +305,7 @@ and exp =
    E_aux of exp_aux * l
 
 and fexp_aux =  (* Field-expression *)
-   FE_Fexp of id * exp
+   FE_fexp of id * exp
 
 and fexp = 
    FE_aux of fexp_aux * l
@@ -547,15 +547,15 @@ def =  (* Top-level definition *)
 
 type 
 lexp_aux =  (* lvalue expression, can't occur out of the parser *)
-   LEXP_id of id (* identifier *)
- | LEXP_mem of id * (exp) list
- | LEXP_vector of lexp * exp (* vector element *)
- | LEXP_vector_range of lexp * exp * exp (* subvector *)
- | LEXP_vector_concat of lexp list
- | LEXP_field of lexp * id (* struct field *)
+   LE_id of id (* identifier *)
+ | LE_mem of id * (exp) list
+ | LE_vector of lexp * exp (* vector element *)
+ | LE_vector_range of lexp * exp * exp (* subvector *)
+ | LE_vector_concat of lexp list
+ | LE_field of lexp * id (* struct field *)
 
 and lexp = 
-   LEXP_aux of lexp_aux * l
+   LE_aux of lexp_aux * l
 
 
 type 

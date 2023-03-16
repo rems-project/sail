@@ -150,16 +150,16 @@ let infer_def_direct_effects asserts_termination def =
   let scan_lexp lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_typ (_, id) | LEXP_id id ->
+    | LE_typ (_, id) | LE_id id ->
        begin match Env.lookup_id id env with
        | Register _ ->
           effects := EffectSet.add Register !effects
        | _ -> ()
        end
-    | LEXP_deref _ -> effects := EffectSet.add Register !effects
+    | LE_deref _ -> effects := EffectSet.add Register !effects
     | _ -> ()
     end;
-    LEXP_aux (lexp_aux, annot)
+    LE_aux (lexp_aux, annot)
   in
 
   let scan_exp e_aux annot =
@@ -203,7 +203,7 @@ let infer_def_direct_effects asserts_termination def =
     
   let rw_exp _ exp =
     fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot);
-                               lEXP_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot);
+                               le_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot);
                                pat_alg = pat_alg } exp in
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp;
                                                  rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
@@ -468,16 +468,16 @@ let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
     let eff = match lexp_aux with
-      | LEXP_typ (_, id) | LEXP_id id ->
+      | LE_typ (_, id) | LE_id id ->
          begin match Env.lookup_id id env with
          | Register _ -> monadic_effect
          | _ -> no_effect
          end
-      | LEXP_deref _ -> monadic_effect
+      | LE_deref _ -> monadic_effect
       | _ -> no_effect
     in
     let eff = union_effects eff child_eff in
-    eff, LEXP_aux (lexp_aux, (l, add_effect_annot tannot eff))
+    eff, LE_aux (lexp_aux, (l, add_effect_annot tannot eff))
   in
 
   let rewrite_e_aux ((child_eff, e_aux), (l, tannot)) =
@@ -508,7 +508,7 @@ let rewrite_attach_effects effect_info =
         (compute_exp_alg no_effect union_effects)
       with
         e_aux = rewrite_e_aux;
-        lEXP_aux = rewrite_lexp_aux;
+        le_aux = rewrite_lexp_aux;
       }
   in
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ exp -> snd (rw_exp exp)) }

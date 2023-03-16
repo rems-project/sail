@@ -654,13 +654,13 @@ let doc_exp_lem, doc_let_lem =
       then wrap_parens (separate space [string "liftR"; parens (doc)])
       else wrap_parens doc in
     match e with
-    | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
+    | E_assign((LE_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        let t = typ_of_annot tannot in
        (match le_act (*, t, tag*) with
-        | LEXP_vector_range (le,e2,e3) ->
+        | LE_vector_range (le,e2,e3) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -677,9 +677,9 @@ let doc_exp_lem, doc_let_lem =
                liftR ((prefix 2 1)
                  (string "write_reg_range")
                  (align (deref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
-        | LEXP_vector (le,e2) ->
+        | LE_vector (le,e2) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -692,13 +692,13 @@ let doc_exp_lem, doc_let_lem =
                    (string call)
                    (align (doc_lexp_deref_lem ctxt le ^/^
                      field_ref ^/^ expY e2 ^/^ expY e)))
-            | LEXP_aux (_, lannot) ->
+            | LE_aux (_, lannot) ->
                let deref = doc_lexp_deref_lem ctxt le in
                let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot lannot)) then "write_reg_bit" else "write_reg_pos" in
                liftR ((prefix 2 1) (string call)
                (deref ^/^ expY e2 ^/^ expY e))
            )
-        | LEXP_field ((LEXP_aux (_, lannot) as le),id) ->
+        | LE_field ((LE_aux (_, lannot) as le),id) ->
           let field_ref =
             doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
             underscore ^^
@@ -709,7 +709,7 @@ let doc_exp_lem, doc_let_lem =
              (string "write_reg_field")
              (doc_lexp_deref_lem ctxt le ^^ space ^^
                 field_ref ^/^ expY e))
-        | LEXP_deref re ->
+        | LE_deref re ->
            liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
         | _ ->
            liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem ctxt le ^/^ expY e)))
@@ -1082,7 +1082,7 @@ let doc_exp_lem, doc_let_lem =
               (separate space [string "let"; doc_pat_lem ctxt true pat; equals])
               (top_exp ctxt false e)
 
-  and doc_fexp ctxt recordtyp (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp ctxt recordtyp (FE_aux(FE_fexp(id,e),_)) =
     let fname =
       if prefix_recordtype && string_of_id recordtyp <> "regstate"
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id_lem id
@@ -1097,12 +1097,12 @@ let doc_exp_lem, doc_let_lem =
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
 
-  and doc_lexp_deref_lem ctxt ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
-    | LEXP_field (le,id) ->
+  and doc_lexp_deref_lem ctxt ((LE_aux(lexp,(l,annot))) as le) = match lexp with
+    | LE_field (le,id) ->
        parens (separate empty [doc_lexp_deref_lem ctxt le;dot;doc_id_lem id])
-    | LEXP_id id -> doc_id_lem (append_id id "_ref")
-    | LEXP_typ (typ,id) -> doc_id_lem (append_id id "_ref")
-    | LEXP_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem ctxt) lexps)
+    | LE_id id -> doc_id_lem (append_id id "_ref")
+    | LE_typ (typ,id) -> doc_id_lem (append_id id "_ref")
+    | LE_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem ctxt) lexps)
     | _ ->
        raise (Reporting.err_unreachable l __POS__ ("doc_lexp_deref_lem: Unsupported lexp"))
              (* expose doc_exp_lem and doc_let *)

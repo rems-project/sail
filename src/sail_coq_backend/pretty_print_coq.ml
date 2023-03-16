@@ -1440,12 +1440,12 @@ let doc_exp, doc_let =
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
-    | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
+    | E_assign((LE_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        (match le_act (*, t, tag*) with
-        | LEXP_vector_range (le,e2,e3) ->
+        | LE_vector_range (le,e2,e3) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -1462,9 +1462,9 @@ let doc_exp, doc_let =
                liftR ((prefix 2 1)
                  (string "write_reg_range")
                  (align (deref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
-        | LEXP_vector (le,e2) ->
+        | LE_vector (le,e2) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -1477,13 +1477,13 @@ let doc_exp, doc_let =
                    (string call)
                    (align (doc_lexp_deref ctxt le ^/^
                      field_ref ^/^ expY e2 ^/^ expY e)))
-            | LEXP_aux (_, lannot) ->
+            | LE_aux (_, lannot) ->
                let deref = doc_lexp_deref ctxt le in
                let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot lannot)) then "write_reg_bit" else "write_reg_pos" in
                liftR ((prefix 2 1) (string call)
                (deref ^/^ expY e2 ^/^ expY e))
            )
-        | LEXP_field ((LEXP_aux (_, lannot) as le),id) ->
+        | LE_field ((LE_aux (_, lannot) as le),id) ->
           let field_ref =
             doc_id ctxt (typ_id_of (typ_of_annot lannot)) ^^
             underscore ^^
@@ -1494,7 +1494,7 @@ let doc_exp, doc_let =
              (string "write_reg_field")
              (doc_lexp_deref ctxt le ^^ space ^^
                 field_ref ^/^ expY e))
-        | LEXP_deref re ->
+        | LE_deref re ->
            liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
         | _ ->
            liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref ctxt le ^/^ expY e)))
@@ -1996,7 +1996,7 @@ let doc_exp, doc_let =
                   v, separate space [string "let "; doc_id ctxt v; coloneq; top_exp ctxt true e; string "in"] ^^ break 1
          in
          let doc_field (_,id) =
-           match List.find (fun (FE_aux (FE_Fexp (id',_),_)) -> Id.compare id id' == 0) fexps with
+           match List.find (fun (FE_aux (FE_fexp (id',_),_)) -> Id.compare id id' == 0) fexps with
            | fexp -> doc_fexp ctxt recordtyp fexp
            | exception Not_found ->
                let fname =
@@ -2248,7 +2248,7 @@ let doc_exp, doc_let =
               (separate space [string "let"; squote ^^ parens (doc_pat ctxt true false (pat, typ_of e)); coloneq])
               (top_exp ctxt false e)
 
-  and doc_fexp ctxt recordtyp (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp ctxt recordtyp (FE_aux(FE_fexp(id,e),_)) =
     let fname =
       if prefix_recordtype && string_of_id recordtyp <> "regstate"
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id ctxt id
@@ -2265,12 +2265,12 @@ let doc_exp, doc_let =
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
 
-  and doc_lexp_deref ctxt ((LEXP_aux(lexp,(l,annot)))) = match lexp with
-    | LEXP_field (le,id) ->
+  and doc_lexp_deref ctxt ((LE_aux(lexp,(l,annot)))) = match lexp with
+    | LE_field (le,id) ->
        parens (separate empty [doc_lexp_deref ctxt le;dot;doc_id ctxt id])
-    | LEXP_id id -> doc_id ctxt id ^^ string "_ref"
-    | LEXP_typ (typ,id) -> doc_id ctxt id ^^ string "_ref"
-    | LEXP_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
+    | LE_id id -> doc_id ctxt id ^^ string "_ref"
+    | LE_typ (typ,id) -> doc_id ctxt id ^^ string "_ref"
+    | LE_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
     | _ ->
        raise (Reporting.err_unreachable l __POS__ ("doc_lexp_deref: Unsupported lexp"))
              (* expose doc_exp and doc_let *)
@@ -2685,10 +2685,10 @@ let all_ids pexp =
         IdSet.add id (IdSet.union ids1 ids2));
       e_for = (fun (id,ids1,ids2,ids3,_,ids4) ->
         IdSet.add id (IdSet.union ids1 (IdSet.union ids2 (IdSet.union ids3 ids4))));
-      lEXP_id = IdSet.singleton;
-      lEXP_memory = (fun (id,ids) ->
+      le_id = IdSet.singleton;
+      le_app = (fun (id,ids) ->
         List.fold_left IdSet.union (IdSet.singleton id) ids);
-      lEXP_cast = (fun (_,id) -> IdSet.singleton id);
+      le_typ = (fun (_,id) -> IdSet.singleton id);
       pat_alg = { (pure_pat_alg IdSet.empty IdSet.union) with
         p_as = (fun (ids,id) -> IdSet.add id ids);
         p_id = IdSet.singleton;

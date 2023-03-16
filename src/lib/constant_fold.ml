@@ -77,7 +77,7 @@ module StringMap = Map.Make(String);;
 let optimize_constant_fold = ref false
 
 let rec fexp_of_ctor (field, value) =
-  FE_aux (FE_Fexp (mk_id field, exp_of_value value), no_annot)
+  FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
 
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
@@ -167,7 +167,7 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
       | _ -> false)
   | _ -> false
 
-and is_constant_fexp (FE_aux (FE_Fexp (_, exp), _)) = is_constant exp
+and is_constant_fexp (FE_aux (FE_fexp (_, exp), _)) = is_constant exp
 
 (* Wrapper around interpreter that repeatedly steps until done. *)
 let rec run frame =

@@ -2746,7 +2746,7 @@ let typ_of_mpexp (MPat_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let env_of_mpexp (MPat_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
-let lexp_typ_of (LEXP_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
+let lexp_typ_of (LE_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let expected_typ_of (l, tannot) = match fst tannot with
   | Some t -> t.expected
@@ -3018,16 +3018,16 @@ let is_declaration = function
   | Update -> false
   | Declaration -> true
                  
-let rec lexp_assignment_type env (LEXP_aux (aux, (l, _))) =
+let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
   match aux with
-  | LEXP_id v ->
+  | LE_id v ->
      begin match Env.lookup_id v env with
      | Register _ | Local (Mutable, _) -> Update
      | Unbound _ -> Declaration
      | Local (Immutable, _) | Enum _  ->
         typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
      end
-  | LEXP_typ (_, v) ->
+  | LE_typ (_, v) ->
      begin match Env.lookup_id v env with
      | Register _ | Local (Mutable, _) ->
         Reporting.warn ("Redundant type annotation on assignment to " ^ string_of_id v) l "Type is already known";
@@ -3036,24 +3036,24 @@ let rec lexp_assignment_type env (LEXP_aux (aux, (l, _))) =
      | Local (Immutable, _) | Enum _  ->
         typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
      end
-  | LEXP_deref _ | LEXP_memory _ -> Update
-  | LEXP_field (lexp, _) ->
+  | LE_deref _ | LE_app _ -> Update
+  | LE_field (lexp, _) ->
      begin match lexp_assignment_type env lexp with
      | Update -> Update
      | Declaration ->
         typ_error env l "Field assignment can only be done to a variable that has already been declared"
      end
-  | LEXP_vector (lexp, _) | LEXP_vector_range (lexp, _, _) ->
+  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) ->
      begin match lexp_assignment_type env lexp with
      | Update -> Update
      | Declaration ->
         typ_error env l "Vector assignment can only be done to a variable that has already been declared"
      end
-  | LEXP_tuple lexps | LEXP_vector_concat lexps ->
+  | LE_tuple lexps | LE_vector_concat lexps ->
      let lexp_is_update lexp = lexp_assignment_type env lexp |> is_update in
      let lexp_is_declaration lexp = lexp_assignment_type env lexp |> is_declaration in
      begin match List.find_opt lexp_is_update lexps, List.find_opt lexp_is_declaration lexps with
-     | Some (LEXP_aux (_, (l_u, _)) as lexp_u), Some (LEXP_aux (_, (l_d, _)) as lexp_d) ->
+     | Some (LE_aux (_, (l_u, _)) as lexp_u), Some (LE_aux (_, (l_d, _)) as lexp_d) ->
         typ_raise env l_d (Err_inner (Err_other ("Assignment declaring new variable " ^ string_of_lexp lexp_d ^ " is also assigning to an existing variable"),
                                       l_u,
                                       "",
@@ -3138,12 +3138,12 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           rectyp_id
        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
-     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, _))) =
+     let check_fexp (FE_aux (FE_fexp (field, exp), (l, _))) =
        let (typq, rectyp_q, field_typ) = Env.get_accessor rectyp_id field env in
        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
-       FE_aux (FE_Fexp (field, checked_exp), (l, empty_tannot))
+       FE_aux (FE_fexp (field, checked_exp), (l, empty_tannot))
      in
      annot_exp (E_struct_update (checked_exp, List.map check_fexp fexps)) typ
   | E_struct fexps, _ ->
@@ -3153,13 +3153,13 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
      let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
-     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, _))) =
+     let check_fexp (FE_aux (FE_fexp (field, exp), (l, _))) =
        record_fields := IdSet.remove field !record_fields;
        let (typq, rectyp_q, field_typ) = Env.get_accessor rectyp_id field env in
        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
-       FE_aux (FE_Fexp (field, checked_exp), (l, empty_tannot))
+       FE_aux (FE_fexp (field, checked_exp), (l, empty_tannot))
      in
      let fexps = List.map check_fexp fexps in
      if IdSet.is_empty !record_fields then
@@ -3878,7 +3878,7 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
 
-and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, uannot)) as lexp) exp =
+and bind_assignment assign_l env (LE_aux (lexp_aux, (lexp_l, uannot)) as lexp) exp =
   let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (assign_l, mk_tannot env (mk_typ (Typ_id (mk_id "unit"))))) in
   let has_typ v env =
     match Env.lookup_id v env with
@@ -3886,13 +3886,13 @@ and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, uannot)) as lexp)
     | _ -> false
   in
   match lexp_aux with
-  | LEXP_memory (f, xs) ->
+  | LE_app (f, xs) ->
      check_exp env (E_aux (E_app (f, xs @ [exp]), (lexp_l, uannot))) unit_typ, env
-  | LEXP_typ (typ_annot, _) ->
+  | LE_typ (typ_annot, _) ->
      let checked_exp = crule check_exp env exp typ_annot in
      let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
      annot_assign tlexp checked_exp, env'
-  | LEXP_id v when has_typ v env ->
+  | LE_id v when has_typ v env ->
      begin match Env.lookup_id v env with
      | Local (Mutable, vtyp) | Register vtyp ->
         let checked_exp = crule check_exp env exp vtyp in
@@ -3917,35 +3917,35 @@ and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, uannot)) as lexp)
           annot_assign inferred_lexp checked_exp, env
         with Type_error (env, l', err') -> typ_raise env l' (err_because (err', l, err))
 
-and bind_lexp env (LEXP_aux (lexp_aux, (l, _)) as lexp) typ =
+and bind_lexp env (LE_aux (lexp_aux, (l, _)) as lexp) typ =
   typ_print (lazy ("Binding mutable " ^ string_of_lexp lexp ^  " to " ^ string_of_typ typ));
-  let annot_lexp lexp typ = LEXP_aux (lexp, (l, mk_tannot env typ)) in
+  let annot_lexp lexp typ = LE_aux (lexp, (l, mk_tannot env typ)) in
   match lexp_aux with
-  | LEXP_typ (typ_annot, v) ->
+  | LE_typ (typ_annot, v) ->
      begin match Env.lookup_id v env with
        | Local (Immutable, _) | Enum _ ->
           typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
        | Local (Mutable, vtyp) ->
           subtyp l env typ typ_annot;
           subtyp l env typ_annot vtyp;
-          annot_lexp (LEXP_typ (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
+          annot_lexp (LE_typ (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
        | Register vtyp ->
           subtyp l env typ typ_annot;
           subtyp l env typ_annot vtyp;
-          annot_lexp (LEXP_typ (typ_annot, v)) typ, env
+          annot_lexp (LE_typ (typ_annot, v)) typ, env
        | Unbound _ ->
           subtyp l env typ typ_annot;
-          annot_lexp (LEXP_typ (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
+          annot_lexp (LE_typ (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
      end
-  | LEXP_id v ->
+  | LE_id v ->
      begin match Env.lookup_id v env with
      | Local (Immutable, _) | Enum _ ->
         typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
-     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
-     | Register vtyp -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
-     | Unbound _ -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
+     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LE_id v) typ, env
+     | Register vtyp -> subtyp l env typ vtyp; annot_lexp (LE_id v) typ, env
+     | Unbound _ -> annot_lexp (LE_id v) typ, Env.add_local v (Mutable, typ) env
      end
-  | LEXP_tuple lexps ->
+  | LE_tuple lexps ->
      begin
        let typ = Env.expand_synonyms env typ in
        let (Typ_aux (typ_aux, _)) = typ in
@@ -3958,7 +3958,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, _)) as lexp) typ =
             try List.fold_right2 bind_tuple_lexp lexps typs ([], env) with
             | Invalid_argument _ -> typ_error env l "Tuple l-expression and tuple type have different length"
           in
-          annot_lexp (LEXP_tuple tlexps) typ, env
+          annot_lexp (LE_tuple tlexps) typ, env
        | _ -> typ_error env l ("Cannot bind tuple l-expression against non tuple type " ^ string_of_typ typ)
      end
   | _ ->
@@ -3966,19 +3966,19 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, _)) as lexp) typ =
      subtyp l env typ (lexp_typ_of inferred_lexp);
      inferred_lexp, env
 
-and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
-  let annot_lexp lexp typ = LEXP_aux (lexp, (l, mk_tannot env typ)) in
+and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
+  let annot_lexp lexp typ = LE_aux (lexp, (l, mk_tannot env typ)) in
   match lexp_aux with
-  | LEXP_id v ->
+  | LE_id v ->
      begin match Env.lookup_id v env with
-     | Local (Mutable, typ) -> annot_lexp (LEXP_id v) typ
-     | Register typ -> annot_lexp (LEXP_id v) typ
+     | Local (Mutable, typ) -> annot_lexp (LE_id v) typ
+     | Register typ -> annot_lexp (LE_id v) typ
      | Local (Immutable, _) | Enum _ ->
         typ_error env l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
      | Unbound _ ->
         typ_error env l ("Cannot create a new identifier in this l-expression " ^ string_of_lexp lexp)
      end
-  | LEXP_vector_range (v_lexp, exp1, exp2) ->
+  | LE_vector_range (v_lexp, exp1, exp2) ->
      begin
        let inferred_v_lexp = infer_lexp env v_lexp in
        let (Typ_aux (v_typ_aux, _)) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
@@ -3999,12 +3999,12 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
                typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
-            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
+            annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
           else
             typ_raise env l (Err_failed_constraint (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
      end
-  | LEXP_vector (v_lexp, exp) ->
+  | LE_vector (v_lexp, exp) ->
      begin
        let inferred_v_lexp = infer_lexp env v_lexp in
        let (Typ_aux (v_typ_aux, _)) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
@@ -4015,7 +4015,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
-            annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
+            annot_lexp (LE_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
             typ_raise env l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order _, _)])
@@ -4024,7 +4024,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
-            annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
+            annot_lexp (LE_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
             typ_raise env l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_id id ->
@@ -4032,14 +4032,14 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
           | E_aux (E_id field, _) ->
              let (hi, lo) = Env.get_bitfield_range l id field env in
              let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
-             infer_lexp env (LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_field (v_lexp, Id_aux (Id "bits", l)), (l, empty_uannot)), hi, lo), (l, uannot)))
+             infer_lexp env (LE_aux (LE_vector_range (LE_aux (LE_field (v_lexp, Id_aux (Id "bits", l)), (l, empty_uannot)), hi, lo), (l, uannot)))
           | _ ->
              typ_error env l (string_of_exp exp ^ " is not a bitfield accessor")
           end
        | _ -> typ_error env l "Cannot assign vector element of non vector or bitfield type"
      end
-  | LEXP_vector_concat [] -> typ_error env l "Cannot have empty vector concatenation l-expression"
-  | LEXP_vector_concat (v_lexp :: v_lexps) ->
+  | LE_vector_concat [] -> typ_error env l "Cannot have empty vector concatenation l-expression"
+  | LE_vector_concat (v_lexp :: v_lexps) ->
      begin
        let sum_vector_lengths first_ord first_elem_typ acc (Typ_aux (v_typ_aux, _)) =
          match v_typ_aux with
@@ -4064,14 +4064,14 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
             when Id.compare id (mk_id "vector") = 0 ->
           let len = List.fold_left (sum_vector_lengths ord elem_typ) len v_typs in
-          annot_lexp (LEXP_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (vector_typ (nexp_simp len) ord elem_typ)
+          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (vector_typ (nexp_simp len) ord elem_typ)
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
             when Id.compare id (mk_id "bitvector") = 0 ->
           let len = List.fold_left (sum_bitvector_lengths ord) len v_typs in
-          annot_lexp (LEXP_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len) ord)
+          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len) ord)
        | _ -> typ_error env l ("Vector concatentation l-expression must only contain bitvector or vector types, found " ^ string_of_typ v_typ)
      end
-  | LEXP_field ((LEXP_aux (_, (l, _)) as lexp), field_id) ->
+  | LE_field ((LE_aux (_, (l, _)) as lexp), field_id) ->
      let inferred_lexp = infer_lexp env lexp in
      let rectyp = lexp_typ_of inferred_lexp in
      begin match lexp_typ_of inferred_lexp with
@@ -4079,20 +4079,20 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, uannot)) as lexp) =
         let (_, rectyp_q, field_typ) = Env.get_accessor rectyp_id field_id env in
         let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q rectyp with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
         let field_typ' = subst_unifiers unifiers field_typ in
-        annot_lexp (LEXP_field (inferred_lexp, field_id)) field_typ'
+        annot_lexp (LE_field (inferred_lexp, field_id)) field_typ'
      | _ -> typ_error env l "Field l-expression has invalid type"
      end
-  | LEXP_deref exp ->
+  | LE_deref exp ->
      let inferred_exp = infer_exp env exp in
      begin match typ_of inferred_exp with
      | Typ_aux (Typ_app (r, [A_aux (A_typ vtyp, _)]), _) when string_of_id r = "register" ->
-        annot_lexp (LEXP_deref inferred_exp) vtyp
+        annot_lexp (LE_deref inferred_exp) vtyp
      | _ ->
         typ_error env l (string_of_typ (typ_of inferred_exp)  ^ " must be a register type in " ^ string_of_exp exp ^ ")")
      end
-  | LEXP_tuple lexps ->
+  | LE_tuple lexps ->
      let inferred_lexps = List.map (infer_lexp env) lexps in
-     annot_lexp (LEXP_tuple inferred_lexps) (tuple_typ (List.map lexp_typ_of inferred_lexps))
+     annot_lexp (LE_tuple inferred_lexps) (tuple_typ (List.map lexp_typ_of inferred_lexps))
   | _ -> typ_error env l ("Could not infer the type of " ^ string_of_lexp lexp)
 
 and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
@@ -4158,12 +4158,12 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
           rectyp_id
        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
-     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, _))) =
+     let check_fexp (FE_aux (FE_fexp (field, exp), (l, _))) =
        let (_, rectyp_q, field_typ) = Env.get_accessor rectyp_id field env in
        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let inferred_exp = crule check_exp env exp field_typ' in
-       FE_aux (FE_Fexp (field, inferred_exp), (l, empty_tannot))
+       FE_aux (FE_fexp (field, inferred_exp), (l, empty_tannot))
      in
      annot_exp (E_struct_update (inferred_exp, List.map check_fexp fexps)) typ
   | E_typ (typ, exp) ->

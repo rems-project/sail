@@ -569,14 +569,14 @@ let rec apat_globals (AP_aux (aux, _, _)) =
 let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in
 
-  let rec anf_lexp env (LEXP_aux (aux, (l, _)) as lexp) =
+  let rec anf_lexp env (LE_aux (aux, (l, _)) as lexp) =
     match aux with
-    | LEXP_id id | LEXP_typ (_, id) ->
+    | LE_id id | LE_typ (_, id) ->
        (fun x -> x), AL_id (id, lvar_typ ~loc:l (Env.lookup_id id env))
-    | LEXP_field (lexp, field_id) ->
+    | LE_field (lexp, field_id) ->
        let wrap, alexp = anf_lexp env lexp in
        wrap, AL_field (alexp, field_id)
-    | LEXP_deref dexp ->
+    | LE_deref dexp ->
        let gs = gensym () in
        (fun x -> mk_aexp (AE_let (Mutable, gs, typ_of dexp, anf dexp, x, unit_typ))),
        AL_addr (gs, typ_of dexp)
@@ -666,7 +666,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      wrap (mk_aexp (AE_field (aval, id, typ_of exp)))
 
   | E_struct_update (exp, fexps) ->
-     let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+     let anf_fexp (FE_aux (FE_fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
      in
@@ -755,8 +755,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      in
      mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
 
-  | E_var (LEXP_aux (LEXP_id id, _), binding, body)
-    | E_var (LEXP_aux (LEXP_typ (_, id), _), binding, body)
+  | E_var (LE_aux (LE_id id, _), binding, body)
+    | E_var (LE_aux (LE_typ (_, id), _), binding, body)
     | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
     | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ->
      let env = env_of body in
@@ -777,7 +777,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
 
   | E_struct fexps ->
-     let anf_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+     let anf_fexp (FE_aux (FE_fexp (id, exp), _)) =
        let aval, wrap = to_aval (anf exp) in
        (id, aval), wrap
      in

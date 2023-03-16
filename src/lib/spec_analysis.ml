@@ -259,11 +259,11 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_struct fexps ->
      let used = fv_of_tannot consider_var bound used tannot in
      List.fold_right
-       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
+       (fun (FE_aux(FE_fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
   | E_struct_update(e, fexps) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     List.fold_right
-      (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
+      (fun (FE_aux(FE_fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
   | E_field(e,_) -> fv_of_exp consider_var bound used set e
   | E_match(e,pes)
   | E_try(e,pes) ->
@@ -314,41 +314,41 @@ and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
     let _,us_e,set_e = fv_of_exp consider_var bound used set exp in
     bound_p,Nameset.union us_p us_e,set_e
 
-and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
+and fv_of_lexp consider_var bound used set (LE_aux(lexp,(_,tannot))) =
   match lexp with
-  | LEXP_id id ->
+  | LE_id id ->
     let used = fv_of_tannot consider_var bound used tannot in
     let i = string_of_id id in
     if Nameset.mem i bound
     then bound, used, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used, set
-  | LEXP_deref exp ->
+  | LE_deref exp ->
     fv_of_exp consider_var bound used set exp
-  | LEXP_typ(typ,id) ->
+  | LE_typ(typ,id) ->
     let used = fv_of_tannot consider_var bound used tannot in
     let i = string_of_id id in
     let used_t = fv_of_typ consider_var bound used typ in
     if Nameset.mem i bound
     then bound, used_t, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used_t, set
-  | LEXP_tuple(tups) ->
+  | LE_tuple(tups) ->
     List.fold_right (fun l (b,u,s) -> fv_of_lexp consider_var b u s l) tups (bound,used,set)
-  | LEXP_memory(id,args) ->
+  | LE_app(id,args) ->
     let (bound,used,set) =
       List.fold_right
         (fun e (b,u,s) ->
           fv_of_exp consider_var b u s e) args (bound,used,set) in
     bound,Nameset.add (string_of_id id) used,set
-  | LEXP_vector_concat(args) ->
+  | LE_vector_concat(args) ->
      List.fold_right
        (fun e (b,u,s) ->
          fv_of_lexp consider_var b u s e) args (bound,used,set)
-  | LEXP_field(lexp,_) -> fv_of_lexp consider_var bound used set lexp
-  | LEXP_vector(lexp,exp) ->
+  | LE_field(lexp,_) -> fv_of_lexp consider_var bound used set lexp
+  | LE_vector(lexp,exp) ->
     let bound_l,used,set = fv_of_lexp consider_var bound used set lexp in
     let _,used,set = fv_of_exp consider_var bound used set exp in
     bound_l,used,set
-  | LEXP_vector_range(lexp,e1,e2) ->
+  | LE_vector_range(lexp,e1,e2) ->
     let bound_l,used,set = fv_of_lexp consider_var bound used set lexp in
     let _,used,set = fv_of_exp consider_var bound used set e1 in
     let _,used,set = fv_of_exp consider_var bound used set e2 in
@@ -624,13 +624,13 @@ let top_sort_defs ast =
 let assigned_vars exp =
   (Rewriter.fold_exp
      { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
-       Rewriter.lEXP_id = (fun id -> IdSet.singleton id);
-       Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id) }
+       Rewriter.le_id = (fun id -> IdSet.singleton id);
+       Rewriter.le_typ = (fun (ty,id) -> IdSet.singleton id) }
      exp)
 
 let assigned_vars_in_fexps fes =
   List.fold_left
-    (fun vs (FE_aux (FE_Fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
+    (fun vs (FE_aux (FE_fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
     IdSet.empty
     fes
 
@@ -639,19 +639,19 @@ let assigned_vars_in_pexp (Pat_aux (p,_)) =
   | Pat_exp (_,e) -> assigned_vars e
   | Pat_when (p,e1,e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2)
 
-let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
+let rec assigned_vars_in_lexp (LE_aux (le,_)) =
   match le with
-  | LEXP_id id
-  | LEXP_typ (_,id) -> IdSet.singleton id
-  | LEXP_tuple lexps
-  | LEXP_vector_concat lexps -> 
+  | LE_id id
+  | LE_typ (_,id) -> IdSet.singleton id
+  | LE_tuple lexps
+  | LE_vector_concat lexps -> 
      List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
-  | LEXP_memory (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
-  | LEXP_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
-  | LEXP_vector_range (le,e1,e2) ->
+  | LE_app (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
+  | LE_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
+  | LE_vector_range (le,e1,e2) ->
      IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
-  | LEXP_field (le,_) -> assigned_vars_in_lexp le
-  | LEXP_deref e -> assigned_vars e
+  | LE_field (le,_) -> assigned_vars_in_lexp le
+  | LE_deref e -> assigned_vars e
 
 let bound_vars exp =
   let open Rewriter in
@@ -807,8 +807,8 @@ let nexp_subst_fns substs =
         | Measure_some exp -> Measure_some (s_exp exp)
       in
       Measure_aux (m,l)
-    and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
-      FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
+    and s_fexp (FE_aux (FE_fexp (id,e), (l,annot))) =
+      FE_aux (FE_fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function
       | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
          Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))
@@ -817,18 +817,18 @@ let nexp_subst_fns substs =
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
       | LB_val (p,e) -> LB_aux (LB_val (s_pat p,s_exp e), (l,s_tannot annot))
-    and s_lexp (LEXP_aux (e,(l,annot))) =
-      let re e = LEXP_aux (e,(l,s_tannot annot)) in
+    and s_lexp (LE_aux (e,(l,annot))) =
+      let re e = LE_aux (e,(l,s_tannot annot)) in
       match e with
-      | LEXP_id _ -> re e
-      | LEXP_typ (typ,id) -> re (LEXP_typ (s_t typ, id))
-      | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map s_exp es))
-      | LEXP_tuple les -> re (LEXP_tuple (List.map s_lexp les))
-      | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
-      | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (s_lexp le, s_exp e1, s_exp e2))
-      | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map s_lexp les))
-      | LEXP_field (le,id) -> re (LEXP_field (s_lexp le, id))
-      | LEXP_deref e -> re (LEXP_deref (s_exp e))
+      | LE_id _ -> re e
+      | LE_typ (typ,id) -> re (LE_typ (s_t typ, id))
+      | LE_app (id,es) -> re (LE_app (id,List.map s_exp es))
+      | LE_tuple les -> re (LE_tuple (List.map s_lexp les))
+      | LE_vector (le,e) -> re (LE_vector (s_lexp le, s_exp e))
+      | LE_vector_range (le,e1,e2) -> re (LE_vector_range (s_lexp le, s_exp e1, s_exp e2))
+      | LE_vector_concat les -> re (LE_vector_concat (List.map s_lexp les))
+      | LE_field (le,id) -> re (LE_field (s_lexp le, id))
+      | LE_deref e -> re (LE_deref (s_exp e))
   in (s_pat,s_exp)
 let nexp_subst_pat substs = fst (nexp_subst_fns substs)
 let nexp_subst_exp substs = snd (nexp_subst_fns substs)

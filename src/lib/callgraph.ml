@@ -185,7 +185,7 @@ let add_def_to_graph graph def =
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_typ (typ, id) ->
+    | LE_typ (typ, id) ->
        IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
        begin match Env.lookup_id id env with
        | Register _ ->
@@ -196,9 +196,9 @@ let add_def_to_graph graph def =
             graph := G.add_edge self (Letbind id) !graph
           else ()
        end
-    | LEXP_memory (id, _) ->
+    | LE_app (id, _) ->
        graph := G.add_edge self (Function id) !graph
-    | LEXP_id id ->
+    | LE_id id ->
        begin match Env.lookup_id id env with
        | Register _ ->
           graph := G.add_edge self (Register id) !graph
@@ -210,7 +210,7 @@ let add_def_to_graph graph def =
        end
     | _ -> ()
     end;
-    LEXP_aux (lexp_aux, annot)
+    LE_aux (lexp_aux, annot)
   in
 
   let scan_exp self e_aux annot =
@@ -239,7 +239,7 @@ let add_def_to_graph graph def =
     E_aux (e_aux, annot)
   in
   let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
-                                      lEXP_aux = (fun (l_aux, annot) -> scan_lexp self l_aux annot);
+                                      le_aux = (fun (l_aux, annot) -> scan_lexp self l_aux annot);
                                       pat_alg = rw_pat self } in
 
   let rewriters self =

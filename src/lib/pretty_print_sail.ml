@@ -546,7 +546,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
-and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+and doc_fexp (FE_aux (FE_fexp (id, exp), _)) =
   separate space [doc_id id; equals; doc_exp exp]
 and doc_block = function
   | [] -> string "()"
@@ -561,20 +561,20 @@ and doc_block = function
        doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
-and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
+and doc_lexp (LE_aux (l_aux, _) as lexp) =
   match l_aux with
-  | LEXP_typ (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
+  | LE_typ (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
   | _ -> doc_atomic_lexp lexp
-and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
+and doc_atomic_lexp (LE_aux (l_aux, _) as lexp) =
   match l_aux with
-  | LEXP_id id -> doc_id id
-  | LEXP_deref exp -> lparen ^^ string "*" ^^ doc_atomic_exp exp ^^ rparen
-  | LEXP_tuple lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
-  | LEXP_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
-  | LEXP_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
-  | LEXP_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
-  | LEXP_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
-  | LEXP_memory (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+  | LE_id id -> doc_id id
+  | LE_deref exp -> lparen ^^ string "*" ^^ doc_atomic_exp exp ^^ rparen
+  | LE_tuple lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
+  | LE_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
+  | LE_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
+  | LE_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
+  | LE_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
+  | LE_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | _ -> parens (doc_lexp lexp)
 and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace
 and doc_pexp (Pat_aux (pat_aux, _)) =

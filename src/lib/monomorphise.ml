@@ -172,9 +172,9 @@ let ids_in_exp exp =
   fold_exp {
       (pure_exp_alg IdSet.empty IdSet.union) with
       e_id = IdSet.singleton;
-      lEXP_id = IdSet.singleton;
-      lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
-      lEXP_cast = (fun (_,id) -> IdSet.singleton id)
+      le_id = IdSet.singleton;
+      le_app = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
+      le_typ = (fun (_,id) -> IdSet.singleton id)
     } exp
 
 let make_vector_lit sz i =
@@ -1126,8 +1126,8 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
         | E_internal_assume (nc,e) -> re (E_internal_assume (nc, map_exp e))
-      and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
-        FE_aux (FE_Fexp (id,map_exp e),annot)
+      and map_fexp (FE_aux (FE_fexp (id,e), annot)) =
+        FE_aux (FE_fexp (id,map_exp e),annot)
       and map_pexp = function
         | Pat_aux (Pat_exp (p,e),l) ->
            let nosplit = lazy [Pat_aux (Pat_exp (p,map_exp e),l)] in
@@ -1179,19 +1179,19 @@ let split_defs target all_errors (splits : split_req list) env ast =
       and map_letbind (LB_aux (lb,annot)) =
         match lb with
         | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
-      and map_lexp ((LEXP_aux (e,annot)) as le) =
-        let re e = LEXP_aux (e,annot) in
+      and map_lexp ((LE_aux (e,annot)) as le) =
+        let re e = LE_aux (e,annot) in
         match e with
-        | LEXP_id _
-        | LEXP_typ _
+        | LE_id _
+        | LE_typ _
           -> le
-        | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map map_exp es))
-        | LEXP_tuple les -> re (LEXP_tuple (List.map map_lexp les))
-        | LEXP_vector (le,e) -> re (LEXP_vector (map_lexp le, map_exp e))
-        | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (map_lexp le, map_exp e1, map_exp e2))
-        | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map map_lexp les))
-        | LEXP_field (le,id) -> re (LEXP_field (map_lexp le, id))
-        | LEXP_deref e -> re (LEXP_deref (map_exp e))
+        | LE_app (id,es) -> re (LE_app (id,List.map map_exp es))
+        | LE_tuple les -> re (LE_tuple (List.map map_lexp les))
+        | LE_vector (le,e) -> re (LE_vector (map_lexp le, map_exp e))
+        | LE_vector_range (le,e1,e2) -> re (LE_vector_range (map_lexp le, map_exp e1, map_exp e2))
+        | LE_vector_concat les -> re (LE_vector_concat (List.map map_lexp les))
+        | LE_field (le,id) -> re (LE_field (map_lexp le, id))
+        | LE_deref e -> re (LE_deref (map_exp e))
       in map_exp, map_pexp, map_letbind
     in
     let map_exp r = let (f,_,_) = map_fns r in f in
@@ -1582,7 +1582,7 @@ in *)
                  not (is_nexp_constant nexp)
              | _ -> false
            in
-           fold_pexp { (pure_exp_alg false (||)) with e_cast = check_cast } pexp
+           fold_pexp { (pure_exp_alg false (||)) with e_typ = check_cast } pexp
          in
          if has_nonconst_sizes then
            (* Constant propagation requires a fully type-annotated AST,
@@ -2334,11 +2334,11 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
        let ds, assigns, r = non_det [e1;e2;e3;e4] in
        (merge_deps ds, assigns, r)
     | E_struct fexps ->
-       let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
+       let es = List.map (function (FE_aux (FE_fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det es in
        (merge_deps ds, assigns, r)
     | E_struct_update (e,fexps) ->
-       let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
+       let es = List.map (function (FE_aux (FE_fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det (e::es) in
        (merge_deps ds, assigns, r)
     | E_field (e,_) -> analyse_sub env assigns e
@@ -2529,35 +2529,35 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
   in (deps, assigns, r)
 
 
-and analyse_lexp fn_id effect_info env assigns deps (LEXP_aux (lexp,(l,_))) =
+and analyse_lexp fn_id effect_info env assigns deps (LE_aux (lexp,(l,_))) =
   let analyse_sub = analyse_exp fn_id effect_info in
   let analyse_lexp = analyse_lexp fn_id effect_info in
  (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
  match lexp with
-  | LEXP_id id
-  | LEXP_typ (_,id) ->
+  | LE_id id
+  | LE_typ (_,id) ->
      if IdSet.mem id env.referenced_vars
      then assigns, empty
      else Bindings.add id deps assigns, empty
-  | LEXP_memory (id,es) ->
+  | LE_app (id,es) ->
      let _, assigns, r = analyse_sub env assigns (E_aux (E_tuple es,(Unknown,empty_tannot))) in
      assigns, r
-  | LEXP_tuple lexps
-  | LEXP_vector_concat lexps ->
+  | LE_tuple lexps
+  | LE_vector_concat lexps ->
       List.fold_left (fun (assigns,r) lexp ->
        let assigns,r' = analyse_lexp env assigns deps lexp
        in assigns,merge r r') (assigns,empty) lexps
-  | LEXP_vector (lexp,e) ->
+  | LE_vector (lexp,e) ->
      let _, assigns, r1 = analyse_sub env assigns e in
      let assigns, r2 = analyse_lexp env assigns deps lexp in
      assigns, merge r1 r2
-  | LEXP_vector_range (lexp,e1,e2) ->
+  | LE_vector_range (lexp,e1,e2) ->
      let _, assigns, r1 = analyse_sub env assigns e1 in
      let _, assigns, r2 = analyse_sub env assigns e2 in
      let assigns, r3 = analyse_lexp env assigns deps lexp in
      assigns, merge r3 (merge r1 r2)
-  | LEXP_field (lexp,_) -> analyse_lexp env assigns deps lexp
-  | LEXP_deref e ->
+  | LE_field (lexp,_) -> analyse_lexp env assigns deps lexp
+  | LE_deref e ->
      let _, assigns, r = analyse_sub env assigns e in
      assigns, r
 
@@ -3563,7 +3563,7 @@ let rec rewrite_aux = function
      | None -> E_aux (E_app (id, args), (l, tannot))
      end
   | E_assign (
-      LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id1,(l_id1,_)), start1, end1),_),
+      LE_aux (LE_vector_range (LE_aux (LE_id id1,(l_id1,_)), start1, end1),_),
       E_aux (E_app (subrange2, [vector2; start2; end2]),(l_assign,_))),
     annot
        when is_id (env_of_annot annot) (Id "vector_subrange") subrange2 &&
@@ -3573,20 +3573,20 @@ let rec rewrite_aux = function
        if is_number typ2 then "vector_update_subrange_from_integer_subrange" else
        "vector_update_subrange_from_subrange"
      in
-     E_aux (E_assign (LEXP_aux (LEXP_id id1,(l_id1,empty_tannot)),
+     E_aux (E_assign (LE_aux (LE_id id1,(l_id1,empty_tannot)),
                       E_aux (E_app (mk_id op, [
                                    E_aux (E_id id1,(Generated l_id1,empty_tannot));
                                    start1; end1;
                                    vector2; start2; end2]),(Unknown,empty_tannot))),
             (l_assign, empty_tannot))
-  | E_assign (LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id1, annot1), start1, end1), _),
+  | E_assign (LE_aux (LE_vector_range (LE_aux (LE_id id1, annot1), start1, end1), _),
               E_aux (E_app (zeros, _), _)), annot
     when is_zeros (env_of_annot annot) zeros ->
-     let lhs = LEXP_aux (LEXP_id id1, annot1) in
+     let lhs = LE_aux (LE_id id1, annot1) in
      let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
      E_aux (E_assign (lhs, rhs), annot)
 
-  | E_assign (LEXP_aux (LEXP_vector_range (lexp1, start1, end1), _),
+  | E_assign (LE_aux (LE_vector_range (lexp1, start1, end1), _),
               E_aux (E_app (zero_extend, zero_extend_args), _)), (l, tannot)
     when is_zero_extend (env_of_tannot tannot) zero_extend && not (is_constant_range (start1, end1)) ->
      let new_annot = (Generated l, empty_tannot) in
@@ -3602,7 +3602,7 @@ let rec rewrite_aux = function
      let with_zeros = E_aux (E_app (mk_id "set_subrange_zeros", [lexp_to_exp lexp1; start1; mid_point_high]), new_annot) in
      E_aux (E_block [
                 E_aux (E_assign (lexp1, with_zeros), new_annot);
-                E_aux (E_assign (LEXP_aux (LEXP_vector_range (lexp1, mid_point_low, end1), new_annot),
+                E_aux (E_assign (LE_aux (LE_vector_range (lexp1, mid_point_low, end1), new_annot),
                          vector), new_annot)
               ], new_annot)
 
@@ -3738,7 +3738,7 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
                                                      [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann))),(genunk,tar_ann)),
                        exp),(genunk,exp_ann))),
        (fun var ->
-         [E_aux (E_assign (LEXP_aux (LEXP_typ (one_target_typ, var),(genunk,tar_ann)),
+         [E_aux (E_assign (LE_aux (LE_typ (one_target_typ, var),(genunk,tar_ann)),
                           E_aux (E_app (Id_aux (Id cast_name,genunk),
                                         [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann)
                   )),(genunk,asg_ann))]),
@@ -3755,7 +3755,7 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
                                      exp),(genunk,exp_ann))),(genunk,exp_ann))),
        (fun var ->
          [E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id var,(genunk,src_ann))),(genunk,src_ann)),
-                       E_aux (E_assign (LEXP_aux (LEXP_typ (one_target_typ, var),(genunk,tar_ann)),
+                       E_aux (E_assign (LE_aux (LE_typ (one_target_typ, var),(genunk,tar_ann)),
                                         e'),(genunk,asg_ann))),(genunk,asg_ann))]),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_let (LB_aux (LB_val (pat, exp),(Generated exp_l,exp_ann)), e'),(Generated exp_l,tar_ann)))
@@ -4290,15 +4290,15 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
   in
   let rewrite_one_lexp nexp_map (lexp, ann) =
     match lexp with
-    | LEXP_typ (typ, id) ->
-       LEXP_aux (LEXP_typ (rewrite_typ_in_body (env_of_annot ann) nexp_map typ, id), ann)
-    | _ -> LEXP_aux (lexp, ann)
+    | LE_typ (typ, id) ->
+       LE_aux (LE_typ (rewrite_typ_in_body (env_of_annot ann) nexp_map typ, id), ann)
+    | _ -> LE_aux (lexp, ann)
   in
   let rewrite_body nexp_map pexp =
     let open Rewriter in
     fold_pexp { id_exp_alg with
       e_aux = rewrite_one_exp nexp_map;
-      lEXP_aux = rewrite_one_lexp nexp_map;
+      le_aux = rewrite_one_lexp nexp_map;
       pat_alg = { id_pat_alg with p_aux = rewrite_one_pat nexp_map }
     } pexp
   in

@@ -473,11 +473,11 @@ exp :: 'E_' ::=
   | assume n_constraint in exp :: :: internal_assume {{ com Internal node for additional type checker assumptions }}
   | constraint n_constraint :: :: constraint
 
-lexp :: 'LEXP_' ::= {{ com lvalue expression }}
+lexp :: 'LE_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
     | id                      :: :: id {{ com identifier }}
     | deref exp               :: :: deref
-    | id ( exp1 , .. , expn ) :: :: memory {{ com memory or register write via function call }}
+    | id ( exp1 , .. , expn ) :: :: app {{ com memory or register write via function call }}
     | ( typ ) id	      :: :: typ
     | ( lexp0 , .. , lexpn )  :: :: tuple {{ com multiple (non-memory) assignment }}
     | lexp1 @ ... @ lexpn     :: :: vector_concat {{ com vector concatenation L-exp }}
@@ -488,7 +488,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 fexp :: 'FE_' ::=
   {{ com field expression }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id = exp                  :: :: Fexp
+  | id = exp                  :: :: fexp
 
 opt_default :: 'Def_val_' ::=
   {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 

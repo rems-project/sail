@@ -118,7 +118,7 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_lit _ -> true
   | E_tuple es | E_vector es -> List.for_all is_value es
   | E_struct fes ->
-     List.for_all (fun (FE_aux (FE_Fexp (_, e), _)) -> is_value e) fes
+     List.for_all (fun (FE_aux (FE_fexp (_, e), _)) -> is_value e) fes
   | E_app (id,es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
   | E_typ (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
@@ -487,11 +487,11 @@ let const_props target ast =
        begin
          match unaux_exp (fst (uncast_exp e')) with
          | E_struct (fes0) ->
-            let apply_fexp (FE_aux (FE_Fexp (id, e), _)) (FE_aux (FE_Fexp (id', e'), ann)) =
+            let apply_fexp (FE_aux (FE_fexp (id, e), _)) (FE_aux (FE_fexp (id', e'), ann)) =
               if Id.compare id id' = 0 then
-                FE_aux (FE_Fexp (id', e), ann)
+                FE_aux (FE_fexp (id', e), ann)
               else
-                FE_aux (FE_Fexp (id', e'), ann)
+                FE_aux (FE_fexp (id', e'), ann)
             in
             let update_fields fexp = List.map (apply_fexp fexp) in
             let fes0' = List.fold_right update_fields fes' fes0 in
@@ -502,10 +502,10 @@ let const_props target ast =
     | E_field (e,id) ->
        let e',assigns = const_prop_exp substs assigns e in
        begin
-         let is_field (FE_aux (FE_Fexp (id', _), _)) = Id.compare id id' = 0 in
+         let is_field (FE_aux (FE_fexp (id', _), _)) = Id.compare id id' = 0 in
          match unaux_exp e' with
          | E_struct fes0 when List.exists is_field fes0 ->
-            let (FE_aux (FE_Fexp (_, e), _)) = List.find is_field fes0 in
+            let (FE_aux (FE_fexp (_, e), _)) = List.find is_field fes0 in
             re (unaux_exp e) assigns
          | _ ->
             re (E_field (e',id)) assigns
@@ -617,8 +617,8 @@ let const_props target ast =
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
   and const_prop_fexps substs assigns fes =
     List.map (const_prop_fexp substs assigns) fes
-  and const_prop_fexp substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
-    FE_aux (FE_Fexp (id,fst (const_prop_exp substs assigns e)),annot)
+  and const_prop_fexp substs assigns (FE_aux (FE_fexp (id,e), annot)) =
+    FE_aux (FE_fexp (id,fst (const_prop_exp substs assigns e)),annot)
   and const_prop_pexp substs assigns = function
     | (Pat_aux (Pat_exp (p,e),l)) ->
        Pat_aux (Pat_exp (p,fst (const_prop_exp (remove_bound substs p) assigns e)),l)
@@ -626,24 +626,24 @@ let const_props target ast =
        let substs' = remove_bound substs p in
        let e1',assigns = const_prop_exp substs' assigns e1 in
        Pat_aux (Pat_when (p, e1', fst (const_prop_exp substs' assigns e2)),l)
-  and const_prop_lexp substs assigns ((LEXP_aux (e,annot)) as le) =
-    let re e = LEXP_aux (e,annot), None in
+  and const_prop_lexp substs assigns ((LE_aux (e,annot)) as le) =
+    let re e = LE_aux (e,annot), None in
     match e with
-    | LEXP_id id (* shouldn't end up substituting here *)
-    | LEXP_typ (_,id)
+    | LE_id id (* shouldn't end up substituting here *)
+    | LE_typ (_,id)
       -> le, Some id
-    | LEXP_memory (id,es) ->
-       re (LEXP_memory (id,List.map (fun e -> fst (const_prop_exp substs assigns e)) es)) (* or here *)
-    | LEXP_tuple les -> re (LEXP_tuple (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
-    | LEXP_vector (le,e) -> re (LEXP_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))
-    | LEXP_vector_range (le,e1,e2) ->
-       re (LEXP_vector_range (fst (const_prop_lexp substs assigns le),
+    | LE_app (id,es) ->
+       re (LE_app (id,List.map (fun e -> fst (const_prop_exp substs assigns e)) es)) (* or here *)
+    | LE_tuple les -> re (LE_tuple (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
+    | LE_vector (le,e) -> re (LE_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))
+    | LE_vector_range (le,e1,e2) ->
+       re (LE_vector_range (fst (const_prop_lexp substs assigns le),
                               fst (const_prop_exp substs assigns e1),
                               fst (const_prop_exp substs assigns e2)))
-    | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
-    | LEXP_field (le,id) -> re (LEXP_field (fst (const_prop_lexp substs assigns le), id))
-    | LEXP_deref e ->
-       re (LEXP_deref (fst (const_prop_exp substs assigns e)))
+    | LE_vector_concat les -> re (LE_vector_concat (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
+    | LE_field (le,id) -> re (LE_field (fst (const_prop_lexp substs assigns le), id))
+    | LE_deref e ->
+       re (LE_deref (fst (const_prop_exp substs assigns e)))
   (* Try to evaluate function calls with constant arguments via
      (interpreter-based) constant folding.
      Boolean connectives are special-cased to support short-circuiting when one

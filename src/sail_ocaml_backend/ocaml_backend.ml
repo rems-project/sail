@@ -368,7 +368,7 @@ and ocaml_block ctx = function
   | E_aux (E_let _, _) as exp :: exps -> ocaml_atomic_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | _ -> assert false
-and ocaml_fexp record_id ctx (FE_aux (FE_Fexp (id, exp), _)) =
+and ocaml_fexp record_id ctx (FE_aux (FE_fexp (id, exp), _)) =
   separate space [zencode_upper ctx record_id ^^ dot ^^ zencode ctx id; equals; ocaml_exp ctx exp]
 and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
@@ -392,9 +392,9 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
   | _ -> parens (ocaml_exp ctx exp)
-and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
+and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
   match lexp_aux with
-  | LEXP_typ (_, id) | LEXP_id id ->
+  | LE_typ (_, id) | LE_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
        | Register typ ->
@@ -410,18 +410,18 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
           separate space [zencode ctx id; string ":="; traced_exp]
        | _ -> separate space [zencode ctx id; string ":="; parens (ocaml_exp ctx exp)]
      end
-  | LEXP_deref ref_exp ->
+  | LE_deref ref_exp ->
      separate space [ocaml_atomic_exp ctx ref_exp; string ":="; parens (ocaml_exp ctx exp)]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
-and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
+and ocaml_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
-  | LEXP_typ _ | LEXP_id _ -> ocaml_atomic_lexp ctx lexp
-  | LEXP_deref exp -> ocaml_exp ctx exp
+  | LE_typ _ | LE_id _ -> ocaml_atomic_lexp ctx lexp
+  | LE_deref exp -> ocaml_exp ctx exp
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
-and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
+and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
-  | LEXP_typ (_, id) -> zencode ctx id
-  | LEXP_id id -> zencode ctx id
+  | LE_typ (_, id) -> zencode ctx id
+  | LE_id id -> zencode ctx id
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
@@ -433,7 +433,7 @@ let rec get_initialize_registers = function
 
 let initial_value_for id inits =
   let find_reg = function
-    | E_aux (E_assign (LEXP_aux (LEXP_id reg_id, _), init), _) when Id.compare id reg_id = 0 -> Some init
+    | E_aux (E_assign (LE_aux (LE_id reg_id, _), init), _) when Id.compare id reg_id = 0 -> Some init
     | _ -> None
   in
   match Util.option_first find_reg inits with

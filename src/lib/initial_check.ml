@@ -464,38 +464,38 @@ and to_ast_measure ctx (P.Measure_aux(m,l)) : uannot internal_loop_measure =
 
 and to_ast_lexp ctx (P.E_aux(exp,l) : P.exp) : uannot lexp =
   let lexp = match exp with
-    | P.E_id id -> LEXP_id (to_ast_id ctx id)
-    | P.E_deref exp -> LEXP_deref (to_ast_exp ctx exp)
+    | P.E_id id -> LE_id (to_ast_id ctx id)
+    | P.E_deref exp -> LE_deref (to_ast_exp ctx exp)
     | P.E_typ (typ, P.E_aux (P.E_id id, l')) ->
-       LEXP_typ (to_ast_typ ctx typ, to_ast_id ctx id)
+       LE_typ (to_ast_typ ctx typ, to_ast_id ctx id)
     | P.E_tuple tups ->
        let ltups = List.map (to_ast_lexp ctx) tups in
-       let is_ok_in_tup (LEXP_aux (le, (l, _))) =
+       let is_ok_in_tup (LE_aux (le, (l, _))) =
          match le with
-         | LEXP_id _ | LEXP_typ _ | LEXP_vector _ | LEXP_vector_concat _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tuple _ -> ()
-         | LEXP_memory _ | LEXP_deref _ ->
+         | LE_id _ | LE_typ _ | LE_vector _ | LE_vector_concat _ | LE_field _ | LE_vector_range _ | LE_tuple _ -> ()
+         | LE_app _ | LE_deref _ ->
             raise (Reporting.err_typ l "only identifiers, fields, and vectors may be set in a tuple")
        in
        List.iter is_ok_in_tup ltups;
-       LEXP_tuple ltups
+       LE_tuple ltups
     | P.E_app ((P.Id_aux (f, l') as f'), args) ->
        begin match f with
        | P.Id(id) ->
           (match List.map (to_ast_exp ctx) args with
-           | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LEXP_memory (to_ast_id ctx f', [])
-           | [E_aux (E_tuple exps,_)] -> LEXP_memory (to_ast_id ctx f', exps)
-           | args -> LEXP_memory(to_ast_id ctx f', args))
+           | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LE_app (to_ast_id ctx f', [])
+           | [E_aux (E_tuple exps,_)] -> LE_app (to_ast_id ctx f', exps)
+           | args -> LE_app(to_ast_id ctx f', args))
        | _ -> raise (Reporting.err_typ l' "memory call on lefthand side of assignment must begin with an id")
        end
     | P.E_vector_append (exp1, exp2) ->
-       LEXP_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
-    | P.E_vector_access (vexp, exp) -> LEXP_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
+       LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
+    | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
     | P.E_vector_subrange (vexp, exp1, exp2) ->
-       LEXP_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_field (fexp, id) -> LEXP_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
+       LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+    | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
     | _ -> raise (Reporting.err_typ l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment")
   in
-  LEXP_aux (lexp, (l, empty_uannot))
+  LE_aux (lexp, (l, empty_uannot))
 
 and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
   match exp_aux with
@@ -530,7 +530,7 @@ and to_ast_record_try ctx (P.E_aux(exp,l):P.exp): uannot fexp option * (l * stri
   | P.E_app_infix(left,op,r) ->
     (match left, op with
     | P.E_aux(P.E_id(id),li), P.Id_aux(P.Id("="),leq) ->
-      Some(FE_aux(FE_Fexp(to_ast_id ctx id, to_ast_exp ctx r), (l, empty_uannot))),None
+      Some(FE_aux(FE_fexp(to_ast_id ctx id, to_ast_exp ctx r), (l, empty_uannot))),None
     | P.E_aux(_,li) , P.Id_aux(P.Id("="),leq) ->
       None,Some(li,"Expected an identifier to begin this field assignment")
     | P.E_aux(P.E_id(id),li), P.Id_aux(_,leq) ->
@@ -1191,7 +1191,7 @@ let generate_initialize_registers vs_ids defs =
       [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
        mk_fundef [mk_funcl (mk_id "initialize_registers")
                     (mk_pat (P_lit (mk_lit L_unit)))
-                    (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_id id), mk_lit_exp L_undef))) regs)))]]
+                    (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_lit_exp L_undef))) regs)))]]
   in
   defs @ initialize_registers
 

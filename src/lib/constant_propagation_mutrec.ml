@@ -84,7 +84,7 @@ let rec is_const_exp exp = match unaux_exp exp with
   | E_vector es -> List.for_all is_const_exp es && is_bitvector_typ (typ_of exp)
   | E_struct fes -> List.for_all is_const_fexp fes
   | _ -> false
-and is_const_fexp (FE_aux (FE_Fexp (_, e), _)) = is_const_exp e
+and is_const_fexp (FE_aux (FE_fexp (_, e), _)) = is_const_exp e
 
 let recheck_exp exp = check_exp (env_of exp) (strip_exp exp) (typ_of exp)
 
@@ -96,7 +96,7 @@ let generate_fun_id id args =
     | E_lit (L_aux (L_true, _)) -> "T"
     | E_lit (L_aux (L_false, _)) -> "F"
     | E_struct fes when is_const_exp exp ->
-       let fsuffix (FE_aux (FE_Fexp (id, e), _)) = suffix e
+       let fsuffix (FE_aux (FE_fexp (id, e), _)) = suffix e
        in
        "struct" ^
        Util.zencode_string (string_of_typ (typ_of exp)) ^

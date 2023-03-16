@@ -122,7 +122,7 @@ type ('a,'pat,'pat_aux) pat_alg =
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
-  ; p_tup            : 'pat list -> 'pat_aux
+  ; p_tuple          : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
   ; p_cons           : 'pat * 'pat -> 'pat_aux
   ; p_string_append  : 'pat list -> 'pat_aux
@@ -137,7 +137,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; e_id                     : id -> 'exp_aux
  ; e_ref                    : id -> 'exp_aux
  ; e_lit                    : lit -> 'exp_aux
- ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
+ ; e_typ                    : Ast.typ * 'exp -> 'exp_aux
  ; e_app                    : id * 'exp list -> 'exp_aux
  ; e_app_infix              : 'exp * id * 'exp -> 'exp_aux
  ; e_tuple                  : 'exp list -> 'exp_aux
@@ -152,8 +152,8 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; e_vector_append          : 'exp * 'exp -> 'exp_aux
  ; e_list                   : 'exp list -> 'exp_aux
  ; e_cons                   : 'exp * 'exp -> 'exp_aux
- ; e_record                 : 'fexp list -> 'exp_aux
- ; e_record_update          : 'exp * 'fexp list -> 'exp_aux
+ ; e_struct                 : 'fexp list -> 'exp_aux
+ ; e_struct_update          : 'exp * 'fexp list -> 'exp_aux
  ; e_field                  : 'exp * id -> 'exp_aux
  ; e_case                   : 'exp * 'pexp list -> 'exp_aux
  ; e_try                    : 'exp * 'pexp list -> 'exp_aux
@@ -171,26 +171,26 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; e_internal_value         : Value.value -> 'exp_aux
  ; e_internal_assume        : n_constraint * 'exp -> 'exp_aux
  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
- ; lEXP_id                  : id -> 'lexp_aux
- ; lEXP_deref               : 'exp -> 'lexp_aux
- ; lEXP_memory              : id * 'exp list -> 'lexp_aux
- ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
- ; lEXP_tuple                 : 'lexp list -> 'lexp_aux
- ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
- ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
- ; lEXP_vector_concat       : 'lexp list -> 'lexp_aux
- ; lEXP_field               : 'lexp * id -> 'lexp_aux
- ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
- ; fE_Fexp                  : id * 'exp -> 'fexp_aux
- ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+ ; le_id                    : id -> 'lexp_aux
+ ; le_deref                 : 'exp -> 'lexp_aux
+ ; le_app                   : id * 'exp list -> 'lexp_aux
+ ; le_typ                   : Ast.typ * id -> 'lexp_aux
+ ; le_tuple                 : 'lexp list -> 'lexp_aux
+ ; le_vector                : 'lexp * 'exp -> 'lexp_aux
+ ; le_vector_range          : 'lexp * 'exp * 'exp -> 'lexp_aux
+ ; le_vector_concat         : 'lexp list -> 'lexp_aux
+ ; le_field                 : 'lexp * id -> 'lexp_aux
+ ; le_aux                   : 'lexp_aux * 'a annot -> 'lexp
+ ; fe_fexp                  : id * 'exp -> 'fexp_aux
+ ; fe_aux                   : 'fexp_aux * 'a annot -> 'fexp
  ; def_val_empty            : 'opt_default_aux
  ; def_val_dec              : 'exp -> 'opt_default_aux
  ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
  ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
- ; lB_val                   : 'pat * 'exp -> 'letbind_aux
- ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
+ ; lb_val                   : 'pat * 'exp -> 'letbind_aux
+ ; lb_aux                   : 'letbind_aux * 'a annot -> 'letbind
  ; pat_alg                  : ('a,'pat,'pat_aux) pat_alg
  }
 
@@ -252,7 +252,7 @@ val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
 
 val add_p_typ : Env.t -> typ -> 'a pat -> 'a pat
 
-val add_e_cast : Env.t -> typ -> 'a exp -> 'a exp
+val add_e_typ : Env.t -> typ -> 'a exp -> 'a exp
 
 val add_typs_let : Env.t -> typ -> typ -> 'a exp -> 'a exp
 

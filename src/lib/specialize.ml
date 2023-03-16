@@ -461,8 +461,8 @@ let specialize_annotations instantiation fdef =
     } in
   let rw_exp = {
       id_exp_alg with
-      e_cast = (fun (typ, exp) -> E_typ (subst_unifiers instantiation typ, exp));
-      lEXP_cast = (fun (typ, lexp) -> LEXP_typ (subst_unifiers instantiation typ, lexp));
+      e_typ = (fun (typ, exp) -> E_typ (subst_unifiers instantiation typ, exp));
+      le_typ = (fun (typ, lexp) -> LE_typ (subst_unifiers instantiation typ, lexp));
       pat_alg = rw_pat
     } in
   let fdef =
