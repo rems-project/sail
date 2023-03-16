@@ -524,8 +524,7 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = (prec * Big_int.num * string)
 
-type
-def =  (* Top-level definition *)
+type def_aux =  (* Top-level definition *)
    DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_mapdef of mapdef (* mapping definition *)
@@ -541,9 +540,10 @@ def =  (* Top-level definition *)
  | DEF_measure of id * pat * exp (* separate termination measure declaration *)
  | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
  | DEF_register of dec_spec (* register declaration *)
- | DEF_pragma of string * string * l
+ | DEF_pragma of string * string
  | DEF_internal_mutrec of fundef list
 
+and def = DEF_aux of def_aux * l
 
 type 
 lexp_aux =  (* lvalue expression, can't occur out of the parser *)

@@ -1593,7 +1593,7 @@ overload_def:
   | Overload id Eq enum_bar
     { ($2, List.map fst $4) }
 
-def:
+def_aux:
   | fun_def
     { DEF_fundef $1 }
   | map_def
@@ -1625,11 +1625,15 @@ def:
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma
-    { DEF_pragma (fst $1, snd $1, loc $startpos $endpos) }
+    { DEF_pragma (fst $1, snd $1) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures
     { DEF_loop_measures ($2,$3) }
+
+def:
+  | d = def_aux
+    { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 
 defs_list:
   | def

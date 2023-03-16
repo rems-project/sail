@@ -879,7 +879,7 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let rec to_ast_def ctx def : uannot def list ctx_out =
+let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
   match def with
   | P.DEF_overload (id, ids) ->
      [DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids)], ctx
@@ -917,13 +917,13 @@ let rec to_ast_def ctx def : uannot def list ctx_out =
   | P.DEF_register dec ->
      let d = to_ast_dec ctx dec in
      [DEF_register d], ctx
-  | P.DEF_pragma ("sail_internal", arg, l) ->
+  | P.DEF_pragma ("sail_internal", arg) ->
      begin match Reporting.loc_file l with
      | Some file ->
         [DEF_pragma ("sail_internal", arg, l)], { ctx with internal_files = file :: ctx.internal_files }
      | None -> [DEF_pragma ("sail_internal", arg, l)], ctx
      end
-  | P.DEF_pragma ("target_set", arg, l) ->
+  | P.DEF_pragma ("target_set", arg) ->
      let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
      begin match args with
      | (set :: targets) ->
@@ -931,11 +931,11 @@ let rec to_ast_def ctx def : uannot def list ctx_out =
      | [] ->
         raise (Reporting.err_general l "No arguments provided to target set directive")
      end
-  | P.DEF_pragma (pragma, arg, l) ->
+  | P.DEF_pragma (pragma, arg) ->
      [DEF_pragma (pragma, arg, l)], ctx
   | P.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
-     raise (Reporting.err_unreachable P.Unknown __POS__
+     raise (Reporting.err_unreachable l __POS__
                                       "Internal mutual block found when processing scattered defs")
   | P.DEF_scattered sdef ->
      let sdef, ctx = to_ast_scattered ctx sdef in
@@ -947,8 +947,8 @@ let rec to_ast_def ctx def : uannot def list ctx_out =
 
 let rec remove_mutrec = function
   | [] -> []
-  | P.DEF_internal_mutrec fundefs :: defs ->
-     List.map (fun fdef -> P.DEF_fundef fdef) fundefs @ remove_mutrec defs
+  | P.DEF_aux (P.DEF_internal_mutrec fundefs, _) :: defs ->
+     List.map (fun (P.FD_aux (_, l) as fdef) -> P.DEF_aux (P.DEF_fundef fdef, l)) fundefs @ remove_mutrec defs
   | def :: defs ->
      def :: remove_mutrec defs
 
