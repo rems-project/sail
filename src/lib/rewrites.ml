@@ -4714,6 +4714,11 @@ let rewrite_toplevel_nexps env defs =
     Monomorphise.rewrite_toplevel_nexps defs
   else defs
 
+let rewrite_complete_record_params env defs =
+  if !opt_mono_complex_nexps then
+    Monomorphise.rewrite_complete_record_params env defs
+  else defs
+
 let opt_mono_split = ref ([]:((string * int) * string) list)
 let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
@@ -4803,6 +4808,7 @@ let all_rewriters = [
     ("mapping_builtins", basic_rewriter rewrite_ast_mapping_patterns);
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
     ("mono_rewrites", basic_rewriter mono_rewrites);
+    ("complete_record_params", basic_rewriter rewrite_complete_record_params);
     ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);
     ("toplevel_consts", String_rewriter (fun target -> basic_rewriter (rewrite_toplevel_consts target)));
     ("monomorphise", String_rewriter (fun target -> Base_rewriter (monomorphise target)));

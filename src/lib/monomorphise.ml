@@ -4101,6 +4101,8 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
   in { ast with defs = cast_specs @ defs }
 end
 
+module ToplevelNexpRewrites = struct
+
 let replace_nexp_in_typ env typ orig new_nexp =
   let rec aux (Typ_aux (t,l) as typ) =
     match t with
@@ -4161,68 +4163,73 @@ let fresh_nexp_kid nexp =
      types, which these are explicitly supposed to be. *)
   mk_kid (mangle_nexp nexp (*^ "#"*))
 
-let rewrite_toplevel_nexps ({ defs; _ } as ast) =
-  let find_nexp env nexp_map nexp =
-    let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
-    List.find is_equal nexp_map
-  in
-  let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
-    match t with
-    | Typ_fn (args,res) ->
-       let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
-       let nexp_map = List.concat (List.map fst args') in
-       let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
-       nexp_map, Typ_aux (Typ_fn (List.map snd args',res),ann)
-    | Typ_tuple typs ->
-       let nexp_map, typs =
-         List.fold_right (fun typ (nexp_map,t) ->
-           let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
-           (nexp_map, typ::t)) typs (nexp_map,[])
-       in nexp_map, Typ_aux (Typ_tuple typs,ann)
-    | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
-       let nexp_opt =
-         match destruct_atom_nexp env typ_full with
-         | Some nexp -> Some nexp
-         | None ->
-            if is_bitvector_typ typ_full then
-              let (size,_,_) = vector_typ_args_of typ_full in
-              Some size
-            else None
-       in match nexp_opt with
-       | None -> nexp_map, typ_full
-       | Some (Nexp_aux (Nexp_constant _,_))
-       | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
-       | Some nexp ->
-          let nexp_map, kid =
-            match find_nexp env nexp_map nexp with
-            | (kid,_) -> nexp_map, kid
-            | exception Not_found ->
-               let kid = fresh_nexp_kid nexp in
-               (kid, nexp)::nexp_map, kid
+let find_nexp env nexp_map nexp =
+  let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
+  List.find is_equal nexp_map
+
+let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
+  match t with
+  | Typ_fn (args,res) ->
+     let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
+     let nexp_map = List.concat (List.map fst args') in
+     let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
+     nexp_map, Typ_aux (Typ_fn (List.map snd args',res),ann)
+  | Typ_tuple typs ->
+     let nexp_map, typs =
+       List.fold_right (fun typ (nexp_map,t) ->
+         let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
+         (nexp_map, typ::t)) typs (nexp_map,[])
+     in nexp_map, Typ_aux (Typ_tuple typs,ann)
+  | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
+     let nexp_opt =
+       match destruct_atom_nexp env typ_full with
+       | Some nexp -> Some nexp
+       | None ->
+          if is_bitvector_typ typ_full then
+            let (size,_,_) = vector_typ_args_of typ_full in
+            Some size
+          else None
+     in match nexp_opt with
+     | None -> nexp_map, typ_full
+     | Some (Nexp_aux (Nexp_constant _,_))
+     | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
+     | Some nexp ->
+        let nexp_map, kid =
+          match find_nexp env nexp_map nexp with
+          | (kid,_) -> nexp_map, kid
+          | exception Not_found ->
+             let kid = fresh_nexp_kid nexp in
+             (kid, nexp)::nexp_map, kid
+        in
+        let new_nexp = nvar kid in
+        nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
+    end
+  | _ ->
+     let typ' = Env.base_typ_of env typ_full in
+     if Typ.compare typ_full typ' == 0 then
+       match t with
+       | Typ_app (f,args) ->
+          let in_arg nexp_map (A_aux (arg,l) as arg_full) =
+            match arg with
+            | A_typ typ ->
+               let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
+               nexp_map, A_aux (A_typ typ',l)
+            | A_nexp nexp ->
+               begin match find_nexp env nexp_map nexp with
+               | (kid,_) -> nexp_map, A_aux (A_nexp (nvar kid), l)
+               | exception Not_found -> nexp_map, arg_full
+               end
+            | A_bool _ | A_order _ -> nexp_map, arg_full
           in
-          let new_nexp = nvar kid in
-          nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
-      end
-    | _ ->
-       let typ' = Env.base_typ_of env typ_full in
-       if Typ.compare typ_full typ' == 0 then
-         match t with
-         | Typ_app (f,args) ->
-            let in_arg nexp_map (A_aux (arg,l) as arg_full) =
-              match arg with
-              | A_typ typ ->
-                 let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
-                 nexp_map, A_aux (A_typ typ',l)
-              | A_bool _ | A_nexp _ | A_order _ -> nexp_map, arg_full
-            in
-            let nexp_map, args =
-              List.fold_right (fun arg (nexp_map,args) ->
-                  let nexp_map, arg = in_arg nexp_map arg in
-                  (nexp_map, arg::args)) args (nexp_map,[])
-            in nexp_map, Typ_aux (Typ_app (f,args),ann)
-         | _ -> nexp_map, typ_full
-       else rewrite_typ_in_spec env nexp_map typ'
-  in
+          let nexp_map, args =
+            List.fold_right (fun arg (nexp_map,args) ->
+                let nexp_map, arg = in_arg nexp_map arg in
+                (nexp_map, arg::args)) args (nexp_map,[])
+          in nexp_map, Typ_aux (Typ_app (f,args),ann)
+       | _ -> nexp_map, typ_full
+     else rewrite_typ_in_spec env nexp_map typ'
+
+let rewrite_toplevel_nexps ({ defs; _ } as ast) =
   let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann)) =
     match tqs with
     | TypQ_aux (TypQ_no_forall,_) -> None
@@ -4330,6 +4337,121 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
      to help prove equivalences such as (8 * 'n) = 'p8_times_n# *)
   Type_check.opt_smt_div := true;
   { ast with defs = List.rev defs }
+
+(* Move complex sizes in record field types into the parameters. *)
+let rewrite_complete_record_params env ast =
+  let lift_params (additions_map,tl) def =
+    match def with
+    | DEF_type (TD_aux (TD_record (id, (TypQ_aux (TypQ_tq qs, tq_l ) as tyqs), fields, semi), annot)) as def ->
+       (* TODO: replace with a local environment *)
+       let env = Env.add_typquant tq_l tyqs env in
+       let nexp_map, fields' =
+         List.fold_right (fun (typ,id) (nexp_map,t) ->
+             let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
+             (nexp_map, (typ,id)::t)) fields ([],[])
+       in begin
+           match nexp_map with
+           | [] -> additions_map, def::tl
+           | _ ->
+              let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map in
+              let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
+              let tyqs' = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
+              let additions_map' = Bindings.add id (tyqs, nexp_map) additions_map in
+              additions_map', DEF_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)) :: tl
+         end
+    | def -> additions_map, def::tl
+  in
+
+  let additions_map, rdefs = List.fold_left lift_params (Bindings.empty, []) ast.defs in
+  let ast = { ast with defs = List.rev rdefs } in
+
+  let rec expand_type (Typ_aux (typ, l) as full_typ) =
+    match typ with
+    | Typ_fn (args, ret) -> Typ_aux (Typ_fn (List.map expand_type args, expand_type ret), l)
+    | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map expand_type typs), l)
+    (* TODO: another potential shadowing hazard *)
+    | Typ_exist (kids,nc,typ') ->
+       Typ_aux (Typ_exist (kids, nc, expand_type typ'), l)
+    | Typ_app (id, ty_args) ->
+       begin match Bindings.find_opt id additions_map with
+       | None -> full_typ
+       | Some (original_tyqs, nexp_map) ->
+          let instantiation =
+            List.fold_left2
+              (fun m kopt ty_arg ->
+                match kopt, ty_arg with
+                | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _), A_aux (A_nexp nexp, _) ->
+                   KBindings.add kid nexp m
+                | _ -> m)
+              KBindings.empty
+              (quant_kopts original_tyqs) ty_args
+          in
+          let new_args =
+            List.map (fun (_, nexp) -> A_aux (A_nexp (subst_kids_nexp instantiation nexp), Generated l)) nexp_map
+          in Typ_aux (Typ_app (id, ty_args @ new_args), l)
+
+       end
+    | _ -> full_typ
+  in
+
+  let open Rewriter in
+  let rw_pat = {
+      id_pat_alg with
+      p_typ = (fun (typ, pat) -> P_typ (expand_type typ, pat));
+    }
+  in
+  let rw_exp = {
+      id_exp_alg with
+      e_typ = (fun (typ, exp) -> E_typ (expand_type typ, exp));
+      le_typ = (fun (typ, lexp) -> LE_typ (expand_type typ, lexp));
+      pat_alg = rw_pat;
+    }
+  in
+  let rw_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), annot)) =
+    match typschm with
+    | TypSchm_aux (TypSchm_ts (typq, typ), annot') ->
+       (* TODO: capture hazard *)
+       let typschm' = TypSchm_aux (TypSchm_ts (typq, expand_type typ), annot') in
+       VS_aux (VS_val_spec (typschm', id, ext, is_cast), annot)
+  in
+  let rw_typedef (TD_aux (td, annot)) =
+    let rw_union (Tu_aux (Tu_ty_id (typ, id), annot)) =
+      Tu_aux (Tu_ty_id (expand_type typ, id), annot)
+    in
+    match td with
+    | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
+       TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
+    | TD_abbrev (id, typq, typ_arg) ->
+       TD_aux (TD_abbrev (id, typq, typ_arg), annot)
+    | TD_record (id, typq, typ_ids, flag) ->
+       TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
+    | TD_variant (id, typq, tus, flag) ->
+       TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
+    | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
+    | TD_bitfield _ -> assert false (* Processed before re-writing *)
+  in
+  let rw_register (DEC_aux (DEC_reg (typ, id, init), annot)) =
+    DEC_aux (DEC_reg (expand_type typ, id, init), annot)
+  in
+  let rw_def rws def =
+    let def' =
+      match def with
+      | DEF_val vs -> DEF_val (rw_spec vs)
+      | DEF_type td -> DEF_type (rw_typedef td)
+      | DEF_register reg -> DEF_register (rw_register reg)
+      | def -> def
+    in rewrite_def rws def'
+  in
+  rewrite_ast_base
+    { rewriters_base with rewrite_exp = (fun _ -> fold_exp rw_exp);
+                          rewrite_pat = (fun _ -> fold_pat rw_pat);
+                          rewrite_def = rw_def
+    } ast
+
+end (* ToplevelNexpRewrites *)
+
+let rewrite_toplevel_nexps = ToplevelNexpRewrites.rewrite_toplevel_nexps
+let rewrite_complete_record_params = ToplevelNexpRewrites.rewrite_complete_record_params
 
 type options = {
   auto : bool;
