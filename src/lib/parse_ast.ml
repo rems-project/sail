@@ -178,7 +178,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_fn of atyp * atyp * atyp (* Function type, last atyp is an effect *)
  | ATyp_bidir of atyp * atyp * atyp (* Mapping type, last atyp is an effect *)
  | ATyp_wild
- | ATyp_tup of (atyp) list (* Tuple type *)
+ | ATyp_tuple of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
  | ATyp_exist of kinded_id list * atyp * atyp
 
@@ -235,8 +235,8 @@ pat_aux =  (* Pattern *)
  | P_app of id * pat list (* union constructor pattern *)
  | P_vector of pat list (* vector pattern *)
  | P_vector_concat of pat list (* concatenated vector pattern *)
- | P_tup of (pat) list (* tuple pattern *)
- | P_list of (pat) list (* list pattern *)
+ | P_tuple of pat list (* tuple pattern *)
+ | P_list of pat list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
  | P_string_append of pat list (* string append pattern, x ^^ y *)
 
@@ -265,25 +265,25 @@ exp_aux =  (* Expression *)
  | E_ref of id
  | E_deref of exp
  | E_lit of lit (* literal constant *)
- | E_cast of atyp * exp (* cast *)
+ | E_typ of atyp * exp (* cast *)
  | E_app of id * exp list (* function application *)
  | E_app_infix of exp * id * exp (* infix function application *)
  | E_tuple of exp list (* tuple *)
  | E_if of exp * exp * exp (* conditional *)
  | E_loop of loop * measure * exp * exp
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
- | E_vector of exp list (* vector (indexed from 0) *)
+ | E_vector of (exp) list (* vector (indexed from 0) *)
  | E_vector_access of exp * exp (* vector access *)
  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
  | E_vector_update of exp * exp * exp (* vector functional update *)
  | E_vector_update_subrange of exp * exp * exp * exp (* vector subrange update (with vector) *)
  | E_vector_append of exp * exp (* vector concatenation *)
- | E_list of exp list (* list *)
+ | E_list of (exp) list (* list *)
  | E_cons of exp * exp (* cons *)
- | E_record of exp list (* struct *)
- | E_record_update of exp * exp list (* functional update of struct *)
+ | E_struct of exp list (* struct *)
+ | E_struct_update of exp * (exp) list (* functional update of struct *)
  | E_field of exp * id (* field projection from struct *)
- | E_case of exp * pexp list (* pattern matching *)
+ | E_match of exp * (pexp) list (* pattern matching *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_sizeof of atyp
@@ -294,6 +294,7 @@ exp_aux =  (* Expression *)
  | E_return of exp
  | E_assert of exp * exp
  | E_var of exp * exp * exp
+ | E_attribute of string * string * exp
  | E_internal_plet of pat * exp * exp
  | E_internal_return of exp
 
@@ -349,7 +350,7 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 type 
 funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * pexp
+   FCL_funcl of id * pexp
 
 
 type 
@@ -407,7 +408,7 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_app of id * ( mpat) list
  | MP_vector of ( mpat) list
  | MP_vector_concat of ( mpat) list
- | MP_tup of ( mpat) list
+ | MP_tuple of ( mpat) list
  | MP_list of ( mpat) list
  | MP_cons of ( mpat) * ( mpat)
  | MP_string_append of mpat list
@@ -512,38 +513,38 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = (prec * Big_int.num * string)
 
-type
-def =  (* Top-level definition *)
+type def_aux =  (* Top-level definition *)
    DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_mapdef of mapdef (* mapping definition *)
  | DEF_impl of funcl (* impl definition *)
- | DEF_val of letbind (* value definition *)
+ | DEF_let of letbind (* value definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)
- | DEF_spec of val_spec (* top-level type constraint *)
+ | DEF_val of val_spec (* top-level type constraint *)
  | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
  | DEF_instantiation of id * subst list (* instantiation *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_measure of id * pat * exp (* separate termination measure declaration *)
  | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
- | DEF_reg_dec of dec_spec (* register declaration *)
- | DEF_pragma of string * string * l
+ | DEF_register of dec_spec (* register declaration *)
+ | DEF_pragma of string * string
  | DEF_internal_mutrec of fundef list
 
+and def = DEF_aux of def_aux * l
 
 type 
 lexp_aux =  (* lvalue expression, can't occur out of the parser *)
-   LEXP_id of id (* identifier *)
- | LEXP_mem of id * (exp) list
- | LEXP_vector of lexp * exp (* vector element *)
- | LEXP_vector_range of lexp * exp * exp (* subvector *)
- | LEXP_vector_concat of lexp list
- | LEXP_field of lexp * id (* struct field *)
+   LE_id of id (* identifier *)
+ | LE_mem of id * (exp) list
+ | LE_vector of lexp * exp (* vector element *)
+ | LE_vector_range of lexp * exp * exp (* subvector *)
+ | LE_vector_concat of lexp list
+ | LE_field of lexp * id (* struct field *)
 
 and lexp = 
-   LEXP_aux of lexp_aux * l
+   LE_aux of lexp_aux * l
 
 
 type 

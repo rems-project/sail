@@ -78,7 +78,7 @@ let scan_ast { defs; _ } =
   let scan (ids, specs) = function
     | DEF_fundef fd ->
        IdSet.add (id_of_fundef fd) ids, specs
-    | DEF_spec (VS_aux (VS_val_spec (_,id,_,_),_) as vs) ->
+    | DEF_val (VS_aux (VS_val_spec (_,id,_,_),_) as vs) ->
        ids, Bindings.add id vs specs
     | DEF_pragma (("file_start" | "file_end"), _ ,_) ->
        ids, specs
@@ -94,9 +94,9 @@ let filter_old_ast repl_ids repl_specs { defs; _ } =
        if IdSet.mem id repl_ids
        then rdefs, spec_found
        else def::rdefs, spec_found
-    | DEF_spec (VS_aux (VS_val_spec (_,id,_,_),_)) ->
+    | DEF_val (VS_aux (VS_val_spec (_,id,_,_),_)) ->
        (match Bindings.find_opt id repl_specs with
-        | Some vs -> DEF_spec vs :: rdefs, IdSet.add id spec_found
+        | Some vs -> DEF_val vs :: rdefs, IdSet.add id spec_found
         | None -> def::rdefs, spec_found)
     | _ -> def::rdefs, spec_found
   in
@@ -105,7 +105,7 @@ let filter_old_ast repl_ids repl_specs { defs; _ } =
 
 let filter_replacements spec_found { defs; _ } =
   let not_found = function
-    | DEF_spec (VS_aux (VS_val_spec (_,id,_,_),_)) -> not (IdSet.mem id spec_found)
+    | DEF_val (VS_aux (VS_val_spec (_,id,_,_),_)) -> not (IdSet.mem id spec_found)
     | _ -> true
   in List.filter not_found defs
 
@@ -117,5 +117,5 @@ let splice ast file =
   let repl_ids, repl_specs = scan_ast repl_ast in
   let defs1, specs_found = filter_old_ast repl_ids repl_specs ast in
   let defs2 = filter_replacements specs_found repl_ast in
-  Type_error.check Type_check.initial_env { ast with defs = defs1 @ defs2 }
+  Type_error.check Type_check.initial_env (Type_check.strip_ast { ast with defs = defs1 @ defs2 })
 

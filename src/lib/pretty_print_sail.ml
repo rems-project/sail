@@ -197,7 +197,7 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_app (id, typs) when Id.compare id (mk_id "atom_bool") = 0 ->
      string "bool" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
-  | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
+  | Typ_tuple typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
   (* Resugar set types like {|1, 2, 3|} *)
   | Typ_exist ([kopt],
@@ -321,7 +321,7 @@ let rec doc_pat (P_aux (p_aux, _)) =
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
   | P_not pat -> string "~" ^^ parens (doc_pat pat)
-  | P_tup pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
+  | P_tuple pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
   | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
   | P_lit lit -> doc_lit lit
   (* P_var short form sugar *)
@@ -440,15 +440,15 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
 
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
-  | E_record fexps -> separate space [string "struct"; string "{"; doc_fexps fexps; string "}"]
+  | E_struct fexps -> separate space [string "struct"; string "{"; doc_fexps fexps; string "}"]
   | E_loop (While, measure, cond, exp) ->
      separate space ([string "while"] @ doc_measure measure @ [doc_exp cond; string "do"; doc_exp exp])
   | E_loop (Until, measure, cond, exp) ->
      separate space ([string "repeat"] @ doc_measure measure @ [doc_exp exp; string "until"; doc_exp cond])
-  | E_record_update (exp, fexps) ->
+  | E_struct_update (exp, fexps) ->
      separate space [string "{"; doc_exp exp; string "with"; doc_fexps fexps; string "}"]
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
-  | E_case (exp, pexps) ->
+  | E_match (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      doc_let_style "let" (doc_pat pat) (doc_exp binding) exp
@@ -515,7 +515,7 @@ and doc_infix n (E_aux (e_aux, _) as exp) =
   | _ -> doc_atomic_exp exp
 and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
-  | E_cast (typ, exp) ->
+  | E_typ (typ, exp) ->
      separate space [doc_atomic_exp exp; colon; doc_typ typ]
   | E_lit lit -> doc_lit lit
   | E_id id -> doc_id id
@@ -546,7 +546,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
-and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
+and doc_fexp (FE_aux (FE_fexp (id, exp), _)) =
   separate space [doc_id id; equals; doc_exp exp]
 and doc_block = function
   | [] -> string "()"
@@ -561,20 +561,20 @@ and doc_block = function
        doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
-and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
+and doc_lexp (LE_aux (l_aux, _) as lexp) =
   match l_aux with
-  | LEXP_cast (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
+  | LE_typ (typ, id) -> separate space [doc_id id; colon; doc_typ typ]
   | _ -> doc_atomic_lexp lexp
-and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
+and doc_atomic_lexp (LE_aux (l_aux, _) as lexp) =
   match l_aux with
-  | LEXP_id id -> doc_id id
-  | LEXP_deref exp -> lparen ^^ string "*" ^^ doc_atomic_exp exp ^^ rparen
-  | LEXP_tup lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
-  | LEXP_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
-  | LEXP_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
-  | LEXP_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
-  | LEXP_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
-  | LEXP_memory (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+  | LE_id id -> doc_id id
+  | LE_deref exp -> lparen ^^ string "*" ^^ doc_atomic_exp exp ^^ rparen
+  | LE_tuple lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
+  | LE_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
+  | LE_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
+  | LE_vector_range (lexp, exp1, exp2) -> doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
+  | LE_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
+  | LE_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | _ -> parens (doc_lexp lexp)
 and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace
 and doc_pexp (Pat_aux (pat_aux, _)) =
@@ -602,7 +602,7 @@ and doc_vector_update = function
      end
   | VU_range (high, low, value) -> separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
  
-let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
+let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp,_)), _)) =
   match pexp with
   | Pat_exp (pat,exp) ->
      group (separate space [doc_id id; doc_pat pat; equals; doc_exp_as_block exp])
@@ -630,7 +630,7 @@ let doc_fundef (FD_aux (FD_function (r, _, funcls), annot)) =
 let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   match mp_aux with
   | MP_id id -> doc_id id
-  | MP_tup pats -> lparen ^^ separate_map (comma ^^ space) doc_mpat pats ^^ rparen
+  | MP_tuple pats -> lparen ^^ separate_map (comma ^^ space) doc_mpat pats ^^ rparen
   | MP_lit lit -> doc_lit lit
   | MP_vector pats -> brackets (separate_map (comma ^^ space) doc_mpat pats)
   | MP_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_mpat pats
@@ -780,7 +780,7 @@ let doc_filter = function
     
 let rec doc_def_no_hardline ?comment:(comment=false) = function
   | DEF_default df -> doc_default df
-  | DEF_spec v_spec -> doc_spec ~comment:comment v_spec
+  | DEF_val v_spec -> doc_spec ~comment:comment v_spec
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
@@ -797,11 +797,11 @@ let rec doc_def_no_hardline ?comment:(comment=false) = function
          | _ -> (space ^^ string "with") ^//^ separate_map (comma ^^ break 1) doc_subst substs)
   | DEF_impl funcl ->
      string "impl" ^^ space ^^ doc_funcl funcl
-  | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
+  | DEF_let lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_internal_mutrec fundefs ->
      (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)
      ^^ hardline ^^ string "}"
-  | DEF_reg_dec dec -> doc_dec dec
+  | DEF_register dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
   | DEF_measure (id,pat,exp) ->
      string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^

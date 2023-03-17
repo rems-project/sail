@@ -278,6 +278,7 @@ let warn_extern_effect l =
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
 %token <string * string> Pragma
+%token <string * string> Attribute
 
 %token <Parse_ast.fixity_token> Fixity
 
@@ -610,7 +611,7 @@ atomic_typ:
   | Lparen typ Rparen
     { $2 }
   | Lparen typ Comma typ_list Rparen
-    { mk_typ (ATyp_tup ($2 :: $4)) $startpos $endpos }
+    { mk_typ (ATyp_tuple ($2 :: $4)) $startpos $endpos }
   | LcurlyBar num_list RcurlyBar
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
@@ -788,7 +789,7 @@ atomic_pat:
   | Lparen pat Rparen
     { $2 }
   | Lparen pat Comma pat_list Rparen
-    { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
+    { mk_pat (P_tuple ($2 :: $4)) $startpos $endpos }
   | Lsquare pat_list Rsquare
     { mk_pat (P_vector $2) $startpos $endpos }
   | LsquareBar RsquareBar
@@ -834,6 +835,8 @@ internal_loop_measure:
 exp:
   | exp0
     { $1 }
+  | Attribute exp
+    { mk_exp (E_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
   | atomic_exp Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
   | Let_ letbind In exp
@@ -853,7 +856,7 @@ exp:
   | If_ exp Then exp
     { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4))) $startpos $endpos }
   | Match exp Lcurly case_list Rcurly
-    { mk_exp (E_case ($2, $4)) $startpos $endpos }
+    { mk_exp (E_match ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
   | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp In typ Rparen exp
@@ -1098,7 +1101,7 @@ block:
 
 atomic_exp:
   | atomic_exp Colon atomic_typ
-    { mk_exp (E_cast ($3, $1)) $startpos $endpos }
+    { mk_exp (E_typ ($3, $1)) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit
@@ -1140,9 +1143,9 @@ atomic_exp:
   | atomic_exp Lsquare exp Comma exp Rsquare
     { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
   | Struct Lcurly fexp_exp_list Rcurly
-    { mk_exp (E_record $3) $startpos $endpos }
+    { mk_exp (E_struct $3) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
-    { mk_exp (E_record_update ($2, $4)) $startpos $endpos }
+    { mk_exp (E_struct_update ($2, $4)) $startpos $endpos }
   | Lsquare Rsquare
     { mk_exp (E_vector []) $startpos $endpos }
   | Lsquare exp_list Rsquare
@@ -1214,7 +1217,7 @@ funcl_patexp_typ:
 
 funcl:
   | id funcl_patexp
-    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos }
+    { mk_funcl (FCL_funcl ($1, $2)) $startpos $endpos }
 
 funcl_doc:
   | Doc funcl_doc
@@ -1230,9 +1233,9 @@ funcls2:
 
 funcls:
   | id funcl_patexp_typ
-    { let pexp, tannot = $2 in ([mk_funcl (FCL_Funcl ($1, pexp)) $startpos $endpos], tannot) }
+    { let pexp, tannot = $2 in ([mk_funcl (FCL_funcl ($1, pexp)) $startpos $endpos], tannot) }
   | id funcl_patexp And funcls2
-    { (mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos($2) :: $4, mk_tannotn) }
+    { (mk_funcl (FCL_funcl ($1, $2)) $startpos $endpos($2) :: $4, mk_tannotn) }
 
 funcl_typ:
   | Forall typquant Dot typ
@@ -1413,7 +1416,7 @@ atomic_mpat:
   | Lparen mpat Rparen
     { $2 }
   | Lparen mpat Comma mpat_list Rparen
-    { mk_mpat (MP_tup ($2 :: $4)) $startpos $endpos }
+    { mk_mpat (MP_tuple ($2 :: $4)) $startpos $endpos }
   | Lsquare mpat_list Rsquare
     { mk_mpat (MP_vector $2) $startpos $endpos }
   | LsquareBar RsquareBar
@@ -1587,7 +1590,7 @@ overload_def:
   | Overload id Eq enum_bar
     { ($2, List.map fst $4) }
 
-def:
+def_aux:
   | fun_def
     { DEF_fundef $1 }
   | map_def
@@ -1597,7 +1600,7 @@ def:
   | Fixity
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
-    { DEF_spec $1 }
+    { DEF_val $1 }
   | outcome_spec_def
     { DEF_outcome ($1, []) }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
@@ -1607,9 +1610,9 @@ def:
   | type_def
     { DEF_type $1 }
   | let_def
-    { DEF_val $1 }
+    { DEF_let $1 }
   | register_def
-    { DEF_reg_dec $1 }
+    { DEF_register $1 }
   | overload_def
     { let (id, ids) = $1 in DEF_overload (id, ids) }
   | scattered_def
@@ -1619,11 +1622,15 @@ def:
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma
-    { DEF_pragma (fst $1, snd $1, loc $startpos $endpos) }
+    { DEF_pragma (fst $1, snd $1) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures
     { DEF_loop_measures ($2,$3) }
+
+def:
+  | d = def_aux
+    { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 
 defs_list:
   | def

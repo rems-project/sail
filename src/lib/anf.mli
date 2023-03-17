@@ -103,7 +103,7 @@ type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 and 'a aexp_aux =
   | AE_val of 'a aval
   | AE_app of id * ('a aval) list * 'a
-  | AE_cast of 'a aexp * 'a
+  | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
@@ -112,9 +112,9 @@ and 'a aexp_aux =
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
+  | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
   | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
+  | AE_struct_update of 'a aval * ('a aval) Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
@@ -124,7 +124,7 @@ and sc_op = SC_and | SC_or
 and 'a apat = AP_aux of 'a apat_aux * Env.t * l
 
 and 'a apat_aux =
-  | AP_tup of ('a apat) list
+  | AP_tuple of ('a apat) list
   | AP_id of id * 'a
   | AP_global of id * 'a
   | AP_app of id * 'a apat * 'a

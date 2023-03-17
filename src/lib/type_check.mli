@@ -105,7 +105,7 @@ val opt_check_completeness : bool ref
 type constraint_reason = (Ast.l * string) option
 
 type type_error =
-  | Err_no_casts of unit exp * typ * typ * type_error * type_error list
+  | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
@@ -254,7 +254,7 @@ module Env : sig
   (** no_casts removes all the implicit type casts/coercions from the
      environment, so checking a term with such an environment will
      guarantee not to insert any casts. Not that this is only about
-     the implicit casting and has nothing to do with the E_cast AST
+     the implicit casting and has nothing to do with the E_typ AST
      node. *)
   val no_casts : t -> t
 
@@ -303,6 +303,8 @@ type tannot
 val destruct_tannot : tannot -> (Env.t * typ) option
 val mk_tannot : Env.t -> typ -> tannot
 
+val untyped_annot : tannot -> uannot
+
 val get_instantiations : tannot -> typ_arg KBindings.t option
 
 val empty_tannot : tannot
@@ -315,19 +317,24 @@ val replace_env : Env.t -> tannot -> tannot
 (** {2 Removing type annotations} *)
 
 (** Strip the type annotations from an expression. *)
-val strip_exp : 'a exp -> unit exp
+val strip_exp : tannot exp -> uannot exp
 
 (** Strip the type annotations from a pattern *)
-val strip_pat : 'a pat -> unit pat
+val strip_pat : tannot pat -> uannot pat
 
 (** Strip the type annotations from a pattern-expression *)
-val strip_pexp : 'a pexp -> unit pexp
+val strip_pexp : tannot pexp -> uannot pexp
 
 (** Strip the type annotations from an l-expression *)
-val strip_lexp : 'a lexp -> unit lexp
+val strip_lexp : tannot lexp -> uannot lexp
 
-val strip_mpexp : 'a mpexp -> unit mpexp
-val strip_mapcl : 'a mapcl -> unit mapcl
+val strip_mpexp : tannot mpexp -> uannot mpexp
+val strip_mapcl : tannot mapcl -> uannot mapcl
+
+val strip_val_spec : tannot val_spec -> uannot val_spec
+val strip_funcl : tannot funcl -> uannot funcl
+val strip_def : tannot def -> uannot def
+val strip_ast : tannot ast -> uannot ast
 
 (** Strip location information from types for comparison purposes *)
 val strip_typ : typ -> typ
@@ -348,21 +355,21 @@ val strip_typ_aux : typ_aux -> typ_aux
    be used to re-start the typechecking process on any
    sub-expression. so local modifications to the AST can be
    re-checked. *)
-val check_exp : Env.t -> unit exp -> typ -> tannot exp
+val check_exp : Env.t -> uannot exp -> typ -> tannot exp
 
-val infer_exp : Env.t -> unit exp -> tannot exp
+val infer_exp : Env.t -> uannot exp -> tannot exp
 
-val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit exp list
+val infer_pat : Env.t -> uannot pat -> tannot pat * Env.t * uannot exp list
 
-val infer_lexp : Env.t -> unit lexp -> tannot lexp
+val infer_lexp : Env.t -> uannot lexp -> tannot lexp
 
-val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
+val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp
 
-val check_funcl : Env.t -> 'a funcl -> typ -> tannot funcl
+val check_funcl : Env.t -> uannot funcl -> typ -> tannot funcl
 
-val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
+val check_fundef : Env.t -> uannot fundef -> tannot def list * Env.t
 
-val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
+val check_val_spec : Env.t -> uannot val_spec -> tannot def list * Env.t
 
 val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 
@@ -382,12 +389,12 @@ val subtype_check : Env.t -> typ -> typ -> bool
 
 val is_enum_member : id -> Env.t -> bool
 
-val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
+val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp list
 
 (** Variant that doesn't introduce new guards for literal patterns,
    but raises a type error instead.  This should always be safe to use
    on patterns that have previously been type checked. *)
-val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
+val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
 
 val typ_error : Env.t -> Ast.l -> string -> 'a
 
@@ -502,13 +509,13 @@ Some invariants that will hold of a fully checked AST are:
    check throws type_errors rather than Sail generic errors from
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
-val check : Env.t -> 'a ast -> tannot ast * Env.t
+val check : Env.t -> uannot ast -> tannot ast * Env.t
 
-val check_defs : Env.t -> 'a def list -> tannot def list * Env.t
+val check_defs : Env.t -> uannot def list -> tannot def list * Env.t
 
 (** The same as [check], but exposes the intermediate type-checking
    environments so we don't have to always re-check the entire AST *)
-val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
+val check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t

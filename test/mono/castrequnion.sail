@@ -1,8 +1,6 @@
 default Order dec
 $include <prelude.sail>
-
-val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
-val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
+$include <mono_rewrites.sail>
 
 val foo : forall 'm 'n, 'm in {8,16} & 'n in {16,32,64}. (implicit('n), bits('m)) -> option(bits('n)) effect pure
 
@@ -19,8 +17,6 @@ union Result ('a : Type) = {
   Complaint : string
 }
 
-/* Getting ahead of myself: the 2*'n isn't supported yet, although shouldn't it end up in the form below?
-*/
 val bar : forall 'n, 'n in {8,16,32}. bits('n) -> Result(bits(2*'n))
 
 function bar(x) =
@@ -29,16 +25,14 @@ function bar(x) =
    16 => Value(x@x, unsigned(x)),
    32 => Value(sail_sign_extend(x,64), unsigned(x))
   }
-/*
-val bar : forall 'n 'm, 'n in {8,16,32} & 'm == 2*'n. bits('n) -> Result(bits('m))
 
-function bar(x) =
-  match 'n {
-    8 => Complaint("No bytes"),
-   16 => Value(x@x, unsigned(x)),
-   32 => Value(sail_sign_extend(x,64), unsigned(x))
-  }
-*/
+val baz : forall 'n, 'n in {8,16,32}. bits('n) -> Result(bits(2*'n))
+
+function baz(x) = {
+  if 'n == 16 then Value(x@x, unsigned(x))
+  else if 'n == 32 then Value(sail_sign_extend(x,64), unsigned(x))
+  else Complaint("No bytes")
+}
 
 val cmp : forall 'n. (option(bits('n)), option(bits('n))) -> bool
 

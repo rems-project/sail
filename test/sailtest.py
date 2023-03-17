@@ -32,6 +32,9 @@ def get_sail_dir():
             print(p.stderr)
             sys.exit(1)
 
+def print_ok(name):
+    print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.PASS, 'ok', color.END))
+            
 def get_sail():
     try:
         return os.environ['SAIL']

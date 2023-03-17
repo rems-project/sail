@@ -87,7 +87,7 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id, _), (_, tannot))) ->
+      | DEF_register (DEC_aux(DEC_reg (typ, id, _), (_, tannot))) ->
          let env = match destruct_tannot tannot with
            | Some (env, _) -> env
            | _ -> Env.empty
@@ -137,7 +137,7 @@ let generate_regstate registers =
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
   in
-  [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
+  [DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot)))]
 
 let generate_initial_regstate defs =
   let registers = find_registers defs in
@@ -187,7 +187,7 @@ let generate_initial_regstate defs =
          in
          "[" ^ (String.concat ", " (elems len)) ^ "]"
       | Typ_app (id, args) -> Bindings.find id vals args
-      | Typ_tup typs ->
+      | Typ_tuple typs ->
          "(" ^ (String.concat ", " (List.map (lookup_init_val vals) typs)) ^ ")"
       | Typ_exist (_, _, typ) -> lookup_init_val vals typ
       | _ -> raise Not_found

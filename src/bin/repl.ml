@@ -555,7 +555,7 @@ let handle_input' istate input =
            begin match args with
            | v :: "=" :: args ->
               let exp = Initial_check.exp_of_string (String.concat " " args) in
-              let defs, env = Type_check.check_defs istate.env [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
+              let defs, env = Type_check.check_defs istate.env [DEF_let (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
               { istate with ast = append_ast_defs istate.ast defs; env = env }
            | _ ->
               failwith "Invalid arguments for :let";
@@ -593,7 +593,7 @@ let handle_input' istate input =
         | ":sync_script" ->
            { istate with ast = !(istate.ref_state).ast; effect_info = !(istate.ref_state).effect_info; env = !(istate.ref_state).env }
         | ":recheck" | ":recheck_types" ->
-           let ast, env = Type_check.check Type_check.initial_env istate.ast in
+           let ast, env = Type_check.check Type_check.initial_env (Type_check.strip_ast istate.ast) in
            { istate with env = env; ast = ast }
         | _ ->
            match Interactive.get_command cmd with

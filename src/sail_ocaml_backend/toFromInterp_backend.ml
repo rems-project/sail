@@ -85,7 +85,7 @@ let maybe_zencode_upper s = if !lem_mode then String.capitalize_ascii s else zen
 let rec rewriteExistential (kids : kinded_id list) (Typ_aux (typ_aux, annot) as typ) =
   print_endline (string_of_typ typ);
   match typ_aux with
-  | Typ_tup typs -> Typ_aux (Typ_tup (List.map (rewriteExistential kids) typs), annot)
+  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map (rewriteExistential kids) typs), annot)
   | Typ_exist _ -> Reporting.unreachable annot __POS__ "nested Typ_exist in rewriteExistential"
   | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)])
        when (string_of_id id = "atom" || string_of_id id = "int") ->
@@ -102,7 +102,7 @@ let rec rewriteExistential (kids : kinded_id list) (Typ_aux (typ_aux, annot) as 
 
 let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   let fromValueArgs (Typ_aux (typ_aux, _)) = match typ_aux with
-    | Typ_tup typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))])
+    | Typ_tuple typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))])
     | _ -> brackets (string "v0")
   in
   let fromValueKid (Kid_aux ((Var name), _)) =
@@ -136,7 +136,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | Typ_fn _ -> parens (string "failwith \"fromValueTyp: Typ_fn arm unimplemented\"")
     | Typ_bidir _ -> parens (string "failwith \"fromValueTyp: Typ_bidir arm unimplemented\"")
     | Typ_exist (kids, _, t) -> parens (fromValueTyp (rewriteExistential kids t) arg_name)
-    | Typ_tup typs -> parens (string ("match " ^ arg_name ^ " with V_tuple ") ^^
+    | Typ_tuple typs -> parens (string ("match " ^ arg_name ^ " with V_tuple ") ^^
                                 brackets (separate (string ";" ^^ space)
                                           (List.mapi (fun i _ -> string (arg_name ^ "_tup" ^ string_of_int i)) typs)) ^^
                                   (string " -> ") ^^
@@ -144,7 +144,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in
   let fromValueVals ((Typ_aux (typ_aux, l)) as typ) = match typ_aux with
-    | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
+    | Typ_tuple typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
     | _ -> fromValueTyp typ "v0"
   in
   let fromValueTypq (QI_aux (qi_aux, _)) = match qi_aux with
@@ -260,7 +260,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
 
 let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   let toValueArgs (Typ_aux (typ_aux, _)) = match typ_aux with
-    | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))
+    | Typ_tuple typs -> parens (separate comma_sp (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))
     | _ -> parens (string "v0")
   in
   let toValueKid (Kid_aux ((Var name), _)) =
@@ -294,7 +294,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | Typ_fn _ -> parens (string "failwith \"toValueTyp: Typ_fn arm unimplemented\"")
     | Typ_bidir _ -> parens (string "failwith \"toValueTyp: Typ_bidir arm unimplemented\"")
     | Typ_exist (kids, _, t) -> parens (toValueTyp (rewriteExistential kids t) arg_name)
-    | Typ_tup typs -> parens (string ("match " ^ arg_name ^ " with ") ^^
+    | Typ_tuple typs -> parens (string ("match " ^ arg_name ^ " with ") ^^
                                 parens (separate comma_sp (List.mapi (fun i _ -> string (arg_name ^ "_tup" ^ string_of_int i)) typs)) ^^
                                   (string " -> V_tuple ") ^^
                                     brackets (separate (string ";" ^^ space)
@@ -302,7 +302,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in
   let toValueVals ((Typ_aux (typ_aux, _)) as typ) = match typ_aux with
-    | Typ_tup typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i typ -> toValueTyp typ ("v" ^ (string_of_int i))) typs))])
+    | Typ_tuple typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i typ -> toValueTyp typ ("v" ^ (string_of_int i))) typs))])
     | _ -> brackets (toValueTyp typ "v0")
   in
   let toValueTypq (QI_aux (qi_aux, _)) = match qi_aux with

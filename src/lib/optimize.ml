@@ -88,10 +88,10 @@ let rec last_env = function
   | _ :: xs -> last_env xs
     
 let recheck ({ defs; _} as ast) =
-  let defs = Type_check.check_with_envs Type_check.initial_env defs in
+  let defs = Type_check.check_with_envs Type_check.initial_env (List.map Type_check.strip_def defs) in
 
   let rec find_optimizations = function
-    | ([DEF_pragma ("optimize", pragma, p_l)], env) :: ([DEF_spec vs as def1], _) :: defs ->
+    | ([DEF_pragma ("optimize", pragma, p_l)], env) :: ([DEF_val vs as def1], _) :: defs ->
        let id = id_of_val_spec vs in
        let args = Str.split (Str.regexp " +") (String.trim pragma) in
        begin match args with
@@ -112,7 +112,7 @@ let recheck ({ defs; _} as ast) =
                let current_id = append_id id ("_unroll_" ^ string_of_int i) in
                let next_id = if i = n then current_id else append_id id ("_unroll_" ^ string_of_int (i + 1)) in
                (* Create a valspec for the new unrolled function *)
-               specs := !specs @ [DEF_spec (rename_valspec current_id vs)];
+               specs := !specs @ [DEF_val (rename_valspec current_id vs)];
                (* Then duplicate it's function body and make it call the next unrolled function *)
                bodies := !bodies @ [rewrite_def (rw_defs next_id) (DEF_fundef (rename_fundef current_id fdef))]
              done;

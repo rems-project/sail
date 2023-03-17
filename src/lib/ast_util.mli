@@ -71,6 +71,40 @@ open Ast
 open Ast_defs
 module Big_int = Nat_big_num
 
+(** {1 Untyped AST annotations and locations} *)
+
+(** The type of annotations for untyped AST nodes. When expressions
+   are type-checked the untyped annotations are replaced with typed
+   annotations {!Type_check.tannot}. *)
+type uannot
+
+val empty_uannot : uannot
+
+(** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
+    {@sail[
+    $[attribute argument] expression
+    ]}
+    The location argument should be a span that corresponds to the attribute itself, and not
+    include the expression.
+*)
+val add_attribute : l -> string -> string -> uannot -> uannot
+
+(** The empty annotation (as a location + uannot] pair). Should be used
+   carefully because it can result in unhelpful error messgaes. However
+   a common pattern is generating code with [no_annot], then adding location
+   information with the various [locate_] functions in this module. *)
+val no_annot : l * uannot
+
+
+(** [gen_loc l] takes a location l and generates a location which
+   means 'generated/derived from location l'. This is useful for debugging
+   errors that occur in generated code. *)
+val gen_loc : Parse_ast.l -> Parse_ast.l
+
+val is_gen_loc : Parse_ast.l -> bool
+
+(** {1 Variable information} *)
+  
 type mut = Immutable | Mutable
 
 (** [lvar] is the type of variables - they can either be registers,
@@ -80,48 +114,37 @@ type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
 val is_unbound : 'a lvar -> bool
                                                                           
-(** Note: Partial function -- fails for Unknown lvars *)
+(** Note: Partial function -- fails for {!Unbound} lvars *)
 val lvar_typ : ?loc:l -> 'a lvar -> 'a
-
-(** The empty annotation. Should be used carefully because it can
-   result in unhelpful error messgaes. However a common pattern is
-   generating code with [no_annot], then adding location information
-   with the various [locate_] functions in this module. *)
-val no_annot : unit annot
-
-(** [gen_loc l] takes a location l and generates a location which
-   means 'generated/derived from location l'. This is useful for debugging
-   errors that occur in generated code. *)
-val gen_loc : Parse_ast.l -> Parse_ast.l
-
-val is_gen_loc : Parse_ast.l -> bool
   
-(** {2 Functions for building (untyped) AST elements} *)
+(** {1 Functions for building and destructuring untyped AST elements} *)
 
+(** {2 Functions for building untyped AST elements} *)
+  
 val mk_id : string -> id
 val mk_kid : string -> kid
 val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
-val mk_exp : ?loc:l -> unit exp_aux -> unit exp
-val mk_pat : unit pat_aux -> unit pat
-val mk_mpat : unit mpat_aux -> unit mpat
-val mk_pexp : ?loc:l -> unit pexp_aux -> unit pexp
-val mk_mpexp : unit mpexp_aux -> unit mpexp
-val mk_lexp : unit lexp_aux -> unit lexp
+val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
+val mk_pat : uannot pat_aux -> uannot pat
+val mk_mpat : uannot mpat_aux -> uannot mpat
+val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
+val mk_mpexp : uannot mpexp_aux -> uannot mpexp
+val mk_lexp : uannot lexp_aux -> uannot lexp
 val mk_lit : lit_aux -> lit
-val mk_lit_exp : lit_aux -> unit exp
+val mk_lit_exp : lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
-val mk_funcl : id -> unit pat -> unit exp -> unit funcl
-val mk_fundef : (unit funcl) list -> unit def
-val mk_val_spec : val_spec_aux -> unit def
+val mk_funcl : id -> uannot pat -> uannot exp -> uannot funcl
+val mk_fundef : (uannot funcl) list -> uannot def
+val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
 val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
-val mk_fexp : id -> unit exp -> unit fexp
-val mk_letbind : unit pat -> unit exp -> unit letbind
+val mk_fexp : id -> uannot exp -> uannot fexp
+val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 
 val inc_ord : order
@@ -143,7 +166,7 @@ val unaux_constraint : n_constraint -> n_constraint_aux
    typ)] or [None] if the pattern does not match. *)
 val untyp_pat : 'a pat -> 'a pat * typ option
 
-(** Same as [untyp_pat], but for [E_cast] nodes *)
+(** Same as [untyp_pat], but for [E_typ] nodes *)
 val uncast_exp : 'a exp -> 'a exp * typ option
 
 (** {2 Utilites for working with kinded_ids} *)
@@ -167,7 +190,7 @@ val is_typ_arg_typ : typ_arg -> bool
 val is_typ_arg_order : typ_arg -> bool
 val is_typ_arg_bool : typ_arg -> bool
   
-(** {2 Sail builtin types} *)
+(** {2 Sail built-in types} *)
 
 val unknown_typ : typ
 val int_typ : typ
@@ -197,7 +220,7 @@ val is_vector_typ : typ -> bool
 val is_bit_typ : typ -> bool
 val is_bitvector_typ : typ -> bool
 
-(** {2 Simplifcation of numeric expressions and constraints}
+(** {1 Simplifcation of numeric expressions and constraints}
 
    These functions simplify nexps and n_constraints using various
    basic rules. In general they will guarantee to reduce constant
@@ -214,7 +237,55 @@ val constraint_conj : n_constraint -> n_constraint list
 (** Same as constraint_conj but for disjunctions *)
 val constraint_disj : n_constraint -> n_constraint list
 
-(** {2 Set and Map modules for various AST elements} *)
+type effect
+ 
+val no_effect : effect
+val monadic_effect : effect
+
+val effectful : effect -> bool
+
+val equal_effects : effect -> effect -> bool
+val subseteq_effects : effect -> effect -> bool
+val union_effects : effect -> effect -> effect
+     
+(** {2 Functions for building numeric expressions} *)
+
+val nconstant : Big_int.num -> nexp
+val nint : int -> nexp
+val nminus : nexp -> nexp -> nexp
+val nsum : nexp -> nexp -> nexp
+val ntimes : nexp -> nexp -> nexp
+val npow2 : nexp -> nexp
+val nvar : kid -> nexp
+val napp : id -> nexp list -> nexp
+val nid : id -> nexp
+
+(** {2 Functions for building numeric constraints} *)
+
+val nc_eq : nexp -> nexp -> n_constraint
+val nc_neq : nexp -> nexp -> n_constraint
+val nc_lteq : nexp -> nexp -> n_constraint
+val nc_gteq : nexp -> nexp -> n_constraint
+val nc_lt : nexp -> nexp -> n_constraint
+val nc_gt : nexp -> nexp -> n_constraint
+val nc_and : n_constraint -> n_constraint -> n_constraint
+val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_not : n_constraint -> n_constraint
+val nc_true : n_constraint
+val nc_false : n_constraint
+val nc_set : kid -> Big_int.num list -> n_constraint
+val nc_int_set : kid -> int list -> n_constraint
+val nc_var : kid -> n_constraint
+
+(** {2 Functions for building type arguments}*)
+
+val arg_nexp : ?loc:l -> nexp -> typ_arg
+val arg_order : ?loc:l -> order -> typ_arg
+val arg_typ : ?loc:l -> typ -> typ_arg
+val arg_bool : ?loc:l -> n_constraint -> typ_arg
+val arg_kopt : kinded_id -> typ_arg
+
+(** {1 Set and Map modules for various AST elements} *)
 
 module Id : sig
   type t = id
@@ -291,56 +362,8 @@ end
 module TypMap : sig
   include Map.S with type key = typ
 end
-
-type effect
  
-val no_effect : effect
-val monadic_effect : effect
-
-val effectful : effect -> bool
-
-val equal_effects : effect -> effect -> bool
-val subseteq_effects : effect -> effect -> bool
-val union_effects : effect -> effect -> effect
-     
-(** {2 Functions for building numeric expressions} *)
-
-val nconstant : Big_int.num -> nexp
-val nint : int -> nexp
-val nminus : nexp -> nexp -> nexp
-val nsum : nexp -> nexp -> nexp
-val ntimes : nexp -> nexp -> nexp
-val npow2 : nexp -> nexp
-val nvar : kid -> nexp
-val napp : id -> nexp list -> nexp
-val nid : id -> nexp
-
-(** {2 Functions for building numeric constraints} *)
-
-val nc_eq : nexp -> nexp -> n_constraint
-val nc_neq : nexp -> nexp -> n_constraint
-val nc_lteq : nexp -> nexp -> n_constraint
-val nc_gteq : nexp -> nexp -> n_constraint
-val nc_lt : nexp -> nexp -> n_constraint
-val nc_gt : nexp -> nexp -> n_constraint
-val nc_and : n_constraint -> n_constraint -> n_constraint
-val nc_or : n_constraint -> n_constraint -> n_constraint
-val nc_not : n_constraint -> n_constraint
-val nc_true : n_constraint
-val nc_false : n_constraint
-val nc_set : kid -> Big_int.num list -> n_constraint
-val nc_int_set : kid -> int list -> n_constraint
-val nc_var : kid -> n_constraint
-
-(** {2 Functions for building type arguments}*)
-
-val arg_nexp : ?loc:l -> nexp -> typ_arg
-val arg_order : ?loc:l -> order -> typ_arg
-val arg_typ : ?loc:l -> typ -> typ_arg
-val arg_bool : ?loc:l -> n_constraint -> typ_arg
-val arg_kopt : kinded_id -> typ_arg
-
-(** {2 Functions for working with type quantifiers} *)
+(** {1 Functions for working with type quantifiers} *)
 
 val quant_add : quant_item -> typquant -> typquant
 val quant_items : typquant -> quant_item list
@@ -351,7 +374,7 @@ val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
 val is_quant_kopt : quant_item -> bool
 val is_quant_constraint : quant_item -> bool
 
-(** {2 Functions to map over annotations in sub-expressions} *)
+(** {1 Functions to map over annotations in sub-expressions} *)
 
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
@@ -372,7 +395,7 @@ val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scatt
 val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def
 val map_ast_annot : ('a annot -> 'b annot) -> 'a ast -> 'b ast
 
-(** {2 Extract locations from terms} *)
+(** {1 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
 val kid_loc : kid -> Parse_ast.l
 val kopt_loc : kinded_id -> Parse_ast.l
@@ -381,7 +404,7 @@ val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
 
-(** {2 Printing utilities}
+(** {1 Printing utilities}
 
    Note: For debugging and error messages only - not guaranteed to
    produce parseable Sail, or even print all language constructs! *)
@@ -409,7 +432,7 @@ val string_of_mpat : 'a mpat -> string
 val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
-(** {2 Functions for getting identifiers from toplevel definitions} *)
+(** {1 Functions for getting identifiers from toplevel definitions} *)
 
 val id_of_fundef : 'a fundef -> id
 val id_of_mapdef : 'a mapdef -> id
@@ -426,7 +449,7 @@ val prepend_id : string -> id -> id
 val append_id : id -> string -> id
 val prepend_kid : string -> kid -> kid
 
-(** {2 Misc functions} *)
+(** {1 Misc functions} *)
 
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
@@ -493,7 +516,7 @@ val hex_to_bin : string -> string
 
 val vector_string_to_bit_list : lit -> lit list
 
-(** {2 Manipulating locations} *)
+(** {1 Manipulating locations} *)
 
 (** locate takes an expression and recursively sets the location in
    every subexpression using a function that takes the orginal
@@ -522,7 +545,7 @@ val extern_assoc : string -> extern option -> string option
    and we don't mind if it's a bit fuzzy in that context. *)
 val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a ast -> (Ast.l * 'a) option
 
-(** {2 Substitutions}
+(** {1 Substitutions}
 
    The function X_subst substitutes a type argument into something of
    type X. The type of the type argument determines which kind of type
@@ -546,7 +569,3 @@ val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
 
 val simple_string_of_loc : Parse_ast.l -> string
-
-(** Attach comments produced by the lexer into their nearest nodes in
-   the abstract syntax tree *)
-val attach_comments : Lexer.comment list -> 'a def list -> 'a def list

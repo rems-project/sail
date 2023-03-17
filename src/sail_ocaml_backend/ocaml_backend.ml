@@ -135,7 +135,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
      let farg = gensym () in
      separate space [string "string_of_list \", \""; parens (separate space [string "fun"; farg; string "->"; ocaml_string_typ typ farg]); arg]
   | Typ_app (_, _) -> string "\"APP\""
-  | Typ_tup typs ->
+  | Typ_tuple typs ->
      let args = List.map (fun _ -> gensym ()) typs in
      let body =
        ocaml_string_parens (separate_map ocaml_string_comma (fun (typ, arg) -> ocaml_string_typ typ arg) (List.combine typs args))
@@ -168,8 +168,8 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_id id -> ocaml_typ_id ctx id
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
-  | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typs, typ) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
+  | Typ_tuple typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
+  | Typ_fn (typs, typ) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tuple typs, l)); string "->"; ocaml_typ ctx typ]
   | Typ_bidir _ -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
@@ -222,7 +222,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
      end
   | P_lit lit -> ocaml_lit lit
   | P_typ (_, pat) -> ocaml_pat ctx pat
-  | P_tup pats -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
+  | P_tuple pats -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
   | P_list pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
@@ -273,14 +273,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
-  | E_cast (_, exp) -> ocaml_exp ctx exp
+  | E_typ (_, exp) -> ocaml_exp ctx exp
   | E_block [exp] -> ocaml_exp ctx exp
   | E_block [] -> string "()"
   | E_block exps -> begin_end (ocaml_block ctx exps)
   | E_field (exp, id) -> ocaml_atomic_exp ctx exp ^^ dot ^^ zencode ctx id
   | E_exit exp -> string "exit 0"
   | E_throw exp -> string "raise" ^^ space ^^ ocaml_atomic_exp ctx exp
-  | E_case (exp, pexps) ->
+  | E_match (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
   | E_try (exp, pexps) ->
@@ -290,9 +290,9 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   | E_if (c, t, e) -> separate space [string "if"; ocaml_atomic_exp ctx c;
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
-  | E_record fexps ->
+  | E_struct fexps ->
      enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp (record_id l exp) ctx) fexps))
-  | E_record_update (exp, fexps) ->
+  | E_struct_update (exp, fexps) ->
      enclose lbrace rbrace (separate space [ocaml_atomic_exp ctx exp;
                                             string "with";
                                             separate_map (semi ^^ space) (ocaml_fexp (record_id l exp) ctx) fexps])
@@ -368,7 +368,7 @@ and ocaml_block ctx = function
   | E_aux (E_let _, _) as exp :: exps -> ocaml_atomic_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | _ -> assert false
-and ocaml_fexp record_id ctx (FE_aux (FE_Fexp (id, exp), _)) =
+and ocaml_fexp record_id ctx (FE_aux (FE_fexp (id, exp), _)) =
   separate space [zencode_upper ctx record_id ^^ dot ^^ zencode ctx id; equals; ocaml_exp ctx exp]
 and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
@@ -392,9 +392,9 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
   | _ -> parens (ocaml_exp ctx exp)
-and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
+and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
   match lexp_aux with
-  | LEXP_cast (_, id) | LEXP_id id ->
+  | LE_typ (_, id) | LE_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
        | Register typ ->
@@ -410,22 +410,22 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
           separate space [zencode ctx id; string ":="; traced_exp]
        | _ -> separate space [zencode ctx id; string ":="; parens (ocaml_exp ctx exp)]
      end
-  | LEXP_deref ref_exp ->
+  | LE_deref ref_exp ->
      separate space [ocaml_atomic_exp ctx ref_exp; string ":="; parens (ocaml_exp ctx exp)]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
-and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
+and ocaml_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
-  | LEXP_cast _ | LEXP_id _ -> ocaml_atomic_lexp ctx lexp
-  | LEXP_deref exp -> ocaml_exp ctx exp
+  | LE_typ _ | LE_id _ -> ocaml_atomic_lexp ctx lexp
+  | LE_deref exp -> ocaml_exp ctx exp
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
-and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
+and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with
-  | LEXP_cast (_, id) -> zencode ctx id
-  | LEXP_id id -> zencode ctx id
+  | LE_typ (_, id) -> zencode ctx id
+  | LE_id id -> zencode ctx id
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
        when Id.compare id (mk_id "initialize_registers") = 0 ->
      inits
   | _ :: defs -> get_initialize_registers defs
@@ -433,7 +433,7 @@ let rec get_initialize_registers = function
 
 let initial_value_for id inits =
   let find_reg = function
-    | E_aux (E_assign (LEXP_aux (LEXP_id reg_id, _), init), _) when Id.compare id reg_id = 0 -> Some init
+    | E_aux (E_assign (LE_aux (LE_id reg_id, _), init), _) when Id.compare id reg_id = 0 -> Some init
     | _ -> None
   in
   match Util.option_first find_reg inits with
@@ -460,9 +460,9 @@ let function_header () =
 
 let funcls_id = function
   | [] -> failwith "Ocaml: empty function"
-  | FCL_aux (FCL_Funcl (id, _),_) :: _ -> id
+  | FCL_aux (FCL_funcl (id, _),_) :: _ -> id
 
-let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pexp), _)) =
+let ocaml_funcl_match ctx (FCL_aux (FCL_funcl (id, pexp), _)) =
   ocaml_pexp ctx pexp
 
 let rec ocaml_funcl_matches ctx = function
@@ -502,7 +502,7 @@ let ocaml_funcls ctx =
   in
   function
   | [] -> failwith "Ocaml: empty function"
-  | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
+  | [FCL_aux (FCL_funcl (id, pexp),_)] ->
      if Bindings.mem id ctx.externs
      then string ("(* Omitting externed function " ^ string_of_id id ^ " *)") ^^ hardline
      else
@@ -532,7 +532,7 @@ let ocaml_funcls ctx =
        let annot_pat =
          let pat =
            if KidSet.is_empty kids then
-             parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs)))
+             parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tuple arg_typs)))
            else
              ocaml_pat ctx pat
          in
@@ -541,7 +541,7 @@ let ocaml_funcls ctx =
          else pat
        in
        let call_header = function_header () in
-       let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
+       let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tuple arg_typs)) ret_typ in
        let call =
          if KidSet.is_empty kids then
            separate space [call_header; zencode ctx id;
@@ -552,7 +552,7 @@ let ocaml_funcls ctx =
          else
            separate space [call_header; zencode ctx id; colon;
                            separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
-                           ocaml_typ ctx (mk_typ (Typ_tup arg_typs)); string "->"; ocaml_typ ctx ret_typ; equals;
+                           ocaml_typ ctx (mk_typ (Typ_tuple arg_typs)); string "->"; ocaml_typ ctx ret_typ; equals;
                            string "fun"; annot_pat; string "->";
                            sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
            ^//^ ocaml_guarded_exp ctx exp guard
@@ -573,9 +573,9 @@ let ocaml_funcls ctx =
        if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend" else ();
        let pat_sym = gensym () in
        let call_header = function_header () in
-       let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tup arg_typs)) ret_typ in
+       let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tuple arg_typs)) ret_typ in
        let call =
-         separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tup arg_typs))); equals;
+         separate space [call_header; zencode ctx id; parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tuple arg_typs))); equals;
                          sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
          ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
          ^^ rparen
@@ -697,7 +697,7 @@ let get_externs defs =
     | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
-    | DEF_spec vs :: defs -> extern_id vs :: extern_ids defs
+    | DEF_val vs :: defs -> extern_id vs :: extern_ids defs
     | def :: defs -> extern_ids defs
     | [] -> []
   in
@@ -708,12 +708,12 @@ let nf_group doc =
   group doc
 
 let ocaml_def ctx def = match def with
-  | DEF_reg_dec ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
+  | DEF_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | DEF_internal_mutrec fds ->
      separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
   | DEF_type td -> nf_group (ocaml_typedef ctx td)
-  | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
+  | DEF_let lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
 
 let val_spec_typs defs =
@@ -723,7 +723,7 @@ let val_spec_typs defs =
     | VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
-    | DEF_spec vs :: defs -> val_spec_typ vs; vs_typs defs
+    | DEF_val vs :: defs -> val_spec_typ vs; vs_typs defs
     | _ :: defs -> vs_typs defs
     | [] -> []
   in
@@ -772,7 +772,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       -> raise (Reporting.err_unreachable (typ_loc full_typ) __POS__
                   ("Required generator for type that should not appear: " ^
                      string_of_typ full_typ))
-    | Typ_tup typs ->
+    | Typ_tuple typs ->
        List.fold_left add_req_from_typ required typs
     | Typ_exist _ ->
        raise (Reporting.err_todo (typ_loc full_typ)
@@ -891,7 +891,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
         let arg_typs = match typ with
           | Typ_aux (Typ_fn (typs,_),_) -> typs
-          | Typ_aux (Typ_tup typs,_) -> typs
+          | Typ_aux (Typ_tuple typs,_) -> typs
           | _ -> [typ]
         in
         zencode_upper ctx id ^^ space ^^

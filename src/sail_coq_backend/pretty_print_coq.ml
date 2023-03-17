@@ -369,7 +369,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> tyvars_of_nexp (orig_nexp (nvar kid))
   | Typ_fn (t1,t2) -> List.fold_left KidSet.union (trec t2) (List.map trec t1)
-  | Typ_tup ts ->
+  | Typ_tuple ts ->
      List.fold_left (fun s t -> KidSet.union s (trec t))
        KidSet.empty ts
   | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
@@ -624,7 +624,7 @@ let rec doc_typ_fns ctx env =
          if atyp_needed then parens tpp else tpp
       | _ -> tup_typ atyp_needed ty
     and tup_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_tup typs ->
+      | Typ_tuple typs ->
          parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
@@ -663,7 +663,7 @@ let rec doc_typ_fns ctx env =
          then string "register"
          else*) doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id
       | Typ_var v -> doc_var ctx v
-      | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+      | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
          let tpp = typ ty in
@@ -740,7 +740,7 @@ let rec doc_typ_fns ctx env =
                            ampersand;
                            doc_arithfact ctx env ~exists:(List.map kopt_kid kopts) nc])
             end
-          | Typ_aux (Typ_tup tys,l) -> begin
+          | Typ_aux (Typ_tuple tys,l) -> begin
               (* TODO: boolean existentials *)
               let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
               let should_keep (Typ_aux (ty,_)) =
@@ -768,7 +768,7 @@ let rec doc_typ_fns ctx env =
                      colon ^/^ parens (separate (string " * ") types)
               in
               group (braces (group (pat ^^ space ^^ ampersand) ^/^
-                               group (tup_typ true (Typ_aux (Typ_tup out_tys,l)) ^^
+                               group (tup_typ true (Typ_aux (Typ_tuple out_tys,l)) ^^
                                         string "%type ") ^^
                                  ampersand ^/^
                                    doc_arithfact ctx env nc))
@@ -1050,7 +1050,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_var _
     -> NexpSet.empty
   | Typ_fn (t1,t2) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
-  | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
+  | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
   | Typ_app (Id_aux (Id "bitvector",_),
              [A_aux (A_nexp size_nexp,_); _])
   | Typ_app (Id_aux (Id "itself",_),
@@ -1101,7 +1101,7 @@ let filter_dep_tuple kopts vals_typs =
 
 let filter_dep_pattern_tuple ctxt kopts (P_aux (p,ann) as pat) typ =
   match p, typ with
-  | P_tup ps, Typ_aux (Typ_tup ts,l) ->
+  | P_tuple ps, Typ_aux (Typ_tuple ts,l) ->
      let ex_pat_typs, tup_pat_typs = filter_dep_tuple kopts (List.combine ps ts) in
      let map_ex_pat x =
        match x with
@@ -1116,8 +1116,8 @@ let filter_dep_pattern_tuple ctxt kopts (P_aux (p,ann) as pat) typ =
        | [p] -> p
        | _ -> parens (separate (string ", ") coq_typats)
      in
-     let coq_pat = P_tup (List.map fst tup_pat_typs) in
-     let coq_typ = Typ_aux (Typ_tup (List.map snd tup_pat_typs), l) in
+     let coq_pat = P_tuple (List.map fst tup_pat_typs) in
+     let coq_typ = Typ_aux (Typ_tuple (List.map snd tup_pat_typs), l) in
      Some coq_typat, P_aux (coq_pat,ann), coq_typ
   | _ -> None, pat, typ
 
@@ -1149,7 +1149,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
           an extra tuple in their type; expand that here if necessary.
           TODO: this should go away if we enforce proper arities. *)
        let arg_typs = match pats, arg_typs with
-         | _::_::_, [Typ_aux (Typ_tup typs,_)] -> typs
+         | _::_::_, [Typ_aux (Typ_tuple typs,_)] -> typs
          | _,_ -> arg_typs
        in
        let pats_pp = separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs) in
@@ -1179,9 +1179,9 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
      | P_vector_concat pats ->
         raise (Reporting.err_unreachable l __POS__
                  "vector concatenation patterns should have been removed before pretty-printing")
-     | P_tup pats  ->
+     | P_tuple pats  ->
         let typs = match typ with
-          | Typ_aux (Typ_tup typs, _) -> typs
+          | Typ_aux (Typ_tuple typs, _) -> typs
           | Typ_aux (Typ_exist _,_) ->
              raise (Reporting.err_todo l "existential types not yet supported here")
           | _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern doesn't have tuple type")
@@ -1382,7 +1382,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
     | P_app (_,ps)
     | P_vector ps
     | P_vector_concat ps
-    | P_tup ps
+    | P_tuple ps
     | P_list ps
     | P_string_append ps
       -> List.fold_left merge_pat m ps
@@ -1440,12 +1440,12 @@ let doc_exp, doc_let =
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
-    | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
+    | E_assign((LE_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        (match le_act (*, t, tag*) with
-        | LEXP_vector_range (le,e2,e3) ->
+        | LE_vector_range (le,e2,e3) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -1462,9 +1462,9 @@ let doc_exp, doc_let =
                liftR ((prefix 2 1)
                  (string "write_reg_range")
                  (align (deref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
-        | LEXP_vector (le,e2) ->
+        | LE_vector (le,e2) ->
            (match le with
-            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+            | LE_aux (LE_field ((LE_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
                  raise (report l __POS__ "indexing a register's (single bit) bitfield not supported")
                else
@@ -1477,13 +1477,13 @@ let doc_exp, doc_let =
                    (string call)
                    (align (doc_lexp_deref ctxt le ^/^
                      field_ref ^/^ expY e2 ^/^ expY e)))
-            | LEXP_aux (_, lannot) ->
+            | LE_aux (_, lannot) ->
                let deref = doc_lexp_deref ctxt le in
                let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot lannot)) then "write_reg_bit" else "write_reg_pos" in
                liftR ((prefix 2 1) (string call)
                (deref ^/^ expY e2 ^/^ expY e))
            )
-        | LEXP_field ((LEXP_aux (_, lannot) as le),id) ->
+        | LE_field ((LE_aux (_, lannot) as le),id) ->
           let field_ref =
             doc_id ctxt (typ_id_of (typ_of_annot lannot)) ^^
             underscore ^^
@@ -1494,7 +1494,7 @@ let doc_exp, doc_let =
              (string "write_reg_field")
              (doc_lexp_deref ctxt le ^^ space ^^
                 field_ref ^/^ expY e))
-        | LEXP_deref re ->
+        | LE_deref re ->
            liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
         | _ ->
            liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref ctxt le ^/^ expY e)))
@@ -1623,7 +1623,7 @@ let doc_exp, doc_let =
             in
             let simple_bool (E_aux (_, (l,a)) as exp) =
               let a' = mk_tannot (env_of_annot (l,a)) bool_typ in
-              E_aux (E_cast (bool_typ, exp), (l,a'))
+              E_aux (E_typ (bool_typ, exp), (l,a'))
             in
             let monad = if ctxt.is_monadic then "M" else "E" in
             let csuffix, cond, body, body_effectful =
@@ -1923,9 +1923,9 @@ let doc_exp, doc_let =
        let lit_pp = doc_lit lit in
        maybe_cast "Literal" (typ_of full_exp) lit_pp
     | E_tuple _
-    | E_cast(_, E_aux (E_tuple _, _)) ->
+    | E_typ(_, E_aux (E_tuple _, _)) ->
        construct_dep_pairs ctxt (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
-    | E_cast(typ,e) ->
+    | E_typ(typ,e) ->
        let env = env_of_annot (l,annot) in
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
        let outer_typ = expand_range_type outer_typ in
@@ -1969,7 +1969,7 @@ let doc_exp, doc_let =
          else epp
        in
        if aexp_needed then parens epp else epp
-    | E_record fexps ->
+    | E_struct fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_))
          | Some (env, Typ_aux (Typ_app (tid, _), _)) ->
@@ -1980,7 +1980,7 @@ let doc_exp, doc_let =
                                           (semi_sp ^^ break 1)
                                           (doc_fexp ctxt recordtyp) fexps)) in
        if aexp_needed then parens epp else epp
-    | E_record_update(e, fexps) ->
+    | E_struct_update(e, fexps) ->
        let recordtyp, env = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_))
          | Some (env, Typ_aux (Typ_app (tid, _), _))
@@ -1996,7 +1996,7 @@ let doc_exp, doc_let =
                   v, separate space [string "let "; doc_id ctxt v; coloneq; top_exp ctxt true e; string "in"] ^^ break 1
          in
          let doc_field (_,id) =
-           match List.find (fun (FE_aux (FE_Fexp (id',_),_)) -> Id.compare id id' == 0) fexps with
+           match List.find (fun (FE_aux (FE_fexp (id',_),_)) -> Id.compare id id' == 0) fexps with
            | fexp -> doc_fexp ctxt recordtyp fexp
            | exception Not_found ->
                let fname =
@@ -2033,7 +2033,7 @@ let doc_exp, doc_let =
         "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps ->
        brackets (separate_map (semi ^^ break 1) (expN) exps)
-    | E_case(e,pexps) ->
+    | E_match(e,pexps) ->
        let only_integers e = expY e in
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
@@ -2180,7 +2180,7 @@ let doc_exp, doc_let =
     let rec aux want_parens (E_aux (e,_) as exp) typ =
       match e with
       | E_tuple exps
-      | E_cast (_, E_aux (E_tuple exps,_)) ->
+      | E_typ (_, E_aux (E_tuple exps,_)) ->
          let typs = List.map general_typ_of exps in
          parens (separate (string ", ") (List.map2 (aux false) exps typs))
       | _ ->
@@ -2211,11 +2211,11 @@ let doc_exp, doc_let =
     let t_pp = top_exp ctxt false t in
     let else_pp = match e with
       | E_aux (E_if (c', t', e'), _)
-      | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
+      | E_aux (E_typ (_, E_aux (E_if (c', t', e'), _)), _) ->
          if_exp ctxt full_env full_typ true c' t' e'
       (* Special case to prevent current arm decoder becoming a staircase *)
       (* TODO: replace with smarter pretty printing *)
-      | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
+      | E_aux (E_internal_plet (pat,exp1,E_aux (E_typ (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
          string "else" ^/^ top_exp ctxt false (E_aux (E_internal_plet (pat,exp1,exp2),ann))
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
@@ -2242,13 +2242,13 @@ let doc_exp, doc_let =
     | LB_val(P_aux (P_typ (typ,pat),_),(E_aux (_,e_ann) as e)) ->
        prefix 2 1
               (separate space [string "let"; squote ^^ parens (doc_pat ctxt true false (pat, typ)); coloneq])
-              (top_exp ctxt false (E_aux (E_cast (typ,e),e_ann)))
+              (top_exp ctxt false (E_aux (E_typ (typ,e),e_ann)))
     | LB_val(pat,e) ->
        prefix 2 1
               (separate space [string "let"; squote ^^ parens (doc_pat ctxt true false (pat, typ_of e)); coloneq])
               (top_exp ctxt false e)
 
-  and doc_fexp ctxt recordtyp (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp ctxt recordtyp (FE_aux(FE_fexp(id,e),_)) =
     let fname =
       if prefix_recordtype && string_of_id recordtyp <> "regstate"
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id ctxt id
@@ -2265,12 +2265,12 @@ let doc_exp, doc_let =
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
 
-  and doc_lexp_deref ctxt ((LEXP_aux(lexp,(l,annot)))) = match lexp with
-    | LEXP_field (le,id) ->
+  and doc_lexp_deref ctxt ((LE_aux(lexp,(l,annot)))) = match lexp with
+    | LE_field (le,id) ->
        parens (separate empty [doc_lexp_deref ctxt le;dot;doc_id ctxt id])
-    | LEXP_id id -> doc_id ctxt id ^^ string "_ref"
-    | LEXP_cast (typ,id) -> doc_id ctxt id ^^ string "_ref"
-    | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
+    | LE_id id -> doc_id ctxt id ^^ string "_ref"
+    | LE_typ (typ,id) -> doc_id ctxt id ^^ string "_ref"
+    | LE_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
     | _ ->
        raise (Reporting.err_unreachable l __POS__ ("doc_lexp_deref: Unsupported lexp"))
              (* expose doc_exp and doc_let *)
@@ -2285,7 +2285,7 @@ let types_used_with_generic_eq defs =
     | Typ_id id -> IdSet.add id idset
     | Typ_app (id,args) ->
        List.fold_left add_typ_arg (IdSet.add id idset) args
-    | Typ_tup ts -> List.fold_left add_typ idset ts
+    | Typ_tuple ts -> List.fold_left add_typ idset ts
     | _ -> idset
   and add_typ_arg idset (A_aux (ta,_)) =
     match ta with
@@ -2307,7 +2307,7 @@ let types_used_with_generic_eq defs =
           | _ -> typs
         in typs', E_aux (exp,annot) }
   in
-  let typs_req_funcl (FCL_aux (FCL_Funcl (_,pexp), _)) =
+  let typs_req_funcl (FCL_aux (FCL_funcl (_,pexp), _)) =
     fst (Rewriter.fold_pexp alg pexp)
   in
   let typs_req_fundef (FD_aux (FD_function (_,_,fcls),_)) =
@@ -2315,17 +2315,17 @@ let types_used_with_generic_eq defs =
   in
   let typs_req_def = function
     | DEF_type _
-    | DEF_spec _
+    | DEF_val _
     | DEF_fixity _
     | DEF_overload _
     | DEF_default _
     | DEF_pragma _
-    | DEF_reg_dec _
+    | DEF_register _
       -> IdSet.empty
     | DEF_fundef fd -> typs_req_fundef fd
     | DEF_internal_mutrec fds ->
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
-    | DEF_val lb ->
+    | DEF_let lb ->
        fst (Rewriter.fold_letbind alg lb)
     | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _) as d ->
        unreachable (def_loc d) __POS__
@@ -2588,10 +2588,10 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   let env = env_of_annot annot in
   let identity = (fun body -> body) in
   match paux, typs with
-  | P_tup [], _ ->
+  | P_tuple [], _ ->
      let annot = (l, mk_tannot Env.empty unit_typ) in
      [P_aux (P_lit (mk_lit L_unit), annot), unit_typ], identity
-  | P_tup pats, _ -> List.combine pats typs, identity
+  | P_tuple pats, _ -> List.combine pats typs, identity
   | P_wild, _ ->
      let wild typ = P_aux (P_wild, (l, mk_tannot env typ)), typ in
      List.map wild typs, identity
@@ -2685,10 +2685,10 @@ let all_ids pexp =
         IdSet.add id (IdSet.union ids1 ids2));
       e_for = (fun (id,ids1,ids2,ids3,_,ids4) ->
         IdSet.add id (IdSet.union ids1 (IdSet.union ids2 (IdSet.union ids3 ids4))));
-      lEXP_id = IdSet.singleton;
-      lEXP_memory = (fun (id,ids) ->
+      le_id = IdSet.singleton;
+      le_app = (fun (id,ids) ->
         List.fold_left IdSet.union (IdSet.singleton id) ids);
-      lEXP_cast = (fun (_,id) -> IdSet.singleton id);
+      le_typ = (fun (_,id) -> IdSet.singleton id);
       pat_alg = { (pure_pat_alg IdSet.empty IdSet.union) with
         p_as = (fun (ids,id) -> IdSet.add id ids);
         p_id = IdSet.singleton;
@@ -2769,7 +2769,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set (FCL_aux(FCL_funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, _) = match typ with
@@ -2948,7 +2948,7 @@ let doc_funcl_body ctxt (exp, is_monadic, fixupspp) =
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
-  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
+  | (FCL_aux (FCL_funcl (id,_),_))::_ -> id
 
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
@@ -2957,7 +2957,7 @@ let doc_fundef_rhs types_mod avoid_target_names effect_info ?(mutrec=NotMutrec) 
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
   | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info mutrec r ~rec_set funcl
-  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
+  | (FCL_aux (FCL_funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
 let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
@@ -2982,7 +2982,7 @@ let doc_funcl types_mod avoid_target_names effect_info mutrec r funcl =
 let doc_fundef types_mod avoid_target_names effect_info (FD_aux(FD_function(r, typa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
+  | [FCL_aux (FCL_funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
      begin
        let pre,body = doc_funcl types_mod avoid_target_names effect_info NotMutrec r funcl in
@@ -3150,7 +3150,7 @@ let doc_val_spec unimplemented avoid_target_names effect_info (VS_aux (VS_val_sp
     let typ_env = env_of_annot (l,ann) in
     (* The type checker will expand the type scheme, and we need to look at the
        environment afterwards to find it. *)
-    let _, next_env = check_val_spec typ_env vs in
+    let _, next_env = check_val_spec typ_env (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id effect_info) in
     group (separate space
@@ -3190,8 +3190,8 @@ let doc_val avoid_target_names pat exp =
        | None -> typpp, exp
        | Some _ ->
           empty, match exp with
-          | E_aux (E_cast (typ',_),_) when alpha_equivalent env typ typ' -> exp
-          | _ -> E_aux (E_cast (typ,exp), (Parse_ast.Unknown, mk_tannot env typ))
+          | E_aux (E_typ (typ',_),_) when alpha_equivalent env typ typ' -> exp
+          | _ -> E_aux (E_typ (typ,exp), (Parse_ast.Unknown, mk_tannot env typ))
   in
   let idpp = doc_id bare_ctxt id in
   let base_pp = doc_exp ctxt false exp ^^ dot in
@@ -3201,16 +3201,16 @@ let doc_val avoid_target_names pat exp =
 
 let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_info def =
   match def with
-  | DEF_spec v_spec -> doc_val_spec unimplemented avoid_target_names effect_info v_spec
+  | DEF_val v_spec -> doc_val_spec unimplemented avoid_target_names effect_info v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> doc_typdef types_mod avoid_target_names generic_eq_types t_def
-  | DEF_reg_dec dec -> group (doc_dec avoid_target_names dec)
+  | DEF_register dec -> group (doc_dec avoid_target_names dec)
 
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef types_mod avoid_target_names effect_info fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec types_mod avoid_target_names effect_info (ids_of_def def) fundefs ^/^ hardline
-  | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val avoid_target_names pat exp
+  | DEF_let (LB_aux (LB_val (pat, exp), _)) -> doc_val avoid_target_names pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_pragma _ -> empty
@@ -3235,11 +3235,11 @@ let find_unimplemented defs =
   let adjust_fundef unimplemented (FD_aux (FD_function (_,_,funcls),_)) =
     match funcls with
     | [] -> unimplemented
-    | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
+    | (FCL_aux (FCL_funcl (id,_),_))::_ ->
        IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_spec (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
+    | DEF_val (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
       match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
@@ -3253,7 +3253,7 @@ let find_unimplemented defs =
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_spec (VS_aux (VS_val_spec (_,_,exts,_),_)) -> begin
+    | DEF_val (VS_aux (VS_val_spec (_,_,exts,_),_)) -> begin
         match Ast_util.extern_assoc "coq" exts with
         | Some name -> StringSet.add name names
         | None -> names
@@ -3269,7 +3269,7 @@ try
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
     | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in

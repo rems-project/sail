@@ -149,7 +149,7 @@ and typ_ids' (Typ_aux (aux, _)) =
      IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
   | Typ_bidir (typ1, typ2) ->
      IdSet.union (typ_ids' typ1) (typ_ids' typ2)
-  | Typ_tup typs ->
+  | Typ_tuple typs ->
      List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
   | Typ_exist (_, _, typ) -> typ_ids' typ
 
@@ -185,7 +185,7 @@ let add_def_to_graph graph def =
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (typ, id) ->
+    | LE_typ (typ, id) ->
        IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
        begin match Env.lookup_id id env with
        | Register _ ->
@@ -196,9 +196,9 @@ let add_def_to_graph graph def =
             graph := G.add_edge self (Letbind id) !graph
           else ()
        end
-    | LEXP_memory (id, _) ->
+    | LE_app (id, _) ->
        graph := G.add_edge self (Function id) !graph
-    | LEXP_id id ->
+    | LE_id id ->
        begin match Env.lookup_id id env with
        | Register _ ->
           graph := G.add_edge self (Register id) !graph
@@ -210,7 +210,7 @@ let add_def_to_graph graph def =
        end
     | _ -> ()
     end;
-    LEXP_aux (lexp_aux, annot)
+    LE_aux (lexp_aux, annot)
   in
 
   let scan_exp self e_aux annot =
@@ -232,14 +232,14 @@ let add_def_to_graph graph def =
          graph := G.add_edge self (Function id) !graph
     | E_ref id ->
        graph := G.add_edge self (Register id) !graph
-    | E_cast (typ, _) ->
+    | E_typ (typ, _) ->
        IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
     | _ -> ()
     end;
     E_aux (e_aux, annot)
   in
   let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
-                                      lEXP_aux = (fun (l_aux, annot) -> scan_lexp self l_aux annot);
+                                      le_aux = (fun (l_aux, annot) -> scan_lexp self l_aux annot);
                                       pat_alg = rw_pat self } in
 
   let rewriters self =
@@ -294,11 +294,11 @@ let add_def_to_graph graph def =
   in
 
   let scan_outcome_def l outcome = function
-    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), _, _, _), _)) ->
+    | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), _, _, _), _)) ->
        graph := G.add_edges outcome [] !graph;
        scan_typquant outcome typq;
        IdSet.iter (fun typ_id -> graph := G.add_edge outcome (Type typ_id) !graph) (typ_ids typ)
-    | DEF_impl (FCL_aux (FCL_Funcl (_, pexp), _)) ->
+    | DEF_impl (FCL_aux (FCL_funcl (_, pexp), _)) ->
        ignore (rewrite_pexp (rewriters outcome) pexp)
     | _ ->
        Reporting.unreachable l __POS__ "Unexpected definition in outcome block"
@@ -313,14 +313,14 @@ let add_def_to_graph graph def =
   in
 
   begin match def with
-  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _, _), _)) ->
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _, _), _)) ->
      graph := G.add_edges (Mapping id) [] !graph;
      List.iter (fun gen_id ->
          graph := G.add_edges (Function gen_id) [Mapping id] !graph
        ) [append_id id "_forwards"; append_id id "_forwards_matches"; append_id id "_backwards"; append_id id "_backwards_matches"];
      scan_typquant (Mapping id) typq;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Mapping id) (Type typ_id) !graph) (typ_ids typ)
-  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
      graph := G.add_edges (Function id) [] !graph;
      scan_typquant (Function id) typq;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
@@ -333,13 +333,13 @@ let add_def_to_graph graph def =
      let id = id_of_mapdef mdef in
      graph := G.add_edges (Mapping id) [] !graph;
      ignore (rewrite_mapdef (rewriters (Mapping id)) mdef)
-  | DEF_val (LB_aux (LB_val (pat, exp), _) as lb) ->
+  | DEF_let (LB_aux (LB_val (pat, exp), _) as lb) ->
      let ids = pat_ids pat in
      IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
   | DEF_type tdef ->
      add_type_def_to_graph tdef
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, opt_exp), _)) ->
+  | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), _)) ->
      begin match opt_exp with
      | Some exp -> ignore (fold_exp (rw_exp (Register id)) exp);
      | None -> ()
@@ -367,7 +367,7 @@ let add_def_to_graph graph def =
        ) substs
   | DEF_scattered (SD_aux (sdef, _)) ->
      begin match sdef with
-     | SD_funcl (FCL_aux (FCL_Funcl (id, pexp), _)) ->
+     | SD_funcl (FCL_aux (FCL_funcl (id, pexp), _)) ->
         ignore (rewrite_pexp (rewriters (Function id)) pexp)
      | _ -> ()
      end
@@ -397,7 +397,7 @@ let id_of_typedef (TD_aux (aux, _)) =
 
 let id_of_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
-let id_of_funcl (FCL_aux (FCL_Funcl (id, _), _)) = id
+let id_of_funcl (FCL_aux (FCL_funcl (id, _), _)) = id
 
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =
@@ -412,16 +412,16 @@ let filter_ast_extra cuts g ast keep_std =
     | DEF_scattered (SD_aux (SD_funcl funcl, a)) :: defs when NM.mem (Function (id_of_funcl funcl)) g -> DEF_scattered (SD_aux (SD_funcl funcl, a)) :: filter_ast' g defs
     | DEF_scattered (SD_aux (SD_funcl _, _)) :: defs -> filter_ast' g defs
 
-    | DEF_reg_dec rdec :: defs when NM.mem (Register (id_of_reg_dec rdec)) g -> DEF_reg_dec rdec :: filter_ast' g defs
-    | DEF_reg_dec _ :: defs -> filter_ast' g defs
+    | DEF_register rdec :: defs when NM.mem (Register (id_of_reg_dec rdec)) g -> DEF_register rdec :: filter_ast' g defs
+    | DEF_register _ :: defs -> filter_ast' g defs
 
-    | DEF_spec vs :: defs when NM.mem (Function (id_of_val_spec vs)) g -> DEF_spec vs :: filter_ast' g defs
-    | DEF_spec _ :: defs -> filter_ast' g defs
+    | DEF_val vs :: defs when NM.mem (Function (id_of_val_spec vs)) g -> DEF_val vs :: filter_ast' g defs
+    | DEF_val _ :: defs -> filter_ast' g defs
 
-    | DEF_val (LB_aux (LB_val (pat, exp), _) as lb) :: defs ->
+    | DEF_let (LB_aux (LB_val (pat, exp), _) as lb) :: defs ->
        let ids = pat_ids pat |> IdSet.elements in
        if List.exists (fun id -> NM.mem (Letbind id) g) ids then
-         DEF_val lb :: filter_ast' g defs
+         DEF_let lb :: filter_ast' g defs
        else
          filter_ast' g defs
 
