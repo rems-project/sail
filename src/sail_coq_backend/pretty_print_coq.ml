@@ -2313,7 +2313,8 @@ let types_used_with_generic_eq defs =
   let typs_req_fundef (FD_aux (FD_function (_,_,fcls),_)) =
     List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
   in
-  let typs_req_def = function
+  let typs_req_def (DEF_aux (aux, _) as def) =
+    match aux with
     | DEF_type _
     | DEF_val _
     | DEF_fixity _
@@ -2327,8 +2328,8 @@ let types_used_with_generic_eq defs =
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_let lb ->
        fst (Rewriter.fold_letbind alg lb)
-    | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _) as d ->
-       unreachable (def_loc d) __POS__
+    | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ ->
+       unreachable (def_loc def) __POS__
          "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
@@ -3144,13 +3145,13 @@ let doc_axiom_typschm typ_env is_monadic l (tqs,typ) =
        arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs,typ),l))
 
-let doc_val_spec unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
+let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
   let bare_ctxt = { empty_ctxt with avoid_target_names } in
   if !opt_undef_axioms && IdSet.mem id unimplemented then
     let typ_env = env_of_annot (l,ann) in
     (* The type checker will expand the type scheme, and we need to look at the
        environment afterwards to find it. *)
-    let _, next_env = check_val_spec typ_env (strip_val_spec vs) in
+    let _, next_env = check_val_spec typ_env def_annot (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id effect_info) in
     group (separate space
@@ -3199,9 +3200,9 @@ let doc_val avoid_target_names pat exp =
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
-let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_info def =
-  match def with
-  | DEF_val v_spec -> doc_val_spec unimplemented avoid_target_names effect_info v_spec
+let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_info (DEF_aux (aux, def_annot) as def) =
+  match aux with
+  | DEF_val v_spec -> doc_val_spec def_annot unimplemented avoid_target_names effect_info v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> doc_typdef types_mod avoid_target_names generic_eq_types t_def
@@ -3227,7 +3228,7 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
     
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
@@ -3239,21 +3240,21 @@ let find_unimplemented defs =
        IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_val (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_,id,exts,_),_)),_) -> begin
       match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end
-    | DEF_internal_mutrec fds ->
+    | DEF_aux (DEF_internal_mutrec fds, _) ->
        List.fold_left adjust_fundef unimplemented fds
-    | DEF_fundef fd -> adjust_fundef unimplemented fd
+    | DEF_aux (DEF_fundef fd, _) -> adjust_fundef unimplemented fd
     | _ -> unimplemented
   in
   List.fold_left adjust_def IdSet.empty defs
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_val (VS_aux (VS_val_spec (_,_,exts,_),_)) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_,_,exts,_),_)),_) -> begin
         match Ast_util.extern_assoc "coq" exts with
         | Some name -> StringSet.add name names
         | None -> names
@@ -3269,12 +3270,12 @@ try
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
-    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
+    | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in
   let is_typ_def = function
-    | DEF_type _ -> true
+    | DEF_aux (DEF_type _, _) -> true
     | _ -> false
   in
   let exc_typ = find_exc_typ defs in

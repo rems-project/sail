@@ -781,7 +781,7 @@ let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
 let rec defs_letbinds defs =
   match defs with
   | [] -> []
-  | DEF_let lb :: defs -> lb :: defs_letbinds defs
+  | DEF_aux (DEF_let lb, _) :: defs -> lb :: defs_letbinds defs
   | _ :: defs -> defs_letbinds defs
 
 let initial_lstate =
@@ -978,7 +978,7 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) when allow_registers ->
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers ->
        begin match opt_exp with
        | None ->
           let env = Type_check.env_of_annot annot in
@@ -989,7 +989,7 @@ let rec initialize_registers allow_registers gstate =
        | Some exp ->
           { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_fundef fdef ->
+    | DEF_aux (DEF_fundef fdef, _) ->
        { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in

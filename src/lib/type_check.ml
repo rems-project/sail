@@ -4846,23 +4846,24 @@ let check_duplicate_letbinding l pat env =
   | Some id ->
      typ_error env l ("Duplicate toplevel let binding " ^ string_of_id id)
   | None -> ()
-     
-let check_letdef orig_env (LB_aux (letbind, (l, _))) =
+
+let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
   typ_print (lazy ("\nChecking top-level let" |> cyan |> clear));
-  begin
-    match letbind with
-    | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
-       check_duplicate_letbinding l pat orig_env;
-       Env.wf_typ orig_env typ_annot;
-       let checked_bind = crule check_exp orig_env bind typ_annot in
-       let tpat, env = bind_pat_no_guard orig_env pat typ_annot in
-       [DEF_let (LB_aux (LB_val (tpat, checked_bind), (l, empty_tannot)))], Env.add_toplevel_lets (pat_ids tpat) env
-    | LB_val (pat, bind) ->
-       check_duplicate_letbinding l pat orig_env;
-       let inferred_bind = irule infer_exp orig_env bind in
-       let tpat, env = bind_pat_no_guard orig_env pat (typ_of inferred_bind) in
-       [DEF_let (LB_aux (LB_val (tpat, inferred_bind), (l, empty_tannot)))], Env.add_toplevel_lets (pat_ids tpat) env
-  end
+  match letbind with
+  | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
+     check_duplicate_letbinding l pat orig_env;
+     Env.wf_typ orig_env typ_annot;
+     let checked_bind = crule check_exp orig_env bind typ_annot in
+     let tpat, env = bind_pat_no_guard orig_env pat typ_annot in
+     [DEF_aux (DEF_let (LB_aux (LB_val (tpat, checked_bind), (l, empty_tannot))), def_annot)],
+     Env.add_toplevel_lets (pat_ids tpat) env
+
+  | LB_val (pat, bind) ->
+     check_duplicate_letbinding l pat orig_env;
+     let inferred_bind = irule infer_exp orig_env bind in
+     let tpat, env = bind_pat_no_guard orig_env pat (typ_of inferred_bind) in
+     [DEF_aux (DEF_let (LB_aux (LB_val (tpat, inferred_bind), (l, empty_tannot))), def_annot)],
+     Env.add_toplevel_lets (pat_ids tpat) env
 
 let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
   match typ with
@@ -4956,8 +4957,9 @@ let infer_funtyp l env tannotopt funcls =
      end
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error env l "Cannot infer function type for unannotated function"
 
-let mk_val_spec env typq typ id =
-  DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None, false), (Parse_ast.Unknown, mk_tannot env typ)))
+(* This is used for functions and mappings that do not have an explicit type signature using val *)
+let synthesize_val_spec env typq typ id =
+  mk_def (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None, false), (Parse_ast.Unknown, mk_tannot env typ))))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -4972,7 +4974,7 @@ let check_termination_measure env arg_typs pat exp =
   let texp = check_exp env exp int_typ in
   tpat, texp
 
-let check_termination_measure_decl env (id, pat, exp) =
+let check_termination_measure_decl env def_annot (id, pat, exp) =
   let quant, typ = Env.get_val_spec id env in
   let arg_typs, l = match typ with
     | Typ_aux (Typ_fn (arg_typs, _), l) -> arg_typs, l
@@ -4980,9 +4982,9 @@ let check_termination_measure_decl env (id, pat, exp) =
   in
   let env = Env.add_typquant l quant env in
   let tpat, texp = check_termination_measure env arg_typs pat exp in
-  DEF_measure (id, tpat, texp)
+  DEF_aux (DEF_measure (id, tpat, texp), def_annot)
 
-let check_fundef env (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _))) =
+let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _))) =
   let id =
     match (List.fold_right
              (fun (FCL_aux (FCL_funcl (id, _), _)) id' ->
@@ -5021,15 +5023,16 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _))) 
   let vs_def, env =
     if not have_val_spec then
       let typ = Typ_aux (Typ_fn (vtyp_args, vtyp_ret), vl) in
-      [mk_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env
+      [synthesize_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env
     else
       [], env
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
   let env = Env.define_val_spec id env in
-  vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, empty_tannot)))], env
+  vs_def @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, empty_tannot))), def_annot)],
+  env
 
-let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
+let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
   let have_val_spec, (quant, typ), env =
     try true, Env.get_val_spec id env, env with
@@ -5053,14 +5056,14 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let vs_def, env =
     if not have_val_spec then
-      [mk_val_spec env quant (Env.expand_synonyms env typ) id], Env.add_val_spec id (quant, typ) env
+      [synthesize_val_spec env quant (Env.expand_synonyms env typ) id], Env.add_val_spec id (quant, typ) env
     else
       [], env
   in
   let mapcl_env = Env.add_typquant l quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let env = Env.define_val_spec id env in
-  vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, empty_tannot)))], env
+  vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, empty_tannot))), def_annot)], env
 
 let rec warn_if_unsafe_cast l env = function
   | Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
@@ -5080,8 +5083,8 @@ let rec warn_if_unsafe_cast l env = function
      Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
 
 (* Checking a val spec simply adds the type as a binding in the context. *)
-let check_val_spec env (VS_aux (vs, (l, _))) =
-  let annotate vs typq typ = DEF_val (VS_aux (vs, (l, mk_tannot (Env.add_typquant l typq env) typ))) in
+let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
+  let annotate vs typq typ = DEF_aux (DEF_val (VS_aux (vs, (l, mk_tannot (Env.add_typquant l typq env) typ))), def_annot) in
   let vs, id, typq, typ, env = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
@@ -5103,8 +5106,9 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   in
   [annotate vs typq typ], Env.add_val_spec id (typq, typ) env
 
-let check_default env (DT_aux (DT_order order, l)) =
-  [DEF_default (DT_aux (DT_order order, l))], Env.set_default_order order env
+let check_default env def_annot (DT_aux (DT_order order, l)) =
+  [DEF_aux (DEF_default (DT_aux (DT_order order, l)), def_annot)],
+  Env.set_default_order order env
 
 let kinded_id_arg kind_id =
   let typ_arg l arg = A_aux (arg, l) in
@@ -5142,8 +5146,8 @@ let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ
   |> Env.add_union_id v (typq, typ)
   |> Env.add_val_spec v (typq, typ)
 
-let rec check_typedef : Env.t -> uannot type_def -> (tannot def) list * Env.t =
-  fun env (TD_aux (tdef, (l, _))) ->
+let rec check_typedef : Env.t -> def_annot -> uannot type_def -> (tannot def) list * Env.t =
+  fun env def_annot (TD_aux (tdef, (l, _))) ->
   match tdef with
   | TD_abbrev (id, typq, typ_arg) ->
      begin match typ_arg with
@@ -5151,10 +5155,14 @@ let rec check_typedef : Env.t -> uannot type_def -> (tannot def) list * Env.t =
         forbid_recursive_types l (fun () -> wf_binding a_l env (typq, typ));
      | _ -> ()
      end;
-     [DEF_type (TD_aux (tdef, (l, empty_tannot)))], Env.add_typ_synonym id typq typ_arg env
+     [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)],
+     Env.add_typ_synonym id typq typ_arg env
+
   | TD_record (id, typq, fields, _) ->
      forbid_recursive_types l (fun () -> List.iter (fun (Typ_aux (_, l) as field, _) -> wf_binding l env (typq, field)) fields);
-     [DEF_type (TD_aux (tdef, (l, empty_tannot)))], Env.add_record id typq fields env
+     [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)],
+     Env.add_record id typq fields env
+
   | TD_variant (id, typq, arms, _) ->
      let rec_env = Env.add_variant id (typq, arms) env in
      (* register_value is a special type used by theorem prover
@@ -5164,9 +5172,13 @@ let rec check_typedef : Env.t -> uannot type_def -> (tannot def) list * Env.t =
        rec_env
        |> (fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms)
      in
-     [DEF_type (TD_aux (tdef, (l, empty_tannot)))], env
+     [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)],
+     env
+
   | TD_enum (id, ids, _) ->
-     [DEF_type (TD_aux (tdef, (l, empty_tannot)))], Env.add_enum id ids env
+     [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)],
+     Env.add_enum id ids env
+
   | TD_bitfield (id, typ, ranges) as unexpanded ->
      let typ = Env.expand_synonyms env typ in
      begin match typ with
@@ -5195,7 +5207,8 @@ let rec check_typedef : Env.t -> uannot type_def -> (tannot def) list * Env.t =
             ) Bindings.empty ranges
         in
         let defs =
-          (DEF_type (TD_aux (record_tdef, (l, empty_uannot))) :: Bitfield.macro id size order ranges)
+          DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
+          :: Bitfield.macro id size order ranges
         in
         let defs =
           if !Initial_check.opt_undefined_gen
@@ -5205,20 +5218,25 @@ let rec check_typedef : Env.t -> uannot type_def -> (tannot def) list * Env.t =
         let defs, env = check_defs env defs in
         let env = Env.add_bitfield id ranges env in
         if !opt_no_bitfield_expansion
-        then [DEF_type (TD_aux (unexpanded, (l, empty_tannot)))], env
+        then [DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env
         else defs, env
+
      | _ ->
         typ_error env l "Underlying bitfield type must be a constant-width bitvector"
      end
 
-and check_scattered : Env.t -> uannot scattered_def -> (tannot def) list * Env.t =
-  fun env (SD_aux (sdef, (l, _))) ->
+and check_scattered : Env.t -> def_annot -> uannot scattered_def -> (tannot def) list * Env.t =
+  fun env def_annot (SD_aux (sdef, (l, _))) ->
   match sdef with
-  | SD_function _ | SD_end _ | SD_mapping _ -> [], env
+  | SD_function _ | SD_end _ | SD_mapping _ ->
+     [], env
+
   | SD_variant (id, typq) ->
-     [DEF_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot)))], Env.add_scattered_variant id typq env
+     [DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot))), def_annot)],
+     Env.add_scattered_variant id typq env
+
   | SD_unioncl (id, tu) ->
-     [DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot)))],
+     [DEF_aux (DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot))), def_annot)],
      let env = Env.add_variant_clause id tu env in
      let typq, _ = Env.get_variant id env in
      let definition_env = Env.get_scattered_variant_env id env in
@@ -5228,21 +5246,25 @@ and check_scattered : Env.t -> uannot scattered_def -> (tannot def) list * Env.t
                     also be caused by using a type defined after the \
                     'scattered union' declaration" in
          raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg))))
+
   | SD_funcl (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
      let funcl_env = Env.add_typquant l typq env in
      let funcl = check_funcl funcl_env funcl typ in
-     [DEF_scattered (SD_aux (SD_funcl funcl, (l, empty_tannot)))], env
+     [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, empty_tannot))), def_annot)],
+     env
+
   | SD_mapcl (id, mapcl) ->
      let typq, typ = Env.get_val_spec id env in
      let mapcl_env = Env.add_typquant l typq env in
      let mapcl = check_mapcl mapcl_env mapcl typ in
-     [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot)))], env
+     [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
+     env
 
 and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * tannot def list * Env.t =
   fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->
   let valid_outcome_def = function
-    | DEF_impl _ | DEF_val _ -> ()
+    | DEF_aux ((DEF_impl _ | DEF_val _), _) -> ()
     | def ->
        typ_error env (def_loc def) "Forbidden definition in outcome block"
   in
@@ -5260,7 +5282,7 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
          let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
          List.iter valid_outcome_def defs;
          let defs, local_env = check_defs local_env defs in
-         let vals = Util.map_filter (function DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)) -> Some id | _ -> None) defs in
+         let vals = Util.map_filter (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)), _) -> Some id | _ -> None) defs in
          decr depth;
          OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, vals, local_env) env
        with
@@ -5272,18 +5294,18 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
      let msg = "Outcome must be declared within top-level scope" in
      typ_raise env l (err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
-and check_impldef : Env.t -> uannot funcl -> tannot def list * Env.t =
-  fun env (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
+and check_impldef : Env.t -> def_annot -> uannot funcl -> tannot def list * Env.t =
+  fun env def_annot (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
   typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
   match env.outcome_typschm with
   | Some (quant, typ) ->
      let funcl_env = Env.add_typquant l quant env in
-     [DEF_impl (check_funcl funcl_env funcl typ)], env
+     [DEF_aux (DEF_impl (check_funcl funcl_env funcl typ), def_annot)], env
   | None ->
      typ_error env l "Cannot declare an implementation outside of an outcome"
 
-and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
-  fun env (IN_aux (IN_id id, (l, _))) substs ->
+and check_outcome_instantiation : 'a. Env.t -> def_annot -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
+  fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params, vals, outcome_env = Env.get_outcome l id env in
   (* Find the outcome parameters that were already instantiated by previous instantiation commands *)
@@ -5345,41 +5367,42 @@ and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst li
       check_function_instantiation decl_l id_from env (to_typq, to_typ) (from_typq, from_typ);
     ) fns;
 
-  [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ)), substs)], Env.add_val_spec id (typq, typ) env
+  [DEF_aux (DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ)), substs), def_annot)],
+  Env.add_val_spec id (typq, typ) env
 
 and check_def : Env.t -> uannot def -> tannot def list * Env.t =
-  fun env def ->
-  match def with
-  | DEF_type tdef -> check_typedef env tdef
-  | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
-  | DEF_fundef fdef -> check_fundef env fdef
-  | DEF_mapdef mdef -> check_mapdef env mdef
-  | DEF_impl funcl -> check_impldef env funcl
+  fun env (DEF_aux (aux, def_annot)) ->
+  match aux with
+  | DEF_fixity (prec, n, op) -> [DEF_aux (DEF_fixity (prec, n, op), def_annot)], env
+  | DEF_type tdef -> check_typedef env def_annot tdef
+  | DEF_fundef fdef -> check_fundef env def_annot fdef
+  | DEF_mapdef mdef -> check_mapdef env def_annot mdef
+  | DEF_impl funcl -> check_impldef env def_annot funcl
   | DEF_internal_mutrec fdefs ->
-     let defs = List.concat (List.map (fun fdef -> fst (check_fundef env fdef)) fdefs) in
+     let defs = List.concat (List.map (fun fdef -> fst (check_fundef env def_annot fdef)) fdefs) in
      let split_fundef (defs, fdefs) def = match def with
-       | DEF_fundef fdef -> (defs, fdefs @ [fdef])
+       | DEF_aux (DEF_fundef fdef, _) -> (defs, fdefs @ [fdef])
        | _ -> (defs @ [def], fdefs) in
      let (defs, fdefs) = List.fold_left split_fundef ([], []) defs in
-     (defs @ [DEF_internal_mutrec fdefs]), env
-  | DEF_let letdef -> check_letdef env letdef
-  | DEF_val vs -> check_val_spec env vs
+     (defs @ [DEF_aux (DEF_internal_mutrec fdefs, def_annot)]), env
+  | DEF_let letdef -> check_letdef env def_annot letdef
+  | DEF_val vs -> check_val_spec env def_annot vs
   | DEF_outcome (outcome, defs) ->
      let outcome, defs, env = check_outcome env outcome defs in
-     [DEF_outcome (outcome, defs)], env
-  | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env ispec substs
-  | DEF_default default -> check_default env default
-  | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
+     [DEF_aux (DEF_outcome (outcome, defs), def_annot)], env
+  | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
+  | DEF_default default -> check_default env def_annot default
+  | DEF_overload (id, ids) -> [DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads id ids env
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, _))) ->
      let env = Env.add_register id typ env in
-     [DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ))))], env
+     [DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot)], env
   | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
      let checked_exp = crule check_exp env exp typ in
      let env = Env.add_register id typ env in
-     [DEF_register (DEC_aux (DEC_reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ))))], env
-  | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
-  | DEF_scattered sdef -> check_scattered env sdef
-  | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
+     [DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ)))), def_annot)], env
+  | DEF_pragma (pragma, arg, l) -> [DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env
+  | DEF_scattered sdef -> check_scattered env def_annot sdef
+  | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env def_annot (id, pat, exp)], env
   | DEF_loop_measures (id, _) ->
      Reporting.unreachable (id_loc id) __POS__
        "Loop termination measures should have been rewritten before type checking"

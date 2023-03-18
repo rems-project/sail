@@ -89,12 +89,13 @@ val empty_uannot : uannot
 *)
 val add_attribute : l -> string -> string -> uannot -> uannot
 
+val mk_def_annot : l -> def_annot
+  
 (** The empty annotation (as a location + uannot] pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
    information with the various [locate_] functions in this module. *)
 val no_annot : l * uannot
-
 
 (** [gen_loc l] takes a location l and generates a location which
    means 'generated/derived from location l'. This is useful for debugging
@@ -146,7 +147,8 @@ val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> uannot exp -> uannot fexp
 val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
-
+val mk_def : ?loc:l -> 'a def_aux -> 'a def
+  
 val inc_ord : order
 val dec_ord : order
 

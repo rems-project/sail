@@ -1490,8 +1490,8 @@ let compile_funcl ctx id pat guard exp =
   [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let rec compile_def n total ctx def =
-  match def with
+let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _))
        when !opt_memo_cache ->
      let digest =
@@ -1524,7 +1524,8 @@ let rec compile_def n total ctx def =
 
   | _ -> compile_def' n total ctx def
 
-and compile_def' n total ctx = function
+and compile_def' n total ctx (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
      [CDEF_register (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
@@ -1620,11 +1621,11 @@ and compile_def' n total ctx = function
   | DEF_loop_measures _ -> [], ctx
 
   | DEF_internal_mutrec fundefs ->
-     let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
+     let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef)) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
   (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
-  | (DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _) as def ->
+  | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
      Reporting.unreachable (def_loc def) __POS__ ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
 
 let mangle_mono_id id ctx ctyps =
@@ -2026,7 +2027,7 @@ let sort_ctype_defs reverse cdefs =
 
 let toplevel_lets_of_ast ast =
   let toplevel_lets_of_def = function
-    | DEF_let (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
+    | DEF_aux (DEF_let (LB_aux (LB_val (pat, _), _)), _) -> pat_ids pat
     | _ -> IdSet.empty
   in
   let toplevel_lets_of_defs defs =

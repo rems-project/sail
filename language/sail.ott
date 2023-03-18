@@ -84,6 +84,8 @@ type loop = While | Until
 
 type extern = { pure : bool; bindings : (string * string) list } option
 
+type def_annot = { doc_comment : string option; attrs : (string * string * l) list; loc : l }
+
 }}
 
 embed
@@ -98,6 +100,8 @@ type loop = While | Until
 type annot 'a = l * 'a
 
 type extern = <| pure : bool; bindings : list (string * string) |>
+
+type def_annot = <| doc_comment : maybe string; attrs : list (string * string * l); loc: l |>
 
 }}
 
@@ -141,6 +145,11 @@ external :: '' ::=
   {{ phantom }}
   {{ lem maybe extern }}
   {{ ocaml extern option }}
+
+def_annot :: '' ::=
+  {{ phantom }}
+  {{ lem def_annot }}
+  {{ ocaml def_annot }}
 
 l :: '' ::=
   {{ phantom }}
@@ -702,7 +711,7 @@ opt_exp :: '' ::= {{ phantom }} {{ lem maybe (exp 'a) }} {{ ocaml 'a exp option 
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register effect effect' typ id = opt_exp                    :: :: reg
+  | register effect effect' typ id = opt_exp :: :: reg
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
@@ -719,7 +728,7 @@ loop_measure :: '' ::=
 
 def :: 'DEF_' ::=
   {{ com top-level definition }}
-  {{ auxparam 'a }}
+  {{ aux _ def_annot }} {{ auxparam 'a }}
   | type_def                                           :: :: type
     {{ com type definition }}
   | fundef                                             :: :: fundef
@@ -734,7 +743,7 @@ def :: 'DEF_' ::=
     {{ com top-level type constraint }}
   | outcome_spec { def1 ... defn }                     :: :: outcome
     {{ com top-level outcome definition }}
-  | instantiation instantiation_spec with subst1 , ... , substn        :: :: instantiation
+  | instantiation instantiation_spec with subst1 , ... , substn :: :: instantiation
     {{ com instantiation }}
   | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}

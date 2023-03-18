@@ -775,10 +775,11 @@ let doc_scattered (SD_aux (sd_aux, _)) =
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
 let doc_filter = function
-  | DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _) -> false
+  | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
   | _ -> true
     
-let rec doc_def_no_hardline ?comment:(comment=false) = function
+let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, _)) =
+  match aux with
   | DEF_default df -> doc_default df
   | DEF_val v_spec -> doc_spec ~comment:comment v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -821,6 +822,9 @@ and doc_def ?comment:(comment=false) def = group (doc_def_no_hardline ~comment:c
 let doc_ast ?comment:(comment=false) { defs; _ } =
   separate_map hardline (doc_def ~comment:comment) (List.filter doc_filter defs)
 
+(* This function is intended to reformat machine-generated Sail into
+   something a bit more readable, it is not intended to be used as a
+   general purpose formatter *)
 let reformat dir { defs; _ } =
   let file_stack = ref [] in
 
@@ -860,12 +864,12 @@ let reformat dir { defs; _ } =
   in
           
   let format_def = function
-    | DEF_pragma ("file_start", path, _) -> push (Some (adjust_path path))
-    | DEF_pragma ("file_end", _, _) -> pop ()
-    | DEF_pragma ("include_start", path, _) ->
+    | DEF_aux (DEF_pragma ("file_start", path, _), _) -> push (Some (adjust_path path))
+    | DEF_aux (DEF_pragma ("file_end", _, _), _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_start", path, _), _) ->
        output_include path;
        if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_pragma ("include_end", _, _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_end", _, _), _) -> pop ()
     | def -> output_def def
   in
 

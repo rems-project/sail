@@ -367,9 +367,9 @@ val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp
 
 val check_funcl : Env.t -> uannot funcl -> typ -> tannot funcl
 
-val check_fundef : Env.t -> uannot fundef -> tannot def list * Env.t
+val check_fundef : Env.t -> def_annot -> uannot fundef -> tannot def list * Env.t
 
-val check_val_spec : Env.t -> uannot val_spec -> tannot def list * Env.t
+val check_val_spec : Env.t -> def_annot -> uannot val_spec -> tannot def list * Env.t
 
 val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 

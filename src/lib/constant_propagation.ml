@@ -297,7 +297,7 @@ let const_props target ast =
 
   let constants =
     let add m = function
-      | DEF_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_))
+      | DEF_aux (DEF_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_)), _)
            when Constant_fold.is_constant exp ->
          Bindings.add id exp m
       | _ -> m

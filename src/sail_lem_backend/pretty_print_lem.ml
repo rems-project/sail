@@ -1573,8 +1573,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let doc_def_lem effect_info type_env def =
-  match def with
+let doc_def_lem effect_info type_env (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_val v_spec -> doc_spec_lem effect_info type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
@@ -1594,7 +1594,7 @@ let doc_def_lem effect_info type_env def =
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
@@ -1605,12 +1605,12 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
-    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
+    | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in
   let is_typ_def = function
-    | DEF_type _ -> true
+    | DEF_aux (DEF_type _, _) -> true
     | _ -> false
   in
   let exc_typ = find_exc_typ defs in

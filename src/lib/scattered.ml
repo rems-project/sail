@@ -72,13 +72,13 @@ open Ast_util
 let funcl_id (FCL_aux (FCL_funcl (id, _), _)) = id
 
 let rec last_scattered_funcl id = function
-  | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: _
+  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), _) :: _
        when Id.compare (funcl_id funcl) id = 0 -> false
   | _ :: defs -> last_scattered_funcl id defs
   | [] -> true
 
 let rec last_scattered_mapcl id = function
-  | DEF_scattered (SD_aux (SD_mapcl (mid, _), _)) :: _
+  | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (mid, _), _)), _) :: _
        when Id.compare mid id = 0 -> false
   | _ :: defs -> last_scattered_mapcl id defs
   | [] -> true
@@ -89,14 +89,14 @@ let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
 let rec get_union_clauses id = function
-  | DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)) :: defs when Id.compare id uid = 0 ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
      tu :: get_union_clauses id defs
   | _ :: defs ->
      get_union_clauses id defs
   | [] -> []
 
 let rec filter_union_clauses id = function
-  | DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)) :: defs when Id.compare id uid = 0 ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
      filter_union_clauses id defs
   | def :: defs ->
      def :: filter_union_clauses id defs
@@ -106,17 +106,18 @@ let rec descatter' funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function
      clause into a DEF_fundef containing all the clauses. *)
-  | DEF_scattered (SD_aux (SD_funcl funcl, (l, _))) :: defs
+  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, _))), _) :: defs
        when last_scattered_funcl (funcl_id funcl) defs ->
      let clauses = match Bindings.find_opt (funcl_id funcl) funcls with
        | Some clauses -> List.rev (funcl :: clauses)
        | None -> [funcl]
      in
-     DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses),
-                         (gen_loc l, Type_check.empty_tannot)))
+     DEF_aux (DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses),
+                                  (gen_loc l, Type_check.empty_tannot))),
+              mk_def_annot (gen_loc l))
      :: descatter' funcls mapcls defs
 
-  | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: defs ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), _) :: defs ->
      let id = funcl_id funcl in
      begin match Bindings.find_opt id funcls with
      | Some clauses -> descatter' (Bindings.add id (funcl :: clauses) funcls) mapcls defs
@@ -124,17 +125,18 @@ let rec descatter' funcls mapcls = function
      end
 
   (* Scattered mappings are handled the same way as scattered functions *)
-  | DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, tannot))) :: defs
+  | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, tannot))), _) :: defs
        when last_scattered_mapcl id defs ->
      let clauses = match Bindings.find_opt id mapcls with
        | Some clauses -> List.rev (mapcl :: clauses)
        | None -> [mapcl]
      in
-     DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses),
-                         (gen_loc l, tannot)))
+     DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses),
+                                  (gen_loc l, tannot))),
+              mk_def_annot (gen_loc l))
      :: descatter' funcls mapcls defs
 
-  | DEF_scattered (SD_aux (SD_mapcl (id, mapcl), _)) :: defs ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), _)), _) :: defs ->
      begin match Bindings.find_opt id mapcls with
      | Some clauses -> descatter' funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
      | None -> descatter' funcls (Bindings.add id [mapcl] mapcls) defs
@@ -143,17 +145,17 @@ let rec descatter' funcls mapcls = function
   (* For scattered unions, when we find a union declaration we
      immediately grab all the future clauses and turn it into a
      regular union declaration. *)
-  | DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))) :: defs ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))), def_annot) :: defs ->
      let tus = get_union_clauses id defs in
      begin match tus with
      | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
      | _ ->
-        DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
+        DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
         :: descatter' funcls mapcls (filter_union_clauses id defs)
      end
        
   (* Therefore we should never see SD_unioncl... *)
-  | DEF_scattered (SD_aux (SD_unioncl _, (l, _))) :: _ ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl _, (l, _))), _) :: _ ->
      raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")
 
   | def :: defs -> def :: descatter' funcls mapcls defs
