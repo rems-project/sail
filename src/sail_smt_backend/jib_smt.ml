@@ -1427,7 +1427,7 @@ let rec generate_ctype_defs ctx = function
   | [] -> []
 
 let rec generate_reg_decs ctx inits = function
-  | CDEF_reg_dec (id, ctyp, _) :: cdefs when not (NameMap.mem (Global (id, 0)) inits)->
+  | CDEF_register (id, ctyp, _) :: cdefs when not (NameMap.mem (Global (id, 0)) inits)->
      Declare_const (zencode_name (Global (id, 0)), smt_ctyp ctx ctyp)
      :: generate_reg_decs ctx inits cdefs
   | _ :: cdefs -> generate_reg_decs ctx inits cdefs
@@ -1538,7 +1538,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
       
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
-    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
+    | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
 
     | Typ_exist _ ->
        (* Use Type_check.destruct_exist when optimising with SMT, to
@@ -2004,7 +2004,7 @@ let smt_cfnode all_cdefs ctx ssa_elems =
   (* We can ignore any non basic-block/start control-flow nodes *)
   | _ -> []
 
-(** When we generate a property for a CDEF_spec, we find it's
+(** When we generate a property for a CDEF_val, we find it's
    associated function body in a CDEF_fundef node. However, we must
    keep track of any global letbindings between the spec and the
    fundef, so they can appear in the generated SMT. *)
@@ -2308,7 +2308,7 @@ let smt_instr_list name ctx all_cdefs instrs =
   stack, start, cfg
 
 let smt_cdef props lets name_file ctx all_cdefs = function
-  | CDEF_spec (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
+  | CDEF_val (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
      | intervening_lets, Some (None, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
@@ -2391,7 +2391,7 @@ let rec smt_cdefs props lets name_file ctx ast =
    all the registers that such a reference could be pointing to.
 *)
 let rec build_register_map rmap = function
-  | CDEF_reg_dec (reg, ctyp, _) :: cdefs ->
+  | CDEF_register (reg, ctyp, _) :: cdefs ->
      let rmap = match CTMap.find_opt ctyp rmap with
        | Some regs ->
           CTMap.add ctyp (reg :: regs) rmap

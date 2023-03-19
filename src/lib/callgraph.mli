@@ -65,7 +65,7 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Functions for generating and interacting with Sail call graphs *)
+(** Functions for generating and interacting with Sail call graphs. *)
 
 open Ast
 open Ast_defs

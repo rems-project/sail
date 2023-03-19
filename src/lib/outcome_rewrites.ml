@@ -90,12 +90,14 @@ let instantiate_typ substs typ =
     ) typ (KBindings.bindings substs)
  
 let instantiate_def target id substs = function
-  | DEF_impl (FCL_aux (FCL_Funcl (target_id, pexp), annot)) when string_of_id target_id = target ->
+  | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), annot)), def_annot) when string_of_id target_id = target ->
      let l = gen_loc (id_loc id) in
-     Some (DEF_fundef (FD_aux (FD_function (Rec_aux (Rec_nonrec, l),
-                                            Typ_annot_opt_aux (Typ_annot_opt_none, l),
-                                            [FCL_aux (FCL_Funcl (id, pexp), annot)]),
-                               annot)))
+     Some (DEF_aux (
+               DEF_fundef (FD_aux (FD_function (Rec_aux (Rec_nonrec, l),
+                                                Typ_annot_opt_aux (Typ_annot_opt_none, l),
+                                                [FCL_aux (FCL_funcl (id, pexp), annot)]),
+                                   annot)),
+               def_annot))
   | def -> None
 
 let rec instantiated_or_abstract l = function
@@ -109,10 +111,10 @@ let rec instantiated_or_abstract l = function
          
 let instantiate target ast =
   let process_def outcomes = function
-    | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs) ->
+    | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _) ->
        Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, []
 
-    | DEF_instantiation (IN_aux (IN_id id, annot), id_substs) ->
+    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) ->
        let l = gen_loc (id_loc id) in
        let env = env_of_annot annot in
        let substs = Env.get_outcome_instantiation env in
@@ -129,7 +131,7 @@ let instantiate target ast =
        let rewrite_e_aux (exp, annot) =
          match exp with
          | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
-         | E_cast (typ, exp) -> E_aux (E_cast (instantiate_typ substs typ, exp), annot)
+         | E_typ (typ, exp) -> E_aux (E_typ (instantiate_typ substs typ, exp), annot)
          | _ -> E_aux (exp, annot)
        in
        let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
@@ -142,7 +144,7 @@ let instantiate target ast =
 
        let valspec is_extern =
          let extern = if is_extern then Some { pure = false; bindings = [("_", string_of_id id)] } else None in
-         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, Type_check.empty_tannot)))
+         DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false), (l, empty_uannot))), def_annot)
        in
        let instantiated_def =
          rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs
@@ -151,8 +153,8 @@ let instantiate target ast =
        in
        let outcome_defs, _ =
          (match instantiated_def with
-          | None -> [DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)); valspec true]
-          | Some def -> [valspec false; def]
+          | None -> [DEF_aux (DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)), mk_def_annot (gen_loc (id_loc id))); valspec true]
+          | Some def -> [valspec false; strip_def def]
          ) |> Type_error.check_defs env
        in
        outcomes, outcome_defs

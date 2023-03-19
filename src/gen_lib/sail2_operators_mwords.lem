@@ -127,6 +127,9 @@ let int_of_vec_fail sign w = return (int_of_vec sign w)
 val string_of_bits : forall 'a. Size 'a => mword 'a -> string
 let string_of_bits = string_of_bv
 
+val string_of_bits_subrange : forall 'a. Size 'a => mword 'a -> integer -> integer -> string
+let string_of_bits_subrange = string_of_bv_subrange
+
 val decimal_string_of_bits : forall 'a. Size 'a => mword 'a -> string
 let decimal_string_of_bits = decimal_string_of_bv
 

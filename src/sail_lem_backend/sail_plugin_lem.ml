@@ -106,6 +106,7 @@ let lem_rewrites =
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("undefined", [Bool_arg false]);
     ("toplevel_consts", [String_arg "lem"; If_mwords_arg]);
+    ("complete_record_params", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);
     ("monomorphise", [String_arg "lem"; If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);

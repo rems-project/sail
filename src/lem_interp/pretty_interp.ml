@@ -71,7 +71,7 @@
  * - string_of_big_int instead of string_of_int
  * - annot does not contain type annotations anymore, so E_internal_cast
  *   is ignored
- * - don't print E_cast either by default (controlled by ignore_casts)
+ * - don't print E_typ either by default (controlled by ignore_casts)
  * - special case for holes in doc_id
  * - pp_exp returns a string instead of working on a buffer (should
  *   change this in the original as well, probably)
@@ -233,7 +233,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
   | _ -> tup_typ ty
   and tup_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
+  | Typ_tuple typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_app(Id_aux (Id "vector", _), [
@@ -255,7 +255,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
   | Typ_var v  -> doc_var v
-  | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+  | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)
       group (parens (typ ty))
@@ -357,7 +357,7 @@ let doc_pat, doc_atomic_pat =
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
   | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
-  | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
+  | P_tuple pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
   | P_app(_, _ :: _) | P_vector_concat _ ->
       group (parens (pat pa))
@@ -476,7 +476,7 @@ let doc_exp, doc_let =
             else string (add_red "[_]"))
     | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
-  | E_cast(typ,e) ->
+  | E_typ(typ,e) ->
       if !ignore_casts then
         atomic_exp env mem add_red show_hole_contents e
       else
@@ -486,9 +486,9 @@ let doc_exp, doc_let =
       atomic_exp env mem add_red show_hole_contents e
   | E_tuple exps ->
       parens (separate_map comma (exp env mem add_red show_hole_contents) exps)
-  | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
+  | E_struct(FES_aux(FES_fexps(fexps,_),_)) ->
       braces (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps)
-  | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+  | E_struct_update(e,(FES_aux(FES_fexps(fexps,_),_))) ->
     braces (doc_op (string "with")
               (exp env mem add_red show_hole_contents e)
               (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps))
@@ -524,7 +524,7 @@ let doc_exp, doc_let =
                           ^^ (atomic_exp env mem add_red show_hole_contents e2)) (exp env mem add_red show_hole_contents e3)))
   | E_list exps ->
       squarebarbars (separate_map comma (exp env mem add_red show_hole_contents) exps)
-  | E_case(e,pexps) ->
+  | E_match(e,pexps) ->
       let opening = separate space [string "switch"; exp env mem add_red show_hole_contents e; lbrace] in
       let cases = separate_map (break 1) (doc_case env mem add_red show_hole_contents) pexps in
       surround 2 1 opening cases rbrace
@@ -573,7 +573,7 @@ let doc_exp, doc_let =
         (separate space [string "let"; doc_atomic_pat pat; equals])
         (exp env mem add_red show_hole_contents e)
 
-  and doc_fexp env mem add_red show_hole_contents (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp env mem add_red show_hole_contents (FE_aux(FE_fexp(id,e),_)) =
     doc_op equals (doc_id id) (exp env mem add_red show_hole_contents e)
 
   and doc_case env mem add_red show_hole_contents (Pat_aux(Pat_exp(pat,e),_)) =
@@ -582,25 +582,25 @@ let doc_exp, doc_let =
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
   and doc_lexp env mem add_red show_hole_contents le = app_lexp env mem add_red show_hole_contents le
-  and app_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) args)
+  and app_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_app(id,args) -> doc_id id ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) args)
   | _ -> vaccess_lexp env mem add_red show_hole_contents le
-  and vaccess_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-    | LEXP_vector(v,e) ->
+  and vaccess_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+    | LE_vector(v,e) ->
       (atomic_lexp env mem add_red show_hole_contents v) ^^ brackets (exp env mem add_red show_hole_contents e)
-    | LEXP_vector_range(v,e1,e2) ->
+    | LE_vector_range(v,e1,e2) ->
       (atomic_lexp env mem add_red show_hole_contents v) ^^
       brackets ((exp env mem add_red show_hole_contents e1) ^^ dotdot ^^ (exp env mem add_red show_hole_contents e2))
     | _ -> field_lexp env mem add_red show_hole_contents le
-  and field_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_field(v,id) -> (atomic_lexp env mem add_red show_hole_contents v) ^^ dot ^^ doc_id id
+  and field_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_field(v,id) -> (atomic_lexp env mem add_red show_hole_contents v) ^^ dot ^^ doc_id id
   | _ -> atomic_lexp env mem add_red show_hole_contents le
-  and atomic_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_id id -> doc_id id
-  | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
-  | LEXP_tup(lexps) -> group (parens (separate_map comma (doc_lexp env mem add_red show_hole_contents) lexps))
-  | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
-  | LEXP_field _ -> group (parens (doc_lexp env mem add_red show_hole_contents le))
+  and atomic_lexp env mem add_red show_hole_contents ((LE_aux(lexp,_)) as le) = match lexp with
+  | LE_id id -> doc_id id
+  | LE_typ(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
+  | LE_tuple(lexps) -> group (parens (separate_map comma (doc_lexp env mem add_red show_hole_contents) lexps))
+  | LE_app _ | LE_vector _ | LE_vector_range _
+  | LE_field _ -> group (parens (doc_lexp env mem add_red show_hole_contents le))
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
@@ -672,7 +672,7 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"
   | Effect_opt_effect e -> doc_effects e
 
-let doc_funcl env mem add_red (FCL_aux(FCL_Funcl(id,Pat_aux (Pat_exp (pat, exp), _)),_)) =
+let doc_funcl env mem add_red (FCL_aux(FCL_funcl(id,Pat_aux (Pat_exp (pat, exp), _)),_)) =
   group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env mem add_red false exp))
 
 let doc_fundef env mem add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =
@@ -710,12 +710,12 @@ let doc_scattered env mem add_red (SD_aux (sdef, _)) = match sdef with
 
 let rec doc_def env mem add_red def = group (match def with
   | DEF_default df -> doc_default df
-  | DEF_spec v_spec -> doc_spec v_spec
+  | DEF_val v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
   | DEF_kind k_def -> failwith "interpreter unexpectedly printing kind def"
   | DEF_fundef f_def -> doc_fundef env mem add_red f_def
-  | DEF_val lbind -> doc_let env mem add_red false lbind
-  | DEF_reg_dec dec -> doc_dec dec
+  | DEF_let lbind -> doc_let env mem add_red false lbind
+  | DEF_register dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered env mem add_red sdef
   | DEF_comm comm_dec -> string "(*" ^^ doc_comm_dec env mem add_red comm_dec ^^ string "*)"
   ) ^^ hardline

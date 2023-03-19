@@ -157,8 +157,8 @@ let rec compact_exp (E_aux (e, l)) =
      wrap(E_if(compact_exp e, ldots, E_aux(E_block [], tunk)))
  | E_for (i, e1, e2, e3, o, e4) ->
     wrap(E_for(i, compact_exp e1, compact_exp e2, compact_exp e3, o, ldots))
- | E_case (e, _) ->
-     wrap(E_case(compact_exp e, []))
+ | E_match (e, _) ->
+     wrap(E_match(compact_exp e, []))
  | E_let (bind, _) -> wrap(E_let(bind, ldots))
  | E_app (f, args) -> wrap(E_app(f, List.map compact_exp args))
  | E_app_infix (l, op, r) -> wrap(E_app_infix(compact_exp l, op, compact_exp r))
@@ -177,13 +177,13 @@ let rec compact_exp (E_aux (e, l)) =
  | E_list exps -> wrap(E_list(List.map compact_exp exps))
  | E_cons (e1, e2) ->
      wrap(E_cons(compact_exp e1, compact_exp e2))
- | E_record_update (e, fexps) ->
-     wrap(E_record_update (compact_exp e, fexps))
+ | E_struct_update (e, fexps) ->
+     wrap(E_struct_update (compact_exp e, fexps))
  | E_field (e, id) ->
      wrap(E_field(compact_exp e, id))
  | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
- | E_block [] | E_nondet [] | E_cast (_, _) | E_internal_cast (_, _)
- | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ ->
+ | E_block [] | E_nondet [] | E_typ (_, _) | E_internal_cast (_, _)
+ | E_id _|E_lit _|E_vector_indexed (_, _)|E_struct _|E_internal_exp _ ->
      wrap e
 
 (* extract, compact and reverse expressions on the stack;

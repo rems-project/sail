@@ -71,6 +71,8 @@ This file wraps the functions in Type_check, so they return
 Fatal_error exceptions from the Reporting module rather than
 Type_errors. *)
 
+open Ast_util
+
 (** If false (default), we'll only explain generated variables, not
    variables written explicitly by the user in the source. *)
 val opt_explain_all_variables : bool ref
@@ -96,10 +98,10 @@ val string_of_type_error : Type_check.type_error -> string
 
 val check_defs : 
   Type_check.Env.t ->
-  'a Ast.def list ->
+  uannot Ast.def list ->
   Type_check.tannot Ast.def list * Type_check.Env.t
 
 val check : 
   Type_check.Env.t ->
-  'a Ast_defs.ast ->
+  uannot Ast_defs.ast ->
   Type_check.tannot Ast_defs.ast * Type_check.Env.t

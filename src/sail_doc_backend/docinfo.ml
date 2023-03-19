@@ -144,7 +144,7 @@ let hyperlinks_from_def files def =
   let scan_lexp lexp_aux annot =
     let env = Type_check.env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (_, id) | LEXP_id id ->
+    | LE_typ (_, id) | LE_id id ->
        begin match Type_check.Env.lookup_id id env with
        | Register _ ->
           link (fun hloc -> Register (id, hloc)) (id_loc id)
@@ -152,7 +152,7 @@ let hyperlinks_from_def files def =
        end
     | _ -> ()
     end;
-    LEXP_aux (lexp_aux, annot)
+    LE_aux (lexp_aux, annot)
   in
   
   let scan_exp e_aux annot =
@@ -174,7 +174,7 @@ let hyperlinks_from_def files def =
   let rw_exp _ exp =
     fold_exp {
         id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot);
-                        lEXP_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot)
+                        le_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot)
       } exp in
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp } [def]);
 
@@ -199,7 +199,7 @@ let rec pat_to_json (P_aux (aux, _)) =
   | P_app (id, pats) -> `Assoc [pat_type "app"; ("id", `String (string_of_id id)); ("patterns", `List (List.map pat_to_json pats))]
   | P_vector pats -> seq_pat_json "vector" pats
   | P_vector_concat pats -> seq_pat_json "vector_concat" pats
-  | P_tup pats -> seq_pat_json "tuple" pats
+  | P_tuple pats -> seq_pat_json "tuple" pats
   | P_list pats -> seq_pat_json "list" pats
   | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", pat_to_json pat_hd); ("tl", pat_to_json pat_tl)]
   | P_string_append pats -> seq_pat_json "string_append" pats
@@ -352,7 +352,7 @@ let docinfo_to_json docinfo =
       ("anchors", bindings_to_json docinfo.anchors (pair_to_json "anchor" location_or_raw_to_json "links" hyperlinks_to_json));
     ]
 
-let docinfo_for_funcl ?files ?outer_annot n (FCL_aux (FCL_Funcl (id, pexp), annot) as clause) =
+let docinfo_for_funcl ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
   let annot = match outer_annot with None -> annot | Some annot -> annot in
   let source = doc_loc (fst annot) Pretty_print_sail.doc_funcl clause in
   let pat, guard, exp = match pexp with
@@ -437,9 +437,9 @@ let docinfo_for_ast ~files ~hyperlinks ast =
   let skipping = function
     | true :: _ -> true
     | _ -> false in
-  let docinfo_for_def (docinfo, skips) def =
+  let docinfo_for_def (docinfo, skips) (DEF_aux (aux, _) as def) =
     let links = hyperlinks files def in
-    match def with
+    match aux with
     (* Maintain a stack of booleans, for each file if it was not
        specified via -doc_file, we push true to skip it. If no
        -doc_file flags are passed, include everything. *)
@@ -468,26 +468,28 @@ let docinfo_for_ast ~files ~hyperlinks ast =
     | _ when skipping skips ->
        docinfo, skips
 
-    | DEF_spec vs ->
+    | DEF_val vs ->
        let id = id_of_val_spec vs in
        { docinfo with valspecs = Bindings.add id (docinfo_for_valspec vs, links) docinfo.valspecs },
        skips
+ 
     | DEF_type td ->
        let id = id_of_type_def td in
        { docinfo with typdefs = Bindings.add id (docinfo_for_typdef td, links) docinfo.typdefs },
        skips
-    | DEF_reg_dec rd ->
+
+    | DEF_register rd ->
        let id = id_of_dec_spec rd in
        { docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers },
        skips
-    | DEF_val (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
+
+    | DEF_let (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
        let ids = pat_ids pat in
        IdSet.fold (fun id docinfo ->
            { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets }
          ) ids docinfo,
        skips
-    | DEF_pragma _ ->
-       docinfo, skips
+
     | _ ->
        docinfo, skips
   in
@@ -495,9 +497,9 @@ let docinfo_for_ast ~files ~hyperlinks ast =
   let process_anchors docinfo =
     let anchored = ref Bindings.empty in
     let pending_anchor = ref None in
-    List.iter (fun def ->
+    List.iter (fun (DEF_aux (aux, _) as def) ->
         let l = def_loc def in
-        match def with
+        match aux with
         | DEF_pragma ("doc", command, l) ->
            begin match String.index_from_opt command 0 ' ' with
            | Some i ->

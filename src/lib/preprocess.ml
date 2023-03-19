@@ -65,6 +65,8 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
+open Parse_ast
+
 (* Simple preprocessor features for conditional file loading *)
 module StringSet = Set.Make(String)
 
@@ -99,13 +101,13 @@ let cond_pragma l defs =
   in
 
   let rec scan = function
-    | Parse_ast.DEF_pragma ("endif", _, _) :: defs when !depth = 0 ->
+    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 ->
        (List.rev !then_defs, List.rev !else_defs, defs)
-    | Parse_ast.DEF_pragma ("else", _, _) :: defs when !depth = 0 ->
+    | DEF_aux (DEF_pragma ("else", _), _) :: defs when !depth = 0 ->
        in_then := false; scan defs
-    | (Parse_ast.DEF_pragma (p, _, _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
+    | (DEF_aux (DEF_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
        incr depth; push_def def; scan defs
-    | (Parse_ast.DEF_pragma ("endif", _, _) as def) :: defs->
+    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs->
        decr depth; push_def def; scan defs
     | def :: defs ->
        push_def def; scan defs
@@ -142,17 +144,19 @@ let all_pragmas =
 let wrap_include l file = function
   | [] -> []
   | defs ->
-     [Parse_ast.DEF_pragma ("include_start", file, l)]
+     [DEF_aux (DEF_pragma ("include_start", file), l)]
      @ defs
-     @ [Parse_ast.DEF_pragma ("include_end", file, l)]
+     @ [DEF_aux (DEF_pragma ("include_end", file), l)]
 
-let rec preprocess dir target opts = function
+let rec preprocess dir target opts =
+  let module P = Parse_ast in
+  function
   | [] -> []
-  | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
+  | DEF_aux (DEF_pragma ("define", symbol), _) :: defs ->
      symbols := StringSet.add symbol !symbols;
      preprocess dir target opts defs
 
-  | (Parse_ast.DEF_pragma ("option", command, l) as opt_pragma) :: defs ->
+  | (DEF_aux (DEF_pragma ("option", command), l) as opt_pragma) :: defs ->
      begin
        try
          let args = Str.split (Str.regexp " +") command in
@@ -162,21 +166,21 @@ let rec preprocess dir target opts = function
      end;
      opt_pragma :: preprocess dir target opts defs
 
-  | Parse_ast.DEF_pragma ("ifndef", symbol, l) :: defs ->
+  | DEF_aux (DEF_pragma ("ifndef", symbol), l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
      if not (StringSet.mem symbol !symbols) then
        preprocess dir target opts (then_defs @ defs)
      else
        preprocess dir target opts (else_defs @ defs)
 
-  | Parse_ast.DEF_pragma ("ifdef", symbol, l) :: defs ->
+  | DEF_aux (DEF_pragma ("ifdef", symbol), l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
      if StringSet.mem symbol !symbols then
        preprocess dir target opts (then_defs @ defs)
      else
        preprocess dir target opts (else_defs @ defs)
 
-  | Parse_ast.DEF_pragma ("iftarget", t, l) :: defs ->
+  | DEF_aux (DEF_pragma ("iftarget", t), l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
      begin match target with
      | Some t' when t = t' ->
@@ -185,7 +189,7 @@ let rec preprocess dir target opts = function
         preprocess dir target opts (else_defs @ defs)
      end
        
-  | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
+  | DEF_aux (DEF_pragma ("include", file), l) :: defs ->
      let len = String.length file in
      if len = 0 then
        (Reporting.warn "" l "Skipping bad $include. No file argument."; preprocess dir target opts defs)
@@ -208,7 +212,7 @@ let rec preprocess dir target opts = function
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
        (Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess dir target opts defs)
 
-  | Parse_ast.DEF_pragma ("suppress_warnings", _, l) :: defs ->
+  | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
      begin match Reporting.simp_loc l with
      | None -> () (* This shouldn't happen, but if it does just continue *)
      | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
@@ -218,18 +222,18 @@ let rec preprocess dir target opts = function
   (* Filter file_start and file_end out of the AST so when we
      round-trip files through the compiler we don't end up with
      incorrect start/end annotations *)
-  | (Parse_ast.DEF_pragma ("file_start", _, _) | Parse_ast.DEF_pragma ("file_end", _, _)) :: defs ->
+  | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs ->
      preprocess dir target opts defs
  
-  | Parse_ast.DEF_pragma (p, arg, l) :: defs ->
+  | DEF_aux (DEF_pragma (p, arg), l) :: defs ->
      if not (StringSet.mem p all_pragmas) then
        Reporting.warn "" l ("Unrecognised directive: " ^ p);
-     Parse_ast.DEF_pragma (p, arg, l) :: preprocess dir target opts defs
+     DEF_aux (DEF_pragma (p, arg), l) :: preprocess dir target opts defs
 
-  | Parse_ast.DEF_outcome (outcome_spec, inner_defs) :: defs ->
-     Parse_ast.DEF_outcome (outcome_spec, preprocess dir target opts inner_defs) :: preprocess dir target opts defs
+  | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
+     DEF_aux (DEF_outcome (outcome_spec, preprocess dir target opts inner_defs), l) :: preprocess dir target opts defs
      
-  | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->
+  | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs ->
      begin match atyp with
      | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess dir target opts defs
      | Parse_ast.ATyp_dec -> symbols := StringSet.add "_DEFAULT_DEC" !symbols; def :: preprocess dir target opts defs

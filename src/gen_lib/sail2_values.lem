@@ -711,6 +711,9 @@ let nat_of_bv v = Maybe.map nat_of_int (unsigned v)
 val string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let string_of_bv v = show_bitlist (bits_of v)
 
+val string_of_bv_subrange : forall 'a. Bitvector 'a => 'a -> integer -> integer -> string
+let string_of_bv_subrange v i j = show_bitlist (subrange_bv_dec (bits_of v) i j)
+
 val print_bits : forall 'a. Bitvector 'a => string -> 'a -> unit
 let print_bits str v = print_endline (str ^ string_of_bv v)
 

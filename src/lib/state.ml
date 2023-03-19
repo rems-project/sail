@@ -81,13 +81,13 @@ let opt_type_grouped_regstate = ref false
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs defs)
 
 let has_default_order defs =
-  List.exists (function DEF_default (DT_aux (DT_order _, _)) -> true | _ -> false) defs
+  List.exists (function DEF_aux (DEF_default (DT_aux (DT_order _, _)), _) -> true | _ -> false) defs
 
 let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id, _), (_, tannot))) ->
+      | DEF_aux (DEF_register (DEC_aux(DEC_reg (typ, id, _), (_, tannot))), _) ->
          let env = match destruct_tannot tannot with
            | Some (env, _) -> env
            | _ -> Env.empty
@@ -137,7 +137,7 @@ let generate_regstate registers =
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
   in
-  [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
+  [DEF_aux (DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))), mk_def_annot Unknown)]
 
 let generate_initial_regstate defs =
   let registers = find_registers defs in
@@ -187,7 +187,7 @@ let generate_initial_regstate defs =
          in
          "[" ^ (String.concat ", " (elems len)) ^ "]"
       | Typ_app (id, args) -> Bindings.find id vals args
-      | Typ_tup typs ->
+      | Typ_tuple typs ->
          "(" ^ (String.concat ", " (List.map (lookup_init_val vals) typs)) ^ ")"
       | Typ_exist (_, _, typ) -> lookup_init_val vals typ
       | _ -> raise Not_found
@@ -232,7 +232,7 @@ let generate_initial_regstate defs =
       | _ -> (defs', vals)
     in
     let (init_defs, init_vals) = List.fold_left (fun inits def -> match def with
-      | DEF_type (TD_aux (td, _)) -> add_typ_init_val inits td
+      | DEF_aux (DEF_type (TD_aux (td, _)), _) -> add_typ_init_val inits td
       | _ -> inits) ([], Bindings.empty) defs
     in
     let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in

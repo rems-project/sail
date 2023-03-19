@@ -72,9 +72,9 @@ open Parser_combinators
 
 let find_properties { defs; _ } =
   let rec find_prop acc = function
-    | DEF_pragma (("property" | "counterexample") as prop_type, command, l) :: defs ->
-       begin match Util.find_next (function DEF_spec _ -> true | _ -> false) defs with
-       | _, Some (DEF_spec vs, defs) ->
+    | DEF_aux (DEF_pragma (("property" | "counterexample") as prop_type, command, l), _) :: defs ->
+       begin match Util.find_next (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs with
+       | _, Some (DEF_aux (DEF_val vs, _), defs) ->
           find_prop ((prop_type, command, l, vs) :: acc) defs
        | _, _ ->
           raise (Reporting.err_general l "Property is not attached to any function signature")
@@ -89,13 +89,13 @@ let find_properties { defs; _ } =
 let add_property_guards props ast =
   let open Type_check in
   let rec add_property_guards' acc = function
-    | (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef) as def) :: defs ->
+    | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs ->
        begin match Bindings.find_opt (id_of_fundef fdef) props with
        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, _), _), _, _, _), _)) ->
           begin match quant_split quant with
           | _, [] -> add_property_guards' (def :: acc) defs
           | _, constraints ->
-             let add_constraints_to_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp, pexp_aux)), fcl_aux)) =
+             let add_constraints_to_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, pexp_aux)), fcl_aux)) =
                let add_guard exp =
                  (* FIXME: Use an assert *)
                  let exp' = mk_exp (E_block [mk_exp (E_app (mk_id "sail_assume", [mk_exp (E_constraint (List.fold_left nc_and nc_true constraints))]));
@@ -116,7 +116,7 @@ let add_property_guards props ast =
                     in
                     raise (Reporting.err_typ pragma_l (Type_error.string_of_type_error err ^ msg))
                in
-               let mk_funcl p = FCL_aux (FCL_Funcl (id, Pat_aux (p, pexp_aux)), fcl_aux) in
+               let mk_funcl p = FCL_aux (FCL_funcl (id, Pat_aux (p, pexp_aux)), fcl_aux) in
                match pexp with
                | Pat_exp (pat, exp) ->
                   mk_funcl (Pat_exp (pat, add_guard exp))
@@ -127,7 +127,7 @@ let add_property_guards props ast =
              let funcls = List.map add_constraints_to_funcl funcls in
              let fdef = FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) in
 
-             add_property_guards' (DEF_fundef fdef :: acc) defs
+             add_property_guards' (DEF_aux (DEF_fundef fdef, def_annot) :: acc) defs
           end
        | None -> add_property_guards' (def :: acc) defs
        end

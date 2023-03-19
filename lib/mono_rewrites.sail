@@ -90,6 +90,9 @@ function extsv(m, v) = {
 val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 
+/* Builtins for the rewrites */
+val string_of_bits_subrange = pure "string_of_bits_subrange" : forall 'n. (bits('n), int, int) -> string
+
 /* Definitions for the rewrites */
 
 val is_zero_subrange : forall 'n, 'n >= 0.

@@ -21,7 +21,7 @@
     (progn (run lem -ocaml %{ast})
            (run sed -i.bak -f %{sed} %{target}))))
 
-(copy_files lem/*.lem)
+(copy_files ../gen_lib/*.lem)
 
 (rule
   (targets

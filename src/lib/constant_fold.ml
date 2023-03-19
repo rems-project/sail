@@ -77,7 +77,7 @@ module StringMap = Map.Make(String);;
 let optimize_constant_fold = ref false
 
 let rec fexp_of_ctor (field, value) =
-  FE_aux (FE_Fexp (mk_id field, exp_of_value value), no_annot)
+  FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
 
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
@@ -92,7 +92,7 @@ and exp_of_value =
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
   | V_record ctors ->
-     mk_exp (E_record (List.map fexp_of_ctor (StringMap.bindings ctors)))
+     mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings ctors)))
   | V_vector vs ->
      mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs ->
@@ -158,8 +158,8 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_lit _ -> true
   | E_vector exps -> List.for_all is_constant exps
-  | E_record fexps -> List.for_all is_constant_fexp fexps
-  | E_cast (_, exp) -> is_constant exp
+  | E_struct fexps -> List.for_all is_constant_fexp fexps
+  | E_typ (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
   | E_id id ->
      (match Env.lookup_id id (env_of exp) with
@@ -167,7 +167,7 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
       | _ -> false)
   | _ -> false
 
-and is_constant_fexp (FE_aux (FE_Fexp (_, exp), _)) = is_constant exp
+and is_constant_fexp (FE_aux (FE_fexp (_, exp), _)) = is_constant exp
 
 (* Wrapper around interpreter that repeatedly steps until done. *)
 let rec run frame =
@@ -286,7 +286,7 @@ let rw_exp fixed target ok not_ok istate =
        else
          E_aux (e_aux, annot)
 
-    | E_cast (typ, (E_aux (E_lit _, _) as lit)) -> ok (); lit
+    | E_typ (typ, (E_aux (E_lit _, _) as lit)) -> ok (); lit
 
     | E_field (exp, id) when is_constant exp ->
        evaluate e_aux annot

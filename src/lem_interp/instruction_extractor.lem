@@ -120,7 +120,7 @@ end
 let rec extract_from_decode decoder = 
   match decoder with
     | [] -> []
-    | (FCL_aux (FCL_Funcl _ (Pat_aux pexp _)) _)::decoder ->
+    | (FCL_aux (FCL_funcl _ (Pat_aux pexp _)) _)::decoder ->
       let exp = match pexp with Pat_exp _ exp -> exp | Pat_when _ _ exp -> exp end in
       (match exp with
 	| E_aux (E_app (Id_aux(Id id) _) parms) (_,(Just (_,Tag_ctor,_,_,_))) ->
@@ -130,7 +130,7 @@ end
 
 let rec extract_effects_of_fcl id execute = match execute with
   | [] -> []
-  | FCL_aux (FCL_Funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) _) _) _) _)) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _,_))) :: executes ->
+  | FCL_aux (FCL_funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) _) _) _) _)) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _,_))) :: executes ->
     if i = id 
     then efs
     else extract_effects_of_fcl id executes
@@ -152,7 +152,7 @@ let rec extract_patt_parm (P_aux p (_,tannot)) =
 
 let rec extract_from_execute fcls = match fcls with
   | [] -> []
-  | FCL_aux (FCL_Funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) parms) _) _) _)) (_,Just(_,_,_,Effect_aux(Effect_set efs) _,_))::fcls ->
+  | FCL_aux (FCL_funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) parms) _) _) _)) (_,Just(_,_,_,Effect_aux(Effect_set efs) _,_))::fcls ->
      (Instr_form i (List.map extract_patt_parm parms) efs)::extract_from_execute fcls
   | _ :: fcls ->
      (* AA: Find out what breaks this *)

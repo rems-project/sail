@@ -84,6 +84,8 @@ type loop = While | Until
 
 type extern = { pure : bool; bindings : (string * string) list } option
 
+type def_annot = { doc_comment : string option; attrs : (string * string * l) list; loc : l }
+
 }}
 
 embed
@@ -98,6 +100,8 @@ type loop = While | Until
 type annot 'a = l * 'a
 
 type extern = <| pure : bool; bindings : list (string * string) |>
+
+type def_annot = <| doc_comment : maybe string; attrs : list (string * string * l); loc: l |>
 
 }}
 
@@ -141,6 +145,11 @@ external :: '' ::=
   {{ phantom }}
   {{ lem maybe extern }}
   {{ ocaml extern option }}
+
+def_annot :: '' ::=
+  {{ phantom }}
+  {{ lem def_annot }}
+  {{ ocaml def_annot }}
 
 l :: '' ::=
   {{ phantom }}
@@ -214,7 +223,7 @@ typ :: 'Typ_' ::=
   | kid                                           :: :: var {{ com type variable }}
   | ( typ1 , ... , typn ) -> typ2                 :: :: fn {{ com Function (first-order only) }}
   | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
-  | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
+  | ( typ1 , .... , typn )                        :: :: tuple {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
   | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
   | { kinded_id1 ...  kinded_idn , n_constraint . typ }
@@ -375,7 +384,7 @@ pat :: 'P_' ::=
     {{ com vector pattern }}
   |  pat1 @ ... @ patn                      :: :: vector_concat
     {{ com concatenated vector pattern }}
-  | ( pat1 , .... , patn )                  :: :: tup
+  | ( pat1 , .... , patn )                  :: :: tuple
     {{ com tuple pattern }}
   | [|| pat1 , .. , patn ||]                :: :: list
     {{ com list pattern }}
@@ -416,7 +425,7 @@ exp :: 'E_' ::=
     {{ com identifier }}
   | lit                                                 :: :: lit
     {{ com literal constant }}
-  | ( typ ) exp                                         :: :: cast
+  | ( typ ) exp                                         :: :: typ
     {{ com cast }}
   | id ( exp1 , .. , expn )                             :: :: app
     {{ com function application }}
@@ -442,11 +451,11 @@ exp :: 'E_' ::=
   | exp1 '::' exp2                                    :: :: cons {{ com cons }}
 
   % structs
-  | struct { fexp0 , ... , fexpn }                    :: :: record {{ com struct }}
-  | { exp with fexp0 , ... , fexpn }                  :: :: record_update {{ com functional update of struct }}
+  | struct { fexp0 , ... , fexpn }                    :: :: struct {{ com struct }}
+  | { exp with fexp0 , ... , fexpn }                  :: :: struct_update {{ com functional update of struct }}
   | exp . id                                          :: :: field {{ com field projection from struct  }}
 
-  | match exp { pexp1 , ... , pexpn }                 :: :: case {{ com pattern matching }}
+  | match exp { pexp1 , ... , pexpn }                 :: :: match {{ com pattern matching }}
 
   | letbind in exp                                    :: :: let
     {{ com let expression }}
@@ -473,13 +482,13 @@ exp :: 'E_' ::=
   | assume n_constraint in exp :: :: internal_assume {{ com Internal node for additional type checker assumptions }}
   | constraint n_constraint :: :: constraint
 
-lexp :: 'LEXP_' ::= {{ com lvalue expression }}
+lexp :: 'LE_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
     | id                      :: :: id {{ com identifier }}
     | deref exp               :: :: deref
-    | id ( exp1 , .. , expn ) :: :: memory {{ com memory or register write via function call }}
-    | ( typ ) id	      :: :: cast
-    | ( lexp0 , .. , lexpn )  :: :: tup {{ com multiple (non-memory) assignment }}
+    | id ( exp1 , .. , expn ) :: :: app {{ com memory or register write via function call }}
+    | ( typ ) id	      :: :: typ
+    | ( lexp0 , .. , lexpn )  :: :: tuple {{ com multiple (non-memory) assignment }}
     | lexp1 @ ... @ lexpn     :: :: vector_concat {{ com vector concatenation L-exp }}
     | lexp [ exp ]            :: :: vector  {{ com vector element }}
     | lexp [ exp1 '..' exp2 ] :: :: vector_range {{ com subvector }}
@@ -488,7 +497,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 fexp :: 'FE_' ::=
   {{ com field expression }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id = exp                  :: :: Fexp
+  | id = exp                  :: :: fexp
 
 opt_default :: 'Def_val_' ::=
   {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
@@ -517,13 +526,13 @@ parsing
 
 %%Fun right App
 %%Function right App
-E_case right E_app
+E_match right E_app
 E_let right E_app
 
 %%Fun <= Field
 %%Function <= Field
 E_app <= E_field
-E_case <= E_field
+E_match <= E_field
 E_let <= E_field
 
 E_app left E_app
@@ -533,46 +542,9 @@ E_app left E_app
 % Function definitions                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%% old Lem style %%%%%%
-grammar
-%% % lem_tannot_opt_aux :: 'LEM_Typ_annot_' ::=
-%% %   {{ com Optional type annotations }}
-%% %   |                                                     :: :: none
-%% %   | : typ                                               :: :: some 
-%% % 
-%% % lem_tannot_opt {{ tex \ottnt{tannot}^? }} :: 'LEM_Typ_annot_' ::=
-%% %   {{ com location-annotated optional type annotations }}
-%% %   | tannot_opt_aux l                                    :: :: aux
-%% % 
-%% % lem_funcl :: 'LEM_FCL' ::=
-%% %   {{ com Function clauses }}
-%% %   {{ aux _ l }}
-%% %   | id pat1 ... patn tannot_opt = exp                   :: :: Funcl
-%% % 
-%% % lem_letbind :: 'LEM_LB_' ::=
-%% %   {{ com Let bindings }}
-%% %   {{ aux _ l }}
-%% %   | pat tannot_opt = exp                                :: :: Let_val
-%% %     {{ com Value bindings }}
-%% %   | lem_funcl                                           :: :: Let_fun
-%% %     {{ com Function bindings }}
-%% % 
-%% % 
-%% % grammar
-%% % lem_val_def :: 'LEM_VD' ::= 
-%% %   {{ com Value definitions }}
-%% %   {{ aux _ l }}
-%% %   | let lem_letbind                                     :: :: Let_def
-%% %     {{ com Non-recursive value definitions }}
-%% %   | let rec  lem_funcl1 and ... and lem_funcln          :: :: Let_rec
-%% %     {{ com Recursive function definitions }}
-%% % 
-%% % lem_val_spec :: 'LEM_VS' ::=
-%% %   {{ com Value type specifications }} 
-%% %   {{ aux _ l }}
-%% %   | val x_l : typschm                                           :: :: Val_spec
-
 %%%%% C-ish style %%%%%%%%%%
+
+grammar
 
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com optional type annotation for functions}}
@@ -601,7 +573,7 @@ pexp_funcl :: 'Pat_funcl_' ::=
 funcl :: 'FCL_' ::=
   {{ com function clause }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id pexp_funcl                   :: :: Funcl
+  | id pexp_funcl                   :: :: funcl
 
 
 fundef :: 'FD_' ::=
@@ -625,7 +597,7 @@ mpat :: 'MP_' ::=
   | id ( mpat1 , ... , mpatn )         ::   :: app
   | [ mpat1 , ... , mpatn ]            ::   :: vector
   | mpat1 @ ... @ mpatn                ::   :: vector_concat
-  | ( mpat1 , ... , mpatn )            ::   :: tup
+  | ( mpat1 , ... , mpatn )            ::   :: tuple
   | [|| mpat1 , ... , mpatn ||]        ::   :: list
   | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}
   | mpat1 '::' mpat2                   ::   :: cons
@@ -739,7 +711,7 @@ opt_exp :: '' ::= {{ phantom }} {{ lem maybe (exp 'a) }} {{ ocaml 'a exp option 
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register effect effect' typ id = opt_exp                    :: :: reg
+  | register effect effect' typ id = opt_exp :: :: reg
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
@@ -756,7 +728,7 @@ loop_measure :: '' ::=
 
 def :: 'DEF_' ::=
   {{ com top-level definition }}
-  {{ auxparam 'a }}
+  {{ aux _ def_annot }} {{ auxparam 'a }}
   | type_def                                           :: :: type
     {{ com type definition }}
   | fundef                                             :: :: fundef
@@ -765,13 +737,13 @@ def :: 'DEF_' ::=
     {{ com mapping definition }}
   | impl funcl                                         :: :: impl
     {{ com impl definition }}
-  | letbind                                            :: :: val
+  | letbind                                            :: :: let
     {{ com value definition }}
-  | val_spec                                           :: :: spec
+  | val_spec                                           :: :: val
     {{ com top-level type constraint }}
   | outcome_spec { def1 ... defn }                     :: :: outcome
     {{ com top-level outcome definition }}
-  | instantiation instantiation_spec with subst1 , ... , substn        :: :: instantiation
+  | instantiation instantiation_spec with subst1 , ... , substn :: :: instantiation
     {{ com instantiation }}
   | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}
@@ -785,7 +757,7 @@ def :: 'DEF_' ::=
     {{ com separate termination measure declaration }}
   | 'termination_measure' id loop_measure1 , .. , loop_measuren :: :: loop_measures
     {{ com separate termination measure declaration }}
-  | dec_spec                                           :: :: reg_dec
+  | dec_spec                                           :: :: register
     {{ com register declaration }}
   | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}

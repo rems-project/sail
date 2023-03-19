@@ -237,7 +237,7 @@ instr :: 'I_' ::=
 cdef :: 'CDEF_' ::=
   | register id : ctyp = {
       instr0 ; ... ; instrn
-    } :: :: reg_dec
+    } :: :: register
   | ctype_def :: :: type
 
 % The first list of instructions sets up the global letbinding, while
@@ -246,7 +246,7 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: let
 
-  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
+  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: val
 
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for

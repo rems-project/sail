@@ -96,12 +96,12 @@ let rec pat_id (P_aux (aux, _)) =
   | P_var (pat, _) -> pat_id pat
   | _ -> None
 
-let add_assert cond (E_aux (aux, (l, ())) as exp) =
+let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
   let msg = mk_lit_exp (L_string "") in
   let assertion = locate (fun _ -> gen_loc l) (mk_exp (E_assert (cond, msg))) in
   match aux with
-  | E_block exps -> E_aux (E_block (assertion :: exps), (l, ()))
-  | _ -> E_aux (E_block (assertion :: [exp]), (l, ()))
+  | E_block exps -> E_aux (E_block (assertion :: exps), (l, empty_uannot))
+  | _ -> E_aux (E_block (assertion :: [exp]), (l, uannot))
 
 (* If we know that x != bitv, then after any let y = unsigned(x) we
    will also know that y != unsigned(bitv) *)

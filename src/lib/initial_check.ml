@@ -149,13 +149,13 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
     | P.ATyp_var v -> Typ_var (to_ast_var v)
     | P.ATyp_fn (from_typ, to_typ, _) ->
        let from_typs = match from_typ with
-         | P.ATyp_aux (P.ATyp_tup typs, _) ->
+         | P.ATyp_aux (P.ATyp_tuple typs, _) ->
             List.map (to_ast_typ ctx) typs
          | _ -> [to_ast_typ ctx from_typ]
        in
        Typ_fn (from_typs, to_ast_typ ctx to_typ)
     | P.ATyp_bidir (typ1, typ2, _) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2)
-    | P.ATyp_tup typs -> Typ_tup (List.map (to_ast_typ ctx) typs)
+    | P.ATyp_tuple typs -> Typ_tuple (List.map (to_ast_typ ctx) typs)
     | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
        Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int])
     | P.ATyp_app (P.Id_aux (P.Id "bool", il), [n]) ->
@@ -342,109 +342,117 @@ let rec to_ast_pat ctx (P.P_aux (pat, l)) =
              else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
           | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
           | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
-          | P.P_tup(pats) -> P_tup (List.map (to_ast_pat ctx) pats)
+          | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
           | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
           | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
           | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-         ), (l,()))
+         ), (l, empty_uannot))
 
-let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : unit letbind =
+let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : uannot letbind =
   LB_aux(
     (match lb with
     | P.LB_val(pat,exp) ->
       LB_val(to_ast_pat ctx pat, to_ast_exp ctx exp)
-    ), (l,()))
+    ), (l, empty_uannot))
 
-and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
-  E_aux(
-    (match exp with
-    | P.E_block exps ->
-      (match to_ast_fexps false ctx exps with
-      | Some fexps -> E_record fexps
-      | None -> E_block (List.map (to_ast_exp ctx) exps))
-    | P.E_id id ->
-       (* We support identifiers the same as __LOC__, __FILE__ and
-          __LINE__ in the OCaml standard library, and similar
-          constructs in C *)
-       let id_str = string_of_parse_id id in
-       if id_str = "__LOC__" then (
-         E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l))
-       ) else if id_str = "__FILE__" then (
-         let file = match Reporting.simp_loc l with
-           | Some (p, _) -> p.pos_fname
-           | None -> "unknown file" in
-         E_lit (L_aux (L_string file, l))
-       ) else if id_str = "__LINE__" then (
-         let lnum = match Reporting.simp_loc l with
-           | Some (p, _) -> p.pos_lnum
-           | None -> -1 in
-         E_lit (L_aux (L_num (Big_int.of_int lnum), l))
-       ) else (
-         E_id (to_ast_id ctx id)
-       )
-    | P.E_ref id -> E_ref (to_ast_id ctx id)
-    | P.E_lit lit -> E_lit (to_ast_lit lit)
-    | P.E_cast (typ, exp) -> E_cast (to_ast_typ ctx typ, to_ast_exp ctx exp)
-    | P.E_app (f, args) ->
-      (match List.map (to_ast_exp ctx) args with
-	| [] -> E_app (to_ast_id ctx f, [])
-        | exps -> E_app (to_ast_id ctx f, exps))
-    | P.E_app_infix(left,op,right) ->
-      E_app_infix(to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
-    | P.E_tuple(exps) -> E_tuple(List.map (to_ast_exp ctx) exps)
-    | P.E_if(e1,e2,e3) -> E_if(to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
-    | P.E_for(id,e1,e2,e3,atyp,e4) ->
-      E_for(to_ast_id ctx id,to_ast_exp ctx e1, to_ast_exp ctx e2,
-            to_ast_exp ctx e3,to_ast_order ctx atyp, to_ast_exp ctx e4)
-    | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-    | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-    | P.E_vector(exps) -> E_vector(List.map (to_ast_exp ctx) exps)
-    | P.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp ctx vexp, to_ast_exp ctx exp)
-    | P.E_vector_subrange(vex,exp1,exp2) ->
-      E_vector_subrange(to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_vector_update(vex,exp1,exp2) ->
-      E_vector_update(to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_vector_update_subrange(vex,e1,e2,e3) ->
-      E_vector_update_subrange(to_ast_exp ctx vex, to_ast_exp ctx e1,
-			       to_ast_exp ctx e2, to_ast_exp ctx e3)
-    | P.E_vector_append(e1,e2) -> E_vector_append(to_ast_exp ctx e1,to_ast_exp ctx e2)
-    | P.E_list(exps) -> E_list(List.map (to_ast_exp ctx) exps)
-    | P.E_cons(e1,e2) -> E_cons(to_ast_exp ctx e1, to_ast_exp ctx e2)
-    | P.E_record fexps ->
-       (match to_ast_fexps true ctx fexps with
-        | Some fexps -> E_record fexps
-        | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none"))
-    | P.E_record_update(exp,fexps) ->
-      (match to_ast_fexps true ctx fexps with
-      | Some(fexps) -> E_record_update(to_ast_exp ctx exp, fexps)
-      | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none"))
-    | P.E_field(exp,id) -> E_field(to_ast_exp ctx exp, to_ast_id ctx id)
-    | P.E_case(exp,pexps) -> E_case(to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-    | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-    | P.E_let(leb,exp) -> E_let(to_ast_letbind ctx leb, to_ast_exp ctx exp)
-    | P.E_assign(lexp,exp) -> E_assign(to_ast_lexp ctx lexp, to_ast_exp ctx exp)
-    | P.E_var(lexp,exp1,exp2) -> E_var(to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_sizeof(nexp) -> E_sizeof(to_ast_nexp ctx nexp)
-    | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
-    | P.E_exit exp -> E_exit(to_ast_exp ctx exp)
-    | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
-    | P.E_return exp -> E_return(to_ast_exp ctx exp)
-    | P.E_assert(cond,msg) -> E_assert(to_ast_exp ctx cond, to_ast_exp ctx msg)
-    | P.E_internal_plet(pat,exp1,exp2) ->
-       if !opt_magic_hash then
-         E_internal_plet(to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-       else
-         raise (Reporting.err_general l "Internal plet construct found without -dmagic_hash")
-    | P.E_internal_return(exp) ->
-       if !opt_magic_hash then
-         E_internal_return(to_ast_exp ctx exp)
-       else
-         raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
-    | P.E_deref exp ->
-       E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
-    ), (l,()))
+and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
+  match exp with
+  | P.E_attribute (attr, arg, exp) ->
+     let E_aux (exp, (exp_l, annot)) = to_ast_exp ctx exp in
+     (* The location of an E_attribute node is just the attribute itself *)
+     let annot = add_attribute l attr arg annot in
+     E_aux (exp, (exp_l, annot))
+  | _ ->
+     let aux = match exp with
+       | P.E_attribute _ -> assert false
+       | P.E_block exps ->
+          (match to_ast_fexps false ctx exps with
+           | Some fexps -> E_struct fexps
+           | None -> E_block (List.map (to_ast_exp ctx) exps))
+       | P.E_id id ->
+          (* We support identifiers the same as __LOC__, __FILE__ and
+             __LINE__ in the OCaml standard library, and similar
+             constructs in C *)
+          let id_str = string_of_parse_id id in
+          if id_str = "__LOC__" then (
+            E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l))
+          ) else if id_str = "__FILE__" then (
+            let file = match Reporting.simp_loc l with
+              | Some (p, _) -> p.pos_fname
+              | None -> "unknown file" in
+            E_lit (L_aux (L_string file, l))
+          ) else if id_str = "__LINE__" then (
+            let lnum = match Reporting.simp_loc l with
+              | Some (p, _) -> p.pos_lnum
+              | None -> -1 in
+            E_lit (L_aux (L_num (Big_int.of_int lnum), l))
+          ) else (
+            E_id (to_ast_id ctx id)
+          )
+       | P.E_ref id -> E_ref (to_ast_id ctx id)
+       | P.E_lit lit -> E_lit (to_ast_lit lit)
+       | P.E_typ (typ, exp) -> E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp)
+       | P.E_app (f, args) ->
+          (match List.map (to_ast_exp ctx) args with
+	   | [] -> E_app (to_ast_id ctx f, [])
+           | exps -> E_app (to_ast_id ctx f, exps))
+       | P.E_app_infix(left,op,right) ->
+          E_app_infix(to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
+       | P.E_tuple(exps) -> E_tuple(List.map (to_ast_exp ctx) exps)
+       | P.E_if(e1,e2,e3) -> E_if(to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
+       | P.E_for(id,e1,e2,e3,atyp,e4) ->
+          E_for(to_ast_id ctx id,to_ast_exp ctx e1, to_ast_exp ctx e2,
+                to_ast_exp ctx e3,to_ast_order ctx atyp, to_ast_exp ctx e4)
+       | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
+       | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
+       | P.E_vector(exps) -> E_vector(List.map (to_ast_exp ctx) exps)
+       | P.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp ctx vexp, to_ast_exp ctx exp)
+       | P.E_vector_subrange(vex,exp1,exp2) ->
+          E_vector_subrange(to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+       | P.E_vector_update(vex,exp1,exp2) ->
+          E_vector_update(to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+       | P.E_vector_update_subrange(vex,e1,e2,e3) ->
+          E_vector_update_subrange(to_ast_exp ctx vex, to_ast_exp ctx e1,
+			           to_ast_exp ctx e2, to_ast_exp ctx e3)
+       | P.E_vector_append(e1,e2) -> E_vector_append(to_ast_exp ctx e1,to_ast_exp ctx e2)
+       | P.E_list(exps) -> E_list(List.map (to_ast_exp ctx) exps)
+       | P.E_cons(e1,e2) -> E_cons(to_ast_exp ctx e1, to_ast_exp ctx e2)
+       | P.E_struct fexps ->
+          (match to_ast_fexps true ctx fexps with
+           | Some fexps -> E_struct fexps
+           | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none"))
+       | P.E_struct_update(exp,fexps) ->
+          (match to_ast_fexps true ctx fexps with
+           | Some(fexps) -> E_struct_update(to_ast_exp ctx exp, fexps)
+           | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none"))
+       | P.E_field(exp,id) -> E_field(to_ast_exp ctx exp, to_ast_id ctx id)
+       | P.E_match(exp,pexps) -> E_match(to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
+       | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
+       | P.E_let(leb,exp) -> E_let(to_ast_letbind ctx leb, to_ast_exp ctx exp)
+       | P.E_assign(lexp,exp) -> E_assign(to_ast_lexp ctx lexp, to_ast_exp ctx exp)
+       | P.E_var(lexp,exp1,exp2) -> E_var(to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+       | P.E_sizeof(nexp) -> E_sizeof(to_ast_nexp ctx nexp)
+       | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
+       | P.E_exit exp -> E_exit(to_ast_exp ctx exp)
+       | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
+       | P.E_return exp -> E_return(to_ast_exp ctx exp)
+       | P.E_assert(cond,msg) -> E_assert(to_ast_exp ctx cond, to_ast_exp ctx msg)
+       | P.E_internal_plet(pat,exp1,exp2) ->
+          if !opt_magic_hash then
+            E_internal_plet(to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+          else
+            raise (Reporting.err_general l "Internal plet construct found without -dmagic_hash")
+       | P.E_internal_return(exp) ->
+          if !opt_magic_hash then
+            E_internal_return(to_ast_exp ctx exp)
+          else
+            raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
+       | P.E_deref exp ->
+          E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
+     in
+     E_aux (aux, (l, empty_uannot))
 
-and to_ast_measure ctx (P.Measure_aux(m,l)) : unit internal_loop_measure =
+and to_ast_measure ctx (P.Measure_aux(m,l)) : uannot internal_loop_measure =
   let m = match m with
     | P.Measure_none -> Measure_none
     | P.Measure_some exp ->
@@ -454,40 +462,40 @@ and to_ast_measure ctx (P.Measure_aux(m,l)) : unit internal_loop_measure =
          raise (Reporting.err_general l "Internal loop termination measure found without -dmagic_hash")
   in Measure_aux (m,l)
 
-and to_ast_lexp ctx (P.E_aux(exp,l) : P.exp) : unit lexp =
+and to_ast_lexp ctx (P.E_aux(exp,l) : P.exp) : uannot lexp =
   let lexp = match exp with
-    | P.E_id id -> LEXP_id (to_ast_id ctx id)
-    | P.E_deref exp -> LEXP_deref (to_ast_exp ctx exp)
-    | P.E_cast (typ, P.E_aux (P.E_id id, l')) ->
-       LEXP_cast (to_ast_typ ctx typ, to_ast_id ctx id)
+    | P.E_id id -> LE_id (to_ast_id ctx id)
+    | P.E_deref exp -> LE_deref (to_ast_exp ctx exp)
+    | P.E_typ (typ, P.E_aux (P.E_id id, l')) ->
+       LE_typ (to_ast_typ ctx typ, to_ast_id ctx id)
     | P.E_tuple tups ->
        let ltups = List.map (to_ast_lexp ctx) tups in
-       let is_ok_in_tup (LEXP_aux (le, (l, _))) =
+       let is_ok_in_tup (LE_aux (le, (l, _))) =
          match le with
-         | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_vector_concat _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
-         | LEXP_memory _ | LEXP_deref _ ->
+         | LE_id _ | LE_typ _ | LE_vector _ | LE_vector_concat _ | LE_field _ | LE_vector_range _ | LE_tuple _ -> ()
+         | LE_app _ | LE_deref _ ->
             raise (Reporting.err_typ l "only identifiers, fields, and vectors may be set in a tuple")
        in
        List.iter is_ok_in_tup ltups;
-       LEXP_tup ltups
+       LE_tuple ltups
     | P.E_app ((P.Id_aux (f, l') as f'), args) ->
        begin match f with
        | P.Id(id) ->
           (match List.map (to_ast_exp ctx) args with
-           | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LEXP_memory (to_ast_id ctx f', [])
-           | [E_aux (E_tuple exps,_)] -> LEXP_memory (to_ast_id ctx f', exps)
-           | args -> LEXP_memory(to_ast_id ctx f', args))
+           | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LE_app (to_ast_id ctx f', [])
+           | [E_aux (E_tuple exps,_)] -> LE_app (to_ast_id ctx f', exps)
+           | args -> LE_app(to_ast_id ctx f', args))
        | _ -> raise (Reporting.err_typ l' "memory call on lefthand side of assignment must begin with an id")
        end
     | P.E_vector_append (exp1, exp2) ->
-       LEXP_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
-    | P.E_vector_access (vexp, exp) -> LEXP_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
+       LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
+    | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
     | P.E_vector_subrange (vexp, exp1, exp2) ->
-       LEXP_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_field (fexp, id) -> LEXP_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
+       LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+    | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
     | _ -> raise (Reporting.err_typ l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment")
   in
-  LEXP_aux (lexp, (l, ()))
+  LE_aux (lexp, (l, empty_uannot))
 
 and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
   match exp_aux with
@@ -495,18 +503,19 @@ and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
      to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2
   | _ -> [to_ast_lexp ctx exp]
 
-and to_ast_case ctx (P.Pat_aux(pex,l) : P.pexp) : unit pexp =
+and to_ast_case ctx (P.Pat_aux(pex,l) : P.pexp) : uannot pexp =
   match pex with
-  | P.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat ctx pat, to_ast_exp ctx exp),(l,()))
+  | P.Pat_exp (pat, exp) ->
+     Pat_aux (Pat_exp (to_ast_pat ctx pat, to_ast_exp ctx exp), (l, empty_uannot))
   | P.Pat_when(pat,guard,exp) ->
-     Pat_aux (Pat_when (to_ast_pat ctx pat, to_ast_exp ctx guard, to_ast_exp ctx exp), (l, ()))
+     Pat_aux (Pat_when (to_ast_pat ctx pat, to_ast_exp ctx guard, to_ast_exp ctx exp), (l, empty_uannot))
 
-and to_ast_fexps (fail_on_error:bool) ctx (exps : P.exp list) : unit fexp list option =
+and to_ast_fexps (fail_on_error:bool) ctx (exps : P.exp list) : uannot fexp list option =
   match exps with
   | [] -> Some []
   | fexp::exps -> let maybe_fexp,maybe_error = to_ast_record_try ctx fexp in
                   (match maybe_fexp,maybe_error with
-                  | Some(fexp),None ->
+                  | Some(fexp), None ->
                     (match (to_ast_fexps fail_on_error ctx exps) with
                     | Some(fexps) -> Some(fexp::fexps)
                     | _  -> None)
@@ -516,12 +525,12 @@ and to_ast_fexps (fail_on_error:bool) ctx (exps : P.exp list) : unit fexp list o
                     else None
                   | _ -> None)
 
-and to_ast_record_try ctx (P.E_aux(exp,l):P.exp): unit fexp option * (l * string) option =
+and to_ast_record_try ctx (P.E_aux(exp,l):P.exp): uannot fexp option * (l * string) option =
   match exp with
   | P.E_app_infix(left,op,r) ->
     (match left, op with
     | P.E_aux(P.E_id(id),li), P.Id_aux(P.Id("="),leq) ->
-      Some(FE_aux(FE_Fexp(to_ast_id ctx id, to_ast_exp ctx r), (l,()))),None
+      Some(FE_aux(FE_fexp(to_ast_id ctx id, to_ast_exp ctx r), (l, empty_uannot))),None
     | P.E_aux(_,li) , P.Id_aux(P.Id("="),leq) ->
       None,Some(li,"Expected an identifier to begin this field assignment")
     | P.E_aux(P.E_id(id),li), P.Id_aux(_,leq) ->
@@ -549,14 +558,14 @@ let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out 
 let to_ast_extern (ext : P.extern) : extern =
   { pure = ext.pure; bindings = ext.bindings }
           
-let to_ast_spec ctx (vs : P.val_spec) : unit val_spec ctx_out =
+let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
   match vs with
   | P.VS_aux (vs, l) ->
      match vs with
      | P.VS_val_spec (ts, id, ext, is_cast) ->
         let typschm, _ = to_ast_typschm ctx ts in
         let ext = Util.option_map to_ast_extern ext in
-        VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, ())), ctx
+        VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx
  
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
   match ev with
@@ -647,7 +656,7 @@ let generate_enum_functions l ctx enum_id fns exps =
       let name = mk_id (string_of_id enum_id ^ "_" ^ string_of_parse_id id) in
       [mk_fundef [
            mk_funcl name (mk_pat (P_id (mk_id "arg#")))
-             (mk_exp (E_case (mk_exp (E_id (mk_id "arg#")),
+             (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")),
                               List.map (fun (id, exps) ->
                                   let id = to_ast_id ctx id in
                                   let exp = to_ast_exp ctx (get_exp i exps) in
@@ -661,6 +670,7 @@ let generate_enum_functions l ctx enum_id fns exps =
     ) fns
   |> List.concat
 
+(* When desugaring a type definition, we check that the type does not have a reserved name *)
 let to_ast_reserved_type_id ctx id =
   let id = to_ast_id ctx id in
   if List.exists (fun reserved -> Id.compare reserved id = 0) ctx.reserved_type_ids then
@@ -672,22 +682,22 @@ let to_ast_reserved_type_id ctx id =
     end
   else
     id
-  
-let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit def list ctx_out =
+
+let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let kind = to_ast_kind kind in
      let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
-     [DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, ())))],
+     [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
      add_constructor id typq ctx
 
   | P.TD_record (id, typq, fields, _) ->
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let fields = List.map (fun (atyp, id) -> to_ast_typ typq_ctx atyp, to_ast_id ctx id) fields in
-     [DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, ())))],
+     [DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)],
      add_constructor id typq ctx
 
   | P.TD_variant (id, typq, arms, _) as union ->
@@ -700,7 +710,7 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit def list ctx_
      in
      let generated_records = filter_records (List.map fst records_and_arms) in
      let generated_records, ctx =
-       List.fold_left (fun (prev, ctx) td -> let td, ctx = to_ast_typedef ctx td in prev @ td, ctx)
+       List.fold_left (fun (prev, ctx) td -> let td, ctx = to_ast_typedef ctx (mk_def_annot (gen_loc l)) td in prev @ td, ctx)
          ([], ctx)
          generated_records
      in
@@ -709,24 +719,24 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit def list ctx_
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let arms = List.map (to_ast_type_union (add_constructor id typq typq_ctx)) arms in
-     [DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, ())))] @ generated_records,
+     [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)] @ generated_records,
      add_constructor id typq ctx
 
   | P.TD_enum (id, fns, enums, _) ->
      let id = to_ast_reserved_type_id ctx id in
      let fns = generate_enum_functions l ctx id fns enums in
      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-     fns @ [DEF_type (TD_aux (TD_enum (id, enums, false), (l, ())))],
+     fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
      { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
   | P.TD_bitfield (id, typ, ranges) ->
      let id = to_ast_reserved_type_id ctx id in
      let typ = to_ast_typ ctx typ in
      let ranges = List.map (fun (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) ranges in
-     [DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, ())))],
+     [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
      { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
-let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : unit rec_opt =
+let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : uannot rec_opt =
   Rec_aux((match r with
   | P.Rec_nonrec -> Rec_nonrec
   | P.Rec_rec -> Rec_rec
@@ -750,27 +760,27 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
      let typq, ctx = to_ast_typquant ctx tq in
      Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx
 
-let to_ast_funcl ctx (P.FCL_aux(fcl, l) : P.funcl) : unit funcl =
+let to_ast_funcl ctx (P.FCL_aux(fcl, l) : P.funcl) : uannot funcl =
   match fcl with
-  | P.FCL_Funcl (id, pexp) ->
-     FCL_aux (FCL_Funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, ()))
+  | P.FCL_funcl (id, pexp) ->
+     FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))
 
-let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : unit funcl list =
+let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
-  | P.FCL_Funcl (id, pexp) ->
+  | P.FCL_funcl (id, pexp) ->
      match List.assoc_opt (string_of_parse_id id) ctx.target_sets with
      | Some targets ->
         List.map (fun target ->
-            FCL_aux (FCL_Funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (l, ()))
+            FCL_aux (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (l, empty_uannot))
           ) targets
      | None ->
-        [FCL_aux (FCL_Funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, ()))]
+        [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))]
     
-let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : unit fundef =
+let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
   match fd with
   | P.FD_function (rec_opt, tannot_opt, _, funcls) ->
      let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
-     FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
+     FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l, empty_uannot))
 
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
   MP_aux(
@@ -784,29 +794,32 @@ let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
       else MP_app(to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
     | P.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat ctx) mpats)
     | P.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat ctx) mpats)
+    | P.MP_tuple(mpats) -> MP_tuple(List.map (to_ast_mpat ctx) mpats)
     | P.MP_list(mpats) -> MP_list(List.map (to_ast_mpat ctx) mpats)
     | P.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
     | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
     | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
-    ), (l,()))
+    ), (l, empty_uannot))
 
 let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
   match mpexp with
-  | P.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat ctx mpat), (l, ()))
-  | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, ()))
+  | P.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat ctx mpat), (l, empty_uannot))
+  | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, empty_uannot))
 
 let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
   match mapcl with
-  | P.MCL_bidir (mpexp1, mpexp2) -> MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, ()))
-  | P.MCL_forwards (mpexp, exp) -> MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, ()))
-  | P.MCL_backwards (mpexp, exp) -> MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, ()))
+  | P.MCL_bidir (mpexp1, mpexp2) ->
+     MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, empty_uannot))
+  | P.MCL_forwards (mpexp, exp) ->
+     MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
+  | P.MCL_backwards (mpexp, exp) ->
+     MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
 
-let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
+let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : uannot mapdef =
   match md with
   | P.MD_mapping(id, typschm_opt, mapcls) ->
      let tannot_opt, ctx = to_ast_typschm_opt ctx typschm_opt in
-     MD_aux(MD_mapping(to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l,()))
+     MD_aux(MD_mapping(to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l, empty_uannot))
 
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
   DEC_aux((match regdec with
@@ -818,7 +831,7 @@ let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
               DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
            | P.DEC_config (id, typ, exp) ->
               DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
-          ),(l,()))
+          ), (l, empty_uannot))
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
   let aux, ctx = match aux with
@@ -850,7 +863,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
        let mapcl = to_ast_mapcl ctx mapcl in
        SD_mapcl (id, mapcl), ctx
   in
-  SD_aux (aux, (l, ())), ctx
+  SD_aux (aux, (l, empty_uannot)), ctx
 
 let to_ast_prec = function
   | P.Infix -> Infix
@@ -867,76 +880,78 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let rec to_ast_def ctx def : unit def list ctx_out =
+let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+  let annot = mk_def_annot l in
   match def with
   | P.DEF_overload (id, ids) ->
-     [DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids)], ctx
+     [DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx
   | P.DEF_fixity (prec, n, op) ->
-     [DEF_fixity (to_ast_prec prec, n, to_ast_id ctx op)], ctx
+     [DEF_aux (DEF_fixity (to_ast_prec prec, n, to_ast_id ctx op), annot)], ctx
   | P.DEF_type t_def ->
-     to_ast_typedef ctx t_def
+     to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
      let fd = to_ast_fundef ctx f_def in
-     [DEF_fundef fd], ctx
+     [DEF_aux (DEF_fundef fd, annot)], ctx
   | P.DEF_mapdef m_def ->
      let md = to_ast_mapdef ctx m_def in
-     [DEF_mapdef md], ctx
+     [DEF_aux (DEF_mapdef md, annot)], ctx
   | P.DEF_impl funcl ->
      let funcls = to_ast_impl_funcls ctx funcl in
-     List.map (fun funcl -> DEF_impl funcl) funcls, ctx
-  | P.DEF_val lb ->
+     List.map (fun funcl -> DEF_aux (DEF_impl funcl, annot)) funcls, ctx
+  | P.DEF_let lb ->
      let lb = to_ast_letbind ctx lb in
-     [DEF_val lb], ctx
-  | P.DEF_spec val_spec ->
+     [DEF_aux (DEF_let lb, annot)], ctx
+  | P.DEF_val val_spec ->
      let vs,ctx = to_ast_spec ctx val_spec in
-     [DEF_spec vs], ctx
+     [DEF_aux (DEF_val vs, annot)], ctx
   | P.DEF_outcome (outcome_spec, defs) ->
      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
      let defs, _ =
        List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
-     [DEF_outcome (outcome_spec, List.rev defs)], ctx
+     [DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx
   | P.DEF_instantiation (id, substs) ->
      let id = to_ast_id ctx id in
-     [DEF_instantiation (IN_aux (IN_id id, (id_loc id, ())), List.map (to_ast_subst ctx) substs)], ctx
+     [DEF_aux (DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs), annot)], ctx
   | P.DEF_default typ_spec ->
      let default,ctx = to_ast_default ctx typ_spec in
-     [DEF_default default], ctx
-  | P.DEF_reg_dec dec ->
+     [DEF_aux (DEF_default default, annot)], ctx
+  | P.DEF_register dec ->
      let d = to_ast_dec ctx dec in
-     [DEF_reg_dec d], ctx
-  | P.DEF_pragma ("sail_internal", arg, l) ->
+     [DEF_aux (DEF_register d, annot)], ctx
+  | P.DEF_pragma ("sail_internal", arg) ->
      begin match Reporting.loc_file l with
      | Some file ->
-        [DEF_pragma ("sail_internal", arg, l)], { ctx with internal_files = file :: ctx.internal_files }
-     | None -> [DEF_pragma ("sail_internal", arg, l)], ctx
+        [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], { ctx with internal_files = file :: ctx.internal_files }
+     | None ->
+        [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx
      end
-  | P.DEF_pragma ("target_set", arg, l) ->
+  | P.DEF_pragma ("target_set", arg) ->
      let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
      begin match args with
      | (set :: targets) ->
-        [DEF_pragma ("target_set", arg, l)], { ctx with target_sets = (set, targets) :: ctx.target_sets }
+        [DEF_aux (DEF_pragma ("target_set", arg, l), annot)], { ctx with target_sets = (set, targets) :: ctx.target_sets }
      | [] ->
         raise (Reporting.err_general l "No arguments provided to target set directive")
      end
-  | P.DEF_pragma (pragma, arg, l) ->
-     [DEF_pragma (pragma, arg, l)], ctx
+  | P.DEF_pragma (pragma, arg) ->
+     [DEF_aux (DEF_pragma (pragma, arg, l), annot)], ctx
   | P.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
-     raise (Reporting.err_unreachable P.Unknown __POS__
+     raise (Reporting.err_unreachable l __POS__
                                       "Internal mutual block found when processing scattered defs")
   | P.DEF_scattered sdef ->
      let sdef, ctx = to_ast_scattered ctx sdef in
-     [DEF_scattered sdef], ctx
+     [DEF_aux (DEF_scattered sdef, annot)], ctx
   | P.DEF_measure (id, pat, exp) ->
-     [DEF_measure (to_ast_id ctx id, to_ast_pat ctx pat, to_ast_exp ctx exp)], ctx
+     [DEF_aux (DEF_measure (to_ast_id ctx id, to_ast_pat ctx pat, to_ast_exp ctx exp), annot)], ctx
   | P.DEF_loop_measures (id, measures) ->
-     [DEF_loop_measures (to_ast_id ctx id, List.map (to_ast_loop_measure ctx) measures)], ctx
+     [DEF_aux (DEF_loop_measures (to_ast_id ctx id, List.map (to_ast_loop_measure ctx) measures), annot)], ctx
 
 let rec remove_mutrec = function
   | [] -> []
-  | P.DEF_internal_mutrec fundefs :: defs ->
-     List.map (fun fdef -> P.DEF_fundef fdef) fundefs @ remove_mutrec defs
+  | P.DEF_aux (P.DEF_internal_mutrec fundefs, _) :: defs ->
+     List.map (fun (P.FD_aux (_, l) as fdef) -> P.DEF_aux (P.DEF_fundef fdef, l)) fundefs @ remove_mutrec defs
   | def :: defs ->
      def :: remove_mutrec defs
 
@@ -949,9 +964,9 @@ let to_ast ctx (P.Defs files) =
     List.rev defs, ctx
   in
   let wrap_file file defs =
-    [DEF_pragma ("file_start", file, P.Unknown)]
+    [mk_def (DEF_pragma ("file_start", file, P.Unknown))]
     @ defs
-    @ [DEF_pragma ("file_end", file, P.Unknown)]
+    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown))]
   in
   let defs, ctx =
     List.fold_left (fun (defs, ctx) file ->
@@ -1077,13 +1092,13 @@ let generate_undefineds vs_ids defs =
       end
   in
   let undefined_tu = function
-    | Tu_aux (Tu_ty_id (Typ_aux (Typ_tup typs, _), id), _) ->
-       mk_exp (E_app (id, List.map (fun typ -> mk_exp (E_cast (typ, mk_lit_exp L_undef))) typs))
-    | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_exp (E_cast (typ, mk_lit_exp L_undef))]))
+    | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) ->
+       mk_exp (E_app (id, List.map (fun typ -> mk_exp (E_typ (typ, mk_lit_exp L_undef))) typs))
+    | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_exp (E_typ (typ, mk_lit_exp L_undef))]))
   in
   let p_tup = function
     | [pat] -> pat
-    | pats -> mk_pat (P_tup pats)
+    | pats -> mk_pat (P_tuple pats)
   in
   let undefined_td = function
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
@@ -1101,7 +1116,7 @@ let generate_undefineds vs_ids defs =
        [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
-                            (mk_exp (E_record (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
+                            (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
     | TD_variant (id, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
        let body =
@@ -1111,7 +1126,7 @@ let generate_undefineds vs_ids defs =
            (* Deduplicate arguments for each constructor to keep definitions
               manageable. *)
            let extract_tu = function
-             | Tu_aux (Tu_ty_id (Typ_aux (Typ_tup typs, _), id), _) -> (id, typs)
+             | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) -> (id, typs)
              | Tu_aux (Tu_ty_id (typ, id), _) -> (id, [typ])
            in
            let record_arg_typs m (_,typs) =
@@ -1153,7 +1168,7 @@ let generate_undefineds vs_ids defs =
     | _ -> []
   in
   let rec undefined_defs = function
-    | DEF_type (TD_aux (td_aux, _)) as def :: defs ->
+    | DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def :: defs ->
        def :: undefined_td td_aux @ undefined_defs defs
     | def :: defs ->
        def :: undefined_defs defs
@@ -1162,7 +1177,7 @@ let generate_undefineds vs_ids defs =
   undefined_builtins @ undefined_defs defs
 
 let rec get_uninitialized_registers = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, None), _)) :: defs -> (typ, id) :: get_uninitialized_registers defs
+  | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> (typ, id) :: get_uninitialized_registers defs
   | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
@@ -1179,13 +1194,13 @@ let generate_initialize_registers vs_ids defs =
       [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
        mk_fundef [mk_funcl (mk_id "initialize_registers")
                     (mk_pat (P_lit (mk_lit L_unit)))
-                    (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_id id), mk_lit_exp L_undef))) regs)))]]
+                    (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_lit_exp L_undef))) regs)))]]
   in
   defs @ initialize_registers
 
 let generate_enum_functions vs_ids defs =
   let rec gen_enums = function
-    | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
+    | DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), _) as enum :: defs ->
        let enum_val_spec name quants typ =
          mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
        in
@@ -1207,7 +1222,7 @@ let generate_enum_functions vs_ids defs =
          let funcl =
            mk_funcl name
              (mk_pat (P_id (mk_id "arg#")))
-             (mk_exp (E_case (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+             (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
          in
          if IdSet.mem name vs_ids then []
          else
@@ -1226,7 +1241,7 @@ let generate_enum_functions vs_ids defs =
          let funcl =
            mk_funcl name
              (mk_pat (P_id (mk_id "arg#")))
-             (mk_exp (E_case (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+             (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
          in
          if IdSet.mem name vs_ids then []
          else

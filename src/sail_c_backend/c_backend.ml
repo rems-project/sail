@@ -284,7 +284,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
  
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
-    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
+    | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
 
     | Typ_exist _ ->
        (* Use Type_check.destruct_exist when optimising with SMT, to
@@ -405,7 +405,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
     let aexp = match aexp with
       | AE_app (id, vs, typ) -> f ctx id vs typ
 
-      | AE_cast (aexp, typ) -> AE_cast (analyze_functions ctx f aexp, typ)
+      | AE_typ (aexp, typ) -> AE_typ (analyze_functions ctx f aexp, typ)
 
       | AE_assign (alexp, aexp) -> AE_assign (alexp, analyze_functions ctx f aexp)
 
@@ -434,7 +434,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
          let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
          AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
 
-      | AE_case (aval, cases, typ) ->
+      | AE_match (aval, cases, typ) ->
          let analyze_case (AP_aux (_, env, _) as pat, aexp1, aexp2) =
            let pat_bindings = Bindings.bindings (apat_types pat) in
            let ctx = { ctx with local_env = env } in
@@ -443,12 +443,12 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
            in
            pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2
          in
-         AE_case (aval, List.map analyze_case cases, typ)
+         AE_match (aval, List.map analyze_case cases, typ)
 
       | AE_try (aexp, cases, typ) ->
          AE_try (analyze_functions ctx f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2) cases, typ)
 
-      | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
+      | AE_field _ | AE_struct_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
     in
     AE_aux (aexp, env, l)
 
@@ -707,7 +707,7 @@ let fix_early_stack_return ret ret_ctyp instrs =
   rewrite_return instrs
 
 let rec insert_heap_returns ret_ctyps = function
-  | (CDEF_spec (id, _, _, ret_ctyp) as cdef) :: cdefs ->
+  | (CDEF_val (id, _, _, ret_ctyp) as cdef) :: cdefs ->
      cdef :: insert_heap_returns (Bindings.add id ret_ctyp ret_ctyps) cdefs
 
   | CDEF_fundef (id, None, args, body) :: cdefs ->
@@ -2138,11 +2138,11 @@ let codegen_alloc = function
   | _ -> assert false
 
 let codegen_def' ctx = function
-  | CDEF_reg_dec (id, ctyp, _) ->
+  | CDEF_register (id, ctyp, _) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
 
-  | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
+  | CDEF_val (id, _, arg_ctyps, ret_ctyp) ->
      if ctx_is_extern id ctx then
        empty
      else if is_stack_ctyp ret_ctyp then

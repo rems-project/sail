@@ -105,7 +105,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
     | Typ_id v -> Typ_id v
     | Typ_var kid -> Typ_var kid
-    | Typ_tup typs -> Typ_tup (List.map nexp_simp_typ typs)
+    | Typ_tuple typs -> Typ_tuple (List.map nexp_simp_typ typs)
     | Typ_app (f, args) -> Typ_app (f, List.map nexp_simp_typ_arg args)
     | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
     | Typ_fn (arg_typs, ret_typ) ->
@@ -136,7 +136,7 @@ let fix_instantiation spec instantiation =
    return all Int-polymorphic functions. *)
 let rec polymorphic_functions ctx defs =
   match defs with
-  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)) :: defs ->
+  | DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)), _) :: defs ->
      let is_polymorphic = List.exists ctx.is_polymorphic (quant_kopts typq) in
      if is_polymorphic && not (ctx.extern_filter externs) then
        IdSet.add id (polymorphic_functions ctx defs)
@@ -184,7 +184,7 @@ let string_of_instantiation instantiation =
   and string_of_typ_aux = function
     | Typ_id id -> string_of_id id
     | Typ_var kid -> kid_name (mk_kopt K_type kid)
-    | Typ_tup typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
+    | Typ_tuple typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list "," string_of_typ_arg args ^ ")"
     | Typ_fn (arg_typs, ret_typ) ->
        "(" ^ Util.string_of_list ", " string_of_typ arg_typs ^ ") -> " ^ string_of_typ ret_typ
@@ -228,7 +228,7 @@ let id_of_instantiation id instantiation =
 
 let rec variant_generic_typ id defs =
   match defs with
-  | DEF_type (TD_aux (TD_variant (id', typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
+  | DEF_aux (DEF_type (TD_aux (TD_variant (id', typq, _, _), _)), _) :: _ when Id.compare id id' = 0 ->
      mk_typ (Typ_app (id', List.map (fun kopt -> mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))) (quant_kopts typq)))
   | _ :: defs -> variant_generic_typ id defs
   | [] -> failwith ("No variant with id " ^ string_of_id id)
@@ -303,7 +303,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_id v -> KidSet.empty
   | Typ_var kid when KidSet.mem kid exs -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
-  | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
+  | Typ_tuple typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kopts, nc, typ) -> typ_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ) ->
@@ -321,7 +321,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
   | Typ_var kid -> KidSet.empty
-  | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
+  | Typ_tuple typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_int_frees ~exs:exs) args)
   | Typ_exist (kopts, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ) ->
@@ -341,7 +341,7 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
 let rec remove_implicit (Typ_aux (aux, l)) =
   match aux with
   | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
-  | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)
+  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map remove_implicit typs), l)
   | Typ_fn (arg_typs, ret_typ) -> Typ_aux (Typ_fn (List.map remove_implicit arg_typs, remove_implicit ret_typ), l)
   | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2), l)
   | Typ_app (Id_aux (Id "implicit", _), args) -> Typ_aux (Typ_app (mk_id "atom", List.map remove_implicit_arg args), l)
@@ -388,8 +388,8 @@ let specialize_id_valspec spec instantiations id ast effect_info =
   match split_defs (is_valspec id) ast.defs with
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_defs, vs, post_defs) ->
-     let typschm, externs, is_cast, annot = match vs with
-       | DEF_spec (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) -> typschm, externs, is_cast, annot
+     let typschm, externs, is_cast, annot, def_annot = match vs with
+       | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)), def_annot) -> typschm, externs, is_cast, annot, def_annot
        | _ -> Reporting.unreachable (id_loc id) __POS__ "val-spec is not actually a val-spec"
      in
      let TypSchm_aux (TypSchm_ts (typq, typ), _) = typschm in
@@ -439,7 +439,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
-           [DEF_spec (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot))]
+           [DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot)), def_annot)]
          end
      in
 
@@ -461,8 +461,8 @@ let specialize_annotations instantiation fdef =
     } in
   let rw_exp = {
       id_exp_alg with
-      e_cast = (fun (typ, exp) -> E_cast (subst_unifiers instantiation typ, exp));
-      lEXP_cast = (fun (typ, lexp) -> LEXP_cast (subst_unifiers instantiation typ, lexp));
+      e_typ = (fun (typ, exp) -> E_typ (subst_unifiers instantiation typ, exp));
+      le_typ = (fun (typ, lexp) -> LE_typ (subst_unifiers instantiation typ, lexp));
       pat_alg = rw_pat
     } in
   let fdef =
@@ -482,18 +482,18 @@ let specialize_annotations instantiation fdef =
 let specialize_id_fundef instantiations id ast =
   match split_defs (is_fundef id) ast.defs with
   | None -> ast
-  | Some (pre_defs, DEF_fundef fundef, post_defs) ->
+  | Some (pre_defs, DEF_aux (DEF_fundef fundef, def_annot), post_defs) ->
      let spec_ids = ref IdSet.empty in
      let specialize_fundef instantiation =
        let spec_id = id_of_instantiation id instantiation in
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
-           [DEF_fundef (specialize_annotations instantiation (rename_fundef spec_id fundef))]
+           [DEF_aux (DEF_fundef (specialize_annotations instantiation (rename_fundef spec_id fundef)), def_annot)]
          end
      in
      let fundefs = List.map specialize_fundef instantiations |> List.concat in
-     { ast with defs = pre_defs @ (DEF_fundef fundef :: fundefs) @ post_defs }
+     { ast with defs = pre_defs @ (DEF_aux (DEF_fundef fundef, def_annot) :: fundefs) @ post_defs }
   | Some _ -> assert false (* unreachable *)
 
 let specialize_id_overloads instantiations id ast =
@@ -501,9 +501,9 @@ let specialize_id_overloads instantiations id ast =
 
   let rec rewrite_overloads defs =
     match defs with
-    | DEF_overload (overload_id, overloads) :: defs ->
+    | DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: defs ->
        let overloads = List.concat (List.map (fun id' -> if Id.compare id' id = 0 then IdSet.elements ids else [id']) overloads) in
-       DEF_overload (overload_id, overloads) :: rewrite_overloads defs
+       DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: rewrite_overloads defs
     | def :: defs -> def :: rewrite_overloads defs
     | [] -> []
   in
@@ -554,11 +554,11 @@ let remove_unused_valspecs env ast =
        remove_unused defs id
     | def :: defs when is_valspec id def ->
        remove_unused defs id
-    | DEF_overload (overload_id, overloads) :: defs ->
+    | DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: defs ->
        begin
          match List.filter (fun id' -> Id.compare id id' <> 0) overloads with
          | [] -> remove_unused defs id
-         | overloads -> DEF_overload (overload_id, overloads) :: remove_unused defs id
+         | overloads -> DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: remove_unused defs id
        end
     | def :: defs -> def :: remove_unused defs id
     | [] -> []
@@ -580,7 +580,7 @@ let reorder_typedefs ast =
   let tdefs = ref [] in
 
   let rec filter_typedefs = function
-    | (DEF_default _ | DEF_type _) as tdef :: defs ->
+    | DEF_aux ((DEF_default _ | DEF_type _), _) as tdef :: defs ->
        tdefs := tdef :: !tdefs;
        filter_typedefs defs
     | def :: defs -> def :: filter_typedefs defs
@@ -609,7 +609,7 @@ let specialize_ids spec ids ast effect_info =
      opt_ddump_spec_ast := Some (f, i + 1)
   | None -> ()
   end;
-  let ast, _ = Type_error.check Type_check.initial_env ast in
+  let ast, _ = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let _, ast =
     List.fold_left
       (fun (n, ast) id ->
@@ -617,7 +617,7 @@ let specialize_ids spec ids ast effect_info =
         (n + 1, rewrite_polymorphic_calls spec id ast))
       (1, ast) (IdSet.elements ids)
   in
-  let ast, env = Type_error.check Type_check.initial_env ast in
+  let ast, env = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let ast = remove_unused_valspecs env ast in
   Profile.finish "specialization pass" t;
   ast, env, effect_info

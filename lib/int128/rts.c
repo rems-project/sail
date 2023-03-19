@@ -450,15 +450,16 @@ int process_arguments(int argc, char *argv[])
 
     case 'b': ;
       uint64_t addr;
-      char *file;
+      char *cp, *file;
 
-      if (!sscanf(optarg, "0x%" PRIx64 ",%ms", &addr, &file)) {
+      addr = strtoull(optarg, &cp, 0);
+      if (cp == optarg || cp[0] != ',' || cp[1] == '\0') {
 	fprintf(stderr, "Could not parse argument %s\n", optarg);
 	return -1;
       };
+      file = cp + 1;
 
       load_raw(addr, file);
-      free(file);
       break;
 
     case 'i':

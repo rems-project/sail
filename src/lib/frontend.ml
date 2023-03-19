@@ -73,7 +73,7 @@ let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref true
 let opt_reformat : string option ref = ref None
                           
-let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
+let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uannot ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   Type_check.opt_check_completeness := true;
   let ast, env = Type_error.check env ast in
@@ -122,4 +122,4 @@ let descatter effect_info type_envs ast =
   let ast, _, type_envs = rewrite_ast_initial effect_info type_envs ast in
   (* Recheck after descattering so that the internal type environments
      always have complete variant types *)
-  Type_error.check Type_check.initial_env ast
+  Type_error.check Type_check.initial_env (Type_check.strip_ast ast)

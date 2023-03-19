@@ -279,8 +279,8 @@ let local_variable id lstate gstate =
 
 let unit_exp = E_lit (L_aux (L_unit, Parse_ast.Unknown))
 
-let is_value_fexp (FE_aux (FE_Fexp (id, exp), _)) = is_value exp
-let value_of_fexp (FE_aux (FE_Fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
+let is_value_fexp (FE_aux (FE_fexp (id, exp), _)) = is_value exp
+let value_of_fexp (FE_aux (FE_fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
 
 let rec build_letchain id lbs (E_aux (_, annot) as exp) =
   match lbs with
@@ -312,7 +312,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin
        let env = Type_check.env_of_annot annot in
        let typ = Type_check.typ_of_annot annot in
-       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> ()) typ in
+       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
        let undef_exp = Type_check.check_exp env undef_exp typ in
        return undef_exp
      end
@@ -469,34 +469,34 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | [] -> return (exp_of_value (tuple_value (List.map value_of_exp exps)))
      end
 
-  | E_case (exp, pexps) when not (is_value exp) ->
-     step exp >>= fun exp' -> wrap (E_case (exp', pexps))
-  | E_case (_, []) -> fail "Pattern matching failed"
-  | E_case (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) ->
+  | E_match (exp, pexps) when not (is_value exp) ->
+     step exp >>= fun exp' -> wrap (E_match (exp', pexps))
+  | E_match (_, []) -> fail "Pattern matching failed"
+  | E_match (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) ->
      begin try
          let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
          if matched then
            return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
          else
-           wrap (E_case (exp, pexps))
+           wrap (E_match (exp, pexps))
        with Failure s -> fail ("Failure: " ^ s)
      end
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) ->
+  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) ->
      begin try
          let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
          if matched then
            let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
            let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
            step guard >>= fun guard' ->
-           wrap (E_case (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
+           wrap (E_match (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
          else
-           wrap (E_case (exp, pexps))
+           wrap (E_match (exp, pexps))
        with Failure s -> fail ("Failure: " ^ s)
      end
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard -> wrap (E_case (exp, pexps))
+  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
+  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard -> wrap (E_match (exp, pexps))
 
-  | E_cast (typ, exp) -> return exp
+  | E_typ (typ, exp) -> return exp
 
   | E_throw exp when is_value exp -> throw (value_of_exp exp)
   | E_throw exp -> step exp >>= fun exp' -> wrap (E_throw exp')
@@ -523,13 +523,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | _ -> fail ("Couldn't find id " ^ string_of_id id)
      end
 
-  | E_record fexps ->
+  | E_struct fexps ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
-       | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
+       | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
+          wrap (E_struct (evaluated @ FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
@@ -538,15 +538,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           |> return
      end
 
-  | E_record_update (exp, fexps) when not (is_value exp) ->
-     step exp >>= fun exp' -> wrap (E_record_update (exp', fexps))
-  | E_record_update (record, fexps) ->
+  | E_struct_update (exp, fexps) when not (is_value exp) ->
+     step exp >>= fun exp' -> wrap (E_struct_update (exp', fexps))
+  | E_struct_update (record, fexps) ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
-       | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
+       | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record_update (record, evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
+          wrap (E_struct_update (record, evaluated @ FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) (coerce_record (value_of_exp record))
@@ -567,16 +567,16 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      wrap (E_block [E_aux (E_assign (lexp, exp), annot); body])
 
   | E_assign (lexp, exp) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_assign (lexp, exp'))
-  | E_assign (LEXP_aux (LEXP_memory (id, args), _), exp) -> wrap (E_app (id, args @ [exp]))
-  | E_assign (LEXP_aux (LEXP_field (lexp, id), ul), exp) ->
+  | E_assign (LE_aux (LE_app (id, args), _), exp) -> wrap (E_app (id, args @ [exp]))
+  | E_assign (LE_aux (LE_field (lexp, id), ul), exp) ->
      begin try
          let open Type_check in
          let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-         let exp' = E_aux (E_record_update (lexp_exp, [FE_aux (FE_Fexp (id, exp), ul)]), ul) in
+         let exp' = E_aux (E_struct_update (lexp_exp, [FE_aux (FE_fexp (id, exp), ul)]), ul) in
          wrap (E_assign (lexp, exp'))
        with Failure s -> fail ("Failure: " ^ s)
      end
-  | E_assign (LEXP_aux (LEXP_vector (vec, n), lexp_annot), exp) ->
+  | E_assign (LE_aux (LE_vector (vec, n), lexp_annot), exp) ->
      begin try
          let open Type_check in
          let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
@@ -584,7 +584,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
          wrap (E_assign (vec, exp'))
        with Failure s -> fail ("Failure: " ^ s)
      end
-  | E_assign (LEXP_aux (LEXP_vector_range (vec, n, m), lexp_annot), exp) ->
+  | E_assign (LE_aux (LE_vector_range (vec, n, m), lexp_annot), exp) ->
      begin try
          let open Type_check in
          let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
@@ -593,7 +593,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
          wrap (E_assign (vec, exp'))
        with Failure s -> fail ("Failure: " ^ s)
      end
-  | E_assign (LEXP_aux (LEXP_id id, _), exp) | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
+  | E_assign (LE_aux (LE_id id, _), exp) | E_assign (LE_aux (LE_typ (_, id), _), exp) ->
      begin
        let open Type_check in
        let name = string_of_id id in
@@ -607,13 +607,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | Enum _ ->
           fail ("Assignment to union constructor: " ^ name)
      end
-  | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) when not (is_value reference) ->
-     step reference >>= fun reference' -> wrap (E_assign (LEXP_aux (LEXP_deref reference', annot), exp))
-  | E_assign (LEXP_aux (LEXP_deref reference, annot), exp) ->
+  | E_assign (LE_aux (LE_deref reference, annot), exp) when not (is_value reference) ->
+     step reference >>= fun reference' -> wrap (E_assign (LE_aux (LE_deref reference', annot), exp))
+  | E_assign (LE_aux (LE_deref reference, annot), exp) ->
      let name = coerce_ref (value_of_exp reference) in
      write_reg name (value_of_exp exp) >> wrap unit_exp
-  | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> fail "Tuple assignment"
-  | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> fail "Vector concat assignment"
+  | E_assign (LE_aux (LE_tuple lexps, annot), exp) -> fail "Tuple assignment"
+  | E_assign (LE_aux (LE_vector_concat lexps, annot), exp) -> fail "Vector concat assignment"
      (*
      let values = coerce_tuple (value_of_exp exp) in
      wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
@@ -624,7 +624,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin
        catch (step exp) >>= fun exp' ->
        match exp' with
-       | Left exn -> wrap (E_case (exp_of_value exn, pexps @ [fallthrough]))
+       | Left exn -> wrap (E_match (exp_of_value exn, pexps @ [fallthrough]))
        | Right exp' -> wrap (E_try (exp', pexps))
      end
 
@@ -681,19 +681,19 @@ and combine _ v1 v2 =
   | None, Some v2 -> Some v2
   | Some v1, Some v2 -> failwith "Pattern binds same identifier twice!"
 
-and exp_of_lexp (LEXP_aux (lexp_aux, _)) =
+and exp_of_lexp (LE_aux (lexp_aux, _)) =
   match lexp_aux with
-  | LEXP_id id -> mk_exp (E_id id)
-  | LEXP_memory (f, args) -> mk_exp (E_app (f, args))
-  | LEXP_cast (typ, id) -> mk_exp (E_cast (typ, mk_exp (E_id id)))
-  | LEXP_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
-  | LEXP_tup lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
-  | LEXP_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
-  | LEXP_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
-  | LEXP_vector_concat [] -> failwith "Empty LEXP_vector_concat node in exp_of_lexp"
-  | LEXP_vector_concat [lexp] -> exp_of_lexp lexp
-  | LEXP_vector_concat (lexp :: lexps) -> mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LEXP_vector_concat lexps))))
-  | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
+  | LE_id id -> mk_exp (E_id id)
+  | LE_app (f, args) -> mk_exp (E_app (f, args))
+  | LE_typ (typ, id) -> mk_exp (E_typ (typ, mk_exp (E_id id)))
+  | LE_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
+  | LE_tuple lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
+  | LE_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
+  | LE_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
+  | LE_vector_concat [] -> failwith "Empty LE_vector_concat node in exp_of_lexp"
+  | LE_vector_concat [lexp] -> exp_of_lexp lexp
+  | LE_vector_concat (lexp :: lexps) -> mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LE_vector_concat lexps))))
+  | LE_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
 and pattern_match env (P_aux (p_aux, (l, _))) value =
   match p_aux with
@@ -755,8 +755,8 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
         end
      | _ -> failwith ("Bad vector annotation for vector concatentation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
      end
-  | P_tup [pat] -> pattern_match env pat value
-  | P_tup pats | P_list pats ->
+  | P_tuple [pat] -> pattern_match env pat value
+  | P_tuple pats | P_list pats ->
      let values = coerce_listlike value in
      if List.compare_lengths pats values = 0 then (
        let matches = List.map2 (pattern_match env) pats values in
@@ -775,13 +775,13 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
   | P_string_append _ -> assert false (* TODO *)
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
-  let pexp_of_funcl (FCL_aux (FCL_Funcl (_, pexp), _)) = pexp in
-  E_aux (E_case (exp_of_value value, List.map pexp_of_funcl funcls), annot)
+  let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = pexp in
+  E_aux (E_match (exp_of_value value, List.map pexp_of_funcl funcls), annot)
 
 let rec defs_letbinds defs =
   match defs with
   | [] -> []
-  | DEF_val lb :: defs -> lb :: defs_letbinds defs
+  | DEF_aux (DEF_let lb, _) :: defs -> lb :: defs_letbinds defs
   | _ :: defs -> defs_letbinds defs
 
 let initial_lstate =
@@ -978,18 +978,18 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) when allow_registers ->
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers ->
        begin match opt_exp with
        | None ->
           let env = Type_check.env_of_annot annot in
           let typ = Type_check.Env.expand_synonyms env typ in
-          let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit L_undef)))) in
+          let exp = mk_exp (E_typ (typ, mk_exp (E_lit (mk_lit L_undef)))) in
           let exp = Type_check.check_exp env exp typ in
           { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        | Some exp ->
           { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_fundef fdef ->
+    | DEF_aux (DEF_fundef fdef, _) ->
        { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in

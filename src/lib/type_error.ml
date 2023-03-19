@@ -212,7 +212,7 @@ let rec map_typ_arg ?under:(under = []) f (Typ_aux (aux, l)) =
     | Typ_var v -> Typ_var v
     | Typ_fn (typs, typ) -> Typ_fn (List.map (map_typ_arg ~under:under f) typs, map_typ_arg ~under:under f typ)
     | Typ_bidir (typ1, typ2) -> Typ_bidir (map_typ_arg ~under:under f typ1, map_typ_arg ~under:under f typ2)
-    | Typ_tup typs -> Typ_tup (List.map (map_typ_arg ~under:under f) typs)
+    | Typ_tuple typs -> Typ_tuple (List.map (map_typ_arg ~under:under f) typs)
     | Typ_app (id, args) ->
        List.map (function
            | A_aux (A_typ typ, l) ->
@@ -368,13 +368,13 @@ let rec collapse_errors = function
        Err_inner (err1, l, prefix, hint, err2)
   | err -> err
 
-let check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =
+let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
   fun env defs ->
   try Type_check.check_defs env defs with
   | Type_error (env, l, err) ->
      raise (Reporting.err_typ l (string_of_type_error err))
          
-let check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
+let check : Env.t -> uannot ast -> tannot ast * Env.t =
   fun env defs ->
   try Type_check.check env defs with
   | Type_error (env, l, err) -> raise (Reporting.err_typ l (string_of_type_error err))

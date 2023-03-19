@@ -78,6 +78,7 @@ type options = {
 
 val monomorphise :
   string -> (* Target backend *)
+  Effects.side_effect_info ->
   options ->
   ((string * int) * string) list -> (* List of splits from the command line *)
   Type_check.tannot ast ->
@@ -88,6 +89,9 @@ val mono_rewrites : Type_check.tannot ast -> Type_check.tannot ast
 
 (* Move complex nexps in function signatures into constraints *)
 val rewrite_toplevel_nexps : Type_check.tannot ast -> Type_check.tannot ast
+
+(* Move complex nexps in record fields into parameters *)
+val rewrite_complete_record_params : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast
 
 (* Add casts across case splits *)
 val add_bitvector_casts : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast
