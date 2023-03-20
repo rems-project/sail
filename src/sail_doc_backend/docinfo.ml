@@ -409,7 +409,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
        Raw (f x |> Pretty_print_sail.to_string |> encode)
 
   let get_doc_comment = function
-    | Parse_ast.Documented (str, _) -> Some (Converter.format Converter.default_config (Omd.of_string str))
+    | Parse_ast.Documented (str, _) -> Some (Converter.convert Converter.default_config str)
     | _ -> None
   
   let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) = {
@@ -458,7 +458,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     { number = n;
       source = source;
       pat = pat;
-      wavedrom = Wavedrom.of_pattern None pat |> Option.map encode;
+      wavedrom = Wavedrom.of_pattern ~labels:None pat |> Option.map encode;
       guard_source = guard_source;
       body_source = body_source;
       comment = Option.map encode comment
@@ -487,18 +487,18 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     let left, left_wavedrom, right, right_wavedrom, body = match aux with
       | MCL_bidir (left, right) ->
          let left = docinfo_for_mpexp left in
-         let left_wavedrom = Wavedrom.of_pattern wavedrom_attr left in
+         let left_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr left in
          let right = docinfo_for_mpexp right in
-         let right_wavedrom = Wavedrom.of_pattern wavedrom_attr right in
+         let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
          (Some left, left_wavedrom, Some right, right_wavedrom, None)
       | MCL_forwards (left, body) ->
          let left = docinfo_for_mpexp left in
-         let left_wavedrom = Wavedrom.of_pattern wavedrom_attr left in
+         let left_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr left in
          let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
          (Some left, left_wavedrom, None, None, Some body)
       | MCL_backwards (right, body) ->
          let right = docinfo_for_mpexp right in
-         let right_wavedrom = Wavedrom.of_pattern wavedrom_attr right in
+         let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
          let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
          (None, None, Some right, right_wavedrom, Some body) in
 

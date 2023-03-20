@@ -125,7 +125,7 @@ let of_pattern' attr_arg = function
   | _ ->
      raise Invalid_wavedrom
 
-let of_pattern attr_arg pat =
+let of_pattern ~labels:attr_arg pat =
   try
     Some (of_pattern' attr_arg pat)
   with

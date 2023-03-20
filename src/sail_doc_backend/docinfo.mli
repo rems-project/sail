@@ -67,80 +67,24 @@
 
 open Libsail
 
-let opt_doc_format = ref "asciidoc"
-let opt_doc_files = ref []
-let opt_doc_embed = ref None
-let opt_doc_compact = ref false
+open Ast
+open Ast_defs
+open Type_check
 
-let embedding_option () = match !opt_doc_embed with
-  | None -> None
-  | Some "plain" -> Some Docinfo.Plain
-  | Some "base64" -> Some Docinfo.Base64
-  | Some embedding ->
-     Printf.eprintf "Unknown embedding type %s for -doc_embed, allowed values are 'plain' or 'base64'\n" embedding;
-     exit 1
-     
-let doc_options = [
-  ( "-doc_format",
-    Arg.String (fun format -> opt_doc_format := format),
-    "<format> Output documentation in the chosen format, either latex or asciidoc (default asciidoc)");
-  ( "-doc_file",
-    Arg.String (fun file -> opt_doc_files := file :: !opt_doc_files),
-    "<file> Document only the provided files");
-  ( "-doc_embed",
-    Arg.String (fun format -> opt_doc_embed := Some format),
-    "<plain|base64> Embed all documentation contents into the documentation bundle rather than referencing it");
-  ( "-doc_compact",
-    Arg.Unit (fun _ -> opt_doc_compact := true),
-    " Use compact documentation format");
-  ]
+type hyperlink
 
-let output_docinfo doc_dir docinfo =
-  let chan = open_out (Filename.concat doc_dir "doc.json") in
-  let json = Docinfo.docinfo_to_json docinfo in
-  if !opt_doc_compact then (
-    Yojson.to_channel ~std:true chan json
-  ) else (
-    Yojson.pretty_to_channel ~std:true chan json
-  );
-  output_char chan '\n';
-  close_out chan
+type 'a docinfo
+   
+val hyperlinks_from_def : string list -> Type_check.tannot def -> hyperlink list
 
-let doc_target _ out_file ast effect_info env =
-  Reporting.opt_warnings := true;
-  let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
-  begin
-    try
-      if not (Sys.is_directory doc_dir) then (
-        prerr_endline ("Failure: documentation output location exists and is not a directory: " ^ doc_dir);
-        exit 1
-      )
-    with Sys_error(_) -> Unix.mkdir doc_dir 0o755
-  end;
-  if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then (
-    let module Config = struct
-        let embedding_mode = embedding_option()
-      end in
-    let module Gen = Docinfo.Generator(Markdown.AsciidocConverter)(Config) in
-    let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in
-    output_docinfo doc_dir docinfo
-  ) else if !opt_doc_format = "identity" then (
-    let module Config = struct
-        let embedding_mode = embedding_option()
-      end in
-    let module Gen = Docinfo.Generator(Markdown.IdentityConverter)(Config) in
-    let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in
-    output_docinfo doc_dir docinfo
-  ) else (
-    Printf.eprintf "Unknown documentation format: %s\n" !opt_doc_format
-  )
+val docinfo_to_json : 'a docinfo -> Yojson.t
 
-let _ =
-  Target.register
-    ~name:"doc"
-    ~options:doc_options
-    ~pre_parse_hook:(fun () ->
-      Type_check.opt_expand_valspec := false;
-      Type_check.opt_no_bitfield_expansion := true
-    )
-    doc_target
+type embedding = Plain | Base64
+ 
+module type CONFIG = sig
+  val embedding_mode : embedding option
+end
+  
+module Generator(Converter : Markdown.CONVERTER)(Config: CONFIG) : sig
+  val docinfo_for_ast : files:string list -> hyperlinks:(string list -> tannot def -> hyperlink list) -> tannot ast -> tannot docinfo
+end

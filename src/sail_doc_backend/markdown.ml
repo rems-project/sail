@@ -71,10 +71,16 @@ module type CONVERTER = sig
   type config
 
   val default_config : config
-  
-  val format_elem : config -> Omd.element -> string
 
-  val format : config -> Omd.t -> string
+  val convert : config -> string -> string
+end
+
+module IdentityConverter : CONVERTER = struct
+  type config = unit
+
+  let default_config = ()
+  
+  let convert _ comment = comment
 end
 
 module AsciidocConverter : CONVERTER = struct
@@ -102,4 +108,6 @@ module AsciidocConverter : CONVERTER = struct
  
   and format conf elems =
     String.concat "" (List.map (format_elem conf) elems)
+
+  let convert conf comment = format conf (Omd.of_string comment) 
 end
