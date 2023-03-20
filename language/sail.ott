@@ -581,7 +581,7 @@ pexp_funcl :: 'Pat_funcl_' ::=
 
 funcl :: 'FCL_' ::=
   {{ com function clause }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ clause_annot }} {{ auxparam 'a }}
   | id pexp_funcl                   :: :: funcl
 
 

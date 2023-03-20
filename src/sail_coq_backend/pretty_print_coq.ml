@@ -2771,7 +2771,7 @@ let merge_var_patterns map pats =
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
 let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set (FCL_aux(FCL_funcl(id, pexp), annot)) =
-  let env = env_of_annot annot in
+  let env = env_of_tannot (snd annot) in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, _) = match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ),_) -> arg_typs, ret_typ, no_effect
@@ -2984,7 +2984,7 @@ let doc_fundef types_mod avoid_target_names effect_info (FD_aux(FD_function(r, t
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_funcl(id,_),annot) as funcl]
-    when not (Env.is_extern id (env_of_annot annot) "coq") ->
+    when not (Env.is_extern id (env_of_tannot (snd annot)) "coq") ->
      begin
        let pre,body = doc_funcl types_mod avoid_target_names effect_info NotMutrec r funcl in
        match r with

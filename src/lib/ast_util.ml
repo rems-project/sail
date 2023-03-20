@@ -87,11 +87,13 @@ let mk_def_annot l = {
     attrs = [];
     loc = l;
   }
-
+                   
 let map_clause_annot f (def_annot, annot) =
   let (l, annot') = f (def_annot.loc, annot) in
   ({ def_annot with loc = l }, annot')
 
+let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc } 
+  
 let add_def_attribute l attr arg (annot : def_annot) =
   { annot with attrs = (attr, arg, l) :: annot.attrs }
 
@@ -185,7 +187,8 @@ let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
 let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
-let mk_funcl id pat body = FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body),no_annot)), no_annot)
+let mk_funcl ?loc:(l=Parse_ast.Unknown) id pat body =
+  FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l, empty_uannot))
 
 let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
 
@@ -754,7 +757,7 @@ and map_fundef_annot_aux f = function
   | FD_function (rec_opt, tannot_opt, funcls) -> FD_function (map_recopt_annot f rec_opt, tannot_opt,
                                                               List.map (map_funcl_annot f) funcls)
 and map_funcl_annot f = function
-  | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, f annot)
+  | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, map_clause_annot f annot)
 and map_funcl_annot_aux f = function
   | FCL_funcl (id, pexp) -> FCL_funcl (id, map_pexp_annot f pexp)
 and map_recopt_annot f = function
@@ -2216,7 +2219,8 @@ and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
     | Pat_when (pat, guard, exp) ->
        option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
 
-let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (l, annot))) =
+let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (def_annot, annot))) =
+  let l = def_annot.loc in
   if not (subloc sl l) then None else
     match find_annot_pexp sl pexp with
     | None -> Some (l, annot)

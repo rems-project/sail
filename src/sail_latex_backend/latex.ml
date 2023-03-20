@@ -440,7 +440,7 @@ let latex_funcls def =
     function
     | (FCL_aux (funcl_aux, annot) as funcl) :: funcls ->
        let cat, id = funcl_command funcl_aux in
-       let first = latex_command cat id (Pretty_print_sail.doc_funcl funcl) (fst annot) in
+       let first = latex_command cat id (Pretty_print_sail.doc_funcl funcl) (fst annot).loc in
        first ^^ next funcls
     | [] -> empty
   in

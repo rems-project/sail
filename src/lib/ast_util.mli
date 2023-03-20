@@ -94,6 +94,8 @@ val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 val get_attribute : string -> (string * string * l) list -> string option
   
 val mk_def_annot : l -> def_annot
+
+val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
   
 (** The empty annotation (as a location + uannot] pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
@@ -140,7 +142,7 @@ val mk_lexp : uannot lexp_aux -> uannot lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
-val mk_funcl : id -> uannot pat -> uannot exp -> uannot funcl
+val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
 val mk_fundef : (uannot funcl) list -> uannot def
 val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm

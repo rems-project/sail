@@ -434,11 +434,11 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     (** If we have just a single clause, we use the annotation for the
        outer FD_aux wrapper, except we prefer documentation comments
        attached to the inner function clause type where available. *)
-    let comment = get_doc_comment (fst annot) in
+    let comment = get_doc_comment (fst annot).loc in
     let annot = match outer_annot with None -> annot | Some annot -> annot in
-    let comment = match comment with None -> get_doc_comment (fst annot) | comment -> comment in
+    let comment = match comment with None -> get_doc_comment (fst annot).loc | comment -> comment in
 
-    let source = doc_loc (fst annot) Pretty_print_sail.doc_funcl clause in
+    let source = doc_loc (fst annot).loc Pretty_print_sail.doc_funcl clause in
     let pat, guard, exp = match pexp with
       | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
       | Pat_aux (Pat_when (pat, guard, exp), _) -> pat, Some guard, exp in
@@ -464,14 +464,14 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       comment = Option.map encode comment
     }
 
-  let included_clause files (FCL_aux (_, annot)) = included_loc files (fst annot)
-       
-  let docinfo_for_fundef files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
+  let included_clause files (FCL_aux (_, (clause_annot, _))) = included_loc files clause_annot.loc
+ 
+  let docinfo_for_fundef def_annot files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
     let clauses = List.filter (included_clause files) clauses in
     match clauses with
     | [] -> None
     | [clause] ->
-       Some (Single_clause (docinfo_for_funcl ~outer_annot:annot 0 clause))
+       Some (Single_clause (docinfo_for_funcl ~outer_annot:(def_annot, snd annot) 0 clause))
     | _ ->
        Some (Multiple_clauses (List.mapi docinfo_for_funcl clauses))
 
@@ -549,7 +549,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     let skipping = function
       | true :: _ -> true
       | _ -> false in
-    let docinfo_for_def (docinfo, skips) (DEF_aux (aux, _) as def) =
+    let docinfo_for_def (docinfo, skips) (DEF_aux (aux, def_annot) as def) =
       let links = hyperlinks files def in
       match aux with
       (* Maintain a stack of booleans, for each file if it was not
@@ -563,7 +563,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
          let id = id_of_fundef fdef in
-         begin match docinfo_for_fundef files fdef with
+         begin match docinfo_for_fundef def_annot files fdef with
          | None -> docinfo
          | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
          end,

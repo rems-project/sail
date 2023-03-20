@@ -760,10 +760,10 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
      let typq, ctx = to_ast_typquant ctx tq in
      Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx
 
-let to_ast_funcl ctx (P.FCL_aux(fcl, l) : P.funcl) : uannot funcl =
+let to_ast_funcl ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
   | P.FCL_funcl (id, pexp) ->
-     FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))
+     FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
 
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
@@ -771,10 +771,10 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
      match List.assoc_opt (string_of_parse_id id) ctx.target_sets with
      | Some targets ->
         List.map (fun target ->
-            FCL_aux (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (l, empty_uannot))
+            FCL_aux (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
           ) targets
      | None ->
-        [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))]
+        [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))]
     
 let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
   match fd with

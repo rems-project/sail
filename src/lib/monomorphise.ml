@@ -1384,8 +1384,9 @@ let rewrite_size_parameters target type_env ast =
     FCL_aux (FCL_funcl (id, const_prop_pexp pexp), a)
   in
 
-  let sizes_funcl fsizes (FCL_aux (FCL_funcl (id,pexp),(l,ann))) =
-    let env = env_of_annot (l,ann) in
+  let sizes_funcl fsizes (FCL_aux (FCL_funcl (id,pexp),(def_annot,ann))) =
+    let l = def_annot.loc in
+    let env = env_of_tannot ann in
     let _, typ = Env.get_val_spec_orig id env in
     let already_visible_nexps =
       NexpSet.union
@@ -1484,7 +1485,8 @@ in *)
   in
   let fn_sizes = List.fold_left sizes_def Bindings.empty ast.defs in
 
-  let rewrite_funcl (FCL_aux (FCL_funcl (id,pexp),(l,annot))) =
+  let rewrite_funcl (FCL_aux (FCL_funcl (id,pexp),(def_annot,annot))) =
+    let l = def_annot.loc in
     let pat,guard,body,(pl,_) = destruct_pexp pexp in
     let pat,guard,body, nexps =
       (* Update pattern and add itself -> nat wrapper to body *)
@@ -1519,7 +1521,7 @@ in *)
       | exception Not_found -> pat,guard,body,NexpSet.empty
     in
     (* Update function applications *)
-    let funcl_typ = typ_of_annot (l,annot) in
+    let funcl_typ = typ_of_tannot annot in
     let already_visible_nexps =
       NexpSet.union
          (lem_nexps_of_typ funcl_typ)
@@ -1537,7 +1539,7 @@ in *)
     let guard = match guard with
       | None -> None
       | Some exp -> Some (fold_exp { id_exp_alg with e_app = rewrite_e_app } exp) in
-    FCL_aux (FCL_funcl (id,construct_pexp (pat,guard,body,(pl,empty_tannot))),(l,empty_tannot))
+    FCL_aux (FCL_funcl (id,construct_pexp (pat,guard,body,(pl,empty_tannot))),(def_annot,empty_tannot))
   in
   let rewrite_e_app (id,args) =
     match Bindings.find id fn_sizes with
@@ -1575,25 +1577,25 @@ in *)
             resolve those variable expressions.  In many cases the monomorphisation
             pass will already have performed constant propagation, but it does not
             for functions where it does not perform splits.*)
-         let check_funcl (FCL_aux (FCL_funcl (id, pexp), (l, _)) as funcl) =
-         let has_nonconst_sizes =
-           let check_cast (typ, _) =
-             match unaux_typ typ with
-             | Typ_app (itself, [A_aux (A_nexp nexp, _)])
-               | Typ_exist (_, _, Typ_aux (Typ_app (itself, [A_aux (A_nexp nexp, _)]), _))
-                  when string_of_id itself = "itself" ->
-                not (is_nexp_constant nexp)
-             | _ -> false
+         let check_funcl (FCL_aux (FCL_funcl (id, pexp), (def_annot, _)) as funcl) =
+           let has_nonconst_sizes =
+             let check_cast (typ, _) =
+               match unaux_typ typ with
+               | Typ_app (itself, [A_aux (A_nexp nexp, _)])
+                 | Typ_exist (_, _, Typ_aux (Typ_app (itself, [A_aux (A_nexp nexp, _)]), _))
+                    when string_of_id itself = "itself" ->
+                  not (is_nexp_constant nexp)
+               | _ -> false
+             in
+             fold_pexp { (pure_exp_alg false (||)) with e_typ = check_cast } pexp
            in
-           fold_pexp { (pure_exp_alg false (||)) with e_typ = check_cast } pexp
-         in
-         if has_nonconst_sizes then
-           (* Constant propagation requires a fully type-annotated AST,
-              so re-check the function clause *)
-           let (tq, typ) = Env.get_val_spec id type_env' in
-           let env = Env.add_typquant l tq type_env' in
-           const_prop_funcl (Type_check.check_funcl env (strip_funcl funcl) typ)
-         else funcl
+           if has_nonconst_sizes then
+             (* Constant propagation requires a fully type-annotated AST,
+                so re-check the function clause *)
+             let (tq, typ) = Env.get_val_spec id type_env' in
+             let env = Env.add_typquant def_annot.loc tq type_env' in
+             const_prop_funcl (Type_check.check_funcl env (strip_funcl funcl) typ)
+           else funcl
          in
          let funcls = List.map check_funcl funcls in
          (* TODO rewrite tannopt? *)
@@ -2824,7 +2826,8 @@ let print_result r =
                                   (Failures.bindings r.failures)))) in
   ()
 
-let analyse_funcl debug effect_info tenv constants (FCL_aux (FCL_funcl (id,pexp),(l,_))) =
+let analyse_funcl debug effect_info tenv constants (FCL_aux (FCL_funcl (id,pexp),(def_annot,_))) =
+  let l = def_annot.loc in
   let _ = if debug > 2 then print_endline (string_of_id id) else () in
   let pat,guard,body,_ = destruct_pexp pexp in
   let (tq,_) = Env.get_val_spec_orig id tenv in
@@ -2958,7 +2961,8 @@ let add_extra_splits extras defs =
          ((Exact l', string_of_id var, Analysis.detail_to_split detail)::split_list)
     ) extras (e,[])
   in
-  let add_to_funcl (FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
+  let add_to_funcl (FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(def_annot,annot))) =
+    let l = def_annot.loc in
     let pexp, splits = 
       match Analysis.ExtraSplits.find (id,l) extras with
       | extras ->
@@ -2966,7 +2970,7 @@ let add_extra_splits extras defs =
          | Pat_exp (p,e) -> let e',sp = add_to_body extras e in Pat_exp (p,e'), sp
          | Pat_when (p,g,e) -> let e',sp = add_to_body extras e in Pat_when (p,g,e'), sp)
       | exception Not_found -> pexp, []
-    in FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot)), splits
+    in FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(def_annot,annot)), splits
   in
   let add_to_def = function
     | DEF_aux (DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)),def_annot) ->
@@ -4042,7 +4046,8 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
       { id_exp_alg with
         e_aux = rewrite_aux } exp
   in
-  let rewrite_funcl (FCL_aux (FCL_funcl (id,pexp),((l,_) as fcl_ann))) =
+  let rewrite_funcl (FCL_aux (FCL_funcl (id,pexp),((def_annot,_) as fcl_ann))) =
+    let l = def_annot.loc in
     let (tq,typ) = Env.get_val_spec_orig id global_env in
     let fun_env = List.fold_right (Env.add_typ_var l) (quant_kopts tq) global_env in
     let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in

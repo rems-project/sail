@@ -4865,7 +4865,8 @@ let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
      [DEF_aux (DEF_let (LB_aux (LB_val (tpat, inferred_bind), (l, empty_tannot))), def_annot)],
      Env.add_toplevel_lets (pat_ids tpat) env
 
-let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
+let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) typ =
+  let l = def_annot.loc in
   match typ with
   | Typ_aux (Typ_fn (typ_args, typ_ret), _) ->
      begin
@@ -4892,7 +4893,7 @@ let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
          | typ_args ->
             check_case env (Typ_aux (Typ_tuple typ_args, l)) pexp typ_ret
        in
-       FCL_aux (FCL_funcl (id, typed_pexp), (l, mk_expected_tannot env typ (Some typ)))
+       FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
@@ -5247,9 +5248,9 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> (tannot def)
                     'scattered union' declaration" in
          raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg))))
 
-  | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_l, _)) as funcl) ->
+  | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let funcl_env = Env.add_typquant fcl_l typq env in
+     let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
      let funcl = check_funcl funcl_env funcl typ in
      [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, empty_tannot))), def_annot)],
      env
@@ -5295,14 +5296,14 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
      typ_raise env l (err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
 and check_impldef : Env.t -> def_annot -> uannot funcl -> tannot def list * Env.t =
-  fun env def_annot (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
+  fun env def_annot (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
   typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
   match env.outcome_typschm with
   | Some (quant, typ) ->
-     let funcl_env = Env.add_typquant l quant env in
+     let funcl_env = Env.add_typquant fcl_def_annot.loc quant env in
      [DEF_aux (DEF_impl (check_funcl funcl_env funcl typ), def_annot)], env
   | None ->
-     typ_error env l "Cannot declare an implementation outside of an outcome"
+     typ_error env fcl_def_annot.loc "Cannot declare an implementation outside of an outcome"
 
 and check_outcome_instantiation : 'a. Env.t -> def_annot -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->

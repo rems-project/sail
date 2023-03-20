@@ -90,13 +90,13 @@ let instantiate_typ substs typ =
     ) typ (KBindings.bindings substs)
  
 let instantiate_def target id substs = function
-  | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), annot)), def_annot) when string_of_id target_id = target ->
+  | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot) when string_of_id target_id = target ->
      let l = gen_loc (id_loc id) in
      Some (DEF_aux (
                DEF_fundef (FD_aux (FD_function (Rec_aux (Rec_nonrec, l),
                                                 Typ_annot_opt_aux (Typ_annot_opt_none, l),
-                                                [FCL_aux (FCL_funcl (id, pexp), annot)]),
-                                   annot)),
+                                                [FCL_aux (FCL_funcl (id, pexp), (fcl_def_annot, tannot))]),
+                                   (l, tannot))),
                def_annot))
   | def -> None
 

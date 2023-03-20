@@ -1417,7 +1417,8 @@ let doc_fun_body_lem ctxt exp =
   else
     doc_exp
 
-let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((l, _) as annot))) =
+let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((def_annot, _) as annot))) =
+  let l = def_annot.loc in
   let (tq, typ) =
     try Env.get_val_spec_orig id type_env with
     | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
