@@ -165,7 +165,7 @@ let underline_double_to color cnum_to =
     Util.(clear (color "^"))
   else
     Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
-  
+ 
 let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
   skip_lines in_chan (lnum_from - 1);
   let line_from = input_line in_chan in

@@ -86,6 +86,8 @@ type extern = { pure : bool; bindings : (string * string) list } option
 
 type def_annot = { doc_comment : string option; attrs : (string * string * l) list; loc : l }
 
+type 'a clause_annot = def_annot * 'a
+
 }}
 
 embed
@@ -102,6 +104,8 @@ type annot 'a = l * 'a
 type extern = <| pure : bool; bindings : list (string * string) |>
 
 type def_annot = <| doc_comment : maybe string; attrs : list (string * string * l); loc: l |>
+
+type clause_annot 'a = def_annot * 'a
 
 }}
 
@@ -150,6 +154,11 @@ def_annot :: '' ::=
   {{ phantom }}
   {{ lem def_annot }}
   {{ ocaml def_annot }}
+
+clause_annot :: '' ::=
+  {{ phantom }}
+  {{ lem clause_annot 'a }}
+  {{ ocaml 'a clause_annot }}
 
 l :: '' ::=
   {{ phantom }}
@@ -612,10 +621,10 @@ mpexp :: 'MPat_' ::=
 
 mapcl :: 'MCL_' ::=
   {{ com mapping clause (bidirectional pattern-match) }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ clause_annot }} {{ auxparam 'a }}
   | mpexp1 <-> mpexp2 :: :: bidir
   | mpexp   => exp    :: :: forwards
-  | mpexp  <-  exp     :: :: backwards
+  | mpexp  <-  exp    :: :: backwards
 
 
 mapdef :: 'MD_' ::=

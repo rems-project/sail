@@ -90,7 +90,9 @@ val loc_to_string : Parse_ast.l -> string
 
 (** [loc_file] returns the file for a location *)
 val loc_file : Parse_ast.l -> string option
- 
+
+val is_documented : Parse_ast.l -> bool
+  
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 

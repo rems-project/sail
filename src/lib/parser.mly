@@ -151,7 +151,7 @@ let doc_id doc (Id_aux (id, l)) = Id_aux (id, doc_loc doc l)
 
 let doc_sd doc (SD_aux (sd, l)) =
   match sd with
-  | SD_funcl fcl -> SD_aux (SD_funcl (doc_funcl doc fcl), l)
+  | SD_funcl fcl -> SD_aux (SD_funcl (doc_funcl doc fcl), (doc_loc doc l))
   | SD_unioncl (id, tu) -> SD_aux (SD_unioncl (id, doc_tu doc tu), l)
   | SD_mapcl (id, mcl) -> SD_aux (SD_mapcl (id, doc_mapcl doc mcl), l)
 
@@ -1632,6 +1632,8 @@ def_aux:
     { DEF_loop_measures ($2,$3) }
 
 def:
+  | attr = Attribute; def = def
+    { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
   | d = def_aux
     { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 

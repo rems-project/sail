@@ -72,22 +72,33 @@ module Big_int = Nat_big_num
 
 (* The type of annotations for untyped AST nodes *)
 type uannot = {
-    attrs : (l * string * string) list
+    attrs : (string * string * l) list
   }
 
 let empty_uannot = {
     attrs = []
   }
 
-let add_attribute l attr arg annot =
-  { attrs = (l, attr, arg) :: annot.attrs }
+let add_attribute l attr arg (annot : uannot) =
+  { attrs = (attr, arg, l) :: annot.attrs }
 
 let mk_def_annot l = {
     doc_comment = None;
     attrs = [];
     loc = l;
   }
- 
+
+let map_clause_annot f (def_annot, annot) =
+  let (l, annot') = f (def_annot.loc, annot) in
+  ({ def_annot with loc = l }, annot')
+
+let add_def_attribute l attr arg (annot : def_annot) =
+  { annot with attrs = (attr, arg, l) :: annot.attrs }
+
+let get_attribute attr1 attrs =
+  List.find_opt (fun (attr2, _, _) -> attr1 = attr2) attrs
+  |> Option.map (fun (_, arg, _) -> arg)
+  
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
@@ -696,13 +707,14 @@ and map_mpexp_annot_aux f = function
   | MPat_pat mpat -> MPat_pat (map_mpat_annot f mpat)
   | MPat_when (mpat, guard) -> MPat_when (map_mpat_annot f mpat, map_exp_annot f guard)
 
-and map_mapcl_annot f = function
+and map_mapcl_annot f =
+  function
   | (MCL_aux (MCL_bidir (mpexp1, mpexp2), annot)) ->
-     MCL_aux (MCL_bidir (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+     MCL_aux (MCL_bidir (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), map_clause_annot f annot)
   | (MCL_aux (MCL_forwards (mpexp, exp), annot)) ->
-     MCL_aux (MCL_forwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
+     MCL_aux (MCL_forwards (map_mpexp_annot f mpexp, map_exp_annot f exp), map_clause_annot f annot)
   | (MCL_aux (MCL_backwards (mpexp, exp), annot)) ->
-     MCL_aux (MCL_backwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
+     MCL_aux (MCL_backwards (map_mpexp_annot f mpexp, map_exp_annot f exp), map_clause_annot f annot)
 
 and map_mpat_annot f (MP_aux (mpat, annot)) = MP_aux (map_mpat_annot_aux f mpat, f annot)
 and map_mpat_annot_aux f = function

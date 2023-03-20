@@ -3794,14 +3794,14 @@ let rewrite_ast_realize_mappings effect_info env ast =
   in
   let realize_mapcl forwards id mapcl =
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) ->
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), _)) ->
        [realize_mpexps forwards mpexp1 mpexp2]
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) ->
+    | (MCL_aux (MCL_forwards (mpexp, exp),  _)) ->
        if forwards then
          [realize_single_mpexp mpexp exp]
        else
          []
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), _)) ->
        if forwards then
          []
        else
@@ -3809,15 +3809,15 @@ let rewrite_ast_realize_mappings effect_info env ast =
   in
   let realize_bool_mapcl forwards id mapcl =
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) ->
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), _)) ->
        let mpexp = if forwards then mpexp1 else mpexp2 in
        [realize_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))]
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) ->
+    | (MCL_aux (MCL_forwards (mpexp, exp), _)) ->
        if forwards then
          [realize_single_mpexp mpexp (mk_lit_exp L_true)]
        else
          []
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), _)) ->
        if forwards then
          []
        else
@@ -3847,7 +3847,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
           ))
       ) in
     match mapcl with
-    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, _))) -> begin
+    | (MCL_aux (MCL_bidir (mpexp1, mpexp2), _)) -> begin
        let mpexp = if forwards then mpexp1 else mpexp2 in
        let other = if forwards then mpexp2 else mpexp1 in
        match other with
@@ -3855,13 +3855,13 @@ let rewrite_ast_realize_mappings effect_info env ast =
          | MPat_aux (MPat_when (mpat2, _), _)->
           [realize_mpexps true (append_placeholder mpexp) (mk_mpexp (MPat_pat (mk_mpat (MP_app ((mk_id "Some"), [ mk_mpat (MP_tuple [mpat2; strlen]) ])))))]
       end
-    | (MCL_aux (MCL_forwards (mpexp, exp), (l, _))) -> begin
+    | (MCL_aux (MCL_forwards (mpexp, exp), _)) -> begin
         if forwards then
           [realize_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
         else
           []
       end
-    | (MCL_aux (MCL_backwards (mpexp, exp), (l, _))) -> begin
+    | (MCL_aux (MCL_backwards (mpexp, exp), _)) -> begin
         if forwards then
           []
         else
@@ -3931,7 +3931,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
     let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
     (* We need to make sure we get the environment for the last mapping clause *)
     let env = match List.rev mapcls with
-      | MCL_aux (_, mapcl_annot) :: _ -> env_of_annot mapcl_annot
+      | MCL_aux (_, (_, mapcl_tannot)) :: _ -> env_of_tannot mapcl_tannot
       | _ -> raise (Reporting.err_unreachable l __POS__ "mapping with no clauses?")
     in
     let (typq, bidir_typ) = Env.get_val_spec id env in

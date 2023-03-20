@@ -137,6 +137,10 @@ let loc_to_string l =
   format_message (Location ("", None, l, Line "")) (buffer_formatter b);
   Buffer.contents b
 
+let is_documented = function
+  | Parse_ast.Documented _ -> true
+  | _ -> false
+ 
 let rec simp_loc = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> simp_loc l

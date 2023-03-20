@@ -259,13 +259,13 @@ let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
   in
   MPat_aux (aux, (l, annot))
   
-let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
+let rewrite_mapcl rewriters (MCL_aux (aux, def_annot)) =
   let aux = match aux with
     | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
     | MCL_forwards (mpexp, exp) -> MCL_forwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
     | MCL_backwards (mpexp, exp) -> MCL_backwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
   in
-  MCL_aux (aux, (l, annot))
+  MCL_aux (aux, def_annot)
 
 let rewrite_mapdef rewriters (MD_aux (MD_mapping (id, tannot_opt, mapcls), annot)) =
   MD_aux (MD_mapping (id, tannot_opt, List.map (rewrite_mapcl rewriters) mapcls), annot)

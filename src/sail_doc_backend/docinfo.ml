@@ -85,6 +85,33 @@ let docinfo_version = 1
 
 let same_file f1 f2 =
   Filename.basename f1 = Filename.basename f2 && Filename.dirname f1 = Filename.dirname f2
+
+let process_file f filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    f (Buffer.contents buf)
+    
+let read_source (p1 : Lexing.position) (p2 : Lexing.position) =
+  process_file (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) p1.pos_fname
+
+let hash_file filename =
+  process_file Digest.string filename |> Digest.to_hex
+    
+type embedding = Plain | Base64
+
+let embedding_string = function
+  | Plain -> "plain"
+  | Base64 -> "base64"
  
 type location_or_raw =
   | Raw of string
@@ -94,12 +121,6 @@ let location_or_raw_to_json = function
   | Raw s -> `String s
   | Location (fname, line1, bol1, char1, line2, bol2, char2) ->
      `Assoc [("file", `String fname); ("loc", `List [`Int line1; `Int bol1; `Int char1; `Int line2; `Int bol2; `Int char2])]
-
-let doc_loc l f x =
-  match Reporting.simp_loc l with
-  | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-     Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
-  | _ -> Raw (f x |> Pretty_print_sail.to_string)
 
 type hyper_location = string * int * int
 
@@ -179,12 +200,6 @@ let hyperlinks_from_def files def =
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp } [def]);
 
   !links
-              
-let doc_loc l f x =
-  match Reporting.simp_loc l with
-  | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-     Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
-  | _ -> Raw (f x |> Pretty_print_sail.to_string)
 
 let rec pat_to_json (P_aux (aux, _)) =
   let pat_type t = ("type", `String t) in
@@ -209,8 +224,10 @@ type 'a function_clause_doc = {
     number : int;
     source : location_or_raw;
     pat : 'a pat;
+    wavedrom : string option;
     guard_source : location_or_raw option;
     body_source : location_or_raw;
+    comment : string option;
   }
 
 let function_clause_doc_to_json docinfo =
@@ -218,8 +235,10 @@ let function_clause_doc_to_json docinfo =
       [
         ("number", `Int docinfo.number);
         ("source", location_or_raw_to_json docinfo.source);
-        ("pattern", pat_to_json docinfo.pat)
+        ("pattern", pat_to_json docinfo.pat);
       ]
+      @ (match docinfo.wavedrom with Some w -> [("wavedrom", `String w)] | None -> [])
+      @ (match docinfo.comment with Some s -> [("comment", `String s)] | None -> [])
       @ (match docinfo.guard_source with Some s -> [("guard", location_or_raw_to_json s)] | None -> [])
       @ [
           ("body", location_or_raw_to_json docinfo.body_source)
@@ -238,7 +257,9 @@ type 'a mapping_clause_doc = {
     number : int;
     source : location_or_raw;
     left : 'a pat option;
+    left_wavedrom : string option;
     right : 'a pat option;
+    right_wavedrom : string option;
     body : location_or_raw option;
   }
 
@@ -249,7 +270,9 @@ let mapping_clause_doc_to_json docinfo =
         ("source", location_or_raw_to_json docinfo.source)
       ]
       @ (match docinfo.left with Some p -> [("left", pat_to_json p)] | None -> [])
+      @ (match docinfo.left_wavedrom with Some w -> [("left_wavedrom", `String w)] | None -> [])
       @ (match docinfo.right with Some p -> [("right", pat_to_json p)] | None -> [])
+      @ (match docinfo.right_wavedrom with Some w -> [("right_wavedrom", `String w)] | None -> [])
       @ (match docinfo.body with Some s -> [("body", location_or_raw_to_json s)] | None -> [])
     )
 
@@ -262,11 +285,6 @@ type valspec_doc = {
     type_source : location_or_raw;
   }
 
-let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_annot) as ts), _, _, _), vs_annot) as vs) = {
-    source = doc_loc (fst vs_annot) (Pretty_print_sail.doc_spec ~comment:false) vs;
-    type_source = doc_loc (fst vs_annot) Pretty_print_sail.doc_typschm ts
-  }
- 
 let valspec_doc_to_json docinfo =
   `Assoc [
       ("source", location_or_raw_to_json docinfo.source);
@@ -277,18 +295,10 @@ type typdef_doc = location_or_raw
 
 let typdef_doc_to_json = location_or_raw_to_json
 
-let docinfo_for_typdef (TD_aux (_, annot) as td) = doc_loc (fst annot) Pretty_print_sail.doc_typdef td
-
 type register_doc = {
     source : location_or_raw;
     type_source : location_or_raw;
     exp_source : location_or_raw option;
-  }
-
-let docinfo_for_register (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) = {
-    source = doc_loc (fst rd_annot) (Pretty_print_sail.doc_dec) rd;
-    type_source = doc_loc typ_l Pretty_print_sail.doc_typ typ;
-    exp_source = Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Pretty_print_sail.doc_exp exp) exp
   }
 
 let register_doc_to_json docinfo =
@@ -307,11 +317,6 @@ type let_doc = {
     exp_source : location_or_raw;
   }
 
-let docinfo_for_let (LB_aux (LB_val (pat, exp), annot) as lbind) = {
-    source = doc_loc (fst annot) (Pretty_print_sail.doc_letbind) lbind;
-    exp_source = doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp;
-  }
-
 let let_doc_to_json docinfo =
   `Assoc [
       ("source", location_or_raw_to_json docinfo.source);
@@ -326,6 +331,9 @@ let pair_to_json x_label f y_label g (x, y) =
   | x, y -> `Assoc [(x_label, x); (y_label, y)]
 
 type 'a docinfo = {
+    embedding : embedding;
+    git : (string * bool) option;
+    hashes : (string * string) list;
     functions : ('a function_doc * hyperlink list) Bindings.t;
     mappings : ('a mapping_doc * hyperlink list) Bindings.t;
     valspecs : (valspec_doc * hyperlink list) Bindings.t;
@@ -341,184 +349,308 @@ let bindings_to_json b f =
   |> (fun elements -> `Assoc elements)
 
 let docinfo_to_json docinfo =
-  `Assoc [
-      ("version", `Int docinfo_version);
-      ("functions", bindings_to_json docinfo.functions (pair_to_json "function" function_doc_to_json "links" hyperlinks_to_json));
-      ("mappings", bindings_to_json docinfo.mappings (pair_to_json "mapping" mapping_doc_to_json "links" hyperlinks_to_json));
-      ("vals", bindings_to_json docinfo.valspecs (pair_to_json "val" valspec_doc_to_json "links" hyperlinks_to_json));
-      ("types", bindings_to_json docinfo.typdefs (pair_to_json "type" typdef_doc_to_json "links" hyperlinks_to_json));
-      ("registers", bindings_to_json docinfo.registers (pair_to_json "register" register_doc_to_json "links" hyperlinks_to_json));
-      ("lets", bindings_to_json docinfo.lets (pair_to_json "let" let_doc_to_json "links" hyperlinks_to_json));
-      ("anchors", bindings_to_json docinfo.anchors (pair_to_json "anchor" location_or_raw_to_json "links" hyperlinks_to_json));
+  let assoc =
+    [
+      ("version", `Int docinfo_version)
     ]
+    @ (match docinfo.git with Some (commit, dirty) -> [("git", `Assoc [("commit", `String commit); ("dirty", `Bool dirty)])] | None -> [])
+    @ [
+        ("embedding", `String (embedding_string docinfo.embedding));
+        ("hashes", `Assoc (List.map (fun (key, hash) -> (key, `Assoc [("md5", `String hash)])) docinfo.hashes));
+        ("functions", bindings_to_json docinfo.functions (pair_to_json "function" function_doc_to_json "links" hyperlinks_to_json));
+        ("mappings", bindings_to_json docinfo.mappings (pair_to_json "mapping" mapping_doc_to_json "links" hyperlinks_to_json));
+        ("vals", bindings_to_json docinfo.valspecs (pair_to_json "val" valspec_doc_to_json "links" hyperlinks_to_json));
+        ("types", bindings_to_json docinfo.typdefs (pair_to_json "type" typdef_doc_to_json "links" hyperlinks_to_json));
+        ("registers", bindings_to_json docinfo.registers (pair_to_json "register" register_doc_to_json "links" hyperlinks_to_json));
+        ("lets", bindings_to_json docinfo.lets (pair_to_json "let" let_doc_to_json "links" hyperlinks_to_json));
+        ("anchors", bindings_to_json docinfo.anchors (pair_to_json "anchor" location_or_raw_to_json "links" hyperlinks_to_json));
+      ] in
+  `Assoc assoc
 
-let docinfo_for_funcl ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
-  let annot = match outer_annot with None -> annot | Some annot -> annot in
-  let source = doc_loc (fst annot) Pretty_print_sail.doc_funcl clause in
-  let pat, guard, exp = match pexp with
-    | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
-    | Pat_aux (Pat_when (pat, guard, exp), _) -> pat, Some guard, exp in
-  let guard_source = Option.map (fun exp -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp) guard in
-  let body_source = match exp with
-    | E_aux (E_block (exp :: exps), _) ->
-       let first_loc = exp_loc exp in
-       let last_loc = exp_loc (Util.last (exp :: exps)) in
-       begin match Reporting.simp_loc first_loc, Reporting.simp_loc last_loc with
-       | Some (p1, _), Some (_, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-          Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
-       | _, _ ->
-          Raw (Pretty_print_sail.doc_block (exp :: exps) |> Pretty_print_sail.to_string)
-       end
-    | _ -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp in
-  { number = n; source = source; pat = pat; guard_source = guard_source; body_source = body_source }
-
-let included_clause files (FCL_aux (_, annot)) = included_loc files (fst annot)
-       
-let docinfo_for_fundef files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
-  let clauses = List.filter (included_clause files) clauses in
-  match clauses with
-  | [] -> None
-  | [clause] ->
-     Some (Single_clause (docinfo_for_funcl ~outer_annot:annot 0 clause))
-  | _ ->
-     Some (Multiple_clauses (List.mapi docinfo_for_funcl clauses))
-
-let docinfo_for_mpexp (MPat_aux (aux, annot)) =
-  match aux with
-  | MPat_pat mpat -> Rewrites.pat_of_mpat mpat
-  | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
- 
-let docinfo_for_mapcl n (MCL_aux (aux, annot) as clause) =
-  let source = doc_loc (fst annot) Pretty_print_sail.doc_mapcl clause in
-  let left, right, body = match aux with
-    | MCL_bidir (left, right) ->
-       let left = docinfo_for_mpexp left in
-       let right = docinfo_for_mpexp right in
-       (Some left, Some right, None)
-    | MCL_forwards (left, body) ->
-       let left = docinfo_for_mpexp left in
-     let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
-     (Some left, None, Some body)
-    | MCL_backwards (right, body) ->
-       let right = docinfo_for_mpexp right in
-       let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
-       (None, Some right, Some body)
-  in
-  { number = n; source = source; left = left; right = right; body = body }
-    
-let included_mapping_clause files (MCL_aux (_, annot)) = included_loc files (fst annot)
-    
-let docinfo_for_mapdef files (MD_aux (MD_mapping (_, _, clauses), annot) as mdef) =
-  let clauses = List.filter (included_mapping_clause files) clauses in
-  match clauses with
-  | [] -> None
-  | _ ->
-     Some (List.mapi docinfo_for_mapcl clauses)
-
-let docinfo_for_ast ~files ~hyperlinks ast =
-  let empty_docinfo = {
-      functions = Bindings.empty;
-      mappings = Bindings.empty;
-      valspecs = Bindings.empty;
-      typdefs = Bindings.empty;
-      registers = Bindings.empty;
-      lets = Bindings.empty;
-      anchors = Bindings.empty;
-    } in
-  let initial_skip = match files with
-    | [] -> false
-    | _ -> true in
-  let skip_file file =
-    if List.exists (same_file file) files then (
-      false
-    ) else (
-      initial_skip
-    ) in
-  let skipping = function
-    | true :: _ -> true
-    | _ -> false in
-  let docinfo_for_def (docinfo, skips) (DEF_aux (aux, _) as def) =
-    let links = hyperlinks files def in
-    match aux with
-    (* Maintain a stack of booleans, for each file if it was not
-       specified via -doc_file, we push true to skip it. If no
-       -doc_file flags are passed, include everything. *)
-    | DEF_pragma (("file_start" | "include_start"), path, _) ->
-       docinfo, (skip_file path :: skips)
-    | DEF_pragma (("file_end" | "include_end"), path, _) ->
-       docinfo, (match skips with _ :: skips -> skips | [] -> [])
-
-    (* Function definiton may be scattered, so we can't skip it *)
-    | DEF_fundef fdef ->
-       let id = id_of_fundef fdef in
-       begin match docinfo_for_fundef files fdef with
-       | None -> docinfo
-       | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
-       end,
-       skips
-
-    | DEF_mapdef mdef ->
-       let id = id_of_mapdef mdef in
-       begin match docinfo_for_mapdef files mdef with
-       | None -> docinfo
-       | Some info -> { docinfo with mappings = Bindings.add id (info, links) docinfo.mappings }
-       end,
-       skips
-
-    | _ when skipping skips ->
-       docinfo, skips
-
-    | DEF_val vs ->
-       let id = id_of_val_spec vs in
-       { docinfo with valspecs = Bindings.add id (docinfo_for_valspec vs, links) docinfo.valspecs },
-       skips
- 
-    | DEF_type td ->
-       let id = id_of_type_def td in
-       { docinfo with typdefs = Bindings.add id (docinfo_for_typdef td, links) docinfo.typdefs },
-       skips
-
-    | DEF_register rd ->
-       let id = id_of_dec_spec rd in
-       { docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers },
-       skips
-
-    | DEF_let (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
-       let ids = pat_ids pat in
-       IdSet.fold (fun id docinfo ->
-           { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets }
-         ) ids docinfo,
-       skips
-
+let git_command args =
+  try
+    let git_out, git_in, git_err = Unix.open_process_full ("git " ^ args) (Unix.environment ()) in
+    let res = input_line git_out in
+    match Unix.close_process_full (git_out, git_in, git_err) with
+    | Unix.WEXITED 0 ->
+       Some res
     | _ ->
-       docinfo, skips
-  in
-  let docinfo = List.fold_left docinfo_for_def (empty_docinfo, [initial_skip]) ast.defs |> fst in
-  let process_anchors docinfo =
-    let anchored = ref Bindings.empty in
-    let pending_anchor = ref None in
-    List.iter (fun (DEF_aux (aux, _) as def) ->
-        let l = def_loc def in
-        match aux with
-        | DEF_pragma ("doc", command, l) ->
-           begin match String.index_from_opt command 0 ' ' with
-           | Some i ->
-              let subcommand = String.sub command 0 i in
-              let arg = String.sub command i (String.length command - i) |> String.trim in
-              pending_anchor := Some arg
-           | None ->
-              raise (Reporting.err_general l "Invalid $doc directive")
-           end
-        | DEF_pragma _ -> ()
-        | _ ->
-           begin match !pending_anchor with
-           | Some arg ->
-              let links = hyperlinks files def in
-              anchored := Bindings.add (mk_id arg) (doc_loc l Pretty_print_sail.doc_def def, links) !anchored;
-              pending_anchor := None
-           | None -> ()
-           end
-      ) ast.defs;
-    { docinfo with anchors = !anchored }
-  in
-  process_anchors docinfo
+       None
+  with
+  | _ -> None
+
+module type CONFIG = sig
+  val embedding_mode : embedding option
+end
+  
+module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
+  let encode str =
+    match Config.embedding_mode with
+    | Some Plain | None -> str
+    | Some Base64 -> Base64.encode_string str
+
+  let embedding_format () =
+    match Config.embedding_mode with
+    | Some Plain | None -> Plain
+    | Some Base64 -> Base64
+
+  let doc_lexing_pos p1 p2 =
+    match Config.embedding_mode with
+    | Some _ ->
+       Raw (read_source p1 p2 |> encode)
+    | None ->
+       Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
+
+  let doc_loc l f x =
+    match Reporting.simp_loc l with
+    | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
+       doc_lexing_pos p1 p2
+    | _ ->
+       Raw (f x |> Pretty_print_sail.to_string |> encode)
+
+  let get_doc_comment = function
+    | Parse_ast.Documented (str, _) -> Some (Converter.format Converter.default_config (Omd.of_string str))
+    | _ -> None
+  
+  let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) = {
+      source = doc_loc (fst vs_annot) (Pretty_print_sail.doc_spec ~comment:false) vs;
+      type_source = doc_loc ts_l Pretty_print_sail.doc_typschm ts
+    }
+
+  let docinfo_for_typdef (TD_aux (_, annot) as td) = doc_loc (fst annot) Pretty_print_sail.doc_typdef td
+
+  let docinfo_for_register (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) = {
+      source = doc_loc (fst rd_annot) (Pretty_print_sail.doc_dec) rd;
+      type_source = doc_loc typ_l Pretty_print_sail.doc_typ typ;
+      exp_source = Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Pretty_print_sail.doc_exp exp) exp
+    }
+
+  let docinfo_for_let (LB_aux (LB_val (pat, exp), annot) as lbind) = {
+      source = doc_loc (fst annot) (Pretty_print_sail.doc_letbind) lbind;
+      exp_source = doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp;
+    }
+
+  let docinfo_for_funcl ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
+    (** If we have just a single clause, we use the annotation for the
+       outer FD_aux wrapper, except we prefer documentation comments
+       attached to the inner function clause type where available. *)
+    let comment = get_doc_comment (fst annot) in
+    let annot = match outer_annot with None -> annot | Some annot -> annot in
+    let comment = match comment with None -> get_doc_comment (fst annot) | comment -> comment in
+
+    let source = doc_loc (fst annot) Pretty_print_sail.doc_funcl clause in
+    let pat, guard, exp = match pexp with
+      | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
+      | Pat_aux (Pat_when (pat, guard, exp), _) -> pat, Some guard, exp in
+    let guard_source = Option.map (fun exp -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp) guard in
+    let body_source = match exp with
+      | E_aux (E_block (exp :: exps), _) ->
+         let first_loc = exp_loc exp in
+         let last_loc = exp_loc (Util.last (exp :: exps)) in
+         begin match Reporting.simp_loc first_loc, Reporting.simp_loc last_loc with
+         | Some (p1, _), Some (_, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
+            doc_lexing_pos p1 p2
+         | _, _ ->
+            Raw (Pretty_print_sail.doc_block (exp :: exps) |> Pretty_print_sail.to_string |> encode)
+         end
+      | _ -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp in
+ 
+    { number = n;
+      source = source;
+      pat = pat;
+      wavedrom = Wavedrom.of_pattern None pat |> Option.map encode;
+      guard_source = guard_source;
+      body_source = body_source;
+      comment = Option.map encode comment
+    }
+
+  let included_clause files (FCL_aux (_, annot)) = included_loc files (fst annot)
+       
+  let docinfo_for_fundef files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
+    let clauses = List.filter (included_clause files) clauses in
+    match clauses with
+    | [] -> None
+    | [clause] ->
+       Some (Single_clause (docinfo_for_funcl ~outer_annot:annot 0 clause))
+    | _ ->
+       Some (Multiple_clauses (List.mapi docinfo_for_funcl clauses))
+
+  let docinfo_for_mpexp (MPat_aux (aux, annot)) =
+    match aux with
+    | MPat_pat mpat -> Rewrites.pat_of_mpat mpat
+    | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
+ 
+  let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
+    let source = doc_loc def_annot.loc Pretty_print_sail.doc_mapcl clause in
+    let wavedrom_attr = get_attribute "wavedrom" def_annot.attrs in
+
+    let left, left_wavedrom, right, right_wavedrom, body = match aux with
+      | MCL_bidir (left, right) ->
+         let left = docinfo_for_mpexp left in
+         let left_wavedrom = Wavedrom.of_pattern wavedrom_attr left in
+         let right = docinfo_for_mpexp right in
+         let right_wavedrom = Wavedrom.of_pattern wavedrom_attr right in
+         (Some left, left_wavedrom, Some right, right_wavedrom, None)
+      | MCL_forwards (left, body) ->
+         let left = docinfo_for_mpexp left in
+         let left_wavedrom = Wavedrom.of_pattern wavedrom_attr left in
+         let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
+         (Some left, left_wavedrom, None, None, Some body)
+      | MCL_backwards (right, body) ->
+         let right = docinfo_for_mpexp right in
+         let right_wavedrom = Wavedrom.of_pattern wavedrom_attr right in
+         let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
+         (None, None, Some right, right_wavedrom, Some body) in
+
+    { number = n;
+      source = source;
+      left = left;
+      left_wavedrom = Option.map encode left_wavedrom;
+      right = right;
+      right_wavedrom = Option.map encode right_wavedrom;
+      body = body
+    }
+    
+  let included_mapping_clause files (MCL_aux (_, (def_annot, _))) = included_loc files def_annot.loc
+    
+  let docinfo_for_mapdef files (MD_aux (MD_mapping (_, _, clauses), annot) as mdef) =
+    let clauses = List.filter (included_mapping_clause files) clauses in
+    match clauses with
+    | [] -> None
+    | _ ->
+       Some (List.mapi docinfo_for_mapcl clauses)
+
+  let docinfo_for_ast ~files ~hyperlinks ast =
+    let gitinfo =
+      git_command "rev-parse HEAD"
+      |> Option.map (fun checksum -> (checksum, Util.is_none (git_command "diff --quiet"))) in
+ 
+    let empty_docinfo = {
+        embedding = embedding_format ();
+        git = gitinfo;
+        hashes = [];
+        functions = Bindings.empty;
+        mappings = Bindings.empty;
+        valspecs = Bindings.empty;
+        typdefs = Bindings.empty;
+        registers = Bindings.empty;
+        lets = Bindings.empty;
+        anchors = Bindings.empty;
+      } in
+    let initial_skip = match files with
+      | [] -> false
+      | _ -> true in
+    let skip_file file =
+      if List.exists (same_file file) files then (
+        false
+      ) else (
+        initial_skip
+      ) in
+    let skipping = function
+      | true :: _ -> true
+      | _ -> false in
+    let docinfo_for_def (docinfo, skips) (DEF_aux (aux, _) as def) =
+      let links = hyperlinks files def in
+      match aux with
+      (* Maintain a stack of booleans, for each file if it was not
+         specified via -doc_file, we push true to skip it. If no
+         -doc_file flags are passed, include everything. *)
+      | DEF_pragma (("file_start" | "include_start"), path, _) ->
+         docinfo, (skip_file path :: skips)
+      | DEF_pragma (("file_end" | "include_end"), path, _) ->
+         docinfo, (match skips with _ :: skips -> skips | [] -> [])
+
+      (* Function definiton may be scattered, so we can't skip it *)
+      | DEF_fundef fdef ->
+         let id = id_of_fundef fdef in
+         begin match docinfo_for_fundef files fdef with
+         | None -> docinfo
+         | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
+         end,
+         skips
+         
+      | DEF_mapdef mdef ->
+         let id = id_of_mapdef mdef in
+         begin match docinfo_for_mapdef files mdef with
+         | None -> docinfo
+         | Some info -> { docinfo with mappings = Bindings.add id (info, links) docinfo.mappings }
+         end,
+         skips
+         
+      | _ when skipping skips ->
+         docinfo, skips
+        
+      | DEF_val vs ->
+         let id = id_of_val_spec vs in
+         { docinfo with valspecs = Bindings.add id (docinfo_for_valspec vs, links) docinfo.valspecs },
+         skips
+         
+      | DEF_type td ->
+         let id = id_of_type_def td in
+         { docinfo with typdefs = Bindings.add id (docinfo_for_typdef td, links) docinfo.typdefs },
+         skips
+         
+      | DEF_register rd ->
+         let id = id_of_dec_spec rd in
+         { docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers },
+         skips
+         
+      | DEF_let (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
+         let ids = pat_ids pat in
+         IdSet.fold (fun id docinfo ->
+             { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets }
+           ) ids docinfo,
+         skips
+         
+      | _ ->
+         docinfo, skips
+    in
+    let docinfo = List.fold_left docinfo_for_def (empty_docinfo, [initial_skip]) ast.defs |> fst in
+
+    let process_anchors docinfo =
+      let anchored = ref Bindings.empty in
+      let pending_anchor = ref None in
+      List.iter (fun (DEF_aux (aux, _) as def) ->
+          let l = def_loc def in
+          match aux with
+          | DEF_pragma ("doc", command, l) ->
+             begin match String.index_from_opt command 0 ' ' with
+             | Some i ->
+                let subcommand = String.sub command 0 i in
+                let arg = String.sub command i (String.length command - i) |> String.trim in
+                pending_anchor := Some arg
+             | None ->
+                raise (Reporting.err_general l "Invalid $doc directive")
+             end
+          | DEF_pragma _ -> ()
+          | _ ->
+             begin match !pending_anchor with
+             | Some arg ->
+                let links = hyperlinks files def in
+                anchored := Bindings.add (mk_id arg) (doc_loc l Pretty_print_sail.doc_def def, links) !anchored;
+                pending_anchor := None
+             | None -> ()
+             end
+        ) ast.defs;
+      { docinfo with anchors = !anchored }
+    in
+    let docinfo = process_anchors docinfo in
+
+    let module StringMap = Map.Make(String) in
+    let process_file_hashes hashes (DEF_aux (_, doc_annot)) =
+      if included_loc files doc_annot.loc then (
+        match Reporting.simp_loc doc_annot.loc with
+        | None -> hashes
+        | Some (p1, _) ->
+           if StringMap.mem p1.pos_fname hashes then (
+             hashes
+           ) else (
+             StringMap.add p1.pos_fname (hash_file p1.pos_fname) hashes
+           )
+      ) else (
+        hashes
+      ) in
+    let hashes = List.fold_left process_file_hashes StringMap.empty ast.defs in
+    { docinfo with hashes = StringMap.bindings hashes }
+
+end

@@ -8,8 +8,8 @@
   (name sail_plugin_doc)
   (modes (native plugin))
   (link_flags -linkall)
-  (libraries libsail omd yojson)
-  (embed_in_plugin_libraries omd yojson))
+  (libraries libsail omd yojson base64)
+  (embed_in_plugin_libraries omd yojson base64))
 
 (install
   (section (site (libsail plugins)))

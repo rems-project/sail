@@ -2930,7 +2930,7 @@ type pattern_duplicate =
 let is_enum_member id env = match Env.lookup_id id env with
   | Enum _ -> true
   | _ -> false
-                       
+ 
 (* Check if a pattern contains duplicate bindings, and raise a type
    error if this is the case *)
 let check_pattern_duplicates env pat =
@@ -4897,37 +4897,37 @@ let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
 let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
-  fun env (MCL_aux (cl, (l, _))) typ ->
-    match typ with
-    | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
-        match cl with
-        | MCL_bidir (mpexp1, mpexp2) -> begin
-            let testing_env = Env.set_allow_unknowns true env in
-            let left_mpat, _, _ = destruct_mpexp mpexp1 in
-            let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
-            let right_mpat, _, _ = destruct_mpexp mpexp2 in
-            let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
+  fun env (MCL_aux (cl, (def_annot, _))) typ ->
+  match typ with
+  | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
+      match cl with
+      | MCL_bidir (mpexp1, mpexp2) -> begin
+          let testing_env = Env.set_allow_unknowns true env in
+          let left_mpat, _, _ = destruct_mpexp mpexp1 in
+          let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
+          let right_mpat, _, _ = destruct_mpexp mpexp2 in
+          let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
 
-            let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
-            let typed_mpexp2 = check_mpexp left_id_env env mpexp2 typ2 in
-            MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (l, mk_expected_tannot env typ (Some typ)))
-          end
-        | MCL_forwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
-            let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
-            let typed_exp = check_exp mpat_env exp typ2 in
-            MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ (Some typ)))
-          end
-        | MCL_backwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
-            let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
-            let typed_exp = check_exp mpat_env exp typ1 in
-            MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ (Some typ)))
-          end
-      end
-    | _ -> typ_error env l ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")
+          let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
+          let typed_mpexp2 = check_mpexp left_id_env env mpexp2 typ2 in
+          MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+      | MCL_forwards (mpexp, exp) -> begin
+          let mpat, _, _ = destruct_mpexp mpexp in
+          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
+          let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
+          let typed_exp = check_exp mpat_env exp typ2 in
+          MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+      | MCL_backwards (mpexp, exp) -> begin
+          let mpat, _, _ = destruct_mpexp mpexp in
+          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
+          let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
+          let typed_exp = check_exp mpat_env exp typ1 in
+          MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+    end
+  | _ -> typ_error env def_annot.loc ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")
 
 let infer_funtyp l env tannotopt funcls =
   match tannotopt with

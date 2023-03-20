@@ -807,13 +807,14 @@ let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
   | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, empty_uannot))
 
 let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
+  let def_annot = mk_def_annot l in
   match mapcl with
   | P.MCL_bidir (mpexp1, mpexp2) ->
-     MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, empty_uannot))
+     MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (def_annot, empty_uannot))
   | P.MCL_forwards (mpexp, exp) ->
-     MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
+     MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
   | P.MCL_backwards (mpexp, exp) ->
-     MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
+     MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
 
 let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : uannot mapdef =
   match md with
@@ -880,9 +881,11 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
-  let annot = mk_def_annot l in
+let rec to_ast_def attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+  let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
   match def with
+  | P.DEF_attribute (attr, arg, def) ->
+     to_ast_def ((attr, arg, l) :: attrs) ctx def
   | P.DEF_overload (id, ids) ->
      [DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx
   | P.DEF_fixity (prec, n, op) ->
@@ -907,7 +910,7 @@ let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
   | P.DEF_outcome (outcome_spec, defs) ->
      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
      let defs, _ =
-       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
+       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def attrs ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
      [DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx
   | P.DEF_instantiation (id, substs) ->
@@ -959,7 +962,7 @@ let to_ast ctx (P.Defs files) =
   let to_ast_defs ctx (_, defs) =
     let defs = remove_mutrec defs in
     let defs, ctx =
-      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], ctx) defs
+      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def [] ctx def in (def @ defs, ctx)) ([], ctx) defs
     in
     List.rev defs, ctx
   in

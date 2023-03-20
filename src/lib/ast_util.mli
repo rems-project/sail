@@ -89,6 +89,10 @@ val empty_uannot : uannot
 *)
 val add_attribute : l -> string -> string -> uannot -> uannot
 
+val add_def_attribute : l -> string -> string -> def_annot -> def_annot
+
+val get_attribute : string -> (string * string * l) list -> string option
+  
 val mk_def_annot : l -> def_annot
   
 (** The empty annotation (as a location + uannot] pair). Should be used
