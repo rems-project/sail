@@ -819,7 +819,6 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | Unique (_,l) -> aux l
         | Generated l -> false (* Could do match_l l, but only want to split user-written patterns *)
         | Hint (_,_,l) -> aux l
-        | Documented (_,l) -> aux l
         | Range (p,q) ->
            p.Lexing.pos_fname = filename &&
              p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum
@@ -1679,7 +1678,6 @@ let rec useful_loc = function
   | Unique (_,l) -> useful_loc l
   | Generated l -> useful_loc l
   | Hint (_,_,l) -> useful_loc l
-  | Documented (_,l) -> useful_loc l
   | Range (_,_) -> true
 
 let id_pair_compare (id,l) (id',l') =

@@ -77,7 +77,6 @@ type l =
   | Generated of l
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
-  | Documented of string * l
 
 type 'a annot = l * 'a
 
@@ -541,7 +540,8 @@ type def_aux =  (* Top-level definition *)
  | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
  | DEF_register of dec_spec (* register declaration *)
  | DEF_pragma of string * string
- | DEF_attribute of string * string * def 
+ | DEF_attribute of string * string * def
+ | DEF_doc of string * def
  | DEF_internal_mutrec of fundef list
 
 and def = DEF_aux of def_aux * l

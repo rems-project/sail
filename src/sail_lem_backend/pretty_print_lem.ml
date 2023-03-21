@@ -161,10 +161,6 @@ let deinfix = function
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
-let doc_docstring_lem (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
-  | _ -> empty
-
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ, no_effect))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),
@@ -1519,8 +1515,7 @@ let doc_spec_lem effect_info env (VS_aux (valspec, annot)) =
      let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
-     doc_docstring_lem annot ^^
-       separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
+     separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 

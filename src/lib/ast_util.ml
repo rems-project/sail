@@ -149,7 +149,6 @@ let rec is_gen_loc = function
   | Parse_ast.Generated l -> true
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range (p1, p2) -> false
-  | Parse_ast.Documented (_, l) -> is_gen_loc l
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
@@ -2269,4 +2268,3 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Hint (_, l1, l2) -> "Hint(_," ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
-  | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"

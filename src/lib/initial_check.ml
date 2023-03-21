@@ -881,11 +881,19 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let rec to_ast_def attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
   let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
+  let annot = { annot with doc_comment = doc } in
   match def with
   | P.DEF_attribute (attr, arg, def) ->
-     to_ast_def ((attr, arg, l) :: attrs) ctx def
+     to_ast_def doc ((attr, arg, l) :: attrs) ctx def
+  | P.DEF_doc (doc_comment, def) ->
+     begin match doc with
+     | Some _ ->
+        raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")
+     | None ->
+        to_ast_def (Some doc_comment) attrs ctx def
+     end
   | P.DEF_overload (id, ids) ->
      [DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx
   | P.DEF_fixity (prec, n, op) ->
@@ -910,7 +918,7 @@ let rec to_ast_def attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
   | P.DEF_outcome (outcome_spec, defs) ->
      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
      let defs, _ =
-       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def attrs ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
+       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def doc attrs ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
      [DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx
   | P.DEF_instantiation (id, substs) ->
@@ -962,7 +970,7 @@ let to_ast ctx (P.Defs files) =
   let to_ast_defs ctx (_, defs) =
     let defs = remove_mutrec defs in
     let defs, ctx =
-      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def [] ctx def in (def @ defs, ctx)) ([], ctx) defs
+      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def None [] ctx def in (def @ defs, ctx)) ([], ctx) defs
     in
     List.rev defs, ctx
   in

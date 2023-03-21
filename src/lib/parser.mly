@@ -134,32 +134,6 @@ let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n 
 let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
 let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
-let doc_loc doc l =
-  match l with
-  | Documented _ -> l
-  | _            -> Documented (doc, l)
-
-let doc_funcl doc (FCL_aux (f, l)) = FCL_aux (f, doc_loc doc l)
-let doc_fun doc (FD_aux (fn, l)) = FD_aux (fn, doc_loc doc l)
-let doc_td doc (TD_aux (t, l)) = TD_aux (t, doc_loc doc l)
-let doc_vs doc (VS_aux (v, l)) = VS_aux (v, doc_loc doc l)
-let doc_reg_dec doc (DEC_aux (d, l)) = DEC_aux (d, doc_loc doc l)
-let doc_mapcl doc (MCL_aux (d, l)) = MCL_aux (d, doc_loc doc l)
-let doc_map doc (MD_aux (m, l)) = MD_aux (m, doc_loc doc l)
-let doc_tu doc (Tu_aux (tu, l)) = Tu_aux (tu, doc_loc doc l)
-let doc_id doc (Id_aux (id, l)) = Id_aux (id, doc_loc doc l)
-
-let doc_sd doc (SD_aux (sd, l)) =
-  match sd with
-  | SD_funcl fcl -> SD_aux (SD_funcl (doc_funcl doc fcl), (doc_loc doc l))
-  | SD_unioncl (id, tu) -> SD_aux (SD_unioncl (id, doc_tu doc tu), l)
-  | SD_mapcl (id, mcl) -> SD_aux (SD_mapcl (id, doc_mapcl doc mcl), l)
-
-  | SD_function _
-  | SD_variant _
-  | SD_mapping _
-  | SD_end _ -> SD_aux (sd, doc_loc doc l)
-
 let qi_id_of_kopt (KOpt_aux (_, l) as kopt) = QI_aux (QI_id kopt, l)
 
 let mk_recr r n m = (Rec_aux(r, loc n m))
@@ -1218,16 +1192,10 @@ funcl:
   | id funcl_patexp
     { mk_funcl (FCL_funcl ($1, $2)) $startpos $endpos }
 
-funcl_doc:
-  | Doc funcl_doc
-    { doc_funcl $1 $2 }
-  | funcl
-    { $1 }
-
 funcls2:
-  | funcl_doc
+  | funcl
     { [$1] }
-  | funcl_doc And funcls2
+  | funcl And funcls2
     { $1 :: $3 }
 
 funcls:
@@ -1274,8 +1242,6 @@ typaram:
     { mk_typq $2 [] $startpos $endpos }
 
 type_def:
-  | Doc type_def
-    { doc_td $1 $2 }
   | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, $3, K_aux (K_type, Parse_ast.Unknown), $5)) $startpos $endpos }
   | Typedef id Eq typ
@@ -1340,8 +1306,6 @@ struct_fields:
     { $1 :: $3 }
 
 type_union:
-  | Doc type_union
-    { doc_tu $1 $2 }
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id Colon typ MinusGt typ
@@ -1362,8 +1326,6 @@ rec_measure:
     { mk_recr (Rec_measure ($2, $4)) $startpos $endpos }
 
 fun_def:
-  | Doc fun_def
-    { doc_fun $1 $2 }
   | Function_ rec_measure? funcls
     { let funcls, tannot = $3 in mk_fun (FD_function (default_opt mk_recn $2, tannot, mk_eannotn, funcls)) $startpos $endpos }
 
@@ -1441,21 +1403,13 @@ mapcl:
   | Backwards mpexp EqGt exp
     { mk_backwards_mapcl $2 $4 $startpos $endpos }
 
-mapcl_doc:
-  | Doc mapcl_doc
-    { doc_mapcl $1 $2 }
-  | mapcl
-    { $1 }
-
 mapcl_list:
-  | mapcl_doc Comma?
+  | mapcl Comma?
     { [$1] }
-  | mapcl_doc Comma mapcl_list
+  | mapcl Comma mapcl_list
     { $1 :: $3 }
 
 map_def:
-  | Doc map_def
-    { doc_map $1 $2 }
   | Mapping id Eq Lcurly mapcl_list Rcurly
     { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
   | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
@@ -1496,8 +1450,6 @@ externs:
     { Some { pure = $2; bindings = $4 }, false }
 
 val_spec_def:
-  | Doc val_spec_def
-    { doc_vs $1 $2 }
   | Val String Colon typschm
     { let typschm = $4 in
       mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] }, false)) $startpos $endpos }
@@ -1512,8 +1464,6 @@ val_spec_def:
       mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs), true)) $startpos $endpos }
 
 register_def:
-  | Doc register_def
-    { doc_reg_dec $1 $2 }
   | Register id Colon typ
     { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
       let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
@@ -1536,8 +1486,6 @@ default_def:
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
 
 scattered_def:
-  | Doc scattered_def
-    { doc_sd $1 $2 }
   | Scattered Union id typaram
     { mk_sd (SD_variant($3, $4)) $startpos $endpos }
   | Scattered Union id
@@ -1584,12 +1532,8 @@ instantiation_def:
     { ($2, $4) }
 
 overload_def:
-  | Doc Overload id Eq Lcurly id_list Rcurly
-    { (doc_id $1 $3, $6) }
   | Overload id Eq Lcurly id_list Rcurly
     { ($2, $5) }
-  | Doc Overload id Eq enum_bar
-    { (doc_id $1 $3, List.map fst $5) }
   | Overload id Eq enum_bar
     { ($2, List.map fst $4) }
 
@@ -1634,6 +1578,8 @@ def_aux:
 def:
   | attr = Attribute; def = def
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
+  | doc = Doc; def = def
+    { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
   | d = def_aux
     { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 

@@ -112,7 +112,12 @@ type embedding = Plain | Base64
 let embedding_string = function
   | Plain -> "plain"
   | Base64 -> "base64"
- 
+
+let bindings_to_json b f =
+  Bindings.bindings b
+  |> List.map (fun (key, elem) -> (string_of_id key, f elem))
+  |> (fun elements -> `Assoc elements)
+            
 type location_or_raw =
   | Raw of string
   | Location of string * int * int * int * int * int * int
@@ -228,6 +233,7 @@ type 'a function_clause_doc = {
     guard_source : location_or_raw option;
     body_source : location_or_raw;
     comment : string option;
+    splits : location_or_raw Bindings.t option;
   }
 
 let function_clause_doc_to_json docinfo =
@@ -243,6 +249,7 @@ let function_clause_doc_to_json docinfo =
       @ [
           ("body", location_or_raw_to_json docinfo.body_source)
         ]
+      @ (match docinfo.splits with Some s -> [("splits", bindings_to_json s location_or_raw_to_json)] | None -> [])
     )
 
 type 'a function_doc =
@@ -330,6 +337,19 @@ let pair_to_json x_label f y_label g (x, y) =
   | `Null, y -> `Assoc [(y_label, y)]
   | x, y -> `Assoc [(x_label, x); (y_label, y)]
 
+type anchor_doc = {
+    source : location_or_raw;
+    comment : string option
+  }
+
+let anchor_doc_to_json docinfo =
+  `Assoc (
+      [
+        ("source", location_or_raw_to_json docinfo.source);
+      ]
+      @ (match docinfo.comment with Some c -> [("comment", `String c)] | None -> [])
+    )
+    
 type 'a docinfo = {
     embedding : embedding;
     git : (string * bool) option;
@@ -340,14 +360,12 @@ type 'a docinfo = {
     typdefs : (typdef_doc * hyperlink list) Bindings.t;
     registers : (register_doc * hyperlink list) Bindings.t;
     lets : (let_doc * hyperlink list) Bindings.t;
-    anchors : (location_or_raw * hyperlink list) Bindings.t;
+    anchors : (anchor_doc * hyperlink list) Bindings.t;
+    spans : location_or_raw Bindings.t;
   }
 
-let bindings_to_json b f =
-  Bindings.bindings b
-  |> List.map (fun (key, elem) -> (string_of_id key, f elem))
-  |> (fun elements -> `Assoc elements)
-
+let span_to_json loc = `Assoc [("span", location_or_raw_to_json loc)]
+                
 let docinfo_to_json docinfo =
   let assoc =
     [
@@ -363,7 +381,8 @@ let docinfo_to_json docinfo =
         ("types", bindings_to_json docinfo.typdefs (pair_to_json "type" typdef_doc_to_json "links" hyperlinks_to_json));
         ("registers", bindings_to_json docinfo.registers (pair_to_json "register" register_doc_to_json "links" hyperlinks_to_json));
         ("lets", bindings_to_json docinfo.lets (pair_to_json "let" let_doc_to_json "links" hyperlinks_to_json));
-        ("anchors", bindings_to_json docinfo.anchors (pair_to_json "anchor" location_or_raw_to_json "links" hyperlinks_to_json));
+        ("anchors", bindings_to_json docinfo.anchors (pair_to_json "anchor" anchor_doc_to_json "links" hyperlinks_to_json));
+        ("spans", bindings_to_json docinfo.spans span_to_json);
       ] in
   `Assoc assoc
 
@@ -408,12 +427,10 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     | _ ->
        Raw (f x |> Pretty_print_sail.to_string |> encode)
 
-  let get_doc_comment = function
-    | Parse_ast.Documented (str, _) -> Some (Converter.convert Converter.default_config str)
-    | _ -> None
-  
+  let get_doc_comment def_annot = def_annot.doc_comment
+    
   let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) = {
-      source = doc_loc (fst vs_annot) (Pretty_print_sail.doc_spec ~comment:false) vs;
+      source = doc_loc (fst vs_annot) Pretty_print_sail.doc_spec vs;
       type_source = doc_loc ts_l Pretty_print_sail.doc_typschm ts
     }
 
@@ -430,14 +447,43 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       exp_source = doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp;
     }
 
-  let docinfo_for_funcl ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
+  let funcl_splits ~ast ~error_loc:l attrs exp =
+    (* The constant propagation tends to strip away block formatting, so put it back to make the pretty_printed output a bit nicer. *)
+    let pretty_printer = match exp with
+      | E_aux (E_block _, _) -> (fun exp -> Pretty_print_sail.doc_block [exp])
+      | _ -> (fun exp -> Pretty_print_sail.doc_exp exp)
+    in
+    match get_attribute "split" attrs with
+    | None -> None
+    | Some split_id ->
+       let split_id = mk_id split_id in
+       let env = Type_check.env_of exp in
+       match Type_check.Env.lookup_id split_id env with
+       | Local (_, (Typ_aux (Typ_id enum_id, _) as enum_typ)) ->
+          let members = Type_check.Env.get_enum enum_id env in
+          let splits =
+            List.fold_left (fun splits member ->
+                let checked_member = Type_check.check_exp env (mk_exp (E_id member)) enum_typ in
+                let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
+                let (propagated, _) = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
+                let propagated_doc = Raw (pretty_printer propagated |> Pretty_print_sail.to_string |> encode) in
+                Bindings.add member propagated_doc splits
+              ) Bindings.empty members in
+          Some splits
+       | _ ->
+          raise (Reporting.err_general l ("Could not split on variable " ^ string_of_id split_id))
+
+  let docinfo_for_funcl ~ast ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
     (** If we have just a single clause, we use the annotation for the
        outer FD_aux wrapper, except we prefer documentation comments
        attached to the inner function clause type where available. *)
-    let comment = get_doc_comment (fst annot).loc in
+    let comment = get_doc_comment (fst annot) in
     let annot = match outer_annot with None -> annot | Some annot -> annot in
-    let comment = match comment with None -> get_doc_comment (fst annot).loc | comment -> comment in
+    let comment = match comment with None -> get_doc_comment (fst annot) | comment -> comment in
 
+    (** Try to use the inner attributes if we have no outer attributes. *)
+    let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
+       
     let source = doc_loc (fst annot).loc Pretty_print_sail.doc_funcl clause in
     let pat, guard, exp = match pexp with
       | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
@@ -449,31 +495,35 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
          let last_loc = exp_loc (Util.last (exp :: exps)) in
          begin match Reporting.simp_loc first_loc, Reporting.simp_loc last_loc with
          | Some (p1, _), Some (_, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-            doc_lexing_pos p1 p2
+            (* Make sure the first line is indented correctly *)
+            doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
          | _, _ ->
             Raw (Pretty_print_sail.doc_block (exp :: exps) |> Pretty_print_sail.to_string |> encode)
          end
       | _ -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp in
- 
+
+    let splits = funcl_splits ~ast:ast ~error_loc:(pat_loc pat) attrs exp in
+    
     { number = n;
       source = source;
       pat = pat;
       wavedrom = Wavedrom.of_pattern ~labels:None pat |> Option.map encode;
       guard_source = guard_source;
       body_source = body_source;
-      comment = Option.map encode comment
+      comment = Option.map encode comment;
+      splits = splits
     }
 
   let included_clause files (FCL_aux (_, (clause_annot, _))) = included_loc files clause_annot.loc
  
-  let docinfo_for_fundef def_annot files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
+  let docinfo_for_fundef ~ast def_annot files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
     let clauses = List.filter (included_clause files) clauses in
     match clauses with
     | [] -> None
     | [clause] ->
-       Some (Single_clause (docinfo_for_funcl ~outer_annot:(def_annot, snd annot) 0 clause))
+       Some (Single_clause (docinfo_for_funcl ~ast:ast ~outer_annot:(def_annot, snd annot) 0 clause))
     | _ ->
-       Some (Multiple_clauses (List.mapi docinfo_for_funcl clauses))
+       Some (Multiple_clauses (List.mapi (docinfo_for_funcl ~ast:ast) clauses))
 
   let docinfo_for_mpexp (MPat_aux (aux, annot)) =
     match aux with
@@ -536,6 +586,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
         registers = Bindings.empty;
         lets = Bindings.empty;
         anchors = Bindings.empty;
+        spans = Bindings.empty;
       } in
     let initial_skip = match files with
       | [] -> false
@@ -563,7 +614,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
          let id = id_of_fundef fdef in
-         begin match docinfo_for_fundef def_annot files fdef with
+         begin match docinfo_for_fundef ~ast:ast def_annot files fdef with
          | None -> docinfo
          | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
          end,
@@ -610,32 +661,60 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     let process_anchors docinfo =
       let anchored = ref Bindings.empty in
       let pending_anchor = ref None in
-      List.iter (fun (DEF_aux (aux, _) as def) ->
+      List.iter (fun (DEF_aux (aux, def_annot) as def) ->
           let l = def_loc def in
           match aux with
-          | DEF_pragma ("doc", command, l) ->
-             begin match String.index_from_opt command 0 ' ' with
-             | Some i ->
-                let subcommand = String.sub command 0 i in
-                let arg = String.sub command i (String.length command - i) |> String.trim in
-                pending_anchor := Some arg
-             | None ->
-                raise (Reporting.err_general l "Invalid $doc directive")
-             end
-          | DEF_pragma _ -> ()
-          | _ ->
-             begin match !pending_anchor with
-             | Some arg ->
-                let links = hyperlinks files def in
-                anchored := Bindings.add (mk_id arg) (doc_loc l Pretty_print_sail.doc_def def, links) !anchored;
-                pending_anchor := None
-             | None -> ()
-             end
+          | DEF_pragma ("anchor", arg, _) ->
+             let links = hyperlinks files def in
+             let anchor_info = {
+                 source = doc_loc l Pretty_print_sail.doc_def def;
+                 comment = def_annot.doc_comment
+               } in
+             anchored := Bindings.add (mk_id arg) (anchor_info, links) !anchored;
+          | _ -> ()
         ) ast.defs;
       { docinfo with anchors = !anchored }
     in
     let docinfo = process_anchors docinfo in
 
+    let process_spans docinfo =
+      let spans = ref Bindings.empty in
+      let current_span = ref None in
+      List.iter (fun (DEF_aux (aux, def_annot)) ->
+          match aux with
+          | DEF_pragma ("span", arg, _) when Util.is_none !current_span ->
+             begin match String.split_on_char ' ' arg with
+             | ["start"; name] ->
+                current_span := Some (name, def_annot.loc)
+             | _ ->
+                raise (Reporting.err_general def_annot.loc "Invalid span directive")
+             end
+            
+          | DEF_pragma ("span", arg, _) when arg = "end" ->
+             begin match !current_span with
+             | Some (name, start_l) ->
+                let end_l = def_annot.loc in
+                begin match Reporting.simp_loc start_l, Reporting.simp_loc end_l with
+                | Some (_, p1), Some (p2, _) when p1.pos_fname = p2.pos_fname ->
+                   (* Adjust the span for p2 to end at the very start of the directive *)
+                   let p2 = { p2 with pos_cnum = p2.pos_bol } in
+                   spans := Bindings.add (mk_id name) (doc_lexing_pos p1 p2) !spans
+                | _, _ ->
+                   raise (Reporting.err_general def_annot.loc "Invalid locations found when ending span")
+                end
+             | None ->
+                raise (Reporting.err_general def_annot.loc "No start span for this end span")
+             end
+ 
+          | DEF_pragma ("span", _, _) ->
+             raise (Reporting.err_general def_annot.loc "Previous span must be ended before this one can begin")
+
+          | _ -> ()
+        ) ast.defs;
+      { docinfo with spans = !spans }
+    in
+    let docinfo = process_spans docinfo in
+           
     let module StringMap = Map.Make(String) in
     let process_file_hashes hashes (DEF_aux (_, doc_annot)) =
       if included_loc files doc_annot.loc then (

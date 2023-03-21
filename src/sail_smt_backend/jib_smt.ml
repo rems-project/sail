@@ -1301,9 +1301,7 @@ let smt_builtin ctx name args ret_ctyp =
   | _ ->
      Reporting.unreachable ctx.pragma_l __POS__ ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
-let loc_doc = function
-  | Parse_ast.Documented (str, l) -> str
-  | _ -> "UNKNOWN"
+let loc_doc _ = "UNKNOWN"
 
 (* Memory reads and writes as defined in lib/regfp.sail *)
 let writes = ref (-1)

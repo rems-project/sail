@@ -335,9 +335,7 @@ let latex_of_markdown str =
 
   replace_this (format (of_string str))
 
-let docstring = function
-  | Parse_ast.Documented (str, _) -> string (latex_of_markdown str)
-  | _ -> empty
+let docstring _ = empty
 
 let add_links str =
   let r = Str.regexp {|\([a-zA-Z0-9_]+\)\([ ]*\)(|} in
@@ -517,7 +515,7 @@ let defs { defs; _ } =
        if !opt_simple_val then
          Some (latex_command Val id (doc_spec_simple vs) (fst annot))
        else
-         Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) (fst annot))
+         Some (latex_command Val id (Pretty_print_sail.doc_spec vs) (fst annot))
 
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
        fundefs := Bindings.add id id !fundefs;

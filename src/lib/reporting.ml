@@ -136,10 +136,6 @@ let loc_to_string l =
   let b = Buffer.create 160 in
   format_message (Location ("", None, l, Line "")) (buffer_formatter b);
   Buffer.contents b
-
-let is_documented = function
-  | Parse_ast.Documented _ -> true
-  | _ -> false
  
 let rec simp_loc = function
   | Parse_ast.Unknown -> None
@@ -151,7 +147,6 @@ let rec simp_loc = function
      | pos -> pos
      end
   | Parse_ast.Range (p1, p2) -> Some (p1, p2)
-  | Parse_ast.Documented (_, l) -> simp_loc l
 
 let rec loc_file = function
   | Parse_ast.Unknown -> None
@@ -159,7 +154,6 @@ let rec loc_file = function
   | Parse_ast.Generated l -> loc_file l
   | Parse_ast.Hint (_, _, l) -> loc_file l
   | Parse_ast.Range (p1, _) -> Some p1.pos_fname
-  | Parse_ast.Documented (_, l) -> loc_file l
 
 let rec start_loc = function
   | Parse_ast.Unknown -> Parse_ast.Unknown
@@ -167,8 +161,7 @@ let rec start_loc = function
   | Parse_ast.Generated l -> Parse_ast.Generated (start_loc l)
   | Parse_ast.Hint (hint, l1, l2) -> Parse_ast.Hint (hint, start_loc l1, start_loc l2)
   | Parse_ast.Range (p1, _) -> Parse_ast.Range (p1, p1)
-  | Parse_ast.Documented (doc, l) -> Parse_ast.Documented (doc, start_loc l)
-                             
+ 
 let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"

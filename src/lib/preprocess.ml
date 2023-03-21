@@ -121,7 +121,8 @@ let cond_pragma l defs =
 let all_pragmas =
   List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
     [ "define";
-      "doc";
+      "anchor";
+      "span";
       "include";
       "ifdef";
       "ifndef";

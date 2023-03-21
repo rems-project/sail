@@ -268,10 +268,6 @@ let doc_var ctxt kid =
   | exception Not_found ->
      string (fix_id ctxt.avoid_target_names true (string_of_kid (try KBindings.find kid ctxt.kid_renames with Not_found -> kid)))
 
-let doc_docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
-  | _ -> empty
-
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),

@@ -71,6 +71,7 @@ let opt_doc_format = ref "asciidoc"
 let opt_doc_files = ref []
 let opt_doc_embed = ref None
 let opt_doc_compact = ref false
+let opt_doc_bundle = ref "doc.json"
 
 let embedding_option () = match !opt_doc_embed with
   | None -> None
@@ -93,10 +94,13 @@ let doc_options = [
   ( "-doc_compact",
     Arg.Unit (fun _ -> opt_doc_compact := true),
     " Use compact documentation format");
+  ( "-doc_bundle",
+    Arg.String (fun file -> opt_doc_bundle := file),
+    "<file> Name for documentation bundle file");
   ]
 
 let output_docinfo doc_dir docinfo =
-  let chan = open_out (Filename.concat doc_dir "doc.json") in
+  let chan = open_out (Filename.concat doc_dir !opt_doc_bundle) in
   let json = Docinfo.docinfo_to_json docinfo in
   if !opt_doc_compact then (
     Yojson.to_channel ~std:true chan json
@@ -120,6 +124,7 @@ let doc_target _ out_file ast effect_info env =
   if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then (
     let module Config = struct
         let embedding_mode = embedding_option()
+        let the_ast = ast
       end in
     let module Gen = Docinfo.Generator(Markdown.AsciidocConverter)(Config) in
     let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in

@@ -232,7 +232,6 @@ let rec format_loc prefix hint l contents =
   | Parse_ast.Unknown -> contents
   | Parse_ast.Range (p1, p2) -> format_pos prefix hint p1 p2 contents
   | Parse_ast.Unique (_, l) -> format_loc prefix hint l contents
-  | Parse_ast.Documented (_, l) -> format_loc prefix hint l contents
   | Parse_ast.Hint (hint', l1, l2) ->
      fun ppf -> format_loc prefix (Some hint') l1 (fun _ -> ()) { ppf with loc_color = Util.green }; format_loc prefix hint l2 contents ppf
   | Parse_ast.Generated l ->

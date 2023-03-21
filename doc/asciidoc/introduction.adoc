@@ -1,0 +1,117 @@
+Sail is a language for expressing the instruction-set
+architecture (ISA) semantics of processors.
+
+Vendor architecture specification documents typically describe the
+sequential behaviour of their ISA with a combination of prose, tables,
+and pseudocode for each instruction.
+
+They vary in how precise that pseudocode is: in some it is just
+suggestive, while in others it is close to a complete description of
+the envelope of architecturally allowed behaviour for sequential code.
+
+For x86{blank}cite:[Intel61], the Intel pseudocode is just suggestive,
+with embedded prose, while the AMD descriptions{blank}cite:[AMD_3_21]
+are prose alone. For IBM Power{blank}cite:[Power3.0B], there is
+detailed pseudocode which has recently become
+machine-processed{blank}cite:[Leighton21]. For
+Arm{blank}cite:[armarmv8], there is detailed pseudocode, which has
+recently become machine-processed{blank}cite:[Reid16]. For
+MIPS{blank}cite:[MIPS64-II,MIPS64-III] there is also reasonably detailed
+pseudocode.
+
+Sail is intended:
+
+* To support precise definition of real-world ISA semantics;
+
+* To be accessible to engineers familiar with existing vendor
+  pseudocodes, with a similar style to the pseudocodes used by ARM and
+  IBM Power (modulo minor syntactic differences);
+
+* To expose the structure needed to combine the sequential ISA
+  semantics with the relaxed-memory concurrency models we have
+  developed;
+  
+* To provide an expressive type system that can statically check the
+  bitvector length and indexing computation that arises in these
+  specifications, to detect errors and to support code generation,
+  with type inference to minimise the required type annotations;
+
+* To support execution, for architecturally complete emulation
+  automatically based on the definition;
+
+* To support automatic generation of theorem-prover definitions, for
+  mechanised reasoning about ISA specifications; and
+
+* To be as minimal as possible given the above, to ease the tasks of
+  code generation and theorem-prover definition generation.
+
+A Sail specification will typically define an abstract syntax type/tre
+(AST) of machine instructions, a decode function that takes binary
+values to AST values, and an execute function that describes how each
+of those behaves at runtime, together with whatever auxiliary
+functions and types are needed.
+
+Given such a specification, the Sail implementation can typecheck it
+and generate:
+
+* An internal representation of the fully type-annotated
+  definition (a deep embedding of the definition) in a form that can
+  be executed by the Sail interpreter.  These are both expressed in
+  Lem{blank}cite:[Lem-icfp2014,Lemcode], a language of type, function, and
+  relation definitions that can be compiled into OCaml and various
+  theorem provers. The Sail interpreter can also be used to analyse
+  instruction definitions (or partially executed instructions) to
+  determine their potential register and memory footprints.
+
+* A shallow embedding of the definition, also in Lem, that can be
+  executed or converted to theorem-prover code more directly.
+  Currently this is aimed at Isabelle/HOL or HOL4, though the Sail
+  dependent types should support generation of idiomatic Coq definitions
+  (directly rather than via Lem).
+
+* A compiled version of the specification
+  directly into OCaml.
+
+* A more efficient executable version of the specification, compiled
+  into C code.
+
+Sail has been used to develop models of parts of several architectures:
+
+[cols="1,1,1"]
+|===
+| Arm-v8 (ASL)
+| generated from Arm's v8.5 public ASL spec
+|https://github.com/rems-project/sail-arm/tree/master/arm-v8.5-a
+
+| Arm-v9 (ASL)
+| generated from Arm's v9.3 public ASL spec
+| https://github.com/rems-project/sail-arm/tree/master/arm-v9.3-a
+
+| RISC-V
+| hand-written
+| https://github.com/riscv/sail-riscv
+
+| CHERI-MIPS
+| hand-written
+| https://github.com/CTSRD-CHERI/sail-cheri-mips
+|===
+
+The Arm-v8 (ASL) model is based on an automatic translation of Arm's
+machine-readable public v8.3 ASL specification footnote:[ARM v8-A
+  Architecture Specification: https://github.com/meriac/archex]. It includes everything in
+ARM's specification.
+
+The MIPS model is hand-written based on the MIPS64 manual version
+2.5{blank}cite:[MIPS64-II,MIPS64-III],
+but covering only the features in the BERI hardware
+reference{blank}cite:[UCAM-CL-TR-868],
+which in turn drew on MIPS4000 and MIPS32{blank}cite:[MIPS4000,MIPS32-I].
+
+The CHERI model is based on that and the CHERI ISA reference manual
+version{nbsp}5{blank}cite:[UCAM-CL-TR-891]. These two are both
+principally by Norton-Wright; they cover all basic user
+and kernel mode MIPS features sufficient to boot FreeBSD, including a
+TLB, exceptions and a basic UART for console interaction. ISA
+extensions such as floating point are not covered. The CHERI model
+supports either 256-bit capabilities or 128-bit compressed
+capabilities.
