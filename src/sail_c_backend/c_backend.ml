@@ -90,6 +90,7 @@ let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
 let opt_branch_coverage = ref None
+let opt_gdb_stub = ref false
                         
 let extra_params () =
   match !opt_extra_params with
@@ -2303,7 +2304,55 @@ let jib_of_ast env effect_info ast =
   let env, effect_info = add_special_functions env effect_info in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
-  
+
+let register_info_array cdefs =
+  let c_literal_of_id id =
+    (* TODO: properly C quote *)
+    string (string_of_id id)
+  in
+  let type_of = function
+    | CT_sbits _ | CT_struct (_, [(_, CT_sbits _)]) -> string "gdb_sbits"
+    | CT_fbits _ | CT_struct (_, [(_, CT_fbits _)]) -> string "gdb_fbits"
+    | _ -> assert false
+  in
+  let qquotes = enclose (string "\\\"") (string "\\\"") in
+  let check_def = function
+    | CDEF_reg_dec (id, (CT_sbits (n, _) | CT_fbits (n, _) as ctyp), _)
+    | CDEF_reg_dec (id, CT_struct (_, [(_, (CT_sbits (n, _) | CT_fbits (n, _) as ctyp))]), _) ->
+       let c_id = c_literal_of_id id in
+       Some (group (braces (dquotes c_id ^^ comma ^/^
+                              type_of ctyp ^^ comma ^/^
+                                ampersand ^^ string (sgen_id id) ^^ comma ^/^
+                                  OCaml.int n) ^^ comma),
+             group (angles (string "reg name=" ^^ qquotes c_id ^/^
+                              string "bitsize=" ^^ qquotes (OCaml.int n) ^^ string "/")))
+    | _ -> None
+  in
+  let (registers, reg_xml) = List.split (List.filter_map check_def cdefs) in
+  let prefix_pp =
+    separate2 hardline hardline [
+          string "enum gdb_reg_type { gdb_sbits, gdb_fbits };";
+          string "struct gdb_register_info { char *name; enum gdb_reg_type ty; void *value; int size; };";
+          empty;
+          concat [string "int gdb_register_count = "; OCaml.int (List.length registers); string ";"];
+          string "struct gdb_register_info gdb_registers[] = {"
+      ]
+  in
+  let registers_pp = separate2 hardline hardline registers in
+  let string_cont = string "\\n\\" ^^ hardline in
+  let mid_pp =
+    separate2 string_cont string_cont [
+        string "const char *gdb_xml = \"<?xml version=\\\"1.0\\\"?>";
+        string "<!DOCTYPE feature SYSTEM \\\"gdb-target.dtd\\\">";
+        string "<target version=\\\"1.0\\\">";
+        string "<feature name=\\\"sail.registers\\\">\\n\\"
+      ]
+  in
+  let reg_xml_pp = separate2 string_cont string_cont reg_xml in
+  let end_pp = string "</feature>\\n</target>\\n\";" in
+  prefix 2 1 prefix_pp (group registers_pp) ^^ hardline ^^ string "};" ^^ hardline ^^
+    prefix 2 1 mid_pp reg_xml_pp ^^ string_cont ^^ end_pp ^^ hardline
+
 let compile_ast env effect_info output_chan c_includes ast =
   try
     let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2436,7 +2485,11 @@ let compile_ast env effect_info output_chan c_includes ast =
                                      else
                                        empty)
                                  ^^ model_main ^^ hardline)
-    |> output_string output_chan
+    |> output_string output_chan;
+    if !opt_gdb_stub then
+      register_info_array cdefs
+      |> Pretty_print_sail.to_string
+      |> output_string output_chan
   with
   | Type_error (_, l, err) ->
      c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)

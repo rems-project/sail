@@ -120,6 +120,9 @@ let c_options = [
   ( "-static",
     Arg.Set C_backend.opt_static,
     " make generated C functions static");
+  ( "-c_gdb",
+    Arg.Set C_backend.opt_gdb_stub,
+    " add information for gdb stub");
 ]
  
 let c_rewrites =
