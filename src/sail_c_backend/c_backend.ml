@@ -2305,7 +2305,53 @@ let jib_of_ast env effect_info ast =
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
 
-let register_info_array cdefs =
+let register_info_array env ctx cdefs =
+  let encoders =
+    let f id =
+      let _, arg_ctyps, ret_ctyp = Bindings.find id ctx.valspecs in
+      let typq, typ = Env.get_val_spec id env in
+      match arg_ctyps, typ with
+      | [CT_struct (struct_id, _)], Typ_aux (Typ_fn (_, dst_typ), _) ->
+         (match destruct_bitvector env dst_typ with
+          | Some (Nexp_aux (Nexp_constant size, _), _) -> Some (struct_id, (id, ret_ctyp, Nat_big_num.to_int size))
+          | _ ->
+             (* TODO: use proper warning *)
+             Printf.eprintf "%s doesn't have a nice destination size\n%!" (string_of_id id);
+             None)
+      | _ ->
+         (* TODO: use proper warning *)
+         Printf.eprintf "%s has a bad type\n%!" (string_of_id id);
+         None
+    in
+    Env.get_overloads (mk_id "gdb_encode_register") env |>
+      List.filter_map f |>
+      List.fold_left (fun m (id,v) -> Bindings.add id v m) Bindings.empty
+  in
+Printf.eprintf "Found %d encoders\n%!" (Bindings.cardinal encoders);
+Bindings.iter (fun id (fn_id, ctyp, size) -> Printf.eprintf "%s %s %s %d\n%!" (string_of_id id) (string_of_id fn_id) (string_of_ctyp ctyp) size) encoders;
+  let decoders =
+    let f id =
+      let _, arg_ctyps, ret_ctyp = Bindings.find id ctx.valspecs in
+      let typq, typ = Env.get_val_spec id env in
+      match arg_ctyps, ret_ctyp, typ with
+      | [arg_ctyp], CT_struct (struct_id, _), Typ_aux (Typ_fn ([src_typ], _), _) ->
+         (match destruct_bitvector env src_typ with
+          | Some (Nexp_aux (Nexp_constant size, _), _) -> Some (struct_id, (id, arg_ctyp, Nat_big_num.to_int size))
+          | _ ->
+             (* TODO: use proper warning *)
+             Printf.eprintf "%s doesn't have a nice source size\n%!" (string_of_id id);
+             None)
+      | _ ->
+         (* TODO: use proper warning *)
+         Printf.eprintf "%s has a bad type\n%!" (string_of_id id);
+         None
+    in
+    Env.get_overloads (mk_id "gdb_decode_register") env |>
+      List.filter_map f |>
+      List.fold_left (fun m (id,v) -> Bindings.add id v m) Bindings.empty
+  in
+Printf.eprintf "Found %d decoders\n%!" (Bindings.cardinal decoders);
+Bindings.iter (fun id (fn_id, ctyp, size) -> Printf.eprintf "%s %s %s %d\n%!" (string_of_id id) (string_of_id fn_id) (string_of_ctyp ctyp) size) decoders;
   let c_literal_of_id id =
     (* TODO: properly C quote *)
     string (string_of_id id)
@@ -2313,30 +2359,103 @@ let register_info_array cdefs =
   let type_of = function
     | CT_sbits _ | CT_struct (_, [(_, CT_sbits _)]) -> string "gdb_sbits"
     | CT_fbits _ | CT_struct (_, [(_, CT_fbits _)]) -> string "gdb_fbits"
+    | CT_lbits _ | CT_struct (_, [(_, CT_lbits _)]) -> string "gdb_lbits"
     | _ -> assert false
   in
   let qquotes = enclose (string "\\\"") (string "\\\"") in
-  let check_def = function
-    | CDEF_reg_dec (id, (CT_sbits (n, _) | CT_fbits (n, _) as ctyp), _)
-    | CDEF_reg_dec (id, CT_struct (_, [(_, (CT_sbits (n, _) | CT_fbits (n, _) as ctyp))]), _) ->
+  let pp id bits_type n read_fn write_fn other_defs =
        let c_id = c_literal_of_id id in
        Some (group (braces (dquotes c_id ^^ comma ^/^
-                              type_of ctyp ^^ comma ^/^
-                                ampersand ^^ string (sgen_id id) ^^ comma ^/^
-                                  OCaml.int n) ^^ comma),
+                              bits_type ^^ comma ^/^
+                                OCaml.int n ^^ comma ^/^
+                                  ampersand ^^ string (sgen_id id) ^^ comma ^/^
+                                    read_fn ^^ comma ^/^
+                                      write_fn
+                      ) ^^ comma),
              group (angles (string "reg name=" ^^ qquotes c_id ^/^
-                              string "bitsize=" ^^ qquotes (OCaml.int n) ^^ string "/")))
+                              string "bitsize=" ^^ qquotes (OCaml.int n) ^^ string "/")),
+         other_defs)
+  in
+  let defs_generated = ref IdSet.empty in
+  let check_def = function
+    | CDEF_reg_dec (id, (CT_sbits _ | CT_fbits _ | CT_lbits _ as ctyp), _)
+    | CDEF_reg_dec (id, CT_struct (_, [(_, (CT_sbits _ | CT_fbits _ | CT_lbits _ as ctyp))]), _) ->
+       let sail_typ = Env.get_register id env in
+       (* Unpack bitfield records *)
+       let sail_typ = match sail_typ with
+         | Typ_aux (Typ_id id, _) | Typ_aux (Typ_app (id, []), _) when Env.is_record id env ->
+            begin match Env.get_record id env with
+            | _, [(typ, _)] -> typ
+            | _ -> sail_typ
+            end
+         | _ -> sail_typ
+       in
+       begin match destruct_bitvector env sail_typ with
+       | Some (Nexp_aux (Nexp_constant n, _), _) -> pp id (type_of ctyp) (Nat_big_num.to_int n) (string "0") (string "0") []
+       | Some (nexp,_) ->
+          (* TODO: report properly *)
+          Printf.eprintf "Non-constant register size for %s: %s\n%!" (string_of_id id) (string_of_nexp nexp);
+          None
+       | None ->
+          (* TODO: report properly *)
+          Printf.eprintf "Inconsistent Sail/IR types for %s: %s vs %s\n%!" (string_of_id id) (string_of_typ sail_typ) (string_of_ctyp ctyp);
+          None
+       end
+
+    | CDEF_reg_dec (id, CT_struct (struct_id, _), _) ->
+       let read_defs, read_fn, read_ctyp =
+         match Bindings.find_opt struct_id encoders with
+         | None -> [], string "0", None
+         | Some (fn_id, ctyp, size) ->
+            let c_struct_id = string (sgen_id struct_id) in
+            let bits_pp = string (sgen_ctyp ctyp) in
+            (* TODO: check whether this is right for all bitvector ctyps *)
+            let read_fn =
+              string "void gdb_read_" ^^ c_struct_id ^^ string "(void *result, void *reg) {" ^^ hardline ^^
+                string "  " ^^ string (sgen_id fn_id) ^^ string "((" ^^ bits_pp ^^ string " *)result, *(struct " ^^ c_struct_id ^^ string " *) reg);" ^^ hardline ^^
+                  string "}"
+            in [read_fn], string "gdb_read_" ^^ c_struct_id, Some (ctyp, size)
+       in 
+       let write_defs, write_fn, write_ctyp =
+         match Bindings.find_opt struct_id decoders with
+         | None -> [], string "0", None
+         | Some (fn_id, ctyp, size) ->
+            let c_struct_id = string (sgen_id struct_id) in
+            let bits_pp = string (sgen_ctyp ctyp) in
+            (* TODO: check whether this is right for all bitvector ctyps *)
+            let write_fn =
+              string "void gdb_write_" ^^ c_struct_id ^^ string "(void *v, void *reg) {" ^^ hardline ^^
+                string "  *(struct " ^^ c_struct_id ^^ string "*)reg = " ^^ string (sgen_id fn_id) ^^ string "(*(" ^^ bits_pp ^^ string "*)v);" ^^ hardline ^^
+                  string "}"
+            in [write_fn], string "gdb_write_" ^^ c_struct_id, Some (ctyp, size)
+       in
+       let other_defs =
+         if IdSet.mem struct_id !defs_generated then [] else
+           (defs_generated := IdSet.add struct_id !defs_generated;
+            read_defs @ write_defs)
+       in
+       let ctyp =
+         match read_ctyp, write_ctyp with
+         | None, None -> None
+         | Some n, None | None, Some n -> Some n
+         | Some m, Some n -> Some m  (* TODO: report discrepancy *)
+       in begin
+           match ctyp with
+           | Some (ctyp, size) -> pp id (type_of ctyp) size read_fn write_fn other_defs
+           | None -> None
+         end
     | _ -> None
   in
-  let (registers, reg_xml) = List.split (List.filter_map check_def cdefs) in
+  let (registers, reg_xml, other_defs) = Util.split3 (List.filter_map check_def cdefs) in
   let prefix_pp =
-    separate2 hardline hardline [
-          string "enum gdb_reg_type { gdb_sbits, gdb_fbits };";
-          string "struct gdb_register_info { char *name; enum gdb_reg_type ty; void *value; int size; };";
+    separate2 hardline hardline ([
+          string "enum gdb_reg_type { gdb_sbits, gdb_fbits, gdb_lbits };";
+          string "struct gdb_register_info { char *name; enum gdb_reg_type ty; int size; void *reg; void (*read_fn)(void *dst, void *reg); void (*write_fn)(void *src, void *reg); };";
           empty;
-          concat [string "int gdb_register_count = "; OCaml.int (List.length registers); string ";"];
+          concat [string "int gdb_register_count = "; OCaml.int (List.length registers); string ";"]
+      ] @ List.concat other_defs @ [
           string "struct gdb_register_info gdb_registers[] = {"
-      ]
+      ])
   in
   let registers_pp = separate2 hardline hardline registers in
   let string_cont = string "\\n\\" ^^ hardline in
@@ -2487,7 +2606,7 @@ let compile_ast env effect_info output_chan c_includes ast =
                                  ^^ model_main ^^ hardline)
     |> output_string output_chan;
     if !opt_gdb_stub then
-      register_info_array cdefs
+      register_info_array env ctx cdefs
       |> Pretty_print_sail.to_string
       |> output_string output_chan
   with
