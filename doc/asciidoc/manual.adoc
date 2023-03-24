@@ -16,6 +16,14 @@ include::introduction.adoc[]
 
 include::riscv.adoc[]
 
+== Usage
+
+include::usage.adoc[]
+
+== The Sail Language
+
+include::language.adoc[]
+
 == References
 
 bibliography::[]

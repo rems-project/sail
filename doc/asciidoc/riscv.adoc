@@ -1,4 +1,4 @@
-:riscv-code: riscv/doc.json
+:riscv-code: sail_doc/riscv_duopod.json
 
 We introduce the basic features of Sail via a small example from our
 RISC-V model that includes just two instructions: add immediate and

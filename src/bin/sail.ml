@@ -153,6 +153,9 @@ let rec options = ref ([
   ( "-have_feature",
     Arg.String (fun symbol -> opt_have_feature := Some symbol),
     " check if a feature symbol is set by default");
+  ( "-no_color",
+    Arg.Clear Util.opt_colors,
+    " do not use terminal color codes in output");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
