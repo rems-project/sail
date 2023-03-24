@@ -71,7 +71,7 @@ module Big_int = Nat_big_num
 
 module IntSet = Util.IntSet
 module IntIntSet = Util.IntIntSet
-               
+
 type ctx = {
     variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;
@@ -87,7 +87,7 @@ type row_index = {
     loc: l;
     num: int
   }
-  
+
 type 'a rows = Rows of ((row_index * 'a) list)
 type 'a columns = Columns of ('a list)
 
@@ -110,14 +110,16 @@ let union_complete lhs rhs =
   let wildcards_lhs = IntIntSet.filter (fun (r, _) -> IntSet.mem r (IntSet.diff rhs.rows lhs.rows)) all_wildcards in
   let wildcards_rhs = IntIntSet.filter (fun (r, _) -> IntSet.mem r (IntSet.diff rhs.rows lhs.rows)) all_wildcards in
   let new_preserved = IntIntSet.diff (IntIntSet.filter (fun (r, _) -> IntSet.mem r (IntSet.inter rhs.rows lhs.rows)) all_wildcards) shared_wildcards in
+  let only_in_lhs = IntSet.diff lhs.rows rhs.rows in
+  let only_in_rhs = IntSet.diff rhs.rows lhs.rows in
   {
     rows = IntSet.union lhs.rows rhs.rows;
     wildcards = IntIntSet.union wildcards_lhs (IntIntSet.union shared_wildcards wildcards_rhs);
     preserved_literals = IntIntSet.union new_preserved (IntIntSet.union lhs.preserved_literals rhs.preserved_literals);
-    redundant = IntSet.inter lhs.redundant rhs.redundant;
+    redundant = IntSet.inter (IntSet.union only_in_rhs lhs.redundant) (IntSet.union only_in_lhs rhs.redundant);
   }
 
-let get_wildcard_patterns (cinfo : complete_info) = IntIntSet.elements cinfo.wildcards |> List.map snd 
+let get_wildcard_patterns (cinfo : complete_info) = IntIntSet.elements cinfo.wildcards |> List.map snd
 let get_preserved_patterns (cinfo : complete_info) = IntIntSet.elements cinfo.preserved_literals |> List.map snd |> IntSet.of_list
 
 type 'a completeness =
@@ -132,7 +134,7 @@ let mk_complete ?redundant:(redundant = []) rows wildcards =
       preserved_literals = IntIntSet.empty;
       redundant = IntSet.of_list redundant
     }
- 
+
 let completeness_map f g = function
   | Incomplete exp -> Incomplete (f exp)
   | Complete cinfo -> Complete (g cinfo)
@@ -168,11 +170,11 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
 let preserved_explanation =
   "Sail cannot simplify the above pattern match:\n"
   ^ "This bitvector pattern literal must be kept, as it is required for Sail to show that the surrounding pattern match is complete.\n"
-  ^ "When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify completeness"
-  
+  ^ "When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify that the match covers all possible cases."
+
 let rows_to_list (Rows rs) = rs
-let columns_to_list (Columns cs) = cs 
- 
+let columns_to_list (Columns cs) = cs
+
 type 'a rc_matrix = 'a columns rows
 type 'a cr_matrix = 'a rows columns
 
@@ -182,14 +184,26 @@ let pop_column (matrix : 'a rc_matrix) : ((row_index * 'a) list * 'a rc_matrix) 
      Some (List.map (fun (l, row) -> (l, List.hd (columns_to_list row))) matrix, Rows (List.map (fun (l, row) -> (l, Columns (List.tl (columns_to_list row)))) matrix))
   | _ ->
      None
-    
+
 let rec transpose (matrix : 'a rc_matrix) : 'a cr_matrix =
   match pop_column matrix with
   | Some (col, matrix) -> Columns (Rows col :: columns_to_list (transpose matrix))
   | None -> Columns []
 
+let row_matrix_empty (Rows rows) =
+  match rows with
+  | [] -> true
+  | _ -> false
+
+let row_matrix_width l (Rows rows) =
+  match rows with
+  | (_, Columns cols) :: _ -> List.length cols
+  | [] -> Reporting.unreachable l __POS__ "Cannot determine width of empty pattern matrix"
+
+let row_matrix_height (Rows rows) = List.length rows
+
 module Make(C: Config) = struct
-  
+
   type bv_constraint =
     | BVC_eq of bv_constraint * bv_constraint
     | BVC_and of bv_constraint * bv_constraint
@@ -212,7 +226,7 @@ module Make(C: Config) = struct
     | _, _ -> BVC_and (x, y)
 
   let typ_of_pat (P_aux (_, (_, (t, _)))) = C.typ_of_t t
-  
+
   let insert_wildcards (cinfo : complete_info) (pat : (C.t * int) pat) : C.t pat =
     let preserved = get_preserved_patterns cinfo in
     let wildcards = get_wildcard_patterns cinfo in
@@ -242,7 +256,7 @@ module Make(C: Config) = struct
       P_aux (aux, (l, t))
     in
     go false pat
- 
+
   type gpat =
     | GP_wild
     | GP_unknown
@@ -265,17 +279,23 @@ module Make(C: Config) = struct
     | GP_enum (_, id) -> string_of_id id
     | GP_bool b -> string_of_bool b
     | GP_vector gpats -> "[" ^ Util.string_of_list ", " _string_of_gpat gpats ^ "]"
- 
+
+  let _debug_rc_matrix (Rows rs) =
+    prerr_endline "=== MATRIX ===";
+    List.iter (fun (_, Columns c) ->
+        prerr_endline (Util.string_of_list ", " _string_of_gpat c)
+      ) rs
+
   let rec generalize ctx (P_aux (p_aux, (l, (_, pnum))) as pat) =
     let typ = typ_of_pat pat in
     match p_aux with
     | P_lit (L_aux (L_unit, _)) ->
        (* Unit pattern always matches on unit, so generalize to wildcard *)
        GP_wild
-      
+
     | P_lit (L_aux (L_hex hex, _)) -> GP_bitvector (pnum, String.length hex * 4, fun x -> BVC_eq (x, BVC_lit ("#x" ^ hex)))
     | P_lit (L_aux (L_bin bin, _)) -> GP_bitvector (pnum, String.length bin, fun x -> BVC_eq (x, BVC_lit ("#b" ^ bin)))
-                                    
+
     | P_vector pats when is_bitvector_typ typ ->
        let mask, bits =
          List.fold_left (fun (mask, bits) (P_aux (pat, _)) ->
@@ -283,7 +303,7 @@ module Make(C: Config) = struct
                | P_lit (L_aux (L_one, _)) -> (mask ^ "1", bits ^ "1")
                | P_lit (L_aux (L_zero, _)) -> (mask ^ "1", bits ^ "0")
                | P_wild | P_id _ -> (mask ^ "0", bits ^ "0")
-               | P_typ (_, P_aux (pat, _)) -> go pat 
+               | P_typ (_, P_aux (pat, _)) -> go pat
                | _ ->
                   Reporting.warn "Unexpected pattern" l "";
                   (mask ^ "0", bits ^ "0")
@@ -295,7 +315,7 @@ module Make(C: Config) = struct
 
     | P_vector pats ->
        GP_vector (List.map (generalize ctx) pats)
-       
+
     | P_vector_concat pats when is_bitvector_typ typ ->
        let lengths =
          List.fold_left (fun acc typ ->
@@ -329,7 +349,7 @@ module Make(C: Config) = struct
 
     | P_tuple pats ->
        GP_tuple (List.map (generalize ctx) pats)
-       
+
     | P_app (id, pats) ->
        let typ_id = match typ with
          | Typ_aux (Typ_app (id, _), _) -> id
@@ -382,13 +402,13 @@ module Make(C: Config) = struct
     | (_, GP_lit (L_aux (L_num m, _))) :: rest -> unmatched_num_literal (Big_int.max n m) rest
     | _ :: rest -> unmatched_num_literal n rest
     | [] -> L_num (Big_int.succ n)
-          
+
   let rec unmatched_literal = function
     | (_, GP_lit (L_aux (L_string str, _))) :: rest -> Some (unmatched_string_literal (String.length str) rest)
     | (_, GP_lit (L_aux (L_num n, _))) :: rest -> Some (unmatched_num_literal n rest)
     | _ :: rest -> unmatched_literal rest
     | [] -> None
- 
+
   let simple_matrix_is_complete _ctx matrix =
     let vars =
       List.mapi (fun i (Rows column) ->
@@ -400,8 +420,8 @@ module Make(C: Config) = struct
     let just_vars = vars |> Util.option_these in
     let all_rows = List.map (fun (idx, _) -> idx.num) (rows_to_list matrix) in
     match just_vars with
-    | [] -> mk_complete all_rows [] (* The entire matrix is wildcard patterns *)
-    | _ -> 
+    | [] when row_matrix_height matrix = 1 -> mk_complete all_rows [] (* The matrix is a single row of wildcard patterns *)
+    | _ ->
        let constrs =
          List.map (fun (l, Columns row) ->
              let row_constrs =
@@ -417,12 +437,12 @@ module Make(C: Config) = struct
              | _ -> (l, Some ("(assert (not (and " ^ Util.string_of_list " " (fun x -> x) row_constrs ^ ")))"))
            ) (rows_to_list matrix)
        in
-       (* Check if we have a row containing only wildcards, hence matrix is trivially unsatisfiable *)
+       (* Check if we have any row containing only wildcards, hence matrix is trivially unsatisfiable *)
        match Util.find_rest_opt (fun (_, constr) -> Util.is_none constr) constrs with
        | Some (_, []) -> mk_complete all_rows []
        (* If there are any rows after the wildcard row, they are redundant *)
        | Some (_, redundant) ->
-          mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) [] []
+          mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
        | None ->
           let smtlib =
             Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const v%d %s)" v ty) just_vars ^ "\n"
@@ -441,7 +461,7 @@ module Make(C: Config) = struct
                | None -> []
              in
              mk_complete all_rows to_wildcards
-         
+
   let find_complex_column matrix =
     let is_complex_column col = List.exists (fun (_, gpat) -> not (is_simple_gpat gpat)) col in
     let columns = List.mapi (fun i col -> (i, rows_to_list col)) (columns_to_list (transpose matrix)) in
@@ -451,7 +471,7 @@ module Make(C: Config) = struct
     | (_, GP_app (typ_id, _, _)) :: _ -> typ_id
     | _ :: gpats -> column_typ_id l gpats
     | [] -> Reporting.unreachable l __POS__ "No column type id"
-                  
+
   let split_app_column l ctx col =
     let typ_id = column_typ_id l col in
     let all_ctors = Bindings.find typ_id ctx.variants |> snd |> List.map (function Tu_aux (Tu_ty_id (_, id), _) -> id) in
@@ -478,7 +498,7 @@ module Make(C: Config) = struct
     Rows (List.map (fun (l, row) ->
               (l, Columns (List.mapi (fun j gpat -> if i = j then flatten gpat else [gpat]) (columns_to_list row) |> List.concat))
             ) (rows_to_list matrix))
- 
+
   let split_matrix_ctor ctx c ctor ctor_rows matrix =
     let row_indices = List.fold_left (fun set (r, _) -> IntSet.add r set) IntSet.empty ctor_rows in
     let flatten = function
@@ -497,7 +517,7 @@ module Make(C: Config) = struct
     | x :: xs when n = 0 -> xs
     | x :: xs -> x :: remove_index (n - 1) xs
     | [] -> []
-    
+
   let split_matrix_bool b c matrix =
     let is_bool_row = function
       | GP_bool b' -> b = b'
@@ -520,7 +540,7 @@ module Make(C: Config) = struct
         |> List.filter (fun (_, row) -> columns_to_list row |> (fun xs -> List.nth xs c) |> is_wild_row)
         |> List.map (fun (l, row) -> (l, Columns (remove_index c (columns_to_list row))))
       )
- 
+
   let split_matrix_enum e c matrix =
     let is_enum_row = function
       | GP_enum (_, id) -> Id.compare e id = 0
@@ -532,7 +552,7 @@ module Make(C: Config) = struct
         |> List.filter (fun (_, row) -> columns_to_list row |> (fun xs -> List.nth xs c) |> is_enum_row)
         |> List.map (fun (l, row) -> (l, Columns (remove_index c (columns_to_list row))))
       )
-    
+
   let retuple width i unmatcheds =
     let (xs, ys) = Util.split_after i unmatcheds in
     let tuple_elems = Util.take width ys in
@@ -552,23 +572,13 @@ module Make(C: Config) = struct
   let relit lit i unmatcheds =
     let (xs, ys) = Util.split_after i unmatcheds in
     xs @ mk_lit_exp lit :: ys
-      
+
   let rebool b i unmatcheds =
     relit (if b then L_true else L_false) i unmatcheds
 
   let reenum e i unmatcheds =
     let (xs, ys) = Util.split_after i unmatcheds in
     xs @ mk_exp (E_id e) :: ys
-    
-  let row_matrix_empty (Rows rows) =
-    match rows with
-    | [] -> true
-    | _ -> false
-
-  let row_matrix_width l (Rows rows) =
-    match rows with
-    | (_, Columns cols) :: _ -> List.length cols
-    | [] -> Reporting.unreachable l __POS__ "Cannot determine width of empty pattern matrix"
 
   let rec undefs_except n c v len =
     if n = len then
@@ -577,7 +587,7 @@ module Make(C: Config) = struct
       v :: undefs_except (n + 1) c v len
     else
       mk_lit_exp L_undef :: undefs_except (n + 1) c v len
- 
+
   let rec matrix_is_complete l ctx matrix =
     match find_complex_column matrix with
     | None -> simple_matrix_is_complete ctx matrix
@@ -600,7 +610,7 @@ module Make(C: Config) = struct
                | Complete cinfo -> Complete cinfo
                | Completeness_unknown -> Completeness_unknown
           end
-            
+
        | App_column typ_id ->
           let ctors = split_app_column l ctx col in
           Bindings.fold (fun ctor ctor_rows unmatcheds ->
@@ -648,10 +658,10 @@ module Make(C: Config) = struct
                  else
                    matrix_is_complete l ctx enum_matrix |> completeness_map (reenum member i) (union_complete cinfo)
             ) members (mk_complete [] [])
- 
+
        | Unknown_column -> Completeness_unknown
        end
- 
+
   (* Just highlight the match keyword and not the whole match block. *)
   let shrink_loc = function
     | Parse_ast.Range (n, m) ->
@@ -676,7 +686,7 @@ module Make(C: Config) = struct
        case :: update_cases l new_pats cases
     | _, _ ->
        Reporting.unreachable l __POS__ "Impossible case in update_cases"
- 
+
   let is_complete_wildcarded l ctx cases typ =
     try
       match cases_to_pats 0 false cases with
@@ -706,5 +716,5 @@ module Make(C: Config) = struct
     | exn -> None
 
   let is_complete l ctx cases typ = Util.is_some (is_complete_wildcarded l ctx cases typ)
-           
+
 end
