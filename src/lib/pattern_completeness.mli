@@ -71,6 +71,7 @@ open Ast_util
 type ctx = {
     variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;
+    constraints : n_constraint list;
   }
 
 module type Config =

@@ -179,7 +179,8 @@ let infer_def_direct_effects asserts_termination def =
     | E_match (exp, cases) ->
        let ctx = {
            Pattern_completeness.variants = Env.get_variants env;
-           Pattern_completeness.enums = Env.get_enums env
+           Pattern_completeness.enums = Env.get_enums env;
+           Pattern_completeness.constraints = Env.get_constraints env;
          } in
        if not (PC.is_complete (fst annot) ctx cases (typ_of exp)) then (
          effects := EffectSet.add IncompleteMatch !effects
@@ -217,7 +218,8 @@ let infer_def_direct_effects asserts_termination def =
         let cases = funcls_to_pexps funcls in
         let ctx = {
             Pattern_completeness.variants = Env.get_variants env;
-            Pattern_completeness.enums = Env.get_enums env
+            Pattern_completeness.enums = Env.get_enums env;
+            Pattern_completeness.constraints = Env.get_constraints env;
           } in
         if not (PC.is_complete l ctx cases typ) then (
           effects := EffectSet.add IncompleteMatch !effects

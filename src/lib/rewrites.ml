@@ -834,7 +834,8 @@ module PC = Pattern_completeness.Make(PC_config);;
 let pats_complete l env ps typ =
   let ctx = {
       Pattern_completeness.variants = Env.get_variants env;
-      Pattern_completeness.enums = Env.get_enums env
+      Pattern_completeness.enums = Env.get_enums env;
+      Pattern_completeness.constraints = Env.get_constraints env;
     } in
   PC.is_complete l ctx ps typ
     

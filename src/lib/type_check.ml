@@ -3102,7 +3102,8 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
        if !opt_check_completeness then (
          let ctx = {
              Pattern_completeness.variants = Env.get_variants env;
-             Pattern_completeness.enums = Env.get_enums env
+             Pattern_completeness.enums = Env.get_enums env;
+             Pattern_completeness.constraints = Env.get_constraints env;
            } in
          match PC.is_complete_wildcarded l ctx checked_cases inferred_typ with
          | Some wildcarded -> wildcarded
