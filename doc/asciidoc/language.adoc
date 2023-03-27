@@ -1,4 +1,85 @@
 === Functions
+:mrb: sail_doc/my_replicate_bits.json
+
+In Sail, we often define functions in two parts. First we can write
+the type signature for the function using the `val` keyword, then
+define the body of the function using the `function` keyword. In this
+Subsection, we will write our own version of the `replicate_bits`
+function from the Sail library. This function takes a number `n` and a
+bitvector, and creates a new bitvector containing that bitvector
+copied `n` times.
+
+sail::my_replicate_bits[from=mrb,type=val]
+
+This signature shows how Sail can track the length of bitvectors and
+the value of integer variables in type signatures, using _type
+variables_. Type variables are written with a leading 'tick', so `'n`
+and `'m` are the type variables in the above signature.
+
+NOTE: The leading tick is a convention derived from Standard ML, and
+other functional languages derived from Standard ML, such as
+OCaml. Readers who are familiar with Rust will also recognise this
+naming convention from lifetime variables in Rust types.
+
+The type `bits('m)` is a bitvector of length `'m`, and `int('n)` is an
+integer with the value `'n`. The result of this function will
+therefore be a bitvector of length `'n * 'm`. We can also add
+_constraints_ on these types. Here we require that we are replicating
+the input bitvector at least once with the `'n >= 1` constraint, and
+that the input bitvector length is at least one with the `'m >= 1`
+constraint. Sail will check that all callers of this function are
+guaranteed to satisfy these constraints.
+
+Sail will also ensure that the output of our function has precisely
+the length `bits('n * 'm)` for all possible inputs (hence why the
+keyword uses the mathematical _forall_ quantifier).
+
+A potential implementation of this function looks like:
+
+sail::my_replicate_bits[from=mrb]
+
+Functions may also have implicit parameters, e.g. we can implement a
+zero extension function that implicitly picks up its result length
+from the calling context as follows:
+
+[source,sail]
+----
+include::sail:extz[from=mrb,type=val]
+
+include::sail:extz[from=mrb]
+----
+
+Implicit parameters are always integers, and they must appear first
+before any other parameters in the function type signature. The first argument can then just be omitted when calling the function, like so:
+
+sail::extz_usage[from=mrb,part=body,dedent]
+
+=== Numeric types
+
+Sail has three basic numeric types, `int`, `nat`, and `range`. The
+type `int` which we have already seen above is an arbitrary precision
+mathematical integer. Likewise, `nat` is an arbitrary precision
+natural number. The type `range('n,{nbsp}'m)` is an inclusive range
+between type variables `'n` and `'m`. For both `int` and `nat` we can
+specify a type variable that constrains elements of the type to be
+equal to the value of that type variable. In other words, the values
+of type `int('n)` are integers equal to `'n`. So
+`5{nbsp}:{nbsp}int(5)` and similarly for any integer constant. These
+types can often be used interchangeably provided certain constraints
+are satisified. For example, `int('n)` is equivalent to
+`range('n,{nbsp}'n)` and `range('n,{nbsp}'m)` can be converted into
+`int('n)` when `'n{nbsp}=={nbsp}'m`.
+
+NOTE: The colon operator `:` is used for type ascription, so `x : Y`
+is read as `x` _has type_ `Y`
+
+Note that `bit` isn't a numeric type (i.e. it's not
+`range(0,{nbsp}1)`). This is intentional, as otherwise it would be
+possible to write expressions like `(1{nbsp}:{nbsp}bit){nbsp}+{nbsp}5`
+which would end up being equivalent to
+`6{nbsp}:{nbsp}range(5,{nbsp}6)`. This kind of implicit casting from
+bits to other numeric types would be highly undesirable. The `bit`
+type itself is a two-element type with members `bitzero` and `bitone`.
 
 === Mappings
 

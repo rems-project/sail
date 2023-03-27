@@ -1,7 +1,9 @@
 
-SAIL_PLUGIN ?= ../../../sail-asciidoc/sail.rb
+SAIL_PLUGIN ?= ../../../asciidoctor-sail/lib/asciidoctor-sail.rb
 
-SAIL_DOCS = sail_doc/riscv_duopod.json sail_doc/pattern_matching.json
+SAIL_DOCS = sail_doc/riscv_duopod.json
+SAIL_DOCS += sail_doc/pattern_matching.json
+SAIL_DOCS += sail_doc/my_replicate_bits.json
 
 CUSTOM_SAIL_DOCS = custom_sail_doc/cannot_wildcard.json
 
