@@ -70,7 +70,7 @@ open import Interp_utilities
 open import Interp
 open import Interp_ast
 (* For failwith for error reporting while debugging; and for fromJust when we know it's not Nothing *)
-import Assert_extra Maybe_extra 
+import Assert_extra Maybe_extra
 open import Num
 import Num_extra
 open import List
@@ -84,10 +84,10 @@ declare ocaml target_rep function debug_print s = `Printf.eprintf` "%s" s
 
 let print s = let _ = debug_print (string_of_value s) in V_lit(L_aux L_unit Unknown)
 
-let hardware_mod (a: integer) (b:integer) : integer = 
+let hardware_mod (a: integer) (b:integer) : integer =
  if a < 0 && b < 0
  then (abs a) mod (abs b)
- else if (a < 0 && b >= 0) 
+ else if (a < 0 && b >= 0)
  then (a mod b) - b
  else a mod b
 
@@ -95,7 +95,7 @@ let hardware_mod (a: integer) (b:integer) : integer =
 rounding behaviour on negative operands. Positive operands always
 round down so derive the one we want (trucation towards zero) from
 that *)
-let hardware_quot (a:integer) (b:integer) : integer = 
+let hardware_quot (a:integer) (b:integer) : integer =
   let q = (abs a) / (abs b) in
   if ((a<0) = (b<0)) then
     q  (* same sign -- result positive *)
@@ -113,7 +113,7 @@ let (min_8   : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_5   : integer) = (integerFromNat 31)
 
 val get_max_representable_in : signed -> nat -> integer
-let get_max_representable_in sign n = 
+let get_max_representable_in sign n =
   match (sign, n) with
   | (Signed, 64)   -> max_64
   | (Unsigned, 64) -> max_64u
@@ -126,7 +126,7 @@ let get_max_representable_in sign n =
   end
 
 val get_min_representable_in : signed -> nat -> integer
-let get_min_representable_in sign n = 
+let get_min_representable_in sign n =
   match (sign, n) with
   | (Unsigned, _)  -> 0
   | (Signed, 64)   -> min_64
@@ -146,7 +146,7 @@ let twoi = integerFromNat 2
 let is_unknown v = match detaint v with
   | V_unknown -> true
   | _ -> false
-end 
+end
 
 let is_undef v = match detaint v with
   | V_lit (L_aux L_undef _) -> true
@@ -161,33 +161,33 @@ end
 
 let has_undef v = match detaint v with
   | V_vector _ _ vs -> List.any is_undef vs
-  | _ -> Assert_extra.failwith ("has_undef given non-vector " ^ (string_of_value v)) 
-end 
+  | _ -> Assert_extra.failwith ("has_undef given non-vector " ^ (string_of_value v))
+end
 
 let rec sparse_walker update ni processed_length length ls df =
-  if processed_length = length 
+  if processed_length = length
   then []
   else match ls with
   | [] -> replicate (length - processed_length) df
-  | (i,v)::ls -> 
-    if ni = i 
+  | (i,v)::ls ->
+    if ni = i
     then v::(sparse_walker update (update ni) (processed_length + 1) length ls df)
     else df::(sparse_walker update (update ni) (processed_length + 1) length ((i,v)::ls) df)
 end
 
-let fill_in_sparse v = 
+let fill_in_sparse v =
   retaint v (match detaint v with
-    | V_vector_sparse first length dir ls df -> 
+    | V_vector_sparse first length dir ls df ->
       V_vector first dir
-	(sparse_walker 
+	(sparse_walker
 	   (if is_inc(dir) then (fun (x: nat) -> x + 1) else (fun (x: nat) -> x - 1)) first 0 length ls df)
     | V_unknown -> V_unknown
     | _ -> Assert_extra.failwith ("fill_in_sparse given non-vector " ^ (string_of_value v))
     end)
 
-let is_one v = 
+let is_one v =
   retaint v
-    match detaint v with 
+    match detaint v with
       | V_lit (L_aux (L_num n) lb) -> V_lit (L_aux (if n=1 then L_one else L_zero) lb)
       | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_one else L_zero) lb)
       | V_unknown -> v
@@ -210,9 +210,9 @@ let rec most_significant v =
     | V_lit (L_aux L_undef _) -> v
     | V_unknown -> V_unknown
     | _ -> Assert_extra.failwith ("most_significant given non-vector " ^ (string_of_value v))
-end;;                       
+end;;
 
-let lt_range v = 
+let lt_range v =
   let lr_helper v1 v2 = match (v1,v2) with
   | (V_lit (L_aux (L_num l1) lr),V_lit (L_aux (L_num l2) ll)) ->
     if l1 < l2
@@ -241,7 +241,7 @@ let bool_to_bit b = match b with
   | true -> V_lit (L_aux L_one Unknown)
   end ;;
 
-let bitwise_not_bit v = 
+let bitwise_not_bit v =
   let lit_not (L_aux l loc) = match l with
     | L_zero -> (V_lit (L_aux L_one loc))
     | L_false -> (V_lit (L_aux L_one loc))
@@ -263,13 +263,13 @@ let rec bitwise_not v =
   | _ -> Assert_extra.failwith ("bitwise_not given unexpected " ^ (string_of_value v))
   end)
 
-let rec bitwise_binop_bit op op_s v = 
+let rec bitwise_binop_bit op op_s v =
   let b_b_b_help x y = match (x,y) with
   | (V_vector _ _ [b],y) -> bitwise_binop_bit op op_s (V_tuple [b; y])
   | (_,V_vector _ _ [b]) -> bitwise_binop_bit op op_s (V_tuple [x; b])
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
-  | (V_lit (L_aux L_undef li), v) -> 
+  | (V_lit (L_aux L_undef li), v) ->
     (match op_s with | "|" -> y | "&" -> x | "^" -> y | _ -> x end)
   | (v,V_lit (L_aux L_undef li)) ->
     (match op_s with | "|" -> x | "&" -> y | "^" -> y | _ -> y end)
@@ -280,7 +280,7 @@ let rec bitwise_binop_bit op op_s v =
 end
 
 let rec bitwise_binop op op_s v =
-  let b_b_help v1 v2 = 
+  let b_b_help v1 v2 =
     match (v1,v2) with
       | (V_vector idx inc v, V_vector idx' inc' v') ->
         (* typechecker ensures inc = inc' and length v = length v' *)
@@ -297,13 +297,13 @@ end
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
  * http://en.wikipedia.org/wiki/Bit_numbering *)
-let to_num signed v = 
-  retaint v   
+let to_num signed v =
+  retaint v
     (match detaint v with
       | (V_vector idx inc l) ->
 	if has_unknown v then V_unknown else if l=[] then V_unknown
 	  else if has_undef v then V_lit (L_aux L_undef Unknown)
-	  else 
+	  else
 	  (* Word library in Lem expects bitseq with LSB first *)
 	    let l = reverse l in
 	  (* Make sure the last bit is a zero to force unsigned numbers *)
@@ -318,15 +318,15 @@ let to_num signed v =
 
 let to_vec_inc v =
   let fail () =  Assert_extra.failwith ("to_vec_inc given unexpected " ^ (string_of_value v)) in
-  let tv_help v1 v2 = 
+  let tv_help v1 v2 =
     match (v1,v2) with
       | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
 	let l = if len < 0 then []
 	  else boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-	V_vector 0 IInc (map bool_to_bit (reverse l)) 
-      | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+	V_vector 0 IInc (map bool_to_bit (reverse l))
+      | ((V_lit(L_aux (L_num n) ln)),V_unknown) ->
 	V_vector 0 IInc (List.replicate (if n < 0 then 0 else (natFromInteger n)) V_unknown)
-      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
+      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) ->
 	V_vector 0 IInc (List.replicate (natFromInteger n) v2)
       | (_,V_unknown) -> V_unknown
       | (V_unknown,_) -> V_unknown
@@ -344,11 +344,11 @@ let to_vec_dec v =
       | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
 	let len = if len < 0 then 0 else natFromInteger len in
 	let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
-	V_vector (len - 1) IDec (map bool_to_bit (reverse l)) 
-      | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+	V_vector (len - 1) IDec (map bool_to_bit (reverse l))
+      | ((V_lit(L_aux (L_num n) ln)),V_unknown) ->
 	let n = if n < 0 then 0 else natFromInteger n in
 	V_vector (if n=0 then 0 else (n-1)) IDec (List.replicate n V_unknown)
-      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
+      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) ->
 	let n = if n < 0 then 0 else natFromInteger n in
 	V_vector (if n = 0 then 0 else (n-1)) IDec (List.replicate n v2)
       | (_,V_unknown) -> V_unknown
@@ -385,7 +385,7 @@ let to_vec ord len n =
   else to_vec_dec (V_tuple ([V_lit(L_aux (L_num len) Interp_ast.Unknown); n]))
 ;;
 
-let exts direction v = 
+let exts direction v =
   let exts_help v1 v = match (v1,v) with
     | (V_lit(L_aux (L_num len) _), V_vector _ inc _)-> to_vec inc len (to_num Signed v)
     | (V_lit(L_aux (L_num len) _), V_unknown) -> to_vec direction len V_unknown
@@ -397,7 +397,7 @@ let exts direction v =
     | _ -> Assert_extra.failwith ("exts not given tuple of length 2 " ^ (string_of_value v))
 end
 
-let extz direction v = 
+let extz direction v =
   let extz_help v1 v = match (v1,v) with
     | (V_lit(L_aux (L_num len) _), V_vector _ inc _)-> to_vec inc len (to_num Unsigned v)
     | (V_lit(L_aux (L_num len) _), V_unknown) -> to_vec direction len V_unknown
@@ -412,8 +412,8 @@ end
 let eq v = match v with
   | (V_tuple [x; y]) ->
     let combo = binary_taint (fun v _ -> v) x y in
-    retaint combo 
-      (if has_unknown x || has_unknown y 
+    retaint combo
+      (if has_unknown x || has_unknown y
        then V_unknown
        else (V_lit (L_aux (if ((detaint x) = (detaint y)) then L_one else L_zero) Unknown)))
   | _ -> Assert_extra.failwith ("eq not given tuple of length 2 " ^ (string_of_value v))
@@ -454,11 +454,11 @@ end
 end*)
 
 let rec neg v = retaint v (match detaint v with
-  | V_lit (L_aux arg la) -> 
+  | V_lit (L_aux arg la) ->
     V_lit (L_aux (match arg with
       | L_one -> L_zero
       | L_zero -> L_one
-      | _ -> Assert_extra.failwith ("neg given unexpected " ^ (string_of_value v)) end) la) 
+      | _ -> Assert_extra.failwith ("neg given unexpected " ^ (string_of_value v)) end) la)
   | V_unknown -> V_unknown
   | V_tuple [v] -> neg v
   | _ -> Assert_extra.failwith ("neg given unexpected " ^ (string_of_value v))
@@ -481,7 +481,7 @@ let rec v_abs v = retaint v (match detaint v with
 
 let arith_op op v =
   let fail () = Assert_extra.failwith ("arith_op given unexpected " ^ (string_of_value v)) in
-  let arith_op_help vl vr = 
+  let arith_op_help vl vr =
     match (vl,vr) with
       | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> V_lit(L_aux (L_num (op x y)) lx)
       | (V_unknown,_) -> V_unknown
@@ -493,7 +493,7 @@ let arith_op op v =
   match v with
     | (V_tuple [vl;vr]) -> binary_taint arith_op_help vl vr
     | _ -> fail ()
-end 
+end
 let arith_op_vec op sign size v =
   let fail () = Assert_extra.failwith ("arith_op_vec given unexpected " ^ (string_of_value v)) in
   let arith_op_help vl vr =
@@ -510,7 +510,7 @@ let arith_op_vec op sign size v =
     | (V_tuple [vl;vr]) -> binary_taint arith_op_help vl vr
     | _ -> fail ()
 end
-let arith_op_vec_vec_range op sign v = 
+let arith_op_vec_vec_range op sign v =
   let fail () = Assert_extra.failwith ("arith_op_vec_vec_range given unexpected " ^ (string_of_value v)) in
   let arith_op_help vl vr =
     match (vl,vr) with
@@ -525,7 +525,7 @@ let arith_op_vec_vec_range op sign v =
     | (V_tuple [vl;vr]) -> binary_taint arith_op_help vl vr
     | _ -> fail ()
 end
-let arith_op_overflow_vec op over_typ sign size v = 
+let arith_op_overflow_vec op over_typ sign size v =
   let fail () = Assert_extra.failwith ("arith_op_overflow_vec given unexpected " ^ (string_of_value v)) in
   let overflow_help vl vr =
     match (vl,vr) with
@@ -533,26 +533,26 @@ let arith_op_overflow_vec op over_typ sign size v =
 	let len = List.length cs1 in
 	let act_size = len * size in
 	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
-	if is_l1_unknown || is_l2_unknown 
+	if is_l1_unknown || is_l2_unknown
 	then (V_tuple [ (to_vec ord (integerFromNat act_size) V_unknown);V_unknown;V_unknown])
-	else 
+	else
 	  let (l1_sign,l2_sign) = (to_num sign vl,to_num sign vr) in
 	  let (l1_unsign,l2_unsign) = (to_num Unsigned vl,to_num Unsigned vr) in
 	  let n = arith_op op (V_tuple [l1_sign;l2_sign]) in
 	  let n_unsign = arith_op op (V_tuple[l1_unsign;l2_unsign]) in
 	  let correct_size_num = to_vec ord (integerFromNat act_size) n in
 	  let one_more_size_u = to_vec ord (integerFromNat (act_size +1)) n_unsign in
-	  let overflow = (match n with 
-	    | V_lit (L_aux (L_num n') ln) -> 
+	  let overflow = (match n with
+	    | V_lit (L_aux (L_num n') ln) ->
 	      if (n' <= (get_max_representable_in sign len)) &&
 		(n' >= (get_min_representable_in sign len))
 	      then V_lit (L_aux L_zero ln)
               else V_lit (L_aux L_one ln)
             | _ -> Assert_extra.failwith ("overflow arith_op returned " ^ (string_of_value v)) end) in
 	  let out_num = to_num sign correct_size_num in
-	  let c_out = 
+	  let c_out =
 	    match detaint one_more_size_u with
-	      | V_vector _ _ (b::bits) -> b 
+	      | V_vector _ _ (b::bits) -> b
               | v -> Assert_extra.failwith ("to_vec returned " ^ (string_of_value v)) end in
     V_tuple [correct_size_num;overflow;c_out]
   | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
@@ -565,12 +565,12 @@ let arith_op_overflow_vec op over_typ sign size v =
 end
 let arith_op_overflow_vec_bit op sign size v =
   let fail () = Assert_extra.failwith ("arith_op_overflow_vec_bit given unexpected " ^ (string_of_value v)) in
-  let arith_help vl vr = 
+  let arith_help vl vr =
     match (vl,vr) with
       | (V_vector b ord cs, V_lit (L_aux bit li)) ->
 	let act_size = (List.length cs) * size in
 	let is_v_unknown = has_unknown vl in
-	if is_v_unknown 
+	if is_v_unknown
 	then V_tuple [(to_vec ord (integerFromNat act_size) V_unknown);V_unknown;V_unknown]
 	else
 	  let l1' = to_num sign vl in
@@ -582,9 +582,9 @@ let arith_op_overflow_vec_bit op sign size v =
             | _ -> Assert_extra.failwith "arith_op_overflow_vec bit given non bit" end in
 	let correct_size_num = to_vec ord (integerFromNat act_size) n in
 	let one_larger = to_vec ord (integerFromNat (act_size +1)) nu in
-	let overflow = if changed 
-	  then retaint n (match detaint n with 
-	    | V_lit (L_aux (L_num n') ln) -> 
+	let overflow = if changed
+	  then retaint n (match detaint n with
+	    | V_lit (L_aux (L_num n') ln) ->
 	      if (n' <= (get_max_representable_in sign act_size)) &&
 		(n' >= (get_min_representable_in sign act_size))
 	      then V_lit (L_aux L_zero ln)
@@ -646,7 +646,7 @@ let arith_op_range_vec_range op sign v =
     | _ -> fail ()
 end
 
-let arith_op_vec_range_range op sign v = 
+let arith_op_vec_range_range op sign v =
   let fail () = Assert_extra.failwith ("arith_op_vec_range_range given unexpected " ^ (string_of_value v)) in
   let arith_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -668,9 +668,9 @@ let arith_op_vec_bit op sign size v =
       | (_,V_unknown) -> V_unknown
       | (V_vector _ ord cs,V_lit (L_aux bit _)) ->
 	let l1' = to_num sign vl in
-	let n = arith_op op (V_tuple 
+	let n = arith_op op (V_tuple
 			       [l1';
-				V_lit 
+				V_lit
 				  (L_aux (L_num (match bit with | L_one -> 1 | _ -> 0 end)) Unknown)])
 	in
         to_vec ord (integerFromNat ((List.length cs) * size)) n
@@ -685,8 +685,8 @@ let arith_op_no0 op v =
   let fail () = Assert_extra.failwith ("arith_op_no0 given unexpected " ^ (string_of_value v)) in
   let arith_help vl vr =
     match (vl,vr) with
-      | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
-	if y = 0 
+      | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) ->
+	if y = 0
 	then V_lit (L_aux L_undef ly)
         else V_lit(L_aux (L_num (op x y)) lx)
       | (V_lit (L_aux L_undef lx),_) -> vl
@@ -694,7 +694,7 @@ let arith_op_no0 op v =
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
       | _ -> fail ()
-  end in 
+  end in
   match v with
     | (V_tuple [vl;vr]) -> binary_taint arith_help vl vr
     | _ -> fail ()
@@ -702,7 +702,7 @@ end
 
 let arith_op_vec_no0 op op_s sign size v =
   let fail () = Assert_extra.failwith ("arith_op_vec_no0 given unexpected " ^ (string_of_value v)) in
-  let arith_help vl vr = 
+  let arith_help vl vr =
     match (vl,vr) with
       | (V_vector b ord cs, V_vector _ _ _) ->
 	let act_size = (List.length cs) * size in
@@ -710,26 +710,26 @@ let arith_op_vec_no0 op op_s sign size v =
 	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
                          if is_l2_unknown then V_unknown else (to_num sign vr)) in
 	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
-	let representable = 
-	  match detaint n with 
-	    | V_lit (L_aux (L_num n') ln) ->  
+	let representable =
+	  match detaint n with
+	    | V_lit (L_aux (L_num n') ln) ->
 	      ((n' <= (get_max_representable_in sign act_size)) && (n' >= (get_min_representable_in sign act_size)))
 	    | _ -> true end in
-         if representable 
+         if representable
 	 then to_vec ord (integerFromNat act_size) n
          else to_vec ord (integerFromNat act_size) (V_lit (L_aux L_undef Unknown))
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
       | _ -> fail ()
    end in
-   match v with 
+   match v with
     | (V_tuple [vl;vr]) -> binary_taint arith_help vl vr
     | _ -> fail ()
 end
 
 let arith_op_overflow_vec_no0 op op_s sign size v =
   let fail () = Assert_extra.failwith ("arith_op_overflow_vec_no0 given unexpected " ^ (string_of_value v)) in
-  let arith_help vl vr = 
+  let arith_help vl vr =
     match (vl,vr) with
       | (V_vector b ord cs, V_vector _ _ cs2) ->
 	let rep_size = (List.length cs2) * size in
@@ -742,13 +742,13 @@ let arith_op_overflow_vec_no0 op op_s sign size v =
 	  let (l1_u,l2_u) = (to_num Unsigned vl,to_num Unsigned vr) in
 	  let n = arith_op op (V_tuple [l1';l2']) in
 	  let n_u = arith_op op (V_tuple [l1_u;l2_u]) in
-	  let representable = 
-	    match detaint n with 
-	      | V_lit (L_aux (L_num n') ln) ->  
+	  let representable =
+	    match detaint n with
+	      | V_lit (L_aux (L_num n') ln) ->
 		((n' <= (get_max_representable_in sign rep_size)) && (n' >= (get_min_representable_in sign rep_size)))
 	      | _ -> true end in
-          let (correct_size_num,one_more) = 
-	  if representable then (to_vec ord (integerFromNat act_size) n,to_vec ord (integerFromNat (act_size+1)) n_u) 
+          let (correct_size_num,one_more) =
+	  if representable then (to_vec ord (integerFromNat act_size) n,to_vec ord (integerFromNat (act_size+1)) n_u)
 	  else let udef = V_lit (L_aux L_undef Unknown) in
 	       (to_vec ord (integerFromNat act_size) udef, to_vec ord (integerFromNat (act_size +1)) udef) in
 	  let overflow = if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
@@ -760,7 +760,7 @@ let arith_op_overflow_vec_no0 op op_s sign size v =
         | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
         | _ -> fail ()
    end in
-  match v with 
+  match v with
     | (V_tuple [vl;vr]) -> binary_taint arith_help vl vr
     | _ -> fail()
 end
@@ -787,8 +787,8 @@ let rec shift_op_vec op v =
     | (V_vector b ord cs,V_lit (L_aux (L_num n) _)) ->
       let n = natFromInteger n in
       (match op with
-       | "<<" -> 
-	 V_vector b ord 
+       | "<<" ->
+	 V_vector b ord
            ((from_n_to_n n ((length cs) - 1) cs) ++(List.replicate n (V_lit (L_aux L_zero Unknown))))
        | ">>" ->
 	    V_vector b ord
@@ -815,7 +815,7 @@ let compare_op op v =
     | (_,V_unknown) -> V_unknown
     | (V_lit (L_aux L_undef lx), _) -> V_lit (L_aux L_undef lx)
     | (_, V_lit (L_aux L_undef ly)) -> V_lit (L_aux L_undef ly)
-    | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
+    | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) ->
       if (op x y)
       then V_lit(L_aux L_one lx)
       else V_lit(L_aux L_zero lx)
@@ -826,7 +826,7 @@ let compare_op op v =
     | _ -> fail ()
 end
 
-let compare_op_vec op sign v = 
+let compare_op_vec op sign v =
   let fail () = Assert_extra.failwith ("compare_op_vec given unexpected " ^ (string_of_value v)) in
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -841,7 +841,7 @@ let compare_op_vec op sign v =
     | _ -> fail ()
 end
 
-let compare_op_vec_range op sign v = 
+let compare_op_vec_range op sign v =
   let fail () = Assert_extra.failwith ("compare_op_vec_range given unexpected " ^ (string_of_value v)) in
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -853,7 +853,7 @@ let compare_op_vec_range op sign v =
     | _ -> fail ()
 end
 
-let compare_op_range_vec op sign v = 
+let compare_op_range_vec op sign v =
   let fail () = Assert_extra.failwith ("compare_op_range_vec given unexpected " ^ (string_of_value v)) in
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -865,7 +865,7 @@ let compare_op_range_vec op sign v =
     | _ -> fail ()
 end
 
-let compare_op_vec_unsigned op v = 
+let compare_op_vec_unsigned op v =
   let fail () = Assert_extra.failwith ("compare_op_vec_unsigned given unexpected " ^ (string_of_value v)) in
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -880,7 +880,7 @@ let compare_op_vec_unsigned op v =
     | _ -> fail ()
 end
 
-let duplicate direction v = 
+let duplicate direction v =
   let fail () = Assert_extra.failwith ("duplicate given unexpected " ^ (string_of_value v)) in
   let dup_help vl vr =
     match (vl,vr) with
@@ -918,15 +918,15 @@ let duplicate_bits v =
 end
 
 
-let rec vec_concat v = 
+let rec vec_concat v =
   let fail () = Assert_extra.failwith ("vec_concat given unexpected " ^ (string_of_value v)) in
-  let concat_help vl vr = 
+  let concat_help vl vr =
     match (vl,vr) with
       | (V_vector n d l, V_vector n' d' l') ->
       (* XXX d = d' ? dropping n' ? *)
 	V_vector n d (l ++ l')
       | (V_lit l, (V_vector n d l' as x)) -> vec_concat (V_tuple [litV_to_vec l d; x])
-      | ((V_vector n d l' as x), V_lit l) -> vec_concat (V_tuple [x; litV_to_vec l d]) 
+      | ((V_vector n d l' as x), V_lit l) -> vec_concat (V_tuple [x; litV_to_vec l d])
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
       | _ -> fail ()
@@ -938,7 +938,7 @@ end
 
 let v_length v = retaint v (match detaint v with
   | V_vector n d l -> V_lit (L_aux (L_num (integerFromNat (List.length l))) Unknown)
-  | V_unknown -> V_unknown 
+  | V_unknown -> V_unknown
   | _ -> Assert_extra.failwith ("length given unexpected " ^ (string_of_value v)) end)
 
 let min v = retaint v (match detaint v with
@@ -973,8 +973,8 @@ let mask direction v =
         | (V_vector s d l,V_lit (L_aux (L_num n) _)) ->
           let n = natFromInteger n in
           let current_size = List.length l in
-          V_vector (if is_inc(d) then 0 else (n-1)) d (drop (current_size - n) l) 
-        | (V_unknown,V_lit (L_aux (L_num n) _)) -> 
+          V_vector (if is_inc(d) then 0 else (n-1)) d (drop (current_size - n) l)
+        | (V_unknown,V_lit (L_aux (L_num n) _)) ->
           let nat_n = natFromInteger n in
           let start_num = if is_inc(direction) then 0 else nat_n -1 in
           V_vector start_num direction (List.replicate nat_n V_unknown)

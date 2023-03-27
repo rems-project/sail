@@ -66,7 +66,7 @@
 (****************************************************************************)
 
 open Libsail
-   
+
 let opt_file_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
@@ -77,7 +77,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
- 
+
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
@@ -99,7 +99,7 @@ let version =
   | (vnum :: _) ->
      Printf.sprintf "Sail %s (%s @ %s)" vnum branch commit
   | _ -> default
-            
+
 let usage_msg =
   version
   ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
@@ -281,7 +281,7 @@ let rec options = ref ([
 
 let register_default_target () =
   Target.register ~name:"default" (fun _ _ _ _ _ -> ())
-  
+
 let run_sail tgt =
   Target.run_pre_parse_hook tgt ();
   let ast, env, effect_info = Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments in
@@ -331,7 +331,7 @@ let main () =
   end;
 
   options := Arg.align !options;
-  
+
   Arg.parse_dynamic options
     (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
@@ -348,11 +348,11 @@ let main () =
     print_endline (Reporting.get_sail_dir Manifest.dir);
     exit 0
   );
- 
+
   let default_target = register_default_target () in
 
   if !opt_memo_z3 then Constraint.load_digests ();
-  
+
   let ast, env, effect_info = match Target.get_the_target () with
     | Some target when not !opt_just_check -> run_sail target
     | _ -> run_sail default_target

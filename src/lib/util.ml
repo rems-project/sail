@@ -123,7 +123,7 @@ let rec last_opt = function
   | [x] -> Some x
   | _ :: xs -> last_opt xs
   | [] -> None
-             
+
 let rec butlast = function
   | [_] -> []
   | x :: xs -> x :: butlast xs
@@ -212,7 +212,7 @@ let rec map_last f = function
   | [] -> []
   | [x] -> [f true x]
   | (x :: xs) -> f false x :: map_last f xs
-        
+
 let rec split_on_char sep str =
   try
     let sep_pos = String.index str sep in
@@ -254,7 +254,7 @@ let rec map_split f = function
      | Error y' ->
         let (xs', ys') = map_split f xs in
         (xs', y' :: ys')
-                   
+
 let list_index p l =
   let rec aux i l =
     match l with [] -> None
@@ -319,7 +319,7 @@ let rec option_first f xL =
     | (x :: xs) -> match f x with None -> option_first f xs | Some s -> Some s
 
 let list_to_front n l =
-  if n <= 0 then l else 
+  if n <= 0 then l else
   let rec aux acc n l =
     match (n, l) with
         (0, x::xs) -> (x :: (List.rev_append acc xs))
@@ -328,7 +328,7 @@ let list_to_front n l =
   in aux [] n l
 
 let undo_list_to_front n l =
-  if n <= 0 then l else 
+  if n <= 0 then l else
   let rec aux acc n y l =
     match (n, l) with
         (0, xs) -> List.rev_append acc (y::xs)
@@ -409,7 +409,7 @@ let move_file src dst =
 let input_byte_opt chan = try Some (input_byte chan) with End_of_file -> None
 
 let same_content_files file1 file2 : bool =
-  (Sys.file_exists file1) && (Sys.file_exists file2) && 
+  (Sys.file_exists file1) && (Sys.file_exists file2) &&
   begin
     let s1 = open_in_bin file1 in
     let s2 = open_in_bin file2 in
@@ -458,7 +458,7 @@ let rec find_rest_opt f = function
   | [] -> None
   | x :: xs when f x -> Some (x, xs)
   | _ :: xs -> find_rest_opt f xs
-     
+
 let find_next f xs =
   let rec find_next' f acc = function
     | x :: xs when f x -> List.rev acc, Some (x, xs)
@@ -486,7 +486,7 @@ let rec find_map f = function
 let fold_left_concat_map f acc xs =
   let ys, acc = List.fold_left (fun (ys, acc) x -> let acc, zs = f acc x in (List.rev zs @ ys, acc)) ([], acc) xs in
   acc, List.rev ys
-  
+
 let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with

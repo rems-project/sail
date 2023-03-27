@@ -176,7 +176,7 @@ let to_smt l vars constr =
   in
 
   let exponentials = ref [] in
-  
+
   (* var_decs outputs the list of variables to be used by the SMT
      solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
      returned by Type_check.get_typ_vars *)
@@ -236,10 +236,10 @@ let to_smt l vars constr =
   in
   let smt_constr = smt_constraint constr in
   var_decs l vars, smt_constr, smt_var, !exponentials
- 
+
 let sailexp_concrete n =
   List.init (n + 1) (fun i -> sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))])
-  
+
 let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : string * (kid -> sexpr * bool) * sexpr list =
   let variables, problem, var_map, exponentials = to_smt l vars constr in
   !opt_solver.header
@@ -319,7 +319,7 @@ let constraint_to_smt l constr =
   (vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")"),
   (fun v -> let sexpr, found = var_map v in pp_sexpr sexpr, found),
   List.map pp_sexpr exponentials
-                            
+
 let rec call_smt' l extra constraints : smt_result =
   let vars =
     kopts_of_constraint constraints
@@ -416,7 +416,7 @@ let rec call_smt' l extra constraints : smt_result =
      opt_solver := { !opt_solver with uninterpret_power = false };
      result
   | Unknown -> Unknown
-          
+
 let call_smt l constraints =
   let t = Profile.start_smt () in
   let result = call_smt' l [] constraints in
@@ -524,7 +524,7 @@ let call_smt_solve_bitvector l smt_file smt_vars =
       ) with
       | Not_found -> None
     ) smt_vars |> Util.option_all
-                     
+
 let solve_smt l constraints var =
   let smt_file, smt_vars, _ = solve_smt_file l [] constraints in
   call_smt_solve l smt_file smt_vars var

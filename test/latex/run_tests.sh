@@ -13,14 +13,14 @@ source "$SAILDIR/test/test_helpers.sh"
 
 printf "<testsuites>\n" >> "$DIR/tests.xml"
 
-find . -name '*.sail' -print0 | while IFS= read -r -d '' line; do 
+find . -name '*.sail' -print0 | while IFS= read -r -d '' line; do
     echo "$line"
 done
 
 for testfile in *.sail; do
     temp_dir=$(mktemp -d)
     trap 'rm -rf $temp_dir' 0 2 3 15
-    
+
     if (cd "$temp_dir" && "$SAILDIR/sail" -o "out" -latex "$DIR/$testfile"); then
         # compare with expected files
         exp_prefix=${testfile//.sail/}

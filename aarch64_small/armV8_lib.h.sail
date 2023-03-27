@@ -48,20 +48,20 @@ enum AccType = {
   AccType_AT                         /* Address translation */
 }
 
-enum MBReqDomain = 
+enum MBReqDomain =
  {MBReqDomain_Nonshareable, MBReqDomain_InnerShareable,
   MBReqDomain_OuterShareable, MBReqDomain_FullSystem}
 
-enum MBReqTypes = 
+enum MBReqTypes =
   {MBReqTypes_Reads, MBReqTypes_Writes, MBReqTypes_All}
 
 
-enum BranchType =   
+enum BranchType =
   {BranchType_CALL, BranchType_ERET, BranchType_DBGEXIT,
    BranchType_RET, BranchType_JMP, BranchType_EXCEPTION,
    BranchType_UNKNOWN}
 
-enum MoveWideOp = 
+enum MoveWideOp =
   {MoveWideOp_N, MoveWideOp_Z, MoveWideOp_K}
 
 /* shared/functions/system/Mode_Bits */
@@ -81,10 +81,10 @@ let EL2 = 0b10
 let EL1 = 0b01
 let EL0 = 0b00
 
-enum DeviceType = 
+enum DeviceType =
   {DeviceType_GRE, DeviceType_nGRE, DeviceType_nGnRE, DeviceType_nGnRnE}
 
-enum Fault = { 
+enum Fault = {
   Fault_None,
   Fault_AccessFlag,
   Fault_Alignment,
@@ -103,7 +103,7 @@ enum Fault = {
   Fault_TLBConflict,
   Fault_Lockdown,
   Fault_Exclusive,
-  Fault_ICacheMaint 
+  Fault_ICacheMaint
 }
 
 struct FaultRecord = {
@@ -186,7 +186,7 @@ val Hint_Branch : BranchType -> unit effect pure
 
 enum CountOp = {CountOp_CLZ, CountOp_CLS, CountOp_CNT}
 
-enum ExtendType = 
+enum ExtendType =
   { ExtendType_SXTB, ExtendType_SXTH, ExtendType_SXTW, ExtendType_SXTX,
     ExtendType_UXTB, ExtendType_UXTH, ExtendType_UXTW, ExtendType_UXTX }
 
@@ -201,12 +201,12 @@ enum MemOp = {MemOp_LOAD, MemOp_STORE, MemOp_PREFETCH}
 
 enum MemBarrierOp = {MemBarrierOp_DSB, MemBarrierOp_DMB, MemBarrierOp_ISB}
 
-enum SystemHintOp = 
+enum SystemHintOp =
   {SystemHintOp_NOP, SystemHintOp_YIELD,
    SystemHintOp_WFE, SystemHintOp_WFI,
    SystemHintOp_SEV, SystemHintOp_SEVL}
 
-enum PSTATEField = 
+enum PSTATEField =
   {PSTATEField_DAIFSet, PSTATEField_DAIFClr, PSTATEField_SP}
 
 enum SystemOp = {Sys_AT, Sys_DC, Sys_IC, Sys_TLBI, Sys_SYS}

@@ -27,7 +27,7 @@ void sail_arena_reset(void)
 void *sail_malloc_align(size_t size, uintptr_t align)
 {
      sail_spin_lock(&sail_arena_lock);
- 
+
      uintptr_t offset = (uintptr_t)sail_arena_buffer + (uintptr_t)sail_arena_offset;
 
      uintptr_t modulo = offset & (align - 1);

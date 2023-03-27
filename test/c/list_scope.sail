@@ -23,5 +23,5 @@ function main() = {
     match ws {
         hd :: _ => print_endline(hd),
         _ => (),
-    }    
+    }
 }

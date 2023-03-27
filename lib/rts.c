@@ -290,7 +290,7 @@ sbits fast_read_ram(const int64_t data_size,
 		    const uint64_t addr)
 {
   uint64_t r = 0;
-  
+
   uint64_t byte;
   for(uint64_t i = (uint64_t) data_size; i > 0; --i) {
     byte = read_mem(addr + (i - 1));

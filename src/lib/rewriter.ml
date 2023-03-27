@@ -243,7 +243,7 @@ let rewrite_lexp rewriters (LE_aux(lexp,(l,annot))) =
 let rewrite_funcl rewriters (FCL_aux (FCL_funcl(id,pexp),(l,annot))) =
   FCL_aux (FCL_funcl (id, rewrite_pexp rewriters pexp),(l,annot))
 
-let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdannot))) = 
+let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdannot))) =
   let recopt = match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
@@ -258,7 +258,7 @@ let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
     | MPat_when (mpat, exp) -> MPat_when (mpat, rewriters.rewrite_exp rewriters exp)
   in
   MPat_aux (aux, (l, annot))
-  
+
 let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
   let aux = match aux with
     | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
@@ -269,7 +269,7 @@ let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
 
 let rewrite_mapdef rewriters (MD_aux (MD_mapping (id, tannot_opt, mapcls), annot)) =
   MD_aux (MD_mapping (id, tannot_opt, List.map (rewrite_mapcl rewriters) mapcls), annot)
-  
+
 let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
   let sd =  match sd with
     | SD_funcl funcl -> SD_funcl (rewrite_funcl rewriters funcl)
@@ -277,7 +277,7 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
     | SD_variant _ | SD_unioncl _ | SD_mapping _ | SD_function _ | SD_end _ -> sd
   in
   SD_aux (sd, (l, annot))
-  
+
 let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
   let aux = match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
@@ -301,7 +301,7 @@ let rewrite_ast_defs rewriters defs =
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
   in
   rewrite defs
-                              
+
 let rewrite_ast_base rewriters ast =
   let rec rewrite ds = match ds with
     | [] -> []
@@ -366,7 +366,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat_aux -> 'pat_aux
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
-                         
+
 and fold_pat (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat -> 'pat =
   function
   | P_aux (pat, annot) -> alg.p_aux (fold_pat_aux alg pat, annot)
@@ -388,7 +388,7 @@ let rec fold_mpat_aux (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat_aux -> 'mpa
 and fold_mpat (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat -> 'mpat =
   function
   | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
-                         
+
 (* identity fold from term alg to term alg *)
 let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
   { p_lit            = (fun lit -> P_lit lit)
@@ -427,7 +427,7 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
   ; p_string_append  = (fun ps -> Util.option_map (fun ps -> MP_string_append ps) (Util.option_all ps))
   ; p_aux            = (fun (pat, annot) -> Util.option_map (fun pat -> MP_aux (pat,annot)) pat)
   }
-  
+
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux) exp_alg =
@@ -605,7 +605,7 @@ let id_exp_alg =
   ; e_exit = (fun e1 -> E_exit (e1))
   ; e_throw = (fun e1 -> E_throw (e1))
   ; e_return = (fun e1 -> E_return e1)
-  ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
+  ; e_assert = (fun (e1,e2) -> E_assert(e1,e2))
   ; e_var = (fun (lexp, e2, e3) -> E_var (lexp,e2,e3))
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)

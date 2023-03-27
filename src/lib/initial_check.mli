@@ -113,7 +113,7 @@ val undefined_builtin_val_specs : uannot def list
 (** {2 Desugar and process AST } *)
 
 val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-  
+
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
 val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
@@ -130,7 +130,7 @@ val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint
 
 (** {2 Parsing files } *)
-  
+
 (** Parse a file into a sequence of comments and a parse AST
 
    @param ?loc If we get an error reading the file, report the error at this location *)

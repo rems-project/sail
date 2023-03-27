@@ -68,7 +68,7 @@
 open Ast_defs
 
 val opt_mwords : bool ref
-   
+
 type options = {
   auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
   debug_analysis : int;           (* Debug output level for the automatic analysis *)

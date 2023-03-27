@@ -78,7 +78,7 @@ let rec fromInterpValueBitU v = match v with
   | Interp_ast.V_lit (L_aux (L_zero) _)  -> B0
   | Interp_ast.V_lit (L_aux (L_undef) _) -> BU
   | Interp_ast.V_lit (L_aux (L_true) _)   -> B1
-  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0 
+  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0
   | Interp_ast.V_tuple [v] -> fromInterpValueBitU v
   | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
                      Interp.debug_print_value v)

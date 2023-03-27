@@ -93,7 +93,7 @@ let rec extract_ityp t tag = match (t,tag) with
   | (T_app "atom" (T_args [T_arg_nexp (Ne_const num)]),_) ->
     IRange (Just (natFromInteger num))
   | (T_app "atom" _,_) -> IRange Nothing
-  | (T_app "range" (T_args [_;T_arg_nexp (Ne_const max)]),_) -> 
+  | (T_app "range" (T_args [_;T_arg_nexp (Ne_const max)]),_) ->
     IRange (Just (natFromInteger max))
   | (T_app "range" _,_) -> IRange Nothing
   | (T_app i (T_args []),Tag_enum max) ->
@@ -102,7 +102,7 @@ let rec extract_ityp t tag = match (t,tag) with
     IEnum i (natFromInteger max)
 *)
   | _ -> IOther
-end 
+end
 
 let extract_parm (E_aux e (_,tannot)) =
   match e with
@@ -110,14 +110,14 @@ let extract_parm (E_aux e (_,tannot)) =
       match tannot with
 	| Just(t,tag,_,_,_) -> (i,(extract_ityp t tag))
 	| _ -> (i,IOther) end
-    | _ -> 
+    | _ ->
       let i = "Unnamed" in
       match tannot with
 	| Just(t,tag,_,_,_) -> (i,(extract_ityp t tag))
 	| _ -> (i,IOther) end
 end
 
-let rec extract_from_decode decoder = 
+let rec extract_from_decode decoder =
   match decoder with
     | [] -> []
     | (FCL_aux (FCL_funcl _ (Pat_aux pexp _)) _)::decoder ->
@@ -126,18 +126,18 @@ let rec extract_from_decode decoder =
 	| E_aux (E_app (Id_aux(Id id) _) parms) (_,(Just (_,Tag_ctor,_,_,_))) ->
 	  Instr_form id (List.map extract_parm parms) []
 	| _ -> Skipped end)::(extract_from_decode decoder)
-end 
+end
 
 let rec extract_effects_of_fcl id execute = match execute with
   | [] -> []
   | FCL_aux (FCL_funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) _) _) _) _)) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _,_))) :: executes ->
-    if i = id 
+    if i = id
     then efs
     else extract_effects_of_fcl id executes
   | _::executes -> extract_effects_of_fcl id executes
 end
 
-let rec extract_patt_parm (P_aux p (_,tannot)) = 
+let rec extract_patt_parm (P_aux p (_,tannot)) =
   let t = match tannot with
     | Just(t,tag,_,_,_) -> extract_ityp t tag
     | _ -> IOther end in
@@ -159,15 +159,15 @@ let rec extract_from_execute fcls = match fcls with
      extract_from_execute fcls
 end
 
-let rec extract_effects instrs execute = 
+let rec extract_effects instrs execute =
   match instrs with
     | [] -> []
     | Skipped::instrs -> Skipped::(extract_effects instrs execute)
-    | (Instr_form id parms [])::instrs -> 
+    | (Instr_form id parms [])::instrs ->
       (Instr_form id parms (extract_effects_of_fcl id execute))::(extract_effects instrs execute)
 end
 
-let extract_instructions_old decode_name execute_name defs = 
+let extract_instructions_old decode_name execute_name defs =
   let (Just decoder) = find_function defs (Id_aux (Id decode_name) Unknown) in
   let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
   let instr_no_effects = extract_from_decode decoder in

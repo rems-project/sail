@@ -137,7 +137,7 @@ function capRegToCapStruct(capReg) : CapReg -> CapStruct =
     length                     = capReg[63..0]
   }
 
-function getCapPerms(cap) : CapStruct -> bits(31) = 
+function getCapPerms(cap) : CapStruct -> bits(31) =
   (
     cap.uperms
       @ cap.perm_reserved11_14
@@ -208,7 +208,7 @@ function writeCapReg(n, cap) : (bits(2), CapStruct) -> unit =
     ()
   else
     let i = unsigned(n) in
-    (*CapRegs[i]) = capStructToCapReg(cap) 
+    (*CapRegs[i]) = capStructToCapReg(cap)
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 

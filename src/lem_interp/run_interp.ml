@@ -94,7 +94,7 @@ let id_to_string = function
 let loc_to_string = function
   | Unknown -> "location unknown"
   | Int(s,_) -> s
-  | Range(s,fline,fchar,tline,tchar) -> 
+  | Range(s,fline,fchar,tline,tchar) ->
       if fline = tline
       then sprintf "%s:%d:%d" s fline fchar
       else sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
@@ -118,14 +118,14 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | Bitvector(bools, _, _) -> "0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
   | Bytevector words->
     "0x" ^ (String.concat ""
-	    (List.map (function 
+	    (List.map (function
 	      | 10 -> "A"
 	      | 11 -> "B"
 	      | 12 -> "C"
 	      | 13 -> "D"
 	      | 14 -> "E"
 	      | 15 -> "F"
-	      | i  -> string_of_int i) words))		
+	      | i  -> string_of_int i) words))
   | Unknown0 -> "Unknown"*)
 
 (*let reg_name_to_string = function
@@ -141,7 +141,7 @@ let rec reg_to_string = function
 
 let rec top_frame_exp_state = function
   | Top -> raise (Invalid_argument "top_frame_exp")
-  | Hole_frame(_, e, _, env, mem, Top) 
+  | Hole_frame(_, e, _, env, mem, Top)
   | Thunk_frame(e, _, env, mem, Top) -> (e,(env,mem))
   | Thunk_frame(_, _, _, _, s)
   | Hole_frame(_, _, _, _, _, s) -> top_frame_exp_state s
@@ -192,16 +192,16 @@ let rec compact_stack ?(acc=[]) = function
   | Top -> acc
   | Hole_frame(_,e,_,env,mem,s)
   | Thunk_frame(e,_,env,mem,s) -> compact_stack ~acc:(((compact_exp e),(env,mem)) :: acc) s
-;;  
+;;
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
   (string_of_big_int x) (string_of_big_int y)
 ;;
 
-let id_compare i1 i2 = 
-  match (i1, i2) with 
-    | (Id_aux(Id(i1),_),Id_aux(Id(i2),_)) 
-    | (Id_aux(Id(i1),_),Id_aux(DeIid(i2),_)) 
+let id_compare i1 i2 =
+  match (i1, i2) with
+    | (Id_aux(Id(i1),_),Id_aux(Id(i2),_))
+    | (Id_aux(Id(i1),_),Id_aux(DeIid(i2),_))
     | (Id_aux(DeIid(i1),_),Id_aux(Id(i2),_))
     | (Id_aux(DeIid(i1),_),Id_aux(DeIid(i2),_)) -> compare i1 i2
 
@@ -469,7 +469,7 @@ let run
   | Error(l, e) ->
       debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
-  debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
+  debugf "%s: %s %s\n" (grey name) (blue "evaluate")
     (Pretty_interp.pp_exp Interp.eenv Printing_functions.red entry);
   let mode = match mode with
   | None -> if eager_eval then Run else Step

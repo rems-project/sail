@@ -129,11 +129,11 @@ let rec load_memory_segments segments =
       begin
         load_memory_segment segment prog_mem;
         load_memory_segments segments'
-      end    
+      end
   end
-  
-let rec read_mem mem address length = 
-  if length = 0  
+
+let rec read_mem mem address length =
+  if length = 0
   then []
   else
     let byte =
@@ -327,7 +327,7 @@ let cheri_register_data_all = mips_register_data_all @ [
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
-  let initial_stack_data = [] in 
+  let initial_stack_data = [] in
   let initial_cap_val_int = Nat_big_num.of_string "0x1fffe6000000100000000000000000000" in (* hex((0x10000 << 64) + (48 << 105) + (0x7fff << 113) + (1 << 128)) T=0x10000 E=48 perms=0x7fff tag=1 *)
   let initial_cap_val_reg = Sail_impl_base.register_value_of_integer 129 128 D_decreasing  initial_cap_val_int in
   let initial_register_abi_data : (string * Sail_impl_base.register_value) list = [
@@ -373,12 +373,12 @@ let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
 let initial_reg_file reg_data init =
   List.iter (fun (reg_name, _) -> reg := Reg.add reg_name (init reg_name) !reg) reg_data
 
-let initial_system_state_of_elf_file name = 
+let initial_system_state_of_elf_file name =
 
   (* call ELF analyser on file *)
   match Sail_interface.populate_and_obtain_global_symbol_init_info name with
   | Error.Fail s -> failwith ("populate_and_obtain_global_symbol_init_info: " ^ s)
-  | Error.Success 
+  | Error.Success
       (_, (elf_epi: Sail_interface.executable_process_image),
        (symbol_map: Elf_file.global_symbol_init_info))
     ->
@@ -420,7 +420,7 @@ let initial_system_state_of_elf_file name =
           in
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
-          
+
           (Cheri128.defs,
            (Mips_extras.mips_read_memory_functions,
             Mips_extras.mips_read_memory_tagged_functions,
@@ -439,7 +439,7 @@ let initial_system_state_of_elf_file name =
 
         | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and EM_MIPS are supported." (Nat_big_num.to_string e_machine))
       in
-      
+
       (* pull the object symbols from the symbol table *)
       let symbol_table : (string * Nat_big_num.num * int * word8 list (*their bytes*)) list =
         let rec convert_symbol_table symbol_map =
@@ -496,7 +496,7 @@ let initial_system_state_of_elf_file name =
                  with Not_found ->
                    StringMap.add name (binding,
                                        (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size)) map
-                     
+
                else map
             )
             StringMap.empty
@@ -517,7 +517,7 @@ let initial_system_state_of_elf_file name =
 
       begin
         (initial_reg_file register_data_all initial_register_state);
-        
+
         (* construct initial system state *)
         let initial_system_state =
           (isa_defs,
@@ -528,7 +528,7 @@ let initial_system_state_of_elf_file name =
            startaddr,
            (Sail_impl_base.address_of_integer startaddr))
         in
-        
+
         (initial_system_state, symbol_table_pp)
       end
     end
@@ -585,8 +585,8 @@ let stop_condition_met model instr =
   | AArch64 -> (match instr with
     | ("ImplementationDefinedStopFetching", _) -> true
     | _ -> false)
-  | MIPS -> (match instr with 
-    | ("HCF", _) -> 
+  | MIPS -> (match instr with
+    | ("HCF", _) ->
       resultf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
       resultf "DEBUG CAP PCC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PCC" !reg));
@@ -695,7 +695,7 @@ let rec write_events = function
   | e::events ->
     (match e with
      | E_write_reg (Reg(id,_,_,_), value) -> reg := Reg.add id value !reg
-     | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value) 
+     | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value)
      | E_write_reg ((Reg_field(id,_,_,_,range) as reg_n),value)->
        let old_val = Reg.find id !reg in
        let new_val = fupdate_slice reg_n old_val value range in
@@ -736,7 +736,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
       | Some pc ->
           let inBranchDelay = option_int_of_reg "inBranchDelay" in
           (match inBranchDelay with
-          | Some 0 -> 
+          | Some 0 ->
             let npc_addr = add_address_nat pc_val 4 in
             let npc_reg = register_value_of_address npc_addr Sail_impl_base.D_decreasing in
             reg := Reg.add "nextPC" npc_reg !reg;
@@ -772,7 +772,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 reg := my_reg;
                 prog_mem := my_mem;
                 tag_mem := my_tags;
-                
+
                 (try
                   let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
                   (if (pending != []) then
@@ -795,7 +795,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 | _-> ());
 
                 let uart_written = option_int_of_reg "UART_WRITTEN" in
-                (match uart_written with 
+                (match uart_written with
                 | Some 1 ->
                   (let uart_data = option_int_of_reg "UART_WDATA" in
                   match uart_data with
@@ -818,14 +818,14 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
       fde_loop (count + 1) context model mode track_dependencies addr_trans
     end
   end
-  
+
 let rec load_raw_file' mem addr chan =
   let byte = input_byte chan in
   (add_mem byte addr mem;
   load_raw_file' mem (Nat_big_num.succ addr) chan)
 
 let rec load_raw_file mem addr chan =
-  try 
+  try
     load_raw_file' mem addr chan
    with
   | End_of_file -> ()
@@ -847,8 +847,8 @@ let run () =
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
   let context = build_context false isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_m5 isa_m6 None isa_externs in
-  (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
-          endian mode, and translate function name 
+  (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not,
+          endian mode, and translate function name
   *)
   let addr_trans = translate_address context E_little_endian "TranslatePC" in
   if String.length(!raw_file) != 0 then

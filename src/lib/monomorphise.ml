@@ -156,7 +156,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     | Typ_bidir _ -> Reporting.unreachable l __POS__ "Lem doesn't support bidir types"
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   else NexpSet.empty
- 
+
 let size_set_limit = 64
 
 let optmap v f =
@@ -604,7 +604,7 @@ let stop_at_false_assertions e =
        let e1,stop = exp e1 in begin
        match stop with
        | Some _ -> e1,stop
-       | None -> 
+       | None ->
           let e2,stop = exp e2 in
           E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
        end
@@ -808,7 +808,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
        end
     | _ -> cannot ("unsupported type " ^ string_of_typ typ)
   in
-  
+
 
   (* Split variable patterns at the given locations *)
 
@@ -832,7 +832,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
             | (Line (filename,line),_,_) -> match_file_line filename line l)
           ls
       in List.map (fun (_,var,optpats) -> (var,optpats)) matches
-    in 
+    in
 
     let split_pat vars p =
       let id_match = function
@@ -867,7 +867,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
-          optmap (list f ps) 
+          optmap (list f ps)
             (fun ps ->
               List.map (fun (ps,sub,pchoices,ksub) -> P_aux (ctx ps,(l,annot)),sub,pchoices,ksub) ps)
         in
@@ -991,7 +991,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
                let kid,kid_annot =
                  match args with
                  | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
-                 | _ -> 
+                 | _ ->
                     raise (Reporting.err_general l
                              ("Pattern match not currently supported by monomorphisation: "
                              ^ string_of_pat pat))
@@ -1332,7 +1332,7 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
     | typ -> typ, fun x -> x
   in
   let typ = Env.expand_synonyms env typ in
-  let replace_size size = 
+  let replace_size size =
     (* TODO: pick simpler nexp when there's a choice (also in pretty printer) *)
     let is_equal nexp =
       prove __POS__ env (NC_aux (NC_equal (size,nexp), Parse_ast.Unknown))
@@ -2061,7 +2061,7 @@ let mk_subrange_pattern vannot vstart vend =
      in
      let dummyl = Generated Unknown in
      match len with
-     | Nexp_aux (Nexp_constant len,_) -> 
+     | Nexp_aux (Nexp_constant len,_) ->
         Some (fun pat ->
           let end_len = Big_int.pred (Big_int.sub len vend) in
           (* Wrap pat in its type; in particular the type checker won't
@@ -2242,7 +2242,7 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
        in
        aux env assigns es
     | E_id id ->
-       begin 
+       begin
          match Bindings.find id env.var_deps with
          | args -> (args,assigns,empty)
          | exception Not_found ->
@@ -2959,7 +2959,7 @@ let add_extra_splits extras defs =
     ) extras (e,[])
   in
   let add_to_funcl (FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
-    let pexp, splits = 
+    let pexp, splits =
       match Analysis.ExtraSplits.find (id,l) extras with
       | extras ->
          (match pexp with
@@ -2973,7 +2973,7 @@ let add_extra_splits extras defs =
        let funcls,splits = List.split (List.map add_to_funcl funcls) in
        DEF_aux (DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)),def_annot), List.concat splits
     | d -> d, []
-  in 
+  in
   let defs, splits = List.split (List.map add_to_def defs) in
   !success, defs, List.concat splits
 

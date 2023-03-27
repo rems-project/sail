@@ -86,7 +86,7 @@ let ocaml_options = [
     Arg.String (fun s -> opt_ocaml_generators := s :: !opt_ocaml_generators),
     "<types> produce random generators for the given types");
 ]
- 
+
 let ocaml_generator_info : (Type_check.tannot Ast.type_def list * string list) option ref = ref None
 
 let stash_pre_rewrite_info (ast : _ Ast_defs.ast) _ type_envs =
@@ -94,7 +94,7 @@ let stash_pre_rewrite_info (ast : _ Ast_defs.ast) _ type_envs =
     match !opt_ocaml_generators with
     | [] -> None
     | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast.defs, !opt_ocaml_generators)
- 
+
 let ocaml_rewrites =
   let open Rewrites in
   [
@@ -118,11 +118,11 @@ let ocaml_rewrites =
     ("simple_types", []);
     ("overload_cast", [])
   ]
- 
+
 let ocaml_target default_sail_dir out_file ast effect_info env =
   let out = match out_file with None -> "out" | Some s -> s in
   Ocaml_backend.ocaml_compile default_sail_dir out ast !ocaml_generator_info
-   
+
 let _ =
   Target.register
     ~name:"ocaml"
@@ -159,7 +159,7 @@ let tofrominterp_rewrites =
     ("vector_concat_assignments", []);
     ("simple_assignments", [])
   ]
-    
+
 let tofrominterp_target _ out_file ast _ _ =
   let out = match out_file with None -> "out" | Some s -> s in
   ToFromInterp_backend.tofrominterp_output !opt_tofrominterp_output_dir out ast

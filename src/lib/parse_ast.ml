@@ -82,14 +82,14 @@ type l =
 type 'a annot = l * 'a
 
 type extern = { pure : bool; bindings : (string * string) list }
-              
+
 exception Parse_error_locn of l * string
 
 type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
-        
-type 
+
+type
 kind_aux =  (* base kind *)
    K_type (* kind of types *)
  | K_int (* kind of natural number size expressions *)
@@ -97,12 +97,12 @@ kind_aux =  (* base kind *)
  | K_bool (* kind of constraints *)
 
 
-type 
+type
 kind =
    K_aux of kind_aux * l
 
 
-type 
+type
 base_effect_aux =  (* effect *)
    BE_rreg (* read register *)
  | BE_wreg (* write register *)
@@ -119,28 +119,28 @@ base_effect_aux =  (* effect *)
  | BE_escape
  | BE_config
 
-type 
+type
 kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
    Var of x
 
 
-type 
+type
 id_aux =  (* Identifier *)
    Id of x
  | Operator of x (* remove infix status *)
 
 type
-base_effect = 
+base_effect =
    BE_aux of base_effect_aux * l
 
 
-type 
-kid = 
+type
+kid =
    Kid_aux of kid_aux * l
 
 
-type 
-id = 
+type
+id =
   Id_aux of id_aux * l
 
 type
@@ -184,16 +184,16 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_exist of kinded_id list * atyp * atyp
  | ATyp_base of id * atyp * atyp
 
-and atyp = 
+and atyp =
    ATyp_aux of atyp_aux * l
 
 
-and 
+and
 kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_kind of string option * kid list * kind option (* kind-annotated variable *)
 
 and
-kinded_id = 
+kinded_id =
    KOpt_aux of kinded_id_aux * l
 
 type
@@ -202,19 +202,19 @@ quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typqu
  | QI_constraint of atyp (* A constraint for this type *)
 
 
-type 
-quant_item = 
+type
+quant_item =
    QI_aux of quant_item_aux * l
 
 
-type 
+type
 typquant_aux =  (* type quantifiers and constraints *)
    TypQ_tq of (quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
-type 
-typquant = 
+type
+typquant =
    TypQ_aux of typquant_aux * l
 
 type
@@ -222,12 +222,12 @@ typschm_aux =  (* type scheme *)
    TypSchm_ts of typquant * atyp
 
 
-type 
-typschm = 
+type
+typschm =
    TypSchm_aux of typschm_aux * l
 
 
-type 
+type
 pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild                (* wildcard        - always matches *)
@@ -242,15 +242,15 @@ pat_aux =  (* Pattern *)
  | P_list of (pat) list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
  | P_string_append of pat list (* string append pattern, x ^^ y *)
- | P_attribute of string * string * pat 
+ | P_attribute of string * string * pat
 
-and pat = 
+and pat =
    P_aux of pat_aux * l
 
 and fpat_aux =  (* Field pattern *)
    FP_Fpat of id * pat
 
-and fpat = 
+and fpat =
    FP_aux of fpat_aux * l
 
 type loop = While | Until
@@ -259,7 +259,7 @@ type measure_aux =  (* optional termination measure for a loop *)
  | Measure_none
  | Measure_some of exp
 
-and measure = 
+and measure =
  | Measure_aux of measure_aux * l
 
 and
@@ -302,37 +302,37 @@ exp_aux =  (* Expression *)
  | E_internal_plet of pat * exp * exp
  | E_internal_return of exp
 
-and exp = 
+and exp =
    E_aux of exp_aux * l
 
 and fexp_aux =  (* Field-expression *)
    FE_fexp of id * exp
 
-and fexp = 
+and fexp =
    FE_aux of fexp_aux * l
 
 and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
    Def_val_empty
  | Def_val_dec of exp
 
-and opt_default = 
+and opt_default =
    Def_val_aux of opt_default_aux * l
 
 and pexp_aux =  (* Pattern match *)
    Pat_exp of pat * exp
  | Pat_when of pat * exp * exp
 
-and pexp = 
+and pexp =
    Pat_aux of pexp_aux * l
 
 and letbind_aux =  (* Let binding *)
    LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
 
-and letbind = 
+and letbind =
    LB_aux of letbind_aux * l
 
 
-type 
+type
 tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
@@ -346,69 +346,69 @@ type
 typschm_opt =
   TypSchm_opt_aux of typschm_opt_aux * l
 
-type 
+type
 effect_opt_aux =  (* Optional effect annotation for functions *)
    Effect_opt_none (* sugar for empty effect set *)
  | Effect_opt_effect of atyp
 
 
-type 
+type
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
  | Rec_measure of pat * exp (* recursive with termination measure *)
 
 
-type 
+type
 funcl_aux =  (* Function clause *)
    FCL_funcl of id * pexp
 
 
-type 
+type
 type_union_aux =  (* Type union constructors *)
    Tu_ty_id of atyp * id
  | Tu_ty_anon_rec of (atyp * id) list * id
 
-type 
-tannot_opt = 
+type
+tannot_opt =
    Typ_annot_opt_aux of tannot_opt_aux * l
 
 
-type 
-effect_opt = 
+type
+effect_opt =
    Effect_opt_aux of effect_opt_aux * l
 
 
-type 
-rec_opt = 
+type
+rec_opt =
    Rec_aux of rec_opt_aux * l
 
 
-type 
-funcl = 
+type
+funcl =
    FCL_aux of funcl_aux * l
 
-type 
-type_union = 
+type
+type_union =
    Tu_aux of type_union_aux * l
 
 type subst_aux =  (* instantiation substitution *)
  | IS_typ of kid * atyp (* instantiate a type variable with a type *)
  | IS_id of id * id (* instantiate an identifier with another identifier *)
-           
-type subst = 
+
+type subst =
  | IS_aux of subst_aux * l
-           
-type 
+
+type
 index_range_aux =  (* index specification, for bitfields in register types *)
    BF_single of atyp       (* single index *)
  | BF_range of atyp * atyp (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
-and index_range = 
+and index_range =
    BF_aux of index_range_aux * l
 
-type 
+type
 default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
    DT_order of kind * atyp
 
@@ -453,14 +453,14 @@ type mapdef =
 type outcome_spec_aux =  (* outcome declaration *)
  | OV_outcome of id * typschm * kinded_id list
 
-type outcome_spec = 
+type outcome_spec =
  | OV_aux of outcome_spec_aux * l
- 
-type 
+
+type
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
 
-type 
+type
 type_def_aux =  (* Type definition body *)
    TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
  | TD_record of id * typquant * ((atyp * id)) list * bool (* struct type definition *)
@@ -468,16 +468,16 @@ type_def_aux =  (* Type definition body *)
  | TD_enum of id * (id * atyp) list * (id * exp option) list * bool (* enumeration type definition *)
  | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
-type 
+type
 val_spec_aux =  (* Value type specification *)
    VS_val_spec of typschm * id * extern option * bool
 
-type 
+type
 dec_spec_aux =  (* Register declarations *)
    DEC_reg of atyp * atyp * atyp * id * exp option
  | DEC_config of id * atyp * exp
 
-type 
+type
 scattered_def_aux =  (* Function and type union definitions that can be spread across
          a file. Each one must end in $_$ *)
    SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
@@ -489,36 +489,36 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
  | SD_end of id (* scattered definition end *)
 
 
-type 
-default_typing_spec = 
+type
+default_typing_spec =
    DT_aux of default_typing_spec_aux * l
 
 
-type 
-fundef = 
+type
+fundef =
    FD_aux of fundef_aux * l
 
 
-type 
-type_def = 
+type
+type_def =
    TD_aux of type_def_aux * l
 
 
-type 
-val_spec = 
+type
+val_spec =
    VS_aux of val_spec_aux * l
 
-type 
-dec_spec = 
+type
+dec_spec =
    DEC_aux of dec_spec_aux * l
 
 
-type loop_measure = 
+type loop_measure =
  | Loop of loop * exp
 
 
-type 
-scattered_def = 
+type
+scattered_def =
    SD_aux of scattered_def_aux * l
 
 type prec = Infix | InfixL | InfixR
@@ -546,7 +546,7 @@ type def_aux =  (* Top-level definition *)
 
 and def = DEF_aux of def_aux * l
 
-type 
+type
 lexp_aux =  (* lvalue expression, can't occur out of the parser *)
    LE_id of id (* identifier *)
  | LE_mem of id * (exp) list
@@ -555,10 +555,10 @@ lexp_aux =  (* lvalue expression, can't occur out of the parser *)
  | LE_vector_concat of lexp list
  | LE_field of lexp * id (* struct field *)
 
-and lexp = 
+and lexp =
    LE_aux of lexp_aux * l
 
 
-type 
+type
 defs =  (* Definition sequence *)
    Defs of (string * def list) list

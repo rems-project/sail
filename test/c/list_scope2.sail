@@ -27,5 +27,5 @@ function main() = {
             print_endline(c)
         },
         _ => (),
-    }    
+    }
 }

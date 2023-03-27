@@ -153,7 +153,7 @@ let rec descatter' funcls mapcls = function
         DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
         :: descatter' funcls mapcls (filter_union_clauses id defs)
      end
-       
+
   (* Therefore we should never see SD_unioncl... *)
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl _, (l, _))), _) :: _ ->
      raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")

@@ -204,7 +204,7 @@ let doc_nexp_lem nexp =
        | Nexp_neg n -> "neg_" ^ mangle_nexp n
        | _ ->
           raise (Reporting.err_unreachable l __POS__
-                  ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\"")) 
+                  ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\""))
      end in
      string ("'" ^ mangle_nexp full_nexp)
 
@@ -368,7 +368,7 @@ let doc_fn_typ_lem ?(monad = empty) env (Typ_aux (aux, l) as ty) = match aux wit
      separate (space ^^ arrow ^^ space) (List.map (doc_typ_lem env) args @ [monad ^^ (doc_typ_lem_brackets env) ret])
   | _ ->
      doc_typ_lem env ty
-   
+
 (* Check for variables in types that would be pretty-printed. *)
 let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
   lem_nexps_of_typ typ
@@ -858,7 +858,7 @@ let doc_exp_lem, doc_let_lem =
                | [] -> doc_id_lem_ctor f
                | [arg] -> doc_id_lem_ctor f ^^ space ^^ expV true arg
                | _ ->
-                  doc_id_lem_ctor f ^^ space ^^ 
+                  doc_id_lem_ctor f ^^ space ^^
                     parens (separate_map comma (expV false) args) in
              wrap_union (if annotation_needed then align epp ^^ doc_tannot_lem ctxt env false typ else align epp)
           | _ ->
@@ -1365,7 +1365,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
           typ_pp ^^ hardline ^^ hardline ^^
-            if !print_to_from_interp_value 
+            if !print_to_from_interp_value
             then toInterpValuePP ^^ hardline ^^ hardline ^^
               fromInterpValuePP ^^ hardline ^^ hardline ^^
                 fromToInterpValuePP ^^ hardline
@@ -1455,7 +1455,7 @@ module StringSet = Set.Make(String)
 
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
-   the funcls should have been merged by the merge_funcls rewrite now. *)   
+   the funcls should have been merged by the merge_funcls rewrite now. *)
 let doc_fundef_rhs_lem monadic env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
   separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic env) funcls
 

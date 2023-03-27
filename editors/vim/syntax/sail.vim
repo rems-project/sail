@@ -1,7 +1,7 @@
 " Vim syntax file
 " Language:	Sail
 " Maintainer:	Bill McSpadden (bill@riscv.org)
-" Last Update:  
+" Last Update:
 " Built on verilog.vim from vim63
 
 " For version 5.x: Clear all syntax items

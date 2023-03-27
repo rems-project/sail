@@ -72,7 +72,7 @@ let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref true
 let opt_reformat : string option ref = ref None
-                          
+
 let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uannot ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env ast in
@@ -80,7 +80,7 @@ let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uanno
   Effects.check_side_effects side_effects ast;
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout (Type_check.strip_ast ast) else () in
   (ast, env, side_effects)
- 
+
 let load_files ?target:target default_sail_dir options type_envs files =
   let t = Profile.start () in
 
@@ -91,7 +91,7 @@ let load_files ?target:target default_sail_dir options type_envs files =
   let ast = Parse_ast.Defs (List.map (fun (f, (_, file_ast)) -> (f, Preprocess.preprocess default_sail_dir target_name options file_ast)) parsed_files) in
   let ast = Initial_check.process_ast ~generate:true ast in
   let ast = { ast with comments = comments } in
-  
+
   let () = if !opt_ddump_initial_ast then Pretty_print_sail.pp_ast stdout ast else () in
 
   begin match !opt_reformat with
@@ -114,7 +114,7 @@ let load_files ?target:target default_sail_dir options type_envs files =
   (ast, type_envs, side_effects)
 
 let rewrite_ast_initial effect_info env = Rewrites.rewrite effect_info env [("initial", fun effect_info env ast -> Rewriter.rewrite_ast ast, effect_info, env)]
-  
+
 let descatter effect_info type_envs ast =
   let ast = Scattered.descatter ast in
   let ast, _, type_envs = rewrite_ast_initial effect_info type_envs ast in

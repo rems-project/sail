@@ -10,7 +10,7 @@ let opt_tab_width = ref 4
 let opt_index = ref None
 let opt_index_default = ref None
 let opt_prefix = ref ""
-                  
+
 let opt_cumulative_table = ref None
 let opt_histogram = ref false
 let opt_cumulative_histogram = ref None
@@ -24,11 +24,11 @@ type color = {
 let opt_bad_color = ref { hue = 0; saturation = 85 }
 let opt_good_color = ref { hue = 120; saturation = 85 }
 let opt_darken = ref 5
-                   
+
 let clamp_degree n = max 0 (min n 360)
 let clamp_percent n = max 0 (min n 100)
 
-let use_alt_colors () = 
+let use_alt_colors () =
   opt_good_color := { !opt_good_color with hue = 220 };
   opt_bad_color := { !opt_good_color with hue = 50 }
 
@@ -133,7 +133,7 @@ let add_span spans _ file l1 c1 l2 c2 =
               (function None -> Some 1 | Some i -> Some (i+1)) file_spans))
     spans
 
-let read_more_coverage filename spans = 
+let read_more_coverage filename spans =
   let spans = ref spans in
   let chan = open_in filename in
   try
@@ -152,7 +152,7 @@ let read_coverage filename = read_more_coverage filename StringMap.empty
 (** We color the source either red (bad) or green (good) if it's
    covered vs uncovered. If we have nested uncovered branches, they
    will be increasingly bad, whereas nested covered branches will be
-   increasingly good. *) 
+   increasingly good. *)
 type source_char = {
     mutable badness : int;
     mutable goodness : int;
@@ -175,7 +175,7 @@ let mark_good_region source span _ =
     source.(span.l1 - 1).(span.c1).goodness <- source.(span.l1 - 1).(span.c1).goodness + 1;
     source.(span.l2 - 1).(span.c2 - 1).goodness <- source.(span.l2 - 1).(span.c2 - 1).goodness - 1
   )
-    
+
 let process_line l = Array.init (String.length l) (fun n -> { badness = 0; goodness = 0; char = l.[n]; bad_zero_width = false })
 
 let read_source filename =
@@ -220,7 +220,7 @@ let file_info file all taken =
     | None, None -> None
   in
   let not_taken = SpanMap.merge diff all taken in
-  
+
   let percent =
     if SpanMap.cardinal all != 0 then
       let p = 100. *. (Float.of_int (SpanMap.cardinal taken) /. Float.of_int (SpanMap.cardinal all)) in
@@ -288,7 +288,7 @@ iframe {
 
 let html_file_for file =
   !opt_prefix ^ Filename.remove_extension (Filename.basename file) ^ ".html"
-              
+
 let read_taken_files all =
   (* Initialise optional CSV outputs *)
   let table_chan = match !opt_cumulative_table with
@@ -372,26 +372,26 @@ let main () =
               Printf.printf "%5d | %7d\n" count spans
             ) histogram
         end;
-      
+
       let source = read_source file in
       SpanMap.iter (mark_good_region source) taken;
       SpanMap.iter (mark_bad_region source) not_taken;
-      
+
       let output_file = html_file_for file in
       let chan = open_out output_file in
-      
+
       let current_goodness = ref 0 in
       let current_badness = ref 0 in
-      
+
       let clamp_lightness l = max 30 (min 80 l) in
-      
+
       let html_color color darkness =
         Printf.sprintf "hsl(%d, %d%%, %d%%)"
           color.hue color.saturation (clamp_lightness ((80 + !opt_darken) - darkness * !opt_darken))
       in
       let good_color () = html_color !opt_good_color !current_goodness in
       let bad_color () = html_color !opt_bad_color !current_badness in
-      
+
       output_string chan "<!DOCTYPE html>\n";
       output_string chan "<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n";
       output_string chan (Printf.sprintf "<title>%s</title>" (Filename.remove_extension (Filename.basename file)));
@@ -526,10 +526,10 @@ let main () =
                 output_string chan "&#171;Invisible branch not taken here&#187";
                 output_string chan "</span>"
               );
-              
+
               assert (!current_goodness >= 0);
               assert (!current_badness >= 0)
-              
+
             ) line;
           output_string chan "<br>\n"
         ) source;
@@ -537,21 +537,21 @@ let main () =
       output_string chan "</code>\n";
       output_string chan "</body>\n";
       output_string chan "</html>";
-      
+
       close_out chan
     ) !opt_files;
 
   begin match !opt_index with
   | Some name ->
      let chan = open_out (name ^ ".html") in
-     
+
      output_string chan "<!DOCTYPE html>\n";
      output_string chan "<html lang=\"en\">\n";
      Printf.ksprintf (output_string chan)
        "<head>\n<meta charset=\"utf-8\">\n<title>Coverage Report</title>\n<style>%s</style>\n</head>\n"
        index_css;
      output_string chan "<body>\n";
-     
+
      output_string chan "<table><tr><td class=\"left\"><div class=\"scroll\">";
      List.iter (fun file ->
          let all, taken = get_file_spans file all taken in
@@ -599,4 +599,4 @@ let _ =
   | l -> l
   end;
   try main () with
-  | Sys_error msg -> prerr_endline msg; exit 1 
+  | Sys_error msg -> prerr_endline msg; exit 1

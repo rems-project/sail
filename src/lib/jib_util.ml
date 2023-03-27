@@ -147,7 +147,7 @@ let imatch_failure l =
 
 let iexit l =
   I_aux (I_exit "explicit", (instr_number (), l))
-  
+
 let iraw ?loc:(l=Parse_ast.Unknown) str =
   I_aux (I_raw str, (instr_number (), l))
 
@@ -216,7 +216,7 @@ let rec map_cval g = function
      g (V_struct (List.map (fun (field, cval) -> field, map_cval g cval) fields, ctyp))
   | V_tuple (members, ctyp) ->
      g (V_tuple (List.map (map_cval g) members, ctyp))
- 
+
 let rec clexp_rename from_id to_id = function
   | CL_id (id, ctyp) when Name.compare id from_id = 0 -> CL_id (to_id, ctyp)
   | CL_id (id, ctyp) -> CL_id (id, ctyp)
@@ -379,7 +379,7 @@ let rec string_of_ctyp = function
   | CT_list ctyp -> "%list(" ^ string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "&(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly kid -> string_of_kid kid
- 
+
 and string_of_uid (id, ctyps) =
   match ctyps with
   | [] -> Util.zencode_string (string_of_id id)
@@ -448,7 +448,7 @@ let rec string_of_cval = function
      end
   | V_tuple (members, _) ->
      "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
-       
+
 let rec map_ctyp f = function
   | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode
      | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _) as ctyp -> f ctyp
@@ -461,7 +461,7 @@ let rec map_ctyp f = function
      f (CT_struct (id, List.map (fun ((id, ctyps), ctyp) -> (id, List.map (map_ctyp f) ctyps), map_ctyp f ctyp) fields))
   | CT_variant (id, ctors) ->
      f (CT_variant (id, List.map (fun ((id, ctyps), ctyp) -> (id, List.map (map_ctyp f) ctyps), map_ctyp f ctyp) ctors))
- 
+
 let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_lint, CT_lint -> true
@@ -573,11 +573,11 @@ module CTList = struct
   type t = ctyp list
   let compare ctyps1 ctyps2 = Util.compare_list ctyp_compare ctyps1 ctyps2
 end
-          
+
 module CTSet = Set.Make(CT)
 module CTMap = Map.Make(CT)
 module CTListSet = Set.Make(CTList)
- 
+
 module UId = struct
   type t = (id * ctyp list)
   let lex_ord c1 c2 = if c1 = 0 then c2 else c1
@@ -630,7 +630,7 @@ let rec ctyp_suprema = function
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly kid -> CT_poly kid
- 
+
 let merge_unifiers kid ctyp1 ctyp2 =
   if ctyp_equal ctyp1 ctyp2 then
     Some ctyp2
@@ -656,7 +656,7 @@ let rec ctyp_unify l ctyp1 ctyp2 =
 
   | CT_fvector (n1, b1, ctyp1), CT_fvector (n2, b2, ctyp2) when b1 = b2 ->
      ctyp_unify l ctyp1 ctyp2
-    
+
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify l ctyp1 ctyp2
 
   | CT_struct (id1, fields1), CT_struct (id2, fields2)
@@ -666,7 +666,7 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_variant (id1, ctors1), CT_variant (id2, ctors2)
        when List.length ctors1 == List.length ctors2 ->
      List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) (List.map snd ctors1) (List.map snd ctors2))
-    
+
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify l ctyp1 ctyp2
 
   | CT_poly kid, _ -> KBindings.singleton kid ctyp2
@@ -686,7 +686,7 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_constant _, CT_fint _ -> KBindings.empty
   | _, _ ->
      Reporting.unreachable l __POS__ ("Invalid ctyp unifiers " ^ full_string_of_ctyp ctyp1 ^ " and " ^ full_string_of_ctyp ctyp2)
- 
+
 let rec ctyp_ids = function
   | CT_enum (id, _) -> IdSet.singleton id
   | CT_struct (id, ctors) | CT_variant (id, ctors) ->
@@ -713,7 +713,7 @@ let rec subst_poly substs = function
      CT_struct (id, List.map (fun (ctor_id, ctyp) -> ctor_id, subst_poly substs ctyp) fields)
   | (CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real
      | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode as ctyp) -> ctyp
- 
+
 let is_ref_ctyp = function
   | CT_ref _ -> true
   | _ -> false
@@ -721,7 +721,7 @@ let is_ref_ctyp = function
 let unref_ctyp = function
   | CT_ref ctyp -> ctyp
   | ctyp -> ctyp
- 
+
 let rec is_polymorphic = function
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
     | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_float _ | CT_rounding_mode -> false
@@ -987,7 +987,7 @@ let cdef_map_ctyp f = function
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 let cdef_map_cval f = cdef_map_instr (map_instr_cval f)
-                    
+
 (* Map over all sequences of instructions contained within an instruction *)
 let rec map_instrs f (I_aux (instr, aux)) =
   let instr = match instr with

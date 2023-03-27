@@ -90,7 +90,7 @@ let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
 let opt_branch_coverage = ref None
-                        
+
 let extra_params () =
   match !opt_extra_params with
   | Some str -> str ^ ", "
@@ -173,7 +173,7 @@ let hex_char =
   | 'E' | 'e' -> [B1; B1; B1; B0]
   | 'F' | 'f' -> [B1; B1; B1; B1]
   | _ -> failwith "Invalid hex character"
-                  
+
 let literal_to_fragment (L_aux (l_aux, _) as lit) =
   match l_aux with
   | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
@@ -187,9 +187,9 @@ let literal_to_fragment (L_aux (l_aux, _) as lit) =
   | L_true -> Some (V_lit (VL_bool true, CT_bool))
   | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
- 
+
 module C_config(Opts : sig val branch_coverage : out_channel option end) : Config = struct
-  
+
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
      types and attempts to fit them into the smallest possible C
@@ -266,7 +266,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
        CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
-                                                         
+
     | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
        let (typ_params, ctors) = Bindings.find id ctx.variants in
@@ -278,10 +278,10 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
              | _ ->
                 Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
-       in           
+       in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
        CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
- 
+
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
@@ -615,7 +615,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
 end
- 
+
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
    stored. The ANF -> Sail IR pass for expressions simply outputs an
@@ -1084,7 +1084,7 @@ let rec sgen_ctyp = function
   | CT_float n -> "float" ^ string_of_int n ^ "_t"
   | CT_rounding_mode -> "uint_fast8_t"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-             
+
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
   | CT_bit -> "fbits"
@@ -1108,7 +1108,7 @@ let rec sgen_ctyp_name = function
   | CT_float n -> "float" ^ string_of_int n
   | CT_rounding_mode -> "rounding_mode"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
- 
+
 let sgen_mask n =
   if n = 0 then
     "UINT64_C(0)"
@@ -1384,7 +1384,7 @@ let rec codegen_conversion l clexp cval =
 
   | CT_ref ctyp_to, ctyp_from ->
      codegen_conversion l (CL_addr clexp) cval
- 
+
   | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
      let i = ngensym () in
      let from = ngensym () in
@@ -1422,7 +1422,7 @@ let rec codegen_conversion l clexp cval =
         )
      ^^ hardline
      ^^ string "  }"
-     
+
   (* If we have to convert between tuple types, convert the fields individually. *)
   | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
      let len = List.length ctyps_to in
@@ -1915,7 +1915,7 @@ let codegen_list_clear id ctyp =
 
 let codegen_list_recreate id =
   string (Printf.sprintf "static void RECREATE(%s)(%s *rop) { KILL(%s)(rop); *rop = NULL; }" (sgen_id id) (sgen_id id) (sgen_id id))
-  
+
 let codegen_inc_reference_count id =
   string (Printf.sprintf "static void internal_inc_%s(%s l) {\n" (sgen_id id) (sgen_id id))
   ^^ string "  if (l == NULL) return;\n"
@@ -1934,7 +1934,7 @@ let codegen_list_copy id ctyp =
   ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
   ^^ string "  *rop = op;\n"
   ^^ string "}"
- 
+
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
   string (Printf.sprintf "static void %s(%s *rop, %s x, %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
@@ -2093,7 +2093,7 @@ let codegen_vector ctx (direction, ctyp) =
       let open Printf in
          ksprintf string "static bool EQUAL(%s)(const %s op1, const %s op2) {\n" (sgen_id id) (sgen_id id) (sgen_id id)
       ^^          string "  if (op1.len != op2.len) return false;\n"
-      ^^          string "  bool result = true;" 
+      ^^          string "  bool result = true;"
       ^^          string "  for (int i = 0; i < op1.len; i++) {\n"
       ^^ ksprintf string "    result &= EQUAL(%s)(op1.data[i], op2.data[i]);" (sgen_ctyp_name ctyp)
       ^^          string "  }\n"
@@ -2226,7 +2226,7 @@ let codegen_def' ctx = function
      ^^ string "}"
 
   | CDEF_pragma _ -> empty
-     
+
 (** As we generate C we need to generate specialized version of tuple,
    list, and vector type. These must be generated in the correct
    order. The ctyp_dependencies function generates a list of
@@ -2303,7 +2303,7 @@ let jib_of_ast env effect_info ast =
   let env, effect_info = add_special_functions env effect_info in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
-  
+
 let compile_ast env effect_info output_chan c_includes ast =
   try
     let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2446,4 +2446,4 @@ let compile_ast_clib env effect_info ast codegen =
   let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
   let cdefs = insert_heap_returns Bindings.empty cdefs in
   codegen ctx cdefs
- 
+

@@ -138,7 +138,7 @@
 (provide 'asl-mode)
 
 
-; other asli lexer rules    
+; other asli lexer rules
 ; | '"' [^'"']* '"' as stringLit
 ; | '\'' ['0' '1'     ' ']* '\'' as bitsLit
 ; | '\'' ['0' '1' 'x' ' ']* '\'' as maskLit

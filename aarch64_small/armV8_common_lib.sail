@@ -37,11 +37,11 @@
 
 /* CP: adding two variants, one that takes a string argument, the other one doesn't  */
 val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
-function Unreachable_no_message() = 
+function Unreachable_no_message() =
     error("Unreachable reached")
 
 val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
-function Unreachable_message(message) = 
+function Unreachable_message(message) =
     error(message)
 
 overload Unreachable = {Unreachable_no_message, Unreachable_message}
@@ -218,7 +218,7 @@ function Align (x, y) =
 
 val CountLeadingSignBits : forall 'N, 'N >= 2. bits('N) -> range(0,'N - 1)
 function CountLeadingSignBits(x) =
-  CountLeadingZeroBits( (x[(length(x) - 1)..1]) ^ 
+  CountLeadingZeroBits( (x[(length(x) - 1)..1]) ^
                         (x[(length(x) - 2)..0]) )
 
 /** FUNCTION:integer CountLeadingZeroBits(bits(N) x) */
@@ -390,7 +390,7 @@ function Replicate (N,x) = {
 /** FUNCTION:integer SInt(bits(N) x) */
 
 /*function forall Nat 'N, Nat 'M, Nat 'K, 'M = 'N + -1, 'K = 2**'M. [|'K * -1:'K + -1|] SInt((bits('N)) x) =*/
-function SInt(x) = { 
+function SInt(x) = {
   signed(x)
   /*let N = (length((bits('N)) 0)) in {
   (integer) result = (nat) x;
@@ -699,8 +699,8 @@ struct read_buffer_type = {
   size : uinteger,
 }
 
-let empty_read_buffer : read_buffer_type = 
-  struct { 
+let empty_read_buffer : read_buffer_type =
+  struct {
     size = 0,
     /* arbitrary values: */
     acctype = AccType_NORMAL,
@@ -710,7 +710,7 @@ let empty_read_buffer : read_buffer_type =
 
 val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, int('N), AccType, bool) -> read_buffer_type effect {escape}
 function _rMem(read_buffer, desc, size, acctype, exclusive) = {
-  if read_buffer.size == 0 then 
+  if read_buffer.size == 0 then
     struct { acctype = acctype,
       exclusive = exclusive,
       address = (desc.paddress).physicaladdress,
@@ -806,7 +806,7 @@ struct write_buffer_type = {
   size : range(0,16),
 }
 
-let empty_write_buffer : write_buffer_type = struct { 
+let empty_write_buffer : write_buffer_type = struct {
   size = 0,
   /* arbitrary values: */
   acctype = AccType_NORMAL,
@@ -913,7 +913,7 @@ function Hint_Branch(hint) = {
 
 /** FUNCTION:shared/functions/registers/ResetExternalDebugRegisters */
 val ResetExternalDebugRegisters : boolean -> unit effect {escape}
-function ResetExternalDebugRegisters (b) = 
+function ResetExternalDebugRegisters (b) =
   not_implemented_extern("ResetExternalDebugRegisters")
 /** FUNCTION:shared/functions/registers/ThisInstrAddr */
 

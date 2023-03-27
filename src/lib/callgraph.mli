@@ -84,7 +84,7 @@ type node =
   | Outcome of id
 
 val node_id : node -> id
-             
+
 module Node : sig
   type t = node
   val compare : node -> node -> int
@@ -95,11 +95,11 @@ module G : sig
                    and type node_set = Set.Make(Node).t
                    and type graph = Graph.Make(Node).graph
 end
-     
+
 type callgraph = G.graph
 
 val graph_of_ast : Type_check.tannot ast -> callgraph
-               
+
 val filter_ast_ids : IdSet.t -> IdSet.t -> Type_check.tannot ast -> Type_check.tannot ast
 
 val filter_ast : Set.Make(Node).t -> callgraph -> 'a ast -> 'a ast

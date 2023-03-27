@@ -88,7 +88,7 @@ let random = ref false
 let opt_cycle_limit = ref 0
 let cycle_count = ref 0
 
-let cycle_limit_reached () = 
+let cycle_limit_reached () =
   cycle_count := !cycle_count + 1;
   !opt_cycle_limit != 0 && !cycle_count >= !opt_cycle_limit
 
@@ -352,8 +352,8 @@ let rec replicate_bits (bits, n) =
 let identity x = x
 
 (*
-Returns list of n bits of integer m starting from offset o >= 0 (bits numbered from least significant). 
-Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way. 
+Returns list of n bits of integer m starting from offset o >= 0 (bits numbered from least significant).
+Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way.
 Most significant bit is head of returned list.
  *)
 let rec get_slice_int' (n, m, o) =
@@ -536,7 +536,7 @@ end
 let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
 
 let page_shift_bits = 20 (* 1M page *)
-let page_size_bytes = 1 lsl page_shift_bits;; 
+let page_size_bytes = 1 lsl page_shift_bits;;
 
 let page_no_of_addr a = Big_int.shift_right a page_shift_bits
 let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
@@ -544,7 +544,7 @@ let top_addr_of_page p = Big_int.shift_left (Big_int.succ p) page_shift_bits
 let get_mem_page p =
   try
     Mem.find p !mem_pages
-  with Not_found -> 
+  with Not_found ->
     let new_page = Bytes.make page_size_bytes '\000' in
     mem_pages := Mem.add p new_page !mem_pages;
     new_page
@@ -561,7 +561,7 @@ let rec add_mem_bytes addr buf off len =
   if (to_copy < len) then
     add_mem_bytes page_top buf (off + to_copy) (len - to_copy)
 
-let rec read_mem_bytes addr len = 
+let rec read_mem_bytes addr len =
   let page_no = page_no_of_addr addr in
   let page_bot = bottom_addr_of_page page_no in
   let page_top = top_addr_of_page page_no in

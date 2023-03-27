@@ -81,7 +81,7 @@ type node =
   | FunctionMeasure of id
   | LoopMeasures of id
   | Outcome of id
-                     
+
 let node_id = function
   | Register id -> id
   | Function id -> id
@@ -387,7 +387,7 @@ let rec graph_of_defs defs =
   | [] -> G.empty
 
 let graph_of_ast ast = graph_of_defs ast.defs
-        
+
 let id_of_typedef (TD_aux (aux, _)) =
   match aux with
   | TD_abbrev (id, _, _) -> id

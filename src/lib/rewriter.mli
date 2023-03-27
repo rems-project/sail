@@ -89,7 +89,7 @@ val rewriters_base : tannot rewriters
 val rewrite_ast : tannot ast -> tannot ast
 
 val rewrite_ast_defs : tannot rewriters -> tannot def list -> tannot def list
-  
+
 val rewrite_ast_base : tannot rewriters -> tannot ast -> tannot ast
 
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
@@ -108,7 +108,7 @@ val rewrite_def : tannot rewriters -> tannot def -> tannot def
 val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 
 val rewrite_mapdef : tannot rewriters -> tannot mapdef -> tannot mapdef
-  
+
 (** the type of interpretations of patterns *)
 type ('a,'pat,'pat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
@@ -198,7 +198,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
 val fold_pat : ('a,'pat,'pat_aux) pat_alg -> 'a pat -> 'pat
 
 val fold_mpat : ('a,'mpat,'mpat_aux) pat_alg -> 'a mpat -> 'mpat
-  
+
 (* fold over expressions *)
 val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,

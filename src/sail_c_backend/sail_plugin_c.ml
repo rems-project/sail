@@ -121,7 +121,7 @@ let c_options = [
     Arg.Set C_backend.opt_static,
     " make generated C functions static");
 ]
- 
+
 let c_rewrites =
   let open Rewrites in
   [

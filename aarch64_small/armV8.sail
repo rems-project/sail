@@ -146,8 +146,8 @@ function clause execute (TMCommit()) = {
 }
 
 /* TTEST - dummy decoding */
-val decodeTMTest : unit -> option(ast) effect pure 
-function decodeTMTest () = 
+val decodeTMTest : unit -> option(ast) effect pure
+function decodeTMTest () =
   Some(TMTest())
 
 
@@ -160,7 +160,7 @@ function clause execute (TMTest()) = {
 }
 
 /* TABORT - dummy decoding */
-val decodeTMAbort : bits(6) -> option(ast) effect pure 
+val decodeTMAbort : bits(6) -> option(ast) effect pure
 function decodeTMAbort ([R] @ (imm5 : bits(5))) = {
   Some(TMAbort(R,imm5));
 }
@@ -620,7 +620,7 @@ end decodeImplementationDefined
 val decodeTestBranchImmediate : bits(32) -> option(ast) effect {escape}
 function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : bits(14))@(Rt:bits(5))) = {
   t : reg_index = UInt_reg(Rt);
- 
+
   let datasize : {| 32, 64 |} /* as int('R) */ = if b5 == b1 then 64 else 32;
   let bit_pos : uinteger = UInt([b5]@b40);
   bit_val : bit = op;
@@ -658,7 +658,7 @@ function clause execute (BranchImmediate(branch_type,offset)) = {
 }
 
 
-val decodeUnconditionalBranchRegister : bits(32) -> option(ast) effect {escape} 
+val decodeUnconditionalBranchRegister : bits(32) -> option(ast) effect {escape}
 scattered function decodeUnconditionalBranchRegister
 
 /* BLR */
@@ -911,7 +911,7 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
       /* anounce the address */
       wMem_Addr(address, dbytes, acctype, excl);
 
-      if rt_unknown then { 
+      if rt_unknown then {
         assert( pair == false & datasize < 128); /* FIXME: CP adding assertion so it typechecks: this should not happen: rt_unknown apparently false in the non-pair case  */
         data = UNKNOWN_BITS(datasize) /* : bits('D) */
       }
@@ -1708,7 +1708,7 @@ function clause execute (AddSubImmediate((d,n,datasize as int('R),sub_op,setflag
   }
 }
 
-/* BFM */ 
+/* BFM */
 /* SBFM */
 /* UBFM */
 val decodeBitfield : bits(32) -> option(ast) effect {escape}
@@ -2508,7 +2508,7 @@ function decode (machineCode) = {
     _                                                => None()
   }
 }
-    
+
 end execute
 
 val supported_instructions : ast -> option(ast) effect {escape}

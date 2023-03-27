@@ -67,7 +67,7 @@
 
 open Ast_defs
 open Type_check
-   
+
 module StringMap = Map.Make(String)
 
 type target = {
@@ -86,9 +86,9 @@ let name tgt = tgt.name
 let run_pre_parse_hook tgt = tgt.pre_parse_hook
 
 let run_pre_descatter_hook tgt = tgt.pre_descatter_hook
-                           
+
 let run_pre_rewrites_hook tgt = tgt.pre_rewrites_hook
-                              
+
 let action tgt = tgt.action
 
 let rewrites tgt = Rewrites.instantiate_rewrites tgt.rewrites
@@ -170,7 +170,7 @@ let () =
        print_endline ("No target " ^ name);
        istate
   )) |> register_command ~name:"rewrites" ~help:"perform rewrites for a target. See :list_targets for a list of targets";
-                
+
   ArgString ("target", fun name -> ArgString ("out", fun out -> ActionUnit (fun istate ->
     match get ~name:name with
     | Some tgt -> action tgt istate.default_sail_dir (Some out) istate.ast istate.effect_info istate.env;

@@ -203,7 +203,7 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_rounding_mode -> "m"
   | CT_enum (id, _) -> "E" ^ string_of_id id ^ "%"
   | CT_ref ctyp -> "&" ^ mangle_string_of_ctyp ctx ctyp
-  | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")" 
+  | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")"
   | CT_struct (id, fields) ->
      let generic_fields = Bindings.find id ctx.records |> snd |> UBindings.bindings in
      (* Note: It might be better to only do this if we actually have polymorphic fields *)
@@ -225,7 +225,7 @@ let rec mangle_string_of_ctyp ctx = function
      "L" ^ mangle_string_of_ctyp ctx ctyp
   | CT_poly kid ->
      "P" ^ string_of_kid kid
- 
+
 module type Config = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp
@@ -262,7 +262,7 @@ let callgraph cdefs =
          !graph
       | _ -> graph
     ) IdGraph.empty cdefs
- 
+
 module Make(C: Config) = struct
 
 let ctyp_of_typ ctx typ = C.convert_typ ctx typ
@@ -280,7 +280,7 @@ let coverage_loc_args l =
   | Some (p1, p2) ->
      Some (Printf.sprintf "\"%s\", %d, %d, %d, %d"
              (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol))
- 
+
 let coverage_branch_reached l =
   let branch_id = !coverage_branch_count in
   incr coverage_branch_count;
@@ -392,7 +392,7 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (_, l) as lit, _) ->
      raise (Reporting.err_general l ("Encountered unexpected literal " ^ string_of_lit lit ^ " when converting ANF represention into IR"))
- 
+
   | AV_tuple avals ->
      let elements = List.map (compile_aval l ctx) avals in
      let cvals = List.map (fun (_, cval, _) -> cval) elements in
@@ -643,7 +643,7 @@ let compile_funcall l ctx id args =
   assert (List.length arg_ctyps = List.length args);
 
   let instantiation = ref KBindings.empty in
-  
+
   let setup_arg ctyp aval =
     let arg_setup, cval, arg_cleanup = compile_aval l ctx aval in
     instantiation := KBindings.union merge_unifiers (ctyp_unify l ctyp (cval_ctyp cval)) !instantiation;
@@ -671,7 +671,7 @@ let rec apat_ctyp ctx (AP_aux (apat, env, _)) =
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
- 
+
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   let ctyp = cval_ctyp cval in
@@ -771,7 +771,7 @@ let rec compile_alexp ctx alexp =
      CL_addr (CL_id (name_or_global ctx id, ctyp))
   | AL_field (alexp, field_id) ->
      CL_field (compile_alexp ctx alexp, (field_id, []))
-     
+
 let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -1423,7 +1423,7 @@ let unique_names =
     | [] -> [], seen
   in
   fun instrs -> fst (opt NameSet.empty instrs)
-  
+
 let letdef_count = ref 0
 
 let compile_funcl ctx id pat guard exp =
@@ -1551,7 +1551,7 @@ and compile_def' n total ctx (DEF_aux (aux, _) as def) =
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
      [CDEF_val (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp) ctx.valspecs }
- 
+
   | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat None exp
@@ -1612,7 +1612,7 @@ and compile_def' n total ctx (DEF_aux (aux, _) as def) =
   | DEF_fixity _ -> [], ctx
 
   | DEF_pragma ("abstract", id_str, _) -> [CDEF_pragma ("abstract", id_str)], ctx
-    
+
   (* We just ignore any pragmas we don't want to deal with. *)
   | DEF_pragma _ -> [], ctx
 
@@ -1687,7 +1687,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
              | CDEF_val (id, _, param_ctyps, ret_ctyp) -> { ctx with valspecs = Bindings.add id (extern, param_ctyps, ret_ctyp) ctx.valspecs }
              | cdef -> ctx
            ) ctx specialized_specs
-       in                                                 
+       in
        specialize_fundefs ctx (orig_cdef :: specialized_specs @ prior) cdefs
 
     | (CDEF_fundef (id, heap_return, params, body) as orig_cdef) :: cdefs when Bindings.mem id !monomorphic_calls ->
@@ -1705,7 +1705,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
            ) (CTListSet.elements (Bindings.find id !monomorphic_calls))
        in
        specialize_fundefs ctx (orig_cdef :: specialized_fundefs @ prior) cdefs
-       
+
     | cdef :: cdefs ->
        specialize_fundefs ctx (cdef :: prior) cdefs
     | [] ->
@@ -1810,7 +1810,7 @@ let rec specialize_variants ctx prior =
 
   let mangled_pragma orig_id mangled_id =
     CDEF_pragma ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)) in
-  
+
   function
   | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
@@ -1836,7 +1836,7 @@ let rec specialize_variants ctx prior =
          cdefs
          ctors
      in
-     
+
      let monomorphized_variants =
        List.map (fun inst ->
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
@@ -1855,10 +1855,10 @@ let rec specialize_variants ctx prior =
          ) monomorphized_variants
        |> List.concat
      in
-     
+
      let prior = List.map (cdef_map_ctyp (fix_variants ctx var_id)) prior in
      let cdefs = List.map (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
- 
+
      let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp) ctx.valspecs } in
      let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
 
@@ -1866,7 +1866,7 @@ let rec specialize_variants ctx prior =
 
   | CDEF_type (CTD_struct (struct_id, fields)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) fields ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty fields in
- 
+
      let cdefs = List.map (cdef_map_instr (specialize_field ctx struct_id)) cdefs in
      let monomorphized_structs =
        List.map (fun inst  ->
@@ -1880,20 +1880,20 @@ let rec specialize_variants ctx prior =
          ) monomorphized_structs
        |> List.concat
      in
- 
+
      let prior = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
      let cdefs = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
      let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx struct_id) param_ctyps, fix_variants ctx struct_id ret_ctyp) ctx.valspecs } in
-     
+
      let ctx =
        List.fold_left (fun ctx (id, fields) ->
            { ctx with records = Bindings.add id ([], UBindings.of_seq (List.to_seq fields)) ctx.records })
          ctx monomorphized_structs
      in
      let ctx = { ctx with records = Bindings.remove struct_id ctx.records } in
-     
+
      specialize_variants ctx (List.concat (List.map (fun (id, fields) -> [CDEF_type (CTD_struct (id, fields)); mangled_pragma struct_id id]) monomorphized_structs) @ mangled_fields @ prior) cdefs
-     
+
   | cdef :: cdefs ->
      specialize_variants ctx (cdef :: prior) cdefs
 
@@ -1907,7 +1907,7 @@ let make_calls_precise ctx cdefs =
     | None -> Bindings.find_opt id !constructor_types
     | Some (_, param_ctyps, ret_ctyp) -> Some (param_ctyps, ret_ctyp)
   in
- 
+
   let precise_call call tail =
     match call with
     | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr ->
@@ -1966,7 +1966,7 @@ let make_calls_precise ctx cdefs =
           let cleanup = List.rev_map (fun (_, _, z) -> z) casted_args |> List.concat in
           [iblock1 (casts @ ret_setup @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux)] @ tail @ ret_cleanup @ cleanup)]
        end
-          
+
     | instr -> instr::tail
   in
 
@@ -1976,7 +1976,7 @@ let make_calls_precise ctx cdefs =
            constructor_types := Bindings.add id ([ctyp], CT_variant (var_id, ctors)) !constructor_types
          ) ctors;
        precise_calls (cdef :: prior) cdefs
-       
+
     | cdef :: cdefs ->
        precise_calls (cdef_map_funcall precise_call cdef :: prior) cdefs
 
@@ -1984,7 +1984,7 @@ let make_calls_precise ctx cdefs =
        List.rev prior
   in
   precise_calls [] cdefs
- 
+
 (** Once we specialize variants, there may be additional type
    dependencies which could be in the wrong order. As such we need to
    sort the type definitions in the list of cdefs. *)
@@ -2035,7 +2035,7 @@ let toplevel_lets_of_ast ast =
     List.fold_left IdSet.union IdSet.empty (List.map toplevel_lets_of_def defs)
   in
   toplevel_lets_of_defs ast.defs |> IdSet.elements
- 
+
 let compile_ast ctx ast =
   let module G = Graph.Make(Callgraph.Node) in
   let g = Callgraph.graph_of_ast ast in
@@ -2046,7 +2046,7 @@ let compile_ast ctx ast =
   let roots = NodeSet.union (toplevel_lets_of_ast ast |> List.map (fun id -> Callgraph.Letbind id) |> NodeSet.of_list) roots in
   let g = G.prune roots NodeSet.empty g in
   let ast = Callgraph.filter_ast NodeSet.empty g ast in
-  
+
   if !opt_memo_cache then
     (try
        if Sys.is_directory "_sbuild" then
@@ -2073,7 +2073,7 @@ let compile_ast ctx ast =
       cdefs, ctx
   in
   let cdefs, ctx = specialize_functions ctx cdefs in
-  let cdefs = sort_ctype_defs true cdefs in 
+  let cdefs = sort_ctype_defs true cdefs in
   let cdefs, ctx = specialize_variants ctx [] cdefs in
   let cdefs = if C.specialize_calls then cdefs else make_calls_precise ctx cdefs in
   let cdefs = sort_ctype_defs false cdefs in

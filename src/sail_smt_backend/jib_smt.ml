@@ -604,7 +604,7 @@ let builtin_tdiv_int =
 
 let builtin_tmod_int =
   builtin_arith "bvurem" (Sail2_values.tmod_int) (fun x -> x)
-  
+
 let bvmask ctx len =
   let all_ones = bvones (lbits_size ctx) in
   let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); len]) in
@@ -949,7 +949,7 @@ let builtin_signed ctx v ret_ctyp =
 
   | CT_lbits _, CT_lint ->
      Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
-    
+
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
@@ -962,7 +962,7 @@ let builtin_add_bits ctx v1 v2 ret_ctyp =
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
-     
+
   | _ -> builtin_type_error ctx "add_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits ctx v1 v2 ret_ctyp =
@@ -1520,7 +1520,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
        in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
        CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
-                                                         
+
     | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
        let (typ_params, ctors) = Bindings.find id ctx.variants in
@@ -1532,10 +1532,10 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
              | _ ->
                 Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
-       in           
+       in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
        CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
-      
+
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)

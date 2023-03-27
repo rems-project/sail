@@ -19,14 +19,14 @@ been used for several papers, available from
 
 Given a Sail definition, the tool will type-check it and generate
 documentation, executable emulators (in C and OCaml), theorem-prover definitions (for
-Isabelle, HOL4, and Coq), and definitions to integrate with our 
+Isabelle, HOL4, and Coq), and definitions to integrate with our
 <a href="http://www.cl.cam.ac.uk/users/pes20/rmem">RMEM</a>
 and
 <a href="https://github.com/rems-project/isla">isla-axiomatic</a>
 tools for
 concurrency semantics.
 The <a href="https://github.com/rems-project/isla">Isla</a> engine provides SMT-based symbolic evaluation for Sail models,
-and the <a href="https://github.com/rems-project/islaris">Islaris</a> verification tool integrates Isla output with the Iris program logic to support proof about binary code in Coq. 
+and the <a href="https://github.com/rems-project/islaris">Islaris</a> verification tool integrates Isla output with the Iris program logic to support proof about binary code in Coq.
 Not all models are integrated with all tools - see the most recent papers and models for
 descriptions of the current state.
 <p>
@@ -69,13 +69,13 @@ Sail is currently being used for Arm-A, Morello (CHERI-Arm), RISC-V, CHERI-RISC-
 
 * [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips).
 
-* [Sail IBM POWER ISA model, automatically generated from IBM XML documentation](https://github.com/rems-project/sail/tree/sail2/old/power).  This is a user-mode fragment. 
+* [Sail IBM POWER ISA model, automatically generated from IBM XML documentation](https://github.com/rems-project/sail/tree/sail2/old/power).  This is a user-mode fragment.
 
-* [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/old/x86). This is a handwritten user-mode fragment. 
+* [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/old/x86). This is a handwritten user-mode fragment.
 
 The hand-written IBM POWER, and x86 models are currently not in sync
 with the latest version of Sail, which is the (default) sail2 branch
-on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics. 
+on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics.
 
 ### External Models
 
@@ -141,9 +141,9 @@ the headers of those files.
 The POWER model in power/ is distributed under the 2-clause BSD licence in
 the headers of those files.
 
-The models in separate repositories are licensed as described in each. 
+The models in separate repositories are licensed as described in each.
 
-## Funding 
+## Funding
 
 This work was partially supported by the UK Government Industrial Strategy Challenge Fund (ISCF) under the Digital Security by Design (DSbD) Programme, to deliver a DSbDtech enabled digital platform (grant 105694).
 This project has received funding from the European Research Council

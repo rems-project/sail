@@ -125,7 +125,7 @@ let non_exec = EffectSet.mem NonExec
 let pure = EffectSet.is_empty
 
 let effectful set = not (pure set)
-         
+
 let has_outcome id = EffectSet.mem (Outcome id)
 
 module PC_config = struct
@@ -197,7 +197,7 @@ let infer_def_direct_effects asserts_termination def =
   in
 
   let pat_alg = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat p_aux annot) } in
-    
+
   let rw_exp _ exp =
     fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot);
                                le_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot);
@@ -229,7 +229,7 @@ let infer_def_direct_effects asserts_termination def =
      effects := EffectSet.add Scattered !effects
   | _ -> ()
   end;
-  
+
   !effects
 
 let infer_mapdef_extra_direct_effects def =
@@ -260,13 +260,13 @@ let infer_mapdef_extra_direct_effects def =
     | MCL_backwards (backward, _) ->
        scan_mpexp backward_effects backward
   in
-  
+
   begin match def with
   | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) ->
      List.iter scan_mapcl mapcls
   | _ -> ()
   end;
-  
+
   !forward_effects, !backward_effects
 
 (* A top-level definition can have a side effect if it contains an
@@ -275,7 +275,7 @@ let can_have_direct_side_effect (DEF_aux (aux, _)) =
   match aux with
   | DEF_type _ -> false
   | DEF_fundef _ -> true
-  | DEF_mapdef _ -> false 
+  | DEF_mapdef _ -> false
   | DEF_impl _ -> true
   | DEF_let _ -> true
   | DEF_val _ -> true
@@ -290,7 +290,7 @@ let can_have_direct_side_effect (DEF_aux (aux, _)) =
   | DEF_register _ -> true
   | DEF_internal_mutrec _ -> true
   | DEF_pragma _ -> false
- 
+
 type side_effect_info = {
     functions : EffectSet.t Bindings.t;
     letbinds : EffectSet.t Bindings.t;
@@ -307,7 +307,7 @@ let function_is_pure id info =
   match Bindings.find_opt id info.functions with
   | Some eff -> pure eff
   | None -> true
-                      
+
 let is_function = function
   | Callgraph.Function _ -> true
   | _ -> false
@@ -321,7 +321,7 @@ let is_mapping = function
    in Sail for others). *)
 let add_effects id effect_set effect_map =
   Bindings.update id (function Some effects -> Some (EffectSet.union effects effect_set) | None -> Some effect_set) effect_map
-                      
+
 let infer_side_effects asserts_termination ast =
   let module NodeSet = Set.Make(Callgraph.Node) in
   let cg = Callgraph.graph_of_ast ast in
@@ -501,7 +501,7 @@ let rewrite_attach_effects effect_info =
     let eff = union_effects eff child_eff in
     eff, E_aux (e_aux, (l, add_effect_annot tannot eff))
   in
-    
+
   let rw_exp =
     fold_exp {
         (compute_exp_alg no_effect union_effects)

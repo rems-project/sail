@@ -21,7 +21,7 @@ val dependencies_to_string : reg_name list -> string
 val exp_to_string : Interp.lenv -> Interp.lmem -> bool -> tannot exp -> string
 
 (* Functions to set the color of parts of the output *)
-type ppmode = 
+type ppmode =
   | Interp_latex
   | Interp_ascii
   | Interp_html
@@ -55,7 +55,7 @@ val local_variables_to_string : instruction_state -> string
 val instruction_to_string : instruction -> string
 
 (*Functions to take a print function and cause a print event for the above functions *)
-val print_exp : (string-> unit) -> Interp.lenv -> Interp.lmem -> bool -> tannot exp -> unit 
+val print_exp : (string-> unit) -> Interp.lenv -> Interp.lmem -> bool -> tannot exp -> unit
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
 val print_instruction : (string -> unit) -> instruction -> unit

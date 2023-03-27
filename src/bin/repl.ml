@@ -101,7 +101,7 @@ let shrink_istate istate = ({
     env = istate.env;
     default_sail_dir = istate.default_sail_dir;
   } : Interactive.istate)
-                        
+
 let initial_istate options env effect_info ast = {
     ast = ast;
     effect_info = effect_info;
@@ -133,7 +133,7 @@ let mode_clear istate =
   match istate.mode with
   | Normal -> ()
   | Evaluation _ -> if istate.clear then LNoise.clear_screen () else ()
-                      
+
 let rec user_input istate callback =
   match LNoise.linenoise (prompt istate) with
   | None -> ()
@@ -184,7 +184,7 @@ let setup_sail_scripting istate =
   let sail_command_name cmd = "sail_" ^ String.sub cmd 1 (String.length cmd - 1) in
 
   let cmds = Interactive.all_commands () in
-  
+
   let val_specs =
     List.map (fun (cmd, (_, action)) ->
         let name = sail_command_name cmd in
@@ -192,7 +192,7 @@ let setup_sail_scripting istate =
         mk_val_spec (VS_val_spec (typschm, mk_id name, Some { pure = false; bindings = [("_", name)] }, false))
       ) cmds in
   let val_specs, env = Type_check.check_defs istate.env val_specs in
-    
+
   List.iter (fun (cmd, (help, action)) ->
       let open Value in
       let name = sail_command_name cmd in
@@ -347,7 +347,7 @@ let rec run_steps istate n =
         in
         run_steps istate (n - 1)
      end
- 
+
 let help =
   let open Printf in
   let open Util in
@@ -776,4 +776,4 @@ let start_repl ?banner:(banner = true) ?commands:(script = []) ?auto_rewrites:(r
   );
   let istate = setup_sail_scripting istate in
   user_input istate handle_input
- 
+

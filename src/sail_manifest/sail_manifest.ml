@@ -74,7 +74,7 @@ let options = Arg.align [
     Arg.Set opt_gen_manifest,
     "generate manifest.ml")
 ]
- 
+
 let git_command args =
   try
     let git_out, git_in, git_err = Unix.open_process_full ("git " ^ args) (Unix.environment ()) in
@@ -86,7 +86,7 @@ let git_command args =
        "unknown"
   with
   | _ -> "unknown"
-            
+
 let gen_manifest () =
   ksprintf print_endline "let dir = \"%s\"" (Sys.getcwd ());
   ksprintf print_endline "let commit = \"%s\"" (git_command "rev-parse HEAD");
@@ -94,7 +94,7 @@ let gen_manifest () =
   ksprintf print_endline "let version = \"%s\"" (git_command "describe")
 
 let usage = "sail_install_tool <options>"
-  
+
 let main () =
   Arg.parse options (fun _ -> ()) usage;
   if !opt_gen_manifest then (

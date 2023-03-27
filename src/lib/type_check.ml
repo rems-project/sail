@@ -95,7 +95,7 @@ let opt_smt_div = ref false
 
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
-                              
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -110,7 +110,7 @@ let typ_debug ?level:(level=1) m = if !opt_tc_debug > level then prerr_endline (
 let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ Lazy.force m) else ()
 
 type constraint_reason = (Ast.l * string) option
- 
+
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
@@ -434,7 +434,7 @@ let destruct_exist_plain ?name:(name=None) typ =
      let typ = typ_subst kid (arg_kopt fresh) typ in
      Some ([fresh], nc, typ)
   | Typ_aux (Typ_exist (kopts, nc, typ), l) ->
-     let add_num i = match name with Some n -> Some (n ^ string_of_int i) | None -> None in 
+     let add_num i = match name with Some n -> Some (n ^ string_of_int i) | None -> None in
      let fresh_kopts =
        List.mapi (fun i kopt -> (kopt_kid kopt, named_existential (kopt_loc kopt) (unaux_kind (kopt_kind kopt)) (add_num i))) kopts
      in
@@ -485,7 +485,7 @@ let destruct_exist ?name:(name=None) typ =
 let adding = Util.("Adding " |> darkgray |> clear)
 
 let counter = ref 0
- 
+
 let fresh_kid ?kid:(kid=mk_kid "") env =
   let suffix = if Kid.compare kid (mk_kid "") = 0 then "#" else "#" ^ string_of_id (id_of_kid kid) in
   let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter ^ suffix), Parse_ast.Unknown) in
@@ -571,7 +571,7 @@ module Env : sig
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
-  val get_enums : t -> IdSet.t Bindings.t 
+  val get_enums : t -> IdSet.t Bindings.t
   val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
@@ -655,7 +655,7 @@ end = struct
      variable is renamed. We can't just remove it because it may be
      referenced by constraints. *)
   let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
- 
+
   let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
@@ -675,12 +675,12 @@ end = struct
       end
 
   let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
-                               
+
   let get_typ_var_loc_opt kid env =
     match KBindings.find_opt kid env.typ_vars with
     | Some (l, _) -> Some l
     | None -> None
-                               
+
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
     | Not_found -> typ_error env (kid_loc kid) ("No type variable " ^ string_of_kid kid)
@@ -726,7 +726,7 @@ end = struct
     || Bindings.mem id builtin_typs
 
   let get_binding_loc env id =
-    let has_key id' = Id.compare id id' = 0 in 
+    let has_key id' = Id.compare id id' = 0 in
     if Bindings.mem id builtin_typs then
       None
     else if Bindings.mem id env.variants then
@@ -748,11 +748,11 @@ end = struct
     | None ->
        let suffix = if Bindings.mem id builtin_typs then " as a built-in type" else "" in
        typ_error env (id_loc id) ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound" ^ suffix)
-    
+
   let bound_ctor_fn env id =
     Bindings.mem id env.top_val_specs
     || Bindings.mem id env.union_ids
-    
+
   let get_overloads id env =
     try Bindings.find id env.overloads with
     | Not_found -> []
@@ -942,7 +942,7 @@ end = struct
                               ^ string_of_kind_aux kind ^ " but should have kind Bool")
        end
     | NC_true | NC_false -> ()
- 
+
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     match aux with
     | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
@@ -1011,7 +1011,7 @@ end = struct
         | Not_found -> Typ_aux (Typ_id id, l))
     | Typ_exist (kopts, nc, typ) ->
        let nc = expand_constraint_synonyms env nc in
-       
+
        (* When expanding an existential synonym we need to take care
           to add the type variables and constraints to the
           environment, so we can check constraints attached to type
@@ -1106,7 +1106,7 @@ end = struct
        typ_raise env l (err_because (Err_other "Well-formedness check failed for type",
                                      err_l,
                                      err))
- 
+
   let add_typ_synonym id typq arg env =
     if bound_typ_id env id then (
       typ_error env (id_loc id) ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
@@ -1137,7 +1137,7 @@ end = struct
     | Not_found -> typ_error env (id_loc id) ("No type declaration found for " ^ string_of_id id)
 
   let get_val_specs env = env.top_val_specs
-                 
+
   let add_union_id id bind env =
     if bound_ctor_fn env id
     then typ_error env (id_loc id) ("A union constructor or function already exists with name " ^ string_of_id id )
@@ -1146,7 +1146,7 @@ end = struct
         typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
         { env with union_ids = Bindings.add id bind env.union_ids }
       end
-    
+
   let get_union_id id env =
     try
       let bind = Bindings.find id env.union_ids in
@@ -1222,7 +1222,7 @@ end = struct
     | Some outcome -> outcome
     | None ->
        typ_error env l ("Outcome " ^ string_of_id id ^ " does not exist")
- 
+
   and add_mapping id (typq, typ1, typ2) env =
     typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -1254,7 +1254,7 @@ end = struct
 
   let add_outcome_variable l kid typ env =
     { env with outcome_instantiation = KBindings.add kid (l, typ) env.outcome_instantiation }
-                                    
+
   let define_val_spec id env =
     if IdSet.mem id env.defined_val_specs
     then typ_error env (id_loc id) ("Function " ^ string_of_id id ^ " has already been declared")
@@ -1265,11 +1265,11 @@ end = struct
   let is_ctor id (Tu_aux (tu, _)) = match tu with
     | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
     | _ -> false
-                                
+
   let union_constructor_info id env =
     let type_unions = List.map (fun (id, (_, tus)) -> (id, tus)) (Bindings.bindings env.variants) in
     Util.find_map (fun (union_id, tus) -> Util.option_map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
- 
+
   let is_union_constructor id env =
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
     List.exists (is_ctor id) type_unions
@@ -1289,7 +1289,7 @@ end = struct
       typ_print (lazy (adding ^ "enum " ^ string_of_id id));
       { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
     )
-      
+
   let get_enum id env =
     match Bindings.find_opt id env.enums with
     | Some enum -> IdSet.elements enum
@@ -1303,9 +1303,9 @@ end = struct
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
-                        
+
   let get_records env = env.records
-                        
+
   let add_record id typq fields env =
     if bound_typ_id env id then (
       already_bound "struct" id env
@@ -1333,7 +1333,7 @@ end = struct
       { env with records = Bindings.add id (typq, fields) env.records;
                  accessors = List.fold_left fold_accessors env.accessors fields }
     )
- 
+
   let get_accessor_fn rec_id id env =
     let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
     try freshen_bind (Bindings.find (field_name rec_id id) env.accessors)
@@ -1374,7 +1374,7 @@ end = struct
     { env with top_letbinds = IdSet.union ids env.top_letbinds }
 
   let get_toplevel_lets env = env.top_letbinds
-                                           
+
   let add_variant id variant env =
     if bound_typ_id env id then (
       already_bound "union" id env
@@ -1382,7 +1382,7 @@ end = struct
       typ_print (lazy (adding ^ "variant " ^ string_of_id id));
       { env with variants = Bindings.add id variant env.variants }
     )
-      
+
   let add_scattered_variant id typq env =
     if bound_typ_id env id then (
       already_bound "scattered union" id env
@@ -1393,14 +1393,14 @@ end = struct
         scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
       }
     )
- 
+
   let add_variant_clause id tu env =
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> { env with variants = Bindings.add id (typq, tus @ [tu]) env.variants }
     | None -> typ_error env (id_loc id) ("scattered union " ^ string_of_id id ^ " not found")
 
   let get_variants env = env.variants
-            
+
   let get_variant id env =
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> typq, tus
@@ -1486,7 +1486,7 @@ end = struct
     | Some ord -> ord
 
   let get_default_order_option env = env.default_order
-                
+
   let set_default_order o env =
     match o with
     | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
@@ -1594,7 +1594,7 @@ let check_shadow_leaks l inner_env outer_env typ =
     )
     (KidSet.elements vars);
   typ
-   
+
 (** Pull an (potentially)-existentially qualified type into the global
    typing environment **)
 let bind_existential l name typ env =
@@ -1929,7 +1929,7 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
      merge_uvars l
        (List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) arg_typs1 arg_typs2))
        (unify_typ l env goals ret_typ1 ret_typ2)
- 
+
   | _, _ -> unify_error l ("Could not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
 
 and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as typ_arg2) =
@@ -2360,7 +2360,7 @@ let rec subtyp l env typ1 typ2 =
      );
      List.iter2 (subtyp l env) typ_args2 typ_args1;
      subtyp l env ret_typ1 ret_typ2
-                                                               
+
   | _, _ ->
   match destruct_exist_plain typ1, destruct_exist (canonicalize env typ2) with
   | Some (kopts, nc, typ1), _ ->
@@ -2574,7 +2574,7 @@ let mk_expected_tannot ?uannot:(uannot=empty_uannot) env typ expected : tannot =
 let get_instantiations = function
   | (None, _) -> None
   | (Some t, _) -> t.instantiation
-  
+
 let empty_tannot = (None, empty_uannot)
 
 let is_empty_tannot tannot = match fst tannot with
@@ -2644,7 +2644,7 @@ let infer_lit env (L_aux (lit_aux, l)) =
   | L_undef -> typ_error env l "Cannot infer the type of undefined"
 
 let instantiate_simple_equations =
-  let rec find_eqs kid (NC_aux (nc,_)) = 
+  let rec find_eqs kid (NC_aux (nc,_)) =
     match nc with
     | NC_equal (Nexp_aux (Nexp_var kid',_), nexp)
         when Kid.compare kid kid' == 0 &&
@@ -2856,13 +2856,13 @@ let check_function_instantiation l id env bind1 bind2 =
         try unify l check_env (quant_kopts typq2 |> List.map kopt_kid |> KidSet.of_list) typ2 typ1
         with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
       in
- 
+
       let quants = List.fold_left (instantiate_quants check_env) (quant_items typq2) (KBindings.bindings unifiers) in
       if not (List.for_all (solve_quant check_env) quants) then (
         typ_raise env l (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_constraints env))
       );
       let typ2 = subst_unifiers unifiers typ2 in
-      
+
       check check_env typ1 typ2
     ) else (
       check env typ1 typ2
@@ -2873,7 +2873,7 @@ let check_function_instantiation l id env bind1 bind2 =
      try direction (fun check_env typ1 typ2 -> subtyp l check_env typ2 typ1) bind2 bind1 with
      | Type_error (err_env, l2, err2) ->
         typ_raise err_env l2 (Err_inner (err2, l1, "Also tried", None, err1))
- 
+
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
    reasonably apply. We don't mind if we try some coercions that are
@@ -2924,12 +2924,12 @@ let rec filter_casts env from_typ to_typ casts =
 
 type pattern_duplicate =
   | Pattern_singleton of l
-  | Pattern_duplicate of l * l 
+  | Pattern_duplicate of l * l
 
 let is_enum_member id env = match Env.lookup_id id env with
   | Enum _ -> true
   | _ -> false
-                       
+
 (* Check if a pattern contains duplicate bindings, and raise a type
    error if this is the case *)
 let check_pattern_duplicates env pat =
@@ -2963,7 +2963,7 @@ let check_pattern_duplicates env pat =
                      l1,
                      Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
   | _ -> ()
- 
+
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -3016,7 +3016,7 @@ let is_update = function
 let is_declaration = function
   | Update -> false
   | Declaration -> true
-                 
+
 let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
   match aux with
   | LE_id v ->
@@ -3061,8 +3061,8 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
      | None, _ -> Declaration
      | _, None -> Update
      end
- 
-    
+
+
 let fresh_var =
   let counter = ref 0 in
   fun () -> let n = !counter in
@@ -3080,7 +3080,7 @@ let tc_assume nc (E_aux (aux, annot)) =
   let l = gen_loc (fst annot) in
   let env = env_of_annot annot in
   E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
- 
+
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
@@ -3088,7 +3088,7 @@ module PC_config = struct
 end
 
 module PC = Pattern_completeness.Make(PC_config);;
-       
+
 let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp exp typ' = E_aux (exp, (l, mk_expected_tannot ~uannot:uannot env typ' (Some typ))) in
   let update_uannot f (E_aux (aux, (l, (tannot, uannot)))) = E_aux (aux, (l, (tannot, f uannot))) in
@@ -5456,15 +5456,15 @@ and check_outcome_instantiation : 'a. Env.t -> def_annot -> 'a instantiation_spe
      typ_error env l ("Function " ^ string_of_id val_id ^ " must be instantiated for " ^ string_of_id id)
   | None -> ()
   end;
-  
+
   List.iter (fun (id_from, id_to, decl_l) ->
       let (to_typq, to_typ) = Env.get_val_spec id_to env in
       let (from_typq, from_typ) = Env.get_val_spec id_from outcome_env in
       typ_debug (lazy (string_of_bind (to_typq, to_typ)));
-      
+
       let from_typ = List.fold_left (fun typ (v, subst_typ) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ) from_typ new_instantiated in
       let from_typ = List.fold_left (fun typ (v, (_, _, subst_typ)) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ) from_typ (KBindings.bindings instantiated) in
-      
+
       check_function_instantiation decl_l id_from env (to_typq, to_typ) (from_typq, from_typ);
     ) fns;
 
@@ -5551,7 +5551,7 @@ let initial_env =
         function_typ [atom_typ (nvar (mk_kid "n"))]
           (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]))
   (* __assume is used by property.ml to add guards for SMT generation,
-     but which don't affect flow-typing.    *) 
+     but which don't affect flow-typing.    *)
   |> Env.add_val_spec (mk_id "sail_assume")
        (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
         function_typ [bool_typ] unit_typ)

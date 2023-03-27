@@ -176,7 +176,7 @@ let typq_bindings (TypQ_aux(tq,_)) = match tq with
           (match k with
            | KOpt_kind (_, Kid_aux (Var s,_)) -> Nameset.add s bounds)
         | _ -> bounds) quants mt
-  | TypQ_no_forall -> mt  
+  | TypQ_no_forall -> mt
 
 let fv_of_typschm consider_var bound used (Ast.TypSchm_aux ((Ast.TypSchm_ts(typq,typ)),_)) =
   let ts_bound = if consider_var then typq_bindings typq else mt in
@@ -645,7 +645,7 @@ let rec assigned_vars_in_lexp (LE_aux (le,_)) =
   | LE_id id
   | LE_typ (_,id) -> IdSet.singleton id
   | LE_tuple lexps
-  | LE_vector_concat lexps -> 
+  | LE_vector_concat lexps ->
      List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
   | LE_app (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
   | LE_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)

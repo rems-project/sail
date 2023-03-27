@@ -117,12 +117,12 @@ let rec loc_to_string = function
   | Unknown -> "location unknown"
   | Int(s,_) -> s
   | Generated l -> "Generated near " ^ loc_to_string l
-  | Range(s,fline,fchar,tline,tchar) -> 
+  | Range(s,fline,fchar,tline,tchar) ->
      if fline = tline
      then sprintf "%s:%d:%d" s fline fchar
      else sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
 ;;
-  
+
 let collapse_leading s =
   if String.length s <= 8 then s else
   let first_bit = s.[0] in
@@ -147,7 +147,7 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | Interp_ast.V_lit(L_aux(L_one, _)) -> "1"
   | Interp_ast.V_lit(L_aux(L_undef, _)) -> "u"
   | Interp_ast.V_unknown -> "?"
-  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) 
+  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false)
 								                                               (List.map Interp.detaint l)))
   ;;
 
@@ -241,17 +241,17 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
     Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
     Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-    (doc_id id) ^^ 
-      (brackets (if equal n zero_big then doc_int m 
+    (doc_id id) ^^
+      (brackets (if equal n zero_big then doc_int m
                  else doc_op colon (doc_int n) (doc_int (add n (sub m one_big)))))
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
-    (squarebars (if equal n zero_big then nexp m else doc_op colon (doc_int n) (nexp m))) 
+    (squarebars (if equal n zero_big then nexp m else doc_op colon (doc_int n) (nexp m)))
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
       (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
-  | _ -> atomic_typ ty 
+  | _ -> atomic_typ ty
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
   | Typ_var v  -> doc_var v
@@ -410,7 +410,7 @@ let doc_exp, doc_let =
   and star_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
-    | "div" | "quot" | "rem" | "mod" | "quot_s" | "mod_s" 
+    | "div" | "quot" | "rem" | "mod" | "quot_s" | "mod_s"
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
       doc_op (doc_id op) (star_exp env mem add_red show_hole_contents l) (starstar_exp env mem add_red show_hole_contents r)
   | _ -> starstar_exp env mem add_red show_hole_contents expr
@@ -465,9 +465,9 @@ let doc_exp, doc_let =
   | E_nondet exps ->
     let exps_doc = separate_map (semi ^^ hardline) (exp env mem add_red show_hole_contents) exps in
     string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
-  | E_id id -> 
+  | E_id id ->
     (match id with
-    | Id_aux(Id("0"), _) -> 
+    | Id_aux(Id("0"), _) ->
         (match Interp.in_lenv env id with
           | Interp_ast.V_unknown -> string (add_red "[_]")
           | v ->
@@ -503,14 +503,14 @@ let doc_exp, doc_let =
                 | _ -> false) es)
        then
          utf8string
-           ("0b" ^ 
+           ("0b" ^
             (List.fold_right (fun (E_aux(e,_)) rst ->
                  match e with
                  | E_lit(L_aux(l, _)) -> (match l with | L_one -> "1"^rst
                                                       | L_zero -> "0"^rst
                                                       | L_undef -> "u"^rst
                                                       | _ -> failwith "bit vector not just bit values")
-                 | _ -> failwith "bit vector not all lits") exps "")) 
+                 | _ -> failwith "bit vector not all lits") exps ""))
        else default_print ())
   | E_vector_update(v,e1,e2) ->
     brackets (doc_op (string "with")
@@ -546,9 +546,9 @@ let doc_exp, doc_let =
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     | "@" | "^^" | "^" | "~^"
     | ">>" | ">>>" | "<<" | "<<<"
-    | "+" | "+_s" | "-" | "-_s" 
+    | "+" | "+_s" | "-" | "-_s"
     | "*" | "/"
-    | "div" | "quot" | "quot_s" | "rem" | "mod" | "mod_s" 
+    | "div" | "quot" | "quot_s" | "rem" | "mod" | "mod_s"
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->
@@ -723,7 +723,7 @@ let rec doc_def env mem add_red def = group (match def with
 and doc_comm_dec env mem add_red dec = match dec with
   | DC_comm s -> string s
   | DC_comm_struct d -> doc_def env mem add_red d
-                          
+
 let doc_defs env mem add_red (Defs(defs)) =
   separate_map hardline (doc_def env mem add_red) defs
 

@@ -126,7 +126,7 @@ let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
 let mk_outcome ev n m = OV_aux (ev, loc n m)
 let mk_subst ev n m = IS_aux (ev, loc n m)
- 
+
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
@@ -228,7 +228,7 @@ let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
 let fix_extern typschm = function
   | None -> None
   | Some extern -> Some { extern with pure = typschm_is_pure typschm }
-       
+
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
@@ -237,7 +237,7 @@ let cast_deprecated l =
 
 let warn_extern_effect l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
- 
+
 %}
 
 /*Terminals with no content*/

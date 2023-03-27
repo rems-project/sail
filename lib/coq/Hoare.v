@@ -342,7 +342,7 @@ Lemma PrePost_assert_expS (*[intro, PrePost_atomI]:*) Regs E (c : bool) m (P : r
   PrePost (if c then P (Value tt) else P (Ex (Failure m))) (assert_expS c m) P.
 destruct c; simpl.
 * apply PrePost_returnS.
-* apply PrePost_failS. 
+* apply PrePost_failS.
 Qed.
 
 Lemma PrePost_choose_listS (*[intro, PrePost_atomI]:*) Regs A E xs (Q : result A E -> predS Regs) :
@@ -604,8 +604,8 @@ Lemma PrePostE_if_sum_branch (*[PrePostE_compositeI]:*) Regs A Ety X Y (b : sumb
   PrePostE (fun s => if b then Pf s else Pg s) (if b then f else g) Q E.
 intros HX HY.
 destruct b as [H | H].
-* apply (HX H). reflexivity. 
-* apply (HY H). reflexivity. 
+* apply (HX H). reflexivity.
+* apply (HY H). reflexivity.
 Qed.
 
 Lemma PrePostE_match_sum_branch (*[PrePostE_compositeI]:*) Regs A Ety X Y (b : sumbool X Y) (f : X -> monadS Regs A Ety) (g : Y -> monadS Regs A Ety) Pf Pg Q E :
@@ -614,8 +614,8 @@ Lemma PrePostE_match_sum_branch (*[PrePostE_compositeI]:*) Regs A Ety X Y (b : s
   PrePostE (fun s => match b with left H => Pf H s | right H => Pg H s end) (match b with left H => f H | right H => g H end) Q E.
 intros HX HY.
 destruct b as [H | H].
-* apply (HX H). reflexivity. 
-* apply (HY H). reflexivity. 
+* apply (HX H). reflexivity.
+* apply (HY H). reflexivity.
 Qed.
 
 Lemma PrePostE_if Regs A Ety (b : bool) (f g : monadS Regs A Ety) P Q E :
@@ -761,8 +761,8 @@ Qed.
 Lemma PrePostE_assert_expS' (*[PrePostE_atomI, intro]:*) Regs Ety (c : bool) m (P : c = true -> predS Regs) (Q : ex Ety -> predS Regs) :
   PrePostE (fun s => if c then (forall pf, P pf s) else Q (Failure m) s) (assert_expS' c m) P Q.
 unfold assert_expS'.
-destruct c. 
-* eapply PrePostE_strengthen_pre. eapply PrePostE_returnS. 
+destruct c.
+* eapply PrePostE_strengthen_pre. eapply PrePostE_returnS.
   auto.
 * auto using PrePostE_failS.
 Qed.
@@ -861,7 +861,7 @@ generalize 0%Z as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z); apply PrePostE_returnS.
-* simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z). 
+* simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z).
   + eapply PrePostE_bindS.
     - intro. apply IHn.
     - apply INV.
@@ -877,7 +877,7 @@ generalize 0%Z as off.
 revert vars.
 induction (S (Z.abs_nat (from - to))); intros.
 * simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z); apply PrePostE_returnS.
-* simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z). 
+* simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z).
   + eapply PrePostE_bindS.
     - intro. apply IHn.
     - apply INV.

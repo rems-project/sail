@@ -90,7 +90,7 @@ end
 (* Note we intentionally keep the side effect type abstract, and
    expose some functions on effect sets based on what we actually
    need. *)
-     
+
 val throws : EffectSet.t -> bool
 
 val pure : EffectSet.t -> bool

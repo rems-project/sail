@@ -86,7 +86,7 @@ let rec last_env = function
   | [] -> Type_check.initial_env
   | [(_, env)] -> env
   | _ :: xs -> last_env xs
-    
+
 let recheck ({ defs; _} as ast) =
   let defs = Type_check.check_with_envs Type_check.initial_env (List.map Type_check.strip_def defs) in
 

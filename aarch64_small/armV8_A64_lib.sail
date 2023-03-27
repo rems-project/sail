@@ -159,7 +159,7 @@ function AArch64_CheckForWFxTrap(target_el, is_wfe) = {
 /** FUNCTION:aarch64/exceptions/traps/AArch64.SystemRegisterTrap */
 
 function AArch64_SystemRegisterTrap(
-            target_el : bits(2), op0 : bits(2), op2 : bits(3), op1 : bits(3), 
+            target_el : bits(2), op0 : bits(2), op2 : bits(3), op1 : bits(3),
             crn : bits(4), rt : bits(5), crm : bits(4), dir : bit) -> unit = {
   not_implemented("AArch64_SystemRegisterTrap");
 }
@@ -179,7 +179,7 @@ function AArch64_WFxTrap(target_el : bits(2), is_wfe : boolean) -> unit = {
 /** FUNCTION:aarch64/functions/aborts/AArch64.CreateFaultRecord */
 
 function AArch64_CreateFaultRecord(
-           faulttype : Fault, ipaddress : bits(48), level : uinteger, acctype : AccType, 
+           faulttype : Fault, ipaddress : bits(48), level : uinteger, acctype : AccType,
            write : boolean, extflag : bit, secondstage : boolean, s2fs1walk : boolean) -> FaultRecord = {
   struct {
     faulttype = faulttype,
@@ -217,7 +217,7 @@ function AArch64_ExclusiveMonitorsPass(address : bits(64), size : uinteger) -> b
     /* return */ false
   else {
 
-  memaddrdesc : AddressDescriptor = 
+  memaddrdesc : AddressDescriptor =
     AArch64_TranslateAddress(address, acctype, iswrite, aligned, size);
 
   /*Check for aborts or debug exceptions*/
@@ -273,7 +273,7 @@ function AArch64_SetExclusiveMonitors(address : bits(64), size : uinteger) -> un
 
 /** FUNCTION:aarch64/functions/memory/AArch64.CheckAlignment */
 
-function AArch64_CheckAlignment(address : bits(64), size : uinteger, 
+function AArch64_CheckAlignment(address : bits(64), size : uinteger,
                                 acctype : AccType, iswrite : boolean) -> boolean = {
   aligned : boolean = (address == Align(address, size));
   let [A] = SCTLR'().A();
@@ -382,7 +382,7 @@ function rMem'(read_buffer, address, size, acctype, exclusive) =
 
     foreach (i from 1 to (size - 1)) {
       /*value[(8*i+7)..(8*i)] =*/read_buffer' = AArch64_rMemSingle(read_buffer', address+i, 1, acctype, aligned, false);
-  }}} else 
+  }}} else
     /*value =*/read_buffer' = AArch64_rMemSingle(read_buffer', address, size, acctype, aligned, exclusive);
 
   /*if BigEndian() then
@@ -410,7 +410,7 @@ function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
   write_buffer' : write_buffer_type = write_buffer;
 
   /* sail doesn't allow assignment to function arguments */
-  value' : bits('N*8) = value; 
+  value' : bits('N*8) = value;
 
   i : uinteger = 0; /* ARM: uninitialized */
   iswrite : boolean = true;
@@ -632,7 +632,7 @@ function SCTLR' () = SCTLR(S1TranslationRegime())
 /** FUNCTION:aarch64/functions/system/AArch64.CheckUnallocatedSystemAccess */
 
 /* return true if the access is not allowed */
-function AArch64_CheckUnallocatedSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), 
+function AArch64_CheckUnallocatedSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4),
                                                crm : bits(4), op2 : bits(3), read : bit) -> boolean = {
   match (op0,op1,crn,crm,op2, read) {
     (0b00,0b000,0b0100,_,0b101, _)  => UInt(PSTATE_EL()) < UInt(EL1) /* CP: added conversion to uint */ /* SPSel */,
@@ -649,7 +649,7 @@ function AArch64_CheckUnallocatedSystemAccess (op0 : bits(2), op1 : bits(3), crn
 
 /** FUNCTION:aarch64/functions/system/CheckSystemAccess */
 
-function CheckSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), crm : bits(4), 
+function CheckSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), crm : bits(4),
                             op2 : bits(3), rt : bits(5), read : bit) -> unit =
 {
   /*Checks if an AArch64 MSR/MRS/SYS instruction is UNALLOCATED or trapped at the current exception*/
@@ -779,7 +779,7 @@ function DecodeRegExtend (op : bits(3)) -> ExtendType = {
 /** FUNCTION:aarch64/instrs/extendreg/ExtendReg */
 
 val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= /* 4 */ 7.
-    (implicit('N), reg_index, ExtendType, int('S)) -> bits('N) effect {rreg,escape} 
+    (implicit('N), reg_index, ExtendType, int('S)) -> bits('N) effect {rreg,escape}
 function ExtendReg (N, _reg, etype, shift) = {
   /*assert( shift >= 0 & shift <= 4 );*/
   _val : bits('N) = rX(_reg);
@@ -808,7 +808,7 @@ function ExtendReg (N, _reg, etype, shift) = {
 /** ENUMERATE:aarch64/instrs/integer/arithmetic/rev/revop/RevOp */
 /** FUNCTION:(bits(M), bits(M)) DecodeBitMasks (bit immN, bits(6) imms, bits(6) immr, boolean immediate) */
 
-val DecodeBitMasks : forall 'M, 'M >= 0 /* & 'E in {2,4,8,16,32,64} */. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape} 
+val DecodeBitMasks : forall 'M, 'M >= 0 /* & 'E in {2,4,8,16,32,64} */. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape}
 function DecodeBitMasks(M : int('M), immN : bit, imms : bits(6), immr : bits(6), immediate : boolean) = {
   /* let M = (length((bit['M]) 0)) in { */
   /* ARM: (bit['M]) tmask := 0; (* ARM: uninitialized *) */

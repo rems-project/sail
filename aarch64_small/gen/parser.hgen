@@ -973,19 +973,19 @@
      Merging the two into one, where the "to/from SP" variant has priority. */
 
   | MOV wreg COMMA wreg
-    { if (isregsp $2 && isregsp $4) 
+    { if (isregsp $2 && isregsp $4)
         then `AArch64AddSubImmediate($2,$4,Set32,false,false,reg_size_bits_R32_of_int 0)
-      else if (isregzr $2 && isregzr $4) 
-        then `AArch64LogicalShiftedRegister($2,W ZR,$4,Set32,false,LogicalOp_ORR,ShiftType_LSL,0,false) 
-      else 
+      else if (isregzr $2 && isregzr $4)
+        then `AArch64LogicalShiftedRegister($2,W ZR,$4,Set32,false,LogicalOp_ORR,ShiftType_LSL,0,false)
+      else
         error_registers ("expected " ^ $1.txt ^ " <Wd|WSP>, <Wn|WSP>") }
 
   | MOV xreg COMMA xreg
-    { if (isregsp $2 && isregsp $4) 
+    { if (isregsp $2 && isregsp $4)
         then `AArch64AddSubImmediate($2,$4,Set64,false,false,reg_size_bits_R64_of_int 0)
-      else if (isregzr $2 && isregzr $4) 
-        then `AArch64LogicalShiftedRegister($2,X ZR,$4,Set64,false,LogicalOp_ORR,ShiftType_LSL,0,false) 
-      else 
+      else if (isregzr $2 && isregzr $4)
+        then `AArch64LogicalShiftedRegister($2,X ZR,$4,Set64,false,LogicalOp_ORR,ShiftType_LSL,0,false)
+      else
         error_registers ("expected " ^ $1.txt ^ " <Xd|SP>, <Xn|SP>") }
 
   /* MOV (... immediate) alias of MOVZ/MOVN/ORR */

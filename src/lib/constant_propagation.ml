@@ -268,7 +268,7 @@ let is_env_inconsistent env ksubsts =
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-(* This is set up so that a partially applied version can be used multiple 
+(* This is set up so that a partially applied version can be used multiple
    times, reducing start up time. *)
 
 let const_props target ast =

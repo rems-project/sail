@@ -87,7 +87,7 @@ val optimize_aarch64_fast_struct : bool ref
    changes - it'll load an old version compiled without said
    changes. *)
 val opt_memo_cache : bool ref
-  
+
 (** {2 Jib context} *)
 
 (** Dynamic context for compiling Sail to Jib. We need to pass a
@@ -160,7 +160,7 @@ end
 module IdGraph : sig
   include Graph.S with type node = id
 end
-                   
+
 val callgraph : cdef list -> IdGraph.graph
 
 module Make(C: Config) : sig

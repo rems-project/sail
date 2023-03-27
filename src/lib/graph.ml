@@ -89,7 +89,7 @@ module type S =
     val children : graph -> node -> node list
 
     val nodes : graph -> node list
-      
+
     (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
        nodes (cuts). *)
@@ -137,7 +137,7 @@ module Make(Ord: OrderedType) = struct
     List.fold_left (fun acc (fn, callees) -> NS.filter (fun callee -> callee <> fn) (NS.union acc callees)) NS.empty (NM.bindings cg)
 
   let nodes cg = NM.bindings cg |> List.map fst
-    
+
   let children cg caller =
     try
       NS.elements (NM.find caller cg)

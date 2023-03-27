@@ -315,7 +315,7 @@ Lemma if_bool_cong A (R : relation A) `{H:Equivalence _ R} (x x' y y' : A) (c : 
   y === y' ->
   (if c then x else y) === if c then x' else y'.
 intros E1 E2.
-destruct c; auto. 
+destruct c; auto.
 Qed.
 
 Lemma if_sumbool_cong A P Q (R : relation A) `{H:Equivalence _ R} (x x' y y' : A) (c : sumbool P Q) :
@@ -323,7 +323,7 @@ Lemma if_sumbool_cong A P Q (R : relation A) `{H:Equivalence _ R} (x x' y y' : A
   y === y' ->
   (if c then x else y) === if c then x' else y'.
 intros E1 E2.
-destruct c; auto. 
+destruct c; auto.
 Qed.
 
 Ltac statecong db :=
@@ -699,7 +699,7 @@ Lemma bindS_rw_left Regs A B E m1 m2 (f : A -> monadS Regs B E) s cs :
   m1 s cs = m2 s cs ->
   bindS m1 f s cs = bindS m2 f s cs.
 intro H. unfold bindS. rewrite H. reflexivity.
-Qed. 
+Qed.
 
 Lemma liftState_read_reg_readS Regs Regval A E reg get_regval' set_regval' :
   (forall s, map_bind reg.(of_regval) (get_regval' reg.(name) s) = Some (reg.(read_from) s)) ->

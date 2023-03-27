@@ -551,7 +551,7 @@ let defs { defs; _ } =
     | DEF_outcome (OV_aux (OV_outcome (id, _, _), l), _) ->
        outcomedefs := Bindings.add id id !outcomedefs;
        Some (latex_command Outcome id (Pretty_print_sail.doc_def def) l)
-       
+
     | _ -> None
   in
 

@@ -86,7 +86,7 @@ let have_symbol symbol =
 let clear_symbols () = symbols := default_symbols
 
 let add_symbol str = symbols := StringSet.add str !symbols
-                     
+
 let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in
@@ -187,7 +187,7 @@ let rec preprocess dir target opts =
      | _ ->
         preprocess dir target opts (else_defs @ defs)
      end
-       
+
   | DEF_aux (DEF_pragma ("include", file), l) :: defs ->
      let len = String.length file in
      if len = 0 then
@@ -223,7 +223,7 @@ let rec preprocess dir target opts =
      incorrect start/end annotations *)
   | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs ->
      preprocess dir target opts defs
- 
+
   | DEF_aux (DEF_pragma (p, arg), l) :: defs ->
      if not (StringSet.mem p all_pragmas) then
        Reporting.warn "" l ("Unrecognised directive: " ^ p);
@@ -231,7 +231,7 @@ let rec preprocess dir target opts =
 
   | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
      DEF_aux (DEF_outcome (outcome_spec, preprocess dir target opts inner_defs), l) :: preprocess dir target opts defs
-     
+
   | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs ->
      begin match atyp with
      | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess dir target opts defs

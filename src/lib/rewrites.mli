@@ -85,7 +85,7 @@ val opt_coq_warn_nonexhaustive : bool ref
 (** Output each rewrite step (as produced by the rewrite function) to
    a file for debugging *)
 val opt_ddump_rewrite_ast : ((string * int) option) ref
-  
+
 (** Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
 
@@ -102,7 +102,7 @@ type rewriter =
   | Literal_rewriter of ((lit -> bool) -> rewriter)
 
 val describe_rewriter : rewriter -> string list
-                      
+
 val all_rewriters : (string * rewriter) list
 
 type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list
@@ -126,5 +126,5 @@ val instantiate_rewrites : (string * rewriter_arg list) list -> rewrite_sequence
 val rewrite : Effects.side_effect_info -> Env.t -> rewrite_sequence -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t
 
 val rewrites_interpreter : (string * rewriter_arg list) list
-  
+
 val simple_typ : typ -> typ

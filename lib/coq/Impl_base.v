@@ -68,7 +68,7 @@
 Require Import Sail.Instr_kinds.
 
 (*
-class ( EnumerationType 'a ) 
+class ( EnumerationType 'a )
   val toNat : 'a -> nat
 end
 
@@ -78,7 +78,7 @@ let ~{ocaml} enumeration_typeCompare e1 e2 =
   compare (toNat e1) (toNat e2)
 let inline {ocaml} enumeration_typeCompare = defaultCompare
 
- 
+
 default_instance forall 'a. EnumerationType 'a => (Ord 'a)
   let compare = enumeration_typeCompare
   let (<)  r1 r2 = (enumeration_typeCompare r1 r2) = LT
@@ -108,13 +108,13 @@ type bit =
   | Bitc_zero
   | Bitc_one
 
-type bit_lifted = 
+type bit_lifted =
   | Bitl_zero
   | Bitl_one
   | Bitl_undef    (* used for modelling h/w arch unspecified bits *)
   | Bitl_unknown  (* used for interpreter analysis exhaustive execution *)
 
-type direction = 
+type direction =
   | D_increasing
   | D_decreasing
 
@@ -125,12 +125,12 @@ let bool_of_dir = function
   end
 
 (* at some point this should probably not mention bit_lifted anymore *)
-type register_value = <| 
-    rv_bits: list bit_lifted (* MSB first, smallest index number *); 
-    rv_dir: direction; 
+type register_value = <|
+    rv_bits: list bit_lifted (* MSB first, smallest index number *);
+    rv_dir: direction;
     rv_start: nat ;
-    rv_start_internal: nat; 
-    (*when dir is increasing, rv_start = rv_start_internal. 
+    rv_start_internal: nat;
+    (*when dir is increasing, rv_start = rv_start_internal.
       Otherwise, tells interpreter how to reconstruct a proper decreasing value*)
     |>
 
@@ -138,7 +138,7 @@ type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *) (*MSB first 
 
 type instruction_field_value = list bit
 
-type byte = Byte of list bit (* of length 8 *)  (*MSB first everywhere*) 
+type byte = Byte of list bit (* of length 8 *)  (*MSB first everywhere*)
 
 type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*) * maybe integer
 (* for both values of end_flag, MSBy first *)
@@ -353,22 +353,22 @@ end
 (* Registers *)
 type slice = (nat * nat)
 
-type reg_name = 
+type reg_name =
   (* do we really need this here if ppcmem already has this information by itself? *)
 | Reg of string * nat * nat * direction
 (*Name of the register, accessing the entire register, the start and size of this register, and its direction *)
 
-| Reg_slice of string * nat * direction * slice 
+| Reg_slice of string * nat * direction * slice
 (* Name of the register, accessing from the bit indexed by the first
 to the bit indexed by the second integer of the slice, inclusive. For
 machineDef* the first is a smaller number or equal to the second, adjusted
 to reflect the correct span direction in the interpreter side.  *)
 
-| Reg_field of string * nat * direction * string * slice 
+| Reg_field of string * nat * direction * string * slice
 (*Name of the register, start and direction, and name of the field of the register
 accessed. The slice specifies where this field is in the register*)
 
-| Reg_f_slice of string * nat * direction * string * slice * slice 
+| Reg_f_slice of string * nat * direction * string * slice * slice
 (* The first four components are as in Reg_field; the final slice
 specifies a part of the field, indexed w.r.t. the register as a whole *)
 
@@ -400,13 +400,13 @@ let width_of_reg_name (r: reg_name) : nat =
   | Reg_f_slice _ _ _ _ _ sl -> width_of_slice sl
   end
 
-let reg_name_non_empty_intersection (r: reg_name) (r': reg_name) : bool = 
+let reg_name_non_empty_intersection (r: reg_name) (r': reg_name) : bool =
   register_base_name r = register_base_name r' &&
   let (i1,  i2)  = slice_of_reg_name r in
   let (i1', i2') = slice_of_reg_name r' in
   i1' <= i2 && i2' >= i1
 
-let reg_nameCompare r1 r2 = 
+let reg_nameCompare r1 r2 =
   compare (register_base_name r1,slice_of_reg_name r1)
           (register_base_name r2,slice_of_reg_name r2)
 
@@ -458,7 +458,7 @@ end
    shallow embedding on the rest of sail_impl_base.lem, and helps avoid name
    clashes between the different monad types. *)
 
-type event = 
+type event =
   | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
   | E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
   | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
@@ -467,21 +467,21 @@ type event =
   | E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
   | E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
   | E_barrier of barrier_kind
-  | E_footprint 
+  | E_footprint
   | E_read_reg of reg_name
   | E_write_reg of reg_name * register_value
   | E_escape
-  | E_error of string 
+  | E_error of string
 
 
-let eventCompare e1 e2 = 
+let eventCompare e1 e2 =
   match (e1,e2) with
   | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
-     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
+     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2))
   | (E_read_memt rk1 v1 i1 tr1, E_read_memt rk2 v2 i2 tr2) ->
-     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
-  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
-    compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
+     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2))
+  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') ->
+    compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2'))
   | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
     compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
   | (E_excl_res, E_excl_res) -> EQ
@@ -561,7 +561,7 @@ val word8_to_bitls : word8 -> list bit_lifted
 val bitls_to_word8 : list bit_lifted -> word8
 
 val integer_of_word8_list : list word8 -> integer
-val word8_list_of_integer : integer -> integer -> list word8 
+val word8_list_of_integer : integer -> integer -> list word8
 
 val concretizable_bitl : bit_lifted -> bool
 val concretizable_bytl : byte_lifted -> bool
@@ -572,7 +572,7 @@ let concretizable_bitl = function
   | Bitl_one -> true
   | Bitl_undef -> false
   | Bitl_unknown -> false
-end 
+end
 
 let concretizable_bytl (Byte_lifted bs) = List.all concretizable_bitl bs
 let concretizable_bytls = List.all concretizable_bytl
@@ -583,22 +583,22 @@ val build_register_value : list bit_lifted -> direction -> nat -> nat -> registe
 let build_register_value bs dir width start_index =
   <| rv_bits = bs;
      rv_dir = dir; (* D_increasing for Power, D_decreasing for ARM *)
-     rv_start_internal = start_index; 
+     rv_start_internal = start_index;
      rv_start = if dir = D_increasing
        then start_index
        else (start_index+1) - width; (* Smaller index, as in Power, for external interaction *)
   |>
 
 val register_value : bit_lifted -> direction -> nat -> nat -> register_value
-let register_value b dir width start_index = 
+let register_value b dir width start_index =
   build_register_value (List.replicate width b) dir width start_index
 
 val register_value_zeros : direction -> nat -> nat -> register_value
-let register_value_zeros dir width start_index = 
+let register_value_zeros dir width start_index =
   register_value Bitl_zero dir width start_index
 
 val register_value_ones : direction -> nat -> nat -> register_value
-let register_value_ones dir width start_index = 
+let register_value_ones dir width start_index =
   register_value Bitl_one dir width start_index
 
 val register_value_for_reg : reg_name -> list bit_lifted -> register_value
@@ -620,14 +620,14 @@ let byte_lifted_undef = Byte_lifted (List.replicate 8 Bitl_undef)
 
 val byte_lifted_unknown : byte_lifted
 let byte_lifted_unknown = Byte_lifted (List.replicate 8 Bitl_unknown)
-  
+
 val memory_value_unknown : nat (*the number of bytes*) -> memory_value
-let memory_value_unknown (width:nat) : memory_value = 
-  List.replicate width byte_lifted_unknown 
+let memory_value_unknown (width:nat) : memory_value =
+  List.replicate width byte_lifted_unknown
 
 val memory_value_undef : nat (*the number of bytes*) -> memory_value
-let memory_value_undef (width:nat) : memory_value = 
-  List.replicate width byte_lifted_undef 
+let memory_value_undef (width:nat) : memory_value =
+  List.replicate width byte_lifted_undef
 
 val match_endianness : forall 'a. end_flag -> list 'a -> list 'a
 let match_endianness endian l =
@@ -636,7 +636,7 @@ let match_endianness endian l =
   | E_big_endian    -> l
   end
 
-(* lengths *)  
+(* lengths *)
 
 val memory_value_length : memory_value -> nat
 let memory_value_length (mv:memory_value) = List.length mv
@@ -645,13 +645,13 @@ let memory_value_length (mv:memory_value) = List.length mv
 (* aux fns *)
 
 val maybe_all : forall 'a.  list (maybe 'a) -> maybe (list 'a)
-let rec maybe_all' xs acc = 
+let rec maybe_all' xs acc =
   match xs with
   | [] -> Just (List.reverse acc)
   | Nothing :: _ -> Nothing
   | (Just y)::xs' -> maybe_all' xs' (y::acc)
   end
-let maybe_all xs = maybe_all' xs [] 
+let maybe_all xs = maybe_all' xs []
 
 (** coercions *)
 
@@ -664,7 +664,7 @@ end
 
 
 val bit_lifted_of_bit : bit -> bit_lifted
-let bit_lifted_of_bit b = 
+let bit_lifted_of_bit b =
   match b with
   | Bitc_zero -> Bitl_zero
   | Bitc_one -> Bitl_one
@@ -684,9 +684,9 @@ val byte_lifted_of_byte : byte -> byte_lifted
 let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
 
 val byte_of_byte_lifted : byte_lifted -> maybe byte
-let byte_of_byte_lifted bl = 
+let byte_of_byte_lifted bl =
   match bl with
-  | Byte_lifted bls -> 
+  | Byte_lifted bls ->
       match maybe_all (List.map bit_of_bit_lifted bls) with
       | Nothing -> Nothing
       | Just bs -> Just (Byte bs)
@@ -697,7 +697,7 @@ let byte_of_byte_lifted bl =
 val bytes_of_bits : list bit -> list byte (*assumes (length bits) mod 8 = 0*)
 let rec bytes_of_bits bits = match bits with
   | [] -> []
-  | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
+  | b0::b1::b2::b3::b4::b5::b6::b7::bits ->
     (Byte [b0;b1;b2;b3;b4;b5;b6;b7])::(bytes_of_bits bits)
   | _ -> failwith "bytes_of_bits not given bits divisible by 8"
 end
@@ -705,7 +705,7 @@ end
 val byte_lifteds_of_bit_lifteds : list bit_lifted -> list byte_lifted (*assumes (length bits) mod 8 = 0*)
 let rec byte_lifteds_of_bit_lifteds bits = match bits with
   | [] -> []
-  | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
+  | b0::b1::b2::b3::b4::b5::b6::b7::bits ->
     (Byte_lifted [b0;b1;b2;b3;b4;b5;b6;b7])::(byte_lifteds_of_bit_lifteds bits)
   | _ -> failwith "byte_lifteds of bit_lifteds not given bits divisible by 8"
 end
@@ -722,17 +722,17 @@ let memory_byte_of_byte = byte_lifted_of_byte
 
 (* this natFromBoolList could move to the Lem word.lem library *)
 val natFromBoolList : list bool -> nat
-let rec natFromBoolListAux (acc : nat) (bl : list bool) = 
-  match bl with 
+let rec natFromBoolListAux (acc : nat) (bl : list bool) =
+  match bl with
     | [] -> acc
     | (true :: bl') -> natFromBoolListAux ((acc * 2) + 1) bl'
     | (false :: bl') -> natFromBoolListAux (acc * 2) bl'
   end
-let natFromBoolList bl = 
+let natFromBoolList bl =
   natFromBoolListAux 0 (List.reverse bl)
 
 
-val nat_of_bit_list : list bit -> nat 
+val nat_of_bit_list : list bit -> nat
 let nat_of_bit_list b =
   natFromBoolList (List.reverse (List.map bit_to_bool b))
   (* natFromBoolList takes a list with LSB first, for consistency with rest of Lem word library, so we reverse it. twice. *)
@@ -740,31 +740,31 @@ let nat_of_bit_list b =
 
 (* to and from integer *)
 
-val integer_of_bit_list : list bit -> integer 
+val integer_of_bit_list : list bit -> integer
 let integer_of_bit_list b =
   integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
   (* integerFromBoolList takes a list with LSB first, so we reverse it *)
 
-val bit_list_of_integer : nat -> integer -> list bit 
-let bit_list_of_integer len b = 
-  List.map (fun b -> if b then Bitc_one else Bitc_zero) 
+val bit_list_of_integer : nat -> integer -> list bit
+let bit_list_of_integer len b =
+  List.map (fun b -> if b then Bitc_one else Bitc_zero)
     (reverse (boolListFrombitSeq len (bitSeqFromInteger Nothing b)))
 
-val integer_of_byte_list : list byte -> integer 
+val integer_of_byte_list : list byte -> integer
 let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
 
-val byte_list_of_integer : nat -> integer -> list byte 
-let byte_list_of_integer (len:nat) (a:integer):list byte = 
+val byte_list_of_integer : nat -> integer -> list byte
+let byte_list_of_integer (len:nat) (a:integer):list byte =
   let bits = bit_list_of_integer (len * 8) a in bytes_of_bits bits
 
 
-val integer_of_address : address -> integer 
-let integer_of_address (a:address):integer = 
+val integer_of_address : address -> integer
+let integer_of_address (a:address):integer =
   match a with
-  | Address bs i -> i 
+  | Address bs i -> i
   end
 
-val address_of_integer : integer -> address 
+val address_of_integer : integer -> address
 let address_of_integer (i:integer):address =
   Address (byte_list_of_integer 8 i) i
 
@@ -786,17 +786,17 @@ let signed_integer_of_bit_list b =
 
 (* regarding a list of int as a list of bytes in memory, MSB lowest-address first, convert to an integer *)
 val integer_address_of_int_list : list int -> integer
-let rec integerFromIntListAux (acc: integer) (is: list int) = 
-  match is with 
+let rec integerFromIntListAux (acc: integer) (is: list int) =
+  match is with
   | [] -> acc
   | (i :: is') -> integerFromIntListAux ((acc * 256) + integerFromInt i) is'
   end
 let integer_address_of_int_list (is: list int) =
   integerFromIntListAux 0 is
 
-val address_of_byte_list : list byte -> address 
-let address_of_byte_list bs = 
-  if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else 
+val address_of_byte_list : list byte -> address
+let address_of_byte_list bs =
+  if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else
   Address bs (integer_of_byte_list bs)
 
 let address_of_byte_lifted_list bls =
@@ -807,16 +807,16 @@ let address_of_byte_lifted_list bls =
 
 (* operations on addresses *)
 
-val add_address_nat : address -> nat -> address 
-let add_address_nat (a:address) (i:nat) : address = 
+val add_address_nat : address -> nat -> address
+let add_address_nat (a:address) (i:nat) : address =
   address_of_integer ((integer_of_address a) + (integerFromNat i))
 
-val clear_low_order_bits_of_address : address -> address 
-let clear_low_order_bits_of_address a = 
-  match a with 
-  | Address [b0;b1;b2;b3;b4;b5;b6;b7] i -> 
+val clear_low_order_bits_of_address : address -> address
+let clear_low_order_bits_of_address a =
+  match a with
+  | Address [b0;b1;b2;b3;b4;b5;b6;b7] i ->
       match b7 with
-      | Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7] -> 
+      | Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7] ->
           let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
 	  let bytes = [b0;b1;b2;b3;b4;b5;b6;b7'] in
           Address bytes (integer_of_byte_list bytes)
@@ -838,7 +838,7 @@ val integer_of_memory_value : end_flag -> memory_value -> maybe integer
 let integer_of_memory_value endian (mv:memory_value):maybe integer =
   match byte_list_of_memory_value endian mv with
   | Just bs -> Just (integer_of_byte_list bs)
-  | Nothing -> Nothing 
+  | Nothing -> Nothing
   end
 
 val memory_value_of_integer : end_flag  -> nat -> integer -> memory_value
@@ -847,15 +847,15 @@ let memory_value_of_integer endian (len:nat) (i:integer):memory_value =
   $> match_endianness endian
 
 
-val integer_of_register_value : register_value -> maybe integer 
-let integer_of_register_value (rv:register_value):maybe integer = 
+val integer_of_register_value : register_value -> maybe integer
+let integer_of_register_value (rv:register_value):maybe integer =
   match maybe_all (List.map bit_of_bit_lifted rv.rv_bits) with
   | Nothing -> Nothing
   | Just bs -> Just (integer_of_bit_list bs)
   end
 
 (* NOTE: register_value_for_reg_of_integer might be easier to use *)
-val register_value_of_integer : nat -> nat -> direction -> integer -> register_value 
+val register_value_of_integer : nat -> nat -> direction -> integer -> register_value
 let register_value_of_integer (len:nat) (start:nat) (dir:direction) (i:integer):register_value =
   let bs = bit_list_of_integer len i in
   build_register_value (List.map bit_lifted_of_bit bs) dir len start
@@ -869,12 +869,12 @@ let register_value_for_reg_of_integer (r: reg_name) (i:integer) : register_value
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
 let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
 
-val register_value_of_address : address -> direction -> register_value   
-let register_value_of_address (Address bytes _) dir : register_value = 
+val register_value_of_address : address -> direction -> register_value
+let register_value_of_address (Address bytes _) dir : register_value =
   let bits = List.concatMap (fun (Byte bs) -> List.map bit_lifted_of_bit bs) bytes in
    <| rv_bits = bits;
       rv_dir = dir;
-      rv_start = 0; 
+      rv_start = 0;
       rv_start_internal = if dir = D_increasing then 0 else (List.length bits) - 1
    |>
 
@@ -885,20 +885,20 @@ let register_value_of_memory_value bytes dir : register_value =
      rv_dir = dir;
      rv_start = 0;
      rv_start_internal = if dir = D_increasing then 0 else (List.length bitls) - 1
-   |>                                                     
+   |>
 
 val memory_value_of_register_value: register_value -> memory_value
 let memory_value_of_register_value r =
   (byte_lifteds_of_bit_lifteds r.rv_bits)
-   
+
 val address_lifted_of_register_value : register_value -> maybe address_lifted
 (* returning Nothing iff the register value is not 64 bits wide, but
 allowing Bitl_undef and Bitl_unknown *)
-let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = 
+let address_lifted_of_register_value (rv:register_value) : maybe address_lifted =
   if List.length rv.rv_bits <> 64 then Nothing
-  else 
+  else
     Just (Address_lifted (byte_lifteds_of_bit_lifteds rv.rv_bits)
-                         (if List.all concretizable_bitl rv.rv_bits 
+                         (if List.all concretizable_bitl rv.rv_bits
 			  then match (maybe_all (List.map bit_of_bit_lifted rv.rv_bits)) with
                               | (Just(bits)) -> Just (integer_of_bit_list bits)
                               | Nothing -> Nothing end
@@ -908,7 +908,7 @@ val address_of_address_lifted : address_lifted -> maybe address
 (* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
 let address_of_address_lifted (al:address_lifted): maybe address =
   match al with
-  | Address_lifted bls (Just i)-> 
+  | Address_lifted bls (Just i)->
       match maybe_all ((List.map byte_of_byte_lifted) bls) with
       | Nothing -> Nothing
       | Just bs -> Just (Address bs i)
@@ -918,10 +918,10 @@ end
 
 val address_of_register_value : register_value -> maybe address
 (* returning Nothing iff the register value is not 64 bits wide, or contains Bitl_undef or Bitl_unknown *)
-let address_of_register_value (rv:register_value) : maybe address = 
+let address_of_register_value (rv:register_value) : maybe address =
   match address_lifted_of_register_value rv with
   | Nothing -> Nothing
-  | Just al -> 
+  | Just al ->
       match address_of_address_lifted al with
       | Nothing -> Nothing
       | Just a -> Just a
@@ -931,22 +931,22 @@ let address_of_register_value (rv:register_value) : maybe address =
 let address_of_memory_value (endian: end_flag) (mv:memory_value) : maybe address =
   match byte_list_of_memory_value endian mv with
   | Nothing -> Nothing
-  | Just bs -> 
+  | Just bs ->
       if List.length bs <> 8 then Nothing else
       Just (address_of_byte_list bs)
-  end 
+  end
 
 val byte_of_int : int -> byte
-let byte_of_int (i:int) : byte = 
+let byte_of_int (i:int) : byte =
   Byte (bit_list_of_integer 8 (integerFromInt i))
 
 val memory_byte_of_int : int -> memory_byte
-let memory_byte_of_int (i:int) : memory_byte = 
+let memory_byte_of_int (i:int) : memory_byte =
   memory_byte_of_byte (byte_of_int i)
 
 (*
 val int_of_memory_byte : int -> maybe memory_byte
-let int_of_memory_byte (mb:memory_byte) : int = 
+let int_of_memory_byte (mb:memory_byte) : int =
   failwith "TODO"
 *)
 
@@ -1011,23 +1011,23 @@ let rec stringFromNaturalHexHelper n acc =
     stringFromNaturalHexHelper (n / 16) (String_extra.chr (natFromNatural (let nd = n mod 16 in if nd <=9 then nd + 48 else nd - 10 + 97)) :: acc)
 
 val stringFromNaturalHex : natural -> string
-let (*~{ocaml;hol}*) stringFromNaturalHex n = 
+let (*~{ocaml;hol}*) stringFromNaturalHex n =
   if n = 0 then "0" else toString (stringFromNaturalHexHelper n [])
 
 val stringFromIntegerHex : integer -> string
-let (*~{ocaml}*) stringFromIntegerHex i = 
-  if i < 0 then 
+let (*~{ocaml}*) stringFromIntegerHex i =
+  if i < 0 then
     "-" ^ stringFromNaturalHex (naturalFromInteger i)
   else
     stringFromNaturalHex (naturalFromInteger i)
 
 
-let stringFromAddress (Address bs i) = 
+let stringFromAddress (Address bs i) =
   let i' = integer_of_byte_list bs in
   if i=i' then
 (*TODO: ideally this should be made to match the src/pp.ml pp_address; the following very roughly matches what's used in the ppcmem UI, enough to make exceptions readable *)
-    if i < 65535 then 
-      show i 
+    if i < 65535 then
+      show i
     else
       stringFromIntegerHex i
   else
@@ -1039,8 +1039,8 @@ end
 
 let stringFromByte_lifted bl =
   match byte_of_byte_lifted bl with
-  | Nothing -> "u?"  
-  | Just (Byte bits) -> 
+  | Nothing -> "u?"
+  | Just (Byte bits) ->
       let i = integer_of_bit_list bits in
       show i
   end
@@ -1050,7 +1050,7 @@ instance (Show byte_lifted)
 end
 
 (* possible next instruction address options *)
-type nia = 
+type nia =
   | NIA_successor
   | NIA_concrete_address of address
   | NIA_indirect_address

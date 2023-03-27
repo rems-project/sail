@@ -18,5 +18,5 @@ function main() = {
     match ws {
         [|_, a|] => print_endline(a),
         _ => (),
-    }    
+    }
 }

@@ -67,14 +67,14 @@
 
 (* PS NOTES FOR KATHY:
 
-pls also change:  
+pls also change:
 
   decode_to_istate
-  decode_to_instruction 
+  decode_to_instruction
 
-to take an opcode as defined above, instead of a value 
+to take an opcode as defined above, instead of a value
 
-and change 
+and change
 
 *)
 
@@ -88,7 +88,7 @@ open import Num
 open import Assert_extra
 
 (*Type representing the constructor parameters in instruction, other is a type not representable externally*)
-type instr_parm_typ = 
+type instr_parm_typ =
   | Bit (*A single bit, represented as a one element Bitvector as a value*)
   | Bvector of maybe nat (* A bitvector type, with length when statically known *)
   | Range of maybe nat (*Internally represented as a number, externally as a bitvector of length nat *)
@@ -108,10 +108,10 @@ let inline ~{coq} instr_parm_typEqual = unsafe_structural_equality
 let {coq} instr_parm_typInequal ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
 let inline ~{coq} instr_parm_typInequal = unsafe_structural_inequality
 
-instance (Eq instr_parm_typ) 
+instance (Eq instr_parm_typ)
   let (=) = instr_parm_typEqual
   let (<>) ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
-end 
+end
 
 let instr_parm_typShow ip = match ip with
   | Bit -> "Bit"
@@ -126,7 +126,7 @@ let show = instr_parm_typShow
 end
 
 (*A representation of the AST node for each instruction in the spec, with concrete values from this call,
-  and the potential static effects from the funcl clause for this instruction 
+  and the potential static effects from the funcl clause for this instruction
   Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
 *)
 
@@ -145,7 +145,7 @@ let inline ~{coq} instructionInequal = unsafe_structural_inequality
 
 type v_kind = Bitv | Bytev
 
-type decode_error = 
+type decode_error =
   | Unsupported_instruction_error of Interp_ast.value
   | Not_an_instruction_error of opcode
   | Internal_error of string
@@ -223,7 +223,7 @@ and memory_write_vals_tagged = list (string * memory_write_val_tagged)
 
 (* Definition information needed to run an instruction *)
 and context =
-    Context of Interp.top_level * direction * 
+    Context of Interp.top_level * direction *
 	memory_reads * memory_read_taggeds * memory_writes * memory_write_eas * memory_write_vals * memory_write_vals_tagged * barriers * excl_res * external_functions
 
 (* An instruction in flight *)
@@ -257,7 +257,7 @@ type outcome =
 | Footprint of instruction_state
 
 (* Request to read register, will track dependency when mode.track_values *)
-| Read_reg of reg_name * (register_value -> instruction_state) 
+| Read_reg of reg_name * (register_value -> instruction_state)
 
 (* Request to write register *)
 | Write_reg of reg_name * register_value * instruction_state
@@ -265,8 +265,8 @@ type outcome =
 (* List of instruciton states to be run in parallel, any order*)
 | Nondet_choice of list instruction_state * instruction_state
 
-(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
-   provide a handler.  The non-optional instruction_state is what we would be doing if we're 
+(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally
+   provide a handler.  The non-optional instruction_state is what we would be doing if we're
    not escaping. This is for exhaustive interp *)
 | Escape of maybe instruction_state * instruction_state
 
@@ -289,7 +289,7 @@ type outcome =
 
 (* Functions to build up the initial state for interpretation *)
 val build_context : bool -> specification -> memory_reads -> memory_read_taggeds-> memory_writes -> memory_write_eas -> memory_write_vals -> memory_write_vals_tagged -> barriers -> excl_res -> external_functions -> context
-val initial_instruction_state : context -> string -> list register_value -> instruction_state 
+val initial_instruction_state : context -> string -> list register_value -> instruction_state
   (* string is a function name, list of value are the parameters to that function *)
 
 type instruction_or_decode_error =
@@ -314,7 +314,7 @@ val instruction_to_istate : context -> instruction -> instruction_state (*i_stat
 
 (* Slice a register value into a smaller vector, starting at first number (wrt the indices of the register value, not raw positions in its list of bits) and going to second (inclusive) according to order. *)
 val slice_reg_value : register_value -> nat -> nat -> register_value
-(*Create a new register value where the contents of nat to nat are replaced by the second register_value *)  
+(*Create a new register value where the contents of nat to nat are replaced by the second register_value *)
 val update_reg_value_slice : reg_name -> register_value -> nat -> nat -> register_value -> register_value
 
 
@@ -322,18 +322,18 @@ val update_reg_value_slice : reg_name -> register_value -> nat -> nat -> registe
 (* When interp_mode has eager_eval false, interpreter is (close to) small step *)
 val interp : interp_mode -> instruction_state -> outcome
 
-(* Run the interpreter without external interaction, feeding in Unknown on all reads 
+(* Run the interpreter without external interaction, feeding in Unknown on all reads
 except for those register values provided *)
 val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
 
 (* As above, but will request register reads: outcome will only be rreg, done, or error *)
-val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event)) 
+val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event))
 
 val translate_address :
   context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address
   -> maybe address * maybe (list event)
 
-                      
+
 val instruction_analysis :
   context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
   -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)

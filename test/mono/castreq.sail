@@ -140,7 +140,7 @@ and foo3(8,x) =
   let y : bits(16) = extzv(x) in
   let z = y@y@y@y in let dfsf = 4 in z
 
-/* Casting an argument isn't supported yet 
+/* Casting an argument isn't supported yet
 val bar2 : forall 'n, 'n in {8,16}. (atom('n),bits('n)) -> unit effect pure
 
 function bar2(8,x) =

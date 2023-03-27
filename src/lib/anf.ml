@@ -127,9 +127,9 @@ and 'a alexp =
   | AL_id of id * 'a
   | AL_addr of id * 'a
   | AL_field of 'a alexp * id
-             
+
 let aexp_loc (AE_aux (_, _, l)) = l
-             
+
 (* Renaming variables in ANF expressions *)
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =

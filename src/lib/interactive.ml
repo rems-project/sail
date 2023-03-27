@@ -85,7 +85,7 @@ let initial_istate default_sail_dir = {
     env = Type_check.initial_env;
     default_sail_dir = default_sail_dir;
   }
- 
+
 let arg str =
   ("<" ^ str ^ ">") |> Util.yellow |> Util.clear
 
@@ -103,7 +103,7 @@ let commands = ref []
 let get_command cmd = List.assoc_opt cmd !commands
 
 let all_commands () = !commands
-     
+
 let reflect_typ action =
   let open Type_check in
   let rec arg_typs = function
@@ -165,6 +165,6 @@ let run_action istate cmd argument action =
        failwith (sprintf "Bad arguments for %s, see (%s %s)" (command cmd) (command ":help") (command cmd))
   in
   call args action
-  
+
 let register_command ~name:name ~help:help action =
   commands := (":" ^ name, (help, action)) :: !commands

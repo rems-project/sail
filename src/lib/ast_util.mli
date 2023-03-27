@@ -94,7 +94,7 @@ val get_attribute : string -> uannot -> (l * string) option
 val get_attributes : uannot -> (l * string * string) list
 
 val mk_def_annot : l -> def_annot
-  
+
 (** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
@@ -109,7 +109,7 @@ val gen_loc : Parse_ast.l -> Parse_ast.l
 val is_gen_loc : Parse_ast.l -> bool
 
 (** {1 Variable information} *)
-  
+
 type mut = Immutable | Mutable
 
 (** [lvar] is the type of variables - they can either be registers,
@@ -118,14 +118,14 @@ type mut = Immutable | Mutable
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
 val is_unbound : 'a lvar -> bool
-                                                                          
+
 (** Note: Partial function -- fails for {!Unbound} lvars *)
 val lvar_typ : ?loc:l -> 'a lvar -> 'a
-  
+
 (** {1 Functions for building and destructuring untyped AST elements} *)
 
 (** {2 Functions for building untyped AST elements} *)
-  
+
 val mk_id : string -> id
 val mk_kid : string -> kid
 val mk_ord : order_aux -> order
@@ -152,7 +152,7 @@ val mk_fexp : id -> uannot exp -> uannot fexp
 val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> 'a def_aux -> 'a def
-  
+
 val inc_ord : order
 val dec_ord : order
 
@@ -195,7 +195,7 @@ val is_typ_arg_nexp : typ_arg -> bool
 val is_typ_arg_typ : typ_arg -> bool
 val is_typ_arg_order : typ_arg -> bool
 val is_typ_arg_bool : typ_arg -> bool
-  
+
 (** {2 Sail built-in types} *)
 
 val unknown_typ : typ
@@ -244,7 +244,7 @@ val constraint_conj : n_constraint -> n_constraint list
 val constraint_disj : n_constraint -> n_constraint list
 
 type effect
- 
+
 val no_effect : effect
 val monadic_effect : effect
 
@@ -253,7 +253,7 @@ val effectful : effect -> bool
 val equal_effects : effect -> effect -> bool
 val subseteq_effects : effect -> effect -> bool
 val union_effects : effect -> effect -> effect
-     
+
 (** {2 Functions for building numeric expressions} *)
 
 val nconstant : Big_int.num -> nexp
@@ -322,13 +322,13 @@ module NC : sig
   type t = n_constraint
   val compare : n_constraint -> n_constraint -> int
 end
-     
+
 (* NB: the comparison function does not expand synonyms *)
 module Typ : sig
   type t = typ
   val compare : typ -> typ -> int
 end
-     
+
 module IdSet : sig
   include Set.S with type elt = id
 end
@@ -368,7 +368,7 @@ end
 module TypMap : sig
   include Map.S with type key = typ
 end
- 
+
 (** {1 Functions for working with type quantifiers} *)
 
 val quant_add : quant_item -> typquant -> typquant
@@ -445,7 +445,7 @@ val id_of_mapdef : 'a mapdef -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id
-  
+
 (** {2 Functions for manipulating identifiers} *)
 
 val id_of_kid : kid -> id
@@ -513,7 +513,7 @@ val ids_of_ast : 'a ast -> IdSet.t
 val val_spec_ids : 'a def list -> IdSet.t
 
 val record_ids : 'a def list -> IdSet.t
-  
+
 val pat_ids : 'a pat -> IdSet.t
 
 val subst : id -> 'a exp -> 'a exp -> 'a exp

@@ -276,7 +276,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | A_typ typ -> parens ((string "fun v -> ") ^^ parens (toValueTyp typ "v"))
     | A_nexp nexp -> toValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
-    | A_bool _ -> parens (string "boolToInterpValue") 
+    | A_bool _ -> parens (string "boolToInterpValue")
   and toValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
     | Typ_id id -> parens (concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"; space; string arg_name])
     (* special case bit vectors for lem *)
@@ -355,7 +355,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_abbrev (id, typq, typ_arg) ->
      begin
        let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
-       (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *) 
+       (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *)
        let toInterpValspec =
          (* HACK because of lem renaming *)
          if string_of_id id = "opcode" || string_of_id id = "integer" then empty else

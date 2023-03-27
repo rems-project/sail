@@ -135,7 +135,7 @@ let buffer_formatter b = {
   }
 
 let format_endline str ppf = ppf.endline (ppf.indent ^ (Str.global_replace (Str.regexp_string "\n") ("\n" ^ ppf.indent) str))
-                           
+
 let underline_single color cnum_from cnum_to =
   if (cnum_from + 1) >= cnum_to then
     Util.(String.make cnum_from ' ' ^ clear (color "^"))
@@ -165,7 +165,7 @@ let underline_double_to color cnum_to =
     Util.(clear (color "^"))
   else
     Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
-  
+
 let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
   skip_lines in_chan (lnum_from - 1);
   let line_from = input_line in_chan in
@@ -189,7 +189,7 @@ let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
-  
+
 let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
   try
     let in_chan = open_in fname in
@@ -207,7 +207,7 @@ let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
-       
+
 let format_code_double prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
     let in_chan = open_in fname in

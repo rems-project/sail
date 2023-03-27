@@ -244,7 +244,7 @@ bool write_ram(const sail_int addr_size,     // Either 32 or 64
       // Then shift buf 8 bits right.
       mpz_fdiv_q_2exp(write_buf, write_buf, 8);
     }
-    
+
     return true;
   }
 }
@@ -253,7 +253,7 @@ sbits fast_read_ram(const int64_t data_size,
 		    const uint64_t addr)
 {
   uint64_t r = 0;
-  
+
   uint64_t byte;
   for(uint64_t i = (uint64_t) data_size; i > 0; --i) {
     byte = read_mem(addr + (i - 1));

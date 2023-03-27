@@ -122,7 +122,7 @@ let fix_endline str =
     String.sub str 0 (String.length str - 1)
   else
     str
-                                            
+
 let print_err_internal p_l m1 m2 =
   let open Error_format in
   prerr_endline (m1 ^ ":");
@@ -164,14 +164,14 @@ let rec start_loc = function
   | Parse_ast.Hint (hint, l1, l2) -> Parse_ast.Hint (hint, start_loc l1, start_loc l2)
   | Parse_ast.Range (p1, _) -> Parse_ast.Range (p1, p1)
   | Parse_ast.Documented (doc, l) -> Parse_ast.Documented (doc, start_loc l)
-                             
+
 let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"
   | Some (p1, p2) ->
      Printf.sprintf "%s:%d.%d-%d.%d"
        p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
- 
+
 let print_err l m1 m2 =
   print_err_internal (Loc l) m1 m2
 
@@ -223,7 +223,7 @@ let forbid_errors ocaml_pos f x =
   | Fatal_error (Err_syntax_loc (l, m)) -> raise (err_unreachable l ocaml_pos m)
   | Fatal_error (Err_lex (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
   | Fatal_error (Err_type (l, _, m)) -> raise (err_unreachable l ocaml_pos m)
- 
+
 let print_error ?(interactive = false) e =
   let (m1, pos_l, m2) = dest_err ~interactive:interactive e in
   print_err_internal pos_l m1 m2
@@ -245,7 +245,7 @@ let pos_compare p1 p2 =
      | n -> n
      end
   | n -> n
- 
+
 module Range = struct
   type t = Lexing.position * Lexing.position
   let compare (p1, p2) (p3, p4) =
@@ -254,7 +254,7 @@ module Range = struct
 end
 
 module RangeMap = Map.Make(Range)
-                 
+
 let ignored_files = ref StringSet.empty
 
 let suppress_warnings_for_file f =

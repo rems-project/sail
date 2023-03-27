@@ -21,7 +21,7 @@ metavar nat ::=
   {{ lex numeric }}
   {{ lem nat }}
   {{ isa nat }}
-  
+
 metavar hex ::=
   {{ phantom }}
   {{ lex numeric }}
@@ -108,7 +108,7 @@ type def_annot = <| doc_comment : maybe string; attrs : list (string * string * 
 embed
 {{ isa
 
-datatype "l" = Unknown 
+datatype "l" = Unknown
 
 datatype "value" = Val
 
@@ -210,7 +210,7 @@ nexp :: 'Nexp_' ::=
 order :: 'Ord_' ::=
   {{ com vector order specifications, of kind Order }}
   {{ aux _ l }}
-  | kid                                 :: :: var {{ com variable }} 
+  | kid                                 :: :: var {{ com variable }}
   | inc                                 :: :: inc {{ com increasing }}
   | dec                                 :: :: dec {{ com decreasing }}
   | ( order )                           :: S :: paren {{ ichlo [[order]] }}
@@ -225,7 +225,7 @@ typ :: 'Typ_' ::=
   | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tuple {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
-  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
+  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }}
   | { kinded_id1 ...  kinded_idn , n_constraint . typ }
     :: :: exist
 
@@ -306,7 +306,7 @@ type_union :: 'Tu_' ::=
   {{ aux _ l }}
   | typ id                                              :: :: ty_id
 
-index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
+index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}}
   {{ aux _ l }}
   | nexp :: :: 'single'  {{ com single index }}
   | nexp1 '..' nexp2 :: :: range {{ com index range }}
@@ -406,8 +406,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
-  | while ::   :: while 
-  | until ::  :: until 
+  | while ::   :: while
+  | until ::  :: until
 
 internal_loop_measure :: 'Measure_' ::=
   {{ com internal syntax for an optional termination measure for a loop }}
@@ -500,7 +500,7 @@ fexp :: 'FE_' ::=
   | id = exp                  :: :: fexp
 
 opt_default :: 'Def_val_' ::=
-  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
+  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map
   {{ aux _ annot }} {{ auxparam 'a }}
   |                           :: :: empty
   | ; default = exp           :: :: dec
@@ -579,7 +579,7 @@ funcl :: 'FCL_' ::=
 fundef :: 'FD_' ::=
   {{ com function definition}}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | function rec_opt tannot_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
+  | function rec_opt tannot_opt funcl1 and ... and funcln :: :: function {{ texlong }}
 % Note that the typ in the tannot_opt is
 % the *result* type, not the type of the whole function.  The argument
 % type comes from the pattern in the funcl
@@ -644,7 +644,7 @@ outcome_spec :: 'OV_' ::=
 
 instantiation_spec :: 'IN_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id :: :: id  
+  | id :: :: id
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
@@ -661,7 +661,7 @@ val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
   {{ lem VS_val_spec of typschm * id * maybe extern * bool }}
-  {{ isa  typschm * id  * (string => string option) * bool }}  
+  {{ isa  typschm * id  * (string => string option) * bool }}
   | val cast_opt id : typschm                           :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] [] [[cast_opt]]) }} {{ lem }} {{ isa }}
@@ -815,7 +815,7 @@ terminals :: '' ::=
   | lt                                  :: :: mathlt
     {{ tex < }}
   | gt                                  :: :: mathgt
-    {{ tex > }} 
+    {{ tex > }}
   | ~=                                  :: :: alphaeq
     {{ tex \ensuremath{\approx} }}
   | ~< 	   			:: :: consist
@@ -857,10 +857,10 @@ terminals :: '' ::=
   | == :: :: equiv
     {{ tex \equiv }}
 %   | [| :: :: range_start
-%     {{ tex \mbox{$\ottsym{[\textbar}$} }}       
-%   | |] :: :: range_end       
-%     {{ tex \mbox{$\ottsym{\textbar]}$} }}       
+%     {{ tex \mbox{$\ottsym{[\textbar}$} }}
+%   | |] :: :: range_end
+%     {{ tex \mbox{$\ottsym{\textbar]}$} }}
 %   | [|| :: :: list_start
-%     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
-%   | ||] :: :: list_end       
-%     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
+%     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}
+%   | ||] :: :: list_end
+%     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}

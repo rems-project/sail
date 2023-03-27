@@ -935,7 +935,7 @@ let doc_tannot ctxt env eff typ =
 (* Only double-quotes need escaped - by doubling them. *)
 let coq_escape_string s =
   Str.global_replace (Str.regexp "\"") "\"\"" s
-   
+
 let doc_lit (L_aux(lit,l)) =
   match lit with
   | L_unit  -> utf8string "tt"
@@ -1402,7 +1402,7 @@ let report = Reporting.err_unreachable
 let doc_exp, doc_let =
   let rec top_exp (ctxt : context) (aexp_needed : bool)
     (E_aux (e, (l,annot)) as full_exp) =
-    let top_exp c a e = 
+    let top_exp c a e =
       let () = debug_depth := !debug_depth + 1 in
       let r = top_exp c a e in
       let () = debug_depth := !debug_depth - 1 in
@@ -1785,7 +1785,7 @@ let doc_exp, doc_let =
                 | ExGeneral, _, t1 -> t1
                 | ExNone, _, t1 -> t1
             in
-            let out_typ = 
+            let out_typ =
               match ann_typ with
               | Typ_aux (Typ_exist (_,_,t1),_) -> t1
               | t1 -> t1
@@ -1864,7 +1864,7 @@ let doc_exp, doc_let =
                 | Some (pre,post) -> call :: List.init pre (fun _ -> underscore) @ argspp @
                                        List.init post (fun _ -> underscore) @
                                          [parens (string "_limit_reduces _acc")]
-                | None -> 
+                | None ->
                    match f with
                    | Id_aux (Id x,_) when is_prefix "#rec#" x ->
                       call :: argspp @ [parens (string "Zwf_guarded _")]
@@ -2074,7 +2074,7 @@ let doc_exp, doc_let =
          match pat, e1, e2 with
          | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
            (E_aux (E_assert (assert_e1,assert_e2),_)), _ ->
-             let assert_fn, mid = 
+             let assert_fn, mid =
                match assert_constraint outer_env true assert_e1 with
                | Some _ -> "assert_exp'", ">>= fun _ =>"
                | None -> "assert_exp", ">>"
@@ -2834,7 +2834,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
     debug ctxt (lazy (" return type " ^ string_of_typ ret_typ));
     debug ctxt (lazy (if is_monadic then " monadic" else " pure"));
     debug ctxt (lazy (" kid_id_renames " ^ String.concat ", " (List.map
-                        (fun (kid,id) -> string_of_kid kid ^ " |-> " ^ 
+                        (fun (kid,id) -> string_of_kid kid ^ " |-> " ^
                                            match id with Some id -> string_of_id id | None -> "<>")
                         (KBindings.bindings kid_to_arg_rename))))
   in
@@ -3225,7 +3225,7 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
   | (DEF_impl _ | DEF_outcome _ | DEF_instantiation _) ->
      unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
 
-    
+
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"

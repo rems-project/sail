@@ -90,7 +90,7 @@ let string_of_name =
      "current_exception" ^ ssa_num n
   | Throw_location n ->
      "throw_location" ^ ssa_num n
-    
+
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
   | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_uid field
@@ -138,7 +138,7 @@ module Ir_formatter = struct
       List.iter (fun file_name ->
           Buffer.add_string buf (" \"" ^ file_name ^ "\"")
         ) !file_map
-        
+
     let rec output_instr n buf indent label_map (I_aux (instr, (_, l))) =
       match instr with
       | I_decl (ctyp, id) | I_reset (ctyp, id) ->
@@ -237,7 +237,7 @@ module Ir_formatter = struct
       output_defs' buf defs;
       output_files buf;
       Buffer.add_string buf "\n\n"
-      
+
   end
 end
 

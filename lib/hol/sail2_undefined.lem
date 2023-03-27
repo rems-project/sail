@@ -5,7 +5,7 @@ open import Sail2_prompt
 
 (* Default implementations of "undefined" functions for builtin types via
    nondeterministic choice, for use with the -undefined_gen option of Sail.
-   
+
    Identical to ../../src/gen_lib/sail2_undefined.lem except for type class
    constraints. *)
 

@@ -7,7 +7,7 @@ val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
 val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
-/* this is here because if we don't have it before including vector_dec 
+/* this is here because if we don't have it before including vector_dec
    we get infinite loops caused by interaction with bool/bit casts */
 /* val eq_bit2 = "eq_bit" : (bit, bit) -> bool */
 /* overload operator == = {eq_bit2} */
@@ -63,14 +63,14 @@ overload pow2 = {pow2_atom, pow2_int}
 
 
 val cast cast_bool_bit : bool -> bit
-function cast_bool_bit(b) = 
+function cast_bool_bit(b) =
   match b {
     true => b1,
     false => b0
   }
 
 val cast cast_bit_bool : bit -> bool
-function cast_bit_bool (b) = 
+function cast_bit_bool (b) =
   match b {
     bitzero => false,
     bitone => true
@@ -122,9 +122,9 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} :
     forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> int(div('M,'N))
-val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} :
     forall 'M 'N. (int('M), int('N)) -> int(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
@@ -156,7 +156,7 @@ val print = "print_endline" : string -> unit
 
 val error : forall ('a : Type). string -> 'a effect{escape}
 function error(message) = {
-  print(message); 
+  print(message);
   exit()
 }
 

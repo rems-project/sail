@@ -126,7 +126,7 @@ $else
     sail_reset_registers(); // registers can be set using -R/--register here
     ...
   ```
-  
+
   This allows us to set the values of registers that would otherwise
   be initialised to some sensible default by the `initialize_model`
   function (overwriting a value set by `-I` at the beginning of execution). */

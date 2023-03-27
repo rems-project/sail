@@ -76,24 +76,24 @@ open Nat_big_num
 
 module Reg = struct
   include Map.Make(struct type t = string let compare = String.compare end)
-  let to_string id v = 
+  let to_string id v =
     sprintf "%s -> %s" id (register_value_to_string v)
-  let find id m = 
+  let find id m =
 (*    eprintf "reg_find called with %s\n" id; *)
     let v = find id m in
 (*    eprintf "%s -> %s\n" id (val_to_string v);*)
     v
 end ;;
 
-let compare_addresses (Address_lifted(v1,n1)) (Address_lifted(v2,n2)) = 
+let compare_addresses (Address_lifted(v1,n1)) (Address_lifted(v2,n2)) =
   let rec comp v1s v2s = match (v1s,v2s) with
     | ([],[]) ->  0
     | ([],_)  -> -1
     | (_,[])  ->  1
-    | (v1::v1s,v2::v2s) -> 
+    | (v1::v1s,v2::v2s) ->
       match Pervasives.compare v1 v2 with
         | 0 -> comp v1s v2s
-        | ans -> ans in 
+        | ans -> ans in
   match n1,n2 with
   | Some(n1),Some(n2) -> compare n1 n2
   | _ ->
@@ -125,7 +125,7 @@ let slice register_vector (start,stop) =
   if register_vector.rv_dir = D_increasing
   then slice_reg_value register_vector start stop
   else
-    (*Interface turns start and stop into forms for 
+    (*Interface turns start and stop into forms for
       increasing because ppcmem only speaks increasing, so here we turn it back *)
     let startd = register_vector.rv_start_internal- start in
     let stopd = startd - (stop - start) in
@@ -134,12 +134,12 @@ let slice register_vector (start,stop) =
 
 let big_num_unit = of_int 1
 
-let rec list_update index start stop e vals =  
+let rec list_update index start stop e vals =
  match vals with
     | []      -> []
-    | x :: xs -> 
-      if Nat_big_num.equal index stop 
-      then e :: xs 
+    | x :: xs ->
+      if Nat_big_num.equal index stop
+      then e :: xs
       else if Nat_big_num.greater_equal index start
       then e :: (list_update (Nat_big_num.add index big_num_unit) start stop e xs)
       else x :: (list_update (Nat_big_num.add index big_num_unit) start stop e xs)
@@ -161,19 +161,19 @@ let fupdate_slice reg_name original e (start,stop) =
   if original.rv_dir = D_increasing
   then update_reg_value_slice reg_name original start stop e
   else
-    (*Interface turns start and stop into forms for 
+    (*Interface turns start and stop into forms for
       increasing because ppcmem only speaks increasing, so here we turn it back *)
     let startd = original.rv_start_internal- start in
     let stopd = startd - (stop - start) in
 (*    let _ = Printf.eprintf "fupdate_slice: starts at %i, %i ->  %i,%i ->  %i\n" original.rv_start_internal start startd  stop stopd in *)
     update_reg_value_slice reg_name original startd stopd e
 
-let combine_slices (start, stop) (inner_start,inner_stop) = 
+let combine_slices (start, stop) (inner_start,inner_stop) =
   (start + inner_start, start + inner_stop)
 
 let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
-let align_addr addr size = 
+let align_addr addr size =
   sub addr (modulus addr size)
 
 let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
@@ -184,7 +184,7 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
  | Read_reg1(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
  | Write_reg1(Reg(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem,tagmem))
- | Write_reg1((Reg_slice(id,_,_,range) as reg_n),value, _) 
+ | Write_reg1((Reg_slice(id,_,_,range) as reg_n),value, _)
  | Write_reg1((Reg_field(id,_,_,_,range) as reg_n),value,_)->
      let old_val = Reg.find id reg in
      let new_val = fupdate_slice reg_n old_val value range in
@@ -198,8 +198,8 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
-   let rec reading (n : num) length = 
-     if length = 0 
+   let rec reading (n : num) length =
+     if length = 0
      then []
      else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
    (Some (register_value_of_memory_value (reading naddress length) !default_order), env)
@@ -209,8 +209,8 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
    let tag = Mem.find (align_addr naddress cap_size) tagmem in
-   let rec reading (n : num) length = 
-     if length = 0 
+   let rec reading (n : num) length =
+     if length = 0
      then []
      else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
    (Some (register_value_of_memory_value (tag::(reading naddress length)) !default_order), env)
@@ -219,12 +219,12 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
-   let rec writing location length bytes mem = 
+   let rec writing location length bytes mem =
      if length = 0
      then mem
      else match bytes with
          | [] -> mem
-         | b::bytes -> 
+         | b::bytes ->
            writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
      (None,(reg,writing naddress length bytes mem,tagmem))
  | Write_memv1(Some location, bytes, _, _) ->
@@ -238,7 +238,7 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
      then mem
      else match bytes with
        | [] -> mem
-       | b::bytes -> 
+       | b::bytes ->
          writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
    (None, (reg,writing naddress length bytes mem, tagmem))
  | Write_memv_tagged0(Some location, (tag, bytes), _, _) ->
@@ -252,7 +252,7 @@ let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
      then mem
      else match bytes with
        | [] -> mem
-       | b::bytes -> 
+       | b::bytes ->
          writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
     let tagmem = Mem.add (align_addr naddress cap_size) (Byte_lifted ([Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;tag])) tagmem in
     (None, (reg,writing naddress length bytes mem, tagmem))
@@ -296,7 +296,7 @@ let run
     cont    print continuation of the top stack frame
     reg     print content of environment
     mem     print content of memory
-    exh     run interpreter exhaustively with unknown and print events 
+    exh     run interpreter exhaustively with unknown and print events
     quit    exit interpreter" in
   let rec interact mode ((reg, mem, tagmem) as env) stack =
     flush_all();
@@ -344,7 +344,7 @@ let run
     | Done0 ->
       interactf "%s: %s\n" (grey name) (blue "done");
       (true, mode, !track_dependencies, env)
-    | Error1 s -> 
+    | Error1 s ->
       errorf "%s: %s: %s\n" (grey name) (red "error") s;
       (false, mode, !track_dependencies, env)
     | Escape0 (None, _) ->
@@ -369,10 +369,10 @@ let run
         end else
           mode in
       let (mode', env', next) =
-        (match action with    
+        (match action with
         | Read_reg1(reg,next_thunk) ->
           (match return with
-           | Some(value) -> 
+           | Some(value) ->
              show "read_reg" (reg_name_to_string reg) right (register_value_to_string value);
              let next = next_thunk value in
              (step next, env', next)
@@ -382,7 +382,7 @@ let run
           (step next, env', next)
         | Read_mem1(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
           (match return with
-           | Some(value) -> 
+           | Some(value) ->
              show "read_mem"
                (memory_value_to_string !default_endian location) right
                (register_value_to_string value);
@@ -395,7 +395,7 @@ let run
            | None -> assert false)
         | Read_mem_tagged0(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
           (match return with
-           | Some(value) -> 
+           | Some(value) ->
              show "read_mem_tagged"
                (memory_value_to_string !default_endian location) right
                (register_value_to_string value);
@@ -403,7 +403,7 @@ let run
               | None -> ()
               | Some(deps) ->
                 show "read_mem address depended on" (dependencies_to_string deps) "" "");
-             let next = 
+             let next =
                (match (memory_value_of_register_value value) with
                 | (Byte_lifted tag)::bytes -> next_thunk ((List.nth tag 7), bytes)
                 | _ -> assert false) in
@@ -454,22 +454,22 @@ let run
           show "evaluated" (fn ^ " " ^ (vdisp ())) "" "";
           (step ~force:true next, env', next)
         | Nondet_choice(nondets, next) ->
-          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2) 
+          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2)
               (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in
           show "nondeterministic evaluation begun" "" "" "";
-          let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
+          let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') ->
               loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies true) next))
               choose_order (false,mode,!track_dependencies,env'); in
           show "nondeterministic evaluation ended" "" "" "";
           (step next,env',next)
         | Analysis_non_det (possible_istates, i_state) ->
-          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2) 
+          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2)
               (List.combine possible_istates (List.map (fun _ -> Random.bits ()) possible_istates)) in
           if possible_istates = []
           then (step i_state,env',i_state)
           else begin
             show "undefined triggered a non_det" "" "" "";
-            let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
+            let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') ->
               loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies true) next))
               choose_order (false,mode,!track_dependencies,env'); in
             (step i_state,env',i_state) end
@@ -494,7 +494,7 @@ let run
   let imode = make_mode eager_eval !track_dependencies true in
   let (IState(instr_state,context)) = istate in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state instr_state in
-  interactf "%s: %s %s\n" (grey name) (blue "evaluate") 
+  interactf "%s: %s %s\n" (grey name) (blue "evaluate")
     (Pretty_interp.pp_exp top_env top_mem Printing_functions.red true top_exp);
   try
     Printexc.record_backtrace true;

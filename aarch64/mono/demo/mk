@@ -5,5 +5,5 @@ set -ex
      -no_lexp_bounds_check -memo_z3 -undefined_gen \
      -auto_mono -mono_rewrites -dall_split_errors -dmono_continue \
      -lem -lem_mwords -lem_sequential -lem_lib Aarch64_extras -o aarch64_mono
-lem -isa -lib "Sail=../../../src/gen_lib/" -lib "Sail=../../../src/lem_interp" ../aarch64_extras.lem aarch64_mono_types.lem aarch64_mono.lem 
+lem -isa -lib "Sail=../../../src/gen_lib/" -lib "Sail=../../../src/lem_interp" ../aarch64_extras.lem aarch64_mono_types.lem aarch64_mono.lem
 isabelle jedit -d ~/local/rems/github/lem/isabelle-lib -d ../../../lib/isabelle -l Sail Aarch64_mono.thy

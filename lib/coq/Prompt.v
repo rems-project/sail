@@ -245,7 +245,7 @@ end.
 Definition bools_of_bits_nondet {rv E} (bits : list bitU) : monad rv (list bool) E :=
   foreachM bits []
     (fun b bools =>
-      bool_of_bitU_nondet b >>= fun b => 
+      bool_of_bitU_nondet b >>= fun b =>
       returnm (bools ++ [b])).
 
 Definition of_bits_nondet {rv n E} (bits : list bitU) `{ArithFact (n >=? 0)} : monad rv (mword n) E :=
@@ -273,9 +273,9 @@ Defined.
 Fixpoint pos_guard_wf {A:Type} {R:A -> A -> Prop} (p:positive) : well_founded R -> well_founded R :=
  match p with
  | xH => fun wfR x => Acc_intro x (fun y _ => wfR y)
- | xO p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+ | xO p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F
 wfR) y)
- | xI p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+ | xI p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F
 wfR) y)
  end.
 

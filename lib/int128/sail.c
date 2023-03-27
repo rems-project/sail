@@ -209,7 +209,7 @@ sail_int CONVERT_OF(sail_int, sail_string)(const sail_string str)
   mpz_div_2exp(tmp, tmp, 64);
   uint64_t hi = mpz_get_ui(tmp);
   mpz_clear(tmp);
-  
+
   unsigned __int128 r = (((unsigned __int128) hi) << 64) + ((unsigned __int128) lo);
   return (__int128) r;
 }
@@ -521,7 +521,7 @@ void normalize_lbits(lbits *rop)
 {
   mpz_t tmp;
   mpz_init(tmp);
-  
+
   mpz_set_ui(tmp, 1);
   mpz_mul_2exp(tmp, tmp, rop->len);
   mpz_sub_ui(tmp, tmp, 1);
@@ -859,7 +859,7 @@ __attribute__((target ("bmi2")))
 void get_slice_int(lbits *rop, const sail_int len, const sail_int n, const sail_int start)
 {
   assert(len <= 128);
-  
+
   unsigned __int128 nbits = (unsigned __int128) (n >> start);
 
   if (len <= 64) {
@@ -1045,7 +1045,7 @@ void reverse_endianness(lbits *rop, const lbits op)
     mpz_t tmp2;
     mpz_init(tmp1);
     mpz_init(tmp2);
-    
+
     /* For other numbers of bytes we reverse the bytes.
      * XXX could use mpz_import/export for this. */
     mpz_set_ui(tmp1, 0xff); // byte mask
@@ -1268,7 +1268,7 @@ void to_real(real *rop, const sail_int op)
 {
   mpz_t op_mpz;
   mpz_init_set_si128(op_mpz, op);
-  
+
   mpq_set_z(*rop, op_mpz);
   mpq_canonicalize(*rop);
 
@@ -1345,7 +1345,7 @@ void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
   mpz_init(tmp2);
   mpz_init(tmp3);
   mpq_init(tmp_real);
-  
+
   gmp_sscanf(op, "%Zd.%n%Zd%n", tmp1, &decimal, tmp2, &total);
 
   int len = total - decimal;
@@ -1511,7 +1511,7 @@ unit print_int(const sail_string str, const sail_int op)
 {
   mpz_t op_mpz;
   mpz_init_set_si128(op_mpz, op);
-  
+
   fputs(str, stdout);
   mpz_out_str(stdout, 10, op_mpz);
   putchar('\n');

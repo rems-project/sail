@@ -83,12 +83,12 @@ let rec instantiate_id id = function
   | IS_aux (IS_id (id_from, id_to), _) :: _ when Id.compare id id_from = 0 -> id_to
   | _ :: substs -> instantiate_id id substs
   | [] -> id
- 
+
 let instantiate_typ substs typ =
   List.fold_left (fun typ -> function
       | (kid, (_, subst_typ)) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
     ) typ (KBindings.bindings substs)
- 
+
 let instantiate_def target id substs = function
   | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), annot)), def_annot) when string_of_id target_id = target ->
      let l = gen_loc (id_loc id) in
@@ -108,7 +108,7 @@ let rec instantiated_or_abstract l = function
        Some def
      else
        raise (Reporting.err_general l "Multiple instantiations found for target")
-         
+
 let instantiate target ast =
   let process_def outcomes = function
     | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _) ->

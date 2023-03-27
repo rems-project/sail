@@ -75,7 +75,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (name sail_smt_backend)
   (synopsis "Sail to C translation")
   (depends
-    (libsail (= :version))))    
+    (libsail (= :version))))
 
 (package
   (name sail_lem_backend)

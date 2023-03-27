@@ -566,7 +566,7 @@ let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out 
 
 let to_ast_extern (ext : P.extern) : extern =
   { pure = ext.pure; bindings = ext.bindings }
-          
+
 let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
   match vs with
   | P.VS_aux (vs, l) ->
@@ -575,7 +575,7 @@ let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
         let typschm, _ = to_ast_typschm ctx ts in
         let ext = Util.option_map to_ast_extern ext in
         VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx
- 
+
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
   match ev with
   | P.OV_aux (P.OV_outcome (id, typschm, outcome_args), l) ->
@@ -584,7 +584,7 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
      in
      let typschm, _ = to_ast_typschm inner_ctx typschm in
      OV_aux (OV_outcome (to_ast_id ctx id, typschm, List.rev outcome_args), l), inner_ctx
-    
+
 let rec to_ast_range ctx (P.BF_aux(r,l)) = (* TODO add check that ranges are sensible for some definition of sensible *)
   BF_aux(
     (match r with
@@ -637,7 +637,7 @@ let rec realise_union_anon_rec_types orig_union arms =
 
 let generate_enum_functions l ctx enum_id fns exps =
   let get_exp i = function
-    | Some (P.E_aux (P.E_tuple exps, _)) -> List.nth exps i 
+    | Some (P.E_aux (P.E_tuple exps, _)) -> List.nth exps i
     | Some exp -> exp
     | None -> Reporting.unreachable l __POS__ "get_exp called without expression"
   in
@@ -784,7 +784,7 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
           ) targets
      | None ->
         [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))]
-    
+
 let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
   match fd with
   | P.FD_function (rec_opt, tannot_opt, _, funcls) ->
@@ -884,7 +884,7 @@ let to_ast_subst ctx = function
      IS_aux (IS_id (to_ast_id ctx id_from, to_ast_id ctx id_to), l)
   | P.IS_aux (P.IS_typ (kid, typ), l) ->
      IS_aux (IS_typ (to_ast_var kid, to_ast_typ ctx typ), l)
- 
+
 let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
@@ -1044,7 +1044,7 @@ let constraint_of_string str =
   with
   | Parser.Error ->
      Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
-    
+
 let extern_of_string ?(pure = false) id str =
   VS_val_spec (typschm_of_string str, id, Some { pure = pure; bindings = [("_", string_of_id id)] }, false)
   |> mk_val_spec

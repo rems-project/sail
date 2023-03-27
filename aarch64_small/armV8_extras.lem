@@ -50,8 +50,8 @@ let aArch64_memory_eas : memory_write_eas =
 let aArch64_memory_vals : memory_write_vals =
   [ ("wMem_Val_NORMAL",      (MV (fun mode v -> Nothing) Nothing));
     ("wMem_Val_ATOMIC", (MV (fun mode v -> Nothing)
-                           (Just 
-			   (fun (IState interp context) b -> 
+                           (Just
+			   (fun (IState interp context) b ->
 			     (*ppcmem2 provides true for success and false for failure; but the status for ARM is reversed*)
 			     let bit = Interp_ast.V_lit (L_aux (if b then L_zero else L_one) Interp_ast.Unknown)in
 			     (IState (Interp.add_answer_to_stack interp bit) context)))));

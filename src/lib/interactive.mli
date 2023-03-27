@@ -97,7 +97,7 @@ val reflect_typ : action -> typ
 val get_command : string -> (string * action) option
 
 val all_commands : unit -> (string * (string * action)) list
-  
+
 val generate_help : string -> string -> action -> string
 
 val run_action : istate -> string -> string -> action -> istate

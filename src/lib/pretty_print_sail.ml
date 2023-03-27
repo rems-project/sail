@@ -95,7 +95,7 @@ let doc_kopt_no_parens = function
   | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
   | kopt when is_order_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Order"]
   | kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Bool"]
-                
+
 let doc_kopt = function
   | kopt when is_int_kopt kopt -> doc_kopt_no_parens kopt
   | kopt -> parens (doc_kopt_no_parens kopt)
@@ -232,7 +232,7 @@ let doc_subst (IS_aux (subst_aux, _)) =
   match subst_aux with
   | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ typ
   | IS_id (id1, id2) -> doc_id id1 ^^ space ^^ equals ^^ space ^^ doc_id id2
-          
+
 let doc_kind (K_aux (k, _)) =
   string (match k with
           | K_int -> "Int"
@@ -421,7 +421,7 @@ let rec doc_exp (E_aux (e_aux, (_, uannot)) as exp) =
      ^^ doc_exp_as_block then_exp
      ^^ space ^^ string "else" ^^ space
      ^^ doc_exp_as_block else_exp
-    
+
   (* Various rules to try to format if blocks nicely based on content.
      There's also an if rule in doc_block for { ... if . then .; ... } because it's
      unambiguous there. *)
@@ -611,7 +611,7 @@ and doc_vector_update = function
         separate space [doc_atomic_exp idx; equals; doc_exp value]
      end
   | VU_range (high, low, value) -> separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
- 
+
 let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp,_)), _)) =
   match pexp with
   | Pat_exp (pat,exp) ->
@@ -787,7 +787,7 @@ let doc_scattered (SD_aux (sd_aux, _)) =
 let doc_filter = function
   | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
   | _ -> true
-    
+
 let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, _)) =
   match aux with
   | DEF_default df -> doc_default df
@@ -872,7 +872,7 @@ let reformat dir { defs; _ } =
     | None :: _ -> ()
     | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "No file for include"
   in
-          
+
   let format_def = function
     | DEF_aux (DEF_pragma ("file_start", path, _), _) -> push (Some (adjust_path path))
     | DEF_aux (DEF_pragma ("file_end", _, _), _) -> pop ()

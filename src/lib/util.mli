@@ -74,7 +74,7 @@ val opt_verbosity : int ref
 val last : 'a list -> 'a
 
 val last_opt : 'a list -> 'a option
-  
+
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
@@ -106,7 +106,7 @@ val power : int -> int -> int
 
 (** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
-  
+
 (** {2 Option Functions} *)
 
 (** [option_map f None] returns [None], whereas
@@ -121,7 +121,7 @@ val option_cases : 'a option -> ('a -> 'b) -> (unit -> 'b) -> 'b
     [option_bind f (Some x)] returns [f x]. *)
 val option_bind : ('a -> 'b option) -> 'a option -> 'b option
 
-(** [option_default d None] returns the default value [d], 
+(** [option_default d None] returns the default value [d],
     whereas [option_default d (Some x)] returns [x]. *)
 val option_default : 'a -> 'a option -> 'a
 
@@ -195,13 +195,13 @@ val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
 val map_filter : ('a -> 'b option) -> 'a list -> 'b list
 
 val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
-  
+
 (** [map_all f l] maps [f] over [l]. If at least one entry is [None], [None] is returned. Otherwise,
     the [Some] function is removed from the list. *)
 val map_all : ('a -> 'b option) -> 'a list -> 'b list option
 
 (** [list_to_front i l] resorts the list [l] by bringing the element at index [i]
-    to the front. 
+    to the front.
     @throws Failure if [i] is not smaller than the length of [l]*)
 val list_to_front : int -> 'a list -> 'a list
 
@@ -224,7 +224,7 @@ val drop : int -> 'a list -> 'a list
 val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
 val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option
-  
+
 val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
 
 (** find an item in a list and return that item as well as its index *)
@@ -233,7 +233,7 @@ val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
 val find_map : ('a -> 'b option) -> 'a list -> 'b option
 
 val fold_left_concat_map : ('a -> 'b -> 'a * 'c list) -> 'a -> 'b list -> 'a * 'c list
-  
+
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)
@@ -319,7 +319,7 @@ val progress : string -> string -> int -> int -> unit
     files existed before. If it is set to [false] and an output file already exists,
     the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref
- 
+
 val open_output_with_check : string option -> string -> (Format.formatter * (out_channel * string * string option * string))
 
 val open_output_with_check_unformatted : string option -> string -> (out_channel * string * string option * string)

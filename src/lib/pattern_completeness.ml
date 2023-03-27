@@ -377,7 +377,7 @@ module Make(C: Config) = struct
        | Some (Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _))
               when string_of_id f = "atom" || string_of_id f = "implicit"  ->
           GP_num (pnum, n, Some v)
-       | _ -> 
+       | _ ->
           GP_num (pnum, n, None)
        end
     | P_lit lit -> GP_lit lit

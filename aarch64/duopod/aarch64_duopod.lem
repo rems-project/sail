@@ -621,27 +621,27 @@ let undefined_InstrSet () = internal_pick [InstrSet_A64;InstrSet_A32;InstrSet_T3
 val undefined_ProcState : unit -> ProcState
 
 let undefined_ProcState () =
-   <| ProcState_N = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_Z = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_C = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_V = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_D = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_A = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_I = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_F = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_PAN = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_UAO = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_SS = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_IL = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_EL = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
-      ProcState_nRW = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_SP = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_Q = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_GE = (undefined_vector (4:ii) (undefined_bit ()) : list bitU); 
-      ProcState_IT = (undefined_vector (8:ii) (undefined_bit ()) : list bitU); 
-      ProcState_J = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_T = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      ProcState_E = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
+   <| ProcState_N = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_Z = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_C = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_V = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_D = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_A = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_I = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_F = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_PAN = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_UAO = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_SS = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_IL = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_EL = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
+      ProcState_nRW = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_SP = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_Q = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_GE = (undefined_vector (4:ii) (undefined_bit ()) : list bitU);
+      ProcState_IT = (undefined_vector (8:ii) (undefined_bit ()) : list bitU);
+      ProcState_J = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_T = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      ProcState_E = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
       ProcState_M = (undefined_vector (5:ii) (undefined_bit ()) : list bitU) |>
 
 val BranchType_of_num : integer -> BranchType
@@ -686,10 +686,10 @@ let undefined_BranchType () =
 val undefined_ExceptionRecord : unit -> ExceptionRecord
 
 let undefined_ExceptionRecord () =
-   <| ExceptionRecord_typ = (undefined_Exception ()); 
-      ExceptionRecord_syndrome = (undefined_vector (25:ii) (undefined_bit ()) : list bitU); 
-      ExceptionRecord_vaddress = (undefined_vector (64:ii) (undefined_bit ()) : list bitU); 
-      ExceptionRecord_ipavalid = (undefined_bool ()); 
+   <| ExceptionRecord_typ = (undefined_Exception ());
+      ExceptionRecord_syndrome = (undefined_vector (25:ii) (undefined_bit ()) : list bitU);
+      ExceptionRecord_vaddress = (undefined_vector (64:ii) (undefined_bit ()) : list bitU);
+      ExceptionRecord_ipavalid = (undefined_bool ());
       ExceptionRecord_ipaddress = (undefined_vector (52:ii) (undefined_bit ()) : list bitU) |>
 
 val Fault_of_num : integer -> Fault
@@ -857,16 +857,16 @@ let undefined_AccType () =
 val undefined_FaultRecord : unit -> FaultRecord
 
 let undefined_FaultRecord () =
-   <| FaultRecord_typ = (undefined_Fault ()); 
-      FaultRecord_acctype = (undefined_AccType ()); 
-      FaultRecord_ipaddress = (undefined_vector (52:ii) (undefined_bit ()) : list bitU); 
-      FaultRecord_s2fs1walk = (undefined_bool ()); 
-      FaultRecord_write = (undefined_bool ()); 
-      FaultRecord_level = (undefined_int ()); 
-      FaultRecord_extflag = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      FaultRecord_secondstage = (undefined_bool ()); 
-      FaultRecord_domain = (undefined_vector (4:ii) (undefined_bit ()) : list bitU); 
-      FaultRecord_errortype = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
+   <| FaultRecord_typ = (undefined_Fault ());
+      FaultRecord_acctype = (undefined_AccType ());
+      FaultRecord_ipaddress = (undefined_vector (52:ii) (undefined_bit ()) : list bitU);
+      FaultRecord_s2fs1walk = (undefined_bool ());
+      FaultRecord_write = (undefined_bool ());
+      FaultRecord_level = (undefined_int ());
+      FaultRecord_extflag = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      FaultRecord_secondstage = (undefined_bool ());
+      FaultRecord_domain = (undefined_vector (4:ii) (undefined_bit ()) : list bitU);
+      FaultRecord_errortype = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
       FaultRecord_debugmoe = (undefined_vector (4:ii) (undefined_bit ()) : list bitU) |>
 
 val MBReqDomain_of_num : integer -> MBReqDomain
@@ -962,39 +962,39 @@ let undefined_DeviceType () =
 val undefined_MemAttrHints : unit -> MemAttrHints
 
 let undefined_MemAttrHints () =
-   <| MemAttrHints_attrs = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
-      MemAttrHints_hints = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
+   <| MemAttrHints_attrs = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
+      MemAttrHints_hints = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
       MemAttrHints_transient = (undefined_bool ()) |>
 
 val undefined_MemoryAttributes : unit -> MemoryAttributes
 
 let undefined_MemoryAttributes () =
-   <| MemoryAttributes_typ = (undefined_MemType ()); 
-      MemoryAttributes_device = (undefined_DeviceType ()); 
-      MemoryAttributes_inner = (undefined_MemAttrHints ()); 
-      MemoryAttributes_outer = (undefined_MemAttrHints ()); 
-      MemoryAttributes_shareable = (undefined_bool ()); 
+   <| MemoryAttributes_typ = (undefined_MemType ());
+      MemoryAttributes_device = (undefined_DeviceType ());
+      MemoryAttributes_inner = (undefined_MemAttrHints ());
+      MemoryAttributes_outer = (undefined_MemAttrHints ());
+      MemoryAttributes_shareable = (undefined_bool ());
       MemoryAttributes_outershareable = (undefined_bool ()) |>
 
 val undefined_FullAddress : unit -> FullAddress
 
 let undefined_FullAddress () =
-   <| FullAddress_physicaladdress = (undefined_vector (52:ii) (undefined_bit ()) : list bitU); 
+   <| FullAddress_physicaladdress = (undefined_vector (52:ii) (undefined_bit ()) : list bitU);
       FullAddress_NS = (undefined_vector (1:ii) (undefined_bit ()) : list bitU) |>
 
 val undefined_AddressDescriptor : unit -> AddressDescriptor
 
 let undefined_AddressDescriptor () =
-   <| AddressDescriptor_fault = (undefined_FaultRecord ()); 
-      AddressDescriptor_memattrs = (undefined_MemoryAttributes ()); 
-      AddressDescriptor_paddress = (undefined_FullAddress ()); 
+   <| AddressDescriptor_fault = (undefined_FaultRecord ());
+      AddressDescriptor_memattrs = (undefined_MemoryAttributes ());
+      AddressDescriptor_paddress = (undefined_FullAddress ());
       AddressDescriptor_vaddress = (undefined_vector (64:ii) (undefined_bit ()) : list bitU) |>
 
 val undefined_DescriptorUpdate : unit -> DescriptorUpdate
 
 let undefined_DescriptorUpdate () =
-   <| DescriptorUpdate_AF = (undefined_bool ()); 
-      DescriptorUpdate_AP = (undefined_bool ()); 
+   <| DescriptorUpdate_AF = (undefined_bool ());
+      DescriptorUpdate_AP = (undefined_bool ());
       DescriptorUpdate_descaddr = (undefined_AddressDescriptor ()) |>
 
 val MemAtomicOp_of_num : integer -> MemAtomicOp
@@ -1391,31 +1391,31 @@ let undefined_MemBarrierOp () = internal_pick [MemBarrierOp_DSB;MemBarrierOp_DMB
 val undefined_AccessDescriptor : unit -> AccessDescriptor
 
 let undefined_AccessDescriptor () =
-   <| AccessDescriptor_acctype = (undefined_AccType ()); 
-      AccessDescriptor_page_table_walk = (undefined_bool ()); 
-      AccessDescriptor_secondstage = (undefined_bool ()); 
-      AccessDescriptor_s2fs1walk = (undefined_bool ()); 
+   <| AccessDescriptor_acctype = (undefined_AccType ());
+      AccessDescriptor_page_table_walk = (undefined_bool ());
+      AccessDescriptor_secondstage = (undefined_bool ());
+      AccessDescriptor_s2fs1walk = (undefined_bool ());
       AccessDescriptor_level = (undefined_int ()) |>
 
 val undefined_Permissions : unit -> Permissions
 
 let undefined_Permissions () =
-   <| Permissions_ap = (undefined_vector (3:ii) (undefined_bit ()) : list bitU); 
-      Permissions_xn = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      Permissions_xxn = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
+   <| Permissions_ap = (undefined_vector (3:ii) (undefined_bit ()) : list bitU);
+      Permissions_xn = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      Permissions_xxn = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
       Permissions_pxn = (undefined_vector (1:ii) (undefined_bit ()) : list bitU) |>
 
 val undefined_TLBRecord : unit -> TLBRecord
 
 let undefined_TLBRecord () =
-   <| TLBRecord_perms = (undefined_Permissions ()); 
-      TLBRecord_nG = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      TLBRecord_domain = (undefined_vector (4:ii) (undefined_bit ()) : list bitU); 
-      TLBRecord_contiguous = (undefined_bool ()); 
-      TLBRecord_level = (undefined_int ()); 
-      TLBRecord_blocksize = (undefined_int ()); 
-      TLBRecord_descupdate = (undefined_DescriptorUpdate ()); 
-      TLBRecord_CnP = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
+   <| TLBRecord_perms = (undefined_Permissions ());
+      TLBRecord_nG = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      TLBRecord_domain = (undefined_vector (4:ii) (undefined_bit ()) : list bitU);
+      TLBRecord_contiguous = (undefined_bool ());
+      TLBRecord_level = (undefined_int ());
+      TLBRecord_blocksize = (undefined_int ());
+      TLBRecord_descupdate = (undefined_DescriptorUpdate ());
+      TLBRecord_CnP = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
       TLBRecord_addrdesc = (undefined_AddressDescriptor ()) |>
 
 val ImmediateOp_of_num : integer -> ImmediateOp
@@ -1549,7 +1549,7 @@ let undefined_PrivilegeLevel () = internal_pick [PL3;PL2;PL1;PL0]
 val undefined_AArch32_SErrorSyndrome : unit -> AArch32_SErrorSyndrome
 
 let undefined_AArch32_SErrorSyndrome () =
-   <| AArch32_SErrorSyndrome_AET = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
+   <| AArch32_SErrorSyndrome_AET = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
       AArch32_SErrorSyndrome_ExT = (undefined_vector (1:ii) (undefined_bit ()) : list bitU) |>
 
 val SystemOp_of_num : integer -> SystemOp
@@ -1581,13 +1581,13 @@ let undefined_SystemOp () = internal_pick [Sys_AT;Sys_DC;Sys_IC;Sys_TLBI;Sys_SYS
 val undefined_PCSample : unit -> PCSample
 
 let undefined_PCSample () =
-   <| PCSample_valid_name = (undefined_bool ()); 
-      PCSample_pc = (undefined_vector (64:ii) (undefined_bit ()) : list bitU); 
-      PCSample_el = (undefined_vector (2:ii) (undefined_bit ()) : list bitU); 
-      PCSample_rw = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      PCSample_ns = (undefined_vector (1:ii) (undefined_bit ()) : list bitU); 
-      PCSample_contextidr = (undefined_vector (32:ii) (undefined_bit ()) : list bitU); 
-      PCSample_contextidr_el2 = (undefined_vector (32:ii) (undefined_bit ()) : list bitU); 
+   <| PCSample_valid_name = (undefined_bool ());
+      PCSample_pc = (undefined_vector (64:ii) (undefined_bit ()) : list bitU);
+      PCSample_el = (undefined_vector (2:ii) (undefined_bit ()) : list bitU);
+      PCSample_rw = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      PCSample_ns = (undefined_vector (1:ii) (undefined_bit ()) : list bitU);
+      PCSample_contextidr = (undefined_vector (32:ii) (undefined_bit ()) : list bitU);
+      PCSample_contextidr_el2 = (undefined_vector (32:ii) (undefined_bit ()) : list bitU);
       PCSample_vmid = (undefined_vector (16:ii) (undefined_bit ()) : list bitU) |>
 
 val ReduceOp_of_num : integer -> ReduceOp
@@ -3933,22 +3933,22 @@ let AArch64_NoFault () =
 
 let AArch64_TranslateAddress vaddress acctype iswrite wasaligned size =
    (ZeroExtend__1 (64:ii) vaddress : M (list bitU)) >>= fun (w__0 : bits ty64) ->
-   return (<| AddressDescriptor_fault = (AArch64_NoFault ()); 
+   return (<| AddressDescriptor_fault = (AArch64_NoFault ());
               AddressDescriptor_memattrs =
-                (<| MemoryAttributes_typ = MemType_Normal; 
-                    MemoryAttributes_device = DeviceType_GRE; 
+                (<| MemoryAttributes_typ = MemType_Normal;
+                    MemoryAttributes_device = DeviceType_GRE;
                     MemoryAttributes_inner =
-                      (<| MemAttrHints_attrs = ([B0;B0]); 
-                          MemAttrHints_hints = ([B0;B0]); 
-                          MemAttrHints_transient = false |>); 
+                      (<| MemAttrHints_attrs = ([B0;B0]);
+                          MemAttrHints_hints = ([B0;B0]);
+                          MemAttrHints_transient = false |>);
                     MemoryAttributes_outer =
-                      (<| MemAttrHints_attrs = ([B0;B0]); 
-                          MemAttrHints_hints = ([B0;B0]); 
-                          MemAttrHints_transient = false |>); 
-                    MemoryAttributes_shareable = true; 
-                    MemoryAttributes_outershareable = true |>); 
+                      (<| MemAttrHints_attrs = ([B0;B0]);
+                          MemAttrHints_hints = ([B0;B0]);
+                          MemAttrHints_transient = false |>);
+                    MemoryAttributes_shareable = true;
+                    MemoryAttributes_outershareable = true |>);
               AddressDescriptor_paddress =
-                (<| FullAddress_physicaladdress = (slice vaddress (0:ii) (52:ii) : list bitU) |>); 
+                (<| FullAddress_physicaladdress = (slice vaddress (0:ii) (52:ii) : list bitU) |>);
               AddressDescriptor_vaddress = w__0 |>)
 
 val AArch64_MaybeZeroRegisterUppers : unit -> M unit

@@ -377,7 +377,7 @@ and comment pos b depth = parse
                                           ) else (
                                             comment pos b (depth-1) lexbuf
                                           ) }
-  | "\n"                                { Buffer.add_string b "\n"; 
+  | "\n"                                { Buffer.add_string b "\n";
                                           Lexing.new_line lexbuf;
                                           comment pos b depth lexbuf }
   | '"'                                 { ignore(string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf);

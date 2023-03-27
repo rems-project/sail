@@ -118,7 +118,7 @@ match s with
 | String h t =>
   match hex_char h with
   | None => (acc, len)
-  | Some i => 
+  | Some i =>
     if i <? base
     then more_digits t base (base * acc + i) (S len)
     else (acc, len)

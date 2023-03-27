@@ -116,11 +116,11 @@ function ConditionHoldsIFP(_cond : (bits(4))) -> regfps =
   }
 
 /* for iR if rSPFP, for oR if wSPFP */
-let rSPIFP : regfps = 
+let rSPIFP : regfps =
   /* TODO: actually this depends on runtime data: PSTATE_SP and PSTATE_EL */
   [| PSTATE_SPfp, RFull("SP_EL0") |]
 
-let wSPFP : (regfps, regfps) = 
+let wSPFP : (regfps, regfps) =
   /* TODO: actually this depends on runtime data: PSTATE_SP and PSTATE_EL */
   ([| PSTATE_SPfp |],
    [| RFull("SP_EL0") |])
@@ -129,9 +129,9 @@ let wSPFP : (regfps, regfps) =
 let CheckSPAlignmentIFP : regfps = PSTATE_ELfp :: rSPIFP
 
 let BigEndianIFP : regfps =
-  if UsingAArch32() then [| RFull("PSTATE_E") |] else [| PSTATE_ELfp |] 
+  if UsingAArch32() then [| RFull("PSTATE_E") |] else [| PSTATE_ELfp |]
 
-let wMem'IFP : regfps = BigEndianIFP 
+let wMem'IFP : regfps = BigEndianIFP
 let wMemIFP : regfps = wMem'IFP
 
 function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,instruction_kind) = {
@@ -198,7 +198,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
           oR = appendL(oR, [| PSTATE_Dfp, PSTATE_Afp, PSTATE_Ifp, PSTATE_Ffp |]);
         }
       },
-    (Hint(op))  => 
+    (Hint(op))  =>
       match op {
         SystemHintOp_YIELD  => (),
         SystemHintOp_WFE  =>
@@ -215,14 +215,14 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
         SystemHintOp_WFI  => {
             /* the execute code for this case always fails because of
                InterruptPending, declared as extern but not defined */
-            not_implemented("Hint(SystemHintOp_WFI);") 
+            not_implemented("Hint(SystemHintOp_WFI);")
         },
         SystemHintOp_SEV  => (), /*SendEvent*/
         SystemHintOp_SEVL  =>
             /* the execute code for this case always fails because of
                EventRegisterSet, declared as extern but not defined */
             not_implemented("Hint(SystemHintOp_SEVL);"),
-        _  => () /* do nothing */ 
+        _  => () /* do nothing */
       },
     (ClearExclusiveMonitor(imm))  => (), /*ClearExclusiveLocal*/
     (Barrier(op,domain,types))  => {
@@ -286,7 +286,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
         /* TODO FIXME: higher EL TPIDRs */
           _ => exit()
         }
-      } 
+      }
       else {
         iR = appendL(iR,xFP(t));
         match (sys_op0,sys_op1,sys_crn,sys_crm,sys_op2) { /* System_Put */
@@ -305,14 +305,14 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
       iR = appendL(xFP(t),iR);
       /* TODO: whether the following applies depends on runtime data:
          operand[bit_pos] == bit_val */
-      let (i,o) = BranchToFP(iR,oR) in {iR = i; oR = o}; 
+      let (i,o) = BranchToFP(iR,oR) in {iR = i; oR = o};
       Nias = [| NIAFP_successor(), NIAFP_concrete_address(rPC() + offset) |];
       ik = IK_branch();
     },
     (BranchImmediate(branch_type,offset))  => {
       if branch_type == BranchType_CALL
       then {iR = _PCfp :: iR; oR = appendL(xFP(30),oR)};
-      let (i,o) = BranchToFP(iR,oR) in {iR = i; oR = o}; 
+      let (i,o) = BranchToFP(iR,oR) in {iR = i; oR = o};
       Nias = [| NIAFP_concrete_address(rPC() + offset) |];
       ik = IK_branch()
     },
@@ -386,7 +386,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
             oR = appendL(xFP(t),oR);
             ik = rmem_kind(acctype,excl);
           }
-          
+
         },
         MemOp_PREFETCH  => aR = [| |]
       }
@@ -583,7 +583,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
     (ConditionalCompareRegister((n,m,datasize,sub_op,condition,flags)))  => {
       iR = appendL(xFP(n),appendL(xFP(m),iR));
       iR = appendL(ConditionHoldsIFP(condition),iR);
-      oR = appendL(NZCVfp,oR);      
+      oR = appendL(NZCVfp,oR);
     },
     (ConditionalSelect((d,n,m,datasize,condition,else_inv,else_inc)))  => {
       iR = appendL(xFP(n),appendL(xFP(m),iR));
@@ -621,7 +621,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
       iR = appendL(xFP(n),iR);
       iR = appendL(xFP(m),iR);
       iR = appendL(xFP(a),iR);
-      oR = appendL(xFP(d),oR);      
+      oR = appendL(xFP(d),oR);
     },
     (MultiplyHigh((d,n,m,a,destsize,datasize,_unsigned)))  => {
       iR = appendL(xFP(n),appendL(xFP(m),iR));

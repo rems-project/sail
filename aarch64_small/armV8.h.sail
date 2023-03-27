@@ -206,21 +206,21 @@ let _V : vector(32,dec,(register(bits(128)))) =
   ,ref V12
   ,ref V11
   ,ref V10
-  ,ref V9 
-  ,ref V8 
-  ,ref V7 
-  ,ref V6 
-  ,ref V5 
-  ,ref V4 
-  ,ref V3 
-  ,ref V2 
-  ,ref V1 
+  ,ref V9
+  ,ref V8
+  ,ref V7
+  ,ref V6
+  ,ref V5
+  ,ref V4
+  ,ref V3
+  ,ref V2
+  ,ref V1
   ,ref V0
   ]
 
 
 /* lsl: used instead of the ARM ARM << over integers */
-val lsl : forall 'm 'n, 'm >= 0 & 'n >= 0. (int('n), int('m)) -> int('n * (2 ^ 'm)) 
+val lsl : forall 'm 'n, 'm >= 0 & 'n >= 0. (int('n), int('m)) -> int('n * (2 ^ 'm))
 function lsl (n, m) = n * (2 ^ m)
 
 /* not_implemented is used to indicate something WE did not implement */

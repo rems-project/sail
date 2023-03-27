@@ -73,7 +73,7 @@ open Type_check
 
 let opt_explain_all_variables = ref false
 let opt_explain_constraints = ref false
-   
+
 type suggestion =
   | Suggest_add_constraint of n_constraint
   | Suggest_none
@@ -129,7 +129,7 @@ let readable_name (Kid_aux (Var str, l)) =
   Kid_aux (Var (String.concat "" (String.split_on_char '#' str)), l)
 
 let has_underscore (Kid_aux (Var str, l)) = String.length str > 1 && str.[1] = '_'
-  
+
 let error_string_of_kid substs kid =
   match KBindings.find_opt kid substs with
   | Some nexp -> string_of_nexp nexp
@@ -140,16 +140,16 @@ let error_string_of_nexp substs nexp =
 
 let error_string_of_nc substs nexp =
   string_of_n_constraint (subst_kids_nc substs nexp)
-  
+
 let error_string_of_typ substs typ =
   string_of_typ (subst_kids_typ substs typ)
 
 let error_string_of_typ_arg substs arg =
   string_of_typ_arg (subst_kids_typ_arg substs arg)
-  
+
 let has_variable set nexp =
   not (KidSet.is_empty (KidSet.inter set (tyvars_of_nexp nexp)))
-  
+
 let rewrite_equality preferred_on_right (NC_aux (aux, l) as nc) =
   let equality = match aux with
     | NC_equal (lhs, rhs) ->
@@ -160,7 +160,7 @@ let rewrite_equality preferred_on_right (NC_aux (aux, l) as nc) =
     | _ -> None in
   match equality with
   | Some (lhs, rhs) ->
-     NC_aux (NC_equal (lhs, rhs), l) 
+     NC_aux (NC_equal (lhs, rhs), l)
   | None ->
      nc
 
@@ -171,7 +171,7 @@ let subst_preferred_variables prefs constraints =
   let original_location = function
     | Some (l, str) -> Some (l, fun _ -> "introduced here by " ^ str)
     | None -> None in
-  let all_substs, constraints = 
+  let all_substs, constraints =
     Util.map_split (function
         | (r, NC_aux (NC_equal (Nexp_aux (Nexp_var v, _), rhs), _))
              when has_variable prefs rhs && not (KidSet.mem v (tyvars_of_nexp rhs)) ->
@@ -230,7 +230,7 @@ let simp_typ = map_typ_arg (fun _ _ -> function
                    | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (nexp_simp nexp), l)
                    | A_aux (A_bool nc, l) -> A_aux (A_bool (constraint_simp nc), l)
                    | arg -> arg)
-  
+
 let message_of_type_error =
   let open Error_format in
   let rec msg = function
@@ -373,7 +373,7 @@ let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
   try Type_check.check_defs env defs with
   | Type_error (env, l, err) ->
      raise (Reporting.err_typ l (string_of_type_error err))
-         
+
 let check : Env.t -> uannot ast -> tannot ast * Env.t =
   fun env defs ->
   try Type_check.check env defs with

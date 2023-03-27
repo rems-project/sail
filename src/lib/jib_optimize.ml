@@ -383,7 +383,7 @@ let remove_pointless_exit instrs =
        List.rev acc
   in
   go [] instrs
- 
+
 module StringSet = Set.Make(String)
 
 let rec get_used_labels set = function

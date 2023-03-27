@@ -366,7 +366,7 @@ induction w.
   apply IHw.
   Lia.lia.
 Qed.
- 
+
 Lemma word_to_bools_nth_Some : forall [n] (w : word n) (i : nat) x, n > 0 ->
   List.nth_error (word_to_bools w) i = Some x <-> x = N.testbit (word_to_N w) (N.of_nat (n - i - 1)) /\ i < n.
 intros.

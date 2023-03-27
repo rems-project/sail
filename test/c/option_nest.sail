@@ -2,7 +2,7 @@ $sail_internal
 
 union test ('a : Type) = {
   Just : 'a,
-  Nothing : unit 
+  Nothing : unit
 }
 
 union option ('a : Type) = {

@@ -13,7 +13,7 @@ function main (() : unit) -> unit = {
   assert(ediv_int(12, -3) == -4);
   assert(ediv_int(-12, 3) == -4);
   assert(ediv_int(-12, -3) == 4);
-  
+
   assert(emod_int(7, 5) == 2);
   assert(emod_int(7, -5) == 2);
   assert(emod_int(-7, 5) == 3);
@@ -31,7 +31,7 @@ function main (() : unit) -> unit = {
   assert(tdiv_int(12, -3) == -4);
   assert(tdiv_int(-12, 3) == -4);
   assert(tdiv_int(-12, -3) == 4);
-  
+
   assert(tmod_int(7, 5) == 2);
   assert(tmod_int(7, -5) == 2);
   assert(tmod_int(-7, 5) == -2);

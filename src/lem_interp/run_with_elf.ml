@@ -130,11 +130,11 @@ let rec load_memory_segments segments =
       begin
         load_memory_segment segment prog_mem;
         load_memory_segments segments'
-      end    
+      end
   end
-  
-let rec read_mem mem address length = 
-  if length = 0  
+
+let rec read_mem mem address length =
+  if length = 0
   then []
   else
     let byte =
@@ -290,7 +290,7 @@ let initial_stack_and_reg_data_of_PPC_elf_file e_entry all_data_memory =
        Lem_list.replicate 8  0 );
       ("initial_stack_data3", Nat_big_num.add initial_GPR1_stack_pointer (Nat_big_num.of_int 16),
        Lem_list.replicate 8  0 )] in
-  
+
   (* read TOC from the second field of the function descriptor pointed to by e_entry*)
   let initial_GPR2_TOC =
     Sail_impl_base.register_value_of_address
@@ -473,7 +473,7 @@ let aarch64_register_data_all =
 let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
   let (reg_SP_EL0_direction, reg_SP_EL0_width, reg_SP_EL0_initial_index) =
     List.assoc "SP_EL0" aarch64_register_data_all in
-  
+
   (* we compiled a small program that prints out SP and run it a few
       times on the Nexus9, these are the results:
       0x0000007fe7f903e0
@@ -501,7 +501,7 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
     (* this is a fairly big but arbitrary chunk: *)
     (* let initial_stack_data_address = Nat_big_num.sub initial_GPR1_stack_pointer (Nat_big_num.of_int 128) in
         [("initial_stack_data", initial_stack_data_address, Lem_list.replicate (128+32) 0 ))] in *)
-    
+
     [ ("initial_stack_data1", Nat_big_num.sub initial_SP_EL0 (Nat_big_num.of_int 16),  Lem_list.replicate 8 0);
       ("initial_stack_data2", Nat_big_num.sub initial_SP_EL0 (Nat_big_num.of_int 8),   Lem_list.replicate 8 0)
     ]
@@ -651,7 +651,7 @@ let mips_register_data_all =  [
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
-  let initial_stack_data = [] in 
+  let initial_stack_data = [] in
   let initial_register_abi_data : (string * Sail_impl_base.register_value) list = [
     ("CP0Status", Sail_impl_base.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));
   ] in
@@ -660,12 +660,12 @@ let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
 let initial_reg_file reg_data init =
   List.iter (fun (reg_name, _) -> reg := Reg.add reg_name (init reg_name) !reg) reg_data
 
-let initial_system_state_of_elf_file name = 
+let initial_system_state_of_elf_file name =
 
   (* call ELF analyser on file *)
   match Sail_interface.populate_and_obtain_global_symbol_init_info name with
   | Error.Fail s -> failwith ("populate_and_obtain_global_symbol_init_info: " ^ s)
-  | Error.Success 
+  | Error.Success
       (_, (elf_epi: Sail_interface.executable_process_image),
        (symbol_map: Elf_file.global_symbol_init_info))
     ->
@@ -725,10 +725,10 @@ let initial_system_state_of_elf_file name =
             | Error.Fail s -> failwith "Failed computing entry point"
             | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
           in
-          
+
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_AAarch64_elf_file e_entry !data_mem in
-          
+
           (ArmV8.defs,
            (ArmV8_extras.aArch64_read_memory_functions,
             ArmV8_extras.aArch64_memory_writes,
@@ -751,7 +751,7 @@ let initial_system_state_of_elf_file name =
           in
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
-          
+
           (Mips.defs,
            (Mips_extras.mips_read_memory_functions,
             Mips_extras.mips_memory_writes,
@@ -768,7 +768,7 @@ let initial_system_state_of_elf_file name =
 
         | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and EM_MIPS are supported." (Nat_big_num.to_string e_machine))
       in
-      
+
       (* pull the object symbols from the symbol table *)
       let symbol_table : (string * Nat_big_num.num * int * word8 list (*their bytes*)) list =
         let rec convert_symbol_table symbol_map =
@@ -825,7 +825,7 @@ let initial_system_state_of_elf_file name =
                  with Not_found ->
                    StringMap.add name (binding,
                                        (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size)) map
-                     
+
                else map
             )
             StringMap.empty
@@ -838,7 +838,7 @@ let initial_system_state_of_elf_file name =
 
       (* Now we examine the rest of the data memory,
          removing the footprint of the symbols and chunking it into aligned chunks *)
-      
+
       let rec remove_symbols_from_data_memory data_mem symbols =
         match symbols with
         | [] -> data_mem
@@ -892,7 +892,7 @@ let initial_system_state_of_elf_file name =
 
       begin
         (initial_reg_file register_data_all initial_register_state);
-        
+
         (* construct initial system state *)
         let initial_system_state =
           (isa_defs,
@@ -903,7 +903,7 @@ let initial_system_state_of_elf_file name =
            startaddr,
            (Sail_impl_base.address_of_integer startaddr))
         in
-        
+
         (initial_system_state, symbol_table_pp)
       end
     end
@@ -954,8 +954,8 @@ let stop_condition_met model instr =
   | AArch64 -> (match instr with
     | ("ImplementationDefinedStopFetching", _) -> true
     | _ -> false)
-  | MIPS -> (match instr with 
-    | ("HCF", _) -> 
+  | MIPS -> (match instr with
+    | ("HCF", _) ->
       resultf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
       true
@@ -988,7 +988,7 @@ let set_next_instruction_address model =
     let cia_addr = address_of_register_value cia in
     (match cia_addr with
     | Some cia_addr ->
-      let nia_addr = add_address_nat cia_addr 4 in 
+      let nia_addr = add_address_nat cia_addr 4 in
       let nia = register_value_of_address nia_addr Sail_impl_base.D_increasing in
       reg := Reg.add "NIA" nia !reg
     | _ -> failwith "CIA address contains unknown or undefined")
@@ -1001,11 +1001,11 @@ let set_next_instruction_address model =
        let n_pc = register_value_of_address n_addr D_decreasing in
        reg := Reg.add "_PC" n_pc !reg
      | _ -> failwith "_PC address contains unknown or undefined")
-  | MIPS -> 
+  | MIPS ->
     let pc_addr       = address_of_register_value (Reg.find "PC" !reg) in
     let branchPending = integer_of_register_value (Reg.find "branchPending" !reg) in
     (match (pc_addr, option_int_of_option_integer branchPending) with
-     | (Some pc_val, Some 0) -> 
+     | (Some pc_val, Some 0) ->
        (* normal -- increment PC *)
        let n_addr = add_address_nat pc_val 4 in
        let n_pc = register_value_of_address n_addr D_decreasing in
@@ -1013,9 +1013,9 @@ let set_next_instruction_address model =
          reg := Reg.add "nextPC" n_pc !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
        end
-     | (Some pc_val, Some 1) -> 
+     | (Some pc_val, Some 1) ->
        (* delay slot -- branch to delayed PC and clear branchPending *)
-       begin 
+       begin
          reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
          reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
@@ -1116,7 +1116,7 @@ let rec write_events = function
   | e::events ->
     (match e with
      | E_write_reg (Reg(id,_,_,_), value) -> reg := Reg.add id value !reg
-     | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value) 
+     | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value)
      | E_write_reg ((Reg_field(id,_,_,_,range) as reg_n),value)->
        let old_val = Reg.find id !reg in
        let new_val = fupdate_slice reg_n old_val value range in
@@ -1151,7 +1151,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
        let opcode = (get_opcode pc_a) in
        Opcode opcode
      | None -> failwith "_PC address contains unknown or undefined")
-  | MIPS -> 
+  | MIPS ->
     begin
     let nextPC  = Reg.find "nextPC" !reg in
     let pc_addr = address_of_register_value nextPC in
@@ -1187,7 +1187,7 @@ let get_pc_address = function
   | MIPS -> Reg.find "PC" !reg
   | PPC  -> Reg.find "CIA" !reg
   | AArch64 -> Reg.find "_PC" !reg
-        
+
 
 let option_int_of_reg str =
   option_int_of_option_integer (integer_of_register_value (Reg.find str !reg))
@@ -1213,7 +1213,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
       | Some pc ->
           let inBranchDelay = option_int_of_reg "inBranchDelay" in
           (match inBranchDelay with
-          | Some 0 -> 
+          | Some 0 ->
             let npc_addr = add_address_nat pc_val 4 in
             let npc_reg = register_value_of_address npc_addr Sail_impl_base.D_decreasing in
             reg := Reg.add "nextPC" npc_reg !reg;
@@ -1249,7 +1249,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 reg := my_reg;
                 prog_mem := my_mem;
                 tag_mem := my_tags;
-                
+
                 (try
                   let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
                   (if (pending != []) then
@@ -1272,7 +1272,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 | _-> ());
 
                 let uart_written = option_int_of_reg "UART_WRITTEN" in
-                (match uart_written with 
+                (match uart_written with
                 | Some 1 ->
                   (let uart_data = option_int_of_reg "UART_WDATA" in
                   match uart_data with
@@ -1280,7 +1280,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                   | None   -> (errorf "UART_WDATA was undef" ; exit 1))
                 | _      -> ());
                 reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
-                
+
                 reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
                 reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
                 reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
@@ -1300,7 +1300,7 @@ let rec load_raw_file' mem addr chan =
   load_raw_file' mem (Nat_big_num.succ addr) chan)
 
 let rec load_raw_file mem addr chan =
-  try 
+  try
     load_raw_file' mem addr chan
    with
   | End_of_file -> ()
@@ -1322,8 +1322,8 @@ let run () =
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
   let context = build_context false isa_defs isa_m0 [] isa_m1 isa_m2 isa_m3 [] isa_m4 None isa_externs in
-  (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
-          endian mode, and translate function name 
+  (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not,
+          endian mode, and translate function name
   *)
   let addr_trans = translate_address context E_little_endian "TranslatePC" in
   if String.length(!raw_file) != 0 then

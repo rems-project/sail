@@ -55,13 +55,13 @@ while (<>) {
 
         # fix scattered union declaration
         s!scattered\s+type\s+(\w+)\s+=\s+const\s+union!scattered union $1!;
-        
+
         # fix scattered union members
         s!union\s+(\w+)\s+member\s+(\w+)\s+(\w+)!union clause $1 = $3 : $2!;
 
         # fix scattered function declaration (drops type, assumes separate val dec.)
         s!scattered\s+function\s+([^\s]+)\s+(\w+)!scattered function $2!;
-        
+
 	# fix any bits[n]
 	s!bit\s*\[([^\]]+)\]!bits\($1\)!g;
 

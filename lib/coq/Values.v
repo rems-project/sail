@@ -178,17 +178,17 @@ Lemma generic_neq_true {T} {x y:T} `{Decidable (x = y)} : generic_neq x y = true
 unfold generic_neq.
 intros H1 H2.
 rewrite <- Decidable_spec in H2.
-destruct Decidable_witness; simpl in *; 
+destruct Decidable_witness; simpl in *;
 congruence.
 Qed.
 Lemma generic_neq_false {T} {x y:T} `{Decidable (x = y)} : generic_neq x y = false -> x = y.
 unfold generic_neq.
 intro H1.
 rewrite <- Decidable_spec.
-destruct Decidable_witness; simpl in *; 
+destruct Decidable_witness; simpl in *;
 congruence.
 Qed.
-#[export] Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) : 
+#[export] Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) :
   forall (x y : T), Decidable (eq x y).
 refine (fun x y => {|
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
@@ -406,13 +406,13 @@ Qed.
 Lemma repeat_length_list {a} {xs : list a} {n : Z} (H : n >= 0) : length_list (repeat xs n) = n * length_list xs.
 unfold length_list, repeat.
 destruct n.
-+ reflexivity. 
++ reflexivity.
 + simpl (List.length _).
   rewrite repeat'_length.
   rewrite Nat2Z.inj_mul.
   unfold Z.to_nat.
   rewrite positive_nat_Z.
-  reflexivity.  
+  reflexivity.
 + exfalso.
   auto with zarith.
 Qed.
@@ -887,7 +887,7 @@ Definition update_subrange_list {A} (is_inc : bool) (xs : list A) i j xs' :=
 
 Open Scope nat.
 Fixpoint nth_in_range {A} (n:nat) (l:list A) : n < length l -> A.
-refine 
+refine
   (match n, l with
   | O, h::_ => fun _ => h
   | S m, _::t => fun H => nth_in_range A m t _
@@ -1163,7 +1163,7 @@ End MachineWords.
    break some of the constraint solving tactics, so prune definition bodies
    down to integer types. *)
 Ltac not_Z_bool ty := match ty with Z => fail 1 | bool => fail 1 | _ => idtac end.
-Ltac clear_non_Z_bool_defns := 
+Ltac clear_non_Z_bool_defns :=
   repeat match goal with H := _ : ?X |- _ => not_Z_bool X; clearbody H end.
 Ltac clear_irrelevant_defns :=
 repeat match goal with X := _ |- _ =>
@@ -1247,7 +1247,7 @@ Ltac unbool_comparisons_goal :=
   (* Important to have these early in the list - setoid_rewrite can
      unfold member_Z_list. *)
   | |- context [member_Z_list _ _ = true] => rewrite member_Z_list_In
-  | |- context [In ?x (?y :: ?t)] => change (In x (y :: t)) with (y = x \/ In x t) 
+  | |- context [In ?x (?y :: ?t)] => change (In x (y :: t)) with (y = x \/ In x t)
   | |- context [In ?x []] => change (In x []) with False
   | |- context [Z.geb _ _] => setoid_rewrite Z.geb_leb
   | |- context [Z.gtb _ _] => setoid_rewrite Z.gtb_ltb
@@ -1295,7 +1295,7 @@ Ltac extract_properties :=
     change (projT1 (existT _ x Hx)) with x in * end;
   (* Properties with proofs embedded by build_ex; uses revert/generalize
      rather than destruct because it seemed to be more efficient, but
-     some experimentation would be needed to be sure. 
+     some experimentation would be needed to be sure.
   repeat (
      match goal with H:context [@build_ex ?T ?n ?P ?prf] |- _ =>
      let x := fresh "x" in
@@ -1315,17 +1315,17 @@ Ltac extract_properties :=
     change (projT1 (existT _ x Hx)) with x in * end.
 (* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
-  repeat match goal with |- context [length_list ?X] => 
+  repeat match goal with |- context [length_list ?X] =>
     let r := (eval cbn in (length_list X)) in
     change (length_list X) with r
   end.
 (* TODO: can we restrict this to concrete terms? *)
 Ltac reduce_pow :=
-  repeat match goal with H:context [Z.pow ?X ?Y] |- _ => 
+  repeat match goal with H:context [Z.pow ?X ?Y] |- _ =>
     let r := (eval cbn in (Z.pow X Y)) in
     change (Z.pow X Y) with r in H
   end;
-  repeat match goal with |- context [Z.pow ?X ?Y] => 
+  repeat match goal with |- context [Z.pow ?X ?Y] =>
     let r := (eval cbn in (Z.pow X Y)) in
     change (Z.pow X Y) with r
   end.
@@ -1662,7 +1662,7 @@ Ltac bool_to_Z :=
   end;
   repeat match goal with
   | H:context [negb ?v] |- _ => rewrite b2z_negb in H
-  | |- context [negb ?v]     => rewrite b2z_negb 
+  | |- context [negb ?v]     => rewrite b2z_negb
   |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
   | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
   |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
@@ -1862,7 +1862,7 @@ Ltac z_comparisons :=
   | exact Z_compare_gt_lt
   | exact Z_compare_gt_eq
   ].
-                                                                                   
+
 Ltac bool_ex_solve :=
 match goal with H : ?l = ?v -> @ex _ _ |- @ex _ _ =>
      match v with true => idtac | false => idtac end;
@@ -2825,7 +2825,7 @@ rewrite Nat2Z.id.
 reflexivity.
 Defined.
 
-Definition vec_of_list_len {A} (l : list A) : vec A (length_list l). 
+Definition vec_of_list_len {A} (l : list A) : vec A (length_list l).
 refine (@existT _ _ l _).
 unfold length_list.
 rewrite Nat2Z.id.

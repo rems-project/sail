@@ -7,4 +7,3 @@
   (section (site (libsail plugins)))
   (package sail_output)
   (files sail_plugin_output.cmxs))
- 

@@ -77,7 +77,7 @@ open Ast_defs
 open Type_check
 
 (** {2 Target type and accessor functions} *)
-   
+
 type target
 
 val name : target -> string
@@ -85,17 +85,17 @@ val name : target -> string
 val run_pre_parse_hook : target -> unit -> unit
 
 val run_pre_descatter_hook : target -> tannot ast -> Env.t -> unit
-  
+
 val run_pre_rewrites_hook : target -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
 val rewrites : target -> Rewrites.rewrite_sequence
-  
+
 val action : target -> string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
 val asserts_termination : target -> bool
 
 (** {2 Target registration} *)
-  
+
 (** Used for plugins to register custom Sail targets/backends.
 
    [register_target ~name:"foo" action] will create an option -foo,

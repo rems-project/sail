@@ -414,7 +414,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
                typq, typ
            ) (typq, typ) (typ_frees @ int_frees)
        in
-       
+
        let safe_instantiation, reverse = safe_instantiation instantiation in
        (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
        let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
@@ -531,7 +531,7 @@ let initial_calls = ref (IdSet.of_list
 let add_initial_calls ids = initial_calls := IdSet.union ids !initial_calls
 
 let get_initial_calls () = IdSet.elements !initial_calls
-                          
+
 let remove_unused_valspecs env ast =
   let calls = ref !initial_calls in
   let vs_ids = val_spec_ids ast.defs in

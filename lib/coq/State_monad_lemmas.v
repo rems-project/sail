@@ -530,7 +530,7 @@ Lemma no_throw_basic_builtins_6 Regs A E1 E2 msg :
   ignore_throw (E1 := E1) (failS msg) = @failS Regs A E2 msg.
 reflexivity. Qed.
 Lemma no_throw_basic_builtins_7 Regs A E1 E2 msg x :
-  ignore_throw (E1 := E1) (maybe_failS msg x) = @maybe_failS Regs A E2 msg x. 
+  ignore_throw (E1 := E1) (maybe_failS msg x) = @maybe_failS Regs A E2 msg x.
 destruct x; reflexivity. Qed.
 
 #[export] Hint Rewrite no_throw_basic_builtins_1 no_throw_basic_builtins_2

@@ -29,7 +29,7 @@ val split : forall 'len 'n 'm, 'len == 'n * 'm & 'n > 0 & 'm > 0.
     (int('n), int('m), bits('len)) -> vector('n, dec, bits('m))
 
 function split(n, m, bv) = {
-    var result: vector('n, dec, bits('m)) = undefined; 
+    var result: vector('n, dec, bits('m)) = undefined;
     foreach (i from 1 to n) {
         result[i - 1] = bv[i * m - 1 .. i * m - m]
     };
@@ -88,7 +88,7 @@ val vector_op : forall 'n 'm, 'n > 0 & 'm > 0.
     (VectorOp, int('n), int('m), vector('n, dec, bits('m)), vector('n, dec, bits('m))) -> vector('n, dec, bits('m))
 
 function vector_op(op, n, m, v1, v2) = {
-    var result: vector('n, dec, bits('m)) = undefined; 
+    var result: vector('n, dec, bits('m)) = undefined;
     foreach (i from 0 to (n - 1)) {
         result[i] = match op {
             Vadd => v1[i] + v2[i],
@@ -150,7 +150,7 @@ function main() = {
     decode(0b0110 @ 0xFFFFF @ 0b00 @ 0b10 @ 0b00 @ 0b01);
     // add V0 to V1 in 16 groups of 16, storing the result in V3
     decode(0b0100 @ 0xFFFFF @ 0b00 @ 0b11 @ 0b00 @ 0b01);
-    
+
     print_bits("V2 = ", V2);
     print_bits("V3 = ", V3);
 

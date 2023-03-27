@@ -85,7 +85,7 @@ let opt_ocaml_build_dir = ref "_sbuild"
 (* OCaml variant type can have at most 246 non-constant
    constructors. *)
 let ocaml_variant_max_constructors = 246
-                        
+
 type ctx =
   { register_inits : tannot exp list;
     externs : id Bindings.t;
@@ -247,7 +247,7 @@ let record_id l exp = match typ_of exp with
   | Typ_aux (Typ_id id, _) when Env.is_record id (env_of exp) -> id
   | Typ_aux (Typ_app (id, _), _) when Env.is_record id (env_of exp) -> id
   | typ -> Reporting.unreachable l __POS__ ("Found a struct without a record type when generating OCaml. Type found: " ^ string_of_typ typ)
- 
+
 let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
   | E_app (f, xs) ->
@@ -258,7 +258,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
         | [x] -> name ^^ space ^^ ocaml_atomic_exp ctx x
         | xs -> name ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
         end
-     | None -> 
+     | None ->
         begin match xs with
         | [x] -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
         (* Make sure we get the correct short circuiting semantics for and and or *)
@@ -631,7 +631,7 @@ let ocaml_string_of_enum ctx id ids =
 
 let ocaml_struct_type ctx id =
   zencode_upper ctx id ^^ dot ^^ zencode ctx id
-  
+
 let ocaml_string_of_struct ctx struct_id typq fields =
   let arg = gensym () in
   let ocaml_field (typ, id) =
@@ -702,7 +702,7 @@ let get_externs defs =
     | [] -> []
   in
   List.fold_left (fun exts (id, name) -> Bindings.add id name exts) Bindings.empty (List.concat (extern_ids defs))
- 
+
 let nf_group doc =
   first_function := true;
   group doc

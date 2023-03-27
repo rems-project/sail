@@ -192,7 +192,7 @@ struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                          'arch_ak : Type), 'n > 0 = {
   access_kind : Access_kind('arch_ak),
   va : option(bits('vasize)),
-  pa : 'pa,          
+  pa : 'pa,
   translation : 'ts,
   size : int('n),
   value : option(bits(8 * 'n)),

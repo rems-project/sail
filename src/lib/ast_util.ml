@@ -93,7 +93,7 @@ let mk_def_annot l = {
     attrs = [];
     loc = l;
   }
- 
+
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
@@ -101,11 +101,11 @@ type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 let is_unbound = function
   | Unbound _ -> true
   | _ -> false
-                                                                          
+
 let string_of_id = function
   | Id_aux (Id v, _) -> v
   | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
-                                                                          
+
 let lvar_typ ?loc:(l=Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
   | Register typ -> typ
@@ -122,7 +122,7 @@ let kid_loc = function
 
 let kopt_loc = function
   | KOpt_aux (_, l) -> l
-                    
+
 let typ_loc = function
   | Typ_aux (_, l) -> l
 
@@ -131,7 +131,7 @@ let pat_loc = function
 
 let exp_loc = function
   | E_aux (_, (l, _)) -> l
-             
+
 let gen_loc = function
   | Parse_ast.Generated l -> Parse_ast.Generated l
   | l -> Parse_ast.Generated l
@@ -207,7 +207,7 @@ let mk_val_spec vs_aux =
   DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown)
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def = DEF_aux (def, mk_def_annot l)
-  
+
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
 
@@ -307,7 +307,7 @@ module KOptSet = Set.Make(KOpt)
 module KOptMap = Map.Make(KOpt)
 module NexpSet = Set.Make(Nexp)
 module NexpMap = Map.Make(Nexp)
- 
+
 let nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
@@ -578,7 +578,7 @@ let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
 let mk_fexp id exp = FE_aux (FE_fexp (id, exp), no_annot)
 
 type effect = bool
-                   
+
 let no_effect = false
 let monadic_effect = true
 
@@ -1091,7 +1091,7 @@ let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
   | None -> raise (Reporting.err_typ l "Function clause list is empty")
 
 let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
-          
+
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
   | TD_record (id, _, _, _)
@@ -1241,7 +1241,7 @@ let is_typ_arg_nexp = function
 let is_typ_arg_typ = function
   | (A_aux (A_typ _, _)) -> true
   | _ -> false
-  
+
 let is_typ_arg_order = function
   | (A_aux (A_order _, _)) -> true
   | _ -> false
@@ -1263,7 +1263,7 @@ module Typ = struct
 end
 
 module TypMap = Map.Make(Typ)
- 
+
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id _ -> raise (Reporting.err_typ l "Unimplemented Nexp_id in nexp_frees")
@@ -1362,7 +1362,7 @@ let rec is_bitvector_typ = function
 (* Utilities for constructing effect sets *)
 
 let effectful e = e
-       
+
 let union_effects e1 e2 = e1 || e2
 
 let equal_effects e1 e2 = e1 = e2
@@ -1372,7 +1372,7 @@ let subseteq_effects e1 e2 =
   | false, _ -> true
   | true, true -> true
   | true, false -> false
-    
+
 let rec kopts_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
   | Nexp_id _

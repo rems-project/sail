@@ -150,15 +150,15 @@ and 'a alexp =
   | AL_id of id * 'a
   | AL_addr of id * 'a
   | AL_field of 'a alexp * id
- 
+
 (** When ANF translation has to introduce new bindings it uses a
 counter to ensure uniqueness. This function resets that counter. *)
 val reset_anf_counter : unit -> unit
 
 val aexp_loc : 'a aexp -> Parse_ast.l
-  
+
 (** {2 Functions for transforming ANF expressions} *)
-  
+
 val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
 
@@ -171,7 +171,7 @@ val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
 val aexp_bindings : 'a aexp -> IdSet.t
-  
+
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 
