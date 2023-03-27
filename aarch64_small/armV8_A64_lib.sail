@@ -622,7 +622,7 @@ function SCTLR (regime) = {
    if      regime == EL1 then SCTLR_EL1
    else if regime == EL2 then SCTLR_EL2
    else if regime == EL3 then SCTLR_EL3
-   else Unreachable("SCTLR_type unreachable") /* ARM: Unreachabe() */
+   else Unreachable("SCTLR_type unreachable") /* ARM: Unreachable() */
 }
 
 /** FUNCTION:SCTLRType SCTLR[] */

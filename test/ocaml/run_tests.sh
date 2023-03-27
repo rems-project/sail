@@ -61,7 +61,7 @@ done
 
 finish_suite "Ocaml trace testing"
 
-# FIXME: Renable these!
+# FIXME: Reenable these!
 #cd $DIR
 #
 #for i in `ls -d */`;

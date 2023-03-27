@@ -97,7 +97,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
 
 (package
   (name sail_latex_backend)
-  (synopsis "Sail to LaTeX formating")
+  (synopsis "Sail to LaTeX formatting")
   (depends
     (libsail (= :version))
     (omd (and (>= 1.3.1) (< 1.4.0)))))

@@ -118,7 +118,7 @@ cval :: 'V_' ::=
   | op ( cval0 , ... , cvaln )                        :: :: call
   | cval . uid                                        :: :: field
 
-% Note that init / clear are sometimes refered to as create / kill
+% Note that init / clear are sometimes referred to as create / kill
 
 %%% IR types
 
@@ -220,12 +220,12 @@ instr :: 'I_' ::=
 
 % We can embed either comments or pass raw-strings through to the
 % code-generator. The first is useful for annotating generated source,
-% the second for inserting instrumention. I_raw should be side-effect
+% the second for inserting instrumentation. I_raw should be side-effect
 % free.
   | '//' string                                    :: :: comment
   | C string                                       :: :: raw
 
-% Jib_compile.ml will represent all returns as assigments to the clexp
+% Jib_compile.ml will represent all returns as assignments to the clexp
 % CL_return, followed by end to signify the end of the
 % function.
   | return cval                                    :: :: return

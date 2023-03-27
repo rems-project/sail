@@ -250,7 +250,7 @@ static inline fbits safe_rshift(const fbits x, const fbits n)
 }
 
 /*
- * For backwards compatability with older Sail C libraries
+ * For backwards compatibility with older Sail C libraries
  */
 typedef uint64_t mach_bits;
 

@@ -78,7 +78,7 @@ module Big_int = Nat_big_num
    is even more verbose still. *)
 val opt_tc_debug : int ref
 
-(** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
+(** [opt_no_lexp_bounds_check] turns off the bounds checking in vector
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
@@ -215,7 +215,7 @@ module Env : sig
   val get_extern : id -> t -> string -> string
 
   (** Lookup id searchs for a specified id in the environment, and
-     returns it's type and what kind of identifier it is, using the
+     returns its type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and
      won't throw any exceptions. *)
   val lookup_id : id -> t -> typ lvar
@@ -225,7 +225,7 @@ module Env : sig
   val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
 
   (** Check if id is a constructor, then if it is return a (n, m,
-     id, type_union) triple where the values represent it's position (n) in the
+     id, type_union) triple where the values represent its position (n) in the
      list of (m) constructors, the union name, and the type_union entry itself *)
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
 
@@ -350,7 +350,7 @@ val strip_typ_aux : typ_aux -> typ_aux
 
 (** Check an expression has some type. Returns a fully annotated
    version of the expression, where each subexpression is annotated
-   with it's type and the Environment used while checking it. The can
+   with its type and the Environment used while checking it. The can
    be used to re-start the typechecking process on any
    sub-expression. so local modifications to the AST can be
    re-checked. *)

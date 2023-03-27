@@ -908,7 +908,7 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
 
   match memop {
     MemOp_STORE  => {
-      /* anounce the address */
+      /* announce the address */
       wMem_Addr(address, dbytes, acctype, excl);
 
       if rt_unknown then {
@@ -1065,7 +1065,7 @@ function clause execute ( LoadStorePairNonTemp((wback,postindex,n,t,t2,acctype,m
     address = address + offset;
 
   if memop == MemOp_STORE then
-    /* anounce the address */
+    /* announce the address */
     wMem_Addr(address, dbytes * 2, acctype, false);
 
   /* this is a hack to allow the address write back to be observed
@@ -1128,7 +1128,7 @@ function sharedDecodeLoadImmediate (opc : bits(2),size : bits(2), Rn : bits(5), 
           = {
   n : reg_index = UInt_reg(Rn);
   t : reg_index = UInt_reg(Rt);
-  /* ARM: inorder to unify the decoding acctype was moved out.
+  /* ARM: in order to unify the decoding acctype was moved out.
           AccType_UNPRIV for LDT* / STT* and AccType_NORMAL for the rest.
   acctype : AccType = AccType_NORMAL/AccType_UNPRIV; */
   memop : MemOp = MemOp_LOAD; /* ARM: uninitialized */
@@ -1221,7 +1221,7 @@ function clause execute ( LoadImmediate ((n,t,acctype,memop,_signed,wback,postin
     address = address + offset;
 
   if memop == MemOp_STORE then
-    /* anounce the address */
+    /* announce the address */
     wMem_Addr(address, quot (datasize,8), acctype, false);
 
   /* this is a hack to allow the address write back to be observed
@@ -1388,7 +1388,7 @@ function clause execute ( LoadRegister((n,t,m,acctype,memop,_signed,wback,postin
     address = address + offset;
 
   if memop == MemOp_STORE then
-    /* anounce the address */
+    /* announce the address */
     wMem_Addr(address, quot (datasize,8), acctype, false);
 
   /* this is a hack to allow the address write back to be observed
@@ -1577,7 +1577,7 @@ function clause execute ( LoadStorePair((wback,postindex,n,t,t2,acctype,memop,_s
     address = address + offset;
 
   if memop == MemOp_STORE then
-    /* anounce the address */
+    /* announce the address */
     wMem_Addr(address, dbytes * 2, acctype, false);
 
   /* this is a hack to allow the address write back to be observed

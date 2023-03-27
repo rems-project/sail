@@ -510,7 +510,7 @@ let specialize_id_overloads instantiations id ast =
 
   { ast with defs = rewrite_overloads ast.defs }
 
-(* Once we've specialized a definition, it's original valspec should
+(* Once we've specialized a definition, its original valspec should
    be unused, unless another polymorphic function called it. We
    therefore remove all unused valspecs. Remaining polymorphic
    valspecs are then re-specialized. This process is iterated until

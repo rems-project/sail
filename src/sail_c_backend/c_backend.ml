@@ -290,7 +290,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        (* Use Type_check.destruct_exist when optimising with SMT, to
           ensure that we don't cause any type variable clashes in
           local_env, and that we can optimize the existential based
-          upon it's constraints. *)
+          upon its constraints. *)
        begin match destruct_exist typ with
        | Some (kids, nc, typ) ->
           let env = add_existential l kids nc ctx.local_env in
@@ -357,7 +357,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
          | None -> v
        end
     | AV_cval (cval, typ) -> AV_cval (cval, typ)
-    (* An id can be converted to a C fragment if it's type can be
+    (* An id can be converted to a C fragment if its type can be
      stack-allocated. *)
     | AV_id (id, lvar) as v ->
        begin

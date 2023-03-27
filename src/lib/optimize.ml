@@ -113,7 +113,7 @@ let recheck ({ defs; _} as ast) =
                let next_id = if i = n then current_id else append_id id ("_unroll_" ^ string_of_int (i + 1)) in
                (* Create a valspec for the new unrolled function *)
                specs := !specs @ [DEF_aux (DEF_val (rename_valspec current_id vs), vs_annot)];
-               (* Then duplicate it's function body and make it call the next unrolled function *)
+               (* Then duplicate its function body and make it call the next unrolled function *)
                bodies := !bodies @ [rewrite_def (rw_defs next_id) (DEF_aux (DEF_fundef (rename_fundef current_id fdef), fdef_annot))]
              done;
 

@@ -72,7 +72,7 @@ open Type_check
 val opt_interactive : bool ref
 
 (** Each interactive command is passed this struct, containing the
-   abstract syntax tree, effect into and the type-checking
+   abstract syntax tree, effect info and the type-checking
    environment. Also contains the default Sail directory *)
 type istate = {
     ast : Type_check.tannot ast;

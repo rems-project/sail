@@ -62,7 +62,7 @@ function DoubleLockStatus() -> boolean= {
 enum signalValue = {LOw, HIGH}
 
 function signalDBGEN () -> signalValue = not_implemented_extern("signalDBGEN")
-function signelNIDEN () -> signalValue = not_implemented_extern("signalNIDEN")
+function signalNIDEN () -> signalValue = not_implemented_extern("signalNIDEN")
 function signalSPIDEN () -> signalValue = not_implemented_extern("signalSPIDEN")
 function signalDPNIDEN () -> signalValue = not_implemented_extern("signalSPNIDEN")
 
@@ -149,7 +149,7 @@ function ReservedValue() -> unit = {
 function UnallocatedEncoding() -> unit = {
   /* If the unallocated encoding is an AArch32 CP10 or CP11 instruction, FPEXC.DEX must be written */
   /* to zero. This is omitted from this code. */
-  /* ARM: uncomment whenimplementing aarch32
+  /* ARM: uncomment when implementing aarch32
   if UsingAArch32() && !AArch32.GeneralExceptionsToAArch64() then
     AArch32.TakeUndefInstrException();
   else*/

@@ -169,12 +169,12 @@ end
 
 let extract_instructions_old decode_name execute_name defs =
   let (Just decoder) = find_function defs (Id_aux (Id decode_name) Unknown) in
-  let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
+  let (Just executor) = find_function defs (Id_aux (Id execute_name) Unknown) in
   let instr_no_effects = extract_from_decode decoder in
-  let instructions = extract_effects instr_no_effects executer in
+  let instructions = extract_effects instr_no_effects executor in
   instructions
 
 let extract_instructions execute_name defs =
-  let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
-  let instructions = extract_from_execute executer in
+  let (Just executor) = find_function defs (Id_aux (Id execute_name) Unknown) in
+  let instructions = extract_from_execute executor in
   instructions
