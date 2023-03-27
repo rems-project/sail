@@ -131,6 +131,7 @@ let has_outcome id = EffectSet.mem (Outcome id)
 module PC_config = struct
   type t = tannot
   let typ_of_t = Type_check.typ_of_tannot
+  let add_attribute l attr arg = Type_check.map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config)

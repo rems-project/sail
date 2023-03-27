@@ -827,6 +827,7 @@ let case_exp e t cs =
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
+  let add_attribute l attr arg = map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config);;

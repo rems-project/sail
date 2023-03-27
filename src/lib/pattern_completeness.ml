@@ -82,6 +82,7 @@ module type Config =
   sig
     type t
     val typ_of_t : t -> typ
+    val add_attribute : l -> string -> string -> t -> t
   end
 
 type row_index = {
@@ -236,6 +237,7 @@ module Make(C: Config) = struct
         Reporting.warn "Required literal" l preserved_explanation
       );
       let wild = wild || List.exists (fun wildcard -> wildcard = n) wildcards in
+      let t = ref t in
       let aux = match aux with
         | P_or (p1, p2) -> P_or (go wild p1, go wild p2)
         | P_not p -> P_not (go wild p)
@@ -250,16 +252,16 @@ module Make(C: Config) = struct
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
         | P_id id -> P_id id
+        | P_lit (L_aux (L_num n, _)) when wild ->
+           t := C.add_attribute (gen_loc l) "int_wildcard" (Big_int.to_string n) !t;
+           P_wild
         | P_lit _ when wild ->
            let typ = typ_of_pat full_pat in
-           if is_bitvector_typ typ then
-             P_typ (typ, P_aux (P_wild, (l, t)))
-           else
-             P_wild
+           P_typ (typ, P_aux (P_wild, (l, !t)))
         | P_lit lit -> P_lit lit
         | P_wild -> P_wild
       in
-      P_aux (aux, (l, t))
+      P_aux (aux, (l, !t))
     in
     go false pat
 

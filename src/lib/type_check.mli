@@ -302,6 +302,8 @@ val mk_tannot : ?uannot:uannot -> Env.t -> typ -> tannot
 
 val untyped_annot : tannot -> uannot
 
+val map_uannot : (uannot -> uannot) -> tannot -> tannot
+
 val get_instantiations : tannot -> typ_arg KBindings.t option
 
 val empty_tannot : tannot

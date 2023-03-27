@@ -2581,6 +2581,8 @@ let is_empty_tannot tannot = match fst tannot with
   | None -> true
   | Some _ -> false
 
+let map_uannot f (t, uannot) = (t, f uannot)
+
 let destruct_tannot tannot = Util.option_map (fun t -> (t.env, t.typ)) (fst tannot)
 
 let string_of_tannot tannot =
@@ -3082,6 +3084,7 @@ let tc_assume nc (E_aux (aux, annot)) =
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
+  let add_attribute l attr arg = map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config);;
@@ -3574,7 +3577,13 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
      let env, typ = bind_typ_pat env typ_pat typ in
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
-  | P_wild -> annot_pat P_wild typ, env, []
+  | P_wild ->
+     begin match get_attribute "int_wildcard" uannot with
+     | Some (_, arg) ->
+        bind_pat env (P_aux (P_lit (L_aux (L_num (Big_int.of_string arg), gen_loc l)), (l, uannot))) typ
+     | None ->
+        annot_pat P_wild typ, env, []
+     end
   | P_or (pat1, pat2) ->
      let tpat1, _, guards1 = bind_pat (Env.no_bindings env) pat1 typ in
      let tpat2, _, guards2 = bind_pat (Env.no_bindings env) pat2 typ in

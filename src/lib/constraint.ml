@@ -495,7 +495,6 @@ let call_smt_solve_bitvector l smt_file smt_vars =
        raise (Reporting.err_general l ("Got error when calling smt: " ^ Printexc.to_string exn))
   in
   Sys.remove input_file;
-  prerr_endline smt_output;
   List.map (fun (smt_var, smt_ty) ->
       let smt_var_str = "p" ^ string_of_int smt_var in
       try (

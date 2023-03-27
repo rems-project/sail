@@ -78,6 +78,7 @@ module type Config =
   sig
     type t
     val typ_of_t : t -> typ
+    val add_attribute : l -> string -> string -> t -> t
   end
 
 module Make(C: Config) : sig
