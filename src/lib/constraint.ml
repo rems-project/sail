@@ -307,7 +307,17 @@ let save_digests () =
 let kopt_pair kopt = (kopt_kid kopt, unaux_kind (kopt_kind kopt))
 
 let bound_exponential sexpr = sfun "and" [sfun "<=" [Atom "0"; sexpr]; sfun "<=" [sexpr; Atom "64"]]
- 
+
+let constraint_to_smt l constr =
+  let vars =
+    kopts_of_constraint constr
+    |> KOptSet.elements
+    |> List.map kopt_pair
+    |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
+  in
+  let vars, sexpr, var_map, exponentials = to_smt l vars constr in
+  (vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")"), (fun v -> pp_sexpr (var_map v)), List.map pp_sexpr exponentials
+                            
 let rec call_smt' l extra constraints : smt_result =
   let vars =
     kopts_of_constraint constraints
@@ -485,19 +495,27 @@ let call_smt_solve_bitvector l smt_file smt_vars =
        raise (Reporting.err_general l ("Got error when calling smt: " ^ Printexc.to_string exn))
   in
   Sys.remove input_file;
+  prerr_endline smt_output;
   List.map (fun (smt_var, smt_ty) ->
-      let smt_var_str = "v" ^ string_of_int smt_var in
-      let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
-      try
-        let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
-        let prefix = Str.matched_group 1 smt_output in
-        let result = Str.matched_group 2 smt_output in
-        match prefix with
-        | "#b" -> Some (smt_var, mk_lit (L_bin result))
-        | "#x" -> Some (smt_var, mk_lit (L_hex result))
-        | _ ->
-           raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
-      with
+      let smt_var_str = "p" ^ string_of_int smt_var in
+      try (
+        if smt_ty = "Int" then (
+          let regexp = "(define-fun " ^ smt_var_str ^ {| () Int [ ]+\([0-9]+\))|} in
+          let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+          let result = Str.matched_group 1 smt_output in
+          Some (smt_var, mk_lit (L_num (Big_int.of_string result)))
+        ) else (
+          let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
+          let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+          let prefix = Str.matched_group 1 smt_output in
+          let result = Str.matched_group 2 smt_output in
+          match prefix with
+          | "#b" -> Some (smt_var, mk_lit (L_bin result))
+          | "#x" -> Some (smt_var, mk_lit (L_hex result))
+          | _ ->
+             raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
+        )
+      ) with
       | Not_found -> None
     ) smt_vars |> Util.option_all
                      

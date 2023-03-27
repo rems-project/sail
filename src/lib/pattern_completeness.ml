@@ -75,6 +75,7 @@ module IntIntSet = Util.IntIntSet
 type ctx = {
     variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;
+    constraints : n_constraint list;
   }
 
 module type Config =
@@ -249,7 +250,12 @@ module Make(C: Config) = struct
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
         | P_id id -> P_id id
-        | P_lit _ when wild -> P_typ (typ_of_pat full_pat, P_aux (P_wild, (l, t)))
+        | P_lit _ when wild ->
+           let typ = typ_of_pat full_pat in
+           if is_bitvector_typ typ then
+             P_typ (typ, P_aux (P_wild, (l, t)))
+           else
+             P_wild
         | P_lit lit -> P_lit lit
         | P_wild -> P_wild
       in
@@ -264,6 +270,7 @@ module Make(C: Config) = struct
     | GP_tuple of gpat list
     | GP_app of id * id * gpat list
     | GP_bitvector of int * int * (bv_constraint -> bv_constraint)
+    | GP_num of int * Big_int.num * kid option
     | GP_enum of id * id
     | GP_vector of gpat list
     | GP_bool of bool
@@ -276,6 +283,7 @@ module Make(C: Config) = struct
     | GP_app (_, ctor, gpats) ->
        string_of_id ctor ^ "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
     | GP_bitvector (_, _, bvc) -> string_of_bv_constraint (bvc (BVC_lit "x"))
+    | GP_num (_, n, _) -> Big_int.to_string n
     | GP_enum (_, id) -> string_of_id id
     | GP_bool b -> string_of_bool b
     | GP_vector gpats -> "[" ^ Util.string_of_list ", " _string_of_gpat gpats ^ "]"
@@ -286,7 +294,7 @@ module Make(C: Config) = struct
         prerr_endline (Util.string_of_list ", " _string_of_gpat c)
       ) rs
 
-  let rec generalize ctx (P_aux (p_aux, (l, (_, pnum))) as pat) =
+  let rec generalize ctx head_exp_typ (P_aux (p_aux, (l, (_, pnum))) as pat) =
     let typ = typ_of_pat pat in
     match p_aux with
     | P_lit (L_aux (L_unit, _)) ->
@@ -314,7 +322,7 @@ module Make(C: Config) = struct
        GP_bitvector (pnum, List.length pats, fun x -> BVC_eq (BVC_bvand (BVC_lit mask, x), BVC_lit bits))
 
     | P_vector pats ->
-       GP_vector (List.map (generalize ctx) pats)
+       GP_vector (List.map (generalize ctx None) pats)
 
     | P_vector_concat pats when is_bitvector_typ typ ->
        let lengths =
@@ -327,7 +335,7 @@ module Make(C: Config) = struct
                 | Some n -> Some (Big_int.to_int n :: lengths)
                 | None -> None
            ) (Some []) (List.map typ_of_pat pats) in
-       let gpats = List.map (generalize ctx) pats in
+       let gpats = List.map (generalize ctx None) pats in
        begin match lengths with
        | Some lengths ->
           let (total, slices) = List.fold_left (fun (total, acc) len -> (total + len, (total + len - 1, total) :: acc)) (0, []) lengths in
@@ -348,7 +356,7 @@ module Make(C: Config) = struct
        end
 
     | P_tuple pats ->
-       GP_tuple (List.map (generalize ctx) pats)
+       GP_tuple (List.map (generalize ctx None) pats)
 
     | P_app (id, pats) ->
        let typ_id = match typ with
@@ -356,15 +364,23 @@ module Make(C: Config) = struct
          | Typ_aux (Typ_id id, _) -> id
          | _ -> failwith "Bad type"
        in
-       GP_app (typ_id, id, List.map (generalize ctx) pats)
+       GP_app (typ_id, id, List.map (generalize ctx None) pats)
 
     | P_lit (L_aux (L_true, _)) -> GP_bool true
     | P_lit (L_aux (L_false, _)) -> GP_bool false
+    | P_lit (L_aux (L_num n, _)) ->
+       begin match head_exp_typ with
+       | Some (Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _))
+              when string_of_id f = "atom" || string_of_id f = "implicit"  ->
+          GP_num (pnum, n, Some v)
+       | _ -> 
+          GP_num (pnum, n, None)
+       end
     | P_lit lit -> GP_lit lit
     | P_wild -> GP_wild
-    | P_var (pat, _) -> generalize ctx pat
-    | P_as (pat, _) -> generalize ctx pat
-    | P_typ (_, pat) -> generalize ctx pat
+    | P_var (pat, _) -> generalize ctx head_exp_typ pat
+    | P_as (pat, _) -> generalize ctx head_exp_typ pat
+    | P_typ (_, pat) -> generalize ctx head_exp_typ pat
 
     | P_id id ->
        begin match List.find_opt (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings ctx.enums) with
@@ -376,12 +392,12 @@ module Make(C: Config) = struct
 
   let rec find_smtlib_type = function
     | (_, GP_bitvector (_, len, _)) :: _ -> Some ("(_ BitVec " ^ string_of_int len ^ ")")
+    | (_, GP_num (_, _, _)) :: _ -> Some "Int"
     | _ :: rest -> find_smtlib_type rest
     | [] -> None
 
   let is_simple_gpat = function
-    | GP_bitvector _ -> true
-    | GP_wild -> true
+    | GP_bitvector _  | GP_num _ | GP_wild -> true
     | _ -> false
 
   let rec column_type = function
@@ -409,7 +425,7 @@ module Make(C: Config) = struct
     | _ :: rest -> unmatched_literal rest
     | [] -> None
 
-  let simple_matrix_is_complete _ctx matrix =
+  let simple_matrix_is_complete ctx matrix =
     let vars =
       List.mapi (fun i (Rows column) ->
           match find_smtlib_type column with
@@ -422,18 +438,23 @@ module Make(C: Config) = struct
     match just_vars with
     | [] when row_matrix_height matrix = 1 -> mk_complete all_rows [] (* The matrix is a single row of wildcard patterns *)
     | _ ->
+       let head_exp_constraint, var_map, _ = Constraint.constraint_to_smt Parse_ast.Unknown (List.fold_left nc_and nc_true ctx.constraints) in
        let constrs =
          List.map (fun (l, Columns row) ->
              let row_constrs =
                List.map2 (fun var gpat ->
                    match var, gpat with
-                   | (Some (i, _), GP_bitvector (_, _, bvc)) -> Some (string_of_bv_constraint (bvc (BVC_lit ("v" ^ string_of_int i))))
+                   | (Some (i, _), GP_bitvector (_, _, bvc)) -> Some (string_of_bv_constraint (bvc (BVC_lit ("p" ^ string_of_int i))))
+                   | (Some (i, s), GP_num (_, n, Some v)) ->
+                      let smt_var = var_map v in
+                      Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i smt_var)
                    | _ -> None
                  ) vars row
                |> Util.option_these
              in
              match row_constrs with
              | [] -> (l, None)
+             | [c] -> (l, Some ("(assert (not " ^ Util.string_of_list " " (fun x -> x) row_constrs ^ "))"))
              | _ -> (l, Some ("(assert (not (and " ^ Util.string_of_list " " (fun x -> x) row_constrs ^ ")))"))
            ) (rows_to_list matrix)
        in
@@ -445,7 +466,8 @@ module Make(C: Config) = struct
           mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
        | None ->
           let smtlib =
-            Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const v%d %s)" v ty) just_vars ^ "\n"
+            head_exp_constraint ^ "\n"
+            ^ Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const p%d %s)" v ty) just_vars ^ "\n"
             ^ Util.string_of_list "\n" (fun x -> x) (Util.option_these (List.map snd constrs)) ^ "\n"
             ^ "(check-sat)\n"
             ^ "(get-model)\n"
@@ -457,7 +479,8 @@ module Make(C: Config) = struct
                                                                 | None -> mk_lit_exp L_undef))
           | None ->
              let to_wildcards = match Util.last_opt (rows_to_list matrix) with
-               | Some (idx, Columns row) -> Util.map_filter (function GP_bitvector (pnum, _, _) -> Some (idx.num, pnum) | _ -> None) row
+               | Some (idx, Columns row) ->
+                  Util.map_filter (function (GP_bitvector (pnum, _, _) | GP_num (pnum, _, _))  -> Some (idx.num, pnum) | _ -> None) row
                | None -> []
              in
              mk_complete all_rows to_wildcards
@@ -687,12 +710,12 @@ module Make(C: Config) = struct
     | _, _ ->
        Reporting.unreachable l __POS__ "Impossible case in update_cases"
 
-  let is_complete_wildcarded l ctx cases typ =
+  let is_complete_wildcarded l ctx cases head_exp_typ =
     try
       match cases_to_pats 0 false cases with
       | _, [] -> None
       | have_guard, pats ->
-         let matrix = Rows (List.mapi (fun i (l, pat) -> ({ loc = l; num = i}, Columns [generalize ctx pat])) pats) in
+         let matrix = Rows (List.mapi (fun i (l, pat) -> ({ loc = l; num = i}, Columns [generalize ctx (Some head_exp_typ) pat])) pats) in
          begin match matrix_is_complete l ctx matrix with
          | Incomplete (unmatched :: _) ->
             let guard_info = if have_guard then " by unguarded patterns" else "" in
@@ -715,6 +738,6 @@ module Make(C: Config) = struct
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | exn -> None
 
-  let is_complete l ctx cases typ = Util.is_some (is_complete_wildcarded l ctx cases typ)
+  let is_complete l ctx cases head_exp_typ = Util.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
 
 end
