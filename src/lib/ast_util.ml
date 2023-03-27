@@ -82,6 +82,12 @@ let empty_uannot = {
 let add_attribute l attr arg annot =
   { attrs = (l, attr, arg) :: annot.attrs }
 
+let get_attribute attr annot =
+  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs
+  |> Option.map (fun (l, _, arg) -> (l, arg))
+
+let get_attributes annot = annot.attrs
+
 let mk_def_annot l = {
     doc_comment = None;
     attrs = [];

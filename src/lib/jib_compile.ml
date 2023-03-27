@@ -1495,7 +1495,7 @@ let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
   | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _))
        when !opt_memo_cache ->
      let digest =
-       def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
+       strip_def def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
      in
      let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
      let cached =
@@ -1626,7 +1626,8 @@ and compile_def' n total ctx (DEF_aux (aux, _) as def) =
 
   (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
   | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
-     Reporting.unreachable (def_loc def) __POS__ ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
+     Reporting.unreachable (def_loc def) __POS__
+       ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def (strip_def def)))
 
 let mangle_mono_id id ctx ctyps =
   append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")

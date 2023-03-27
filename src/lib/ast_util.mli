@@ -89,9 +89,13 @@ val empty_uannot : uannot
 *)
 val add_attribute : l -> string -> string -> uannot -> uannot
 
+val get_attribute : string -> uannot -> (l * string) option
+
+val get_attributes : uannot -> (l * string * string) list
+
 val mk_def_annot : l -> def_annot
   
-(** The empty annotation (as a location + uannot] pair). Should be used
+(** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
    information with the various [locate_] functions in this module. *)

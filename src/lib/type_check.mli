@@ -97,9 +97,6 @@ val opt_smt_div : bool ref
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 
-(** Check pattern-match completeness when type-checking *)
-val opt_check_completeness : bool ref
-
 (** {2 Type errors} *)
 
 type constraint_reason = (Ast.l * string) option
@@ -301,7 +298,7 @@ type tannot
    calling destruct_tannot followed by mk_tannot returns an identical
    type annotation. *)
 val destruct_tannot : tannot -> (Env.t * typ) option
-val mk_tannot : Env.t -> typ -> tannot
+val mk_tannot : ?uannot:uannot -> Env.t -> typ -> tannot
 
 val untyped_annot : tannot -> uannot
 

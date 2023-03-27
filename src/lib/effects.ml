@@ -176,12 +176,8 @@ let infer_def_direct_effects asserts_termination def =
     | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
     | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 ->
        effects := EffectSet.add Register !effects
-    | E_match (exp, cases) ->
-       let ctx = {
-           Pattern_completeness.variants = Env.get_variants env;
-           Pattern_completeness.enums = Env.get_enums env
-         } in
-       if not (PC.is_complete (fst annot) ctx cases (typ_of exp)) then (
+    | E_match (_, _) ->
+       if Util.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then (
          effects := EffectSet.add IncompleteMatch !effects
        )
     | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
