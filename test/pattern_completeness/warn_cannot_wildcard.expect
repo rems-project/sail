@@ -1,0 +1,8 @@
+[93mWarning[0m: Required literal [96mwarn_cannot_wildcard.sail[0m:10.14-17:
+10[96m |[0m        (Some(0b1), _)         => (),
+  [91m |[0m              [91m^-^[0m
+  [91m |[0m 
+Sail cannot simplify the above pattern match:
+This bitvector pattern literal must be kept, as it is required for Sail to show that the surrounding pattern match is complete.
+When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify that the match covers all possible cases.
+

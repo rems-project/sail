@@ -72,6 +72,8 @@ module Big_int = Nat_big_num
 module IntSet = Util.IntSet
 module IntIntSet = Util.IntIntSet
 
+let opt_debug_no_literals = ref false
+
 type ctx = {
     variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;
@@ -440,16 +442,28 @@ module Make(C: Config) = struct
     match just_vars with
     | [] when row_matrix_height matrix = 1 -> mk_complete all_rows [] (* The matrix is a single row of wildcard patterns *)
     | _ ->
-       let head_exp_constraint, var_map, _ = Constraint.constraint_to_smt Parse_ast.Unknown (List.fold_left nc_and nc_true ctx.constraints) in
+       let head_exp_constraint, var_map, _ =
+         Constraint.constraint_to_smt Parse_ast.Unknown (List.fold_left nc_and nc_true ctx.constraints) in
+       let created_vars = ref KidSet.empty in
        let constrs =
          List.map (fun (l, Columns row) ->
              let row_constrs =
                List.map2 (fun var gpat ->
                    match var, gpat with
                    | (Some (i, _), GP_bitvector (_, _, bvc)) -> Some (string_of_bv_constraint (bvc (BVC_lit ("p" ^ string_of_int i))))
-                   | (Some (i, s), GP_num (_, n, Some v)) ->
-                      let smt_var = var_map v in
-                      Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i smt_var)
+                   | (Some (i, _), GP_num (_, n, Some v)) ->
+                      let smt_var, created = var_map v in
+                      (* If the variable was not already in the map (and has therefore just been created), then it is unconstrained *)
+                      if created then (
+                        created_vars := KidSet.add v !created_vars
+                      );
+                      if not (KidSet.mem v !created_vars) then (
+                        Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i smt_var)
+                      ) else (
+                        Some (Printf.sprintf "(= p%d %s)" i (Big_int.to_string n))
+                      )
+                   | (Some (i, _), GP_num (_, n, None)) ->
+                      Some (Printf.sprintf "(= p%d %s)" i (Big_int.to_string n))
                    | _ -> None
                  ) vars row
                |> Util.option_these
@@ -476,9 +490,13 @@ module Make(C: Config) = struct
           in
           match Constraint.call_smt_solve_bitvector Parse_ast.Unknown smtlib just_vars with
           | Some lits ->
-             Incomplete (List.init (List.length vars) (fun i -> match List.assoc_opt i lits with
-                                                                | Some lit -> mk_exp (E_lit lit)
-                                                                | None -> mk_lit_exp L_undef))
+             if !opt_debug_no_literals then (
+               Incomplete (List.init (List.length vars) (fun _ -> mk_lit_exp L_undef))
+             ) else (
+               Incomplete (List.init (List.length vars) (fun i -> match List.assoc_opt i lits with
+                                                                  | Some lit -> mk_exp (E_lit lit)
+                                                                  | None -> mk_lit_exp L_undef))
+             )
           | None ->
              let to_wildcards = match Util.last_opt (rows_to_list matrix) with
                | Some (idx, Columns row) ->

@@ -3578,12 +3578,13 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild ->
-     begin match get_attribute "int_wildcard" uannot with
-     | Some (_, arg) ->
-        bind_pat env (P_aux (P_lit (L_aux (L_num (Big_int.of_string arg), gen_loc l)), (l, uannot))) typ
-     | None ->
-        annot_pat P_wild typ, env, []
-     end
+     let env = match get_attribute "int_wildcard" uannot with
+       | Some (_, arg) ->
+          (* If the patterh completeness checker replaced an numeric pattern, modify the environment as if it hadn't *)
+          let _, env, _ = bind_pat env (P_aux (P_lit (L_aux (L_num (Big_int.of_string arg), gen_loc l)), (l, uannot))) typ in
+          env
+       | None -> env in
+     annot_pat P_wild typ, env, []
   | P_or (pat1, pat2) ->
      let tpat1, _, guards1 = bind_pat (Env.no_bindings env) pat1 typ in
      let tpat2, _, guards2 = bind_pat (Env.no_bindings env) pat2 typ in

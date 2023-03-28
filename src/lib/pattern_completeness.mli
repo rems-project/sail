@@ -68,6 +68,12 @@
 open Ast
 open Ast_util
 
+(** For testing, we don't want our tests to print exact literals in
+    warnings, otherwise they would be overly brittle. This is because
+    we use an SMT solver to find counterexamples to complex
+    constrained patterns. *)
+val opt_debug_no_literals : bool ref
+
 type ctx = {
     variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;

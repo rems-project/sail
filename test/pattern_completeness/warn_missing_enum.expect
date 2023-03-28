@@ -1,0 +1,12 @@
+[93mWarning[0m: Redundant case [96mwarn_missing_enum.sail[0m:7.8-9:
+7[96m |[0m        C => (),
+ [91m |[0m        [91m^[0m
+ [91m |[0m 
+This match case is never used
+
+[93mWarning[0m: Redundant case [96mwarn_missing_enum.sail[0m:8.8-9:
+8[96m |[0m        D => (),
+ [91m |[0m        [91m^[0m
+ [91m |[0m 
+This match case is never used
+

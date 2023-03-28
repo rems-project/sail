@@ -81,7 +81,7 @@ type smt_result = Unknown | Sat | Unsat
 val load_digests : unit -> unit
 val save_digests : unit -> unit
 
-val constraint_to_smt : l -> n_constraint -> string * (kid -> string) * string list
+val constraint_to_smt : l -> n_constraint -> string * (kid -> string * bool) * string list
 
 val call_smt : l -> n_constraint -> smt_result
 
