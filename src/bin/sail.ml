@@ -77,7 +77,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
-                     
+ 
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts

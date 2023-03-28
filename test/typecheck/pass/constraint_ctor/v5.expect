@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mconstraint_ctor/v5.sail[0m:27.2-29:
+[96mpass/constraint_ctor/v5.sail[0m:27.2-29:
 27[96m |[0m  _prove(constraint('x >= 4));
   [91m |[0m  [91m^-------------------------^[0m
   [91m |[0m Cannot prove 'x >= 4

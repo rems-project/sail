@@ -1,11 +1,11 @@
-[93mWarning[0m: Deprecated [96mreg_32_64/v3.sail[0m:5.57-70:
+[93mWarning[0m: Deprecated [96mpass/reg_32_64/v3.sail[0m:5.57-70:
 5[96m |[0mval "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
  [91m |[0m                                                         [91m^-----------^[0m
  [91m |[0m 
 Explicit effect annotations are deprecated. They are no longer used and can be removed.
 
 [93mType error[0m:
-[96mreg_32_64/v3.sail[0m:29.2-27:
+[96mpass/reg_32_64/v3.sail[0m:29.2-27:
 29[96m |[0m  reg_deref(R)['d - 1 .. 0]
   [91m |[0m  [91m^-----------------------^[0m
   [91m |[0m No overloading for vector_subrange, tried:

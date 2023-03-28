@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mif_infer/v2.sail[0m:10.10-38:
+[96mpass/if_infer/v2.sail[0m:10.10-38:
 10[96m |[0m  let _ = 0b1001[if R then 0 else f()];
   [91m |[0m          [91m^--------------------------^[0m
   [91m |[0m No overloading for vector_access, tried:
@@ -9,7 +9,7 @@
   [91m |[0m [94m*[0m plain_vector_access
   [91m |[0m    Could not unify vector('n, dec, 'a) and bitvector(4, dec)
   [91m |[0m 
-  [91m |[0m [93mCaused by [0m[96mif_infer/v2.sail[0m:10.10-38:
+  [91m |[0m [93mCaused by [0m[96mpass/if_infer/v2.sail[0m:10.10-38:
   [91m |[0m 10[96m |[0m  let _ = 0b1001[if R then 0 else f()];
   [91m |[0m   [91m |[0m          [91m^--------------------------^[0m
   [91m |[0m   [91m |[0m Vector access could not be interpreted as a bitfield access

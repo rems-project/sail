@@ -1,11 +1,11 @@
-[93mWarning[0m: Deprecated [96mbool_constraint/v3.sail[0m:27.11-36:
+[93mWarning[0m: Deprecated [96mpass/bool_constraint/v3.sail[0m:27.11-36:
 27[96m |[0mval my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> 'q. bool('q)}
   [91m |[0m           [91m^-----------------------^[0m
   [91m |[0m 
 All external bindings should be marked as either monadic or pure
 
 [93mType error[0m:
-[96mbool_constraint/v3.sail[0m:46.4-32:
+[96mpass/bool_constraint/v3.sail[0m:46.4-32:
 46[96m |[0m    _prove(constraint('n <= 14))
   [91m |[0m    [91m^--------------------------^[0m
   [91m |[0m Cannot prove 'n <= 14
