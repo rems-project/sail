@@ -7,15 +7,15 @@ import hashlib
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
-sys.path.insert(0, os.path.join(mydir, '..'))
+sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
 
-print("Sail is {}".format(sail))
-print("Sail dir is {}".format(sail_dir))
+print('Sail is {}'.format(sail))
+print('Sail dir is {}'.format(sail_dir))
 
 step('mkdir -p rtpass')
 step('mkdir -p rtpass2')
