@@ -445,6 +445,8 @@ module Make(C: Config) = struct
        let head_exp_constraint, var_map, _ =
          Constraint.constraint_to_smt Parse_ast.Unknown (List.fold_left nc_and nc_true ctx.constraints) in
        let created_vars = ref KidSet.empty in
+       (* We set this true if we need to include the head expression constraint in the generated SMT problem *)
+       let require_head_exp_constraint = ref false in
        let constrs =
          List.map (fun (l, Columns row) ->
              let row_constrs =
@@ -458,6 +460,7 @@ module Make(C: Config) = struct
                         created_vars := KidSet.add v !created_vars
                       );
                       if not (KidSet.mem v !created_vars) then (
+                        require_head_exp_constraint := true;
                         Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i smt_var)
                       ) else (
                         Some (Printf.sprintf "(= p%d %s)" i (Big_int.to_string n))
@@ -482,7 +485,7 @@ module Make(C: Config) = struct
           mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
        | None ->
           let smtlib =
-            head_exp_constraint ^ "\n"
+            (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
             ^ Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const p%d %s)" v ty) just_vars ^ "\n"
             ^ Util.string_of_list "\n" (fun x -> x) (Util.option_these (List.map snd constrs)) ^ "\n"
             ^ "(check-sat)\n"
