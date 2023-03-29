@@ -93,7 +93,7 @@ let rec zip_labels xs ys =
 let wavedrom_label = function
   | None -> ""
   | Some label -> Printf.sprintf ", attr: ['%s']" label
-                      
+
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
   | P_id id ->

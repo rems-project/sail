@@ -100,13 +100,13 @@ let process_file f filename =
   with End_of_file ->
     close_in chan;
     f (Buffer.contents buf)
-    
+
 let read_source (p1 : Lexing.position) (p2 : Lexing.position) =
   process_file (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) p1.pos_fname
 
 let hash_file filename =
   process_file Digest.string filename |> Digest.to_hex
-    
+
 type embedding = Plain | Base64
 
 let embedding_string = function
@@ -117,7 +117,7 @@ let bindings_to_json b f =
   Bindings.bindings b
   |> List.map (fun (key, elem) -> (string_of_id key, f elem))
   |> (fun elements -> `Assoc elements)
-            
+
 type location_or_raw =
   | Raw of string
   | Location of string * int * int * int * int * int * int
@@ -135,13 +135,13 @@ let included_loc files l =
      Util.list_empty files || List.exists (same_file file) files
   | None ->
      Util.list_empty files
-                    
+
 let hyper_loc l =
   match Reporting.simp_loc l with
   | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
      Some (p1.pos_fname, p1.pos_cnum, p2.pos_cnum)
   | _ -> None
-                    
+
 type hyperlink =
   | Function of id * hyper_location
   | Register of id * hyper_location
@@ -180,7 +180,7 @@ let hyperlinks_from_def files def =
     end;
     LE_aux (lexp_aux, annot)
   in
-  
+
   let scan_exp e_aux annot =
     let env = Type_check.env_of_annot annot in
     begin match e_aux with
@@ -224,7 +224,7 @@ let rec pat_to_json (P_aux (aux, _)) =
   | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", pat_to_json pat_hd); ("tl", pat_to_json pat_tl)]
   | P_string_append pats -> seq_pat_json "string_append" pats
   | P_or _ | P_not _ -> `Null
-       
+
 type 'a function_clause_doc = {
     number : int;
     source : location_or_raw;
@@ -286,7 +286,7 @@ let mapping_clause_doc_to_json docinfo =
 type 'a mapping_doc = 'a mapping_clause_doc list
 
 let mapping_doc_to_json docinfos = `List (List.map mapping_clause_doc_to_json docinfos)
-                    
+
 type valspec_doc = {
     source : location_or_raw;
     type_source : location_or_raw;
@@ -329,7 +329,7 @@ let let_doc_to_json docinfo =
       ("source", location_or_raw_to_json docinfo.source);
       ("exp", location_or_raw_to_json docinfo.exp_source)
     ]
-  
+
 let pair_to_json x_label f y_label g (x, y) =
   match (f x, g y) with
   | `Null, `Null -> `Null
@@ -349,7 +349,7 @@ let anchor_doc_to_json docinfo =
       ]
       @ (match docinfo.comment with Some c -> [("comment", `String c)] | None -> [])
     )
-    
+
 type 'a docinfo = {
     embedding : embedding;
     git : (string * bool) option;
@@ -365,7 +365,7 @@ type 'a docinfo = {
   }
 
 let span_to_json loc = `Assoc [("span", location_or_raw_to_json loc)]
-                
+
 let docinfo_to_json docinfo =
   let assoc =
     [
@@ -401,7 +401,7 @@ let git_command args =
 module type CONFIG = sig
   val embedding_mode : embedding option
 end
-  
+
 module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
   let encode str =
     match Config.embedding_mode with
@@ -427,8 +427,12 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     | _ ->
        Raw (f x |> Pretty_print_sail.to_string |> encode)
 
-  let get_doc_comment def_annot = def_annot.doc_comment
-    
+  let get_doc_comment def_annot =
+    Option.map (fun comment ->
+        let conf = Converter.default_config ~loc:def_annot.loc in
+        Converter.convert conf comment
+      ) def_annot.doc_comment
+
   let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) = {
       source = doc_loc (fst vs_annot) Pretty_print_sail.doc_spec vs;
       type_source = doc_loc ts_l Pretty_print_sail.doc_typschm ts
@@ -483,7 +487,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
 
     (** Try to use the inner attributes if we have no outer attributes. *)
     let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
-       
+
     let source = doc_loc (fst annot).loc Pretty_print_sail.doc_funcl clause in
     let pat, guard, exp = match pexp with
       | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
@@ -503,7 +507,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       | _ -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp in
 
     let splits = funcl_splits ~ast:ast ~error_loc:(pat_loc pat) attrs exp in
-    
+
     { number = n;
       source = source;
       pat = pat;
@@ -515,7 +519,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     }
 
   let included_clause files (FCL_aux (_, (clause_annot, _))) = included_loc files clause_annot.loc
- 
+
   let docinfo_for_fundef ~ast def_annot files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
     let clauses = List.filter (included_clause files) clauses in
     match clauses with
@@ -529,7 +533,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     match aux with
     | MPat_pat mpat -> Rewrites.pat_of_mpat mpat
     | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
- 
+
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Pretty_print_sail.doc_mapcl clause in
     let wavedrom_attr = get_attribute "wavedrom" def_annot.attrs in
@@ -560,9 +564,9 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       right_wavedrom = Option.map encode right_wavedrom;
       body = body
     }
-    
+
   let included_mapping_clause files (MCL_aux (_, (def_annot, _))) = included_loc files def_annot.loc
-    
+
   let docinfo_for_mapdef files (MD_aux (MD_mapping (_, _, clauses), annot) as mdef) =
     let clauses = List.filter (included_mapping_clause files) clauses in
     match clauses with
@@ -574,7 +578,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     let gitinfo =
       git_command "rev-parse HEAD"
       |> Option.map (fun checksum -> (checksum, Util.is_none (git_command "diff --quiet"))) in
- 
+
     let empty_docinfo = {
         embedding = embedding_format ();
         git = gitinfo;
@@ -619,7 +623,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
          | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
          end,
          skips
-         
+
       | DEF_mapdef mdef ->
          let id = id_of_mapdef mdef in
          begin match docinfo_for_mapdef files mdef with
@@ -627,32 +631,32 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
          | Some info -> { docinfo with mappings = Bindings.add id (info, links) docinfo.mappings }
          end,
          skips
-         
+
       | _ when skipping skips ->
          docinfo, skips
-        
+
       | DEF_val vs ->
          let id = id_of_val_spec vs in
          { docinfo with valspecs = Bindings.add id (docinfo_for_valspec vs, links) docinfo.valspecs },
          skips
-         
+
       | DEF_type td ->
          let id = id_of_type_def td in
          { docinfo with typdefs = Bindings.add id (docinfo_for_typdef td, links) docinfo.typdefs },
          skips
-         
+
       | DEF_register rd ->
          let id = id_of_dec_spec rd in
          { docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers },
          skips
-         
+
       | DEF_let (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
          let ids = pat_ids pat in
          IdSet.fold (fun id docinfo ->
              { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets }
            ) ids docinfo,
          skips
-         
+
       | _ ->
          docinfo, skips
     in
@@ -689,7 +693,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
              | _ ->
                 raise (Reporting.err_general def_annot.loc "Invalid span directive")
              end
-            
+
           | DEF_pragma ("span", arg, _) when arg = "end" ->
              begin match !current_span with
              | Some (name, start_l) ->
@@ -705,7 +709,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
              | None ->
                 raise (Reporting.err_general def_annot.loc "No start span for this end span")
              end
- 
+
           | DEF_pragma ("span", _, _) ->
              raise (Reporting.err_general def_annot.loc "Previous span must be ended before this one can begin")
 
@@ -714,7 +718,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       { docinfo with spans = !spans }
     in
     let docinfo = process_spans docinfo in
-           
+
     let module StringMap = Map.Make(String) in
     let process_file_hashes hashes (DEF_aux (_, doc_annot)) =
       if included_loc files doc_annot.loc then (

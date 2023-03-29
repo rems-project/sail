@@ -74,7 +74,9 @@ open Libsail
 module type CONVERTER = sig
   type config
 
-  val default_config : config
+  (** The location is the location of the doc comment, used for errors
+      if we cannot convert the markdown for any reason. *)
+  val default_config : loc:Parse_ast.l -> config
 
   val convert : config -> string -> string
 end

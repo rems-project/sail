@@ -80,7 +80,7 @@ let embedding_option () = match !opt_doc_embed with
   | Some embedding ->
      Printf.eprintf "Unknown embedding type %s for -doc_embed, allowed values are 'plain' or 'base64'\n" embedding;
      exit 1
-     
+
 let doc_options = [
   ( "-doc_format",
     Arg.String (fun format -> opt_doc_format := format),

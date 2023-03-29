@@ -74,17 +74,17 @@ open Type_check
 type hyperlink
 
 type 'a docinfo
-   
+
 val hyperlinks_from_def : string list -> Type_check.tannot def -> hyperlink list
 
 val docinfo_to_json : 'a docinfo -> Yojson.t
 
 type embedding = Plain | Base64
- 
+
 module type CONFIG = sig
   val embedding_mode : embedding option
 end
-  
+
 module Generator(Converter : Markdown.CONVERTER)(Config: CONFIG) : sig
   val docinfo_for_ast : files:string list -> hyperlinks:(string list -> tannot def -> hyperlink list) -> tannot ast -> tannot docinfo
 end
