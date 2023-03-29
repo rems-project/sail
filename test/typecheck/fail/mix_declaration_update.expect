@@ -1,9 +1,9 @@
 [93mType error[0m:
-[96mmix_declaration_update.sail[0m:9.8-11:
+[96mfail/mix_declaration_update.sail[0m:9.8-11:
 9[96m |[0m  (foo, bar) = (2, 4);
  [91m |[0m        [91m^-^[0m
  [91m |[0m Assignment declaring new variable bar is also assigning to an existing variable
  [91m |[0m 
- [91m |[0m [96mmix_declaration_update.sail[0m:9.3-6:
+ [91m |[0m [96mfail/mix_declaration_update.sail[0m:9.3-6:
  [91m |[0m 9[96m |[0m  (foo, bar) = (2, 4);
  [91m |[0m  [91m |[0m   [91m^-^[0m [91mexisting variable[0m

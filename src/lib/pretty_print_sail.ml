@@ -84,6 +84,12 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
+let doc_attr attr arg =
+  if arg = "" then
+    Printf.ksprintf string "$[%s]" attr ^^ space
+  else
+    Printf.ksprintf string "$[%s %s]" attr arg ^^ space
+
 let doc_kopt_no_parens = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
@@ -316,7 +322,9 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
-let rec doc_pat (P_aux (p_aux, _)) =
+let rec doc_pat (P_aux (p_aux, (_, uannot))) =
+  concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+  ^^
   match p_aux with
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
@@ -390,7 +398,9 @@ let rec get_vector_updates (E_aux (e_aux, _) as exp) =
      input, updates @ [VU_range (exp2, exp3, exp4)]
   | _ -> exp, []
 
-let rec doc_exp (E_aux (e_aux, _) as exp) =
+let rec doc_exp (E_aux (e_aux, (_, uannot)) as exp) =
+  concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+  ^^
   match e_aux with
   | E_block [] -> string "()"
   | E_block exps ->

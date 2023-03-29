@@ -827,6 +827,7 @@ let case_exp e t cs =
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
+  let add_attribute l attr arg = map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config);;
@@ -834,7 +835,8 @@ module PC = Pattern_completeness.Make(PC_config);;
 let pats_complete l env ps typ =
   let ctx = {
       Pattern_completeness.variants = Env.get_variants env;
-      Pattern_completeness.enums = Env.get_enums env
+      Pattern_completeness.enums = Env.get_enums env;
+      Pattern_completeness.constraints = Env.get_constraints env;
     } in
   PC.is_complete l ctx ps typ
     
@@ -3135,7 +3137,6 @@ let rewrite_ast_mapping_patterns env =
     | [] -> Pat_aux (Pat_exp (new_pat, new_expr), pexp_annot)
     | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), pexp_annot)
     in
-    typ_debug (lazy (Printf.sprintf "rewritten pexp: %s\n%!" (Pretty_print_sail.doc_pexp new_pexp |> Pretty_print_sail.to_string)));
     new_pexp
 
   in
@@ -4896,7 +4897,7 @@ let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
   | Some (f, i) ->
      let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
      let ((ot,_,_,_) as ext_ot) = Util.open_output_with_check_unformatted None filename in
-     Pretty_print_sail.pp_ast ot ast;
+     Pretty_print_sail.pp_ast ot (strip_ast ast);
      Util.close_output_with_check ext_ot;
      opt_ddump_rewrite_ast := Some (f, i + 1)
   | _ -> ()

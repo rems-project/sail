@@ -97,7 +97,7 @@ let latex_target _ out_file ast effect_info env =
   end;
   Latex.opt_directory := latex_dir;
   let chan = open_out (Filename.concat latex_dir "commands.tex") in
-  output_string chan (Pretty_print_sail.to_string (Latex.defs ast));
+  output_string chan (Pretty_print_sail.to_string (Latex.defs (Type_check.strip_ast ast)));
   close_out chan
  
 let _ =

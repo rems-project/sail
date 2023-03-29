@@ -324,29 +324,38 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
      TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 
-let rec to_ast_pat ctx (P.P_aux (pat, l)) =
-  P_aux ((match pat with
-          | P.P_lit lit -> P_lit (to_ast_lit lit)
-          | P.P_wild -> P_wild
-          | P.P_or (pat1, pat2) ->
-             P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
-          | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
-             P_as (to_ast_pat ctx pat, to_ast_id ctx id)
-          | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
-          | P.P_id id -> P_id (to_ast_id ctx id)
-          | P.P_var (pat, typ) -> P_var (to_ast_pat ctx pat, to_ast_typ_pat ctx typ)
-          | P.P_app (id, []) -> P_id (to_ast_id ctx id)
-          | P.P_app (id, pats) ->
-             if List.length pats == 1 && string_of_parse_id id = "~"
-             then P_not (to_ast_pat ctx (List.hd pats))
-             else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
-          | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
-          | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
-          | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
-          | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
-          | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
-          | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-         ), (l, empty_uannot))
+let rec to_ast_pat ctx (P.P_aux (aux, l)) =
+  match aux with
+  | P.P_attribute (attr, arg, pat) ->
+     let P_aux (aux, (pat_l, annot)) = to_ast_pat ctx pat in
+     (* The location of an E_attribute node is just the attribute by itself *)
+     let annot = add_attribute l attr arg annot in
+     P_aux (aux, (pat_l, annot))
+  | _ ->
+     let aux = match aux with
+       | P.P_attribute _ -> assert false
+       | P.P_lit lit -> P_lit (to_ast_lit lit)
+       | P.P_wild -> P_wild
+       | P.P_or (pat1, pat2) ->
+          P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
+       | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
+          P_as (to_ast_pat ctx pat, to_ast_id ctx id)
+       | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
+       | P.P_id id -> P_id (to_ast_id ctx id)
+       | P.P_var (pat, typ) -> P_var (to_ast_pat ctx pat, to_ast_typ_pat ctx typ)
+       | P.P_app (id, []) -> P_id (to_ast_id ctx id)
+       | P.P_app (id, pats) ->
+          if List.length pats == 1 && string_of_parse_id id = "~"
+          then P_not (to_ast_pat ctx (List.hd pats))
+          else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
+       | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
+       | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
+       | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
+       | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
+       | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
+       | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
+     in
+     P_aux (aux, (l, empty_uannot))
 
 let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : uannot letbind =
   LB_aux(
@@ -359,7 +368,7 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
   match exp with
   | P.E_attribute (attr, arg, exp) ->
      let E_aux (exp, (exp_l, annot)) = to_ast_exp ctx exp in
-     (* The location of an E_attribute node is just the attribute itself *)
+     (* The location of an E_attribute node is just the attribute by itself *)
      let annot = add_attribute l attr arg annot in
      E_aux (exp, (exp_l, annot))
   | _ ->

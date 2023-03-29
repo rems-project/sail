@@ -1,11 +1,11 @@
-[93mWarning[0m: Deprecated [96mReplicate/v2.sail[0m:9.39-54:
+[93mWarning[0m: Deprecated [96mpass/Replicate/v2.sail[0m:9.39-54:
 9[96m |[0m  (implicit('N), bits('M)) -> bits('N) effect {escape}
  [91m |[0m                                       [91m^-------------^[0m
  [91m |[0m 
 Explicit effect annotations are deprecated. They are no longer used and can be removed.
 
 [93mType error[0m:
-[96mReplicate/v2.sail[0m:13.4-30:
+[96mpass/Replicate/v2.sail[0m:13.4-30:
 13[96m |[0m    replicate_bits(x, 'N / 'M)
   [91m |[0m    [91m^------------------------^[0m
   [91m |[0m Failed to prove constraint: ('M * 'ex240#) == 'N

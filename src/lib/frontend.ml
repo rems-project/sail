@@ -75,12 +75,10 @@ let opt_reformat : string option ref = ref None
                           
 let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uannot ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
-  Type_check.opt_check_completeness := true;
   let ast, env = Type_error.check env ast in
-  Type_check.opt_check_completeness := false;
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   Effects.check_side_effects side_effects ast;
-  let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout ast else () in
+  let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout (Type_check.strip_ast ast) else () in
   (ast, env, side_effects)
  
 let load_files ?target:target default_sail_dir options type_envs files =

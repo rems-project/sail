@@ -1,20 +1,20 @@
 [93mType error[0m:
-[96mscattered_union_rec.sail[0m:6.0-25:
+[96mfail/scattered_union_rec.sail[0m:6.0-25:
 6[96m |[0munion clause U = Ctor : E
  [91m |[0m[91m^-----------------------^[0m
  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mscattered_union_rec.sail[0m:6.24-25:
+ [91m |[0m [93mCaused by [0m[96mfail/scattered_union_rec.sail[0m:6.24-25:
  [91m |[0m 6[96m |[0munion clause U = Ctor : E
  [91m |[0m  [91m |[0m                        [91m^[0m
  [91m |[0m  [91m |[0m Well-formedness check failed for type
  [91m |[0m  [91m |[0m 
- [91m |[0m  [91m |[0m [93mCaused by [0m[96mscattered_union_rec.sail[0m:6.24-25:
+ [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/scattered_union_rec.sail[0m:6.24-25:
  [91m |[0m  [91m |[0m 6[96m |[0munion clause U = Ctor : E
  [91m |[0m  [91m |[0m  [91m |[0m                        [91m^[0m
  [91m |[0m  [91m |[0m Undefined type E
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mscattered_union_rec.sail[0m:6.13-14:
+ [91m |[0m [93mCaused by [0m[96mfail/scattered_union_rec.sail[0m:6.13-14:
  [91m |[0m 6[96m |[0munion clause U = Ctor : E
  [91m |[0m  [91m |[0m             [91m^[0m
  [91m |[0m  [91m |[0m As this is a scattered union clause, this could also be caused by using a type defined after the 'scattered union' declaration

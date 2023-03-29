@@ -95,9 +95,6 @@ let opt_smt_div = ref false
 
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
-
-(* Check pattern-match completeness when type-checking *)
-let opt_check_completeness = ref false
                               
 let depth = ref 0
 
@@ -2554,7 +2551,7 @@ type tannot = tannot' option * uannot
 
 let untyped_annot tannot = snd tannot
 
-let mk_tannot env typ : tannot =
+let mk_tannot ?uannot:(uannot=empty_uannot) env typ : tannot =
   (Some {
        env = env;
        typ = Env.expand_synonyms env typ;
@@ -2562,9 +2559,9 @@ let mk_tannot env typ : tannot =
        expected = None;
        instantiation = None
      },
-   empty_uannot)
+   uannot)
 
-let mk_expected_tannot env typ expected : tannot =
+let mk_expected_tannot ?uannot:(uannot=empty_uannot) env typ expected : tannot =
   (Some {
        env = env;
        typ = Env.expand_synonyms env typ;
@@ -2572,7 +2569,7 @@ let mk_expected_tannot env typ expected : tannot =
        expected = expected;
        instantiation = None
      },
-   empty_uannot)
+   uannot)
 
 let get_instantiations = function
   | (None, _) -> None
@@ -2583,6 +2580,8 @@ let empty_tannot = (None, empty_uannot)
 let is_empty_tannot tannot = match fst tannot with
   | None -> true
   | Some _ -> false
+
+let map_uannot f (t, uannot) = (t, f uannot)
 
 let destruct_tannot tannot = Util.option_map (fun t -> (t.env, t.typ)) (fst tannot)
 
@@ -3085,12 +3084,14 @@ let tc_assume nc (E_aux (aux, annot)) =
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
+  let add_attribute l attr arg = map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config);;
        
 let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
-  let annot_exp exp typ' = E_aux (exp, (l, mk_expected_tannot env typ' (Some typ))) in
+  let annot_exp exp typ' = E_aux (exp, (l, mk_expected_tannot ~uannot:uannot env typ' (Some typ))) in
+  let update_uannot f (E_aux (aux, (l, (tannot, uannot)))) = E_aux (aux, (l, (tannot, f uannot))) in
   match (exp_aux, typ_aux) with
   | E_block exps, _ ->
      annot_exp (E_block (check_block l env exps (Some typ))) typ
@@ -3098,19 +3099,20 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
-     let checked_cases =
-       if !opt_check_completeness then (
+     let checked_cases, attr_update =
+       if Util.is_some (get_attribute "complete" uannot) || Util.is_some (get_attribute "incomplete" uannot) then (
+         checked_cases, (fun attrs -> attrs)
+       ) else (
          let ctx = {
              Pattern_completeness.variants = Env.get_variants env;
-             Pattern_completeness.enums = Env.get_enums env
+             Pattern_completeness.enums = Env.get_enums env;
+             Pattern_completeness.constraints = Env.get_constraints env;
            } in
          match PC.is_complete_wildcarded l ctx checked_cases inferred_typ with
-         | Some wildcarded -> wildcarded
-         | None -> checked_cases
-       ) else (
-         checked_cases
+         | Some wildcarded -> wildcarded, add_attribute (gen_loc l) "complete" ""
+         | None -> checked_cases, add_attribute (gen_loc l) "incomplete" ""
        ) in
-     annot_exp (E_match (inferred_exp, checked_cases)) typ
+     annot_exp (E_match (inferred_exp, checked_cases)) typ |> update_uannot attr_update
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
@@ -3546,7 +3548,7 @@ and bind_pat_no_guard env (P_aux (_, (l, _)) as pat) typ =
 and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
   let typ, env = bind_existential l (name_pat pat) typ env in
   typ_print (lazy (Util.("Binding " |> yellow |> clear) ^ string_of_pat pat ^  " to " ^ string_of_typ typ));
-  let annot_pat pat typ' = P_aux (pat, (l, mk_expected_tannot env typ' (Some typ))) in
+  let annot_pat pat typ' = P_aux (pat, (l, mk_expected_tannot ~uannot:uannot env typ' (Some typ))) in
   let switch_typ pat typ = match pat with
     | P_aux (pat_aux, (l, (Some tannot, uannot))) -> P_aux (pat_aux, (l, (Some { tannot with typ = typ }, uannot)))
     | _ -> typ_error env l "Cannot switch type for unannotated pattern"
@@ -3575,7 +3577,14 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
      let env, typ = bind_typ_pat env typ_pat typ in
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
-  | P_wild -> annot_pat P_wild typ, env, []
+  | P_wild ->
+     let env = match get_attribute "int_wildcard" uannot with
+       | Some (_, arg) ->
+          (* If the patterh completeness checker replaced an numeric pattern, modify the environment as if it hadn't *)
+          let _, env, _ = bind_pat env (P_aux (P_lit (L_aux (L_num (Big_int.of_string arg), gen_loc l)), (l, uannot))) typ in
+          env
+       | None -> env in
+     annot_pat P_wild typ, env, []
   | P_or (pat1, pat2) ->
      let tpat1, _, guards1 = bind_pat (Env.no_bindings env) pat1 typ in
      let tpat2, _, guards2 = bind_pat (Env.no_bindings env) pat2 typ in
@@ -3750,8 +3759,8 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
            typed_pat, env, guard::guards
         | _ -> raise typ_exn
 
-and infer_pat env (P_aux (pat_aux, (l, _)) as pat) =
-  let annot_pat pat typ = P_aux (pat, (l, mk_tannot env typ)) in
+and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
+  let annot_pat pat typ = P_aux (pat, (l, mk_tannot ~uannot:uannot env typ)) in
   match pat_aux with
   | P_id v ->
      begin
@@ -3967,7 +3976,7 @@ and bind_lexp env (LE_aux (lexp_aux, (l, _)) as lexp) typ =
      inferred_lexp, env
 
 and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
-  let annot_lexp lexp typ = LE_aux (lexp, (l, mk_tannot env typ)) in
+  let annot_lexp lexp typ = LE_aux (lexp, (l, mk_tannot ~uannot:uannot env typ)) in
   match lexp_aux with
   | LE_id v ->
      begin match Env.lookup_id v env with
@@ -4096,7 +4105,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
   | _ -> typ_error env l ("Could not infer the type of " ^ string_of_lexp lexp)
 
 and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
-  let annot_exp exp typ = E_aux (exp, (l, mk_tannot env typ)) in
+  let annot_exp exp typ = E_aux (exp, (l, mk_tannot ~uannot:uannot env typ)) in
   match exp_aux with
   | E_block exps ->
      let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in

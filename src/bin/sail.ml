@@ -77,7 +77,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
-                     
+ 
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
@@ -242,6 +242,9 @@ let rec options = ref ([
   ( "-dmono_continue",
     Arg.Set Rewrites.opt_dmono_continue,
     " (debug) continue despite monomorphisation errors");
+  ( "-dpattern_warning_no_literals",
+    Arg.Set Pattern_completeness.opt_debug_no_literals,
+    "");
   ( "-infer_effects",
     Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
     " Ignored for compatibility with older versions; effects are always inferred now (deprecated)");

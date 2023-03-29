@@ -1,0 +1,6 @@
+[93mWarning[0m: Redundant case [96mwarn_range_redundant.sail[0m:9.8-9:
+9[96m |[0m        3 => (),
+ [91m |[0m        [91m^[0m
+ [91m |[0m 
+This match case is never used
+

@@ -7,7 +7,7 @@ import hashlib
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
-sys.path.insert(0, os.path.join(mydir, '..'))
+sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
