@@ -604,7 +604,7 @@ let specialize_ids spec ids ast effect_info =
   | Some (f, i) ->
      let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
      let out_chan = open_out filename in
-     Pretty_print_sail.pp_ast out_chan ast;
+     Pretty_print_sail.pp_ast out_chan (Type_check.strip_ast ast);
      close_out out_chan;
      opt_ddump_spec_ast := Some (f, i + 1)
   | None -> ()

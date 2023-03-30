@@ -167,12 +167,12 @@ let to_smt l vars constr =
   let vnum = ref (-1) in
   let smt_var v =
     match KBindings.find_opt v !var_map with
-    | Some n -> Atom ("v" ^ string_of_int n)
+    | Some n -> Atom ("v" ^ string_of_int n), false
     | None ->
        let n = !vnum + 1 in
        var_map := KBindings.add v n !var_map;
        vnum := n;
-       Atom ("v" ^ string_of_int n)
+       Atom ("v" ^ string_of_int n), true
   in
 
   let exponentials = ref [] in
@@ -183,13 +183,13 @@ let to_smt l vars constr =
   let var_decs l (vars : kind_aux KBindings.t) : string =
     vars
     |> KBindings.bindings
-    |> List.map (fun (v, k) -> sfun "declare-const" [smt_var v; smt_type l k])
+    |> List.map (fun (v, k) -> sfun "declare-const" [fst (smt_var v); smt_type l k])
     |> string_of_list "\n" pp_sexpr
   in
   let rec smt_nexp (Nexp_aux (aux, _) : nexp) : sexpr =
     match aux with
     | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
-    | Nexp_var v -> smt_var v
+    | Nexp_var v -> fst (smt_var v)
     | Nexp_constant c
          when Big_int.less_equal c (Big_int.of_int (-1)) && not !opt_solver.negative_literals ->
        sfun "-" [Atom "0"; Atom (Big_int.to_string (Big_int.abs c))]
@@ -219,14 +219,14 @@ let to_smt l vars constr =
     | NC_bounded_gt (nexp1, nexp2) -> sfun ">" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
     | NC_set (v, ints) ->
-       sfun "or" (List.map (fun i -> sfun "=" [smt_var v; Atom (Big_int.to_string i)]) ints)
+       sfun "or" (List.map (fun i -> sfun "=" [fst (smt_var v); Atom (Big_int.to_string i)]) ints)
     | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
     | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
     | NC_app (id, args) ->
        sfun (string_of_id id) (List.map smt_typ_arg args)
     | NC_true -> Atom "true"
     | NC_false -> Atom "false"
-    | NC_var v -> smt_var v
+    | NC_var v -> fst (smt_var v)
   and smt_typ_arg (A_aux (aux, l) : typ_arg) : sexpr =
     match aux with
     | A_nexp nexp -> smt_nexp nexp
@@ -240,7 +240,7 @@ let to_smt l vars constr =
 let sailexp_concrete n =
   List.init (n + 1) (fun i -> sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))])
   
-let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : string * (kid -> sexpr) * sexpr list =
+let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : string * (kid -> sexpr * bool) * sexpr list =
   let variables, problem, var_map, exponentials = to_smt l vars constr in
   !opt_solver.header
   ^ variables ^ "\n"
@@ -307,7 +307,19 @@ let save_digests () =
 let kopt_pair kopt = (kopt_kid kopt, unaux_kind (kopt_kind kopt))
 
 let bound_exponential sexpr = sfun "and" [sfun "<=" [Atom "0"; sexpr]; sfun "<=" [sexpr; Atom "64"]]
- 
+
+let constraint_to_smt l constr =
+  let vars =
+    kopts_of_constraint constr
+    |> KOptSet.elements
+    |> List.map kopt_pair
+    |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
+  in
+  let vars, sexpr, var_map, exponentials = to_smt l vars constr in
+  (vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")"),
+  (fun v -> let sexpr, found = var_map v in pp_sexpr sexpr, found),
+  List.map pp_sexpr exponentials
+                            
 let rec call_smt' l extra constraints : smt_result =
   let vars =
     kopts_of_constraint constraints
@@ -421,7 +433,7 @@ let solve_smt_file l extra constraints =
   smtlib_of_constraints ~get_model:true l vars extra constraints
 
 let call_smt_solve l smt_file smt_vars var =
-  let smt_var = pp_sexpr (smt_vars var) in
+  let smt_var = pp_sexpr (fst (smt_vars var)) in
   if !opt_smt_verbose then
     prerr_endline (Printf.sprintf "SMTLIB2 constraints are (solve for %s): \n%s%!" smt_var smt_file)
   else ();
@@ -486,18 +498,30 @@ let call_smt_solve_bitvector l smt_file smt_vars =
   in
   Sys.remove input_file;
   List.map (fun (smt_var, smt_ty) ->
-      let smt_var_str = "v" ^ string_of_int smt_var in
-      let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
-      try
-        let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
-        let prefix = Str.matched_group 1 smt_output in
-        let result = Str.matched_group 2 smt_output in
-        match prefix with
-        | "#b" -> Some (smt_var, mk_lit (L_bin result))
-        | "#x" -> Some (smt_var, mk_lit (L_hex result))
-        | _ ->
-           raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
-      with
+      let smt_var_str = "p" ^ string_of_int smt_var in
+      try (
+        if smt_ty = "Int" then (
+          let regexp = "(define-fun " ^ smt_var_str ^ {| () Int [ ]+\([0-9]+\|\((- [0-9]+)\)\))|} in
+          let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+          let result = Str.matched_group 1 smt_output in
+          if result.[0] = '(' then (
+            let n = Big_int.of_string (String.sub result 3 (String.length result - 4)) in
+            Some (smt_var, mk_lit (L_num (Big_int.negate n)))
+          ) else (
+            Some (smt_var, mk_lit (L_num (Big_int.of_string result)))
+          )
+        ) else (
+          let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
+          let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+          let prefix = Str.matched_group 1 smt_output in
+          let result = Str.matched_group 2 smt_output in
+          match prefix with
+          | "#b" -> Some (smt_var, mk_lit (L_bin result))
+          | "#x" -> Some (smt_var, mk_lit (L_hex result))
+          | _ ->
+             raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
+        )
+      ) with
       | Not_found -> None
     ) smt_vars |> Util.option_all
                      
@@ -519,7 +543,7 @@ let solve_all_smt l constraints var =
 
 let solve_unique_smt' l constraints exp_defn exp_bound var =
   let smt_file, smt_vars, exponentials = solve_smt_file l (exp_defn @ exp_bound) constraints in
-  let digest = Digest.string (smt_file ^ pp_sexpr (smt_vars var)) in
+  let digest = Digest.string (smt_file ^ pp_sexpr (fst (smt_vars var))) in
   let result =
     match DigestMap.find_opt digest !known_uniques with
     | Some (Some result) -> Some (Big_int.of_int result)

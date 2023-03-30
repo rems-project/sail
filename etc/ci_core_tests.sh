@@ -2,8 +2,6 @@
 
 set -eu
 
-export OPAMVERBOSE=2
-
-eval `opam config env`
+export TEST_PAR=4
 
 test/run_core_tests.sh

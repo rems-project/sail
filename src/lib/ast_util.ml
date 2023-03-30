@@ -72,7 +72,7 @@ module Big_int = Nat_big_num
 
 (* The type of annotations for untyped AST nodes *)
 type uannot = {
-    attrs : (string * string * l) list
+    attrs : (l * string * string) list
   }
 
 let empty_uannot = {
@@ -80,7 +80,17 @@ let empty_uannot = {
   }
 
 let add_attribute l attr arg (annot : uannot) =
-  { attrs = (attr, arg, l) :: annot.attrs }
+  { attrs = (l, attr, arg) :: annot.attrs }
+
+let get_attribute attr annot =
+  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs
+  |> Option.map (fun (l, _, arg) -> (l, arg))
+
+let get_attributes annot = annot.attrs
+
+let find_attribute_opt attr1 attrs =
+  List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs
+  |> Option.map (fun (_, _, arg) -> arg)
 
 let mk_def_annot l = {
     doc_comment = None;
@@ -95,12 +105,8 @@ let map_clause_annot f (def_annot, annot) =
 let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc } 
   
 let add_def_attribute l attr arg (annot : def_annot) =
-  { annot with attrs = (attr, arg, l) :: annot.attrs }
+  { annot with attrs = (l, attr, arg) :: annot.attrs }
 
-let get_attribute attr1 attrs =
-  List.find_opt (fun (attr2, _, _) -> attr1 = attr2) attrs
-  |> Option.map (fun (_, arg, _) -> arg)
-  
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
@@ -824,9 +830,9 @@ and map_scattered_annot_aux f = function
   | SD_mapcl (id, mcl) -> SD_mapcl (id, map_mapcl_annot f mcl)
   | SD_end id -> SD_end id
 
-and map_decspec_annot f = function
-  | DEC_aux (dec_aux, annot) -> DEC_aux (map_decspec_annot_aux f dec_aux, f annot)
-and map_decspec_annot_aux f = function
+and map_register_annot f = function
+  | DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
+and map_register_annot_aux f = function
   | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
   | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
 
@@ -846,7 +852,7 @@ and map_def_annot f (DEF_aux (aux, annot)) =
     | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
     | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, List.map (map_loop_measure_annot f) measures)
-    | DEF_register ds -> DEF_register (map_decspec_annot f ds)
+    | DEF_register ds -> DEF_register (map_register_annot f ds)
     | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
     | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
   in

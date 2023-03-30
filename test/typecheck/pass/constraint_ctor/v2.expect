@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mconstraint_ctor/v2.sail[0m:18.2-30:
+[96mpass/constraint_ctor/v2.sail[0m:18.2-30:
 18[96m |[0m  _prove(constraint('x >= 24));
   [91m |[0m  [91m^--------------------------^[0m
   [91m |[0m Cannot prove 'x >= 24

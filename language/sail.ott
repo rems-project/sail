@@ -84,7 +84,7 @@ type loop = While | Until
 
 type extern = { pure : bool; bindings : (string * string) list } option
 
-type def_annot = { doc_comment : string option; attrs : (string * string * l) list; loc : l }
+type def_annot = { doc_comment : string option; attrs : (l * string * string) list; loc : l }
 
 type 'a clause_annot = def_annot * 'a
 
@@ -103,7 +103,7 @@ type annot 'a = l * 'a
 
 type extern = <| pure : bool; bindings : list (string * string) |>
 
-type def_annot = <| doc_comment : maybe string; attrs : list (string * string * l); loc: l |>
+type def_annot = <| doc_comment : maybe string; attrs : list (l * string * string); loc: l |>
 
 type clause_annot 'a = def_annot * 'a
 

@@ -734,6 +734,8 @@ pat_concat:
 pat:
   | pat1
     { $1 }
+  | Attribute pat
+    { mk_pat (P_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
   | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
   | pat1 Match typ

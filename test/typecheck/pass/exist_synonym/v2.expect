@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mexist_synonym/v2.sail[0m:6.27-36:
+[96mpass/exist_synonym/v2.sail[0m:6.27-36:
 6[96m |[0mlet x : {'n, 0 <= 'n <= 8. regno('n)} = 4
  [91m |[0m                           [91m^-------^[0m
  [91m |[0m Could not prove constraints (0 <= 'n & 'n < 2) in type synonym int('n) with (0 <= 'n & 'n <= 8)

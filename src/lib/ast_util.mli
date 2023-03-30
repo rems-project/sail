@@ -89,15 +89,19 @@ val empty_uannot : uannot
 *)
 val add_attribute : l -> string -> string -> uannot -> uannot
 
+val get_attribute : string -> uannot -> (l * string) option
+
+val get_attributes : uannot -> (l * string * string) list
+
+val find_attribute_opt : string -> (l * string * string) list -> string option
+
 val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 
-val get_attribute : string -> (string * string * l) list -> string option
-  
 val mk_def_annot : l -> def_annot
 
 val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
   
-(** The empty annotation (as a location + uannot] pair). Should be used
+(** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
    information with the various [locate_] functions in this module. *)
@@ -398,6 +402,7 @@ val map_fundef_annot : ('a annot -> 'b annot) -> 'a fundef -> 'b fundef
 val map_funcl_annot : ('a annot -> 'b annot) -> 'a funcl -> 'b funcl
 val map_mapdef_annot : ('a annot -> 'b annot) -> 'a mapdef -> 'b mapdef
 val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
+val map_register_annot : ('a annot -> 'b annot) -> 'a dec_spec -> 'b dec_spec
 val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
 val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def

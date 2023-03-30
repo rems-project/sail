@@ -97,9 +97,6 @@ val opt_smt_div : bool ref
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 
-(** Check pattern-match completeness when type-checking *)
-val opt_check_completeness : bool ref
-
 (** {2 Type errors} *)
 
 type constraint_reason = (Ast.l * string) option
@@ -301,9 +298,11 @@ type tannot
    calling destruct_tannot followed by mk_tannot returns an identical
    type annotation. *)
 val destruct_tannot : tannot -> (Env.t * typ) option
-val mk_tannot : Env.t -> typ -> tannot
+val mk_tannot : ?uannot:uannot -> Env.t -> typ -> tannot
 
 val untyped_annot : tannot -> uannot
+
+val map_uannot : (uannot -> uannot) -> tannot -> tannot
 
 val get_instantiations : tannot -> typ_arg KBindings.t option
 
@@ -330,9 +329,11 @@ val strip_lexp : tannot lexp -> uannot lexp
 
 val strip_mpexp : tannot mpexp -> uannot mpexp
 val strip_mapcl : tannot mapcl -> uannot mapcl
-
+val strip_letbind : tannot letbind -> uannot letbind
 val strip_val_spec : tannot val_spec -> uannot val_spec
 val strip_funcl : tannot funcl -> uannot funcl
+val strip_register : tannot dec_spec -> uannot dec_spec
+val strip_typedef : tannot type_def -> uannot type_def
 val strip_def : tannot def -> uannot def
 val strip_ast : tannot ast -> uannot ast
 

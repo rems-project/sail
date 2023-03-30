@@ -517,7 +517,7 @@ let handle_input' istate input =
            *)
        | ":ast" ->
           let chan = open_out arg in
-          Pretty_print_sail.pp_ast chan istate.ast;
+          Pretty_print_sail.pp_ast chan (Type_check.strip_ast istate.ast);
           close_out chan;
           istate
        | ":output" ->

@@ -421,12 +421,12 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     | None ->
        Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
 
-  let doc_loc l f x =
+  let doc_loc l g f x =
     match Reporting.simp_loc l with
     | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
        doc_lexing_pos p1 p2
     | _ ->
-       Raw (f x |> Pretty_print_sail.to_string |> encode)
+       Raw (g x |> f |> Pretty_print_sail.to_string |> encode)
 
   let get_doc_comment def_annot =
     Option.map (fun comment ->
@@ -435,21 +435,21 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       ) def_annot.doc_comment
 
   let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) = {
-      source = doc_loc (fst vs_annot) Pretty_print_sail.doc_spec vs;
-      type_source = doc_loc ts_l Pretty_print_sail.doc_typschm ts
+      source = doc_loc (fst vs_annot) Type_check.strip_val_spec Pretty_print_sail.doc_spec vs;
+      type_source = doc_loc ts_l (fun ts -> ts) Pretty_print_sail.doc_typschm ts
     }
 
-  let docinfo_for_typdef (TD_aux (_, annot) as td) = doc_loc (fst annot) Pretty_print_sail.doc_typdef td
+  let docinfo_for_typdef (TD_aux (_, annot) as td) = doc_loc (fst annot) Type_check.strip_typedef Pretty_print_sail.doc_typdef td
 
   let docinfo_for_register (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) = {
-      source = doc_loc (fst rd_annot) (Pretty_print_sail.doc_dec) rd;
-      type_source = doc_loc typ_l Pretty_print_sail.doc_typ typ;
-      exp_source = Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Pretty_print_sail.doc_exp exp) exp
+      source = doc_loc (fst rd_annot) Type_check.strip_register Pretty_print_sail.doc_dec rd;
+      type_source = doc_loc typ_l (fun typ -> typ) Pretty_print_sail.doc_typ typ;
+      exp_source = Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Pretty_print_sail.doc_exp exp) exp
     }
 
   let docinfo_for_let (LB_aux (LB_val (pat, exp), annot) as lbind) = {
-      source = doc_loc (fst annot) (Pretty_print_sail.doc_letbind) lbind;
-      exp_source = doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp;
+      source = doc_loc (fst annot) Type_check.strip_letbind Pretty_print_sail.doc_letbind lbind;
+      exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp;
     }
 
   let funcl_splits ~ast ~error_loc:l attrs exp =
@@ -458,7 +458,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       | E_aux (E_block _, _) -> (fun exp -> Pretty_print_sail.doc_block [exp])
       | _ -> (fun exp -> Pretty_print_sail.doc_exp exp)
     in
-    match get_attribute "split" attrs with
+    match find_attribute_opt "split" attrs with
     | None -> None
     | Some split_id ->
        let split_id = mk_id split_id in
@@ -471,7 +471,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
                 let checked_member = Type_check.check_exp env (mk_exp (E_id member)) enum_typ in
                 let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
                 let (propagated, _) = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
-                let propagated_doc = Raw (pretty_printer propagated |> Pretty_print_sail.to_string |> encode) in
+                let propagated_doc = Raw (pretty_printer (Type_check.strip_exp propagated) |> Pretty_print_sail.to_string |> encode) in
                 Bindings.add member propagated_doc splits
               ) Bindings.empty members in
           Some splits
@@ -489,11 +489,11 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     (** Try to use the inner attributes if we have no outer attributes. *)
     let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
 
-    let source = doc_loc (fst annot).loc Pretty_print_sail.doc_funcl clause in
+    let source = doc_loc (fst annot).loc Type_check.strip_funcl Pretty_print_sail.doc_funcl clause in
     let pat, guard, exp = match pexp with
       | Pat_aux (Pat_exp (pat, exp), _) -> pat, None, exp
       | Pat_aux (Pat_when (pat, guard, exp), _) -> pat, Some guard, exp in
-    let guard_source = Option.map (fun exp -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp) guard in
+    let guard_source = Option.map (fun exp -> doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp) guard in
     let body_source = match exp with
       | E_aux (E_block (exp :: exps), _) ->
          let first_loc = exp_loc exp in
@@ -503,9 +503,10 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
             (* Make sure the first line is indented correctly *)
             doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
          | _, _ ->
-            Raw (Pretty_print_sail.doc_block (exp :: exps) |> Pretty_print_sail.to_string |> encode)
+            let block = Type_check.strip_exp exp :: List.map Type_check.strip_exp exps in
+            Raw (Pretty_print_sail.doc_block block |> Pretty_print_sail.to_string |> encode)
          end
-      | _ -> doc_loc (exp_loc exp) Pretty_print_sail.doc_exp exp in
+      | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp in
 
     let splits = funcl_splits ~ast:ast ~error_loc:(pat_loc pat) attrs exp in
 
@@ -536,8 +537,8 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
 
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
-    let source = doc_loc def_annot.loc Pretty_print_sail.doc_mapcl clause in
-    let wavedrom_attr = get_attribute "wavedrom" def_annot.attrs in
+    let source = doc_loc def_annot.loc Type_check.strip_mapcl Pretty_print_sail.doc_mapcl clause in
+    let wavedrom_attr = find_attribute_opt "wavedrom" def_annot.attrs in
 
     let left, left_wavedrom, right, right_wavedrom, body = match aux with
       | MCL_bidir (left, right) ->
@@ -549,12 +550,12 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       | MCL_forwards (left, body) ->
          let left = docinfo_for_mpexp left in
          let left_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr left in
-         let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
+         let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
          (Some left, left_wavedrom, None, None, Some body)
       | MCL_backwards (right, body) ->
          let right = docinfo_for_mpexp right in
          let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
-         let body = doc_loc (exp_loc body) Pretty_print_sail.doc_exp body in
+         let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
          (None, None, Some right, right_wavedrom, Some body) in
 
     { number = n;
@@ -672,7 +673,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
           | DEF_pragma ("anchor", arg, _) ->
              let links = hyperlinks files def in
              let anchor_info = {
-                 source = doc_loc l Pretty_print_sail.doc_def def;
+                 source = doc_loc l Type_check.strip_def Pretty_print_sail.doc_def def;
                  comment = def_annot.doc_comment
                } in
              anchored := Bindings.add (mk_id arg) (anchor_info, links) !anchored;

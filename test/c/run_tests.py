@@ -7,7 +7,7 @@ import hashlib
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
-sys.path.insert(0, os.path.join(mydir, '..'))
+sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
@@ -17,9 +17,19 @@ sail = get_sail()
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
+def no_valgrind():
+    try:
+        subprocess.call(['valgrind'])
+        return False
+    except FileNotFoundError:
+        return True
+
 def test_c(name, c_opts, sail_opts, valgrind):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
     results = Results(name)
+    if valgrind and no_valgrind():
+        print('skipping because no valgrind found')
+        return results.finish()
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
