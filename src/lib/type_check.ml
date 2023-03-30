@@ -2930,7 +2930,7 @@ type pattern_duplicate =
 let is_enum_member id env = match Env.lookup_id id env with
   | Enum _ -> true
   | _ -> false
- 
+
 (* Check if a pattern contains duplicate bindings, and raise a type
    error if this is the case *)
 let check_pattern_duplicates env pat =
@@ -2938,7 +2938,13 @@ let check_pattern_duplicates env pat =
     | Pattern_duplicate _ -> true
     | _ -> false
   in
-  let rec collect_duplicates ids (P_aux (aux, (l, _))) =
+  let one_loc = function
+    | Pattern_singleton l -> l
+    | Pattern_duplicate (l, _) -> l
+  in
+  let ids = ref Bindings.empty in
+  let subrange_ids = ref Bindings.empty in
+  let rec collect_duplicates (P_aux (aux, (l, _))) =
     let update_id = function
       | None -> Some (Pattern_singleton l)
       | Some (Pattern_singleton l2) -> Some (Pattern_duplicate (l2, l))
@@ -2947,24 +2953,69 @@ let check_pattern_duplicates env pat =
     match aux with
     | P_id id when not (is_enum_member id env) ->
        ids := Bindings.update id update_id !ids
+    | P_vector_subrange (id, _, _) ->
+       subrange_ids := Bindings.add id l !subrange_ids
+    | P_as (p, id) ->
+       ids := Bindings.update id update_id !ids;
+       collect_duplicates p
     | P_id _ | P_lit _ | P_wild -> ()
-    | P_not p | P_as (p, _) | P_typ (_, p) | P_var (p, _) ->
-       collect_duplicates ids p
+    | P_not p | P_typ (_, p) | P_var (p, _) ->
+       collect_duplicates p
     | P_or (p1, p2) | P_cons (p1, p2) ->
-       collect_duplicates ids p1; collect_duplicates ids p2
+       collect_duplicates p1; collect_duplicates p2
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
-       List.iter (collect_duplicates ids) ps
+       List.iter collect_duplicates ps
   in
-  let ids = ref Bindings.empty in
-  collect_duplicates ids pat;
+  collect_duplicates pat;
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
   | Some (id, Pattern_duplicate (l1, l2)) ->
      typ_raise env l2
        (err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
                      l1,
                      Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
-  | _ -> ()
- 
+  | _ ->
+     Bindings.iter (fun subrange_id l ->
+         match Bindings.find_opt subrange_id !ids with
+         | Some pattern_info ->
+            typ_raise env l
+              (err_because (Err_other ("Vector subrange binding " ^ string_of_id subrange_id ^ " is also bound as a regular identifier"),
+                            one_loc pattern_info,
+                            Err_other "Regular binding is here"))
+         | None -> ()
+       ) !subrange_ids
+
+let bitvector_typ_from_range l env n m =
+  let len, order = match Env.get_default_order env with
+    | Ord_aux (Ord_dec, _) ->
+       if Big_int.greater_equal n m then
+         Big_int.sub (Big_int.succ n) m, dec_ord
+       else
+         typ_error env l (Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
+                            (Big_int.to_string n) (Big_int.to_string m))
+    | Ord_aux (Ord_inc, _) ->
+       if Big_int.less_equal n m then
+         Big_int.sub (Big_int.succ m) n, inc_ord
+       else
+         typ_error env l (Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
+                            (Big_int.to_string n) (Big_int.to_string m))
+    | _ ->
+       typ_error env l default_order_error_string
+  in
+  bitvector_typ (nconstant len) order
+
+let bind_pattern_vector_subranges (P_aux (_, (l, _)) as pat) env =
+  let id_ranges = pattern_vector_subranges pat in
+  Bindings.fold (fun id ranges env ->
+      match ranges with
+      | [(n, m)] ->
+         Env.add_local id (Immutable, bitvector_typ_from_range l env n m) env
+      | (_, n) :: (m, _) :: _ ->
+         typ_error env l (Printf.sprintf "Cannot bind %s as pattern subranges are non-contiguous. %s[%s] is not defined."
+                            (string_of_id id) (string_of_id id) (Big_int.to_string (Big_int.succ m)))
+      | _ ->
+         Reporting.unreachable l __POS__ "Found range pattern with no range"
+    ) id_ranges env
+
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -3173,6 +3224,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
           check_pattern_duplicates env pat;
+          let env = bind_pattern_vector_subranges pat env in
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
@@ -3417,6 +3469,7 @@ and check_block l env exps ret_typ =
 and check_case env pat_typ pexp typ =
   let pat, guard, case, ((l, _) as annot) = destruct_pexp pexp in
   check_pattern_duplicates env pat;
+  let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
      let guard = match guard, guards with
@@ -3825,6 +3878,9 @@ and infer_pat env (P_aux (pat_aux, (l, _)) as pat) =
         let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
         annot_pat (P_vector_concat inferred_pats) (bits_typ env len), env, guards
      end
+  | P_vector_subrange (id, n, m) ->
+     let typ = bitvector_typ_from_range l env n m in
+     annot_pat (P_vector_subrange (id, n, m)) typ, env, []
   | P_string_append pats ->
      let fold_pats (pats, env, guards) pat =
        let inferred_pat, env, guards' = infer_pat env pat in
@@ -4719,6 +4775,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
            let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env (mk_mpat (MP_id var)) typ in
            typed_mpat, env, guard::guards
         | _ -> raise typ_exn
+
 and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) =
   let annot_mpat mpat typ = MP_aux (mpat, (l, mk_tannot env typ)) in
   match mpat_aux with
@@ -4736,6 +4793,51 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) =
        | Local (Mutable, _) | Register _ ->
           typ_error env l ("Cannot shadow mutable local or register in mapping-pattern " ^ string_of_mpat mpat)
        | Enum enum -> annot_mpat (MP_id v) enum, env, []
+     end
+  | MP_vector_subrange (id, n, m) ->
+     let len, order = match Env.get_default_order env with
+       | Ord_aux (Ord_dec, _) ->
+          if Big_int.greater_equal n m then
+            Big_int.sub (Big_int.succ n) m, dec_ord
+          else
+            typ_error env l (Printf.sprintf "%s must be greater than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+       | Ord_aux (Ord_inc, _) ->
+          if Big_int.less_equal n m then
+            Big_int.sub (Big_int.succ m) n, inc_ord
+          else
+            typ_error env l (Printf.sprintf "%s must be less than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+       | _ ->
+          typ_error env l default_order_error_string
+     in
+     begin
+       match Env.lookup_id id env with
+       | Local (Immutable, _) | Unbound _ ->
+          begin match Env.lookup_id id other_env with
+          | Unbound _ ->
+             if allow_unknown then
+               annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, []
+             else
+               typ_error env l "Cannot infer identifier type in vector subrange pattern"
+          | Local (Immutable, other_typ) ->
+             let (id_len, id_order) = destruct_bitvector_typ l env other_typ in
+             if is_order_inc id_order <> is_order_inc order then (
+               typ_error env l "Mismatching bitvector ordering in vector subrange pattern %b %b"
+             );
+             begin match id_len with
+             | Nexp_aux (Nexp_constant id_len, _) when Big_int.greater_equal id_len len ->
+                annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, []
+             | _ ->
+                typ_error env l (Printf.sprintf "%s must have a constant length greater than or equal to %s"
+                                   (string_of_id id) (Big_int.to_string len))
+             end
+          | _ ->
+             typ_error env l "Invalid identifier in vector subrange pattern"
+          end
+       | Local _ | Register _ ->
+          typ_error env l "Invalid identifier in vector subrange pattern"
+       | Enum e ->
+          typ_error env l (Printf.sprintf "Identifier %s is a member of enumeration %s in vector subrange pattern"
+                             (string_of_id id) (string_of_typ e))
      end
   | MP_app (f, _) when Env.is_union_constructor f env ->
      begin

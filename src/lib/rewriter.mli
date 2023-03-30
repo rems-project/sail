@@ -111,22 +111,23 @@ val rewrite_mapdef : tannot rewriters -> tannot mapdef -> tannot mapdef
   
 (** the type of interpretations of patterns *)
 type ('a,'pat,'pat_aux) pat_alg =
-  { p_lit            : lit -> 'pat_aux
-  ; p_wild           : 'pat_aux
-  ; p_or             : 'pat * 'pat -> 'pat_aux
-  ; p_not            : 'pat        -> 'pat_aux
-  ; p_as             : 'pat * id -> 'pat_aux
-  ; p_typ            : Ast.typ * 'pat -> 'pat_aux
-  ; p_id             : id -> 'pat_aux
-  ; p_var            : 'pat * typ_pat -> 'pat_aux
-  ; p_app            : id * 'pat list -> 'pat_aux
-  ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_concat  : 'pat list -> 'pat_aux
-  ; p_tuple          : 'pat list -> 'pat_aux
-  ; p_list           : 'pat list -> 'pat_aux
-  ; p_cons           : 'pat * 'pat -> 'pat_aux
-  ; p_string_append  : 'pat list -> 'pat_aux
-  ; p_aux            : 'pat_aux * 'a annot -> 'pat
+  { p_lit             : lit -> 'pat_aux
+  ; p_wild            : 'pat_aux
+  ; p_or              : 'pat * 'pat -> 'pat_aux
+  ; p_not             : 'pat        -> 'pat_aux
+  ; p_as              : 'pat * id -> 'pat_aux
+  ; p_typ             : Ast.typ * 'pat -> 'pat_aux
+  ; p_id              : id -> 'pat_aux
+  ; p_var             : 'pat * typ_pat -> 'pat_aux
+  ; p_app             : id * 'pat list -> 'pat_aux
+  ; p_vector          : 'pat list -> 'pat_aux
+  ; p_vector_concat   : 'pat list -> 'pat_aux
+  ; p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux
+  ; p_tuple           : 'pat list -> 'pat_aux
+  ; p_list            : 'pat list -> 'pat_aux
+  ; p_cons            : 'pat * 'pat -> 'pat_aux
+  ; p_string_append   : 'pat list -> 'pat_aux
+  ; p_aux             : 'pat_aux * 'a annot -> 'pat
   }
 
 (** the type of interpretations of expressions *)

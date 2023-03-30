@@ -637,6 +637,43 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
 
+type subrange =
+  | Inc_subrange of l * Big_int.num * Big_int.num
+  | Dec_subrange of l * Big_int.num * Big_int.num
+  | One_subrange of l * Big_int.num
+
+let rec insert_subrange ms (n1, n2) =
+  match ms with
+  | (m1, m2) :: ms ->
+     if Big_int.equal n2 (Big_int.succ m1) then
+       (n1, m2) :: ms
+     else if Big_int.greater n2 m1 then
+       (n1, n2) :: (m1, m2) :: ms
+     else if Big_int.equal m2 (Big_int.succ n1) then
+       insert_subrange ms (m1, n2)
+     else
+       (m1, m2) :: insert_subrange ms (n1, n2)
+  | [] -> [(n1, n2)]
+
+let insert_subranges ns ms = List.fold_left insert_subrange ns ms
+
+let rec pattern_vector_subranges (P_aux (aux, (l, _)) as pat) =
+  match aux with
+  | P_vector_subrange (id, n, m) when Big_int.greater n m ->
+     Bindings.singleton id [(n, m)]
+  | P_vector_subrange (id, n, m) ->
+     Bindings.singleton id [(m, n)]
+  | P_typ (_, pat) | P_var (pat, _) | P_as (pat, _) | P_not pat ->
+     pattern_vector_subranges pat
+  | P_cons (pat1, pat2) | P_or (pat1, pat2) ->
+     Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) (pattern_vector_subranges pat1) (pattern_vector_subranges pat2)
+  | P_tuple pats | P_vector_concat pats | P_app (_, pats) | P_list pats | P_string_append pats | P_vector pats ->
+     List.fold_left (fun ranges pat ->
+         Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) ranges (pattern_vector_subranges pat)
+       ) Bindings.empty pats
+  | P_id _ | P_lit _ | P_wild ->
+     Bindings.empty
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
@@ -700,6 +737,7 @@ and map_pat_annot_aux f = function
   | P_tuple pats -> P_tuple (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
+  | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
   | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
@@ -727,6 +765,7 @@ and map_mpat_annot_aux f = function
   | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
   | MP_vector mpats -> MP_vector (List.map (map_mpat_annot f) mpats)
+  | MP_vector_subrange (id, n, m) -> MP_vector_subrange (id, n, m)
   | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
@@ -1027,6 +1066,11 @@ and string_of_pat (P_aux (pat, _)) =
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
   | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
+  | P_vector_subrange (id, n, m) ->
+     if Big_int.equal n m then
+       string_of_id id ^ "[" ^ Big_int.to_string n ^ "]"
+     else
+       string_of_id id ^ "[" ^ Big_int.to_string n ^ ".." ^ Big_int.to_string m ^ "]"
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
@@ -1042,6 +1086,7 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
+  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Big_int.to_string n ^ " .. " ^ Big_int.to_string m ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
@@ -1069,11 +1114,10 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
-
 let rec pat_ids (P_aux (pat_aux, _)) =
   match pat_aux with
   | P_lit _ | P_wild -> IdSet.empty
-  | P_id id -> IdSet.singleton id
+  | P_id id | P_vector_subrange (id, _, _) -> IdSet.singleton id
   | P_as (pat, id) -> IdSet.add id (pat_ids pat)
   | P_or (pat1, pat2) -> IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_not (pat)       -> pat_ids pat
@@ -1837,6 +1881,7 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
     | P_app (id, pats) -> P_app (locate_id f id, List.map (locate_pat f) pats)
     | P_vector pats -> P_vector (List.map (locate_pat f) pats)
     | P_vector_concat pats -> P_vector_concat (List.map (locate_pat f) pats)
+    | P_vector_subrange (id, n, m) -> P_vector_subrange (locate_id f id, n, m)
     | P_tuple pats -> P_tuple (List.map (locate_pat f) pats)
     | P_list pats -> P_list (List.map (locate_pat f) pats)
     | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)

@@ -393,6 +393,8 @@ pat :: 'P_' ::=
     {{ com vector pattern }}
   |  pat1 @ ... @ patn                      :: :: vector_concat
     {{ com concatenated vector pattern }}
+  | id [ num1 '..' num2 ]                   :: :: vector_subrange
+    {{ com vector subrange pattern }}
   | ( pat1 , .... , patn )                  :: :: tuple
     {{ com tuple pattern }}
   | [|| pat1 , .. , patn ||]                :: :: list
@@ -606,6 +608,7 @@ mpat :: 'MP_' ::=
   | id ( mpat1 , ... , mpatn )         ::   :: app
   | [ mpat1 , ... , mpatn ]            ::   :: vector
   | mpat1 @ ... @ mpatn                ::   :: vector_concat
+  | id [ num1 '..' num2 ]              ::   :: vector_subrange
   | ( mpat1 , ... , mpatn )            ::   :: tuple
   | [|| mpat1 , ... , mpatn ||]        ::   :: list
   | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}

@@ -342,6 +342,7 @@ let rec to_ast_pat ctx (P.P_aux (pat, l)) =
              else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
           | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
           | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
+          | P.P_vector_subrange (id, n, m) -> P_vector_subrange (to_ast_id ctx id, n, m)
           | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
           | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
           | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
@@ -783,23 +784,25 @@ let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
      FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l, empty_uannot))
 
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
-  MP_aux(
-    (match mpat with
-    | P.MP_lit(lit) -> MP_lit(to_ast_lit lit)
-    | P.MP_id(id) -> MP_id(to_ast_id ctx id)
-    | P.MP_as (mpat, id) -> MP_as (to_ast_mpat ctx mpat, to_ast_id ctx id)
-    | P.MP_app(id,mpats) ->
-      if mpats = []
-      then MP_id (to_ast_id ctx id)
-      else MP_app(to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
-    | P.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_tuple(mpats) -> MP_tuple(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_list(mpats) -> MP_list(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
-    | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
-    | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
-    ), (l, empty_uannot))
+  MP_aux (
+      (match mpat with
+       | P.MP_lit lit -> MP_lit (to_ast_lit lit)
+       | P.MP_id id -> MP_id (to_ast_id ctx id)
+       | P.MP_as (mpat, id) -> MP_as (to_ast_mpat ctx mpat, to_ast_id ctx id)
+       | P.MP_app (id, mpats) ->
+          if mpats = []
+          then MP_id (to_ast_id ctx id)
+          else MP_app (to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector mpats -> MP_vector (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector_concat mpats -> MP_vector_concat (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector_subrange (id, n, m) -> MP_vector_subrange (to_ast_id ctx id, n, m)
+       | P.MP_tuple mpats -> MP_tuple (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_list mpats -> MP_list (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
+       | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
+       | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
+      ), (l, empty_uannot)
+    )
 
 let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
   match mpexp with

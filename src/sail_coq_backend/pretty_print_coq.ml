@@ -1175,6 +1175,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
      | P_vector_concat pats ->
         raise (Reporting.err_unreachable l __POS__
                  "vector concatenation patterns should have been removed before pretty-printing")
+     | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"
      | P_tuple pats  ->
         let typs = match typ with
           | Typ_aux (Typ_tuple typs, _) -> typs
@@ -1364,6 +1365,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
       -> m
     | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
     | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
+    | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"
     | P_typ (_,p) -> merge_pat m p
     | P_as (p,id) -> merge_new_kids id (merge_pat m p)
     | P_id id -> merge_new_kids id m

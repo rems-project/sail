@@ -757,6 +757,10 @@ atomic_pat:
 		     mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
   | id Unit
     { mk_pat (P_app ($1, [mk_pat (P_lit (mk_lit L_unit $startpos $endpos)) $startpos $endpos])) $startpos $endpos }
+  | id Lsquare Num Rsquare
+    { mk_pat (P_vector_subrange ($1, $3, $3)) $startpos $endpos }
+  | id Lsquare Num DotDot Num Rsquare
+    { mk_pat (P_vector_subrange ($1, $3, $5)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | atomic_pat Colon typ
@@ -1370,6 +1374,10 @@ atomic_mpat:
     { mk_mpat (MP_lit $1) $startpos $endpos }
   | id
     { mk_mpat (MP_id $1) $startpos $endpos }
+  | id Lsquare Num Rsquare
+    { mk_mpat (MP_vector_subrange ($1, $3, $3)) $startpos $endpos }
+  | id Lsquare Num DotDot Num Rsquare
+    { mk_mpat (MP_vector_subrange ($1, $3, $5)) $startpos $endpos }
   | id Unit
     { mk_mpat (MP_app ($1, [mk_mpat (MP_lit (mk_lit L_unit $startpos($2) $endpos($2))) $startpos($2) $endpos($2)])) $startpos $endpos }
   | id Lparen mpat_list Rparen

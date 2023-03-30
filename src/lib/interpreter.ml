@@ -298,6 +298,40 @@ let get_interpreter_extern id env =
   let open Type_check in
   Env.get_extern id env "interpreter"
 
+type partial_binding =
+  | Complete_binding of value
+  | Partial_binding of (value * Big_int.num * Big_int.num) list
+
+let combine _ v1 v2 =
+  match (v1, v2) with
+  | None, None -> None
+  | Some v1, None -> Some v1
+  | None, Some v2 -> Some v2
+  | Some (Partial_binding p1), Some (Partial_binding p2) ->
+     Some (Partial_binding (p1 @ p2))
+  | Some (Complete_binding _), Some (Complete_binding _) ->
+     failwith "Tried to bind same identifier twice!"
+  | Some _, Some _ ->
+     failwith "Tried to mix partial and complete binding!"
+
+let complete_bindings =
+  Bindings.map (function
+      | Complete_binding v -> v
+      | Partial_binding ((v1, n1, m1) :: partial_values) ->
+         let max, min =
+           List.fold_left (fun (max, min) (_, n, m) ->
+               (Big_int.max max (Big_int.max n m),
+                Big_int.min min (Big_int.min n m))
+             ) (n1, m1) partial_values in
+         let len = Big_int.sub (Big_int.succ max) min in
+         List.fold_left (fun bv (slice, n, m) ->
+             prerr_endline (string_of_value slice);
+             value_update_subrange [bv; V_int n; V_int m; slice]
+           ) (value_zeros [V_int len]) ((v1, n1, m1) :: partial_values)
+      | Partial_binding [] ->
+         Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
+    )
+
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
   match e_aux with
@@ -370,7 +404,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) ->
      let matched, bindings = pattern_match (Type_check.env_of orig_exp) pat (value_of_exp bind) in
      if matched then
-       return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+       return (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings (complete_bindings bindings)))
      else
        fail "Match failure"
 
@@ -476,7 +510,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin try
          let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
          if matched then
-           return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+           return (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings (complete_bindings bindings)))
          else
            wrap (E_match (exp, pexps))
        with Failure s -> fail ("Failure: " ^ s)
@@ -484,6 +518,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) ->
      begin try
          let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
+         let bindings = complete_bindings bindings in
          if matched then
            let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
            let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
@@ -674,13 +709,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
 
-and combine _ v1 v2 =
-  match (v1, v2) with
-  | None, None -> None
-  | Some v1, None -> Some v1
-  | None, Some v2 -> Some v2
-  | Some v1, Some v2 -> failwith "Pattern binds same identifier twice!"
-
 and exp_of_lexp (LE_aux (lexp_aux, _)) =
   match lexp_aux with
   | LE_id id -> mk_exp (E_id id)
@@ -710,7 +738,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
      (not m, b)
   | P_as (pat, id) ->
      let matched, bindings = pattern_match env pat value in
-     matched, Bindings.add id value bindings
+     matched, Bindings.add id (Complete_binding value) bindings
   | P_typ (_, pat) -> pattern_match env pat value
   | P_id id ->
      let open Type_check in
@@ -720,8 +748,10 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           if is_ctor value && string_of_id id = fst (coerce_ctor value)
           then true, Bindings.empty
           else false, Bindings.empty
-       | _ -> true, Bindings.singleton id value
+       | _ -> true, Bindings.singleton id (Complete_binding value)
      end
+  | P_vector_subrange (id, n, m) ->
+     true, Bindings.singleton id (Partial_binding [(value, n, m)])
   | P_var (pat, _) -> pattern_match env pat value
   | P_app (id, pats) ->
      let (ctor, vals) = coerce_ctor value in

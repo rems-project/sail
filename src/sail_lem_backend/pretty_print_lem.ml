@@ -576,6 +576,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_list pats -> brackets (separate_map semi (doc_pat_lem ctxt false) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem ctxt true p) (doc_pat_lem ctxt true p')
   | P_string_append _ -> unreachable l __POS__ "Lem doesn't support string append patterns"
+  | P_vector_subrange _ -> unreachable l __POS__ "Lem doesn't support vector subrange patterns"
   | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 

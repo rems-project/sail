@@ -102,6 +102,7 @@ let coq_rewrites =
     ("prover_regstate", [Bool_arg true]);
     ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
+    ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);

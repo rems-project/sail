@@ -90,18 +90,37 @@ let rec zip_labels xs ys =
   | xs, [] -> []
   | x :: xs, y :: ys -> (x, y) :: zip_labels xs ys
 
-let wavedrom_label = function
-  | None -> ""
-  | Some label -> Printf.sprintf ", attr: ['%s']" label
+let wavedrom_label size = function
+  | None -> Printf.sprintf ", attr: '%d'" size
+  | Some label -> Printf.sprintf ", attr: ['%d', '%s']" size label
+
+let binary_to_hex str =
+  let open Sail2_values in
+  let padded = match String.length str mod 4 with
+    | 0 -> str
+    | 1 -> "000" ^ str
+    | 2 -> "00" ^ str
+    | _ -> "0" ^ str in
+  Util.string_to_list padded
+  |> List.map (function '0' -> B0 | _ -> B1)
+  |> hexstring_of_bits
+  |> Option.get
+  |> Util.string_of_list "" (fun c -> String.make 1 c)
 
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
   | P_id id ->
-     Printf.sprintf "    { bits: %d, name: '%s'%s }" size (string_of_id id) (wavedrom_label label)
+     Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
   | P_lit (L_aux (L_bin bin, _)) ->
-     Printf.sprintf "    { bits: %d, name: 0b%s%s }" size bin (wavedrom_label label)
+     Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
-     Printf.sprintf "    { bits: %d, name: 0x%s%s }" size hex (wavedrom_label label)
+     Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
+  | P_vector_subrange (id, n, m) when Big_int.equal n m ->
+     Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }"
+       size (Big_int.to_string n) (wavedrom_label size label)
+  | P_vector_subrange (id, n, m) ->
+     Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }"
+       size (string_of_id id) (Big_int.to_string n) (Big_int.to_string m) (wavedrom_label size label)
   | P_as (pat, _) | P_typ (_, pat) ->
      wavedrom_elem_string size label pat
   | _ -> raise Invalid_wavedrom

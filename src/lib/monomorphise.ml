@@ -553,6 +553,8 @@ let freshen_pat_bindings p =
        let p1,vs1 = aux p1 in
        let p2,vs2 = aux p2 in
        mkp (P_cons (p1, p2)), vs1@vs2
+    | P_vector_subrange _ ->
+       Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"
   in aux p
 
 (* This cuts off function bodies at false assertions that we may have produced
@@ -967,6 +969,8 @@ let split_defs target all_errors (splits : split_req list) env ast =
            relist spl (fun ps -> P_list ps) ps
         | P_cons (p1,p2) ->
            re2 spl (fun p1' p2' -> P_cons (p1', p2')) p1 p2
+        | P_vector_subrange _ ->
+           Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"
       in spl p
     in
 
@@ -2664,6 +2668,8 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
       | P_list pats
         -> of_list pats
       | P_cons (p1,p2) -> of_list [p1;p2]
+      | P_vector_subrange _ ->
+         Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"
     in aux pat
   in
   let int_quant = function

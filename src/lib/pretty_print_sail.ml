@@ -326,6 +326,11 @@ let rec doc_pat (P_aux (p_aux, _)) =
   | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
+  | P_vector_subrange (id, n, m) ->
+     if Big_int.equal n m then
+       doc_id id ^^ brackets (string (Big_int.to_string n))
+     else
+       doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
   | P_wild -> string "_"
   | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)

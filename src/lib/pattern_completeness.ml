@@ -151,6 +151,7 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_app (ctor, ps) -> P_app (ctor, List.map (go counter) ps)
       | P_vector ps -> P_vector (List.map (go counter) ps)
       | P_vector_concat ps -> P_vector_concat (List.map (go counter) ps)
+      | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
       | P_tuple ps -> P_tuple (List.map (go counter) ps)
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
@@ -230,6 +231,7 @@ module Make(C: Config) = struct
         | P_app (ctor, ps) -> P_app (ctor, List.map (go wild) ps)
         | P_vector ps -> P_vector (List.map (go wild) ps)
         | P_vector_concat ps -> P_vector_concat (List.map (go wild) ps)
+        | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
         | P_tuple ps -> P_tuple (List.map (go wild) ps)
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
@@ -346,6 +348,8 @@ module Make(C: Config) = struct
     | P_as (pat, _) -> generalize ctx pat
     | P_typ (_, pat) -> generalize ctx pat
 
+    | P_vector_subrange _ -> GP_wild
+  
     | P_id id ->
        begin match List.find_opt (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings ctx.enums) with
        | Some (enum, _) -> GP_enum (enum, id)

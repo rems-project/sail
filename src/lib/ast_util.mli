@@ -487,6 +487,8 @@ val is_kid_generated : kid -> bool
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
+val pattern_vector_subranges : 'a pat -> (Big_int.num * Big_int.num) list Bindings.t
+
 val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
 

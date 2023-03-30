@@ -286,6 +286,67 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
     } defs),
   rewrite_typ
 
+let rewrite_ast_remove_vector_subrange_pats env ast =
+  let rewrite_pattern pat =
+    let appends = ref Bindings.empty in
+    let rec insert_into_append (n1, m1, id1, typ1) = function
+      | (n2, m2, id2, typ2) :: xs ->
+         if Big_int.greater m1 n2 then
+           (n1, m1, id1, typ1) :: (n2, m2, id2, typ2) :: xs
+         else
+           (n2, m2, id2, typ2) :: insert_into_append (n1, m1, id1, typ1) xs
+      | [] -> [(n1, m1, id1, typ1)] in
+    let pat_alg = {
+        id_pat_alg with
+        p_aux =
+          (fun (aux, annot) ->
+            let typ = typ_of_annot annot in
+            match aux with
+            | P_vector_subrange (id, n, m) ->
+               let range_id = Printf.ksprintf mk_id "%s_%s_%s#"
+                                (string_of_id id) (Big_int.to_string n) (Big_int.to_string m) in
+               appends := Bindings.update id (fun a -> Some (insert_into_append (n, m, range_id, typ) (Option.value a ~default:[]))) !appends;
+               P_aux (P_typ (typ, P_aux (P_id range_id, annot)), annot)
+            | _ -> P_aux (aux, annot)
+          )
+      } in
+    let pat = fold_pat pat_alg pat in
+    pat, !appends
+  in
+  let rewrite_pexp pat body =
+    let pat, appends = rewrite_pattern pat in
+    let body =
+      Bindings.fold (fun id append body ->
+          match append with
+          | (_, _, id1, _) :: tl_append ->
+             let env = List.fold_left (fun env (_, _, id, typ) -> Env.add_local id (Immutable, typ) env) (env_of body) append in
+             let append_exp = List.fold_left (fun e1 (_, _, id2, _) -> mk_exp (E_vector_append (e1, mk_exp (E_id id2)))) (mk_exp (E_id id1)) tl_append in
+             let bind = mk_exp (E_let (mk_letbind (mk_pat (P_id id)) append_exp, mk_lit_exp L_unit)) in
+             let bind = check_exp env bind unit_typ in
+             begin match bind with
+             | E_aux (E_let (letbind, _), annot) ->
+                E_aux (E_let (letbind, body), annot)
+             | _ -> assert false
+             end
+          | [] ->
+             body
+        ) appends body in
+    pat, body
+  in
+  let exp_alg = {
+      id_exp_alg with
+      pat_exp = (fun (pat, body) -> let pat, body = rewrite_pexp pat body in Pat_exp (pat, body));
+      pat_when = (fun (pat, guard, body) -> let pat, body = rewrite_pexp pat body in Pat_when (pat, guard, body))
+    } in
+  let rewrite_exp _ = fold_exp exp_alg in
+  let rewrite_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
+    FCL_aux (FCL_funcl (id, fold_pexp exp_alg pexp), annot) in
+  let rewrite_fun _ (FD_aux (FD_function (r_o, t_o, funcls), a)) =
+    FD_aux (FD_function (r_o, t_o, List.map rewrite_funcl funcls), a) in
+  rewrite_ast_base
+    { rewriters_base with rewrite_exp = rewrite_exp; rewrite_fun = rewrite_fun }
+    ast
+
 let remove_vector_concat_pat pat =
 
   (* ivc: bool that indicates whether the exp is in a vector_concat pattern *)
@@ -322,11 +383,12 @@ let remove_vector_concat_pat pat =
     ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
-    ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
-    ; p_tuple          = (fun ps -> P_tuple (List.map (fun p -> p false) ps))
-    ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
-    ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
-    ; p_string_append  = (fun (ps) -> P_string_append (List.map (fun p -> p false) ps))
+    ; p_vector_concat   = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
+    ; p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m))
+    ; p_tuple           = (fun ps -> P_tuple (List.map (fun p -> p false) ps))
+    ; p_list            = (fun ps -> P_list (List.map (fun p -> p false) ps))
+    ; p_cons            = (fun (p,ps) -> P_cons (p false, ps false))
+    ; p_string_append   = (fun (ps) -> P_string_append (List.map (fun p -> p false) ps))
     ; p_aux =
         (fun (pat,((l,_) as annot)) contained_in_p_as ->
           match pat with
@@ -442,28 +504,29 @@ let remove_vector_concat_pat pat =
           (P_aux (P_as (P_aux (P_vector_concat pats',rannot'),rootid),rannot), decls @ decls')
       | ((p,decls),annot) -> (P_aux (p,annot),decls) in
 
-    { p_lit            = (fun lit -> (P_lit lit,[]))
-    ; p_wild           = (P_wild,[])
-    ; p_or             = (fun ((pat1, ds1), (pat2, ds2)) -> (P_or(pat1, pat2), ds1 @ ds2))
-    ; p_not            = (fun (pat, ds) -> (P_not(pat), ds))
-    ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
-    ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
-    ; p_id             = (fun id -> (P_id id,[]))
-    ; p_var            = (fun ((pat,decls),kid) -> (P_var (pat,kid),decls))
-    ; p_app            = (fun (id,ps) -> let (ps,decls) = List.split ps in
-                                         (P_app (id,ps),List.flatten decls))
-    ; p_vector         = (fun ps -> let (ps,decls) = List.split ps in
-                                    (P_vector ps,List.flatten decls))
-    ; p_vector_concat  = (fun ps -> let (ps,decls) = List.split ps in
-                                    (P_vector_concat ps,List.flatten decls))
-    ; p_tuple          = (fun ps -> let (ps,decls) = List.split ps in
-                                    (P_tuple ps,List.flatten decls))
-    ; p_list           = (fun ps -> let (ps,decls) = List.split ps in
-                                    (P_list ps,List.flatten decls))
-    ; p_string_append  = (fun ps -> let (ps,decls) = List.split ps in
-                                    (P_string_append ps,List.flatten decls))
-    ; p_cons           = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
-    ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
+    { p_lit             = (fun lit -> (P_lit lit,[]))
+    ; p_wild            = (P_wild,[])
+    ; p_or              = (fun ((pat1, ds1), (pat2, ds2)) -> (P_or(pat1, pat2), ds1 @ ds2))
+    ; p_not             = (fun (pat, ds) -> (P_not(pat), ds))
+    ; p_as              = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
+    ; p_typ             = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
+    ; p_id              = (fun id -> (P_id id,[]))
+    ; p_var             = (fun ((pat,decls),kid) -> (P_var (pat,kid),decls))
+    ; p_app             = (fun (id,ps) -> let (ps,decls) = List.split ps in
+                                          (P_app (id,ps),List.flatten decls))
+    ; p_vector          = (fun ps -> let (ps,decls) = List.split ps in
+                                     (P_vector ps,List.flatten decls))
+    ; p_vector_concat   = (fun ps -> let (ps,decls) = List.split ps in
+                                     (P_vector_concat ps,List.flatten decls))
+    ; p_vector_subrange = (fun (id, n, m) -> (P_vector_subrange (id, n, m), []))
+    ; p_tuple           = (fun ps -> let (ps,decls) = List.split ps in
+                                     (P_tuple ps,List.flatten decls))
+    ; p_list            = (fun ps -> let (ps,decls) = List.split ps in
+                                     (P_list ps,List.flatten decls))
+    ; p_string_append   = (fun ps -> let (ps,decls) = List.split ps in
+                                     (P_string_append ps,List.flatten decls))
+    ; p_cons            = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
+    ; p_aux             = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
     } in
 
   let (pat,decls) = fold_pat unname_vector_concat_elements pat in
@@ -633,6 +696,7 @@ let rec is_irrefutable_pattern (P_aux (p,ann)) =
   | P_as (p1,_)
   | P_typ (_,p1)
     -> is_irrefutable_pattern p1
+  | P_vector_subrange _ -> true
   | P_id id -> begin
     match Env.lookup_id id (env_of_annot ann) with
     | Local _ | Unbound _ -> true
@@ -791,6 +855,9 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   | P_var (pat, _) -> pat_to_exp pat
   | P_typ (_,pat) -> pat_to_exp pat
   | P_id id -> rewrap (E_id id)
+  | P_vector_subrange (id, n, m) ->
+     let subrange = mk_exp (E_vector_subrange (mk_exp (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m))) in
+     check_exp env subrange typ
   | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
   | P_vector_concat pats -> begin
@@ -958,6 +1025,7 @@ let compose_guard_opt g1 g2 = match g1, g2 with
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
+| P_vector_subrange _ -> true
 | P_as (pat,_) | P_typ (_,pat) | P_var (pat,_) -> contains_bitvector_pat pat
 | P_or(pat1, pat2) -> contains_bitvector_pat pat1 || contains_bitvector_pat pat2
 | P_not(pat) -> contains_bitvector_pat pat
@@ -995,6 +1063,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
+    ; p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m))
     ; p_string_append  = (fun ps -> P_string_append (List.map (fun p -> p false) ps))
     ; p_tuple          = (fun ps -> P_tuple (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
@@ -1146,6 +1215,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                                     (P_vector ps, flatten_guards_decls gdls))
     ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector_concat ps, flatten_guards_decls gdls))
+    ; p_vector_subrange = (fun (id, n, m) -> (P_vector_subrange (id, n, m), (None, (fun b -> b), [])))
     ; p_string_append  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_string_append ps, flatten_guards_decls gdls))
     ; p_tuple          = (fun ps -> let (ps,gdls) = List.split ps in
@@ -2506,6 +2576,8 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
   | P_lit _ | P_wild -> []
   | P_id id -> [pat]
+  (* Should have been rewritten early *)
+  | P_vector_subrange _ -> []
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> bindings_of_pat left
   | P_as (p, id) -> [annot_pat (P_id id) unk (env_of_pat p) (typ_of_pat p)]
@@ -2524,6 +2596,8 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
 let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
   | P_lit _ | P_wild -> []
+  (* This pattern should be rewritten early *)
+  | P_vector_subrange _ -> []
   | P_id id -> [typ_of_pat pat]
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> binding_typs_of_pat left
@@ -2964,6 +3038,7 @@ let rewrite_ast_pat_string_append env =
        let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
        P_aux (P_cons (pat1, pat2), p_annot), guards, expr
     | P_aux (P_id _, _)
+    | P_aux (P_vector_subrange _, _)
     | P_aux (P_lit _, _)
     | P_aux (P_wild, _) -> pat, guards, expr
   in
@@ -3121,6 +3196,7 @@ let rewrite_ast_mapping_patterns env =
        let p', guards, expr = rewrite_pat env (p, guards, expr) in
        P_aux (P_not p', p_annot), guards, expr
     | P_aux (P_id _, _)
+    | P_aux (P_vector_subrange _, _)
     | P_aux (P_lit _, _)
     | P_aux (P_wild, _) -> pat, guards, expr
   in
@@ -3750,13 +3826,14 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_app (id, args)               -> P_aux (P_app (id, (List.map pat_of_mpat args)), annot)
   | MP_vector mpats                 -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
   | MP_vector_concat mpats          -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
+  | MP_vector_subrange (id, n, m)   -> P_aux (P_vector_subrange (id, n, m), annot)
   | MP_tuple mpats                  -> P_aux (P_tuple (List.map pat_of_mpat mpats), annot)
   | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
   | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
   | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
   | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
   | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
- 
+
 let rec exp_of_mpat ((MP_aux (mpat, (l, annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
   let concat_vectors vec1 vec2 =
@@ -3772,7 +3849,8 @@ let rec exp_of_mpat ((MP_aux (mpat, (l, annot))) as mp_aux) =
   | MP_app (id, args)               -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
   | MP_vector mpats                 -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
   | MP_vector_concat mpats          -> List.fold_right concat_vectors (List.map (fun m -> exp_of_mpat m) mpats) empty_vec
-  | MP_tuple mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
+  | MP_vector_subrange (id, n, m)   -> E_aux (E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m)), (l, annot))
+  | MP_tuple mpats                  -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
   | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), (l,annot))
   | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l,annot))
   | MP_string_append mpats          -> List.fold_right string_append (List.map (fun m -> exp_of_mpat m) mpats) empty_string
@@ -4229,6 +4307,7 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
      raise (Reporting.err_unreachable (fst ann) __POS__ "Negated pattern not supported")
   | P_vector _
   | P_vector_concat _
+  | P_vector_subrange _
   | P_string_append _ ->
      raise (Reporting.err_unreachable (fst ann) __POS__
               "Found pattern that should have been rewritten away in earlier stage")
@@ -4843,6 +4922,7 @@ let all_rewriters = [
     ("simple_assignments", basic_rewriter (rewrite_simple_assignments false));
     ("simple_struct_assignments", basic_rewriter (rewrite_simple_assignments true));
     ("remove_vector_concat", basic_rewriter rewrite_ast_remove_vector_concat);
+    ("remove_vector_subrange_pats", basic_rewriter rewrite_ast_remove_vector_subrange_pats);
     ("remove_bitvector_pats", basic_rewriter rewrite_ast_remove_bitvector_pats);
     ("remove_numeral_pats", basic_rewriter rewrite_ast_remove_numeral_pats);
     ("guarded_pats", basic_rewriter rewrite_ast_guarded_pats);
