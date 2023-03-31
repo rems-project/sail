@@ -3894,15 +3894,16 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
        end
     | _ -> None, [] in
 
-  let check_total_len n = match solve_unique env n with
+  let check_constant_len l n = match solve_unique env n with
     | Some c -> nconstant c
-    | None -> typ_error env l "Could not infer constant length for vector concatenation pattern" in
+    | None -> typ_error env l "Could not infer constant length for vector concatenation subpattern" in
 
   (* Now we have two similar cases for ordinary vectors and bitvectors *)
   match elem_typ with
   | Some elem_typ ->
      let fold_len len pat =
        let (len', _, elem_typ') = destruct_vector_typ l env (typ_of_pat pat) in
+       let len' = check_constant_len (pat_loc pat) len' in
        typ_equality l env elem_typ elem_typ';
        nsum len len'
      in
@@ -3918,13 +3919,13 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
         env,
         guards' @ guards
      | None ->
-        let len = check_total_len inferred_len in
-        annot_vcp before_uninferred (dvector_typ env len elem_typ), env, guards
+        annot_vcp before_uninferred (dvector_typ env inferred_len elem_typ), env, guards
      end
 
   | None ->
      let fold_len len pat =
        let (len', _) = destruct_bitvector_typ l env (typ_of_pat pat) in
+       let len' = check_constant_len (pat_loc pat) len' in
        nsum len len'
      in
      let before_len = List.fold_left fold_len (nint 0) before_uninferred in
@@ -3939,8 +3940,7 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
         env,
         guards' @ guards
      | None ->
-        let len = check_total_len inferred_len in
-        annot_vcp before_uninferred (bits_typ env len), env, guards
+        annot_vcp before_uninferred (bits_typ env inferred_len), env, guards
      end
 
 and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) as typ) =
