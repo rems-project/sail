@@ -3746,6 +3746,8 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
   | P_lit (L_aux (L_false, _) as lit) when is_atom_bool typ ->
      let nc = match destruct_atom_bool env typ with Some nc -> nc | None -> assert false in
      annot_pat (P_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, []
+  | P_vector_concat (pat :: pats) ->
+     bind_vector_concat_pat l env uannot pat pats (Some typ)
   | _ ->
      let (inferred_pat, env, guards) = infer_pat env pat in
      match subtyp l env typ (typ_of_pat inferred_pat) with
@@ -3811,29 +3813,7 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
      List.iter (fun pat -> typ_equality l env etyp (typ_of_pat pat)) pats;
      annot_pat (P_vector pats) (bits_typ env len), env, guards
   | P_vector_concat (pat :: pats) ->
-     let fold_pats (pats, env, guards) pat =
-       let inferred_pat, env, guards' = infer_pat env pat in
-       pats @ [inferred_pat], env, guards' @ guards
-     in
-     let inferred_pats, env, guards =
-       List.fold_left fold_pats ([], env, []) (pat :: pats) in
-     begin match destruct_any_vector_typ l env (typ_of_pat (List.hd inferred_pats)) with
-     | Destruct_vector (len, _, vtyp) ->
-        let fold_len len pat =
-          let (len', _, vtyp') = destruct_vector_typ l env (typ_of_pat pat) in
-          typ_equality l env vtyp vtyp';
-          nsum len len'
-        in
-        let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
-        annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
-     | Destruct_bitvector (len, _) ->
-        let fold_len len pat =
-          let (len', _) = destruct_bitvector_typ l env (typ_of_pat pat) in
-          nsum len len'
-        in
-        let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
-        annot_pat (P_vector_concat inferred_pats) (bits_typ env len), env, guards
-     end
+     bind_vector_concat_pat l env uannot pat pats None
   | P_string_append pats ->
      let fold_pats (pats, env, guards) pat =
        let inferred_pat, env, guards' = infer_pat env pat in
@@ -3850,6 +3830,118 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
      Env.add_local id (Immutable, typ_of_pat typed_pat) env,
      guards
   | _ -> typ_error env l ("Couldn't infer type of pattern " ^ string_of_pat pat)
+
+and bind_vector_concat_pat l env uannot pat pats typ_opt =
+  let annot_vcp pats typ = P_aux (P_vector_concat pats, (l, mk_tannot ~uannot:uannot env typ)) in
+
+  (* Try to infer a constant length, and the element type if non-bitvector *)
+  let typ_opt =
+    Option.bind typ_opt (fun typ ->
+        match destruct_any_vector_typ l env typ with
+        | Destruct_vector (len, order, elem_typ) ->
+           Option.map (fun l -> (l, order, Some elem_typ)) (solve_unique env len)
+        | Destruct_bitvector(len, order) ->
+           Option.map (fun l -> (l, order, None)) (solve_unique env len)
+      ) in
+
+  (* Try to infer any subpatterns, skipping those we cannot infer *)
+  let fold_pats (pats, env, guards) pat =
+    let wrap_some (x, y, z) = (Ok x, y, z) in
+    let inferred_pat, env, guards' =
+      if Util.is_none typ_opt then (
+        wrap_some (infer_pat env pat)
+      ) else (
+        try wrap_some (infer_pat env pat) with
+        | (Type_error _ as exn) -> (Error (pat, exn), env, [])
+      ) in
+    inferred_pat :: pats, env, guards' @ guards
+  in
+  let inferred_pats, env, guards = List.fold_left fold_pats ([], env, []) (pat :: pats) in
+  let inferred_pats = List.rev inferred_pats in
+
+  (* Will be none if the subpatterns are bitvectors *)
+  let elem_typ = match typ_opt with
+    | Some (_, _, elem_typ) -> elem_typ
+    | None ->
+       match List.find_opt Util.is_ok inferred_pats with
+       | Some (Ok pat) ->
+          begin match destruct_any_vector_typ l env (typ_of_pat pat) with
+          | Destruct_vector (_, _, t) -> Some t
+          | Destruct_bitvector _ -> None
+          end
+       | _ ->
+          typ_error env l "Could not infer type of subpatterns in vector concatenation pattern" in
+
+  (* We can handle a single None in inferred_pats from something like
+     0b00 @ _ @ 0b00, because we know the wildcard will be bits('n - 4)
+     where 'n is the total length of the pattern. *)
+  let before_uninferred, rest = Util.take_drop Util.is_ok inferred_pats in
+  let before_uninferred = List.map Result.get_ok before_uninferred in
+  let uninferred, after_uninferred = match rest with
+    | Error (first_uninferred, exn) :: rest ->
+       begin match List.find_opt Util.is_error rest with
+       | Some (Error (second_uninferred, _)) ->
+          let msg =
+            "Cannot infer width here, as there are multiple subpatterns with unclear width in vector concatenation pattern"
+          in
+          typ_raise env (pat_loc second_uninferred)
+            (err_because (Err_other msg, pat_loc first_uninferred, Err_other "A previous subpattern is here"))
+       | _ -> ()
+       end;
+       begin match typ_opt with
+       | Some (total_len, order, _) -> Some (total_len, order, first_uninferred), List.map Result.get_ok rest
+       | None -> raise exn
+       end
+    | _ -> None, [] in
+
+  let check_total_len n = match solve_unique env n with
+    | Some c -> nconstant c
+    | None -> typ_error env l "Could not infer constant length for vector concatenation pattern" in
+
+  (* Now we have two similar cases for ordinary vectors and bitvectors *)
+  match elem_typ with
+  | Some elem_typ ->
+     let fold_len len pat =
+       let (len', _, elem_typ') = destruct_vector_typ l env (typ_of_pat pat) in
+       typ_equality l env elem_typ elem_typ';
+       nsum len len'
+     in
+     let before_len = List.fold_left fold_len (nint 0) before_uninferred in
+     let after_len = List.fold_left fold_len (nint 0) after_uninferred in
+     let inferred_len = nexp_simp (nsum before_len after_len) in
+     begin match uninferred with
+     | Some (total_len, order, uninferred_pat) ->
+        let total_len = nconstant total_len in
+        let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+        let checked_pat, env, guards' = bind_pat env uninferred_pat (vector_typ uninferred_len order elem_typ) in
+        annot_vcp (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len order elem_typ),
+        env,
+        guards' @ guards
+     | None ->
+        let len = check_total_len inferred_len in
+        annot_vcp before_uninferred (dvector_typ env len elem_typ), env, guards
+     end
+
+  | None ->
+     let fold_len len pat =
+       let (len', _) = destruct_bitvector_typ l env (typ_of_pat pat) in
+       nsum len len'
+     in
+     let before_len = List.fold_left fold_len (nint 0) before_uninferred in
+     let after_len = List.fold_left fold_len (nint 0) after_uninferred in
+     let inferred_len = nexp_simp (nsum before_len after_len) in
+     begin match uninferred with
+     | Some (total_len, order, uninferred_pat) ->
+        let total_len = nconstant total_len in
+        let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+        let checked_pat, env, guards' = bind_pat env uninferred_pat (bitvector_typ uninferred_len order) in
+        annot_vcp (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len order),
+        env,
+        guards' @ guards
+     | None ->
+        let len = check_total_len inferred_len in
+        annot_vcp before_uninferred (bits_typ env len), env, guards
+     end
 
 and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) as typ) =
   typ_print (lazy (Util.("Binding type pattern " |> yellow |> clear) ^ string_of_typ_pat typ_pat ^ " to " ^ string_of_typ typ));

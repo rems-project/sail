@@ -152,6 +152,9 @@ val changed2 : ('a -> 'b -> 'c) -> ('a -> 'a option) -> 'a -> ('b -> 'b option) 
 val is_some : 'a option -> bool
 val is_none : 'a option -> bool
 
+val is_ok : ('a, 'b) result -> bool
+val is_error : ('a, 'b) result -> bool
+
 (** {2 List Functions} *)
 
 (** [list_index p l] returns the first index [i] such that

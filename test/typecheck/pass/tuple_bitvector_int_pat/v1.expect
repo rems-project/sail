@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/tuple_bitvector_int_pat/v1.sail[0m:10.28-29:
+10[96m |[0m            (32, 0b00 @ _ @ _ @ 0b11) => (),
+  [91m |[0m                            [91m^[0m
+  [91m |[0m Cannot infer width here, as there are multiple subpatterns with unclear width in vector concatenation pattern
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mpass/tuple_bitvector_int_pat/v1.sail[0m:10.24-25:
+  [91m |[0m 10[96m |[0m            (32, 0b00 @ _ @ _ @ 0b11) => (),
+  [91m |[0m   [91m |[0m                        [91m^[0m
+  [91m |[0m   [91m |[0m A previous subpattern is here

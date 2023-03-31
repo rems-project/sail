@@ -439,6 +439,14 @@ let is_some = function
   | Some _ -> true
   | None -> false
 
+let is_ok = function
+  | Ok _ -> true
+  | Error _ -> false
+
+let is_error = function
+  | Ok _ -> false
+  | Error _ -> true
+
 let rec take_drop f = function
   | [] -> ([], [])
   | (x :: xs) when not (f x) -> ([], x :: xs)
