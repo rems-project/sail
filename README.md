@@ -1,8 +1,7 @@
 The Sail ISA specification language
 ===================================
 
-![](https://github.com/rems-project/sail/workflows/CI%20ubuntu-20.04/badge.svg)
-![](https://github.com/rems-project/sail/workflows/CI%20macOS-latest/badge.svg)
+![](https://github.com/rems-project/sail/workflows/Build%20and%20Test/badge.svg)
 
 Overview
 ========
