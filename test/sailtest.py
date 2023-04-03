@@ -45,8 +45,8 @@ def parallel():
     try:
         return int(os.environ['TEST_PAR'])
     except Exception as e:
-        print("Running 4 tests in parallel. Set TEST_PAR to configure")
-        return 4
+        print("Running 16 tests in parallel. Set TEST_PAR to configure")
+        return 16
 
 def chunks(filenames, cores):
     ys = []

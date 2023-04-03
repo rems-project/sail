@@ -19,7 +19,7 @@ print("Sail dir is {}".format(sail_dir))
 
 def no_valgrind():
     try:
-        subprocess.call(['valgrind'])
+        subprocess.call(['valgrind', '--version'])
         return False
     except FileNotFoundError:
         return True

@@ -202,7 +202,10 @@ let to_smt l vars constr =
        begin match nexp_simp nexp with
        | Nexp_aux (Nexp_constant c, _) when Big_int.greater_equal c Big_int.zero ->
           Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
-       | nexp when !opt_solver.uninterpret_power -> sfun "sailexp" [smt_nexp nexp]
+       | nexp when !opt_solver.uninterpret_power ->
+          let exp = smt_nexp nexp in
+          exponentials := exp :: !exponentials;
+          sfun "sailexp" [exp]
        | nexp ->
           let exp = smt_nexp nexp in
           exponentials := exp :: !exponentials;
@@ -245,7 +248,7 @@ let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : str
   !opt_solver.header
   ^ variables ^ "\n"
   ^ (if !opt_solver.uninterpret_power then "(declare-fun sailexp (Int) Int)\n" else "")
-  ^ Util.string_of_list "" (fun sexpr -> "\n" ^ pp_sexpr (sfun "assert" [sexpr])) extra
+  ^ Util.string_of_list "" (fun sexpr -> "\n" ^ pp_sexpr (sfun "assert" [sexpr])) extra ^ "\n"
   ^ pp_sexpr (sfun "assert" [problem])
   ^ "\n(check-sat)"
   ^ (if get_model then "\n(get-model)\n" else "\n")
@@ -319,8 +322,8 @@ let constraint_to_smt l constr =
   (vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")"),
   (fun v -> let sexpr, found = var_map v in pp_sexpr sexpr, found),
   List.map pp_sexpr exponentials
-                            
-let rec call_smt' l extra constraints : smt_result =
+ 
+let rec call_smt' l extra constraints =
   let vars =
     kopts_of_constraint constraints
     |> KOptSet.elements
@@ -330,9 +333,9 @@ let rec call_smt' l extra constraints : smt_result =
   let problems = [constraints] in
   let smt_file, _, exponentials = smtlib_of_constraints l vars extra constraints in
 
-  if !opt_smt_verbose then
+  if !opt_smt_verbose then (
     prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" smt_file)
-  else ();
+  );
 
   let rec input_lines chan = function
     | 0 -> []
@@ -396,30 +399,38 @@ let rec call_smt' l extra constraints : smt_result =
             Unknown
           )
   in
-  match result with
-  | Unsat -> Unsat
-  | Sat -> Sat
-  | Unknown when exponentials <> [] ->
-     (* If we get an unknown result for a constraint involving `2^x`,
-        then try replacing `2^` with an uninterpreted function to see
-        if the problem would be unsat in that case. *)
-     opt_solver := { !opt_solver with uninterpret_power = true };
-     let result = match call_smt' l (sailexp_concrete 64) constraints with
-       | Unsat -> Unsat
-       | Sat ->
-          begin match call_smt' l (sailexp_concrete 64 @ List.map bound_exponential exponentials) constraints with
-          | Sat -> Sat
-          | _ -> Unknown
-          end
-       | _ -> Unknown
-     in
-     opt_solver := { !opt_solver with uninterpret_power = false };
-     result
-  | Unknown -> Unknown
-          
+  (match result with
+   | Unsat -> Unsat
+   | Sat -> Sat
+   | Unknown when exponentials <> [] && not !opt_solver.uninterpret_power ->
+      (* If we get an unknown result for a constraint involving `2^x`,
+         then try replacing `2^` with an uninterpreted function to see
+         if the problem would be unsat in that case. *)
+      opt_solver := { !opt_solver with uninterpret_power = true };
+      let result = call_smt_uninterpret_power ~bound:64 l constraints in
+      opt_solver := { !opt_solver with uninterpret_power = false };
+      result
+   | Unknown -> Unknown),
+  exponentials
+
+and call_smt_uninterpret_power ~bound:bound l constraints =
+  match call_smt' l (sailexp_concrete bound) constraints with
+  | (Unsat, _) -> Unsat
+  | (Sat, exponentials) ->
+     begin match call_smt' l (sailexp_concrete bound @ List.map bound_exponential exponentials) constraints with
+     | (Sat, _) -> Sat
+     | _ -> Unknown
+     end
+  | _ -> Unknown
+  
 let call_smt l constraints =
   let t = Profile.start_smt () in
-  let result = call_smt' l [] constraints in
+  let result =
+    if !opt_solver.uninterpret_power then (
+      call_smt_uninterpret_power ~bound:64 l constraints
+    ) else (
+      fst (call_smt' l [] constraints)
+    ) in
   Profile.finish_smt t;
   result
 
@@ -552,7 +563,7 @@ let solve_unique_smt' l constraints exp_defn exp_bound var =
        match call_smt_solve l smt_file smt_vars var with
        | Some result ->
           let t = Profile.start_smt () in
-          let smt_result' = call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))) in
+          let smt_result' = fst (call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var)))) in
           Profile.finish_smt t;
           begin match smt_result' with
           | Unsat ->
