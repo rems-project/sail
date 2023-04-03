@@ -2192,7 +2192,7 @@ let rec is_typ_inhabited env (Typ_aux (aux, l) as typ) =
   | Typ_id _ ->
      true
   | Typ_var _ ->
-     false
+     true
   | Typ_fn _ | Typ_bidir _ ->
      Reporting.unreachable l __POS__ "Inhabitedness check applied to function or mapping type"
   | Typ_internal_unknown ->
@@ -3394,7 +3394,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
      else typ_error env l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      if (is_typ_monomorphic typ || Env.polymorphic_undefineds env) then (
-       if is_typ_inhabited env (Env.expand_synonyms env typ) then (
+       if is_typ_inhabited env (Env.expand_synonyms env typ) || Env.polymorphic_undefineds env then (
          annot_exp (E_lit lit) typ
        ) else (
          typ_error env l ("Type " ^ string_of_typ typ ^ " is empty")
