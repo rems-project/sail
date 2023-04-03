@@ -532,6 +532,7 @@ module Env : sig
   val get_locals : t -> (mut * typ) Bindings.t
   val add_toplevel_lets : IdSet.t -> t -> t
   val get_toplevel_lets : t -> IdSet.t
+  val is_variant : id -> t -> bool
   val add_variant : id -> typquant * type_union list -> t -> t
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
@@ -1307,6 +1308,7 @@ end = struct
   let get_records env = env.records
                         
   let add_record id typq fields env =
+    let fields = List.map (fun (typ, id) -> (expand_synonyms env typ, id)) fields in
     if bound_typ_id env id then (
       already_bound "struct" id env
     ) else (
@@ -1374,13 +1376,19 @@ end = struct
     { env with top_letbinds = IdSet.union ids env.top_letbinds }
 
   let get_toplevel_lets env = env.top_letbinds
-                                           
-  let add_variant id variant env =
+
+  let is_variant id env = Bindings.mem id env.variants
+                            
+  let add_variant id (typq, constructors) env =
+    let constructors =
+      List.map (fun (Tu_aux (Tu_ty_id (typ, id), l)) ->
+          Tu_aux (Tu_ty_id (expand_synonyms (add_typquant l typq env) typ, id), l)
+        ) constructors in
     if bound_typ_id env id then (
       already_bound "union" id env
     ) else (
       typ_print (lazy (adding ^ "variant " ^ string_of_id id));
-      { env with variants = Bindings.add id variant env.variants }
+      { env with variants = Bindings.add id (typq, constructors) env.variants }
     )
       
   let add_scattered_variant id typq env =
@@ -2147,6 +2155,54 @@ let ambiguous_vars typ =
   let vars = ambiguous_vars' typ in
   if KidSet.cardinal vars > 1 then vars else KidSet.empty
 
+let rec is_typ_inhabited env (Typ_aux (aux, l) as typ) =
+  match aux with
+  | Typ_tuple typs ->
+     List.for_all (is_typ_inhabited env) typs
+  | Typ_app (id, [A_aux (A_nexp len, _); _]) when Id.compare id (mk_id "bitvector") = 0 ->
+     prove __POS__ env (nc_gteq len (nint 0))
+  | Typ_app (id, [A_aux (A_nexp len, _); _; A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
+     prove __POS__ env (nc_gteq len (nint 0))
+  | Typ_app (id, _) when Id.compare id (mk_id "list") = 0 ->
+     true
+  | Typ_app (id, args) when Env.is_variant id env ->
+     let typq, constructors = Env.get_variant id env in
+     let kopts, _ = quant_split typq in
+     let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+     List.exists (fun (Tu_aux (Tu_ty_id (typ, id), _)) ->
+         is_typ_inhabited env (subst_unifiers unifiers typ)
+       ) constructors
+  | Typ_id id when Env.is_record id env ->
+     let _, fields = Env.get_record id env in
+     List.for_all (fun (typ, field) ->
+         is_typ_inhabited env typ
+       ) fields
+  | Typ_app (id, args) when Env.is_record id env ->
+     let typq, fields = Env.get_record id env in
+     let kopts, _ = quant_split typq in
+     let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+     List.for_all (fun (typ, field) ->
+         is_typ_inhabited env (subst_unifiers unifiers typ)
+       ) fields
+  | Typ_app (_, args) ->
+     List.for_all (is_typ_arg_inhabited env) args
+  | (Typ_exist _) ->
+     let typ, env = bind_existential l None typ env in
+     is_typ_inhabited env typ
+  | Typ_id _ ->
+     true
+  | Typ_var _ ->
+     false
+  | Typ_fn _ | Typ_bidir _ ->
+     Reporting.unreachable l __POS__ "Inhabitedness check applied to function or mapping type"
+  | Typ_internal_unknown ->
+     Reporting.unreachable l __POS__ "Inhabitedness check applied to unknown type"
+
+and is_typ_arg_inhabited env (A_aux (aux, l)) =
+  match aux with
+  | A_typ typ -> is_typ_inhabited env typ
+  | _ -> true
+ 
 (**************************************************************************)
 (* 3.5. Subtyping with existentials                                       *)
 (**************************************************************************)
@@ -3337,9 +3393,15 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
      if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error env l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
-     if is_typ_monomorphic typ || Env.polymorphic_undefineds env
-     then annot_exp (E_lit lit) typ
-     else typ_error env l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
+     if (is_typ_monomorphic typ || Env.polymorphic_undefineds env) then (
+       if is_typ_inhabited env (Env.expand_synonyms env typ) then (
+         annot_exp (E_lit lit) typ
+       ) else (
+         typ_error env l ("Type " ^ string_of_typ typ ^ " is empty")
+       )
+     ) else (
+       typ_error env l ("Type " ^ string_of_typ typ ^ " must be monomorphic")
+     )
   | E_internal_assume (nc, exp), _ ->
      Env.wf_constraint env nc;
      let env = Env.add_constraint nc env in

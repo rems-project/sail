@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/negative_bits_existential.sail[0m:12.17-26:
+12[96m |[0m    let x: Foo = undefined;
+  [91m |[0m                 [91m^-------^[0m
+  [91m |[0m Type Foo is empty
