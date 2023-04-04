@@ -863,7 +863,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
              else None
            in
            Some (List.concat
-                   (List.map (fun h -> Util.map_filter (merge h) t') h'))
+                   (List.map (fun h -> List.filter_map (merge h) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
@@ -2125,7 +2125,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
     when is_id (env_of exp) (Id "append") append ->
      (* If the expression is a concatenation resulting in a small enough bitvector,
         perform a (total) case split on the sub-vectors *)
-     let vec_len v = try Util.option_map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+     let vec_len v = try Option.map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
      let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
      let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
      begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
@@ -2670,7 +2670,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
     | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),kid),_)),_) -> Some kid
     | _ -> None
   in
-  let top_kids = Util.map_filter int_quant qs in
+  let top_kids = List.filter_map int_quant qs in
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
@@ -3666,9 +3666,9 @@ let simplify_size_nexp env quant_kids nexp =
           | Nexp_minus(n1,n2) ->
              re (fun n1 n2 -> Nexp_minus(n1,n2)) (aux n1, aux n2)
           | Nexp_exp n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
           | Nexp_neg n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
           | _ -> None
   in aux nexp
 

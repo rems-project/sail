@@ -1269,7 +1269,7 @@ end = struct
                                 
   let union_constructor_info id env =
     let type_unions = List.map (fun (id, (_, tus)) -> (id, tus)) (Bindings.bindings env.variants) in
-    Util.find_map (fun (union_id, tus) -> Util.option_map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
+    Util.find_map (fun (union_id, tus) -> Option.map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
  
   let is_union_constructor id env =
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
@@ -1621,7 +1621,7 @@ let bind_tuple_existentials l name (Typ_aux (aux, annot) as typ) env =
 
 let destruct_range env typ =
   let kopts, constr, (Typ_aux (typ_aux, _)) =
-    Util.option_default ([], nc_true, typ) (destruct_exist (Env.expand_synonyms env typ))
+    Option.value ~default:([], nc_true, typ) (destruct_exist (Env.expand_synonyms env typ))
   in
   match typ_aux with
     | Typ_app (f, [A_aux (A_nexp n, _)])
@@ -2639,7 +2639,7 @@ let is_empty_tannot tannot = match fst tannot with
 
 let map_uannot f (t, uannot) = (t, f uannot)
 
-let destruct_tannot tannot = Util.option_map (fun t -> (t.env, t.typ)) (fst tannot)
+let destruct_tannot tannot = Option.map (fun t -> (t.env, t.typ)) (fst tannot)
 
 let string_of_tannot tannot =
   match destruct_tannot tannot with
@@ -2850,7 +2850,7 @@ let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_minus (n1, n2) ->
      Util.option_binop Big_int.add (big_int_of_nexp n1) (big_int_of_nexp n2)
   | Nexp_exp n ->
-     Util.option_map (fun n -> Big_int.pow_int_positive 2 (Big_int.to_int n)) (big_int_of_nexp n)
+     Option.map (fun n -> Big_int.pow_int_positive 2 (Big_int.to_int n)) (big_int_of_nexp n)
   | _ -> None
 
 let assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
@@ -3156,7 +3156,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
      let inferred_typ = typ_of inferred_exp in
      let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
      let checked_cases, attr_update =
-       if Util.is_some (get_attribute "complete" uannot) || Util.is_some (get_attribute "incomplete" uannot) then (
+       if Option.is_some (get_attribute "complete" uannot) || Option.is_some (get_attribute "incomplete" uannot) then (
          checked_cases, (fun attrs -> attrs)
        ) else (
          let ctx = {
@@ -3330,7 +3330,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
      | _ ->
         let cond' = type_coercion env cond' bool_typ in
         let then_branch' = crule check_exp (add_opt_constraint l "then branch" (assert_constraint env true cond') env) then_branch typ in
-        let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch typ in
+        let else_branch' = crule check_exp (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env) else_branch typ in
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      end
   | E_exit exp, _ ->
@@ -3378,7 +3378,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           begin
             match unaux_exp (fst (uncast_exp e_t)) with
             | E_throw _ | E_block [E_aux (E_throw _, _)] ->
-               add_opt_constraint l "if-throw" (option_map nc_not (assert_constraint env false cond)) env
+               add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint env false cond)) env
             | _ -> env
           end
        | _ -> env in
@@ -3467,12 +3467,12 @@ and check_block l env exps ret_typ =
   | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let env = add_opt_constraint l "if-throw" (option_map nc_not (assert_constraint env false cond')) env in
+     let env = add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint env false cond')) env in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_if (cond, then_exp, _), _) as exp) :: exps) when exp_unconditionally_returns then_exp ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let env = add_opt_constraint l "unconditional if" (option_map nc_not (assert_constraint env false cond')) env in
+     let env = add_opt_constraint l "unconditional if" (Option.map nc_not (assert_constraint env false cond')) env in
      texp :: check_block l env exps ret_typ
   | (exp :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
@@ -3910,7 +3910,7 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
   let fold_pats (pats, env, guards) pat =
     let wrap_some (x, y, z) = (Ok x, y, z) in
     let inferred_pat, env, guards' =
-      if Util.is_none typ_opt then (
+      if Option.is_none typ_opt then (
         wrap_some (infer_pat env pat)
       ) else (
         try wrap_some (infer_pat env pat) with
@@ -3925,7 +3925,7 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
   let elem_typ = match typ_opt with
     | Some (_, _, elem_typ) -> elem_typ
     | None ->
-       match List.find_opt Util.is_ok inferred_pats with
+       match List.find_opt Result.is_ok inferred_pats with
        | Some (Ok pat) ->
           begin match destruct_any_vector_typ l env (typ_of_pat pat) with
           | Destruct_vector (_, _, t) -> Some t
@@ -3937,11 +3937,11 @@ and bind_vector_concat_pat l env uannot pat pats typ_opt =
   (* We can handle a single None in inferred_pats from something like
      0b00 @ _ @ 0b00, because we know the wildcard will be bits('n - 4)
      where 'n is the total length of the pattern. *)
-  let before_uninferred, rest = Util.take_drop Util.is_ok inferred_pats in
+  let before_uninferred, rest = Util.take_drop Result.is_ok inferred_pats in
   let before_uninferred = List.map Result.get_ok before_uninferred in
   let uninferred, after_uninferred = match rest with
     | Error (first_uninferred, exn) :: rest ->
-       begin match List.find_opt Util.is_error rest with
+       begin match List.find_opt Result.is_error rest with
        | Some (Error (second_uninferred, _)) ->
           let msg =
             "Cannot infer width here, as there are multiple subpatterns with unclear width in vector concatenation pattern"
@@ -4413,7 +4413,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
      begin match destruct_numeric (Env.expand_synonyms env (typ_of then_branch')) with
      | Some (kids, nc, then_nexp) ->
         let then_sn = to_simple_numeric l kids nc then_nexp in
-        let else_branch' = irule infer_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch in
+        let else_branch' = irule infer_exp (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env) else_branch in
         begin match destruct_numeric (Env.expand_synonyms env (typ_of else_branch')) with
         | Some (kids, nc, else_nexp) ->
            let else_sn = to_simple_numeric l kids nc else_nexp in
@@ -4424,10 +4424,10 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
      | None ->
         begin match typ_of then_branch' with
         | Typ_aux (Typ_app (f, [_]), _) when string_of_id f = "atom_bool" ->
-           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch bool_typ in
+           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env) else_branch bool_typ in
            annot_exp (E_if (cond', then_branch', else_branch')) bool_typ
         | _ ->
-           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (option_map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
+           let else_branch' = crule check_exp (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env) else_branch (typ_of then_branch') in
            annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
         end
      end
@@ -5445,7 +5445,7 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
          let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
          List.iter valid_outcome_def defs;
          let defs, local_env = check_defs local_env defs in
-         let vals = Util.map_filter (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)), _) -> Some id | _ -> None) defs in
+         let vals = List.filter_map (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)), _) -> Some id | _ -> None) defs in
          decr depth;
          OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, vals, local_env) env
        with

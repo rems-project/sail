@@ -172,7 +172,7 @@ let rec add_list buf sep add_elem = function
      add_elem buf x;
      Buffer.add_char buf sep;
      add_list buf sep add_elem xs
- 
+
 (* Each non-Type/Order kind in Sail maps to a type in the SMT solver *)
 let smt_type l = function
   | K_int -> Atom "Int"

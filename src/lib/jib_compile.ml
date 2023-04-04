@@ -1637,7 +1637,7 @@ let mangle_mono_id id ctx ctyps =
    in a future round of specialization *)
 let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
   let polymorphic_functions =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              Some id
@@ -1670,7 +1670,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
        let tyargs = List.fold_left (fun set ctyp -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty (ret_ctyp :: param_ctyps) in
        spec_tyargs := Bindings.add id tyargs !spec_tyargs;
        let specialized_specs =
-         Util.map_filter (fun instantiation ->
+         List.filter_map (fun instantiation ->
              let specialized_id = mangle_mono_id id ctx instantiation in
              if not (IdSet.mem specialized_id !specialized_calls) then (
                let substs = List.fold_left2 (fun substs tyarg ty -> KBindings.add tyarg ty substs) KBindings.empty (KidSet.elements tyargs) instantiation in
@@ -1693,7 +1693,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
     | (CDEF_fundef (id, heap_return, params, body) as orig_cdef) :: cdefs when Bindings.mem id !monomorphic_calls ->
        let tyargs = Bindings.find id !spec_tyargs in
        let specialized_fundefs =
-         Util.map_filter (fun instantiation ->
+         List.filter_map (fun instantiation ->
              let specialized_id = mangle_mono_id id ctx instantiation in
              if not (IdSet.mem specialized_id !specialized_calls) then (
                specialized_calls := IdSet.add specialized_id !specialized_calls;
@@ -1718,7 +1718,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
      unreachable from any monomorphic function *)
   let graph = callgraph cdefs in
   let monomorphic_roots =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              None
@@ -1732,7 +1732,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
     IdSet.filter (fun id -> not (IdGraphNS.mem id monomorphic_reachable)) polymorphic_functions
   in
   let cdefs =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_fundef (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | CDEF_val (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | cdef -> Some cdef

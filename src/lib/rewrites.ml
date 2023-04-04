@@ -4524,7 +4524,7 @@ let rewrite_explicit_measure effect_info env ast =
              P_aux (P_id id,(loc,empty_tannot)),
              E_aux (E_id id,(loc,empty_tannot))
            in
-           let wpats,wexps = List.split (Util.list_mapi mk_wrap measure_pats) in
+           let wpats,wexps = List.split (List.mapi mk_wrap measure_pats) in
            let wpat = match wpats with
              | [wpat] -> wpat
              | _ -> P_aux (P_tuple wpats,(loc,empty_tannot))

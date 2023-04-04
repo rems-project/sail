@@ -478,7 +478,7 @@ module Make(C: Config) = struct
            ) (rows_to_list matrix)
        in
        (* Check if we have any row containing only wildcards, hence matrix is trivially unsatisfiable *)
-       match Util.find_rest_opt (fun (_, constr) -> Util.is_none constr) constrs with
+       match Util.find_rest_opt (fun (_, constr) -> Option.is_none constr) constrs with
        | Some (_, []) -> mk_complete all_rows []
        (* If there are any rows after the wildcard row, they are redundant *)
        | Some (_, redundant) ->
@@ -503,7 +503,7 @@ module Make(C: Config) = struct
           | None ->
              let to_wildcards = match Util.last_opt (rows_to_list matrix) with
                | Some (idx, Columns row) ->
-                  Util.map_filter (function (GP_bitvector (pnum, _, _) | GP_num (pnum, _, _))  -> Some (idx.num, pnum) | _ -> None) row
+                  List.filter_map (function (GP_bitvector (pnum, _, _) | GP_num (pnum, _, _))  -> Some (idx.num, pnum) | _ -> None) row
                | None -> []
              in
              mk_complete all_rows to_wildcards
@@ -556,7 +556,7 @@ module Make(C: Config) = struct
     Rows (
         rows_to_list matrix
         |> List.mapi (fun r row -> (r, row))
-        |> Util.map_filter (fun (r, (l, row)) -> if IntSet.mem r row_indices then Some (l, remove_ctor row) else None)
+        |> List.filter_map (fun (r, (l, row)) -> if IntSet.mem r row_indices then Some (l, remove_ctor row) else None)
       )
 
   let rec remove_index n = function
@@ -761,6 +761,6 @@ module Make(C: Config) = struct
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | exn -> None
 
-  let is_complete l ctx cases head_exp_typ = Util.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
+  let is_complete l ctx cases head_exp_typ = Option.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
 
 end

@@ -2320,7 +2320,7 @@ let compile_ast env effect_info output_chan c_includes ast =
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])
-                      @ (if Util.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
+                      @ (if Option.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -2391,7 +2391,7 @@ let compile_ast env effect_info output_chan c_includes ast =
     let model_pre_exit =
       [ "void model_pre_exit()";
         "{" ]
-      @ (if Util.is_some !opt_branch_coverage then
+      @ (if Option.is_some !opt_branch_coverage then
          [ "  if (sail_coverage_exit() != 0) {";
            "    fprintf(stderr, \"Could not write coverage information\\n\");";
            "    exit(EXIT_FAILURE);";

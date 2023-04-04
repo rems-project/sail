@@ -828,8 +828,7 @@ let doc_exp_lem, doc_let_lem =
              let (returner, monad, arg_order) = if ctxt.monadic then ("early_return", "MR", fun x -> x) else ("Left", "either", List.rev) in
              let epp = separate space [string returner; expY exp] in
              let aexp_needed, tepp =
-               match Util.option_bind (make_printable_type ctxt ctxt.top_env)
-                       (Env.get_ret_typ (env_of exp)),
+               match Option.bind (Env.get_ret_typ (env_of exp)) (make_printable_type ctxt ctxt.top_env),
                      make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
                | Some typ, Some full_typ ->
                   let tannot = separate space ([string monad]
@@ -1042,7 +1041,7 @@ let doc_exp_lem, doc_let_lem =
            "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
       let ta =
-        match Util.option_bind (make_printable_type ctxt ctxt.top_env) (Env.get_ret_typ (env_of full_exp)),
+        match Option.bind (Env.get_ret_typ (env_of full_exp)) (make_printable_type ctxt ctxt.top_env),
               make_printable_type ctxt (env_of r) (typ_of r) with
        | Some full_typ, Some r_typ ->
           separate space
@@ -1131,7 +1130,7 @@ let doc_typquant_sorts idpp (TypQ_aux (typq,_)) =
        | QI_constraint _ -> None
      in
      if List.exists (function (QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),_),_)),_)) -> true | _ -> false) qs then
-       let qs_pp = Util.map_filter q qs in
+       let qs_pp = List.filter_map q qs in
        string "declare isabelle target_sorts " ^^ idpp ^^ space ^^ separate space (equals::qs_pp) ^^ hardline
      else empty
   | TypQ_no_forall -> empty
