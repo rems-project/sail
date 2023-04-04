@@ -1,4 +1,4 @@
-name: Build and Test
+name: Coverage
 
 on: [push, workflow_dispatch]
 
@@ -9,8 +9,8 @@ jobs:
   build:
     strategy:
       matrix:
-        version: [4.08.1, 5.0.0]
-        os: [ubuntu-latest, macOS-latest]
+        version: [4.08.1]
+        os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -32,7 +32,7 @@ jobs:
       uses: actions/cache/restore@v3
       with:
         path: ~/.opam
-        key: ${{ matrix.os }}-${{ matrix.version }}
+        key: ${{ matrix.os }}-${{ matrix.version }}-cov
 
     - name: Setup opam
       if: steps.cache-opam.outputs.cache-hit != 'true'
@@ -51,9 +51,31 @@ jobs:
       run: |
         eval $(opam env)
         opam pin --yes --no-action add .
-        opam install sail --yes
+        opam install . --yes --deps-only
+
+    - name: Build Sail with coverage
+      run: |
+        eval $(opam env)
+        dune build --release --instrument-with bisect_ppx
+        dune install
 
     - name: Test Sail
       run: |
         eval $(opam env)
-        etc/ci_core_tests.sh
+        export SAIL_DIR=$(pwd)
+        etc/ci_coverage_tests.sh
+        
+    - name: Collect coverage
+      run: |
+        eval $(opam env)
+        bisect-ppx-report html --coverage-path=test/
+        bisect-ppx-report summary --per-file --coverage-path=test/ > coverage_summary.txt
+        zip -r coverage.zip _coverage/
+
+    - name: Archive coverage
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-coverage
+        path: |
+          coverage_summary.txt
+          coverage.zip

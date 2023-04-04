@@ -1680,11 +1680,6 @@ let rec useful_loc = function
   | Documented (_,l) -> useful_loc l
   | Range (_,_) -> true
 
-let id_pair_compare (id,l) (id',l') =
-    match Id.compare id id' with
-    | 0 -> compare l l'
-    | x -> x
-
 (* Usually we do a full case split on an argument, but sometimes we find a
    case expression in the function body that suggests a more compact case
    splitting. *)
@@ -1762,10 +1757,6 @@ let string_of_argsplits s =
     (List.map (fun ((id,l),detail) ->
       string_of_id id ^ "." ^ simple_string_of_loc l ^ string_of_match_detail detail)
                         (ArgSplits.bindings s))
-
-let string_of_lx lx =
-  let open Lexing in
-  Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
 
 let string_of_extra_splits s =
   String.concat ", "

@@ -202,7 +202,7 @@ let row_matrix_empty (Rows rows) =
 let row_matrix_width l (Rows rows) =
   match rows with
   | (_, Columns cols) :: _ -> List.length cols
-  | [] -> Reporting.unreachable l __POS__ "Cannot determine width of empty pattern matrix"
+  | [] -> Reporting.unreachable l __POS__ "Cannot determine width of empty pattern matrix" [@coverage off]
 
 let row_matrix_height (Rows rows) = List.length rows
 
@@ -279,6 +279,7 @@ module Make(C: Config) = struct
     | GP_vector of gpat list
     | GP_bool of bool
 
+  [@@@coverage off]
   let rec _string_of_gpat = function
     | GP_wild -> "_"
     | GP_unknown -> "?"
@@ -297,6 +298,7 @@ module Make(C: Config) = struct
     List.iter (fun (_, Columns c) ->
         prerr_endline (Util.string_of_list ", " _string_of_gpat c)
       ) rs
+  [@@@coverage on]
 
   let rec generalize ctx head_exp_typ (P_aux (p_aux, (l, (_, pnum))) as pat) =
     let typ = typ_of_pat pat in
@@ -351,7 +353,7 @@ module Make(C: Config) = struct
                 | GP_wild ->
                    bvc
                 | _ ->
-                   Reporting.unreachable l __POS__ "Invalid bitvector pattern"
+                   Reporting.unreachable l __POS__ "Invalid bitvector pattern" [@coverage off]
               ) BVC_true slices gpats
           in
           GP_bitvector (pnum, total, bvc)
@@ -516,7 +518,7 @@ module Make(C: Config) = struct
   let rec column_typ_id l = function
     | (_, GP_app (typ_id, _, _)) :: _ -> typ_id
     | _ :: gpats -> column_typ_id l gpats
-    | [] -> Reporting.unreachable l __POS__ "No column type id"
+    | [] -> Reporting.unreachable l __POS__ "No column type id" [@coverage off]
 
   let split_app_column l ctx col =
     let typ_id = column_typ_id l col in
@@ -529,7 +531,7 @@ module Make(C: Config) = struct
           | GP_wild ->
              Bindings.map (fun xs -> (i, None) :: xs) acc
           | _ ->
-             Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern"
+             Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
         in
         (i + 1, acc)
       ) (0, all_ctors) col
@@ -539,7 +541,7 @@ module Make(C: Config) = struct
     let flatten = function
       | GP_tuple gpats -> gpats
       | GP_wild -> List.init width (fun _ -> GP_wild)
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern"
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern" [@coverage off]
     in
     Rows (List.map (fun (l, row) ->
               (l, Columns (List.mapi (fun j gpat -> if i = j then flatten gpat else [gpat]) (columns_to_list row) |> List.concat))
@@ -550,7 +552,7 @@ module Make(C: Config) = struct
     let flatten = function
       | GP_app (_, _, gpats) -> GP_tuple gpats
       | GP_wild -> GP_wild
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern"
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
     in
     let remove_ctor row = Columns (List.mapi (fun i gpat -> if i = c then flatten gpat else gpat) (columns_to_list row)) in
     Rows (
@@ -731,7 +733,7 @@ module Make(C: Config) = struct
     | _, ((Pat_aux (Pat_when _, _) as case) :: cases) ->
        case :: update_cases l new_pats cases
     | _, _ ->
-       Reporting.unreachable l __POS__ "Impossible case in update_cases"
+       Reporting.unreachable l __POS__ "Impossible case in update_cases" [@coverage off]
 
   let is_complete_wildcarded l ctx cases head_exp_typ =
     try
@@ -746,7 +748,7 @@ module Make(C: Config) = struct
               ("The following expression is unmatched" ^ guard_info ^ ": " ^ (string_of_exp unmatched |> Util.yellow |> Util.clear));
             None
          | Incomplete [] ->
-            Reporting.unreachable l __POS__ "Got unmatched pattern matrix without witness"
+            Reporting.unreachable l __POS__ "Got unmatched pattern matrix without witness" [@coverage off]
          | Complete cinfo ->
             let wildcarded_pats = List.map (fun (_, pat) -> insert_wildcards cinfo pat) pats in
             List.iter (fun (idx, _) ->

@@ -67,6 +67,8 @@
 
 %{
 
+[@@@coverage exclude_file]
+  
 module Big_int = Nat_big_num
 open Parse_ast
 

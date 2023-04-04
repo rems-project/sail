@@ -320,6 +320,7 @@ val strip_exp : tannot exp -> uannot exp
 
 (** Strip the type annotations from a pattern *)
 val strip_pat : tannot pat -> uannot pat
+val strip_mpat : tannot mpat -> uannot mpat
 
 (** Strip the type annotations from a pattern-expression *)
 val strip_pexp : tannot pexp -> uannot pexp

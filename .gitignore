@@ -12,6 +12,8 @@
 a.out
 *.gch
 
+*.coverage
+
 _build/
 _sbuild/
 

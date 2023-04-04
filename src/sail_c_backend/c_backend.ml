@@ -2289,7 +2289,7 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_function_id id)
   | _ -> assert false
 
-let rec get_recursive_functions cdefs =
+let get_recursive_functions cdefs =
   let graph = Jib_compile.callgraph cdefs in
   let rf = IdGraph.self_loops graph in
   (* Use strongly-connected components for mutually recursive functions *)

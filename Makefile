@@ -1,4 +1,4 @@
-.PHONY: all isail sail install clean docker test
+.PHONY: all isail sail install coverage clean docker test
 
 all: sail
 
@@ -9,6 +9,9 @@ sail:
 
 install: sail
 	dune install
+
+coverage:
+	dune build --release --instrument-with bisect_ppx
 
 clean:
 	dune clean

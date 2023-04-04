@@ -135,7 +135,7 @@ let error_string_of_kid substs kid =
   | Some nexp -> string_of_nexp nexp
   | None -> string_of_kid kid
 
-let error_string_of_nexp substs nexp =
+let _error_string_of_nexp substs nexp =
   string_of_nexp (subst_kids_nexp substs nexp)
 
 let error_string_of_nc substs nexp =
