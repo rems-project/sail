@@ -475,7 +475,7 @@ let remove_vector_concat_pat pat =
   let find_root root_id =
     try List.find (fun (_, (root_id', _)) -> root_id = root_id') decls with
     | Not_found ->
-    (* If it's not a root the it's a leaf node in the graph, so search for child_id *)
+    (* If it's not a root then it's a leaf node in the graph, so search for child_id *)
     try List.find (fun (_, (_, child_id)) -> root_id = child_id) decls with
     | Not_found -> assert false (* Should never happen *)
   in

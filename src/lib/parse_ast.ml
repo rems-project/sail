@@ -112,7 +112,7 @@ base_effect_aux =  (* effect *)
  | BE_eamem (* address for write signaled *)
  | BE_exmem (* determine if a store-exclusive (ARM) is going to succeed *)
  | BE_barr (* memory barrier *)
- | BE_depend (* dynmically dependent footprint *)
+ | BE_depend (* dynamically dependent footprint *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
@@ -120,7 +120,7 @@ base_effect_aux =  (* effect *)
  | BE_config
 
 type 
-kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
+kid_aux =  (* identifiers with kind, ticked to differentiate from program variables *)
    Var of x
 
 
@@ -311,7 +311,7 @@ and fexp_aux =  (* Field-expression *)
 and fexp = 
    FE_aux of fexp_aux * l
 
-and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+and opt_default_aux =  (* Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map *)
    Def_val_empty
  | Def_val_dec of exp
 

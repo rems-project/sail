@@ -18,7 +18,7 @@ Sail 0.15
 
 ##### More modular codebase and dune build system
 
-The Sail internals have been refactored into seperate packages for
+The Sail internals have been refactored into separate packages for
 each Sail backend (c/lem/coq and so on). The shared parts of Sail are
 now contained in a separate libsail OCaml library. The main Sail
 executable links together all the Sail backends into a single
@@ -72,7 +72,7 @@ requirements for a function to be pure in this sense are stricter than
 they were previously - a pure function must not:
 
 * Throw an exception
-* Exit (either explicitly or by failing an assertion)
+* Exit (either explicitily or by failing an assertion)
 * Contain a possibly incomplete pattern match
 * Read or write any register
 * Call any impure function

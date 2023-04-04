@@ -1621,7 +1621,7 @@ and vec_concat_match_plev t_level pat r_vals dir l last_pat t =
         else (false,false,eenv,[],[])
       | P_typ _ (P_aux p (l',Just(t',_,_,_,_))) -> vec_concat_match_plev t_level p r_vals dir l last_pat t
       | _ -> (false,false,eenv,[],[]) end
-      (*TODO Need to support indexed here, skipping intermediate numbers but consumming r_vals, and as *)
+      (*TODO Need to support indexed here, skipping intermediate numbers but consuming r_vals, and as *)
 
 and vec_concat_match t_level pats r_vals =
     match pats with
@@ -3392,7 +3392,7 @@ let rec __resume mode stack value =
   | (Hole_frame id exp t_level env mem Top,Just value) ->
     interp_main mode t_level (add_to_env (id,value) env) mem exp
   | (Hole_frame id exp t_level env mem Top,Nothing) ->
-    (Error Unknown "Top hole frame hit wihtout a value in resume", mem, env)
+    (Error Unknown "Top hole frame hit without a value in resume", mem, env)
   | (Hole_frame id exp t_level env mem stack,Just value) ->
     match resume mode stack (Just value) with
     | (Value v,_,_) ->

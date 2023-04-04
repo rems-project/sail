@@ -57,7 +57,7 @@ on code from some other location. `Unique` is used internally to tag
 locations with unique integers so they can be referred to
 later. `Unknown` is used for Sail that has no obvious corresponding
 location, although this should be avoided as much possible as it leads
-to poor error messages. Ast nodes programatically generated initially
+to poor error messages. Ast nodes programmatically generated initially
 have `Unknown` locations, but `Ast_util.locate` can be used to
 recursively attach `Generated` locations for error purposes.
 
@@ -232,7 +232,7 @@ file is long, but is structured as follows:
    definitions of functions and datatypes.
 
 The interface by which the rest of Sail can interact with the
-type-checker and type annotations is strictly controlled by it's [mli
+type-checker and type annotations is strictly controlled by its [mli
 interface](https://github.com/rems-project/sail/blob/sail2/src/type_check.mli)
 file. We try to keep much of the type-checking internals as abstract
 as possible.

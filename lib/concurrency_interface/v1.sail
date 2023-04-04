@@ -105,7 +105,7 @@ union Access_kind('arch_ak : Type) = {
   AK_explicit: Explicit_access_kind,
   AK_ifetch : unit, // Instruction fetch
   AK_ttw : unit, // Translation table walk
-  AK_arch : 'arch_ak // Archtecture specific type of access.
+  AK_arch : 'arch_ak // Architecture specific type of access.
 }
 
 struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,

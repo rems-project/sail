@@ -78,7 +78,7 @@ module Big_int = Nat_big_num
    with much more debug information. *)
 let opt_tc_debug = ref 0
 
-(* opt_no_lexp_bounds_check turns of the bounds checking in vector
+(* opt_no_lexp_bounds_check turns off the bounds checking in vector
    assignments in l-expressions *)
 let opt_no_lexp_bounds_check = ref false
 

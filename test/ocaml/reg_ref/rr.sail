@@ -5,7 +5,7 @@ val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 
 type regno ('n : Int), 0 <= 'n < 4 = atom('n)
 
-/* regiser x0 : bits(32) is always 0 */
+/* register x0 : bits(32) is always 0 */
 register x1 : bits(32)
 register x2 : bits(32)
 register x3 : bits(32)
@@ -73,7 +73,7 @@ function slice_bit MkSlice(_, [b]) = b
 /* Overload slice modifier */
 overload _mod_slice = {_set_slice, _set_slice2, vector_slice, slice_slice}
 
-/* Set up a struct with an aliased LT bit in CR0, mimicing old-style syntax */
+/* Set up a struct with an aliased LT bit in CR0, mimicking old-style syntax */
 infix 1 ...
 
 type operator ...('n : Int, 'm : Int) = slice('m, 'n - ('m - 1))

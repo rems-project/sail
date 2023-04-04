@@ -192,7 +192,7 @@ enum ExtendType =
 
 enum RevOp = {RevOp_RBIT, RevOp_REV16, RevOp_REV32, RevOp_REV64}
 
-enum ShiftType =   /* the oreder is important for decoding */
+enum ShiftType =   /* the order is important for decoding */
   {ShiftType_LSL, ShiftType_LSR, ShiftType_ASR, ShiftType_ROR}
 
 enum LogicalOp = {LogicalOp_AND, LogicalOp_EOR, LogicalOp_ORR}
