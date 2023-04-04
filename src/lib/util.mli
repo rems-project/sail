@@ -106,6 +106,8 @@ val power : int -> int -> int
 
 (** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
+
+val iter_last : (bool -> 'a -> unit) -> 'a list -> unit
   
 (** {2 Option Functions} *)
 

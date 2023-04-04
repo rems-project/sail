@@ -144,7 +144,7 @@ let set_solver = function
 
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
-type sexpr = List of (sexpr list) | Atom of string
+type sexpr = List of sexpr list | Atom of string
 
 let sfun (fn : string) (xs : sexpr list) : sexpr = List (Atom fn :: xs)
 
@@ -152,7 +152,28 @@ let rec pp_sexpr : sexpr -> string = function
   | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
   | Atom x -> x
 
-(** Each non-Type/Order kind in Sail mapes to a type in the SMT solver *)
+let rec add_sexpr buf = function
+  | List xs ->
+     Buffer.add_char buf '(';
+     Util.iter_last (fun last x ->
+         add_sexpr buf x;
+         if not last then (
+           Buffer.add_char buf ' '
+         )
+       ) xs;
+     Buffer.add_char buf ')'
+  | Atom x ->
+     Buffer.add_string buf x
+
+let rec add_list buf sep add_elem = function
+  | [] -> ()
+  | [x] -> add_elem buf x
+  | x :: xs ->
+     add_elem buf x;
+     Buffer.add_char buf sep;
+     add_list buf sep add_elem xs
+ 
+(* Each non-Type/Order kind in Sail maps to a type in the SMT solver *)
 let smt_type l = function
   | K_int -> Atom "Int"
   | K_bool -> Atom "Bool"
@@ -180,11 +201,10 @@ let to_smt l vars constr =
   (* var_decs outputs the list of variables to be used by the SMT
      solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
      returned by Type_check.get_typ_vars *)
-  let var_decs l (vars : kind_aux KBindings.t) : string =
+  let var_decs l (vars : kind_aux KBindings.t) : sexpr list =
     vars
     |> KBindings.bindings
     |> List.map (fun (v, k) -> sfun "declare-const" [fst (smt_var v); smt_type l k])
-    |> string_of_list "\n" pp_sexpr
   in
   let rec smt_nexp (Nexp_aux (aux, _) : nexp) : sexpr =
     match aux with
@@ -244,24 +264,32 @@ let sailexp_concrete n =
   List.init (n + 1) (fun i -> sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))])
   
 let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : string * (kid -> sexpr * bool) * sexpr list =
+  let open Buffer in
+  let buf = create 512 in
+  add_string buf !opt_solver.header;
   let variables, problem, var_map, exponentials = to_smt l vars constr in
-  !opt_solver.header
-  ^ variables ^ "\n"
-  ^ (if !opt_solver.uninterpret_power then "(declare-fun sailexp (Int) Int)\n" else "")
-  ^ Util.string_of_list "" (fun sexpr -> "\n" ^ pp_sexpr (sfun "assert" [sexpr])) extra ^ "\n"
-  ^ pp_sexpr (sfun "assert" [problem])
-  ^ "\n(check-sat)"
-  ^ (if get_model then "\n(get-model)\n" else "\n")
-  ^ !opt_solver.footer,
-  var_map,
-  exponentials
+  add_list buf '\n' add_sexpr variables;
+  add_char buf '\n';
+  if !opt_solver.uninterpret_power then (
+    add_string buf "(declare-fun sailexp (Int) Int)\n"
+  );
+  add_list buf '\n' (fun buf sexpr -> add_sexpr buf (sfun "assert" [sexpr])) extra;
+  add_char buf '\n';
+  add_sexpr buf (sfun "assert" [problem]);
+  add_string buf "\n(check-sat)";
+  if get_model then (
+    add_string buf "\n(get-model)"
+  );
+  add_char buf '\n';
+  add_string buf !opt_solver.footer;
+  (Buffer.contents buf, var_map, exponentials)
 
 type smt_result = Unknown | Sat | Unsat
 
 module DigestMap = Map.Make(Digest)
 
-let known_problems = ref (DigestMap.empty)
-let known_uniques = ref (DigestMap.empty)
+let known_problems = ref DigestMap.empty
+let known_uniques = ref DigestMap.empty
 
 let load_digests_err () =
   let in_chan = open_in_bin "z3_problems" in
@@ -319,6 +347,7 @@ let constraint_to_smt l constr =
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
   let vars, sexpr, var_map, exponentials = to_smt l vars constr in
+  let vars = string_of_list "\n" pp_sexpr vars in
   (vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")"),
   (fun v -> let sexpr, found = var_map v in pp_sexpr sexpr, found),
   List.map pp_sexpr exponentials

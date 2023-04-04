@@ -212,7 +212,14 @@ let rec map_last f = function
   | [] -> []
   | [x] -> [f true x]
   | (x :: xs) -> f false x :: map_last f xs
-        
+
+let rec iter_last f = function
+  | [] -> ()
+  | [x] -> f true x
+  | x :: xs ->
+     f false x;
+     iter_last f xs
+               
 let rec split_on_char sep str =
   try
     let sep_pos = String.index str sep in
