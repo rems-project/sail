@@ -1,12 +1,13 @@
-name: Coverage
+name: Test coverage
 
-on: [push, workflow_dispatch]
+on: [push, pull_request, workflow_dispatch]
 
 env:
   OPAMVERBOSE: 1
 
 jobs:
   build:
+    # GitHub allows matrix variables in more places than env variables
     strategy:
       matrix:
         version: [4.08.1]
@@ -17,15 +18,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: System dependencies (ubuntu)
-      if: startsWith(matrix.os, 'ubuntu')
+    - name: System dependencies
       run: |
         sudo apt install build-essential libgmp-dev z3 cvc4 opam
-
-    - name: System dependencies (macOS)
-      if: startsWith(matrix.os, 'macOS')
-      run: |
-        brew install gpatch gmp z3 pkg-config lzlib zlib opam
 
     - name: Restore cached opam
       id: cache-opam-restore
@@ -40,7 +35,7 @@ jobs:
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
 
     - name: Save cached opam
-      if: steps.cache-opam.outputs.cache-hit != 'true'
+      if: steps.cache-opam.outputs.cache-hit == 'true'
       id: cache-opam-save
       uses: actions/cache/save@v3
       with:
@@ -64,13 +59,19 @@ jobs:
         eval $(opam env)
         export SAIL_DIR=$(pwd)
         etc/ci_coverage_tests.sh
-        
+
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: |
+          test/**/tests.xml
+
     - name: Collect coverage
       run: |
         eval $(opam env)
         bisect-ppx-report html --coverage-path=test/
         bisect-ppx-report summary --per-file --coverage-path=test/ > coverage_summary.txt
-        zip -r coverage.zip _coverage/
 
     - name: Archive coverage
       uses: actions/upload-artifact@v3
@@ -78,4 +79,5 @@ jobs:
         name: code-coverage
         path: |
           coverage_summary.txt
-          coverage.zip
+          _coverage/*
+          _coverage/src/lib/*
