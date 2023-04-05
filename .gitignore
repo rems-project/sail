@@ -12,12 +12,15 @@
 a.out
 *.gch
 
-*.coverage
-
 _build/
 _sbuild/
 
 z3_problems
+
+# bisect_ppx coverage
+
+*.coverage
+_coverage/
 
 # HOL4
 
@@ -60,9 +63,8 @@ lib/hol/sail-heap
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
 /test/latex/out
-/test/lem/Out_lemmas.thy
-/test/lem/out.lem
-/test/lem/out_types.lem
+/test/lem/*.thy
+/test/lem/*.lem
 /test/*/tests.xml
 /test/riscv/tests/*.iout
 /test/smt/*.out
