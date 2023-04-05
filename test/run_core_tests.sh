@@ -15,7 +15,7 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.sh || returncode=1
+./lexing/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Pattern completeness tests\n"

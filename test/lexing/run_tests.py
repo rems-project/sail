@@ -14,32 +14,21 @@ from sailtest import *
 sail_dir = get_sail_dir()
 sail = get_sail()
 
-test_dir = '../typecheck/pass'
-
-skip_tests = {
-    'phantom_option',
-    'phantom_bitlist_union',
-    'vector_pattern_split'
-}
-
 print('Sail is {}'.format(sail))
 print('Sail dir is {}'.format(sail_dir))
 
-def test_lem():
-    banner('Testing lem')
-    results = Results('pass')
-    for filenames in chunks(os.listdir(test_dir), parallel()):
+def test_lexing():
+    banner('Testing lexer')
+    results = Results('lex')
+    for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
-            if basename in skip_tests:
-                print_skip(filename)
-                continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem -o {} {}/{}'.format(sail, basename, test_dir, filename))
-                step('lem -lib {}/src/gen_lib {}_types.lem {}.lem'.format(sail_dir, basename, basename))
-                step('rm {}_types.lem {}.lem'.format(basename, basename))
+                step('{} {} 2> {}.error'.format(sail, filename, basename), expected_status = 1)
+                step('diff {}.expect {}.error'.format(basename, basename))
+                step('rm {}.error'.format(basename))
                 print_ok(filename)
                 sys.exit(0)
         results.collect(tests)
@@ -47,7 +36,7 @@ def test_lem():
 
 xml = '<testsuites>\n'
 
-xml += test_lem()
+xml += test_lexing()
 
 xml += '</testsuites>\n'
 

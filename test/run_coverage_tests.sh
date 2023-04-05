@@ -11,7 +11,7 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.sh || returncode=1
+./lexing/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Pattern completeness tests\n"
@@ -42,5 +42,11 @@ printf "C tests\n"
 printf "==========================================\n"
 
 ./c/run_tests.py || returncode=1
+
+printf "\n==========================================\n"
+printf "SMT tests\n"
+printf "==========================================\n"
+
+./smt/run_tests.py || returncode=1
 
 exit $returncode
