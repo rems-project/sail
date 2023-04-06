@@ -102,19 +102,28 @@ let rec filter_union_clauses id = function
      def :: filter_union_clauses id defs
   | [] -> []
 
+module PC_config = struct
+  type t = Type_check.tannot
+  let typ_of_t = Type_check.typ_of_tannot
+  let add_attribute l attr arg = Type_check.map_uannot (add_attribute l attr arg)
+end
+
+module PC = Pattern_completeness.Make(PC_config)
+
 let rec descatter' funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function
      clause into a DEF_fundef containing all the clauses. *)
-  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, _))), _) :: defs
+  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, tannot))), _) :: defs
        when last_scattered_funcl (funcl_id funcl) defs ->
      let clauses = match Bindings.find_opt (funcl_id funcl) funcls with
        | Some clauses -> List.rev (funcl :: clauses)
        | None -> [funcl]
      in
+     let clauses, update_attr = Type_check.(check_funcls_complete l (env_of_tannot tannot) clauses (typ_of_tannot tannot)) in
      DEF_aux (DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses),
-                                  (gen_loc l, Type_check.empty_tannot))),
-              mk_def_annot (gen_loc l))
+                                  (gen_loc l, tannot))),
+              update_attr (mk_def_annot (gen_loc l)))
      :: descatter' funcls mapcls defs
 
   | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), _) :: defs ->

@@ -366,8 +366,13 @@ module Make(C: Config) = struct
        end
 
     | P_tuple pats ->
-       GP_tuple (List.map (generalize ctx None) pats)
-
+       begin match head_exp_typ with
+       | Some (Typ_aux (Typ_tuple typs, _)) when List.length pats = List.length typs ->
+          GP_tuple (List.map2 (fun pat typ -> generalize ctx (Some typ) pat) pats typs)
+       | _ ->    
+          GP_tuple (List.map (generalize ctx None) pats)
+       end
+         
     | P_app (id, pats) ->
        let typ_id = match typ with
          | Typ_aux (Typ_app (id, _), _) -> id
@@ -711,10 +716,11 @@ module Make(C: Config) = struct
 
        | List_column ->
           let cons_matrix, empty_list_matrix = split_matrix_cons i matrix in
+          let width = row_matrix_width l matrix in
           if row_matrix_empty empty_list_matrix then
-            Incomplete [mk_exp (E_list [])]
+            Incomplete (undefs_except 0 i (mk_exp (E_list [])) width)
           else if row_matrix_empty cons_matrix then
-            Incomplete [mk_exp (E_cons (mk_lit_exp L_undef, mk_lit_exp L_undef))]
+            Incomplete (undefs_except 0 i (mk_exp (E_cons (mk_lit_exp L_undef, mk_lit_exp L_undef))) width)
           else
             begin match matrix_is_complete l ctx cons_matrix with
             | Incomplete unmatcheds ->
@@ -828,6 +834,15 @@ module Make(C: Config) = struct
     with
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | exn -> None
+
+  let is_complete_funcls_wildcarded l ctx funcls head_exp_typ =
+    let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
+    let cases = List.map destruct_funcl funcls in
+    match is_complete_wildcarded l ctx (List.map snd cases) head_exp_typ with
+    | Some pexps ->
+       Some (List.map2 (fun ((id, annot), _) pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) cases pexps)
+    | None ->
+       None
 
   let is_complete l ctx cases head_exp_typ = Option.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
 

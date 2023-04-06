@@ -2,5 +2,5 @@
 9[96m |[0m        match (x, y) {
  [91m |[0m        [91m^---^[0m
  [91m |[0m 
-The following expression is unmatched: [93m(2, 0x4000000000000000)[0m
+The following expression is unmatched: [93m(32, 0x4000000000000000)[0m
 
