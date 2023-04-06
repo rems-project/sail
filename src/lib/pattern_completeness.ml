@@ -829,6 +829,15 @@ module Make(C: Config) = struct
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | exn -> None
 
+  let is_complete_funcls_wildcarded l ctx funcls head_exp_typ =
+    let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
+    let cases = List.map destruct_funcl funcls in
+    match is_complete_wildcarded l ctx (List.map snd cases) head_exp_typ with
+    | Some pexps ->
+       Some (List.map2 (fun ((id, annot), _) pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) cases pexps)
+    | None ->
+       None
+
   let is_complete l ctx cases head_exp_typ = Option.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
 
 end
