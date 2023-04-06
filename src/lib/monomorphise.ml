@@ -3940,10 +3940,15 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                        (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
-               | P_aux (P_wild, _), None ->
-                  begin match body with
-                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann) when Kid.compare kid kid' == 0 ->
-                     (* Similar to the literal case *)
+               | P_aux (P_wild, (_, annot)), None ->
+                  (* Similar to the literal case *)
+                  begin match body, untyped_annot annot |> get_attribute "int_wildcard" with
+                  | _, Some (_, s) ->
+                     let i = Big_int.of_string s in
+                     let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
+                     make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
+                       (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
+                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann), _ when Kid.compare kid kid' == 0 ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) nexp) env) result_typ in
                      let body'' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                                     (make_bitvector_env_casts env (env_of body') quant_kids (KBindings.singleton kid nexp) body')
