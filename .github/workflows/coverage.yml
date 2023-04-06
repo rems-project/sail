@@ -30,12 +30,12 @@ jobs:
         key: ${{ matrix.os }}-${{ matrix.version }}-cov
 
     - name: Setup opam
-      if: steps.cache-opam.outputs.cache-hit != 'true'
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
 
     - name: Save cached opam
-      if: steps.cache-opam.outputs.cache-hit == 'true'
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
       uses: actions/cache/save@v3
       with:
@@ -60,11 +60,12 @@ jobs:
         export SAIL_DIR=$(pwd)
         etc/ci_coverage_tests.sh
 
-    - name: Publish Test Results
-      uses: EnricoMi/publish-unit-test-result-action@v2
+    - name: Upload test results
       if: always()
+      uses: actions/upload-artifact@v3
       with:
-        files: |
+        name: test-results
+        path: |
           test/**/tests.xml
 
     - name: Collect coverage
@@ -81,3 +82,10 @@ jobs:
           coverage_summary.txt
           _coverage/*
           _coverage/src/lib/*
+
+    - name: Upload event payload
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: event.json
+        path: ${{ github.event_path }}
