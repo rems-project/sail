@@ -34,7 +34,9 @@ skip_tests_mwords = {
     'while_PM',
     'zero_length_bv',
     'negative_bits_list',
-    'patternrefinement'
+    'patternrefinement',
+    # Due to an incompatibility between -auto_mono and -smt_linearize
+    'pow_32_64'
 }
 
 print('Sail is {}'.format(sail))

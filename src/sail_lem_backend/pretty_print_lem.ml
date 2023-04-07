@@ -86,9 +86,16 @@ type context = {
     early_ret : bool;
     monadic : bool;
     bound_nexps : NexpSet.t;
-    top_env : Env.t
+    top_env : Env.t;
+    params_to_print : Util.IntSet.t Bindings.t;
 }
-let empty_ctxt = { early_ret = false; monadic = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
+let empty_ctxt = {
+    early_ret = false;
+    monadic = false;
+    bound_nexps = NexpSet.empty;
+    top_env = Env.empty;
+    params_to_print = Bindings.empty;
+  }
 
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
@@ -216,11 +223,96 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
   | Nexp_neg n -> rewrap (Nexp_neg (orig_nexp n))
   | _ -> rewrap nexp
 
+(* Calculate which type parameters of a data type (for now just records) are
+   types or sizes that should be printed. *)
+let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
+  let make_type_size_map env id typq typs type_size_map =
+    let type_params, _ =
+      List.fold_left
+        (fun (is,i) q ->
+          match q with
+          | KOpt_aux (KOpt_kind (K_aux (K_type, _),_), _) ->
+             (Util.IntSet.add i is, i+1)
+          | _ -> (is,i+1)) (Util.IntSet.empty, 0) (quant_kopts typq)
+    in
+    let local_ints, _ =
+      List.fold_left
+        (fun (map,i) q ->
+          match q with
+          | KOpt_aux (KOpt_kind (K_aux (K_int, _),kid), _) ->
+             (KBindings.add kid i map, i+1)
+          | _ -> (map,i+1)) (KBindings.empty, 0) (quant_kopts typq)
+    in
+    let rec check_typ is typ =
+      match Env.expand_synonyms env typ with
+      | Typ_aux (Typ_app (id, args), _) -> begin
+          match Bindings.find_opt id type_size_map with
+          | None -> is
+          | Some js ->
+             let is' =
+               Util.IntSet.fold (fun j is ->
+                   match List.nth_opt args j with
+                   | Some (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)) ->
+                      (match KBindings.find_opt kid local_ints with
+                       | Some i -> Util.IntSet.add i is
+                       | None -> is)
+                   | _ -> is) js is
+             in
+             List.fold_left (fun is (A_aux (arg, _)) ->
+                 match arg with
+                 | A_typ typ -> check_typ is typ
+                 | _ -> is) is' args
+        end
+      | Typ_aux (Typ_tuple typs, _) -> List.fold_left check_typ is typs
+      | Typ_aux (Typ_exist (_,_,typ), _) -> check_typ is typ
+      | _ -> is
+    in
+    let is = List.fold_left (fun is typ -> check_typ is typ) type_params typs in
+    Bindings.add id is type_size_map
+  in
+  let check_def type_size_map (DEF_aux (def, _)) =
+    match def with
+    | DEF_type (TD_aux (TD_record (id, typq, fs, _), _)) ->
+       let env = Env.add_typquant Unknown typq env in
+       make_type_size_map env id typq (List.map fst fs) type_size_map
+    | DEF_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
+       let env = Env.add_typquant Unknown typq env in
+       make_type_size_map env id typq (List.map (fun (Tu_aux (Tu_ty_id (t,_),_)) -> t) tus) type_size_map
+    | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> begin
+       let env = Env.add_typquant Unknown typq env in
+        match typ_arg with
+        | A_aux (A_typ typ, _) ->
+           make_type_size_map env id typq [typ] type_size_map
+        | _ -> type_size_map
+      end
+    | _ -> type_size_map
+  in
+
+  (* Seed parameters to print with builtin types that need a parameter to be printed *)
+  let bitvector_itself_prints =
+    if !Monomorphise.opt_mwords
+    then Util.IntSet.singleton 0
+    else Util.IntSet.empty
+  in
+  let init_map =
+    Bindings.empty |>
+      Bindings.add (mk_id "bitvector") bitvector_itself_prints |>
+      Bindings.add (mk_id "itself") bitvector_itself_prints
+  in
+
+  let map = List.fold_left check_def init_map defs in
+  (*
+  Bindings.iter (fun id is ->
+      let s = String.concat "," (List.map string_of_int (Util.IntSet.elements is))
+      in Printf.eprintf "%s %s\n%!" (string_of_id id) s) map;
+  *)
+  map
+
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ_lem *)
-let rec lem_nexps_of_typ (Typ_aux (t,l)) =
-  let trec = lem_nexps_of_typ in
+let rec lem_nexps_of_typ params_to_print (Typ_aux (t,l)) =
+  let trec = lem_nexps_of_typ params_to_print in
   match t with
   | Typ_id _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
@@ -245,50 +337,56 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_app(Id_aux (Id "range", _),_)
   | Typ_app(Id_aux (Id "implicit", _),_)
   | Typ_app(Id_aux (Id "atom", _), _) -> NexpSet.empty
-  | Typ_app (_,tas) ->
-     List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg ta))
-       NexpSet.empty tas
+  | Typ_app (id,tas) -> begin
+     match Bindings.find_opt id params_to_print with
+     | Some is ->
+        Util.IntSet.fold (fun i s -> NexpSet.union s (lem_nexps_of_typ_arg params_to_print (List.nth tas i)))
+          is NexpSet.empty
+     | None ->
+        List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg params_to_print ta))
+          NexpSet.empty tas
+    end
   | Typ_exist (kids,_,t) -> trec t
   | Typ_bidir _ -> raise (Reporting.err_unreachable l __POS__ "Lem doesn't support bidir types")
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and lem_nexps_of_typ_arg (A_aux (ta,_)) =
+and lem_nexps_of_typ_arg params_to_print (A_aux (ta,_)) =
   match ta with
   | A_nexp nexp ->
       let nexp = nexp_simp (orig_nexp nexp) in
       if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
-  | A_typ typ -> lem_nexps_of_typ typ
+  | A_typ typ -> lem_nexps_of_typ params_to_print typ
   | A_order _ -> NexpSet.empty
   | A_bool _ -> NexpSet.empty
 
-let lem_tyvars_of_typ typ =
+let lem_tyvars_of_typ params_to_print typ =
   NexpSet.fold (fun nexp ks -> KidSet.union ks (tyvars_of_nexp nexp))
-    (lem_nexps_of_typ typ) KidSet.empty
+    (lem_nexps_of_typ params_to_print typ) KidSet.empty
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
 let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
-  let rec typ atyp_needed ty = tup_typ atyp_needed ty
-    and tup_typ atyp_needed (Typ_aux (t, l) as ty) = match t with
+  let rec typ params_to_print atyp_needed ty = tup_typ params_to_print atyp_needed ty
+    and tup_typ params_to_print atyp_needed (Typ_aux (t, l) as ty) = match t with
       | Typ_fn(args,ret) ->
          let ret_typ =
            (* TODO EFFECT: Monadicity as parameter or separate function. See Coq *)
            (*
            if effectful efct
            then separate space [string "M"; tup_typ true ret]
-           else *) separate space [tup_typ false ret] in
-         let arg_typs = List.map (tup_typ false) args in
+           else *) separate space [tup_typ params_to_print false ret] in
+         let arg_typs = List.map (tup_typ params_to_print false) args in
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
       | Typ_tuple typs ->
-         parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
-      | _ -> app_typ atyp_needed ty
-    and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
+         parens (separate_map (space ^^ star ^^ space) (app_typ params_to_print false) typs)
+      | _ -> app_typ params_to_print atyp_needed ty
+    and app_typ params_to_print atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
           A_aux (A_nexp m, _);
           A_aux (A_order ord, _);
           A_aux (A_typ elem_typ, _)]) ->
-         let tpp = string "list" ^^ space ^^ typ true elem_typ in
+         let tpp = string "list" ^^ space ^^ typ params_to_print true elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "bitvector", _), [
           A_aux (A_nexp m, _);
@@ -297,11 +395,11 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
            if !Monomorphise.opt_mwords then
              string "mword " ^^ doc_nexp_lem (nexp_simp m)
            else
-             string "list" ^^ space ^^ typ true bit_typ
+             string "list" ^^ space ^^ typ params_to_print true bit_typ
          in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
-         let tpp = string "register_ref regstate register_value " ^^ typ true etyp in
+         let tpp = string "register_ref regstate register_value " ^^ typ params_to_print true etyp in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
@@ -312,10 +410,17 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
       | Typ_app(Id_aux (Id "atom_bool", _), [A_aux(A_bool nc,_)]) ->
          (string "bool")
       | Typ_app(id,args) ->
-         let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space doc_typ_arg_lem args) in
+         let args =
+           match Bindings.find_opt id params_to_print with
+           | None -> args
+           | Some is ->
+              let args,_ = List.fold_left (fun (l,i) a -> if Util.IntSet.mem i is then (a::l,i+1) else (l,i+1)) ([],0) args in
+              List.rev args
+         in
+         let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem params_to_print) args) in
          if atyp_needed then parens tpp else tpp
-      | _ -> atomic_typ atyp_needed ty
-    and atomic_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
+      | _ -> atomic_typ params_to_print atyp_needed ty
+    and atomic_typ params_to_print atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bool"
       | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id (id) ->
@@ -326,12 +431,12 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
       | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
-         let tpp = typ true ty in
+         let tpp = typ params_to_print true ty in
          if atyp_needed then parens tpp else tpp
       | Typ_exist (kopts,_,ty) when List.for_all is_int_kopt kopts -> begin
          let kids = List.map kopt_kid kopts in
-         let tpp = typ true ty in
-         let visible_vars = lem_tyvars_of_typ ty in
+         let tpp = typ params_to_print true ty in
+         let visible_vars = lem_tyvars_of_typ params_to_print ty in
          match List.filter (fun kid -> KidSet.mem kid visible_vars) kids with
          | [] -> if atyp_needed then parens tpp else tpp
          | bad -> raise (Reporting.err_general l
@@ -345,29 +450,29 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
       | Typ_exist _ -> unreachable l __POS__ "Non-integer existentials currently unsupported in Lem" (* TODO *)
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-    and doc_typ_arg_lem (A_aux(t,_)) = match t with
-      | A_typ t -> app_typ true t
+    and doc_typ_arg_lem params_to_print (A_aux(t,_)) = match t with
+      | A_typ t -> app_typ params_to_print true t
       | A_nexp n -> doc_nexp_lem (nexp_simp n)
       | A_order o -> empty
       | A_bool _ -> empty
   in
-  let top atyp_needed env ty =
+  let top atyp_needed params_to_print env ty =
     (* If we use the bitlist representation of bitvectors, the type argument in
        type abbreviations such as "bits('n)" becomes dead, which confuses HOL; as a
        workaround, we expand type synonyms in this case. *)
     let ty' = if !Monomorphise.opt_mwords then ty else Env.expand_synonyms env ty in
-    typ atyp_needed ty'
+    typ params_to_print atyp_needed ty'
   in top false, top true, atomic_typ
 
-let doc_fn_typ_lem ?(monad = empty) env (Typ_aux (aux, l) as ty) = match aux with
+let doc_fn_typ_lem ?(monad = empty) params_to_print env (Typ_aux (aux, l) as ty) = match aux with
   | Typ_fn (args, ret) ->
-     separate (space ^^ arrow ^^ space) (List.map (doc_typ_lem env) args @ [monad ^^ (doc_typ_lem_brackets env) ret])
+     separate (space ^^ arrow ^^ space) (List.map (doc_typ_lem params_to_print env) args @ [monad ^^ (doc_typ_lem_brackets params_to_print env) ret])
   | _ ->
-     doc_typ_lem env ty
+     doc_typ_lem params_to_print env ty
    
 (* Check for variables in types that would be pretty-printed. *)
 let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
-  lem_nexps_of_typ typ
+  lem_nexps_of_typ ctxt.params_to_print typ
   |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
 let rec replace_typ_size ctxt env (Typ_aux (t, a) as typ) =
@@ -433,7 +538,7 @@ let doc_tannot_lem ctxt env eff typ =
   match make_printable_type ctxt env typ with
   | None -> empty
   | Some typ ->
-     let ta = doc_typ_lem env typ in
+     let ta = doc_typ_lem ctxt.params_to_print env typ in
      if eff then string " : M " ^^ parens ta
      else string " : " ^^ ta
 
@@ -488,7 +593,8 @@ let doc_typquant_items_lem quant_nexps =
    machine words.  Often these will be unnecessary, but this simple
    approach will do for now. *)
 
-let rec typeclass_nexps (Typ_aux(t,l)) =
+let rec typeclass_nexps params_to_print (Typ_aux(t,l)) =
+  let typeclass_nexps = typeclass_nexps params_to_print in
   if !Monomorphise.opt_mwords then
     match t with
     | Typ_id _
@@ -496,37 +602,42 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
       -> NexpSet.empty
     | Typ_fn (ts,t) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-    | Typ_app (Id_aux (Id "bitvector",_),
-               [A_aux (A_nexp size_nexp,_); _])
-    | Typ_app (Id_aux (Id "itself",_),
-               [A_aux (A_nexp size_nexp,_)]) ->
-       let size_nexp = nexp_simp size_nexp in
-       if is_nexp_constant size_nexp then NexpSet.empty else
-       NexpSet.singleton (orig_nexp size_nexp)
     | Typ_app (id, args) ->
-       let add_arg_nexps nexps = function
-         | A_aux (A_typ typ, _) ->
-            NexpSet.union nexps (typeclass_nexps typ)
+       let add_arg_subtyp_nexps nexps = function
+         | A_aux (A_typ typ, _) -> NexpSet.union nexps (typeclass_nexps typ)
          | _ -> nexps
        in
-       List.fold_left add_arg_nexps NexpSet.empty args
+       let add_arg_nexps nexps = function
+         | A_aux (A_nexp nexp, _) ->
+            let nexp = nexp_simp nexp in
+            if is_nexp_constant nexp
+            then nexps else
+              NexpSet.add (orig_nexp nexp) nexps
+         | _ -> nexps
+       in begin
+           let subtyp_nexps = List.fold_left add_arg_subtyp_nexps NexpSet.empty args in
+           match Bindings.find_opt id params_to_print with
+           | Some is ->
+              Util.IntSet.fold (fun i set -> add_arg_nexps set (List.nth args i)) is subtyp_nexps
+           | None -> subtyp_nexps
+         end
     | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
     | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   else NexpSet.empty
 
-let doc_typclasses_lem t =
-  let nexps = typeclass_nexps t in
+let doc_typclasses_lem params_to_print t =
+  let nexps = typeclass_nexps params_to_print t in
   if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
   (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
 
-let doc_typschm_lem ?(monad = empty) env quants (TypSchm_aux(TypSchm_ts(tq,t),l)) =
+let doc_typschm_lem ?(monad = empty) params_to_print env quants (TypSchm_aux(TypSchm_ts(tq,t),l)) =
   let env = Env.add_typquant l tq env in
-  let pt = doc_fn_typ_lem ~monad:monad env t in
+  let pt = doc_fn_typ_lem ~monad:monad params_to_print env t in
   if quants
   then
-    let nexps_used = lem_nexps_of_typ t in
-    let ptyc, nexps_sizes = doc_typclasses_lem t in
+    let nexps_used = lem_nexps_of_typ params_to_print t in
+    let ptyc, nexps_sizes = doc_typclasses_lem params_to_print t in
     let nexps_to_include = NexpSet.union nexps_used nexps_sizes in
     if NexpSet.is_empty nexps_to_include
     then pt
@@ -562,7 +673,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
     let doc_p = doc_pat_lem ctxt true p in
     (match make_printable_type ctxt (env_of_annot (l,annot)) typ with
     | None -> doc_p
-    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem (env_of_annot (l,annot)) typ)))
+    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem ctxt.params_to_print (env_of_annot (l,annot)) typ)))
   | P_vector pats ->
      let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
      if apat_needed then parens ppp else ppp
@@ -580,18 +691,24 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 
-let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
+let rec typ_needs_printed params_to_print (Typ_aux (t,_) as typ) =
+  let typ_needs_printed = typ_needs_printed params_to_print in
+  match t with
   | Typ_tuple ts -> List.exists typ_needs_printed ts
-  | Typ_app (Id_aux (Id "itself",_),_) -> true
-  | Typ_app (_, targs) -> is_bitvector_typ typ || List.exists typ_needs_printed_arg targs
+  | Typ_app (id, targs) ->
+     begin
+       match Bindings.find_opt id params_to_print with
+       | Some is when not (Util.IntSet.is_empty is) -> true
+       | _ -> List.exists (typ_needs_printed_arg params_to_print) targs
+     end
   | Typ_fn (ts,t) -> List.exists typ_needs_printed ts || typ_needs_printed t
   | Typ_exist (kopts,_,t) ->
      let kids = List.map kopt_kid kopts in (* TODO: Check this *)
-     let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ t) in
+     let visible_kids = KidSet.inter (KidSet.of_list kids) (lem_tyvars_of_typ params_to_print t) in
      typ_needs_printed t && KidSet.is_empty visible_kids
   | _ -> false
-and typ_needs_printed_arg (A_aux (targ, _)) = match targ with
-  | A_typ t -> typ_needs_printed t
+and typ_needs_printed_arg params_to_print (A_aux (targ, _)) = match targ with
+  | A_typ t -> typ_needs_printed params_to_print t
   | _ -> false
 
 let contains_early_return exp =
@@ -829,8 +946,8 @@ let doc_exp_lem, doc_let_lem =
                      make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
                | Some typ, Some full_typ ->
                   let tannot = separate space ([string monad]
-                                               @ arg_order [doc_atomic_typ_lem false full_typ;
-                                                            doc_atomic_typ_lem false typ]) in
+                                               @ arg_order [doc_atomic_typ_lem ctxt.params_to_print false full_typ;
+                                                            doc_atomic_typ_lem ctxt.params_to_print false typ]) in
                   true, doc_op colon epp tannot
                | _ -> aexp_needed, epp
              in
@@ -867,7 +984,7 @@ let doc_exp_lem, doc_let_lem =
                let env = env_of full_exp in
                let t = Env.expand_synonyms env (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if typ_needs_printed t then
+               if typ_needs_printed ctxt.params_to_print t then
                  if Id.compare f (mk_id "bitvector_cast_out") <> 0 &&
                       Id.compare f (mk_id "zero_extend_type_hack") <> 0
                  then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
@@ -916,7 +1033,7 @@ let doc_exp_lem, doc_let_lem =
        let env = env_of full_exp in
        let typ = Env.expand_synonyms env (typ_of full_exp) in
        let eff = effect_of full_exp in
-       if typ_needs_printed typ
+       if typ_needs_printed ctxt.params_to_print typ
        then parens (doc_lit_lem lit ^^ doc_tannot_lem ctxt env (effectful eff) typ)
        else doc_lit_lem lit
     | E_typ (typ,e) -> expV aexp_needed e (*parens (expN e ^^ doc_tannot_lem ctxt (env_of full_exp) (effectful (effect_of full_exp)) typ)*)
@@ -1043,8 +1160,8 @@ let doc_exp_lem, doc_let_lem =
        | Some full_typ, Some r_typ ->
           separate space
             [string ": MR";
-            parens (doc_typ_lem (env_of full_exp) full_typ);
-            parens (doc_typ_lem (env_of r) r_typ)]
+            parens (doc_typ_lem ctxt.params_to_print (env_of full_exp) full_typ);
+            parens (doc_typ_lem ctxt.params_to_print (env_of r) r_typ)]
        | _ -> empty
       in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
@@ -1105,9 +1222,9 @@ let doc_exp_lem, doc_let_lem =
   in top_exp, let_exp
 
 (*TODO Upcase and downcase type and constructors as needed*)
-let doc_type_union_lem env (Tu_aux(Tu_ty_id(typ,id),_)) =
+let doc_type_union_lem params_to_print env (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [pipe; doc_id_lem_ctor id; string "of";
-                  parens (doc_typ_lem env typ)]
+                  parens (doc_typ_lem params_to_print env typ)]
 
 (*
 let rec doc_range_lem (BF_aux(r,_)) = match r with
@@ -1137,19 +1254,33 @@ let doc_sia_id (Id_aux(i,_)) =
   | Id i -> string i
   | Operator x -> string ("operator " ^ x)
 
-let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
+let typq_to_print params_to_print id typq =
+  match Bindings.find_opt id params_to_print with
+  | None -> typq
+  | Some is ->
+     match typq with
+     | TypQ_aux (TypQ_no_forall, _) -> typq
+     | TypQ_aux (TypQ_tq qs, l) ->
+        List.fold_left (fun (t,i) h ->
+            if is_quant_kopt h then
+              if Util.IntSet.mem i is then (h::t,i+1) else (t,i+1)
+            else (t,i)) ([],0) qs |>
+          fst |> List.rev |> fun qs -> TypQ_aux (TypQ_tq qs, l)
+
+let doc_typdef_lem params_to_print env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
+     let typq_to_print = typq_to_print params_to_print id typq in
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op equals
-       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
-       (doc_typschm_lem env false typschm)
+       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print)])
+       (doc_typschm_lem params_to_print env false typschm)
   | TD_abbrev _ -> empty
   | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
                     else doc_id_lem_type fid in
     let f_pp (typ,fid) =
-      concat [fname fid;space;colon;space;doc_typ_lem env typ; semi] in
+      concat [fname fid;space;colon;space;doc_typ_lem params_to_print env typ; semi] in
     let rectyp = match typq with
       | TypQ_aux (TypQ_tq qs, _) ->
         let quant_item = function
@@ -1191,9 +1322,10 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
           doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
-    let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq in
+    let typq_to_print = typq_to_print params_to_print id typq in
+    let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq_to_print in
     doc_op equals
-           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
+           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print)])
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^ sorts_pp
     (* if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs *)
@@ -1212,10 +1344,11 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
          let env = Env.add_typquant l typq env in
-         let ar_doc = group (separate_map (break 1) (doc_type_union_lem env) ar) in
+         let ar_doc = group (separate_map (break 1) (doc_type_union_lem params_to_print env) ar) in
+         let typq_to_print = typq_to_print params_to_print id typq in
          let typ_pp =
            (doc_op equals)
-             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
+             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print)])
              ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
            separate space [string "SIA.Id_aux";
@@ -1400,8 +1533,8 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   | _, _ ->
      [pat], identity
 
-let doc_tannot_opt_lem env (Typ_annot_opt_aux(t,_)) = match t with
-  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem env typ)
+let doc_tannot_opt_lem params_to_print env (Typ_annot_opt_aux(t,_)) = match t with
+  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem params_to_print env typ)
   | Typ_annot_opt_none -> empty
 
 let doc_fun_body_lem ctxt exp =
@@ -1413,7 +1546,7 @@ let doc_fun_body_lem ctxt exp =
   else
     doc_exp
 
-let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((def_annot, _) as annot))) =
+let doc_funcl_lem monadic params_to_print type_env (FCL_aux(FCL_funcl(id, pexp), ((def_annot, _) as annot))) =
   let l = def_annot.loc in
   let (tq, typ) =
     try Env.get_val_spec_orig id type_env with
@@ -1427,8 +1560,10 @@ let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((def_annot, _)
   let ctxt =
     { early_ret = contains_early_return exp;
       monadic = monadic;
-      bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
-      top_env = type_env } in
+      bound_nexps = NexpSet.union (lem_nexps_of_typ params_to_print typ) (typeclass_nexps params_to_print typ);
+      top_env = type_env;
+      params_to_print
+    } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let wrap_monadic =
@@ -1453,18 +1588,18 @@ module StringSet = Set.Make(String)
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs_lem monadic env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
-  separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic env) funcls
+let doc_fundef_rhs_lem monadic params_to_print env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
+  separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic params_to_print env) funcls
 
-let doc_mutrec_lem effect_info env = function
+let doc_mutrec_lem effect_info params_to_print env = function
   | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty internal_mutrec"
   | (fundef :: _ as fundefs) ->
      let id = id_of_fundef fundef in
      let required_monadic = not (Effects.function_is_pure id effect_info) in
      string "let rec " ^^
-     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem required_monadic env) fundefs
+     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem required_monadic params_to_print env) fundefs
 
-let doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot) as fd) =
+let doc_fundef_lem effect_info params_to_print env (FD_aux (FD_function (r, typa, fcls), fannot) as fd) =
   match fcls with
   | [] -> Reporting.unreachable (fst fannot) __POS__ "FD_function with empty function list"
   | FCL_aux (FCL_funcl (id, pexp), annot) :: _
@@ -1481,7 +1616,7 @@ let doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot)
          pexp
      in
      let doc_rec = if is_funcl_rec then [string "rec"] else [] in
-     separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic env fd])
+     separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic params_to_print env fd])
   | _ -> empty
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
@@ -1509,13 +1644,13 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   (*| DEC_reg (typ, id, Some exp) ->
      separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline*)
 
-let doc_spec_lem effect_info env (VS_aux (valspec, annot)) =
+let doc_spec_lem effect_info params_to_print env (VS_aux (valspec, annot)) =
   match valspec with
   | VS_val_spec (typschm, id, exts, _) when Ast_util.extern_assoc "lem" exts = None ->
      let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
-     separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
+     separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad params_to_print env true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 
@@ -1569,18 +1704,18 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let doc_def_lem effect_info type_env (DEF_aux (aux, _) as def) =
+let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   match aux with
-  | DEF_val v_spec -> doc_spec_lem effect_info type_env v_spec
+  | DEF_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> group (doc_typdef_lem type_env t_def) ^/^ hardline
+  | DEF_type t_def -> group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
   | DEF_register dec -> group (doc_dec_lem dec)
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef_lem effect_info type_env fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info type_env fundefs ^/^ hardline
+  | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info params_to_print type_env fundefs ^/^ hardline
   | DEF_let (LB_aux (LB_val (pat, _), _) as lbind) ->
-     group (doc_let_lem empty_ctxt lbind) ^/^ hardline
+     group (doc_let_lem { empty_ctxt with params_to_print } lbind) ^/^ hardline
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | (DEF_outcome _ | DEF_impl _ | DEF_instantiation _) -> unreachable (def_loc def) __POS__ "Event definition found when generating lem"
@@ -1610,9 +1745,10 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
     | _ -> false
   in
   let exc_typ = find_exc_typ defs in
+  let params_to_print = type_parameters_to_print type_env defs in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
-  let register_ref_tannot typ = string " : register_ref regstate register_value " ^^ parens (doc_typ_lem type_env typ) in
+  let register_ref_tannot typ = string " : register_ref regstate register_value " ^^ parens (doc_typ_lem params_to_print type_env typ) in
   let register_refs = State.register_refs_lem !Monomorphise.opt_mwords register_ref_tannot (State.find_registers defs) in
   (print types_file)
     (concat
@@ -1631,9 +1767,9 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
              string "module SIA = Interp_ast"; hardline;
              hardline]
         else empty;
-        separate empty (List.map (doc_def_lem effect_info type_env) typdefs); hardline;
+        separate empty (List.map (doc_def_lem effect_info params_to_print type_env) typdefs); hardline;
         hardline;
-        separate empty (List.map (doc_def_lem effect_info type_env) statedefs); hardline;
+        separate empty (List.map (doc_def_lem effect_info params_to_print type_env) statedefs); hardline;
         hardline;
         State.regval_instance_lem;
         hardline;
@@ -1649,5 +1785,5 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) defs_modules;hardline;
         hardline;
-        separate empty (List.map (doc_def_lem effect_info type_env) defs);
+        separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs);
         hardline]);

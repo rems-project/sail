@@ -341,8 +341,8 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let i = string_of_id id in
   (* This was originally written for the general case, but I cut it down to the
      more manageable prenex-form below *)
-  let rec size_nvars_ty typ =
-    let Typ_aux (ty,l) = Env.expand_synonyms env typ in
+  let rec size_nvars_ty (Typ_aux (_,l) as typ) =
+    let Typ_aux (ty,_l) = Env.expand_synonyms env typ in
     match ty with
     | Typ_id _
     | Typ_var _
@@ -4190,30 +4190,6 @@ let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
          let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
          (nexp_map, typ::t)) typs (nexp_map,[])
      in nexp_map, Typ_aux (Typ_tuple typs,ann)
-  | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
-     let nexp_opt =
-       match destruct_atom_nexp env typ_full with
-       | Some nexp -> Some nexp
-       | None ->
-          if is_bitvector_typ typ_full then
-            let (size,_,_) = vector_typ_args_of typ_full in
-            Some size
-          else None
-     in match nexp_opt with
-     | None -> nexp_map, typ_full
-     | Some (Nexp_aux (Nexp_constant _,_))
-     | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
-     | Some nexp ->
-        let nexp_map, kid =
-          match find_nexp env nexp_map nexp with
-          | (kid,_) -> nexp_map, kid
-          | exception Not_found ->
-             let kid = fresh_nexp_kid nexp in
-             (kid, nexp)::nexp_map, kid
-        in
-        let new_nexp = nvar kid in
-        nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
-    end
   | _ ->
      let typ' = Env.base_typ_of env typ_full in
      if Typ.compare typ_full typ' == 0 then
@@ -4224,11 +4200,18 @@ let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
             | A_typ typ ->
                let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
                nexp_map, A_aux (A_typ typ',l)
+            | A_nexp (Nexp_aux (Nexp_constant _,_))
+            | A_nexp (Nexp_aux (Nexp_var _,_)) -> nexp_map, arg_full
             | A_nexp nexp ->
-               begin match find_nexp env nexp_map nexp with
-               | (kid,_) -> nexp_map, A_aux (A_nexp (nvar kid), l)
-               | exception Not_found -> nexp_map, arg_full
-               end
+               let nexp_map, kid =
+                 match find_nexp env nexp_map nexp with
+                 | (kid,_) -> nexp_map, kid
+                 | exception Not_found ->
+                    let kid = fresh_nexp_kid nexp in
+                    (kid, nexp)::nexp_map, kid
+               in
+               let new_nexp = nvar kid in
+               nexp_map, A_aux (A_nexp new_nexp, l)
             | A_bool _ | A_order _ -> nexp_map, arg_full
           in
           let nexp_map, args =
