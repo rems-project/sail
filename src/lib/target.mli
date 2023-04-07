@@ -84,6 +84,8 @@ val name : target -> string
 
 val run_pre_parse_hook : target -> unit -> unit
 
+val run_pre_descatter_hook : target -> tannot ast -> Env.t -> unit
+  
 val run_pre_rewrites_hook : target -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
 val rewrites : target -> Rewrites.rewrite_sequence
@@ -121,6 +123,7 @@ val register :
   ?description:string ->
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
   ?pre_parse_hook:(unit -> unit) ->
+  ?pre_descatter_hook:(tannot ast -> Env.t -> unit) ->
   ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->

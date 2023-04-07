@@ -285,7 +285,8 @@ let register_default_target () =
 let run_sail tgt =
   Target.run_pre_parse_hook tgt ();
   let ast, env, effect_info = Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments in
-  let ast, env = Frontend.initial_rewrite effect_info env ast in
+  Target.run_pre_descatter_hook tgt ast env;
+  let ast, env = Frontend.descatter effect_info env ast in
   let ast, env =
     List.fold_right (fun file (ast, _) -> Splice.splice ast file)
       (!opt_splice) (ast, env)

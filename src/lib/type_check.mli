@@ -347,10 +347,6 @@ val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
 val strip_n_constraint : n_constraint -> n_constraint
 val strip_typ_aux : typ_aux -> typ_aux
 
-val bind_funcl_arg_typ : Parse_ast.l -> Env.t -> typ -> (typ * typ * Env.t)
-
-val pattern_completeness_ctx : Env.t -> Pattern_completeness.ctx
-
 (** {2 Checking expressions and patterns} *)
 
 (** Check an expression has some type. Returns a fully annotated

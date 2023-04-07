@@ -94,11 +94,7 @@ val get_attribute : string -> uannot -> (l * string) option
 val get_attributes : uannot -> (l * string * string) list
 
 val mk_def_annot : l -> def_annot
-
-val add_def_attribute : l -> string -> string -> def_annot -> def_annot
-
-val get_def_attribute : string -> def_annot -> (l * string) option
-
+  
 (** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location

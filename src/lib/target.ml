@@ -74,6 +74,7 @@ type target = {
     name : string;
     options : (Arg.key * Arg.spec * Arg.doc) list;
     pre_parse_hook : (unit -> unit);
+    pre_descatter_hook : (tannot ast -> Env.t -> unit);
     pre_rewrites_hook : (tannot ast -> Effects.side_effect_info -> Env.t -> unit);
     rewrites : (string * Rewrites.rewriter_arg list) list;
     action : string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
@@ -84,6 +85,8 @@ let name tgt = tgt.name
 
 let run_pre_parse_hook tgt = tgt.pre_parse_hook
 
+let run_pre_descatter_hook tgt = tgt.pre_descatter_hook
+                           
 let run_pre_rewrites_hook tgt = tgt.pre_rewrites_hook
                               
 let action tgt = tgt.action
@@ -102,6 +105,7 @@ let register
       ?description:desc
       ?options:(options = [])
       ?pre_parse_hook:(pre_parse_hook = (fun () -> ()))
+      ?pre_descatter_hook:(pre_descatter_hook = (fun _ _ -> ()))
       ?pre_rewrites_hook:(pre_rewrites_hook = (fun _ _ _ -> ()))
       ?rewrites:(rewrites = [])
       ?asserts_termination:(asserts_termination = false)
@@ -124,6 +128,7 @@ let register
       name = name;
       options = ("-" ^ flag, Arg.Unit set_target, desc) :: options;
       pre_parse_hook = pre_parse_hook;
+      pre_descatter_hook = pre_descatter_hook;
       pre_rewrites_hook = pre_rewrites_hook;
       rewrites = rewrites;
       action = action;
