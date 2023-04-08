@@ -2,7 +2,6 @@
 
 default Order dec
 $include <prelude.sail>
-$include <mono_rewrites.sail>
 
 // The preconditions for this rewrite require a non-constant size somewhere, so
 // pull the example out into a separate function.

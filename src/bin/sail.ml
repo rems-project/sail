@@ -172,7 +172,9 @@ let rec options = ref ([
     Arg.Set Rewrites.opt_auto_mono,
     " automatically infer how to monomorphise code");
   ( "-mono_rewrites",
-    Arg.Set Rewrites.opt_mono_rewrites,
+    Arg.Unit (fun _ ->
+        Preprocess.add_symbol "_OPT_MONO_REWRITES";
+        Rewrites.opt_mono_rewrites := true),
     " turn on rewrites for combining bitvector operations");
   ( "-mono_split",
     Arg.String (fun s ->

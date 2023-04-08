@@ -327,4 +327,8 @@ $endif
 
 overload __size = {__id, bitvector_length}
 
+$ifdef _OPT_MONO_REWRITES
+$include <mono_rewrites.sail>
+$endif
+
 $endif
