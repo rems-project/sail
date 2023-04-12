@@ -828,8 +828,7 @@ let doc_exp_lem, doc_let_lem =
              let (returner, monad, arg_order) = if ctxt.monadic then ("early_return", "MR", fun x -> x) else ("Left", "either", List.rev) in
              let epp = separate space [string returner; expY exp] in
              let aexp_needed, tepp =
-               match Util.option_bind (make_printable_type ctxt ctxt.top_env)
-                       (Env.get_ret_typ (env_of exp)),
+               match Option.bind (Env.get_ret_typ (env_of exp)) (make_printable_type ctxt ctxt.top_env),
                      make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
                | Some typ, Some full_typ ->
                   let tannot = separate space ([string monad]
@@ -1042,7 +1041,7 @@ let doc_exp_lem, doc_let_lem =
            "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return r ->
       let ta =
-        match Util.option_bind (make_printable_type ctxt ctxt.top_env) (Env.get_ret_typ (env_of full_exp)),
+        match Option.bind (Env.get_ret_typ (env_of full_exp)) (make_printable_type ctxt ctxt.top_env),
               make_printable_type ctxt (env_of r) (typ_of r) with
        | Some full_typ, Some r_typ ->
           separate space
@@ -1131,7 +1130,7 @@ let doc_typquant_sorts idpp (TypQ_aux (typq,_)) =
        | QI_constraint _ -> None
      in
      if List.exists (function (QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),_),_)),_)) -> true | _ -> false) qs then
-       let qs_pp = Util.map_filter q qs in
+       let qs_pp = List.filter_map q qs in
        string "declare isabelle target_sorts " ^^ idpp ^^ space ^^ separate space (equals::qs_pp) ^^ hardline
      else empty
   | TypQ_no_forall -> empty
@@ -1573,8 +1572,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let doc_def_lem effect_info type_env def =
-  match def with
+let doc_def_lem effect_info type_env (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_val v_spec -> doc_spec_lem effect_info type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
@@ -1594,7 +1593,7 @@ let doc_def_lem effect_info type_env def =
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
@@ -1605,12 +1604,12 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info t
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
-    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
+    | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in
   let is_typ_def = function
-    | DEF_type _ -> true
+    | DEF_aux (DEF_type _, _) -> true
     | _ -> false
   in
   let exc_typ = find_exc_typ defs in

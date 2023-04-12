@@ -1,0 +1,59 @@
+name: Build matrix
+
+on: [push, workflow_dispatch]
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        version: [4.08.1, 5.0.0]
+        os: [ubuntu-latest, macOS-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: System dependencies (ubuntu)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo apt install build-essential libgmp-dev z3 cvc4 opam
+
+    - name: System dependencies (macOS)
+      if: startsWith(matrix.os, 'macOS')
+      run: |
+        brew install gpatch gmp z3 pkg-config lzlib zlib opam
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.opam
+        key: ${{ matrix.os }}-${{ matrix.version }}
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Sail
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add .
+        opam install sail --yes
+
+    - name: Test Sail
+      run: |
+        eval $(opam env)
+        etc/ci_core_tests.sh

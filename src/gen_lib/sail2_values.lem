@@ -124,7 +124,7 @@ let hardware_mod = tmod_int
 
 (* There are different possible answers for integer divide regarding
 rounding behaviour on negative operands. Positive operands always
-round down so derive the one we want (trucation towards zero) from
+round down so derive the one we want (truncation towards zero) from
 that *)
 let tdiv_int (a:integer) (b:integer) : integer =
   let q = (abs a) / (abs b) in
@@ -971,7 +971,7 @@ let internal_reg_value v =
 
 let external_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
-  (*This is the case the thread/concurrecny model expects, so no change needed*)
+  (* This is the case the thread/concurrency model expects, so no change needed *)
   | D_increasing -> (i,j)
   | D_decreasing -> let slice_i = start - i in
                     let slice_j = (i - j) + slice_i in

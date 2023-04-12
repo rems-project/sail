@@ -278,7 +278,7 @@ let warn ?once_from short_str l explanation =
   if !opt_warnings && not already_shown then (
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
-       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Util.option_default [] in
+       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
        if not (List.exists (fun s -> s = short_str) shorts) then (
          prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": "
                         ^ short_str ^ (if short_str <> "" then " " else "") ^ loc_to_string l ^ explanation ^ "\n");
@@ -302,7 +302,7 @@ let format_warn ?once_from short_str l explanation =
   if !opt_warnings && not already_shown then (
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
-       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Util.option_default [] in
+       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
        if not (List.exists (fun s -> s = short_str) shorts) then (
          let open Error_format in
          prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str);

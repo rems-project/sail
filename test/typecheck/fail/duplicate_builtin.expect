@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mduplicate_builtin.sail[0m:1.5-8:
+[96mfail/duplicate_builtin.sail[0m:1.5-8:
 1[96m |[0menum int = Foo | Bar
  [91m |[0m     [91m^-^[0m
  [91m |[0m Cannot create enum type int, name is already bound as a built-in type

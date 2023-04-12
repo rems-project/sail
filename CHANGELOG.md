@@ -18,7 +18,7 @@ Sail 0.15
 
 ##### More modular codebase and dune build system
 
-The Sail internals have been refactored into seperate packages for
+The Sail internals have been refactored into separate packages for
 each Sail backend (c/lem/coq and so on). The shared parts of Sail are
 now contained in a separate libsail OCaml library. The main Sail
 executable links together all the Sail backends into a single
@@ -32,7 +32,7 @@ system to dune.
 
 This has been a significant refactoring of the core Sail codebase, and
 while all efforts have been taken to ensure backwards-compatibility
-and minimize any potential breakage, it is possible there exists some.
+and minimise any potential breakage, it is possible there exists some.
 
 ##### New pattern completeness checker
 
@@ -44,7 +44,7 @@ pattern is incomplete.
 ##### Implicit casts now forbidden by default
 
 Previously they were only forbidden by the `-dno_cast` flag (which is
-used by both sail-riscv and sail-arm). This behavior is now the
+used by both sail-riscv and sail-arm). This behaviour is now the
 default and this flag is ignored. The `-allow_deprecated_casts` flag
 must be used to enable this now. Implicit casts will be fully removed
 in the next Sail release.
@@ -80,7 +80,7 @@ they were previously - a pure function must not:
 This more strict notion of purity fixes some long-standing bugs when
 generating theorem prover definitions from Sail.
 
-Note that functions do not have to be explictly marked pure to be
+Note that functions do not have to be explicitly marked pure to be
 considered pure. Purity will be inferred automatically. The pure
 annotation is used to declare primitive functions as pure, and make it
 a hard error if a function is inferred to be impure.

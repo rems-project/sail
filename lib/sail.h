@@ -263,7 +263,7 @@ typedef struct {
   mpz_t *bits;
 } lbits;
 
-// For backwards compatability
+// For backwards compatibility
 typedef uint64_t mach_bits;
 typedef lbits sail_bits;
 

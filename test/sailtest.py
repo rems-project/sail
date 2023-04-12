@@ -34,7 +34,10 @@ def get_sail_dir():
 
 def print_ok(name):
     print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.PASS, 'ok', color.END))
-            
+
+def print_skip(name):
+    print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.WARNING, 'skip', color.END))
+
 def get_sail():
     try:
         return os.environ['SAIL']
@@ -45,8 +48,8 @@ def parallel():
     try:
         return int(os.environ['TEST_PAR'])
     except Exception as e:
-        print("Running 4 tests in parallel. Set TEST_PAR to configure")
-        return 4
+        print("Running 16 tests in parallel. Set TEST_PAR to configure")
+        return 16
 
 def chunks(filenames, cores):
     ys = []

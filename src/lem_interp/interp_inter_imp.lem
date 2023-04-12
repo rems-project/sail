@@ -197,7 +197,7 @@ let intern_ifield_value direction v =
 
 let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
-    | D_increasing -> (i,j) (*This is the case the thread/concurrecny model expects, so no change needed*)
+    | D_increasing -> (i,j) (*This is the case the thread/concurrency model expects, so no change needed*)
     | D_decreasing ->
       let slice_i = start - i in
       let slice_j = (i - j) + slice_i in

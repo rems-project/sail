@@ -278,19 +278,22 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
   in
   SD_aux (sd, (l, annot))
   
-let rec rewrite_def rewriters d = match d with
-  | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
-     DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
-  | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
-  | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
-  | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
-  | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
-  | DEF_let letbind -> DEF_let (rewriters.rewrite_let rewriters letbind)
-  | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
-  | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
-  | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
+let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
+  let aux = match aux with
+    | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
+       DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
+    | DEF_type _ | DEF_mapdef _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> aux
+    | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
+    | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
+    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
+    | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
+    | DEF_let letbind -> DEF_let (rewriters.rewrite_let rewriters letbind)
+    | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
+    | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
+    | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
+    | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
+  in
+  DEF_aux (aux, def_annot)
 
 let rewrite_ast_defs rewriters defs =
   let rec rewrite ds = match ds with
@@ -411,18 +414,18 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
   ; p_wild           = None
   ; p_or             = (fun _ -> None)
   ; p_not            = (fun _ -> None)
-  ; p_as             = (fun (pat, id) -> Util.option_map (fun pat -> MP_as (pat, id)) pat)
-  ; p_typ            = (fun (typ, pat) -> Util.option_map (fun pat -> MP_typ (pat, typ)) pat)
+  ; p_as             = (fun (pat, id) -> Option.map (fun pat -> MP_as (pat, id)) pat)
+  ; p_typ            = (fun (typ, pat) -> Option.map (fun pat -> MP_typ (pat, typ)) pat)
   ; p_id             = (fun id -> Some (MP_id id))
   ; p_var            = (fun _ -> None)
-  ; p_app            = (fun (id, ps) -> Util.option_map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
-  ; p_vector         = (fun ps -> Util.option_map (fun ps -> MP_vector ps) (Util.option_all ps))
-  ; p_vector_concat  = (fun ps -> Util.option_map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
-  ; p_tuple          = (fun ps -> Util.option_map (fun ps -> MP_tuple ps) (Util.option_all ps))
-  ; p_list           = (fun ps -> Util.option_map (fun ps -> MP_list ps) (Util.option_all ps))
-  ; p_cons           = (fun (ph, pt) -> Util.option_bind (fun ph -> Util.option_map (fun pt -> MP_cons (ph, pt)) pt) ph)
-  ; p_string_append  = (fun ps -> Util.option_map (fun ps -> MP_string_append ps) (Util.option_all ps))
-  ; p_aux            = (fun (pat, annot) -> Util.option_map (fun pat -> MP_aux (pat,annot)) pat)
+  ; p_app            = (fun (id, ps) -> Option.map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
+  ; p_vector         = (fun ps -> Option.map (fun ps -> MP_vector ps) (Util.option_all ps))
+  ; p_vector_concat  = (fun ps -> Option.map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
+  ; p_tuple          = (fun ps -> Option.map (fun ps -> MP_tuple ps) (Util.option_all ps))
+  ; p_list           = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps))
+  ; p_cons           = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt))
+  ; p_string_append  = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps))
+  ; p_aux            = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat,annot)) pat)
   }
   
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,

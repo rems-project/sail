@@ -149,7 +149,7 @@ function ReservedValue() -> unit = {
 function UnallocatedEncoding() -> unit = {
   /* If the unallocated encoding is an AArch32 CP10 or CP11 instruction, FPEXC.DEX must be written */
   /* to zero. This is omitted from this code. */
-  /* ARM: uncomment whenimplementing aarch32
+  /* ARM: uncomment when implementing aarch32
   if UsingAArch32() && !AArch32.GeneralExceptionsToAArch64() then
     AArch32.TakeUndefInstrException();
   else*/

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/negative_bits_tuple.sail[0m:8.29-38:
+8[96m |[0m    let x: (bits(-1), int) = undefined;
+ [91m |[0m                             [91m^-------^[0m
+ [91m |[0m Type (bits(-1), int) is empty

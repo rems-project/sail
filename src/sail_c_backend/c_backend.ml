@@ -290,7 +290,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        (* Use Type_check.destruct_exist when optimising with SMT, to
           ensure that we don't cause any type variable clashes in
           local_env, and that we can optimize the existential based
-          upon it's constraints. *)
+          upon its constraints. *)
        begin match destruct_exist typ with
        | Some (kids, nc, typ) ->
           let env = add_existential l kids nc ctx.local_env in
@@ -357,7 +357,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
          | None -> v
        end
     | AV_cval (cval, typ) -> AV_cval (cval, typ)
-    (* An id can be converted to a C fragment if it's type can be
+    (* An id can be converted to a C fragment if its type can be
      stack-allocated. *)
     | AV_id (id, lvar) as v ->
        begin
@@ -2289,7 +2289,7 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_function_id id)
   | _ -> assert false
 
-let rec get_recursive_functions cdefs =
+let get_recursive_functions cdefs =
   let graph = Jib_compile.callgraph cdefs in
   let rf = IdGraph.self_loops graph in
   (* Use strongly-connected components for mutually recursive functions *)
@@ -2320,7 +2320,7 @@ let compile_ast env effect_info output_chan c_includes ast =
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])
-                      @ (if Util.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
+                      @ (if Option.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -2391,7 +2391,7 @@ let compile_ast env effect_info output_chan c_includes ast =
     let model_pre_exit =
       [ "void model_pre_exit()";
         "{" ]
-      @ (if Util.is_some !opt_branch_coverage then
+      @ (if Option.is_some !opt_branch_coverage then
          [ "  if (sail_coverage_exit() != 0) {";
            "    fprintf(stderr, \"Could not write coverage information\\n\");";
            "    exit(EXIT_FAILURE);";

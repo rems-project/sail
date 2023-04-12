@@ -696,7 +696,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
     let sc_def d =
       match d with
-    | DEF_type td -> let (refinements,td') = sc_type_def td in (refinements, DEF_type td')
+      | DEF_aux (DEF_type td, def_annot) ->
+         let (refinements,td') = sc_type_def td in
+         (refinements, DEF_aux (DEF_type td', def_annot))
     | _ -> ([], d)
     in
     let (refinements, defs') = List.split (List.map sc_def defs)
@@ -861,7 +863,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
              else None
            in
            Some (List.concat
-                   (List.map (fun h -> Util.map_filter (merge h) t') h'))
+                   (List.map (fun h -> List.filter_map (merge h) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
@@ -1095,7 +1097,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
            let e' = match match_l lb_l with
              | [] -> e'
              | [(id_string,splits)] ->
-                let l' = Generated (fst annot) in
+                let l' = Generated lb_l in
                 let id = mk_id id_string in
                 let match_exp = E_aux (E_id id, (l',binding_exp_annot)) in
                 let pat_to_split = P_aux (P_id id, (l',binding_exp_annot)) in
@@ -1228,9 +1230,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
       | _ -> [sd]
     in
     let num_defs = List.length defs in
-    let map_def idx d =
+    let map_def idx (DEF_aux (aux, def_annot) as def) =
       Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
-      match d with
+      match aux with
       | DEF_type _
       | DEF_val _
       | DEF_default _
@@ -1239,13 +1241,13 @@ let split_defs target all_errors (splits : split_req list) env ast =
       | DEF_fixity _
       | DEF_pragma _
       | DEF_internal_mutrec _
-        -> [d]
-      | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
-      | DEF_let lb -> [DEF_let (map_letbind lb)]
-      | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
-      | DEF_measure (id,pat,exp) -> [DEF_measure (id,pat,map_exp exp)]
+        -> [def]
+      | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
+      | DEF_let lb -> [DEF_aux (DEF_let (map_letbind lb), def_annot)]
+      | DEF_scattered sd -> List.map (fun x -> DEF_aux (DEF_scattered x, def_annot)) (map_scattered_def sd)
+      | DEF_measure (id,pat,exp) -> [DEF_aux (DEF_measure (id,pat,map_exp exp), def_annot)]
       | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ | DEF_mapdef _ | DEF_loop_measures _ ->
-         Reporting.unreachable (def_loc d) __POS__
+         Reporting.unreachable (def_loc def) __POS__
            "Found definition that should have been rewritten previously during monomorphisation"
     in
     List.concat (List.mapi map_def defs)
@@ -1476,7 +1478,7 @@ in *)
     | exception Not_found -> Bindings.add id (parameters_to_rewrite, new_nexps) fsizes
   in
   let sizes_def fsizes = function
-    | DEF_fundef (FD_aux (FD_function (_,_,funcls),_)) ->
+    | DEF_aux (DEF_fundef (FD_aux (FD_function (_,_,funcls),_)),_) ->
        List.fold_left sizes_funcl fsizes funcls
     | _ -> fsizes
   in
@@ -1564,22 +1566,23 @@ in *)
     in
     Bindings.fold update_val_spec fn_sizes type_env
   in
-  let rewrite_def = function
-    | DEF_fundef (FD_aux (FD_function (recopt,tannopt,funcls),(l,_))) ->
-       let funcls = List.map rewrite_funcl funcls in
-       (* Check whether we have ended up with itself('n) expressions where 'n
-          is not constant.  If so, try and see if constant propagation can
-          resolve those variable expressions.  In many cases the monomorphisation
-          pass will already have performed constant propagation, but it does not
-          for functions where it does not perform splits.*)
-       let check_funcl (FCL_aux (FCL_funcl (id, pexp), (l, _)) as funcl) =
+  let rewrite_def (DEF_aux (aux, def_annot)) =
+    let aux = match aux with
+      | DEF_fundef (FD_aux (FD_function (recopt,tannopt,funcls),(l,_))) ->
+         let funcls = List.map rewrite_funcl funcls in
+         (* Check whether we have ended up with itself('n) expressions where 'n
+            is not constant.  If so, try and see if constant propagation can
+            resolve those variable expressions.  In many cases the monomorphisation
+            pass will already have performed constant propagation, but it does not
+            for functions where it does not perform splits.*)
+         let check_funcl (FCL_aux (FCL_funcl (id, pexp), (l, _)) as funcl) =
          let has_nonconst_sizes =
            let check_cast (typ, _) =
              match unaux_typ typ with
              | Typ_app (itself, [A_aux (A_nexp nexp, _)])
-             | Typ_exist (_, _, Typ_aux (Typ_app (itself, [A_aux (A_nexp nexp, _)]), _))
-               when string_of_id itself = "itself" ->
-                 not (is_nexp_constant nexp)
+               | Typ_exist (_, _, Typ_aux (Typ_app (itself, [A_aux (A_nexp nexp, _)]), _))
+                  when string_of_id itself = "itself" ->
+                not (is_nexp_constant nexp)
              | _ -> false
            in
            fold_pexp { (pure_exp_alg false (||)) with e_typ = check_cast } pexp
@@ -1591,20 +1594,22 @@ in *)
            let env = Env.add_typquant l tq type_env' in
            const_prop_funcl (Type_check.check_funcl env (strip_funcl funcl) typ)
          else funcl
-       in
-       let funcls = List.map check_funcl funcls in
-       (* TODO rewrite tannopt? *)
-       DEF_fundef (FD_aux (FD_function (recopt,tannopt,funcls),(l,empty_tannot)))
-    | DEF_let lb -> DEF_let (rewrite_letbind lb)
-    | DEF_val (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) ->
-       let typschm = match typschm with
-         | TypSchm_aux (TypSchm_ts (tq, typ),l) ->
-            TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
-       in
-       DEF_val (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot)))
-    | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
-       DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
-    | def -> def
+         in
+         let funcls = List.map check_funcl funcls in
+         (* TODO rewrite tannopt? *)
+         DEF_fundef (FD_aux (FD_function (recopt,tannopt,funcls),(l,empty_tannot)))
+      | DEF_let lb -> DEF_let (rewrite_letbind lb)
+      | DEF_val (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) ->
+         let typschm = match typschm with
+           | TypSchm_aux (TypSchm_ts (tq, typ),l) ->
+              TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
+         in
+         DEF_val (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot)))
+      | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
+         DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
+      | _ -> aux
+    in
+    DEF_aux (aux, def_annot)
   in
 (*
   Bindings.iter (fun id args ->
@@ -1674,11 +1679,6 @@ let rec useful_loc = function
   | Hint (_,_,l) -> useful_loc l
   | Documented (_,l) -> useful_loc l
   | Range (_,_) -> true
-
-let id_pair_compare (id,l) (id',l') =
-    match Id.compare id id' with
-    | 0 -> compare l l'
-    | x -> x
 
 (* Usually we do a full case split on an argument, but sometimes we find a
    case expression in the function body that suggests a more compact case
@@ -1757,10 +1757,6 @@ let string_of_argsplits s =
     (List.map (fun ((id,l),detail) ->
       string_of_id id ^ "." ^ simple_string_of_loc l ^ string_of_match_detail detail)
                         (ArgSplits.bindings s))
-
-let string_of_lx lx =
-  let open Lexing in
-  Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
 
 let string_of_extra_splits s =
   String.concat ", "
@@ -2120,7 +2116,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
     when is_id (env_of exp) (Id "append") append ->
      (* If the expression is a concatenation resulting in a small enough bitvector,
         perform a (total) case split on the sub-vectors *)
-     let vec_len v = try Util.option_map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+     let vec_len v = try Option.map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
      let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
      let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
      begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
@@ -2386,7 +2382,8 @@ let rec analyse_exp fn_id effect_info env assigns (E_aux (e,(l,annot)) as exp) =
          (* Potential improvements: match on more patterns (e.g. tuples);
             allow disjunctions of equalities as well as set constraints;
             allow set constraint to be part of a larger constraint. *)
-         | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), _ when unknown_deps ->
+         | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), _
+              when unknown_deps && useful_loc lb_l ->
             let l' = Generated l in
             let split = match typ_of e1 with
               | Typ_aux (Typ_exist ([kdid], NC_aux (NC_set (kid, sizes), _), typ), _)
@@ -2664,7 +2661,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
     | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),kid),_)),_) -> Some kid
     | _ -> None
   in
-  let top_kids = Util.map_filter int_quant qs in
+  let top_kids = List.filter_map int_quant qs in
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
@@ -2841,7 +2838,8 @@ let analyse_funcl debug effect_info tenv constants (FCL_aux (FCL_funcl (id,pexp)
   let _ = if debug > 2 then print_result r else ()
   in r
 
-let analyse_def debug effect_info env globals = function
+let analyse_def debug effect_info env globals (DEF_aux (aux, _)) =
+  match aux with
   | DEF_fundef (FD_aux (FD_function (_,_,funcls),_)) ->
      globals, List.fold_left (fun r f -> merge r (analyse_funcl debug effect_info env globals f)) empty funcls
 
@@ -2870,7 +2868,7 @@ let analyse_defs debug effect_info env ast =
   let total_defs = List.length ast.defs in
   let def (idx,globals,r) d =
     begin match d with
-      | DEF_fundef fd ->
+      | DEF_aux (DEF_fundef fd, _) ->
          Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
       | _ -> ()
     end;
@@ -2941,14 +2939,14 @@ let fresh_sz_var =
 let add_extra_splits extras defs =
   let success = ref true in
   let add_to_body extras (E_aux (_,(l,annot)) as e) =
-    let l' = Generated l in
+    let l' = unique (Generated l) in
     KBindings.fold (fun kid detail (exp,split_list) ->
          let nexp = Nexp_aux (Nexp_var kid,l) in
          let var = fresh_sz_var () in
          let size_annot = mk_tannot (env_of e) (atom_typ nexp) in
-         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l,size_annot)),exp),(l',annot))] in
+         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l',size_annot)),exp),(l',annot))] in
          E_aux (E_match (E_aux (E_sizeof nexp, (l',size_annot)), pexps),(l',annot)),
-         ((Exact l, string_of_id var, Analysis.detail_to_split detail)::split_list)
+         ((Exact l', string_of_id var, Analysis.detail_to_split detail)::split_list)
     ) extras (e,[])
   in
   let add_to_funcl (FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
@@ -2962,9 +2960,9 @@ let add_extra_splits extras defs =
     in FCL_aux (FCL_funcl (id,Pat_aux (pexp,peannot)),(l,annot)), splits
   in
   let add_to_def = function
-    | DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)) ->
+    | DEF_aux (DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)),def_annot) ->
        let funcls,splits = List.split (List.map add_to_funcl funcls) in
-       DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)), List.concat splits
+       DEF_aux (DEF_fundef (FD_aux (FD_function (re,ta,funcls),annot)),def_annot), List.concat splits
     | d -> d, []
   in 
   let defs, splits = List.split (List.map add_to_def defs) in
@@ -3659,9 +3657,9 @@ let simplify_size_nexp env quant_kids nexp =
           | Nexp_minus(n1,n2) ->
              re (fun n1 n2 -> Nexp_minus(n1,n2)) (aux n1, aux n2)
           | Nexp_exp n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
           | Nexp_neg n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
           | _ -> None
   in aux nexp
 
@@ -3942,10 +3940,15 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                        (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
-               | P_aux (P_wild, _), None ->
-                  begin match body with
-                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann) when Kid.compare kid kid' == 0 ->
-                     (* Similar to the literal case *)
+               | P_aux (P_wild, (_, annot)), None ->
+                  (* Similar to the literal case *)
+                  begin match body, untyped_annot annot |> get_attribute "int_wildcard" with
+                  | _, Some (_, s) ->
+                     let i = Big_int.of_string s in
+                     let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
+                     make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
+                       (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
+                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann), _ when Kid.compare kid kid' == 0 ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) nexp) env) result_typ in
                      let body'' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                                     (make_bitvector_env_casts env (env_of body') quant_kids (KBindings.singleton kid nexp) body')
@@ -4078,9 +4081,9 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
     FCL_aux (FCL_funcl (id,pexp),fcl_ann)
   in
   let rewrite_def idx = function
-    | DEF_fundef (FD_aux (FD_function (r,t,fcls),fd_ann) as fd) ->
+    | DEF_aux (DEF_fundef (FD_aux (FD_function (r,t,fcls),fd_ann) as fd), def_annot) ->
        Util.progress "Adding casts " (string_of_id (id_of_fundef fd)) idx (List.length defs);
-       DEF_fundef (FD_aux (FD_function (r,t,List.map rewrite_funcl fcls),fd_ann))
+       DEF_aux (DEF_fundef (FD_aux (FD_function (r,t,List.map rewrite_funcl fcls),fd_ann)), def_annot)
     | d -> d
   in
   specs_required := IdSet.empty;
@@ -4099,6 +4102,8 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
     check_defs initial_env defs
   in { ast with defs = cast_specs @ defs }
 end
+
+module ToplevelNexpRewrites = struct
 
 let replace_nexp_in_typ env typ orig new_nexp =
   let rec aux (Typ_aux (t,l) as typ) =
@@ -4160,68 +4165,73 @@ let fresh_nexp_kid nexp =
      types, which these are explicitly supposed to be. *)
   mk_kid (mangle_nexp nexp (*^ "#"*))
 
-let rewrite_toplevel_nexps ({ defs; _ } as ast) =
-  let find_nexp env nexp_map nexp =
-    let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
-    List.find is_equal nexp_map
-  in
-  let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
-    match t with
-    | Typ_fn (args,res) ->
-       let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
-       let nexp_map = List.concat (List.map fst args') in
-       let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
-       nexp_map, Typ_aux (Typ_fn (List.map snd args',res),ann)
-    | Typ_tuple typs ->
-       let nexp_map, typs =
-         List.fold_right (fun typ (nexp_map,t) ->
-           let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
-           (nexp_map, typ::t)) typs (nexp_map,[])
-       in nexp_map, Typ_aux (Typ_tuple typs,ann)
-    | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
-       let nexp_opt =
-         match destruct_atom_nexp env typ_full with
-         | Some nexp -> Some nexp
-         | None ->
-            if is_bitvector_typ typ_full then
-              let (size,_,_) = vector_typ_args_of typ_full in
-              Some size
-            else None
-       in match nexp_opt with
-       | None -> nexp_map, typ_full
-       | Some (Nexp_aux (Nexp_constant _,_))
-       | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
-       | Some nexp ->
-          let nexp_map, kid =
-            match find_nexp env nexp_map nexp with
-            | (kid,_) -> nexp_map, kid
-            | exception Not_found ->
-               let kid = fresh_nexp_kid nexp in
-               (kid, nexp)::nexp_map, kid
+let find_nexp env nexp_map nexp =
+  let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
+  List.find is_equal nexp_map
+
+let rec rewrite_typ_in_spec env nexp_map (Typ_aux (t,ann) as typ_full) =
+  match t with
+  | Typ_fn (args,res) ->
+     let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
+     let nexp_map = List.concat (List.map fst args') in
+     let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
+     nexp_map, Typ_aux (Typ_fn (List.map snd args',res),ann)
+  | Typ_tuple typs ->
+     let nexp_map, typs =
+       List.fold_right (fun typ (nexp_map,t) ->
+         let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
+         (nexp_map, typ::t)) typs (nexp_map,[])
+     in nexp_map, Typ_aux (Typ_tuple typs,ann)
+  | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
+     let nexp_opt =
+       match destruct_atom_nexp env typ_full with
+       | Some nexp -> Some nexp
+       | None ->
+          if is_bitvector_typ typ_full then
+            let (size,_,_) = vector_typ_args_of typ_full in
+            Some size
+          else None
+     in match nexp_opt with
+     | None -> nexp_map, typ_full
+     | Some (Nexp_aux (Nexp_constant _,_))
+     | Some (Nexp_aux (Nexp_var _,_)) -> nexp_map, typ_full
+     | Some nexp ->
+        let nexp_map, kid =
+          match find_nexp env nexp_map nexp with
+          | (kid,_) -> nexp_map, kid
+          | exception Not_found ->
+             let kid = fresh_nexp_kid nexp in
+             (kid, nexp)::nexp_map, kid
+        in
+        let new_nexp = nvar kid in
+        nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
+    end
+  | _ ->
+     let typ' = Env.base_typ_of env typ_full in
+     if Typ.compare typ_full typ' == 0 then
+       match t with
+       | Typ_app (f,args) ->
+          let in_arg nexp_map (A_aux (arg,l) as arg_full) =
+            match arg with
+            | A_typ typ ->
+               let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
+               nexp_map, A_aux (A_typ typ',l)
+            | A_nexp nexp ->
+               begin match find_nexp env nexp_map nexp with
+               | (kid,_) -> nexp_map, A_aux (A_nexp (nvar kid), l)
+               | exception Not_found -> nexp_map, arg_full
+               end
+            | A_bool _ | A_order _ -> nexp_map, arg_full
           in
-          let new_nexp = nvar kid in
-          nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
-      end
-    | _ ->
-       let typ' = Env.base_typ_of env typ_full in
-       if Typ.compare typ_full typ' == 0 then
-         match t with
-         | Typ_app (f,args) ->
-            let in_arg nexp_map (A_aux (arg,l) as arg_full) =
-              match arg with
-              | A_typ typ ->
-                 let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
-                 nexp_map, A_aux (A_typ typ',l)
-              | A_bool _ | A_nexp _ | A_order _ -> nexp_map, arg_full
-            in
-            let nexp_map, args =
-              List.fold_right (fun arg (nexp_map,args) ->
-                  let nexp_map, arg = in_arg nexp_map arg in
-                  (nexp_map, arg::args)) args (nexp_map,[])
-            in nexp_map, Typ_aux (Typ_app (f,args),ann)
-         | _ -> nexp_map, typ_full
-       else rewrite_typ_in_spec env nexp_map typ'
-  in
+          let nexp_map, args =
+            List.fold_right (fun arg (nexp_map,args) ->
+                let nexp_map, arg = in_arg nexp_map arg in
+                (nexp_map, arg::args)) args (nexp_map,[])
+          in nexp_map, Typ_aux (Typ_app (f,args),ann)
+       | _ -> nexp_map, typ_full
+     else rewrite_typ_in_spec env nexp_map typ'
+
+let rewrite_toplevel_nexps ({ defs; _ } as ast) =
   let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann)) =
     match tqs with
     | TypQ_aux (TypQ_no_forall,_) -> None
@@ -4309,16 +4319,16 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
   in
   let rewrite_def spec_map def =
     match def with
-    | DEF_val vs -> (match rewrite_valspec vs with
+    | DEF_aux (DEF_val vs, def_annot) -> (match rewrite_valspec vs with
       | None -> spec_map, def
-      | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_val vs)
-    | DEF_fundef (FD_aux (FD_function (recopt,_,funcls),ann)) ->
+      | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_aux (DEF_val vs, def_annot))
+    | DEF_aux (DEF_fundef (FD_aux (FD_function (recopt,_,funcls),ann)), def_annot) ->
        (* Type annotations on function definitions will have been turned into
           valspecs by type checking, so it should be safe to drop them rather
           than updating them. *)
        let tann = Typ_annot_opt_aux (Typ_annot_opt_none,Generated Unknown) in
        spec_map,
-       DEF_fundef (FD_aux (FD_function (recopt,tann,List.map (rewrite_funcl spec_map) funcls),ann))
+       DEF_aux (DEF_fundef (FD_aux (FD_function (recopt,tann,List.map (rewrite_funcl spec_map) funcls),ann)), def_annot)
     | _ -> spec_map, def
   in
   let _, defs = List.fold_left (fun (spec_map,t) def ->
@@ -4329,6 +4339,120 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
      to help prove equivalences such as (8 * 'n) = 'p8_times_n# *)
   Type_check.opt_smt_div := true;
   { ast with defs = List.rev defs }
+
+(* Move complex sizes in record field types into the parameters. *)
+let rewrite_complete_record_params env ast =
+  let lift_params (additions_map,tl) def =
+    match def with
+    | DEF_aux (DEF_type (TD_aux (TD_record (id, (TypQ_aux (TypQ_tq qs, tq_l ) as tyqs), fields, semi), annot)), def_annot) as def ->
+       (* TODO: replace with a local environment *)
+       let env = Env.add_typquant tq_l tyqs env in
+       let nexp_map, fields' =
+         List.fold_right (fun (typ,id) (nexp_map,t) ->
+             let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
+             (nexp_map, (typ,id)::t)) fields ([],[])
+       in begin
+           match nexp_map with
+           | [] -> additions_map, def::tl
+           | _ ->
+              let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map in
+              let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
+              let tyqs' = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
+              let additions_map' = Bindings.add id (tyqs, nexp_map) additions_map in
+              additions_map', DEF_aux (DEF_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
+         end
+    | def -> additions_map, def::tl
+  in
+
+  let additions_map, rdefs = List.fold_left lift_params (Bindings.empty, []) ast.defs in
+  let ast = { ast with defs = List.rev rdefs } in
+
+  let rec expand_type (Typ_aux (typ, l) as full_typ) =
+    match typ with
+    | Typ_fn (args, ret) -> Typ_aux (Typ_fn (List.map expand_type args, expand_type ret), l)
+    | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map expand_type typs), l)
+    (* TODO: another potential shadowing hazard *)
+    | Typ_exist (kids,nc,typ') ->
+       Typ_aux (Typ_exist (kids, nc, expand_type typ'), l)
+    | Typ_app (id, ty_args) ->
+       begin match Bindings.find_opt id additions_map with
+       | None -> full_typ
+       | Some (original_tyqs, nexp_map) ->
+          let instantiation =
+            List.fold_left2
+              (fun m kopt ty_arg ->
+                match kopt, ty_arg with
+                | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _), A_aux (A_nexp nexp, _) ->
+                   KBindings.add kid nexp m
+                | _ -> m)
+              KBindings.empty
+              (quant_kopts original_tyqs) ty_args
+          in
+          let new_args =
+            List.map (fun (_, nexp) -> A_aux (A_nexp (subst_kids_nexp instantiation nexp), Generated l)) nexp_map
+          in Typ_aux (Typ_app (id, ty_args @ new_args), l)
+
+       end
+    | _ -> full_typ
+  in
+
+  let open Rewriter in
+  let rw_pat = {
+      id_pat_alg with
+      p_typ = (fun (typ, pat) -> P_typ (expand_type typ, pat));
+    }
+  in
+  let rw_exp = {
+      id_exp_alg with
+      e_typ = (fun (typ, exp) -> E_typ (expand_type typ, exp));
+      le_typ = (fun (typ, lexp) -> LE_typ (expand_type typ, lexp));
+      pat_alg = rw_pat;
+    }
+  in
+  let rw_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), annot)) =
+    match typschm with
+    | TypSchm_aux (TypSchm_ts (typq, typ), annot') ->
+       (* TODO: capture hazard *)
+       let typschm' = TypSchm_aux (TypSchm_ts (typq, expand_type typ), annot') in
+       VS_aux (VS_val_spec (typschm', id, ext, is_cast), annot)
+  in
+  let rw_typedef (TD_aux (td, annot)) =
+    let rw_union (Tu_aux (Tu_ty_id (typ, id), annot)) =
+      Tu_aux (Tu_ty_id (expand_type typ, id), annot)
+    in
+    match td with
+    | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
+       TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
+    | TD_abbrev (id, typq, typ_arg) ->
+       TD_aux (TD_abbrev (id, typq, typ_arg), annot)
+    | TD_record (id, typq, typ_ids, flag) ->
+       TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
+    | TD_variant (id, typq, tus, flag) ->
+       TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
+    | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
+    | TD_bitfield _ -> assert false (* Processed before re-writing *)
+  in
+  let rw_register (DEC_aux (DEC_reg (typ, id, init), annot)) =
+    DEC_aux (DEC_reg (expand_type typ, id, init), annot)
+  in
+  let rw_def rws (DEF_aux (aux, def_annot)) =
+    let aux' = match aux with
+      | DEF_val vs -> DEF_val (rw_spec vs)
+      | DEF_type td -> DEF_type (rw_typedef td)
+      | DEF_register reg -> DEF_register (rw_register reg)
+      | def -> def
+    in rewrite_def rws (DEF_aux (aux', def_annot))
+  in
+  rewrite_ast_base
+    { rewriters_base with rewrite_exp = (fun _ -> fold_exp rw_exp);
+                          rewrite_pat = (fun _ -> fold_pat rw_pat);
+                          rewrite_def = rw_def
+    } ast
+
+end (* ToplevelNexpRewrites *)
+
+let rewrite_toplevel_nexps = ToplevelNexpRewrites.rewrite_toplevel_nexps
+let rewrite_complete_record_params = ToplevelNexpRewrites.rewrite_complete_record_params
 
 type options = {
   auto : bool;

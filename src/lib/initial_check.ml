@@ -322,27 +322,38 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
      TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 
-let rec to_ast_pat ctx (P.P_aux (pat, l)) =
-  P_aux ((match pat with
-          | P.P_lit lit -> P_lit (to_ast_lit lit)
-          | P.P_wild -> P_wild
-          | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
-             P_as (to_ast_pat ctx pat, to_ast_id ctx id)
-          | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
-          | P.P_id id -> P_id (to_ast_id ctx id)
-          | P.P_var (pat, typ) -> P_var (to_ast_pat ctx pat, to_ast_typ_pat ctx typ)
-          | P.P_app (id, []) -> P_id (to_ast_id ctx id)
-          | P.P_app (id, pats) ->
-             if List.length pats == 1 && string_of_parse_id id = "~"
-             then P_not (to_ast_pat ctx (List.hd pats))
-             else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
-          | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
-          | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
-          | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
-          | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
-          | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
-          | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-         ), (l, empty_uannot))
+let rec to_ast_pat ctx (P.P_aux (aux, l)) =
+  match aux with
+  | P.P_attribute (attr, arg, pat) ->
+     let P_aux (aux, (pat_l, annot)) = to_ast_pat ctx pat in
+     (* The location of an E_attribute node is just the attribute by itself *)
+     let annot = add_attribute l attr arg annot in
+     P_aux (aux, (pat_l, annot))
+  | _ ->
+     let aux = match aux with
+       | P.P_attribute _ -> assert false
+       | P.P_lit lit -> P_lit (to_ast_lit lit)
+       | P.P_wild -> P_wild
+       | P.P_or (pat1, pat2) ->
+          P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
+       | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
+          P_as (to_ast_pat ctx pat, to_ast_id ctx id)
+       | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
+       | P.P_id id -> P_id (to_ast_id ctx id)
+       | P.P_var (pat, typ) -> P_var (to_ast_pat ctx pat, to_ast_typ_pat ctx typ)
+       | P.P_app (id, []) -> P_id (to_ast_id ctx id)
+       | P.P_app (id, pats) ->
+          if List.length pats == 1 && string_of_parse_id id = "~"
+          then P_not (to_ast_pat ctx (List.hd pats))
+          else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
+       | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
+       | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
+       | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
+       | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
+       | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
+       | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
+     in
+     P_aux (aux, (l, empty_uannot))
 
 let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : uannot letbind =
   LB_aux(
@@ -560,7 +571,7 @@ let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
      match vs with
      | P.VS_val_spec (ts, id, ext, is_cast) ->
         let typschm, _ = to_ast_typschm ctx ts in
-        let ext = Util.option_map to_ast_extern ext in
+        let ext = Option.map to_ast_extern ext in
         VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx
  
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
@@ -666,6 +677,7 @@ let generate_enum_functions l ctx enum_id fns exps =
     ) fns
   |> List.concat
 
+(* When desugaring a type definition, we check that the type does not have a reserved name *)
 let to_ast_reserved_type_id ctx id =
   let id = to_ast_id ctx id in
   if List.exists (fun reserved -> Id.compare reserved id = 0) ctx.reserved_type_ids then
@@ -677,22 +689,22 @@ let to_ast_reserved_type_id ctx id =
     end
   else
     id
-  
-let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : uannot def list ctx_out =
+
+let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let kind = to_ast_kind kind in
      let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
-     [DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot)))],
+     [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
      add_constructor id typq ctx
 
   | P.TD_record (id, typq, fields, _) ->
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let fields = List.map (fun (atyp, id) -> to_ast_typ typq_ctx atyp, to_ast_id ctx id) fields in
-     [DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot)))],
+     [DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)],
      add_constructor id typq ctx
 
   | P.TD_variant (id, typq, arms, _) as union ->
@@ -705,7 +717,7 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : uannot def list ct
      in
      let generated_records = filter_records (List.map fst records_and_arms) in
      let generated_records, ctx =
-       List.fold_left (fun (prev, ctx) td -> let td, ctx = to_ast_typedef ctx td in prev @ td, ctx)
+       List.fold_left (fun (prev, ctx) td -> let td, ctx = to_ast_typedef ctx (mk_def_annot (gen_loc l)) td in prev @ td, ctx)
          ([], ctx)
          generated_records
      in
@@ -714,21 +726,21 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : uannot def list ct
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
      let arms = List.map (to_ast_type_union (add_constructor id typq typq_ctx)) arms in
-     [DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot)))] @ generated_records,
+     [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)] @ generated_records,
      add_constructor id typq ctx
 
   | P.TD_enum (id, fns, enums, _) ->
      let id = to_ast_reserved_type_id ctx id in
      let fns = generate_enum_functions l ctx id fns enums in
      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-     fns @ [DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot)))],
+     fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
      { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
   | P.TD_bitfield (id, typ, ranges) ->
      let id = to_ast_reserved_type_id ctx id in
      let typ = to_ast_typ ctx typ in
      let ranges = List.map (fun (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) ranges in
-     [DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot)))],
+     [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
      { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
 let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : uannot rec_opt =
@@ -875,70 +887,72 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
 let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+  let annot = mk_def_annot l in
   match def with
   | P.DEF_overload (id, ids) ->
-     [DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids)], ctx
+     [DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx
   | P.DEF_fixity (prec, n, op) ->
-     [DEF_fixity (to_ast_prec prec, n, to_ast_id ctx op)], ctx
+     [DEF_aux (DEF_fixity (to_ast_prec prec, n, to_ast_id ctx op), annot)], ctx
   | P.DEF_type t_def ->
-     to_ast_typedef ctx t_def
+     to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
      let fd = to_ast_fundef ctx f_def in
-     [DEF_fundef fd], ctx
+     [DEF_aux (DEF_fundef fd, annot)], ctx
   | P.DEF_mapdef m_def ->
      let md = to_ast_mapdef ctx m_def in
-     [DEF_mapdef md], ctx
+     [DEF_aux (DEF_mapdef md, annot)], ctx
   | P.DEF_impl funcl ->
      let funcls = to_ast_impl_funcls ctx funcl in
-     List.map (fun funcl -> DEF_impl funcl) funcls, ctx
+     List.map (fun funcl -> DEF_aux (DEF_impl funcl, annot)) funcls, ctx
   | P.DEF_let lb ->
      let lb = to_ast_letbind ctx lb in
-     [DEF_let lb], ctx
+     [DEF_aux (DEF_let lb, annot)], ctx
   | P.DEF_val val_spec ->
      let vs,ctx = to_ast_spec ctx val_spec in
-     [DEF_val vs], ctx
+     [DEF_aux (DEF_val vs, annot)], ctx
   | P.DEF_outcome (outcome_spec, defs) ->
      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
      let defs, _ =
        List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
-     [DEF_outcome (outcome_spec, List.rev defs)], ctx
+     [DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx
   | P.DEF_instantiation (id, substs) ->
      let id = to_ast_id ctx id in
-     [DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs)], ctx
+     [DEF_aux (DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs), annot)], ctx
   | P.DEF_default typ_spec ->
      let default,ctx = to_ast_default ctx typ_spec in
-     [DEF_default default], ctx
+     [DEF_aux (DEF_default default, annot)], ctx
   | P.DEF_register dec ->
      let d = to_ast_dec ctx dec in
-     [DEF_register d], ctx
+     [DEF_aux (DEF_register d, annot)], ctx
   | P.DEF_pragma ("sail_internal", arg) ->
      begin match Reporting.loc_file l with
      | Some file ->
-        [DEF_pragma ("sail_internal", arg, l)], { ctx with internal_files = file :: ctx.internal_files }
-     | None -> [DEF_pragma ("sail_internal", arg, l)], ctx
+        [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], { ctx with internal_files = file :: ctx.internal_files }
+     | None ->
+        [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx
      end
   | P.DEF_pragma ("target_set", arg) ->
      let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
      begin match args with
      | (set :: targets) ->
-        [DEF_pragma ("target_set", arg, l)], { ctx with target_sets = (set, targets) :: ctx.target_sets }
+        [DEF_aux (DEF_pragma ("target_set", arg, l), annot)], { ctx with target_sets = (set, targets) :: ctx.target_sets }
      | [] ->
         raise (Reporting.err_general l "No arguments provided to target set directive")
      end
   | P.DEF_pragma (pragma, arg) ->
-     [DEF_pragma (pragma, arg, l)], ctx
+     [DEF_aux (DEF_pragma (pragma, arg, l), annot)], ctx
   | P.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
      raise (Reporting.err_unreachable l __POS__
                                       "Internal mutual block found when processing scattered defs")
   | P.DEF_scattered sdef ->
      let sdef, ctx = to_ast_scattered ctx sdef in
-     [DEF_scattered sdef], ctx
+     [DEF_aux (DEF_scattered sdef, annot)], ctx
   | P.DEF_measure (id, pat, exp) ->
-     [DEF_measure (to_ast_id ctx id, to_ast_pat ctx pat, to_ast_exp ctx exp)], ctx
+     [DEF_aux (DEF_measure (to_ast_id ctx id, to_ast_pat ctx pat, to_ast_exp ctx exp), annot)], ctx
   | P.DEF_loop_measures (id, measures) ->
-     [DEF_loop_measures (to_ast_id ctx id, List.map (to_ast_loop_measure ctx) measures)], ctx
+     [DEF_aux (DEF_loop_measures (to_ast_id ctx id, List.map (to_ast_loop_measure ctx) measures), annot)], ctx
 
 let rec remove_mutrec = function
   | [] -> []
@@ -956,9 +970,9 @@ let to_ast ctx (P.Defs files) =
     List.rev defs, ctx
   in
   let wrap_file file defs =
-    [DEF_pragma ("file_start", file, P.Unknown)]
+    [mk_def (DEF_pragma ("file_start", file, P.Unknown))]
     @ defs
-    @ [DEF_pragma ("file_end", file, P.Unknown)]
+    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown))]
   in
   let defs, ctx =
     List.fold_left (fun (defs, ctx) file ->
@@ -1160,7 +1174,7 @@ let generate_undefineds vs_ids defs =
     | _ -> []
   in
   let rec undefined_defs = function
-    | DEF_type (TD_aux (td_aux, _)) as def :: defs ->
+    | DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def :: defs ->
        def :: undefined_td td_aux @ undefined_defs defs
     | def :: defs ->
        def :: undefined_defs defs
@@ -1169,7 +1183,7 @@ let generate_undefineds vs_ids defs =
   undefined_builtins @ undefined_defs defs
 
 let rec get_uninitialized_registers = function
-  | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) :: defs -> (typ, id) :: get_uninitialized_registers defs
+  | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> (typ, id) :: get_uninitialized_registers defs
   | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
@@ -1192,7 +1206,7 @@ let generate_initialize_registers vs_ids defs =
 
 let generate_enum_functions vs_ids defs =
   let rec gen_enums = function
-    | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
+    | DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), _) as enum :: defs ->
        let enum_val_spec name quants typ =
          mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
        in

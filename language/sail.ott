@@ -52,7 +52,7 @@ metavar regexp ::=
   {{ lem string }}
   {{ hol string }}
   {{ isa string }}
-  {{ com Regular expresions, as a string literal }}
+  {{ com Regular expressions, as a string literal }}
 
 metavar real ::=
    {{ phantom }}
@@ -84,6 +84,8 @@ type loop = While | Until
 
 type extern = { pure : bool; bindings : (string * string) list } option
 
+type def_annot = { doc_comment : string option; attrs : (string * string * l) list; loc : l }
+
 }}
 
 embed
@@ -98,6 +100,8 @@ type loop = While | Until
 type annot 'a = l * 'a
 
 type extern = <| pure : bool; bindings : list (string * string) |>
+
+type def_annot = <| doc_comment : maybe string; attrs : list (string * string * l); loc: l |>
 
 }}
 
@@ -141,6 +145,11 @@ external :: '' ::=
   {{ phantom }}
   {{ lem maybe extern }}
   {{ ocaml extern option }}
+
+def_annot :: '' ::=
+  {{ phantom }}
+  {{ lem def_annot }}
+  {{ ocaml def_annot }}
 
 l :: '' ::=
   {{ phantom }}
@@ -467,7 +476,7 @@ exp :: 'E_' ::=
     {{ com halt with error message $[[exp']]$ when not $[[exp]]$. exp' is optional. }}
   | ( exp )                                           :: S :: paren {{ ichlo [[exp]] }}
   | var lexp = exp in exp'  :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
-  | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
+  | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguish some introduced lets during processing from original ones }}
   | return_int ( exp )      ::  :: internal_return {{ com For internal use to embed into monad definition }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
   | assume n_constraint in exp :: :: internal_assume {{ com Internal node for additional type checker assumptions }}
@@ -702,7 +711,7 @@ opt_exp :: '' ::= {{ phantom }} {{ lem maybe (exp 'a) }} {{ ocaml 'a exp option 
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register effect effect' typ id = opt_exp                    :: :: reg
+  | register effect effect' typ id = opt_exp :: :: reg
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
@@ -719,7 +728,7 @@ loop_measure :: '' ::=
 
 def :: 'DEF_' ::=
   {{ com top-level definition }}
-  {{ auxparam 'a }}
+  {{ aux _ def_annot }} {{ auxparam 'a }}
   | type_def                                           :: :: type
     {{ com type definition }}
   | fundef                                             :: :: fundef
@@ -734,7 +743,7 @@ def :: 'DEF_' ::=
     {{ com top-level type constraint }}
   | outcome_spec { def1 ... defn }                     :: :: outcome
     {{ com top-level outcome definition }}
-  | instantiation instantiation_spec with subst1 , ... , substn        :: :: instantiation
+  | instantiation instantiation_spec with subst1 , ... , substn :: :: instantiation
     {{ com instantiation }}
   | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}

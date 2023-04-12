@@ -510,7 +510,8 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
 
-let fv_of_def consider_var consider_scatter_as_one all_defs = function
+let fv_of_def consider_var consider_scatter_as_one all_defs (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_mapdef mdef -> mt,mt (* fv_of_map consider_var mdef *)
@@ -535,8 +536,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
         (fv_of_pes consider_var mt used mt
            [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
-  | (DEF_loop_measures _ | DEF_impl _ | DEF_outcome _ | DEF_instantiation _) as d ->
-     Reporting.unreachable (def_loc d) __POS__
+  | DEF_loop_measures _ | DEF_impl _ | DEF_outcome _ | DEF_instantiation _ ->
+     Reporting.unreachable (def_loc def) __POS__
        "Found definition that should have been rewritten previously"
 
 (*
@@ -556,7 +557,7 @@ let add_def_to_map id d defset =
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
-    | DEF_register (DEC_aux (DEC_reg (typ, _, _), annot)) ->
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, _, _), annot)), _) ->
        (* For a register, we need to ensure that any undefined_type
           functions for types used by the register are placed before
           the register declaration. *)
@@ -599,16 +600,16 @@ let def_of_component graph defset comp =
   match List.concat (List.map get_def comp) with
   | [] -> []
   | [def] -> [def]
-  | (((DEF_fundef _ | DEF_internal_mutrec _) as def) :: _) as defs ->
+  | ((DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _), _) as def) :: _) as defs ->
      let get_fundefs = function
-       | DEF_fundef fundef -> [fundef]
-       | DEF_internal_mutrec fundefs -> fundefs
+       | DEF_aux (DEF_fundef fundef, _) -> [fundef]
+       | DEF_aux (DEF_internal_mutrec fundefs, _) -> fundefs
        | _ ->
           raise (Reporting.err_unreachable (def_loc def) __POS__
             "Trying to merge non-function definition with mutually recursive functions") in
      let fundefs = List.concat (List.map get_fundefs defs) in
      (* print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs); *)
-     [DEF_internal_mutrec fundefs]
+     [mk_def (DEF_internal_mutrec fundefs)]
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
 

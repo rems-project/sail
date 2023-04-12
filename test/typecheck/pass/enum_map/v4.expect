@@ -1,5 +1,5 @@
 [93mError[0m:
-[96menum_map/v4.sail[0m:12.8-14:
+[96mpass/enum_map/v4.sail[0m:12.8-14:
 12[96m |[0m  A2 => 0xFFFF,
   [91m |[0m        [91m^----^[0m
   [91m |[0m Each enumeration clause for F must define exactly 2 expressions for the functions as_bits, as_string

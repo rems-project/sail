@@ -84,8 +84,8 @@ let rec list_contains cmp l1 = function
      let rec remove = function
        | [] -> None
        | h'::t' -> if cmp h h' = 0 then Some t'
-                   else Util.option_map (List.cons h') (remove t')
-     in Util.option_bind (fun l1' -> list_contains cmp l1' t) (remove l1)
+                   else Option.map (List.cons h') (remove t')
+     in Option.bind (remove l1) (fun l1' -> list_contains cmp l1' t)
 
 (* We currently support OCaml versions that are too old for KBindings.filter_opt *)
 let kbindings_filter_map f m =
@@ -181,7 +181,7 @@ let enclose_record_update = enclose (string "{[ ") (string " ]}")
 let bigarrow = string "=>"
 let comment = enclose (string "(*") (string "*)")
 
-let separate_opt s f l = separate s (Util.map_filter f l)
+let separate_opt s f l = separate s (List.filter_map f l)
 
 let is_number_char c =
   c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
@@ -408,7 +408,7 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
                     Parse_ast.Generated l))
   | _ -> None
 
-let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
+let expand_range_type typ = Option.value ~default:typ (maybe_expand_range_type typ)
 
 
 let nice_and nc1 nc2 =
@@ -838,7 +838,7 @@ and doc_nc_exp ctx env nc =
   let rec newnc f nc =
     let ncs = flatten_nc nc in
     let candidates =
-      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
+      List.filter_map (fun (ncs',id) -> Option.map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
     in
     match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
     | ([],id)::_ -> doc_id ctx id
@@ -1022,15 +1022,15 @@ let doc_typquant_items ?(prop_vars=false) ctx env delimit (TypQ_aux (tq,_)) =
 let doc_typquant_items_separate ctx env delimit (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
-     Util.map_filter (doc_quant_item_id ctx delimit) qis,
-     Util.map_filter (doc_quant_item_constr ctx env delimit) qis
+     List.filter_map (doc_quant_item_id ctx delimit) qis,
+     List.filter_map (doc_quant_item_constr ctx env delimit) qis
   | TypQ_no_forall -> [], []
 
 let typquant_names_separate ctx (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
-     Util.map_filter (quant_item_id_name ctx) qis,
-     Util.map_filter (quant_item_constr_name ctx) qis
+     List.filter_map (quant_item_id_name ctx) qis,
+     List.filter_map (quant_item_constr_name ctx) qis
   | TypQ_no_forall -> [], []
 
 
@@ -1723,8 +1723,8 @@ let doc_exp, doc_let =
                   return type, so that we can work out if we need a cast around
                   the function call. *)
             let dummy_args =
-              Util.list_mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
-                                           general_typ_of exp) args
+              List.mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
+                                      general_typ_of exp) args
             in
             let () = debug ctxt (lazy (" arg types: " ^ String.concat ", " (List.map (fun (_,ty) -> string_of_typ ty) dummy_args))) in
             let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
@@ -2313,7 +2313,8 @@ let types_used_with_generic_eq defs =
   let typs_req_fundef (FD_aux (FD_function (_,_,fcls),_)) =
     List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
   in
-  let typs_req_def = function
+  let typs_req_def (DEF_aux (aux, _) as def) =
+    match aux with
     | DEF_type _
     | DEF_val _
     | DEF_fixity _
@@ -2327,8 +2328,8 @@ let types_used_with_generic_eq defs =
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_let lb ->
        fst (Rewriter.fold_letbind alg lb)
-    | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _) as d ->
-       unreachable (def_loc d) __POS__
+    | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ ->
+       unreachable (def_loc def) __POS__
          "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
@@ -2454,8 +2455,8 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
     in
     let typqs_pp = doc_typquant_items bare_ctxt Env.empty braces typq in
     let inhabited_pp =
-      let reqs_pp = separate (break 1) (Util.map_filter doc_inhabited_req (quant_items typq)) in
-      let params_pp = separate space (Util.map_filter (quant_item_id_name bare_ctxt) (quant_items typq)) in
+      let reqs_pp = separate (break 1) (List.filter_map doc_inhabited_req (quant_items typq)) in
+      let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
       let field_pp (_,fid) = fname fid ^^ string " := inhabitant" in
       group (prefix 2 1 (group (string "#[export] Instance dummy_" ^^ type_id_pp ^/^ typqs_pp ^/^ reqs_pp ^^ colon ^/^
                                   string "Inhabited (" ^^ type_id_pp ^^ space ^^ params_pp ^^ string ") := {"))
@@ -2504,12 +2505,12 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
            | _ -> None
          in
          let typ_use_pp =
-           separate space (id_pp::Util.map_filter (quant_item_id_name bare_ctxt) (quant_items typq))
+           separate space (id_pp::List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq))
          in
          let eq_pp =
            if IdSet.mem id generic_eq_types then
              let eq_reqs_pp =
-               separate (break 1) (Util.map_filter doc_dec_eq_req (quant_items typq))
+               separate (break 1) (List.filter_map doc_dec_eq_req (quant_items typq))
              in
              string "#[export] Instance Decidable_eq_" ^^ typ_nm ^^ space ^^ eq_reqs_pp ^^ colon ^/^
                string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^
@@ -2522,7 +2523,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux(td, (l, ann
            match ar with
            | Tu_aux (Tu_ty_id(typ,example_id),_)::_ ->
               let reqs_pp =
-                separate (break 1) (Util.map_filter doc_inhabited_req (quant_items typq))
+                separate (break 1) (List.filter_map doc_inhabited_req (quant_items typq))
               in
               group (prefix 2 1 (group (string "#[export] Instance dummy_" ^^ typ_nm ^^ space ^^ reqs_pp ^^ colon ^/^
                             string "Inhabited (" ^^ typ_use_pp ^^ string ") := {"))
@@ -2639,7 +2640,7 @@ let pat_is_plain_binder env (P_aux (p,_)) =
 let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
   match pat_is_plain_binder env pat with
   | Some id ->
-     if Util.is_none (is_auto_decomposed_exist empty_ctxt env typ) (* TODO? *)
+     if Option.is_none (is_auto_decomposed_exist empty_ctxt env typ) (* TODO? *)
      then (pat,typ), fun e -> e
      else begin
        match id with
@@ -2708,7 +2709,7 @@ let mk_kid_renames avoid_target_names ids_to_avoid kids =
     | Id_aux (Id i, _) -> Some (fix_id avoid_target_names false i)
     | Id_aux (Operator _, _) -> None
   in
-  let ids = StringSet.of_list (Util.map_filter map_id (IdSet.elements ids_to_avoid)) in
+  let ids = StringSet.of_list (List.filter_map map_id (IdSet.elements ids_to_avoid)) in
   let check_kid kid (newkids,rebindings) =
     let rec check kid1 =
       let kid_string = fix_id avoid_target_names true (string_of_kid kid1) in
@@ -2788,7 +2789,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
     | Rec_aux (Rec_nonrec,_) -> demote_as_pattern
     | _ -> demote_all_patterns env
   in
-  let pats, binds = List.split (Util.list_mapi pattern_elim pats) in
+  let pats, binds = List.split (List.mapi pattern_elim pats) in
   let pats, eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
@@ -2876,7 +2877,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
         squote ^^ parens (separate space [doc_pat ctxt true true (pat, exp_typ); colon; doc_typ ctxt Env.empty typ]))
   in
   let patspp = flow_map (break 1) doc_binder pats in
-  let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
+  let atom_constrs = List.filter_map (atom_constraint ctxt) pats in
   let retpp =
     (* TODO: again, probably should provide proper environment *)
     if is_monadic
@@ -2887,7 +2888,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   let intropp, accpp, measurepp, fixupspp = match rec_opt with
     | Rec_aux (Rec_measure _,_) ->
        let fixupspp =
-         Util.map_filter (fun (pat,typ) ->
+         List.filter_map (fun (pat,typ) ->
              match pat_is_plain_binder env pat with
              | Some (Some id) -> begin
                  match destruct_exist_plain (Env.expand_synonyms env (expand_range_type typ)) with
@@ -3144,13 +3145,13 @@ let doc_axiom_typschm typ_env is_monadic l (tqs,typ) =
        arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs,typ),l))
 
-let doc_val_spec unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
+let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
   let bare_ctxt = { empty_ctxt with avoid_target_names } in
   if !opt_undef_axioms && IdSet.mem id unimplemented then
     let typ_env = env_of_annot (l,ann) in
     (* The type checker will expand the type scheme, and we need to look at the
        environment afterwards to find it. *)
-    let _, next_env = check_val_spec typ_env (strip_val_spec vs) in
+    let _, next_env = check_val_spec typ_env def_annot (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id effect_info) in
     group (separate space
@@ -3199,9 +3200,9 @@ let doc_val avoid_target_names pat exp =
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
-let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_info def =
-  match def with
-  | DEF_val v_spec -> doc_val_spec unimplemented avoid_target_names effect_info v_spec
+let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_info (DEF_aux (aux, def_annot) as def) =
+  match aux with
+  | DEF_val v_spec -> doc_val_spec def_annot unimplemented avoid_target_names effect_info v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> doc_typdef types_mod avoid_target_names generic_eq_types t_def
@@ -3227,7 +3228,7 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
     
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_type td -> string_of_id (id_of_type_def td) = "exception"
+    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
@@ -3239,21 +3240,21 @@ let find_unimplemented defs =
        IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_val (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_,id,exts,_),_)),_) -> begin
       match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end
-    | DEF_internal_mutrec fds ->
+    | DEF_aux (DEF_internal_mutrec fds, _) ->
        List.fold_left adjust_fundef unimplemented fds
-    | DEF_fundef fd -> adjust_fundef unimplemented fd
+    | DEF_aux (DEF_fundef fd, _) -> adjust_fundef unimplemented fd
     | _ -> unimplemented
   in
   List.fold_left adjust_def IdSet.empty defs
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_val (VS_aux (VS_val_spec (_,_,exts,_),_)) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_,_,exts,_),_)),_) -> begin
         match Ast_util.extern_assoc "coq" exts with
         | Some name -> StringSet.add name names
         | None -> names
@@ -3269,12 +3270,12 @@ try
     |> val_spec_ids
   in
   let is_state_def = function
-    | DEF_val vs -> IdSet.mem (id_of_val_spec vs) state_ids
-    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) state_ids
+    | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
+    | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in
   let is_typ_def = function
-    | DEF_type _ -> true
+    | DEF_aux (DEF_type _, _) -> true
     | _ -> false
   in
   let exc_typ = find_exc_typ defs in

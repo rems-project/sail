@@ -406,7 +406,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   | _ -> empty
 
 
-let tofrominterp_def def = match def with
+let tofrominterp_def (DEF_aux (aux, _)) = match aux with
   | DEF_type td -> group (frominterp_typedef td ^^ twice hardline ^^ tointerp_typedef td ^^ twice hardline)
   | _ -> empty
 

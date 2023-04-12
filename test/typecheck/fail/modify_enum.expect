@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/modify_enum.sail[0m:9.4-5:
+9[96m |[0m    A = 0b1
+ [91m |[0m    [91m^[0m
+ [91m |[0m Cannot modify immutable let-bound constant or enumeration constructor A

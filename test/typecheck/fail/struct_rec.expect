@@ -1,17 +1,17 @@
 [93mType error[0m:
-[96mstruct_rec.sail[0m:2.0-4.1:
+[96mfail/struct_rec.sail[0m:2.0-4.1:
 2[96m |[0mstruct S = {
  [91m |[0m[91m^-----------[0m
 4[96m |[0m}
  [91m |[0m[91m^[0m
  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mstruct_rec.sail[0m:3.10-11:
+ [91m |[0m [93mCaused by [0m[96mfail/struct_rec.sail[0m:3.10-11:
  [91m |[0m 3[96m |[0m  field : S
  [91m |[0m  [91m |[0m          [91m^[0m
  [91m |[0m  [91m |[0m Well-formedness check failed for type
  [91m |[0m  [91m |[0m 
- [91m |[0m  [91m |[0m [93mCaused by [0m[96mstruct_rec.sail[0m:3.10-11:
+ [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/struct_rec.sail[0m:3.10-11:
  [91m |[0m  [91m |[0m 3[96m |[0m  field : S
  [91m |[0m  [91m |[0m  [91m |[0m          [91m^[0m
  [91m |[0m  [91m |[0m Undefined type S

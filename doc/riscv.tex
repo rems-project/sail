@@ -72,9 +72,13 @@ register Xs : vector(32, dec, xlenbits)
 \sailoverloadAX
 
 We also give a function \ll{MEMr} for reading memory, this function
-just points at a builtin we have defined elsewhere.
+just points at a builtin we have defined elsewhere.  The builtin is
+very general, so we also derive a simpler \ll{read_mem} function.
 
 \sailval{MEMr}
+
+\sailvalreadMem
+\sailfnreadMem
 
 It's common when defining architecture specifications to break
 instruction semantics down into separate functions that handle

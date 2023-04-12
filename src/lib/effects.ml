@@ -131,6 +131,7 @@ let has_outcome id = EffectSet.mem (Outcome id)
 module PC_config = struct
   type t = tannot
   let typ_of_t = Type_check.typ_of_tannot
+  let add_attribute l attr arg = Type_check.map_uannot (add_attribute l attr arg)
 end
 
 module PC = Pattern_completeness.Make(PC_config)
@@ -176,12 +177,8 @@ let infer_def_direct_effects asserts_termination def =
     | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
     | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 ->
        effects := EffectSet.add Register !effects
-    | E_match (exp, cases) ->
-       let ctx = {
-           Pattern_completeness.variants = Env.get_variants env;
-           Pattern_completeness.enums = Env.get_enums env
-         } in
-       if not (PC.is_complete (fst annot) ctx cases (typ_of exp)) then (
+    | E_match (_, _) ->
+       if Option.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then (
          effects := EffectSet.add IncompleteMatch !effects
        )
     | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
@@ -209,25 +206,20 @@ let infer_def_direct_effects asserts_termination def =
                                                  rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
 
   begin match def with
-  | DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
+  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)), _) ->
      effects := EffectSet.add External !effects
-  | DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) ->
+  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) ->
      begin match funcls_info funcls with
      | Some (id, typ, env) ->
-        let cases = funcls_to_pexps funcls in
-        let ctx = {
-            Pattern_completeness.variants = Env.get_variants env;
-            Pattern_completeness.enums = Env.get_enums env
-          } in
-        if not (PC.is_complete l ctx cases typ) then (
+        if Option.is_some (get_def_attribute "incomplete" def_annot) then (
           effects := EffectSet.add IncompleteMatch !effects
         )
      | None ->
         Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
      end
-  | DEF_mapdef _ ->
+  | DEF_aux (DEF_mapdef _, _) ->
      effects := EffectSet.add IncompleteMatch !effects
-  | DEF_scattered _ ->
+  | DEF_aux (DEF_scattered _, _) ->
      effects := EffectSet.add Scattered !effects
   | _ -> ()
   end;
@@ -264,7 +256,7 @@ let infer_mapdef_extra_direct_effects def =
   in
   
   begin match def with
-  | DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) ->
+  | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) ->
      List.iter scan_mapcl mapcls
   | _ -> ()
   end;
@@ -273,7 +265,8 @@ let infer_mapdef_extra_direct_effects def =
 
 (* A top-level definition can have a side effect if it contains an
    expression which could have some side effect *)
-let can_have_direct_side_effect = function
+let can_have_direct_side_effect (DEF_aux (aux, _)) =
+  match aux with
   | DEF_type _ -> false
   | DEF_fundef _ -> true
   | DEF_mapdef _ -> false 
@@ -333,7 +326,7 @@ let infer_side_effects asserts_termination ast =
   let infer_fun_termination_assert def =
     if asserts_termination then
       match def with
-      | DEF_measure (id,_,_) ->
+      | DEF_aux (DEF_measure (id, _, _), _) ->
          fun_termination_asserts := IdSet.add id !fun_termination_asserts
       | _ -> ()
   in
@@ -341,7 +334,7 @@ let infer_side_effects asserts_termination ast =
       Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       (* Handle mapping separately to allow different effects for both directions *)
       begin match def with
-      | DEF_mapdef mdef ->
+      | DEF_aux (DEF_mapdef mdef, _) ->
          let effs = infer_def_direct_effects asserts_termination def in
          let fw, bk = infer_mapdef_extra_direct_effects def in
          let id = id_of_mapdef mdef in
@@ -414,8 +407,8 @@ let infer_side_effects asserts_termination ast =
 
 let check_side_effects effect_info ast =
   let allowed_nonexec = ref IdSet.empty in
-  List.iter (fun def ->
-      match def with
+  List.iter (fun (DEF_aux (aux, _) as def) ->
+      match aux with
       | DEF_pragma ("non_exec", name, _) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
       | DEF_let _ ->
          IdSet.iter (fun id ->
@@ -428,7 +421,7 @@ let check_side_effects effect_info ast =
            ) (ids_of_def def)
       | DEF_fundef fdef ->
          let id = id_of_fundef fdef in
-         let eff = Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Util.option_default EffectSet.empty in
+         let eff = Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Option.value ~default:EffectSet.empty in
          if non_exec eff && not (IdSet.mem id !allowed_nonexec) then
            raise (Reporting.err_general (id_loc id) ("Function " ^ string_of_id id ^ " calls function marked non-executable"))
       | _ -> ()

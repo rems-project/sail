@@ -425,7 +425,7 @@ and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
+  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)), _) :: defs
        when Id.compare id (mk_id "initialize_registers") = 0 ->
      inits
   | _ :: defs -> get_initialize_registers defs
@@ -697,7 +697,7 @@ let get_externs defs =
     | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
-    | DEF_val vs :: defs -> extern_id vs :: extern_ids defs
+    | DEF_aux (DEF_val vs, _) :: defs -> extern_id vs :: extern_ids defs
     | def :: defs -> extern_ids defs
     | [] -> []
   in
@@ -707,7 +707,7 @@ let nf_group doc =
   first_function := true;
   group doc
 
-let ocaml_def ctx def = match def with
+let ocaml_def ctx (DEF_aux (aux, _)) = match aux with
   | DEF_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | DEF_internal_mutrec fds ->
@@ -723,7 +723,7 @@ let val_spec_typs defs =
     | VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
-    | DEF_val vs :: defs -> val_spec_typ vs; vs_typs defs
+    | DEF_aux (DEF_val vs, _) :: defs -> val_spec_typ vs; vs_typs defs
     | _ :: defs -> vs_typs defs
     | [] -> []
   in
@@ -739,8 +739,8 @@ let val_spec_typs defs =
  *)
 
 let orig_types_for_ocaml_generator defs =
-  Util.map_filter (function
-      | DEF_type td -> Some td
+  List.filter_map (function
+      | DEF_aux (DEF_type td, _) -> Some td
       | _ -> None) defs
 
 let ocaml_pp_generators ctx defs orig_types required =

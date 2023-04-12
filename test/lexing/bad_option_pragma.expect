@@ -1,0 +1,3 @@
+[93mError[0m:
+[96mbad_option_pragma.sail[0m:2.17-3.0:
+ [91m |[0m Anonymous argument 'file.sail' cannot be passed via $option directive

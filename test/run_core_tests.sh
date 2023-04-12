@@ -15,13 +15,19 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.sh || returncode=1
+./lexing/run_tests.py || returncode=1
+
+printf "\n==========================================\n"
+printf "Pattern completeness tests\n"
+printf "==========================================\n"
+
+./pattern_completeness/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Typechecking tests\n"
 printf "==========================================\n"
 
-./typecheck/run_tests.sh || returncode=1
+./typecheck/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "OCaml tests\n"

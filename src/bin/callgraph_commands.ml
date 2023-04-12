@@ -153,7 +153,7 @@ let () =
       | (Function id,_) -> Some (Function id)
       | _ -> None
     in
-    let cuts = NodeMap.bindings g |> Util.map_filter keep |> NodeSet.of_list in
+    let cuts = NodeMap.bindings g |> List.filter_map keep |> NodeSet.of_list in
     let g = G.prune roots cuts g in
     { istate with ast = filter_ast_extra cuts g istate.ast !slice_keep_std }
   ) |> register_command

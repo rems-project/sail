@@ -78,7 +78,7 @@ let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
 let opt_format = ref false
-                     
+
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
@@ -246,6 +246,9 @@ let rec options = ref ([
   ( "-dmono_continue",
     Arg.Set Rewrites.opt_dmono_continue,
     " (debug) continue despite monomorphisation errors");
+  ( "-dpattern_warning_no_literals",
+    Arg.Set Pattern_completeness.opt_debug_no_literals,
+    "");
   ( "-infer_effects",
     Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
     " Ignored for compatibility with older versions; effects are always inferred now (deprecated)");
@@ -286,8 +289,7 @@ let register_default_target () =
 let run_sail tgt =
   Target.run_pre_parse_hook tgt ();
   let ast, env, effect_info = Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments in
-  Target.run_pre_descatter_hook tgt ast env;
-  let ast, env = Frontend.descatter effect_info env ast in
+  let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env =
     List.fold_right (fun file (ast, _) -> Splice.splice ast file)
       (!opt_splice) (ast, env)

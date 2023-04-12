@@ -1490,12 +1490,12 @@ let compile_funcl ctx id pat guard exp =
   [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let rec compile_def n total ctx def =
-  match def with
+let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _))
        when !opt_memo_cache ->
      let digest =
-       def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
+       strip_def def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
      in
      let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
      let cached =
@@ -1524,7 +1524,8 @@ let rec compile_def n total ctx def =
 
   | _ -> compile_def' n total ctx def
 
-and compile_def' n total ctx = function
+and compile_def' n total ctx (DEF_aux (aux, _) as def) =
+  match aux with
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
      [CDEF_register (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
@@ -1620,12 +1621,13 @@ and compile_def' n total ctx = function
   | DEF_loop_measures _ -> [], ctx
 
   | DEF_internal_mutrec fundefs ->
-     let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
+     let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef)) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
   (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
-  | (DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _) as def ->
-     Reporting.unreachable (def_loc def) __POS__ ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
+  | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
+     Reporting.unreachable (def_loc def) __POS__
+       ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def (strip_def def)))
 
 let mangle_mono_id id ctx ctyps =
   append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
@@ -1635,7 +1637,7 @@ let mangle_mono_id id ctx ctyps =
    in a future round of specialization *)
 let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
   let polymorphic_functions =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              Some id
@@ -1668,7 +1670,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
        let tyargs = List.fold_left (fun set ctyp -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty (ret_ctyp :: param_ctyps) in
        spec_tyargs := Bindings.add id tyargs !spec_tyargs;
        let specialized_specs =
-         Util.map_filter (fun instantiation ->
+         List.filter_map (fun instantiation ->
              let specialized_id = mangle_mono_id id ctx instantiation in
              if not (IdSet.mem specialized_id !specialized_calls) then (
                let substs = List.fold_left2 (fun substs tyarg ty -> KBindings.add tyarg ty substs) KBindings.empty (KidSet.elements tyargs) instantiation in
@@ -1691,7 +1693,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
     | (CDEF_fundef (id, heap_return, params, body) as orig_cdef) :: cdefs when Bindings.mem id !monomorphic_calls ->
        let tyargs = Bindings.find id !spec_tyargs in
        let specialized_fundefs =
-         Util.map_filter (fun instantiation ->
+         List.filter_map (fun instantiation ->
              let specialized_id = mangle_mono_id id ctx instantiation in
              if not (IdSet.mem specialized_id !specialized_calls) then (
                specialized_calls := IdSet.add specialized_id !specialized_calls;
@@ -1716,7 +1718,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
      unreachable from any monomorphic function *)
   let graph = callgraph cdefs in
   let monomorphic_roots =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_val (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              None
@@ -1730,7 +1732,7 @@ let rec specialize_functions ?(specialized_calls=ref IdSet.empty) ctx cdefs =
     IdSet.filter (fun id -> not (IdGraphNS.mem id monomorphic_reachable)) polymorphic_functions
   in
   let cdefs =
-    Util.map_filter (function
+    List.filter_map (function
         | CDEF_fundef (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | CDEF_val (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | cdef -> Some cdef
@@ -2026,7 +2028,7 @@ let sort_ctype_defs reverse cdefs =
 
 let toplevel_lets_of_ast ast =
   let toplevel_lets_of_def = function
-    | DEF_let (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
+    | DEF_aux (DEF_let (LB_aux (LB_val (pat, _), _)), _) -> pat_ids pat
     | _ -> IdSet.empty
   in
   let toplevel_lets_of_defs defs =

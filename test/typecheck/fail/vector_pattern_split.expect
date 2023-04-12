@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/vector_pattern_split.sail[0m:10.8-20:
+10[96m |[0m        _ : bits('n) @ _ : bits(64 - 'n) => (),
+  [91m |[0m        [91m^----------^[0m
+  [91m |[0m Could not infer constant length for vector concatenation subpattern

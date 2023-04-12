@@ -10,7 +10,7 @@ printf "\n==========================================\n"
 printf "Lem tests\n"
 printf "==========================================\n"
 
-./lem/run_tests.sh
+./lem/run_tests.py
 
 printf "\n==========================================\n"
 printf "Monomorphisation tests\n"

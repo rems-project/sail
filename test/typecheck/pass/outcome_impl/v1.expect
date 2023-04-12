@@ -1,10 +1,10 @@
 [93mType error[0m:
-[96moutcome_impl/v1.sail[0m:33.2-13:
+[96mpass/outcome_impl/v1.sail[0m:33.2-13:
 33[96m |[0m  'a = string
   [91m |[0m  [91m^---------^[0m
   [91m |[0m Cannot instantiate 'a with string, already instantiated as bits(32)
   [91m |[0m 
-  [91m |[0m [93mCaused by [0m[96moutcome_impl/v1.sail[0m:29.2-15:
+  [91m |[0m [93mCaused by [0m[96mpass/outcome_impl/v1.sail[0m:29.2-15:
   [91m |[0m 29[96m |[0m  'a = bits(32),
   [91m |[0m   [91m |[0m  [91m^-----------^[0m
   [91m |[0m   [91m |[0m Previously instantiated here

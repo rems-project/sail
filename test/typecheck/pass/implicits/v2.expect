@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mimplicits/v2.sail[0m:5.50-56:
+[96mpass/implicits/v2.sail[0m:5.50-56:
 5[96m |[0mval EXTZ : forall 'n 'm, 0 <= 'n <= 'm. (implicit('m - 1), bits('n)) -> bits('m)
  [91m |[0m                                                  [91m^----^[0m
  [91m |[0m Implicit argument must contain a single type variable

@@ -84,6 +84,12 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
+let doc_attr attr arg =
+  if arg = "" then
+    Printf.ksprintf string "$[%s]" attr ^^ space
+  else
+    Printf.ksprintf string "$[%s %s]" attr arg ^^ space
+
 let doc_kopt_no_parens = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
@@ -316,7 +322,9 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
-let rec doc_pat (P_aux (p_aux, _)) =
+let rec doc_pat (P_aux (p_aux, (_, uannot))) =
+  concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+  ^^
   match p_aux with
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
@@ -390,7 +398,9 @@ let rec get_vector_updates (E_aux (e_aux, _) as exp) =
      input, updates @ [VU_range (exp2, exp3, exp4)]
   | _ -> exp, []
 
-let rec doc_exp (E_aux (e_aux, _) as exp) =
+let rec doc_exp (E_aux (e_aux, (_, uannot)) as exp) =
+  concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+  ^^
   match e_aux with
   | E_block [] -> string "()"
   | E_block exps ->
@@ -775,10 +785,11 @@ let doc_scattered (SD_aux (sd_aux, _)) =
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
 let doc_filter = function
-  | DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _) -> false
+  | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
   | _ -> true
     
-let rec doc_def_no_hardline ?comment:(comment=false) = function
+let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, _)) =
+  match aux with
   | DEF_default df -> doc_default df
   | DEF_val v_spec -> doc_spec ~comment:comment v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -821,6 +832,9 @@ and doc_def ?comment:(comment=false) def = group (doc_def_no_hardline ~comment:c
 let doc_ast ?comment:(comment=false) { defs; _ } =
   separate_map hardline (doc_def ~comment:comment) (List.filter doc_filter defs)
 
+(* This function is intended to reformat machine-generated Sail into
+   something a bit more readable, it is not intended to be used as a
+   general purpose formatter *)
 let reformat dir { defs; _ } =
   let file_stack = ref [] in
 
@@ -860,12 +874,12 @@ let reformat dir { defs; _ } =
   in
           
   let format_def = function
-    | DEF_pragma ("file_start", path, _) -> push (Some (adjust_path path))
-    | DEF_pragma ("file_end", _, _) -> pop ()
-    | DEF_pragma ("include_start", path, _) ->
+    | DEF_aux (DEF_pragma ("file_start", path, _), _) -> push (Some (adjust_path path))
+    | DEF_aux (DEF_pragma ("file_end", _, _), _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_start", path, _), _) ->
        output_include path;
        if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_pragma ("include_end", _, _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_end", _, _), _) -> pop ()
     | def -> output_def def
   in
 

@@ -1,9 +1,9 @@
 [93mType error[0m:
-[96mduplicate_type_id2.sail[0m:3.6-10:
+[96mfail/duplicate_type_id2.sail[0m:3.6-10:
 3[96m |[0munion foo1 = { Bar2 : unit }
  [91m |[0m      [91m^--^[0m
  [91m |[0m Cannot create union type foo1, name is already bound
  [91m |[0m 
- [91m |[0m [96mduplicate_type_id2.sail[0m:1.5-9:
+ [91m |[0m [96mfail/duplicate_type_id2.sail[0m:1.5-9:
  [91m |[0m 1[96m |[0menum foo1 = Bar1
  [91m |[0m  [91m |[0m     [91m^--^[0m [91mprevious binding[0m

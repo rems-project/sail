@@ -736,7 +736,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
   | P_vector_concat [] -> eq_value (V_vector []) value, Bindings.empty
   | P_vector_concat (pat :: pats) ->
      (* We have to use the annotation on each member of the
-        vector_concat pattern to figure out it's length. Due to the
+        vector_concat pattern to figure out its length. Due to the
         recursive call that has an empty_tannot we must not use the
         annotation in the whole vector_concat pattern. *)
      let open Type_check in
@@ -781,7 +781,7 @@ let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
 let rec defs_letbinds defs =
   match defs with
   | [] -> []
-  | DEF_let lb :: defs -> lb :: defs_letbinds defs
+  | DEF_aux (DEF_let lb, _) :: defs -> lb :: defs_letbinds defs
   | _ :: defs -> defs_letbinds defs
 
 let initial_lstate =
@@ -820,7 +820,7 @@ let rec eval_frame' = function
      | Pure v, (head :: stack') when is_value v ->
         Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
      | Pure exp', _ ->
-        let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
+        let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp exp'))) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
         begin
@@ -978,7 +978,7 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) when allow_registers ->
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers ->
        begin match opt_exp with
        | None ->
           let env = Type_check.env_of_annot annot in
@@ -989,7 +989,7 @@ let rec initialize_registers allow_registers gstate =
        | Some exp ->
           { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_fundef fdef ->
+    | DEF_aux (DEF_fundef fdef, _) ->
        { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
@@ -1036,7 +1036,7 @@ let analyse_instruction state ast =
                 (E_app (mk_id "initial_analysis", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env
                 (tuple_typ [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"])
   in
-  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp typed)), state, return typed, [])
+  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp typed))), state, return typed, [])
 
 let execute_instruction state ast =
   let env = (snd state).typecheck_env in
@@ -1044,4 +1044,4 @@ let execute_instruction state ast =
   let typed = annot_exp
                 (E_app (mk_id "execute", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env unit_typ
   in
-  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp typed)), state, return typed, [])
+  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp typed))), state, return typed, [])
