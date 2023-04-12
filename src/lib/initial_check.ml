@@ -334,8 +334,6 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
        | P.P_attribute _ -> assert false
        | P.P_lit lit -> P_lit (to_ast_lit lit)
        | P.P_wild -> P_wild
-       | P.P_or (pat1, pat2) ->
-          P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
        | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
           P_as (to_ast_pat ctx pat, to_ast_id ctx id)
        | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)

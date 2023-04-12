@@ -307,7 +307,8 @@ let run_sail tgt =
 let run_sail_format () =
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
   List.iter (fun (f, (comments, parse_ast)) ->
-      Format_sail.chunk_ast comments parse_ast
+      let formatted = Format_sail.format_defs comments parse_ast in
+      print_string formatted
     ) parsed_files
   
 let feature_check () =
