@@ -88,7 +88,7 @@ let starting_line_num l = match Reporting.simp_loc l with
 let starting_column_num l = match Reporting.simp_loc l with
   | Some (s, _) -> Some (s.pos_cnum - s.pos_bol)
   | None -> None
-          
+
 let ending_line_num l = match Reporting.simp_loc l with
   | Some (_, e) -> Some e.pos_lnum
   | None -> None
@@ -105,7 +105,7 @@ type match_kind = Try_match | Match_match
 let match_keywords = function
   | Try_match -> "try", Some "catch"
   | Match_match -> "match", None
-                            
+
 let binder_keyword = function
   | Var_binder -> "var"
   | Let_binder -> "let"
@@ -125,15 +125,26 @@ type chunk =
       return_typ_opt : chunks option;
       funcls : pexp_chunks list
     }
+  | Val of {
+      is_cast : bool;
+      id : id;
+      extern_opt : extern option;
+      typq_opt : chunks option;
+      typ : chunks;
+    }
   | Function_typ of {
       mapping : bool;
       lhs : chunks;
       rhs : chunks;
     }
   | Exists of {
-      vars: chunks;
-      constr: chunks;
-      typ: chunks;
+      vars : chunks;
+      constr : chunks;
+      typ : chunks;
+    }
+  | Typ_quant of {
+      vars : chunks;
+      constr_opt : chunks option;
     }
   | App of id * chunks list
   | Field of chunks * id
@@ -211,6 +222,12 @@ let rec prerr_chunk indent = function
        ) args
   | Function fn ->
      Printf.eprintf "%sFunction:%s\n" indent (string_of_id fn.id);
+     begin match fn.typq_opt with
+     | Some typq ->
+        Printf.eprintf "%s  typq:\n" indent;
+        Queue.iter (prerr_chunk (indent ^ "    ")) typq
+     | None -> ()
+     end;
      begin match fn.return_typ_opt with
      | Some return_typ ->
         Printf.eprintf "%s  return_typ:\n" indent;
@@ -229,6 +246,9 @@ let rec prerr_chunk indent = function
          Printf.eprintf "%s  body %d:\n" indent i;
          Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body;
        ) fn.funcls
+  | Val vs ->
+     Printf.eprintf "%sVal:%s is_cast=%b has_extern=%b\n"
+       indent (string_of_id vs.id) vs.is_cast (Option.is_some vs.extern_opt)
   | Match m ->
      Printf.eprintf "%sMatch:%s %b\n" indent (fst (match_keywords m.kind)) m.aligned;
      Printf.eprintf "%s  exp:\n" indent;
@@ -251,6 +271,14 @@ let rec prerr_chunk indent = function
          Printf.eprintf "%s  %s:\n" indent name;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) [("lhs", fn_typ.lhs); ("rhs", fn_typ.rhs)]
+  | Typ_quant typq ->
+     Printf.eprintf "%sTyp_quant:\n" indent;
+     List.iter (fun (name, arg) ->
+         Printf.eprintf "%s  %s:\n" indent name;
+         Queue.iter (prerr_chunk (indent ^ "    ")) arg
+       ) (match typq.constr_opt with
+          | Some constr -> [("vars", typq.vars); ("constr", constr)]
+          | None -> [("vars", typq.vars)])
   | Pragma (pragma, arg) ->
      Printf.eprintf "%sPragma:$%s %s\n" indent pragma arg
   | Unary (op, arg) ->
@@ -318,7 +346,7 @@ let rec prerr_chunk indent = function
   | Chunks chunks ->
      Printf.eprintf "%sChunks:\n" indent;
      Queue.iter (prerr_chunk (indent ^ "  ")) chunks
- 
+
 let string_of_var (Kid_aux (Var v, _)) = v
 
 (* Pop comments preceeding location into the chunkstream *)
@@ -368,7 +396,7 @@ let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind), l)) =
   | _, _ ->
      (* No other KOpt should be parseable *)
      Reporting.unreachable l __POS__ "Invalid KOpt in formatter"
- 
+
 let chunk_of_lit (L_aux (aux, _)) =
   match aux with
   | L_unit -> Atom "()"
@@ -396,7 +424,7 @@ let rec map_peek_acc f acc = function
      x1 :: map_peek_acc f acc (x2 ::xs)
   | [x] -> [fst (f acc None x)]
   | [] -> []
-        
+
 let have_linebreak line_num1 line_num2 =
   match line_num1, line_num2 with
   | Some p1, Some p2 -> p1 < p2
@@ -406,13 +434,13 @@ let have_blank_linebreak line_num1 line_num2 =
   match line_num1, line_num2 with
   | Some p1, Some p2 -> p1 + 1 < p2
   | _, _ -> false
-          
+
 let chunk_delimit ?delim ~get_loc ~chunk comments chunks xs =
   map_peek (fun next x ->
       let l = get_loc x in
       let chunks = Queue.create () in
       chunk comments chunks x;
-      
+
       (* Add a delimiter, which is optional for the last element *)
       begin match delim with
       | Some delim ->
@@ -423,26 +451,26 @@ let chunk_delimit ?delim ~get_loc ~chunk comments chunks xs =
          )
       | None -> ()
       end;
-      
+
       (* If the next delimited expression is on a new line,
          pop any single trailing comment on the same line into
          this chunk sequence.
-              
+
          If we have multiple trailing comments like:
-             
+
          arg1 /* block comment */, // line comment
          arg2
-            
+
          the line comment will be attached to arg2, and the
          block comment to arg1 *)
       let next_line_num = Option.bind next (fun x2 -> starting_line_num (get_loc x2)) in
       if have_linebreak (ending_line_num l) next_line_num then (
         ignore (pop_trailing_comment comments chunks (ending_line_num l))
       );
-      
+
       chunks
     ) xs
- 
+
 let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   pop_comments comments chunks l;
   let rec_chunk_atyp atyp =
@@ -693,7 +721,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
            if need_spacer then (
              Queue.add (Spacer (true, 1)) chunks
            );
-           
+
            begin match block_exp with
            | Block_exp exp ->
               chunk_exp comments chunks exp;
@@ -707,7 +735,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
               let exp_chunks = rec_chunk_exp exp in
               Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
            end;
-              
+
            (* TODO: Do we need to do something different for multiple trailing comments at end of a block? *)
            let next_line_num = Option.bind next (fun bexp -> block_exp_locs bexp |> fst |> starting_line_num) in
            if have_linebreak (ending_line_num e_l) next_line_num || Option.is_none next then (
@@ -830,9 +858,40 @@ and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
      chunk_exp comments exp_chunks exp;
      (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
      ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
-     { funcl_space = true; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks } 
- 
+     { funcl_space = true; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks }
+
 let chunk_funcl comments (FCL_aux (FCL_funcl (_, pexp), _)) = chunk_pexp comments pexp
+
+let chunk_quant_item comments chunks last = function
+  | QI_aux (QI_id kopt, l) ->
+     pop_comments comments chunks l;
+     Queue.add (chunk_of_kopt kopt) chunks;
+     if not last then (
+       Queue.add (Spacer (false, 1)) chunks
+     )
+  | QI_aux (QI_constraint atyp, _) ->
+     chunk_atyp comments chunks atyp
+
+let chunk_quant_items comments chunks quant_items =
+  let is_qi_id = function
+    | QI_aux (QI_id _, _) as qi -> Ok qi
+    | QI_aux (QI_constraint _, _) as qi -> Error qi
+  in
+  let kopts, constrs = Util.map_split is_qi_id quant_items in
+  let kopt_chunks = Queue.create () in
+  Util.iter_last (chunk_quant_item comments kopt_chunks) kopts;
+  let constr_chunks_opt = match constrs with
+    | [] -> None
+    | _ ->
+       let constr_chunks = Queue.create () in
+       Util.iter_last (chunk_quant_item comments constr_chunks) constrs;
+       Some constr_chunks
+  in
+  Typ_quant {
+      vars = kopt_chunks;
+      constr_opt = constr_chunks_opt;
+    }
+  |> add_chunk chunks
 
 let chunk_tannot_opt comments (Typ_annot_opt_aux (aux, l)) =
   match aux with
@@ -841,9 +900,10 @@ let chunk_tannot_opt comments (Typ_annot_opt_aux (aux, l)) =
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
      None, Some typ_chunks
-  | Typ_annot_opt_some (typq, typ) ->
+  | Typ_annot_opt_some (TypQ_aux (TypQ_tq quant_items, _), typ) ->
      let typq_chunks = Queue.create () in
      pop_comments comments typq_chunks l;
+     chunk_quant_items comments typq_chunks quant_items;
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
      Some typq_chunks, Some typ_chunks
@@ -873,6 +933,16 @@ let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, f
        funcls = funcls;
   }) |> add_chunk chunks
 
+let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt, is_cast), l)) =
+  pop_comments comments chunks l;
+  (Val {
+       is_cast = is_cast;
+       id = id;
+       extern_opt = extern_opt;
+       typq_opt = None;
+       typ = Queue.create ();
+  }) |> add_chunk chunks
+
 let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
   pop_comments comments chunks l;
   let def_chunks = Queue.create () in
@@ -882,7 +952,7 @@ let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as ty
   let id_chunks = Queue.create () in
   pop_comments comments id_chunks (id_loc id);
   Queue.push (Atom (string_of_id id)) id_chunks;
- 
+
   let typ_chunks = Queue.create () in
   chunk_atyp comments typ_chunks typ;
   let skip_spacer = match opt_exp with
@@ -958,6 +1028,8 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
      chunk_register comments chunks reg
   | DEF_let lb ->
      chunk_toplevel_let l comments chunks lb
+  | DEF_val vs ->
+     chunk_val_spec comments chunks vs
   end;
   (* Adjust the line span of a pragma to a single line so the spacing works out *)
   if not !pragma_span then (
@@ -965,7 +1037,7 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
   ) else (
     fst line_span, fst line_span
   )
-  
+
 let chunk_defs comments defs =
   let comments = Stack.of_seq (List.to_seq comments) in
   let chunks = Queue.create () in

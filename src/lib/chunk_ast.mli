@@ -97,6 +97,13 @@ type chunk =
       return_typ_opt : chunks option;
       funcls : pexp_chunks list
     }
+  | Val of {
+      is_cast : bool;
+      id : Parse_ast.id;
+      extern_opt : Parse_ast.extern option;
+      typq_opt : chunks option;
+      typ : chunks;
+    }
   | Function_typ of {
       mapping : bool;
       lhs : chunks;
@@ -106,6 +113,10 @@ type chunk =
       vars: chunks;
       constr: chunks;
       typ: chunks;
+    }
+  | Typ_quant of {
+      vars : chunks;
+      constr_opt : chunks option;
     }
   | App of Parse_ast.id * chunks list
   | Field of chunks * Parse_ast.id

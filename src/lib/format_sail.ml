@@ -87,11 +87,14 @@ let rec map_sep_last ~default:d ~last:g f = function
      let x = f x in
      let xs, l = map_sep_last ~default:d ~last:g f xs in
      (x :: xs, l)
-     
+
 let line_comment_opt = function
   | Comment (Lexer.Comment_line, _, contents) -> Some contents
   | _ -> None
 
+(** We implement a small wrapper around a subset of the PPrint API to
+    track line breaks and dedents (points where the indentation level
+    decreases), re-implementing a few core combinators. *)
 module PPrintWrapper = struct
   type document =
     | Empty
@@ -105,17 +108,17 @@ module PPrintWrapper = struct
     | Hardline
     | Ifflat of document * document
     | Blank of int
-           
+
   type linebreak_info = {
       hardlines : (int * int) Queue.t;
-      dedents: (int * int) Queue.t;
+      dedents: (int * int * int) Queue.t;
     }
 
-  let empty_lb_info () = {
+  let empty_linebreak_info () = {
       hardlines = Queue.create ();
       dedents = Queue.create ();
     }
-  
+
   let rec to_pprint lb_info =
     let open PPrint in
     function
@@ -131,10 +134,10 @@ module PPrintWrapper = struct
        group (to_pprint lb_info doc)
     | Nest (n, doc) ->
        let doc = to_pprint lb_info doc in
-       range (fun (_, e) -> Queue.add e lb_info.dedents) (nest n doc)
+       ifflat (nest n doc) (range (fun (_, (l, c)) -> Queue.add (l, c, n) lb_info.dedents) (nest n doc))
     | Align doc ->
        let doc = to_pprint lb_info doc in
-       range (fun (_, e) -> Queue.add e lb_info.dedents) (align doc)
+       ifflat (align doc) (range (fun ((_, amount), (l, c)) -> Queue.add (l, c, amount) lb_info.dedents) (align doc))
     | Cat (doc1, doc2) ->
        let doc1 = to_pprint lb_info doc1 in
        let doc2 = to_pprint lb_info doc2 in
@@ -149,7 +152,7 @@ module PPrintWrapper = struct
        blank n
 
   let break n = Ifflat (Blank n, Hardline)
-  
+
   let (^^) doc1 doc2 =
     match doc1, doc2 with
     | Empty, _ -> doc2
@@ -157,7 +160,7 @@ module PPrintWrapper = struct
     | _, _ -> Cat (doc1, doc2)
 
   let empty = Empty
-  
+
   let hardline = Hardline
 
   let nest n doc = Nest (n, doc)
@@ -169,71 +172,44 @@ module PPrintWrapper = struct
   let string s = String s
 
   let utf8string s = Utf8string s
-  
+
   let group doc = Group doc
 
   let blank n = Blank n
-  
-  let comma = char ','
+
   let space = char ' '
 
   let enclose l r x = l ^^ x ^^ r
+
   let parens = enclose (char '(') (char ')')
 
   let ifflat doc1 doc2 = Ifflat (doc1, doc2)
 
-  let fold_lefti f acc xs =
-    let n = ref 0 in
-    List.fold_left (fun acc x ->
-        let x' = f !n acc x in
-        incr n;
-        x'
-      ) acc xs
-
   let concat = List.fold_left (^^) Empty
-  
+
   let separate_map sep f xs =
-    fold_lefti (fun n acc x ->
+    Util.fold_left_index (fun n acc x ->
         if n = 0 then f x else acc ^^ sep ^^ f x
       ) Empty xs
 
   let separate sep xs = separate_map sep (fun x -> x) xs
-  
-  (* Comma separation, but with a trailing comma if non-flat *)
-  let comma_sep_trailing f xs = separate_map (comma ^^ break 1) f xs ^^ ifflat empty (comma ^^ hardline) 
-
-  let fold_left_index_last f init xs =
-    let rec go acc n = function
-      | [] -> acc
-      | [x] -> f true n acc x
-      | x :: xs -> go (f false n acc x) (n + 1) xs
-    in
-    go init 0 xs
-
-  let separate_map_last sep f xs =
-    fold_left_index_last (fun last i acc x ->
-        if i = 0 then
-          f last x
-        else
-          acc ^^ sep ^^ f last x
-      ) empty xs
 
   let concat_map_last f xs =
-    fold_left_index_last (fun last i acc x ->
-        if i = 0 then
+    Util.fold_left_index_last (fun n last acc x ->
+        if n = 0 then
           f last x
         else
           acc ^^ f last x
-      ) empty xs
+      ) Empty xs
 
   let prefix n b x y =
-    group (x ^^ nest n (break b ^^ y))
-  
+    Group (x ^^ Nest (n, break b ^^ y))
+
   let infix n b op x y =
-    prefix n b (x ^^ blank b ^^ op) y
-  
+    prefix n b (x ^^ Blank b ^^ op) y
+
   let surround n b opening contents closing =
-    group (opening ^^ nest n (break b ^^ contents) ^^ break b ^^ closing )
+    opening ^^ Nest (n, break b ^^ contents) ^^ break b ^^ closing
 
   let twice doc = doc ^^ doc
 
@@ -247,7 +223,7 @@ module PPrintWrapper = struct
     go n empty
 
   let lines s = List.map string (Util.split_on_char '\n' s)
-  
+
 end
 
 open PPrintWrapper
@@ -256,12 +232,13 @@ let doc_id (Id_aux (id_aux, _)) =
   string (match id_aux with
           | Id v -> v
           | Operator op -> "operator " ^ op)
- 
 
 type opts = {
-    (* Controls the bracketing of operators by underapproximating the precedence level of the grammar as we print *)
+    (* Controls the bracketing of operators by underapproximating the
+       precedence level of the grammar as we print *)
     precedence : int;
-    (* True if we are in a statement-like context. Controls how if-then-else statements are formatted *)
+    (* True if we are in a statement-like context. Controls how
+       if-then-else statements are formatted *)
     statement : bool
   }
 
@@ -270,13 +247,16 @@ let default_opts = {
     statement = true
   }
 
-(* atomic lowers the allowed precedence of binary operators to zero, forcing them to always be bracketed *)
+(* atomic lowers the allowed precedence of binary operators to zero,
+   forcing them to always be bracketed *)
 let atomic opts = { opts with precedence = 0 }
 
-(* nonatomic raises the allowed precedence to the maximum, so nothing is bracketed. *)               
+(* nonatomic raises the allowed precedence to the maximum, so nothing
+   is bracketed. *)
 let nonatomic opts = { opts with precedence = 10 }
 
-(* subatomic forces even some atomic constructs to be bracketed, by setting the allowed precedence below zero *)
+(* subatomic forces even some atomic constructs to be bracketed, by
+   setting the allowed precedence below zero *)
 let subatomic opts = { opts with precedence = -1 }
 
 let atomic_parens opts doc = if opts.precedence <> 10 then parens doc else doc
@@ -300,7 +280,7 @@ let atomic_parens opts doc = if opts.precedence <> 10 then parens doc else doc
 let expression_like opts = { opts with statement = false }
 
 let statement_like opts = { opts with statement = true }
-                           
+
 let operator_precedence = function
   | "=" -> 10, atomic, nonatomic 
   | ":" -> 0, subatomic, subatomic
@@ -310,43 +290,22 @@ let ternary_operator_precedence = function
   | ("..", "=") -> 0, atomic, atomic, nonatomic
   | (":", "=") -> 0, atomic, nonatomic, nonatomic
   | _ -> 10, subatomic, subatomic, subatomic
-       
+
 let opt_delim s = ifflat empty (string s)
 
 let softline = break 0
 
 let prefix_parens n x y =
-  group (x ^^ ifflat space (space ^^ char '(') ^^ nest n (softline ^^ y) ^^ softline ^^ ifflat empty (char ')'))
-             
+  x ^^ ifflat space (space ^^ char '(') ^^ nest n (softline ^^ y) ^^ softline ^^ ifflat empty (char ')')
+
 let chunk_inserts_trailing_hardline = function
   | Comment (Lexer.Comment_line, _, _) -> true
   | _ -> false
 
-(* This function inserts linebreaks (b) in a sequence of documents
-   produced by a function f, which can either be hardlines or
-   softlines.
-
-   However, we want to avoid inserting additional linebreaks after
-   line comments, so f returns both a document and boolean indicating
-   whether (a hard) linebreak has already been introduced. *)
-let rec broken b f = function
-  | [] -> empty
-  | [x] -> let doc, _ = f x in doc
-  | x :: xs ->
-     let doc, already_have_hardline = f x in
-     doc ^^ (if already_have_hardline then empty else b) ^^ broken b f xs
-
-let rec softbroken_sep sep f = function
-  | [] -> empty
-  | [x] -> let doc, _ = f x in doc
-  | x :: xs ->
-     let doc, already_have_hardline = f x in
-     doc ^^ (if already_have_hardline then sep else (break 1 ^^ sep)) ^^ space ^^ softbroken_sep sep f xs
-
 let surround_hardline h n b opening contents closing =
   let b = if h then hardline else break b in
   group (opening ^^ nest n (b ^^ contents) ^^ b ^^ closing)
-     
+
 let rec doc_chunk ?toplevel:(toplevel=false) opts = function
   | Atom s -> string s
   | Chunks chunks -> doc_chunks opts chunks
@@ -356,12 +315,11 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      utf8string ("\"" ^ String.escaped s ^ "\"")
   | App (id, args) ->
      doc_id id
-     ^^ surround tabwidth 0 (char '(') (broken softline (doc_chunks_linebreak (opts |> nonatomic |> expression_like)) args) (char ')')
+     ^^ surround tabwidth 0 (char '(') (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args) (char ')')
   | Tuple (l, r, spacing, args) ->
-     surround tabwidth spacing (string l) (broken softline (doc_chunks_linebreak (nonatomic opts)) args) (string r)
+     surround tabwidth spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r)
   | Intersperse (op, args) ->
-     prerr_endline op;
-     group (softbroken_sep (string op) (doc_chunks_linebreak (atomic opts)) args)
+     group (separate_map (string op) (doc_chunks (atomic opts)) args)
   | Spacer (line, n) ->
      if line then
        repeat n hardline
@@ -425,7 +383,7 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      let exp_doc = doc_chunks opts exp in
      surround tabwidth 0
        (char '[' ^^ exp_doc ^^ space ^^ string "with" ^^ space)
-       (group (separate_map (comma ^^ break 1) (doc_chunk opts) updates))
+       (group (separate_map (char ',' ^^ break 1) (doc_chunk opts) updates))
        (char ']')
      |> atomic_parens opts
   | Index (exp, ix) ->
@@ -436,12 +394,25 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
   | Exists ex ->
      let ex_doc =
        doc_chunks (atomic opts) ex.vars
-       ^^ comma ^^ break 1
+       ^^ char ',' ^^ break 1
        ^^ doc_chunks (nonatomic opts) ex.constr
        ^^ char '.' ^^ break 1
        ^^ doc_chunks (nonatomic opts) ex.typ
      in
      enclose (char '{') (char '}') (align ex_doc)
+  | Typ_quant typq ->
+     group (
+         align (
+             string "forall" ^^ space
+             ^^ nest 2 (
+                    doc_chunks opts typq.vars
+                    ^^ (match typq.constr_opt with
+                        | None -> char '.'
+                        | Some constr -> char ',' ^^ break 1 ^^ doc_chunks opts constr ^^ char '.')
+                  )
+           )
+         ^^ break 1
+       )
   | Comment (comment_type, n, contents) ->
      begin match comment_type with
      | Lexer.Comment_line ->
@@ -465,7 +436,18 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
        | [funcl] -> doc_funcl f.return_typ_opt opts funcl
        | funcl :: funcls ->
           doc_funcl f.return_typ_opt opts funcl ^^ sep ^^ separate_map sep (doc_funcl None opts) f.funcls in
-     string "function" ^^ space ^^ doc_id f.id ^^ clauses ^^ hardline
+     string "function" ^^ space ^^ doc_id f.id
+     ^^ (match f.typq_opt with Some typq -> space ^^ doc_chunks opts typq | None -> empty)
+     ^^ clauses ^^ hardline
+  | Val vs ->
+     let doc_binding (target, name) = string target ^^ char ':' ^^ space ^^ char '"' ^^ utf8string name ^^ char '"' in
+     string "val" ^^ space ^^ (if vs.is_cast then string "cast" ^^ space else empty) ^^ doc_id vs.id ^^ space
+     ^^ group (match vs.extern_opt with
+               | Some extern ->
+                  char '=' ^^ space
+                  ^^ string (if extern.pure then "pure" else "monadic") ^^ space
+                  ^^ surround tabwidth 1 (char '{') (separate_map (break 1) doc_binding extern.bindings) (char '}')
+               | None -> empty)
   | Pragma (pragma, arg) ->
      string "$pragma" ^^ space ^^ string arg ^^ hardline
   | Block (always_hardline, exps) ->
@@ -485,24 +467,23 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      let kw1, kw2 = match_keywords m.kind in
      string kw1 ^^ space ^^ doc_chunks (nonatomic opts) m.exp
      ^^ (Option.fold ~none:empty ~some:(fun k -> space ^^ string k) kw2) ^^ space
-     ^^ surround tabwidth 1 (char '{') (broken hardline (doc_pexp_chunks opts) m.cases) (char '}')
+     ^^ surround tabwidth 1 (char '{') (separate_map hardline (doc_pexp_chunks opts) m.cases) (char '}')
      |> atomic_parens opts
   | Field (exp, id) ->
      doc_chunks (subatomic opts) exp ^^ char '.' ^^ doc_id id
 
 and doc_pexp_chunks_pair opts pexp =
   let pat = doc_chunks opts pexp.pat in
-  let body, ih = doc_chunks_linebreak opts pexp.body in
+  let body = doc_chunks opts pexp.body in
   match pexp.guard with
-  | None -> pat, body, ih
+  | None -> pat, body
   | Some guard ->
      separate space [pat; string "if"; doc_chunks opts guard],
-     body,
-     ih
+     body
 
 and doc_pexp_chunks opts pexp =
-  let guarded_pat, body, ih = doc_pexp_chunks_pair opts pexp in
-  separate space [guarded_pat; string "=>"; body], ih
+  let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
+  separate space [guarded_pat; string "=>"; body]
 
 and doc_funcl return_typ_opt opts pexp =
   let return_typ = match return_typ_opt with
@@ -511,8 +492,10 @@ and doc_funcl return_typ_opt opts pexp =
   match pexp.guard with
   | None ->
      (if pexp.funcl_space then space else empty)
-     ^^ doc_chunks opts pexp.pat
-     ^^ return_typ
+     ^^ group (
+            doc_chunks opts pexp.pat
+            ^^ return_typ
+          )
      ^^ string "="
      ^^ space ^^ doc_chunks opts pexp.body
   | Some guard ->
@@ -521,11 +504,14 @@ and doc_funcl return_typ_opt opts pexp =
      ^^ string "="
      ^^ space ^^ doc_chunks opts pexp.body
 
-(* Format an expression in a block, optionally terminating it with a semicolon. If the expression has a trailing comment then we will format as:
+(* Format an expression in a block, optionally terminating it with a
+   semicolon. If the expression has a trailing comment then we will
+   format as:
 
    doc; // comment
 
-   In this case a hardline must be inserted by the block formatter, so we return and additional boolean to indicate this. *)
+   In this case a hardline must be inserted by the block formatter, so
+   we return and additional boolean to indicate this. *)
 and doc_block_exp_chunks opts no_semi chunks =
   let chunks = Queue.to_seq chunks |> List.of_seq in
   let requires_hardline = ref false in
@@ -542,32 +528,19 @@ and doc_block_exp_chunks opts no_semi chunks =
           doc_chunk opts chunk
       ) chunks in
   (group doc, !requires_hardline)
- 
-and doc_chunks_linebreak opts chunks =
-  let chunks = Queue.to_seq chunks |> List.of_seq in
-  (* Push optional trailing delimiters out of the group so they respect the enclosing flatness *)
-  let is_opt_delim = function
-    | Opt_delim s -> true
-    | chunk -> false in
-  let docs =
-    List.rev_map (fun c ->
-        (doc_chunk opts c, is_opt_delim c, chunk_inserts_trailing_hardline c)
-      ) chunks in
-  let get_doc (doc, _, _) = doc in
-  let inserts_hardline (_, _, ih) = ih in
-  match docs with
-  | [] -> empty, false
-  | (last_doc, d, ih) :: docs ->
-     let docs = concat (List.rev_map get_doc docs) in
-     let doc = if d then group docs ^^ last_doc else group (docs ^^ last_doc) in
-     doc, ih
 
-and doc_chunks opts chunks = fst (doc_chunks_linebreak opts chunks)
-    
+and doc_chunks opts chunks =
+  Queue.fold (fun doc chunk ->
+      doc ^^ doc_chunk opts chunk
+    ) empty chunks
+
 let to_string doc =
   let b = Buffer.create 1024 in
-  let lb_info = empty_lb_info () in
+  let lb_info = empty_linebreak_info () in
   PPrint.ToBuffer.pretty 1. 80 b (to_pprint lb_info doc);
+  Queue.iter (fun (l, c, n) ->
+      Printf.eprintf "Dedent %d:%d:%d\n" l c n
+    ) lb_info.dedents;
   Buffer.contents b, lb_info
 
 let fixup lb_info s =
@@ -576,19 +549,24 @@ let fixup lb_info s =
   let line = ref 0 in
   let space_after_hardline = ref None in
   String.iter (fun c ->
-      begin match Queue.peek_opt lb_info.dedents with
-      | Some (l, c) when l = !line && c = !column ->
-         begin match !space_after_hardline with
-         | Some n -> space_after_hardline := Some (n - 4)
-         | None -> ()
-         end;
-         (* Buffer.add_string buf Util.("D" |> green |> clear); *)
-         ignore (Queue.pop lb_info.dedents)
-      | _ -> ();
-      end;
+      Printf.eprintf "%d:%d\n" !line !column;
+      let rec pop_dedents () =
+        begin match Queue.peek_opt lb_info.dedents with
+        | Some (l, c, amount) when l = !line && c = !column ->
+           begin match !space_after_hardline with
+           | Some n -> space_after_hardline := Some (n - 4)
+           | None -> ()
+           end;
+           Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear);
+           ignore (Queue.pop lb_info.dedents);
+           pop_dedents ()
+        | _ -> ();
+        end
+      in
+      pop_dedents ();
       begin match Queue.peek_opt lb_info.hardlines with
       | Some (l, c) when l = !line && c = !column ->
-         (* Buffer.add_string buf Util.("H" |> red |> clear); *)
+         Buffer.add_string buf Util.("H" |> red |> clear);
          space_after_hardline := Some 0;
          ignore (Queue.pop lb_info.hardlines)
       | _ -> ();
@@ -605,7 +583,7 @@ let fixup lb_info s =
         incr column
       ) else (
         begin match !space_after_hardline with
-        | Some n when n > 0 -> Buffer.add_string buf (String.make n ' ')
+        | Some n when n > 0 -> Buffer.add_string buf (String.make n ' ');
         | _ -> ()
         end;
         space_after_hardline := None;
@@ -614,10 +592,11 @@ let fixup lb_info s =
       )
     ) s;
   Buffer.contents buf
-  
+
 let format_defs comments defs =
   let chunks = chunk_defs comments defs in
   Queue.iter (prerr_chunk "") chunks;
   let doc = Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
   let s, lb_info = to_string (doc ^^ hardline) in
-  fixup lb_info s
+  let s = fixup lb_info s in
+  s

@@ -231,7 +231,7 @@ let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
 let fix_extern typschm = function
   | None -> None
   | Some extern -> Some { extern with pure = typschm_is_pure typschm }
-       
+
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
