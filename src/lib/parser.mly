@@ -1247,12 +1247,24 @@ funcl_typ:
     { mk_tannot mk_typqn $1 $startpos $endpos }
 
 index_range:
+  | paren_index_range At index_range
+    { mk_ir (BF_concat ($1, $3)) $startpos $endpos }
+  | paren_index_range
+    { $1 }
+
+paren_index_range:
+  | Lparen paren_index_range At index_range Rparen
+    { mk_ir (BF_concat ($2, $4)) $startpos $endpos }
+  | atomic_index_range
+    { $1 }
+
+atomic_index_range:
   | typ
     { mk_ir (BF_single $1) $startpos $endpos }
   | typ DotDot typ
     { mk_ir (BF_range ($1, $3)) $startpos $endpos }
-  | Lparen index_range At index_range Rparen
-    { mk_ir (BF_concat ($2, $4)) $startpos $endpos }
+  | Lparen typ DotDot typ Rparen
+    { mk_ir (BF_range ($2, $4)) $startpos $endpos }
 
 r_id_def:
   | id Colon index_range

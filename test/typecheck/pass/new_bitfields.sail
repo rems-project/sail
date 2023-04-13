@@ -2,9 +2,36 @@ default Order dec
 
 $include <prelude.sail>
 
+// We have a few variations of the same bitfield:
+
 bitfield B : bits(32) = {
   Field0: (31..16 @ 7..0),
   Field1: 15..8
+}
+
+bitfield B2 : bits(32) = {
+  Field0: 31..16 @ 7..0,
+  Field1: 15..8
+}
+
+bitfield B3 : bits(32) = {
+  Field0: 31..16 @ 7..0,
+  Field1: 15..8,
+}
+
+bitfield B4 : bits(32) = {
+  Field0: 31..16 @ 7..4 @ 3..0,
+  Field1: 15..8,
+}
+
+bitfield B5 : bits(32) = {
+  Field0: (31..16) @ 7..4 @ 3..0,
+  Field1: 15..8,
+}
+
+bitfield B6 : bits(32) = {
+  Field0: ((31..16) @ 7..4) @ 3..0,
+  Field1: 15..8,
 }
 
 register R : B
