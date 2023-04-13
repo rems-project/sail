@@ -872,7 +872,8 @@ let chunk_quant_item comments chunks last = function
   | QI_aux (QI_constraint atyp, _) ->
      chunk_atyp comments chunks atyp
 
-let chunk_quant_items comments chunks quant_items =
+let chunk_quant_items l comments chunks quant_items =
+  pop_comments comments chunks l;
   let is_qi_id = function
     | QI_aux (QI_id _, _) as qi -> Ok qi
     | QI_aux (QI_constraint _, _) as qi -> Error qi
@@ -902,8 +903,7 @@ let chunk_tannot_opt comments (Typ_annot_opt_aux (aux, l)) =
      None, Some typ_chunks
   | Typ_annot_opt_some (TypQ_aux (TypQ_tq quant_items, _), typ) ->
      let typq_chunks = Queue.create () in
-     pop_comments comments typq_chunks l;
-     chunk_quant_items comments typq_chunks quant_items;
+     chunk_quant_items l comments typq_chunks quant_items;
      let typ_chunks = Queue.create () in
      chunk_atyp comments typ_chunks typ;
      Some typq_chunks, Some typ_chunks
@@ -935,13 +935,26 @@ let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, f
 
 let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt, is_cast), l)) =
   pop_comments comments chunks l;
-  (Val {
-       is_cast = is_cast;
-       id = id;
-       extern_opt = extern_opt;
-       typq_opt = None;
-       typ = Queue.create ();
-  }) |> add_chunk chunks
+  let typq_chunks_opt, typ = match typschm with
+    | TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_no_forall, _), typ), _) ->
+       None, typ
+    | TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_tq quant_items, _), typ), l) ->
+       let typq_chunks = Queue.create () in
+       chunk_quant_items l comments typq_chunks quant_items;
+       Some typq_chunks, typ
+  in
+  let typ_chunks = Queue.create () in
+  chunk_atyp comments typ_chunks typ;
+  add_chunk chunks (Val {
+      is_cast = is_cast;
+      id = id;
+      extern_opt = extern_opt;
+      typq_opt = typq_chunks_opt;
+      typ = typ_chunks;
+    });
+  if not (pop_trailing_comment ~space:1 comments chunks (ending_line_num l)) then (
+    Queue.push (Spacer (true, 1)) chunks
+  )
 
 let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
   pop_comments comments chunks l;

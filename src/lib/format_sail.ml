@@ -106,16 +106,18 @@ module PPrintWrapper = struct
     | Align of document
     | Cat of document * document
     | Hardline
+    | Require_hardline
     | Ifflat of document * document
-    | Blank of int
 
   type linebreak_info = {
       hardlines : (int * int) Queue.t;
+      require_hardlines : (int * int) Queue.t;
       dedents: (int * int * int) Queue.t;
     }
 
   let empty_linebreak_info () = {
       hardlines = Queue.create ();
+      require_hardlines = Queue.create ();
       dedents = Queue.create ();
     }
 
@@ -144,14 +146,12 @@ module PPrintWrapper = struct
        doc1 ^^ doc2
     | Hardline ->
        range (fun (e, _) -> Queue.add e lb_info.hardlines) hardline
+    | Require_hardline ->
+       range (fun (e, _) -> Queue.add e lb_info.require_hardlines) hardline
     | Ifflat (doc1, doc2) ->
        let doc1 = to_pprint lb_info doc1 in
        let doc2 = to_pprint lb_info doc2 in
        ifflat doc1 doc2
-    | Blank n ->
-       blank n
-
-  let break n = Ifflat (Blank n, Hardline)
 
   let (^^) doc1 doc2 =
     match doc1, doc2 with
@@ -159,9 +159,24 @@ module PPrintWrapper = struct
     | _, Empty -> doc1
     | _, _ -> Cat (doc1, doc2)
 
+  let repeat n doc =
+    let rec go n acc =
+      if n = 0 then
+        acc
+      else
+        go (n - 1) (doc ^^ acc)
+    in
+    go n Empty
+
+  let blank n = repeat n (Char ' ')
+
+  let break n = Ifflat (blank n, Hardline)
+
   let empty = Empty
 
   let hardline = Hardline
+
+  let require_hardline = Require_hardline
 
   let nest n doc = Nest (n, doc)
 
@@ -174,8 +189,6 @@ module PPrintWrapper = struct
   let utf8string s = Utf8string s
 
   let group doc = Group doc
-
-  let blank n = Blank n
 
   let space = char ' '
 
@@ -206,7 +219,7 @@ module PPrintWrapper = struct
     Group (x ^^ Nest (n, break b ^^ y))
 
   let infix n b op x y =
-    prefix n b (x ^^ Blank b ^^ op) y
+    prefix n b (x ^^ blank b ^^ op) y
 
   let surround n b opening contents closing =
     opening ^^ Nest (n, break b ^^ contents) ^^ break b ^^ closing
@@ -302,11 +315,13 @@ let chunk_inserts_trailing_hardline = function
   | Comment (Lexer.Comment_line, _, _) -> true
   | _ -> false
 
+"%%" "%n"
+
 let surround_hardline h n b opening contents closing =
   let b = if h then hardline else break b in
   group (opening ^^ nest n (b ^^ contents) ^^ b ^^ closing)
 
-let rec doc_chunk ?toplevel:(toplevel=false) opts = function
+let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
   | Atom s -> string s
   | Chunks chunks -> doc_chunks opts chunks
   | Delim s -> string s ^^ space
@@ -315,9 +330,10 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      utf8string ("\"" ^ String.escaped s ^ "\"")
   | App (id, args) ->
      doc_id id
-     ^^ surround tabwidth 0 (char '(') (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args) (char ')')
+     ^^ group (surround tabwidth 0 (char '(') (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args) (char ')'))
   | Tuple (l, r, spacing, args) ->
-     surround tabwidth spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r)
+     let group_fn = if ungroup_tuple then (fun x -> x) else group in
+     group_fn (surround tabwidth spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r))
   | Intersperse (op, args) ->
      group (separate_map (string op) (doc_chunks (atomic opts)) args)
   | Spacer (line, n) ->
@@ -400,6 +416,12 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
        ^^ doc_chunks (nonatomic opts) ex.typ
      in
      enclose (char '{') (char '}') (align ex_doc)
+  | Function_typ ft ->
+     separate space [
+       doc_chunks opts ft.lhs;
+       if ft.mapping then string "<->" else string "->";
+       doc_chunks opts ft.rhs
+     ]
   | Typ_quant typq ->
      group (
          align (
@@ -441,20 +463,24 @@ let rec doc_chunk ?toplevel:(toplevel=false) opts = function
      ^^ clauses ^^ hardline
   | Val vs ->
      let doc_binding (target, name) = string target ^^ char ':' ^^ space ^^ char '"' ^^ utf8string name ^^ char '"' in
-     string "val" ^^ space ^^ (if vs.is_cast then string "cast" ^^ space else empty) ^^ doc_id vs.id ^^ space
+     string "val" ^^ space ^^ (if vs.is_cast then string "cast" ^^ space else empty) ^^ doc_id vs.id
      ^^ group (match vs.extern_opt with
                | Some extern ->
-                  char '=' ^^ space
+                 space ^^ char '=' ^^ space
                   ^^ string (if extern.pure then "pure" else "monadic") ^^ space
-                  ^^ surround tabwidth 1 (char '{') (separate_map (break 1) doc_binding extern.bindings) (char '}')
+                  ^^ surround tabwidth 1 (char '{') (separate_map (char ',' ^^ break 1) doc_binding extern.bindings) (char '}')
                | None -> empty)
+     ^^ space ^^ char ':'
+     ^^ (match vs.typq_opt with
+         | Some typq -> space ^^ doc_chunks opts typq
+         | None -> empty)
+     ^^ space ^^ doc_chunks opts vs.typ
   | Pragma (pragma, arg) ->
      string "$pragma" ^^ space ^^ string arg ^^ hardline
   | Block (always_hardline, exps) ->
      let exps = map_last (fun no_semi chunks -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks) exps in
-     let require_hardline = always_hardline || List.exists snd exps in
+     let sep = if (always_hardline || List.exists snd exps) then hardline else break 1 in
      let exps = List.map fst exps in
-     let sep = if require_hardline then hardline else break 1 in
      surround_hardline always_hardline tabwidth 1 (char '{') (separate sep exps) (char '}')
      |> atomic_parens opts
   | Block_binder (binder, x, y) ->
@@ -493,7 +519,7 @@ and doc_funcl return_typ_opt opts pexp =
   | None ->
      (if pexp.funcl_space then space else empty)
      ^^ group (
-            doc_chunks opts pexp.pat
+            doc_chunks ~ungroup_tuple:true opts pexp.pat
             ^^ return_typ
           )
      ^^ string "="
@@ -522,26 +548,29 @@ and doc_block_exp_chunks opts no_semi chunks =
           match line_comment_opt chunk with
           | Some contents ->
              requires_hardline := true;
-             terminator ^^ space ^^ string "//" ^^ string contents
+             terminator ^^ space ^^ string "//" ^^ string contents ^^ require_hardline
           | None -> doc_chunk opts chunk ^^ terminator
         else
           doc_chunk opts chunk
       ) chunks in
   (group doc, !requires_hardline)
 
-and doc_chunks opts chunks =
+and doc_chunks ?(ungroup_tuple=false) opts chunks =
   Queue.fold (fun doc chunk ->
-      doc ^^ doc_chunk opts chunk
+      doc ^^ doc_chunk ~ungroup_tuple:ungroup_tuple opts chunk
     ) empty chunks
 
 let to_string doc =
   let b = Buffer.create 1024 in
   let lb_info = empty_linebreak_info () in
   PPrint.ToBuffer.pretty 1. 80 b (to_pprint lb_info doc);
-  Queue.iter (fun (l, c, n) ->
-      Printf.eprintf "Dedent %d:%d:%d\n" l c n
-    ) lb_info.dedents;
+  Queue.iter (fun (l, c) ->
+      Printf.eprintf "Hardline %d:%d\n" l c
+    ) lb_info.hardlines;
   Buffer.contents b, lb_info
+
+let backspace buf =
+  Buffer.truncate buf (Buffer.length buf - 1)
 
 let fixup lb_info s =
   let buf = Buffer.create (String.length s) in
@@ -552,7 +581,7 @@ let fixup lb_info s =
       Printf.eprintf "%d:%d\n" !line !column;
       let rec pop_dedents () =
         begin match Queue.peek_opt lb_info.dedents with
-        | Some (l, c, amount) when l = !line && c = !column ->
+        | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
            begin match !space_after_hardline with
            | Some n -> space_after_hardline := Some (n - 4)
            | None -> ()
@@ -564,13 +593,26 @@ let fixup lb_info s =
         end
       in
       pop_dedents ();
-      begin match Queue.peek_opt lb_info.hardlines with
-      | Some (l, c) when l = !line && c = !column ->
-         Buffer.add_string buf Util.("H" |> red |> clear);
-         space_after_hardline := Some 0;
-         ignore (Queue.pop lb_info.hardlines)
-      | _ -> ();
-      end;
+
+      let rec pop_hardlines ch h =
+        begin match Queue.peek_opt h with
+          | Some (l, c) when l < !line || (l = !line && c = !column) ->
+             if l < !line then (
+               backspace buf;
+               Buffer.add_string buf Util.(("B" ^ ch) |> red |> clear);
+               Buffer.add_char buf '\n'
+             ) else (
+               Buffer.add_string buf Util.(ch |> red |> clear);
+             );
+             space_after_hardline := Some 0;
+             ignore (Queue.pop h);
+             pop_hardlines ch h
+          | _ -> ();
+        end
+      in
+      pop_hardlines "R" lb_info.require_hardlines;
+      pop_hardlines "H" lb_info.hardlines;
+
       if c = '\n' then (
         incr line;
         column := 0;
