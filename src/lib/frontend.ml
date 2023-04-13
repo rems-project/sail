@@ -76,6 +76,7 @@ let opt_reformat : string option ref = ref None
 let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uannot ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env ast in
+  let ast = Scattered.descatter ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   Effects.check_side_effects side_effects ast;
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout (Type_check.strip_ast ast) else () in
@@ -115,8 +116,7 @@ let load_files ?target:target default_sail_dir options type_envs files =
 
 let rewrite_ast_initial effect_info env = Rewrites.rewrite effect_info env [("initial", fun effect_info env ast -> Rewriter.rewrite_ast ast, effect_info, env)]
   
-let descatter effect_info type_envs ast =
-  let ast = Scattered.descatter ast in
+let initial_rewrite effect_info type_envs ast =
   let ast, _, type_envs = rewrite_ast_initial effect_info type_envs ast in
   (* Recheck after descattering so that the internal type environments
      always have complete variant types *)

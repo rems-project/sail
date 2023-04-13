@@ -3143,7 +3143,13 @@ module PC_config = struct
   let add_attribute l attr arg = map_uannot (add_attribute l attr arg)
 end
 
-module PC = Pattern_completeness.Make(PC_config);;
+module PC = Pattern_completeness.Make(PC_config)
+
+let pattern_completeness_ctx env = {
+  Pattern_completeness.variants = Env.get_variants env;
+  Pattern_completeness.enums = Env.get_enums env;
+  Pattern_completeness.constraints = Env.get_constraints env;
+}
        
 let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp exp typ' = E_aux (exp, (l, mk_expected_tannot ~uannot:uannot env typ' (Some typ))) in
@@ -3159,11 +3165,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
        if Option.is_some (get_attribute "complete" uannot) || Option.is_some (get_attribute "incomplete" uannot) then (
          checked_cases, (fun attrs -> attrs)
        ) else (
-         let ctx = {
-             Pattern_completeness.variants = Env.get_variants env;
-             Pattern_completeness.enums = Env.get_enums env;
-             Pattern_completeness.constraints = Env.get_constraints env;
-           } in
+         let ctx = pattern_completeness_ctx env in
          match PC.is_complete_wildcarded l ctx checked_cases inferred_typ with
          | Some wildcarded -> wildcarded, add_attribute (gen_loc l) "complete" ""
          | None -> checked_cases, add_attribute (gen_loc l) "incomplete" ""
@@ -5031,36 +5033,36 @@ let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
      [DEF_aux (DEF_let (LB_aux (LB_val (tpat, inferred_bind), (l, empty_tannot))), def_annot)],
      Env.add_toplevel_lets (pat_ids tpat) env
 
-let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
+let bind_funcl_arg_typ l env typ =
   match typ with
   | Typ_aux (Typ_fn (typ_args, typ_ret), _) ->
      begin
-       let typ_args = List.map implicit_to_int typ_args in
        let env = Env.add_ret_typ typ_ret env in
-       (* We want to forbid polymorphic undefined values in all cases,
-          except when type checking the specific undefined_(type)
-          functions created by the -undefined_gen functions in
-          initial_check.ml. Only in these functions will the rewriter
-          be able to correctly re-write the polymorphic undefineds
-          (due to the specific form the functions have *)
-       let env =
-         if Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0
-         then Env.allow_polymorphic_undefineds env
-         else env
-       in
-       (* This is one of the cases where we are allowed to treat
-          function arguments as like a tuple, and maybe we
-          shouldn't. *)
-       let typed_pexp =
-         match List.map implicit_to_int typ_args with
-         | [typ_arg] ->
-            check_case env typ_arg pexp typ_ret
-         | typ_args ->
-            check_case env (Typ_aux (Typ_tuple typ_args, l)) pexp typ_ret
-       in
-       FCL_aux (FCL_funcl (id, typed_pexp), (l, mk_expected_tannot env typ (Some typ)))
+       match List.map implicit_to_int typ_args with
+       | [typ_arg] ->
+         typ_arg, typ_ret, env
+       | typ_args ->
+         (* This is one of the cases where we are allowed to treat
+            function arguments as like a tuple, normally we can't. *)
+         Typ_aux (Typ_tuple typ_args, l), typ_ret, env
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
+
+let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
+  let typ_arg, typ_ret, env = bind_funcl_arg_typ l env typ in
+  (* We want to forbid polymorphic undefined values in all cases,
+     except when type checking the specific undefined_(type) functions
+     created by the -undefined_gen functions in initial_check.ml. Only
+     in these functions will the rewriter be able to correctly
+     re-write the polymorphic undefineds (due to the specific form the
+     functions have *)
+  let env =
+    if Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0
+    then Env.allow_polymorphic_undefineds env
+    else env
+  in
+  let typed_pexp = check_case env typ_arg pexp typ_ret in
+  FCL_aux (FCL_funcl (id, typed_pexp), (l, mk_expected_tannot env typ (Some typ)))
 
 let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
   fun env (MCL_aux (cl, (l, _))) typ ->
@@ -5150,6 +5152,13 @@ let check_termination_measure_decl env def_annot (id, pat, exp) =
   let tpat, texp = check_termination_measure env arg_typs pat exp in
   DEF_aux (DEF_measure (id, tpat, texp), def_annot)
 
+let check_funcls_complete l env funcls typ =
+  let typ_arg, _, env = bind_funcl_arg_typ l env typ in
+  let ctx = pattern_completeness_ctx env in
+  match PC.is_complete_funcls_wildcarded l ctx funcls typ_arg with
+    | Some funcls -> funcls, add_def_attribute (gen_loc l) "complete" ""
+    | None -> funcls, add_def_attribute (gen_loc l) "incomplete" "" 
+
 let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _))) =
   let id =
     match (List.fold_right
@@ -5194,8 +5203,14 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
       [], env
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
+  let funcls, update_attr =
+    if Option.is_some (get_def_attribute "complete" def_annot) || Option.is_some (get_def_attribute "incomplete" def_annot) then (
+      funcls, (fun attrs -> attrs)
+    ) else (
+      check_funcls_complete l funcl_env funcls typ
+    ) in
   let env = Env.define_val_spec id env in
-  vs_def @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, empty_tannot))), def_annot)],
+  vs_def @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, empty_tannot))), update_attr def_annot)],
   env
 
 let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
@@ -5387,7 +5402,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> (tannot def) li
      end
 
 and check_scattered : Env.t -> def_annot -> uannot scattered_def -> (tannot def) list * Env.t =
-  fun env def_annot (SD_aux (sdef, (l, _))) ->
+  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
   | SD_function _ | SD_end _ | SD_mapping _ ->
      [], env
@@ -5412,7 +5427,7 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> (tannot def)
      let typq, typ = Env.get_val_spec id env in
      let funcl_env = Env.add_typquant l typq env in
      let funcl = check_funcl funcl_env funcl typ in
-     [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, empty_tannot))), def_annot)],
+     [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot:uannot funcl_env typ))), def_annot)],
      env
 
   | SD_mapcl (id, mapcl) ->

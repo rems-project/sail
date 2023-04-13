@@ -93,7 +93,14 @@ let mk_def_annot l = {
     attrs = [];
     loc = l;
   }
- 
+
+let add_def_attribute l attr arg (annot : def_annot) =
+  { annot with attrs = (attr, arg, l) :: annot.attrs }
+
+let get_def_attribute attr (annot : def_annot) =
+  List.find_opt (fun (attr', arg, l) -> attr = attr') annot.attrs
+  |> Option.map (fun (_, arg, l) -> (l, arg))
+
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id

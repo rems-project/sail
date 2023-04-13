@@ -1,0 +1,6 @@
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_partial_lookup.sail[0m:8.4-9:
+8[96m |[0m    match (x, table) {
+ [91m |[0m    [91m^---^[0m
+ [91m |[0m 
+The following expression is unmatched: [93m(undefined, [||])[0m
+
