@@ -579,7 +579,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
   let docinfo_for_ast ~files ~hyperlinks ast =
     let gitinfo =
       git_command "rev-parse HEAD"
-      |> Option.map (fun checksum -> (checksum, Util.is_none (git_command "diff --quiet"))) in
+      |> Option.map (fun checksum -> (checksum, Option.is_none (git_command "diff --quiet"))) in
 
     let empty_docinfo = {
         embedding = embedding_format ();
@@ -688,7 +688,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       let current_span = ref None in
       List.iter (fun (DEF_aux (aux, def_annot)) ->
           match aux with
-          | DEF_pragma ("span", arg, _) when Util.is_none !current_span ->
+          | DEF_pragma ("span", arg, _) when Option.is_none !current_span ->
              begin match String.split_on_char ' ' arg with
              | ["start"; name] ->
                 current_span := Some (name, def_annot.loc)

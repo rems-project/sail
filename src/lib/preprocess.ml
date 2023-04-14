@@ -159,11 +159,17 @@ let rec preprocess dir target opts =
 
   | (DEF_aux (DEF_pragma ("option", command), l) as opt_pragma) :: defs ->
      begin
+       let first_line err_msg = match String.split_on_char '\n' err_msg with
+         | line :: _ -> "\n" ^ line
+         | [] -> "" [@coverage off] (* Don't expect this should ever happen, but we are fine if it does *)
+       in
        try
          let args = Str.split (Str.regexp " +") command in
-         Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts (fun _ -> ()) "";
+         let file_arg file = raise (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive")) in
+         Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts file_arg "";
        with
-       | Arg.Bad message | Arg.Help message -> raise (Reporting.err_general l message)
+       | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
+       | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
      end;
      opt_pragma :: preprocess dir target opts defs
 

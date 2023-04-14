@@ -864,7 +864,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
              else None
            in
            Some (List.concat
-                   (List.map (fun h -> Util.map_filter (merge h) t') h'))
+                   (List.map (fun h -> List.filter_map (merge h) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
@@ -1684,11 +1684,6 @@ let rec useful_loc = function
   | Hint (_,_,l) -> useful_loc l
   | Range (_,_) -> true
 
-let id_pair_compare (id,l) (id',l') =
-    match Id.compare id id' with
-    | 0 -> compare l l'
-    | x -> x
-
 (* Usually we do a full case split on an argument, but sometimes we find a
    case expression in the function body that suggests a more compact case
    splitting. *)
@@ -1766,10 +1761,6 @@ let string_of_argsplits s =
     (List.map (fun ((id,l),detail) ->
       string_of_id id ^ "." ^ simple_string_of_loc l ^ string_of_match_detail detail)
                         (ArgSplits.bindings s))
-
-let string_of_lx lx =
-  let open Lexing in
-  Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
 
 let string_of_extra_splits s =
   String.concat ", "
@@ -2129,7 +2120,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
     when is_id (env_of exp) (Id "append") append ->
      (* If the expression is a concatenation resulting in a small enough bitvector,
         perform a (total) case split on the sub-vectors *)
-     let vec_len v = try Util.option_map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+     let vec_len v = try Option.map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
      let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
      let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
      begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
@@ -2676,7 +2667,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
     | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),kid),_)),_) -> Some kid
     | _ -> None
   in
-  let top_kids = Util.map_filter int_quant qs in
+  let top_kids = List.filter_map int_quant qs in
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
@@ -3674,9 +3665,9 @@ let simplify_size_nexp env quant_kids nexp =
           | Nexp_minus(n1,n2) ->
              re (fun n1 n2 -> Nexp_minus(n1,n2)) (aux n1, aux n2)
           | Nexp_exp n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
           | Nexp_neg n ->
-             Util.option_map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
+             Option.map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
           | _ -> None
   in aux nexp
 
@@ -3957,10 +3948,15 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                        (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
-               | P_aux (P_wild, _), None ->
-                  begin match body with
-                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann) when Kid.compare kid kid' == 0 ->
-                     (* Similar to the literal case *)
+               | P_aux (P_wild, (_, annot)), None ->
+                  (* Similar to the literal case *)
+                  begin match body, untyped_annot annot |> get_attribute "int_wildcard" with
+                  | _, Some (_, s) ->
+                     let i = Big_int.of_string s in
+                     let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
+                     make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
+                       (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
+                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann), _ when Kid.compare kid kid' == 0 ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) nexp) env) result_typ in
                      let body'' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                                     (make_bitvector_env_casts env (env_of body') quant_kids (KBindings.singleton kid nexp) body')

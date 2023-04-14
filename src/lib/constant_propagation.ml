@@ -696,7 +696,7 @@ let const_props target ast =
            | A_aux (A_nexp n,_) -> Some (k,n)
            | _ -> None
          in
-         let kbindings = Util.map_filter is_nexp (KBindings.bindings unifiers) in
+         let kbindings = List.filter_map is_nexp (KBindings.bindings unifiers) in
          DoesMatch ([id',exp],kbindings)
       | E_tuple es, P_tuple ps ->
          let check = function

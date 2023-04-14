@@ -93,7 +93,7 @@ type instr_parm_typ =
   | Bvector of maybe nat (* A bitvector type, with length when statically known *)
   | Range of maybe nat (*Internally represented as a number, externally as a bitvector of length nat *)
   | Enum of string * nat (*Internally represented as either a number or constructor, externally as a bitvector*)
-  | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
+  | Other (*An unrepresentable type, will be represented as Unknown in instruction form *)
 
 let {coq} instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
   | (Bit,Bit) -> true

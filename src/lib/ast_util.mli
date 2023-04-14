@@ -95,9 +95,11 @@ val get_attributes : uannot -> (l * string * string) list
 
 val find_attribute_opt : string -> (l * string * string) list -> string option
 
+val mk_def_annot : l -> def_annot
+
 val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 
-val mk_def_annot : l -> def_annot
+val get_def_attribute : string -> def_annot -> (l * string) option
 
 val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
   
@@ -415,6 +417,7 @@ val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
+val nexp_loc : nexp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
 
 (** {1 Printing utilities}

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/undefined_infer.sail[0m:1.8-17:
+1[96m |[0mlet _ = undefined
+ [91m |[0m        [91m^-------^[0m
+ [91m |[0m Cannot infer the type of undefined

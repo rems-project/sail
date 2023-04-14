@@ -1,8 +1,8 @@
 Note: This version of the specification has been superseded by https://github.com/rems-project/sail-arm
 
 This folder contains an automatically generated ARM v8.3 architecture
-specification. This specification is based on ARM's publically
-realeased machine-readable XML specification available at
+specification. This specification is based on ARM's publicly
+released machine-readable XML specification available at
 https://github.com/meriac/archex. See that github repository for
 licensing information.
 

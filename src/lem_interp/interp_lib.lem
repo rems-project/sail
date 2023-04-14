@@ -93,7 +93,7 @@ let hardware_mod (a: integer) (b:integer) : integer =
 
 (* There are different possible answers for integer divide regarding
 rounding behaviour on negative operands. Positive operands always
-round down so derive the one we want (trucation towards zero) from
+round down so derive the one we want (truncation towards zero) from
 that *)
 let hardware_quot (a:integer) (b:integer) : integer = 
   let q = (abs a) / (abs b) in

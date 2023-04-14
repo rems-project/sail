@@ -439,7 +439,7 @@ Definition hardware_mod (a: Z) (b:Z) : Z :=
 
 (* There are different possible answers for integer divide regarding
 rounding behaviour on negative operands. Positive operands always
-round down so derive the one we want (trucation towards zero) from
+round down so derive the one we want (truncation towards zero) from
 that *)
 Definition hardware_quot (a:Z) (b:Z) : Z :=
   let q := (abs a) / (abs b) in
@@ -1026,7 +1026,7 @@ Definition to_word_nat {n} (w : word n) : mword (Z.of_nat n) :=
 
 (* Establish the relationship between to_word and to_word_nat, starting with some
    reasoning using dependent equality, but ultimately finishing with a directly
-   usably plain equality result. *)
+   usable plain equality result. *)
 
 Lemma to_word_eq_dep m n (w : MachineWord.word (Z.to_nat m)) (v : MachineWord.word (Z.to_nat n)) :
   m > 0 ->
@@ -2456,7 +2456,7 @@ Definition internal_reg_value v :=
 
 Definition external_slice (d:direction) (start:nat) ((i,j):(nat*nat)) :=
   match d with
-  (*This is the case the thread/concurrecny model expects, so no change needed*)
+  (*This is the case the thread/concurrency model expects, so no change needed*)
   | D_increasing => (i,j)
   | D_decreasing => let slice_i = start - i in
                     let slice_j = (i - j) + slice_i in

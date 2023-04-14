@@ -739,7 +739,7 @@ let val_spec_typs defs =
  *)
 
 let orig_types_for_ocaml_generator defs =
-  Util.map_filter (function
+  List.filter_map (function
       | DEF_aux (DEF_type td, _) -> Some td
       | _ -> None) defs
 

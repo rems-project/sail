@@ -574,7 +574,7 @@ let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
      match vs with
      | P.VS_val_spec (ts, id, ext, is_cast) ->
         let typschm, _ = to_ast_typschm ctx ts in
-        let ext = Util.option_map to_ast_extern ext in
+        let ext = Option.map to_ast_extern ext in
         VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx
  
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =

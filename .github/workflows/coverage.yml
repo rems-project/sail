@@ -1,0 +1,91 @@
+name: Test coverage
+
+on: [push, pull_request, workflow_dispatch]
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  build:
+    # GitHub allows matrix variables in more places than env variables
+    strategy:
+      matrix:
+        version: [4.08.1]
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: System dependencies
+      run: |
+        sudo apt install build-essential libgmp-dev z3 cvc4 opam
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.opam
+        key: ${{ matrix.os }}-${{ matrix.version }}-cov
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Sail
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add .
+        opam install . --yes --deps-only
+
+    - name: Build Sail with coverage
+      run: |
+        eval $(opam env)
+        dune build --release --instrument-with bisect_ppx
+        dune install
+
+    - name: Test Sail
+      run: |
+        eval $(opam env)
+        export SAIL_DIR=$(pwd)
+        etc/ci_coverage_tests.sh
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: |
+          test/**/tests.xml
+
+    - name: Collect coverage
+      run: |
+        eval $(opam env)
+        bisect-ppx-report html --coverage-path=test/
+        bisect-ppx-report summary --per-file --coverage-path=test/ > coverage_summary.txt
+
+    - name: Archive coverage
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-coverage
+        path: |
+          coverage_summary.txt
+          _coverage/*
+          _coverage/src/lib/*
+
+    - name: Upload event payload
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: event.json
+        path: ${{ github.event_path }}

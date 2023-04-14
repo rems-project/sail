@@ -212,7 +212,14 @@ let rec map_last f = function
   | [] -> []
   | [x] -> [f true x]
   | (x :: xs) -> f false x :: map_last f xs
-        
+
+let rec iter_last f = function
+  | [] -> ()
+  | [x] -> f true x
+  | x :: xs ->
+     f false x;
+     iter_last f xs
+               
 let rec split_on_char sep str =
   try
     let sep_pos = String.index str sep in
@@ -236,13 +243,6 @@ let map_changed_default d f l =
       None
 
 let map_changed f l = map_changed_default (fun x -> x) f l
-
-let rec map_filter (f : 'a -> 'b option) (l : 'a list) : 'b list =
-  match l with [] -> []
-    | x :: xs ->
-      let xs' = map_filter f xs in
-      match (f x) with None -> xs'
-        | Some x' -> x' :: xs'
 
 let rec map_split f = function
   | [] -> ([], [])
@@ -270,21 +270,9 @@ let option_get_exn e = function
   | Some(o) -> o
   | None -> raise e
 
-let option_default d = function
-  | None -> d
-  | Some(o) -> o
-
 let option_cases op f1 f2 = match op with
   | Some(o) -> f1 o
   | None -> f2 ()
-
-let option_map f = function
-  | None -> None
-  | Some(o) -> Some(f o)
-
-let option_bind f = function
-  | None -> None
-  | Some(o) -> f o
 
 let option_binop f x y = match x, y with
   | Some x, Some y -> Some (f x y)
@@ -304,18 +292,11 @@ let rec option_all = function
      | Some xs -> Some (x :: xs)
      end
 
-let changed2 f g x h y =
-  match (g x, h y) with
-    | (None,None) -> None
-    | (Some(x'),None) -> Some(f x' y)
-    | (None,Some(y')) -> Some(f x y')
-    | (Some(x'),Some(y')) -> Some(f x' y')
-
 let rec map_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   match l with [] -> Some []
     | x :: xs ->
       match (f x) with None -> None
-        | Some x' -> option_map (fun xs' -> x' :: xs') (map_all f xs)
+        | Some x' -> Option.map (fun xs' -> x' :: xs') (map_all f xs)
 
 let rec option_first f xL =
   match xL with
@@ -353,14 +334,6 @@ let rec split3 = function
     let (xs, ys, zs) = split3 xs in
     (x :: xs, y :: ys, z :: zs)
   | [] -> ([], [], [])
-
-let list_mapi (f : int -> 'a -> 'b)  (l : 'a list) : 'b list =
-  let rec aux f i l =
-     match l with
-         [] -> []
-       | (x :: xs) -> ((f i x) :: (aux f (i + 1) xs))
-  in
-    aux f 0 l
 
 let rec list_iter_sep (sf : unit -> unit) (f : 'a -> unit) l : unit =
   match l with
@@ -439,10 +412,6 @@ let string_of_option string_of = function
   | None -> ""
   | Some x -> string_of x
 
-let is_some = function
-  | Some _ -> true
-  | None -> false
-
 let rec take_drop f = function
   | [] -> ([], [])
   | (x :: xs) when not (f x) -> ([], x :: xs)
@@ -482,8 +451,6 @@ let rec find_map f = function
 let fold_left_concat_map f acc xs =
   let ys, acc = List.fold_left (fun (ys, acc) x -> let acc, zs = f acc x in (List.rev zs @ ys, acc)) ([], acc) xs in
   acc, List.rev ys
-  
-let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with
   | 0, _ -> []

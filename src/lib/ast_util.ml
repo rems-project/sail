@@ -107,6 +107,10 @@ let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc }
 let add_def_attribute l attr arg (annot : def_annot) =
   { annot with attrs = (l, attr, arg) :: annot.attrs }
 
+let get_def_attribute attr (annot : def_annot) =
+  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs
+  |> Option.map (fun (l, arg, _) -> (l, arg))
+
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
@@ -144,7 +148,10 @@ let pat_loc = function
 
 let exp_loc = function
   | E_aux (_, (l, _)) -> l
-             
+
+let nexp_loc = function
+  | Nexp_aux (_, l) -> l
+
 let gen_loc = function
   | Parse_ast.Generated l -> Parse_ast.Generated l
   | l -> Parse_ast.Generated l
@@ -1118,7 +1125,7 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
   | BF_single n -> string_of_nexp n
   | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
-  | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
+  | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ " @ " ^ string_of_index_range ir2 ^ ")"
 
 let rec pat_ids (P_aux (pat_aux, _)) =
   match pat_aux with
@@ -2319,3 +2326,4 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Hint (_, l1, l2) -> "Hint(_," ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
+

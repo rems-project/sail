@@ -106,24 +106,14 @@ val power : int -> int -> int
 
 (** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
+
+val iter_last : (bool -> 'a -> unit) -> 'a list -> unit
   
 (** {2 Option Functions} *)
-
-(** [option_map f None] returns [None], whereas
-    [option_map f (Some x)] returns [Some (f x)]. *)
-val option_map : ('a -> 'b) -> 'a option -> 'b option
 
 (** [option_cases None f_s f_n] returns [f_n], whereas
     [option_cases (Some x) f_s f_n] returns [f_s x]. *)
 val option_cases : 'a option -> ('a -> 'b) -> (unit -> 'b) -> 'b
-
-(** [option_bind f None] returns [None], whereas
-    [option_bind f (Some x)] returns [f x]. *)
-val option_bind : ('a -> 'b option) -> 'a option -> 'b option
-
-(** [option_default d None] returns the default value [d], 
-    whereas [option_default d (Some x)] returns [x]. *)
-val option_default : 'a -> 'a option -> 'a
 
 (** [option_binop f (Some x) (Some y)] returns [Some (f x y)],
     and in all other cases, [option_binop] returns [None]. *)
@@ -141,16 +131,6 @@ val option_these : 'a option list -> 'a list
    them are wrapped in Some. If any are None then the result is None is
    None. [option_all []] is [Some []] *)
 val option_all : 'a option list -> 'a list option
-
-(** [changed2 f g x h y] applies [g] to [x] and [h] to [y].
-    If both function applications return [None], then [None] is
-    returned. Otherwise [f] is applied to the results. For this
-    application of [f], [x] is used in case [g x] returns [None] and
-    similarly [y] in case [h y] returns [None]. *)
-val changed2 : ('a -> 'b -> 'c) -> ('a -> 'a option) -> 'a -> ('b -> 'b option) -> 'b -> 'c option
-
-val is_some : 'a option -> bool
-val is_none : 'a option -> bool
 
 (** {2 List Functions} *)
 
@@ -180,18 +160,9 @@ val map_changed : ('a -> 'a option) -> 'a list -> 'a list option
     and returns the resulting list. *)
 val map_changed_default : ('a -> 'b) -> ('a -> 'b option) -> 'a list -> 'b list option
 
-(** [list_mapi f l] maps [f] over [l]. In contrast to the standard
-    [map] function, [f] gets the current index of the list as an extra
-    argument. Counting starts at [0]. *)
-val list_mapi : (int -> 'a -> 'b) -> 'a list -> 'b list
-
 (** [list_iter sf f [a1; ...; an]] applies function [f] in turn to [a1; ...; an] and
     calls [sf ()] in between. It is equivalent to [begin f a1; sf(); f a2; sf(); ...; f an; () end]. *)
 val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
-
-(** [map_filter f l] maps [f] over [l] and removes all entries [x] of [l]
-    with [f x = None]. *)
-val map_filter : ('a -> 'b option) -> 'a list -> 'b list
 
 val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
   

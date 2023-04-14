@@ -398,6 +398,8 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
 
 (* For debugging we provide a pretty printer for ANF expressions. *)
 
+[@@@coverage off]
+
 let pp_lvar lvar doc =
   match lvar with
   | Register typ ->
@@ -524,6 +526,8 @@ and pp_aval = function
                    ^^ separate_map (comma ^^ space) (fun (id, field) -> pp_id id ^^ string " = " ^^ pp_aval field) (Bindings.bindings fields)
                    ^^ string "}")
 
+[@@@coverage on]
+
 let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
 let is_dead_aexp (AE_aux (_, env, _)) = prove __POS__ env nc_false
@@ -536,7 +540,7 @@ let rec split_block l = function
      let exps, last = split_block l exps in
      exp :: exps, last
   | [] ->
-     raise (Reporting.err_unreachable l __POS__ "empty block found when converting to ANF")
+     Reporting.unreachable l __POS__ "empty block found when converting to ANF" [@coverage off]
 
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
@@ -554,8 +558,8 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
   | _ ->
-     raise (Reporting.err_unreachable (fst annot) __POS__
-       ("Could not convert pattern to ANF: " ^ string_of_pat pat))
+    Reporting.unreachable (fst annot) __POS__
+      ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
 
 let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with
@@ -582,7 +586,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
        AL_addr (gs, typ_of dexp)
     | _ ->
        Reporting.unreachable l __POS__
-         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF") [@coverage off]
   in
 
   let to_aval (AE_aux (aexp_aux, env, _) as aexp) =
@@ -764,8 +768,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      mk_aexp (AE_let (Mutable, id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
 
   | E_var (lexp, _, _) ->
-     raise (Reporting.err_unreachable l __POS__
-       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
+     Reporting.unreachable l __POS__
+       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF") [@coverage off]
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
      anf (E_aux (E_match (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
@@ -792,19 +796,19 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
      (* Should be re-written by type checker *)
-     raise (Reporting.err_unreachable l __POS__ "encountered raw vector operation when converting to ANF")
+     Reporting.unreachable l __POS__ "encountered raw vector operation when converting to ANF" [@coverage off]
 
   | E_internal_value _ ->
      (* Interpreter specific *)
-     raise (Reporting.err_unreachable l __POS__ "encountered E_internal_value when converting to ANF")
+     Reporting.unreachable l __POS__ "encountered E_internal_value when converting to ANF" [@coverage off]
 
   | E_sizeof nexp ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
-     raise (Reporting.err_unreachable l __POS__ ("encountered E_sizeof node " ^ string_of_nexp nexp ^ " when converting to ANF"))
+     Reporting.unreachable l __POS__ ("encountered E_sizeof node " ^ string_of_nexp nexp ^ " when converting to ANF") [@coverage off]
 
   | E_constraint _ ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
-     raise (Reporting.err_unreachable l __POS__ "encountered E_constraint node when converting to ANF")
+     Reporting.unreachable l __POS__ "encountered E_constraint node when converting to ANF" [@coverage off]
 
   | E_internal_return _ | E_internal_plet _ ->
-     raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
+     Reporting.unreachable l __POS__ "encountered unexpected internal node when converting to ANF" [@coverage off]

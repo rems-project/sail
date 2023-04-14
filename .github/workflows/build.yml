@@ -1,3 +1,5 @@
+name: Build matrix
+
 on: [push, workflow_dispatch]
 
 env:
@@ -33,11 +35,12 @@ jobs:
         key: ${{ matrix.os }}-${{ matrix.version }}
 
     - name: Setup opam
-      if: steps.cache-opam.outputs.cache-hit != 'true'
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
 
     - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
       uses: actions/cache/save@v3
       with:

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/negative_bits_struct.sail[0m:14.24-33:
+14[96m |[0m    let x: synonym(1) = undefined;
+  [91m |[0m                        [91m^-------^[0m
+  [91m |[0m Type synonym(1) is empty

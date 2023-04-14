@@ -104,7 +104,7 @@ let rec instantiated_or_abstract l = function
   | [] -> None
   | None :: xs -> instantiated_or_abstract l xs
   | Some def :: xs ->
-     if List.for_all Util.is_none xs then
+     if List.for_all Option.is_none xs then
        Some def
      else
        raise (Reporting.err_general l "Multiple instantiations found for target")

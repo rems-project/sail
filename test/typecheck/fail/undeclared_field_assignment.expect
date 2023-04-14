@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/undeclared_field_assignment.sail[0m:7.4-9:
+7[96m |[0m    x.foo = 0b0
+ [91m |[0m    [91m^---^[0m
+ [91m |[0m Field assignment can only be done to a variable that has already been declared

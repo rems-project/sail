@@ -102,7 +102,7 @@ apply cast_Z_refl.
 Qed.
 
 (* Note that `rewrite` won't automatically open a subgoal for `EQ` because it's
-   named, so either give it up-front or use erwrite.  In general it's probably
+   named, so either give it up-front or use rewrite.  In general it's probably
    better to avoid using this in favour of autocast_refl or autocast_eq_dep, which
    don't need to mention the equality proof in the result. *)
 Lemma autocast_eq {T m n} `{Inhabited (T n)} (x : T m) : forall EQ : m = n, autocast x = cast_Z x EQ.

@@ -83,4 +83,4 @@ val load_files :
   string list ->
   (Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info)
 
-val descatter : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
+val initial_rewrite : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t

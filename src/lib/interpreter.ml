@@ -766,7 +766,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
   | P_vector_concat [] -> eq_value (V_vector []) value, Bindings.empty
   | P_vector_concat (pat :: pats) ->
      (* We have to use the annotation on each member of the
-        vector_concat pattern to figure out it's length. Due to the
+        vector_concat pattern to figure out its length. Due to the
         recursive call that has an empty_tannot we must not use the
         annotation in the whole vector_concat pattern. *)
      let open Type_check in

@@ -1,0 +1,6 @@
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_partial_scattered.sail[0m:7.0-8:
+7[96m |[0mfunction clause foo 64 = ()
+ [91m |[0m[91m^------^[0m
+ [91m |[0m 
+The following expression is unmatched: [93m32[0m
+

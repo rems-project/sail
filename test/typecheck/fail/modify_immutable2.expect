@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/modify_immutable2.sail[0m:8.4-15:
+8[96m |[0m    x : bits(1) = 0b0
+ [91m |[0m    [91m^---------^[0m
+ [91m |[0m Cannot modify immutable let-bound constant or enumeration constructor x

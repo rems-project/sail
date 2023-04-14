@@ -78,7 +78,7 @@ module Big_int = Nat_big_num
    is even more verbose still. *)
 val opt_tc_debug : int ref
 
-(** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
+(** [opt_no_lexp_bounds_check] turns off the bounds checking in vector
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
@@ -215,7 +215,7 @@ module Env : sig
   val get_extern : id -> t -> string -> string
 
   (** Lookup id searchs for a specified id in the environment, and
-     returns it's type and what kind of identifier it is, using the
+     returns its type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and
      won't throw any exceptions. *)
   val lookup_id : id -> t -> typ lvar
@@ -225,7 +225,7 @@ module Env : sig
   val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
 
   (** Check if id is a constructor, then if it is return a (n, m,
-     id, type_union) triple where the values represent it's position (n) in the
+     id, type_union) triple where the values represent its position (n) in the
      list of (m) constructors, the union name, and the type_union entry itself *)
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
 
@@ -238,6 +238,13 @@ module Env : sig
   val is_mapping : id -> t -> bool
 
   val is_register : id -> t -> bool
+
+  (** Check if the type with the given id is a bitfield type *)
+  val is_bitfield : id -> t -> bool
+
+  (** [get_bitfield_ranges id env] returns the index ranges of bitfield type [id],
+      or raises [Not_found] if [id] is not a bitfield type. *)
+  val get_bitfield_ranges : id -> t -> index_range Bindings.t
 
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
@@ -271,6 +278,10 @@ end
 
 (** {4 Environment helper functions} *)
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
+
+(** [get_bitfield_range id field env] returns the [index_range] of [field]
+    in bitfield type [id], or [None] if the field does not exist. *)
+val get_bitfield_range : id -> id -> Env.t -> index_range option
 
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not
@@ -320,6 +331,7 @@ val strip_exp : tannot exp -> uannot exp
 
 (** Strip the type annotations from a pattern *)
 val strip_pat : tannot pat -> uannot pat
+val strip_mpat : tannot mpat -> uannot mpat
 
 (** Strip the type annotations from a pattern-expression *)
 val strip_pexp : tannot pexp -> uannot pexp
@@ -352,7 +364,7 @@ val strip_typ_aux : typ_aux -> typ_aux
 
 (** Check an expression has some type. Returns a fully annotated
    version of the expression, where each subexpression is annotated
-   with it's type and the Environment used while checking it. The can
+   with its type and the Environment used while checking it. The can
    be used to re-start the typechecking process on any
    sub-expression. so local modifications to the AST can be
    re-checked. *)
@@ -373,6 +385,16 @@ val check_fundef : Env.t -> def_annot -> uannot fundef -> tannot def list * Env.
 val check_val_spec : Env.t -> def_annot -> uannot val_spec -> tannot def list * Env.t
 
 val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
+
+(** Use the pattern completeness checker to check completeness of a
+   list of function clauses. This takes care of setting up the
+   environment in the correct way. The type passed is the type of the
+   function (Typ_fn), and the environment should be that attached to
+   either the SD_funcl clause or the FD_function clause. Note that
+   this is only exposed so that it can be used during descattering to
+   check completeness of scattered functions, and should not be called
+   otherwise. *)
+val check_funcls_complete : Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * (def_annot -> def_annot) 
 
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove

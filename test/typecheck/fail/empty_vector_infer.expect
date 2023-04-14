@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/empty_vector_infer.sail[0m:8.12-14:
+8[96m |[0m    let _ = [];
+ [91m |[0m            [91m^^[0m
+ [91m |[0m Cannot infer type of empty vector

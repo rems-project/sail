@@ -178,7 +178,7 @@ let infer_def_direct_effects asserts_termination def =
     | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 ->
        effects := EffectSet.add Register !effects
     | E_match (_, _) ->
-       if Util.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then (
+       if Option.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then (
          effects := EffectSet.add IncompleteMatch !effects
        )
     | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
@@ -208,16 +208,10 @@ let infer_def_direct_effects asserts_termination def =
   begin match def with
   | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)), _) ->
      effects := EffectSet.add External !effects
-  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), _) ->
+  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) ->
      begin match funcls_info funcls with
      | Some (id, typ, env) ->
-        let cases = funcls_to_pexps funcls in
-        let ctx = {
-            Pattern_completeness.variants = Env.get_variants env;
-            Pattern_completeness.enums = Env.get_enums env;
-            Pattern_completeness.constraints = Env.get_constraints env;
-          } in
-        if not (PC.is_complete l ctx cases typ) then (
+        if Option.is_some (get_def_attribute "incomplete" def_annot) then (
           effects := EffectSet.add IncompleteMatch !effects
         )
      | None ->
@@ -427,7 +421,7 @@ let check_side_effects effect_info ast =
            ) (ids_of_def def)
       | DEF_fundef fdef ->
          let id = id_of_fundef fdef in
-         let eff = Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Util.option_default EffectSet.empty in
+         let eff = Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Option.value ~default:EffectSet.empty in
          if non_exec eff && not (IdSet.mem id !allowed_nonexec) then
            raise (Reporting.err_general (id_loc id) ("Function " ^ string_of_id id ^ " calls function marked non-executable"))
       | _ -> ()

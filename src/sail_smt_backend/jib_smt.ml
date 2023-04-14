@@ -1542,7 +1542,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
        (* Use Type_check.destruct_exist when optimising with SMT, to
           ensure that we don't cause any type variable clashes in
           local_env, and that we can optimize the existential based
-          upon it's constraints. *)
+          upon its constraints. *)
        begin match destruct_exist typ with
        | Some (kids, nc, typ) ->
           let env = add_existential l kids nc ctx.local_env in
