@@ -205,6 +205,11 @@ module PPrintWrapper = struct
         if n = 0 then f x else acc ^^ sep ^^ f x
       ) Empty xs
 
+  let separate_map_last sep f xs =
+    Util.fold_left_index_last (fun n last acc x ->
+        if n = 0 then f last x else acc ^^ sep ^^ f last x
+      ) Empty xs
+  
   let separate sep xs = separate_map sep (fun x -> x) xs
 
   let concat_map_last f xs =
@@ -304,6 +309,15 @@ let ternary_operator_precedence = function
   | (":", "=") -> 0, atomic, nonatomic, nonatomic
   | _ -> 10, subatomic, subatomic, subatomic
 
+let unary_operator_precedence = function
+  | "throw" -> 0, nonatomic, space
+  | "return" -> 0, nonatomic, space
+  | "internal_return" -> 0, nonatomic, space
+  | "*" -> 10, atomic, empty
+  | "-" -> 10, atomic, empty
+  | "2^" -> 10, atomic, empty
+  | _ -> 10, subatomic, empty
+
 let opt_delim s = ifflat empty (string s)
 
 let softline = break 0
@@ -314,8 +328,6 @@ let prefix_parens n x y =
 let chunk_inserts_trailing_hardline = function
   | Comment (Lexer.Comment_line, _, _) -> true
   | _ -> false
-
-"%%" "%n"
 
 let surround_hardline h n b opening contents closing =
   let b = if h then hardline else break b in
@@ -341,6 +353,14 @@ let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
        repeat n hardline
      else
        repeat n space
+  | Unary (op, exp) ->
+     let outer_prec, inner_prec, spacing = unary_operator_precedence op in
+     let doc = string op ^^ spacing ^^ doc_chunks (opts |> inner_prec |> expression_like) exp in
+     if outer_prec > opts.precedence then (
+       parens doc
+     ) else (
+       doc
+     )
   | Binary (lhs, op, rhs) ->
      let outer_prec, lhs_prec, rhs_prec = operator_precedence op in
      let doc =
@@ -435,6 +455,8 @@ let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
            )
          ^^ break 1
        )
+  | Struct_update (exp, fexps) ->
+     surround tabwidth 1 (char '{') (doc_chunks opts exp ^^ space ^^ string "with" ^^ break 1 ^^ separate_map (break 1) (doc_chunks opts) fexps) (char '}')
   | Comment (comment_type, n, contents) ->
      begin match comment_type with
      | Lexer.Comment_line ->
@@ -458,7 +480,7 @@ let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
        | [funcl] -> doc_funcl f.return_typ_opt opts funcl
        | funcl :: funcls ->
           doc_funcl f.return_typ_opt opts funcl ^^ sep ^^ separate_map sep (doc_funcl None opts) f.funcls in
-     string "function" ^^ space ^^ doc_id f.id
+     string "function" ^^ (if f.clause then space ^^ string "clause" else empty) ^^ space ^^ doc_id f.id
      ^^ (match f.typq_opt with Some typq -> space ^^ doc_chunks opts typq | None -> empty)
      ^^ clauses ^^ hardline
   | Val vs ->
@@ -475,6 +497,18 @@ let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
          | Some typq -> space ^^ doc_chunks opts typq
          | None -> empty)
      ^^ space ^^ doc_chunks opts vs.typ
+  | Enum e ->
+     string "enum" ^^ space ^^ doc_id e.id
+     ^^ group (
+       (match e.enum_functions with
+        | Some enum_functions ->
+           space ^^ string "with" ^^ space ^^ align (separate_map softline (doc_chunks opts) enum_functions)
+        | None ->
+           empty
+       )
+       ^^ space ^^ char '=' ^^ space
+       ^^ surround tabwidth 1 (char '{') (separate_map softline (doc_chunks opts) e.members) (char '}')
+     )
   | Pragma (pragma, arg) ->
      string "$pragma" ^^ space ^^ string arg ^^ hardline
   | Block (always_hardline, exps) ->
@@ -495,6 +529,38 @@ let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
      ^^ (Option.fold ~none:empty ~some:(fun k -> space ^^ string k) kw2) ^^ space
      ^^ surround tabwidth 1 (char '{') (separate_map hardline (doc_pexp_chunks opts) m.cases) (char '}')
      |> atomic_parens opts
+  | Foreach loop ->
+     let to_keyword = string (if loop.decreasing then "downto" else "to") in
+     string "foreach" ^^ space
+     ^^ group (surround tabwidth 0 (char '(')
+                 (separate (break 1) ([
+                      doc_chunks (opts |> atomic) loop.var;
+                      string "from" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.from_index;
+                      to_keyword ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.to_index
+                    ]
+                      @ (match loop.step with
+                          | Some step ->
+                             [string "by" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) step]
+                          | None ->
+                             []
+                        )
+                    ))
+                 (char ')'))
+     ^^ space ^^ group (doc_chunks (opts |> nonatomic |> statement_like) loop.body)
+  | While loop ->
+     let measure = match loop.termination_measure with
+       | Some chunks ->
+          string "termination_measure" ^^ space ^^ group (surround tabwidth 1 (char '{') (doc_chunks opts chunks) (char '}')) ^^ space
+       | None -> empty
+     in
+     let cond = doc_chunks (opts |> nonatomic |> expression_like) loop.cond in
+     let body = doc_chunks (opts |> nonatomic |> statement_like) loop.body in
+     if loop.repeat_until then (
+       string "repeat" ^^ space ^^ measure ^^ body ^^ space ^^ string "until" ^^ space ^^ cond
+     ) else (
+       string "while" ^^ space ^^ measure ^^ cond ^^ space ^^ string "do" ^^ space ^^ body
+     )
+       
   | Field (exp, id) ->
      doc_chunks (subatomic opts) exp ^^ char '.' ^^ doc_id id
 
@@ -599,7 +665,7 @@ let fixup lb_info s =
           | Some (l, c) when l < !line || (l = !line && c = !column) ->
              if l < !line then (
                backspace buf;
-               Buffer.add_string buf Util.(("B" ^ ch) |> red |> clear);
+               Buffer.add_string buf Util.(("t" ^ ch) |> red |> clear);
                Buffer.add_char buf '\n'
              ) else (
                Buffer.add_string buf Util.(ch |> red |> clear);

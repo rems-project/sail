@@ -120,6 +120,7 @@ type chunk =
   | Spacer of bool * int
   | Function of {
       id : id;
+      clause : bool;
       rec_opt : chunks option;
       typq_opt : chunks option;
       return_typ_opt : chunks option;
@@ -131,6 +132,11 @@ type chunk =
       extern_opt : extern option;
       typq_opt : chunks option;
       typ : chunks;
+    }
+  | Enum of {
+      id : id;
+      enum_functions : chunks list option;
+      members : chunks list
     }
   | Function_typ of {
       mapping : bool;
@@ -164,12 +170,26 @@ type chunk =
   | Block_binder of binder * chunks * chunks
   | If_then of bool * chunks * chunks
   | If_then_else of if_format * chunks * chunks * chunks
-  | Record_update of chunks * chunks list
+  | Struct_update of chunks * chunks list
   | Match of {
       kind : match_kind;
       exp : chunks;
       aligned : bool;
       cases : pexp_chunks list
+    }
+  | Foreach of {
+      var : chunks;
+      decreasing : bool;
+      from_index : chunks;
+      to_index : chunks;
+      step : chunks option;
+      body : chunks
+    }
+  | While of {
+      repeat_until : bool;
+      termination_measure : chunks option;
+      cond : chunks;
+      body : chunks
     }
   | Vector_updates of chunks * chunk list
   | Chunks of chunks
@@ -215,13 +235,13 @@ let rec prerr_chunk indent = function
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) args
   | Block (always_hardline, args) ->
-     Printf.eprintf "%sBlock: %b\n" indent always_hardline;
+     Printf.eprintf "%sBlock: always_hardline=%b\n" indent always_hardline;
      List.iteri (fun i arg ->
          Printf.eprintf "%s  %d:\n" indent i;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) args
   | Function fn ->
-     Printf.eprintf "%sFunction:%s\n" indent (string_of_id fn.id);
+     Printf.eprintf "%sFunction:%s clause=%b\n" indent (string_of_id fn.id) fn.clause;
      begin match fn.typq_opt with
      | Some typq ->
         Printf.eprintf "%s  typq:\n" indent;
@@ -249,6 +269,20 @@ let rec prerr_chunk indent = function
   | Val vs ->
      Printf.eprintf "%sVal:%s is_cast=%b has_extern=%b\n"
        indent (string_of_id vs.id) vs.is_cast (Option.is_some vs.extern_opt)
+  | Enum e ->
+     Printf.eprintf "%sEnum:%s\n" indent (string_of_id e.id);
+     begin match e.enum_functions with
+       | Some enum_functions ->
+         List.iter (fun chunks ->
+             Printf.eprintf "%s  enum_function:\n" indent;
+             Queue.iter (prerr_chunk (indent ^ "    ")) chunks
+           ) enum_functions
+       | None -> ()
+     end;
+     List.iter (fun chunks ->
+         Printf.eprintf "%s  member:\n" indent;
+         Queue.iter (prerr_chunk (indent ^ "    ")) chunks
+       ) e.members
   | Match m ->
      Printf.eprintf "%sMatch:%s %b\n" indent (fst (match_keywords m.kind)) m.aligned;
      Printf.eprintf "%s  exp:\n" indent;
@@ -271,6 +305,30 @@ let rec prerr_chunk indent = function
          Printf.eprintf "%s  %s:\n" indent name;
          Queue.iter (prerr_chunk (indent ^ "    ")) arg
        ) [("lhs", fn_typ.lhs); ("rhs", fn_typ.rhs)]
+  | Foreach loop ->
+     Printf.eprintf "%sForeach: downto=%b\n" indent loop.decreasing;
+     begin match loop.step with
+     | Some step ->
+        Printf.eprintf "%s  step:\n" indent;
+        Queue.iter (prerr_chunk (indent ^ "    ")) step
+     | None -> ()
+     end;
+     List.iter (fun (name, arg) ->
+         Printf.eprintf "%s  %s:\n" indent name;
+         Queue.iter (prerr_chunk (indent ^ "    ")) arg
+       ) [("var", loop.var); ("from", loop.from_index); ("to", loop.to_index); ("body", loop.body)]
+  | While loop ->
+     Printf.eprintf "%sWhile: repeat_until=%b\n" indent loop.repeat_until;
+     begin match loop.termination_measure with
+     | Some measure ->
+        Printf.eprintf "%s  step:\n" indent;
+        Queue.iter (prerr_chunk (indent ^ "    ")) measure
+     | None -> ()
+     end;
+     List.iter (fun (name, arg) ->
+         Printf.eprintf "%s  %s:\n" indent name;
+         Queue.iter (prerr_chunk (indent ^ "    ")) arg
+       ) [("cond", loop.cond); ("body", loop.body)]
   | Typ_quant typq ->
      Printf.eprintf "%sTyp_quant:\n" indent;
      List.iter (fun (name, arg) ->
@@ -328,8 +386,8 @@ let rec prerr_chunk indent = function
   | Field (exp, id) ->
      Printf.eprintf "%sField:%s\n" indent (string_of_id id);
      Queue.iter (prerr_chunk (indent ^ "  ")) exp
-  | Record_update (exp, exps) ->
-     Printf.eprintf "%sRecord_update:\n" indent;
+  | Struct_update (exp, exps) ->
+     Printf.eprintf "%sStruct_update:\n" indent;
      Queue.iter (prerr_chunk (indent ^ "    ")) exp;
      Printf.eprintf "%s  with:" indent;
      List.iter (fun exp ->
@@ -603,6 +661,10 @@ let flatten_block exps =
     | [E_aux (E_var (lexp, exp, E_aux (E_block more_exps, _)), _)] ->
        Queue.add (Block_var (lexp, exp)) block_exps;
        go more_exps
+    | [E_aux (E_let (letbind, E_aux (E_lit (L_aux (L_unit, _)), _)), _)] ->
+       Queue.add (Block_let letbind) block_exps
+    | [E_aux (E_var (lexp, exp, E_aux (E_lit (L_aux (L_unit, _)), _)), _)] ->
+       Queue.add (Block_var (lexp, exp)) block_exps
     | exp :: exps ->
        Queue.add (Block_exp exp) block_exps;
        go exps
@@ -710,7 +772,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_struct_update (exp, fexps) ->
      let exp = rec_chunk_exp exp in
      let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks fexps in
-     Queue.add (Record_update (exp, fexps)) chunks
+     Queue.add (Struct_update (exp, fexps)) chunks
   | E_block exps ->
      let block_exps = flatten_block exps in
      let block_chunks =
@@ -775,10 +837,11 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
      let t_chunks = rec_chunk_exp t in
      let e_chunks = rec_chunk_exp e in
      Queue.add (If_then_else (if_format, i_chunks, t_chunks, e_chunks)) chunks
-  | (E_throw exp | E_return exp | E_deref exp) as unop ->
+  | (E_throw exp | E_return exp | E_deref exp | E_internal_return exp) as unop ->
      let unop = match unop with
        | E_throw _ -> "throw"
        | E_return _ -> "return"
+       | E_internal_return _ -> "internal_return"
        | E_deref _ -> "*"
        | _ -> Reporting.unreachable l __POS__ "invalid unop" in
      let e_chunks = rec_chunk_exp exp in
@@ -786,9 +849,6 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_field (exp, id) ->
      let exp_chunks = rec_chunk_exp exp in
      Queue.add (Field (exp_chunks, id)) chunks
-  | E_internal_return exp ->
-     let e_chunks = rec_chunk_exp exp in
-     Queue.add (Unary ("internal_return", e_chunks)) chunks
   | (E_match (exp, cases) | E_try (exp, cases)) as match_exp ->
      let kind = match match_exp with E_match _ -> Match_match | _ -> Try_match in
      let exp_chunks = rec_chunk_exp exp in
@@ -814,6 +874,69 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
      let ix_chunks = Queue.create () in
      Queue.add (Binary (ix1_chunks, "..", ix2_chunks)) ix_chunks;
      Queue.add (Index (exp_chunks, ix_chunks)) chunks
+  | E_for (var, from_index, to_index, step, order, body) ->
+     let decreasing = match order with
+       | ATyp_aux (ATyp_inc, _) -> false
+       | ATyp_aux (ATyp_dec, _) -> true
+       | _ -> Reporting.unreachable l __POS__ "Invalid foreach order"
+     in
+     let var_chunks = Queue.create () in
+     pop_comments comments var_chunks (id_loc var);
+     Queue.add (Atom (string_of_id var)) var_chunks;
+     let from_chunks = Queue.create () in
+     chunk_exp comments from_chunks from_index;
+     let to_chunks = Queue.create () in
+     chunk_exp comments to_chunks to_index;
+     let step_chunks_opt = match step with
+       | E_aux (E_lit (L_aux (L_num n, _)), _) when Big_int.equal n (Big_int.of_int 1) ->
+          None
+       | _ ->
+          let step_chunks = Queue.create () in
+          chunk_exp comments step_chunks step;
+          Some step_chunks
+     in
+     let body_chunks = Queue.create () in
+     chunk_exp comments body_chunks body;
+     (Foreach {
+         var = var_chunks;
+         decreasing = decreasing;
+         from_index = from_chunks;
+         to_index = to_chunks;
+         step = step_chunks_opt;
+         body = body_chunks
+       }) |> add_chunk chunks
+  | E_loop (loop_type, measure, cond, body) ->
+     let measure_chunks_opt = match measure with
+       | Measure_aux (Measure_none, _) -> None
+       | Measure_aux (Measure_some exp, _) ->
+          let measure_chunks = Queue.create () in
+          chunk_exp comments measure_chunks exp;
+          Some measure_chunks
+     in
+     begin match loop_type with
+       | While ->
+         let cond_chunks = Queue.create () in
+         chunk_exp comments cond_chunks cond;
+         let body_chunks = Queue.create () in
+         chunk_exp comments body_chunks body;
+         (While {
+             repeat_until = false;
+             termination_measure = measure_chunks_opt;
+             cond = cond_chunks;
+             body = body_chunks
+           }) |> add_chunk chunks
+       | Until ->
+         let cond_chunks = Queue.create () in
+         chunk_exp comments cond_chunks cond;
+         let body_chunks = Queue.create () in
+         chunk_exp comments body_chunks body;
+         (While {
+             repeat_until = true;
+             termination_measure = measure_chunks_opt;
+             cond = cond_chunks;
+             body = body_chunks
+           }) |> add_chunk chunks
+     end
 
 and chunk_vector_update comments (E_aux (aux, l) as exp) =
   let rec_chunk_exp exp =
@@ -927,6 +1050,7 @@ let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, f
   let funcls = List.map (chunk_funcl comments) funcls in
   (Function {
        id = fn_id;
+       clause = false;
        rec_opt = None;
        typq_opt = typq_opt;
        return_typ_opt = return_typ_opt;
@@ -1007,13 +1131,93 @@ let chunk_toplevel_let l comments chunks (LB_aux (LB_val (pat, exp), _)) =
     Queue.push (Spacer (true, 1)) chunks
   )
 
+let chunk_keyword k chunks =
+  Queue.push (Atom k) chunks;
+  Queue.push (Spacer (false, 1)) chunks
+
+let chunk_id id comments chunks =
+  pop_comments comments chunks (id_loc id);
+  Queue.push (Atom (string_of_id id)) chunks;
+  Queue.push (Spacer (false, 1)) chunks
+    
+let finish_def def_chunks chunks =
+  Queue.push (Chunks def_chunks) chunks;
+  Queue.push (Spacer (true, 1)) chunks
+
+let build_def chunks fs =
+  let def_chunks = Queue.create () in
+  List.iter (fun f ->
+      f def_chunks
+    ) fs;
+  finish_def def_chunks chunks
+
+let chunk_type_def comments chunks (TD_aux (aux, l)) =
+  pop_comments comments chunks l;
+  let chunk_enum_member comments chunks member =
+    match member with
+    | (id, None) ->
+      pop_comments comments chunks (id_loc id);
+      Queue.push (Atom (string_of_id id)) chunks
+    | (id, Some exp) ->
+      chunk_id id comments chunks;
+      chunk_keyword "=>" chunks;
+      chunk_exp comments chunks exp
+  in
+  let chunk_enum_function comments chunks (id, typ) =
+    chunk_id id comments chunks;
+    chunk_keyword "->" chunks;
+    chunk_atyp comments chunks typ
+  in
+  match aux with
+  | TD_enum (id, [], members, _) ->
+     let members = chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments chunks members in
+     Queue.add (Enum {
+        id = id;
+        enum_functions = None;
+        members = members
+      }) chunks;
+     Queue.add (Spacer (true, 1)) chunks
+  | TD_enum (id, enum_functions, members, _) ->
+     let enum_functions = chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_function comments chunks enum_functions in
+     let members = chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments chunks members in
+     Queue.add (Enum {
+        id = id;
+        enum_functions = Some enum_functions;
+        members = members
+      }) chunks;
+     Queue.add (Spacer (true, 1)) chunks
+ 
+let chunk_scattered comments chunks (SD_aux (aux, l)) =
+  pop_comments comments chunks l;
+  match aux with
+  | SD_funcl (FCL_aux (FCL_funcl (id, _), _) as funcl) ->
+     let funcl_chunks = chunk_funcl comments funcl in
+     Queue.push (Function {
+         id = id;
+         clause = true;
+         rec_opt = None;
+         typq_opt = None;
+         return_typ_opt = None;
+         funcls = [funcl_chunks]
+       }) chunks
+  | SD_end id ->
+     build_def chunks [
+       chunk_keyword "end";
+       chunk_id id comments
+     ]
+  | SD_function (_, _, _, id) ->
+     build_def chunks [
+       chunk_keyword "scattered function";
+       chunk_id id comments
+     ]
+
 let def_spacer (_, e) (s, _) =
   prerr_endline ((string_of_line_num e) ^ " " ^ (string_of_line_num s));
   match e, s with
   | Some l_e, Some l_s ->
      if l_s > l_e + 1 then 1 else 0
   | _, _ -> 1
- 
+
 let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = starting_line_num l, ending_line_num l in
   let spacing = def_spacer last_line_span line_span in
@@ -1043,6 +1247,10 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
      chunk_toplevel_let l comments chunks lb
   | DEF_val vs ->
      chunk_val_spec comments chunks vs
+  | DEF_scattered sd ->
+     chunk_scattered comments chunks sd
+  | DEF_type td ->
+     chunk_type_def comments chunks td
   end;
   (* Adjust the line span of a pragma to a single line so the spacing works out *)
   if not !pragma_span then (

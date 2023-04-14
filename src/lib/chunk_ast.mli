@@ -92,6 +92,7 @@ type chunk =
   | Spacer of bool * int
   | Function of {
       id : Parse_ast.id;
+      clause : bool;
       rec_opt : chunks option;
       typq_opt : chunks option;
       return_typ_opt : chunks option;
@@ -103,6 +104,11 @@ type chunk =
       extern_opt : Parse_ast.extern option;
       typq_opt : chunks option;
       typ : chunks;
+    }
+  | Enum of {
+      id : Parse_ast.id;
+      enum_functions : chunks list option;
+      members : chunks list
     }
   | Function_typ of {
       mapping : bool;
@@ -136,12 +142,26 @@ type chunk =
   | Block_binder of binder * chunks * chunks
   | If_then of bool * chunks * chunks
   | If_then_else of if_format * chunks * chunks * chunks
-  | Record_update of chunks * chunks list
+  | Struct_update of chunks * chunks list
   | Match of {
       kind : match_kind;
       exp : chunks;
       aligned : bool;
       cases : pexp_chunks list
+    }
+  | Foreach of {
+      var : chunks;
+      decreasing : bool;
+      from_index : chunks;
+      to_index : chunks;
+      step : chunks option;
+      body : chunks
+    }
+  | While of {
+      repeat_until : bool;
+      termination_measure : chunks option;
+      cond : chunks;
+      body : chunks
     }
   | Vector_updates of chunks * chunk list
   | Chunks of chunks

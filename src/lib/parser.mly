@@ -1313,6 +1313,8 @@ type_def:
 enum_functions:
   | id MinusGt typ Comma enum_functions
     { ($1, $3) :: $5 }
+  | id MinusGt typ Comma
+    { [($1, $3)] }
   | id MinusGt typ
     { [($1, $3)] }
 
