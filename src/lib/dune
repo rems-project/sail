@@ -61,5 +61,5 @@
 (library
   (name libsail)
   (public_name libsail)
-  (libraries lem linksem pprint dune-site)
+  (libraries lem linksem pprint dune-site yojson)
   (instrumentation (backend bisect_ppx)))

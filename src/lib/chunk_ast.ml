@@ -410,6 +410,24 @@ let rec prerr_chunk indent = function
 
 let string_of_var (Kid_aux (Var v, _)) = v
 
+let rec pop_header_comments comments chunks l lnum =
+  match Stack.top_opt comments with
+  | None -> ()
+  | Some (Lexer.Comment (comment_type, comment_s, e, contents)) ->
+     begin match Reporting.simp_loc l with
+     | Some (s, _) when e.pos_cnum < s.pos_cnum && comment_s.pos_lnum = lnum ->
+        let _ = Stack.pop comments in
+        Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents)) chunks;
+        Queue.add (Spacer (true, 1)) chunks;
+        pop_header_comments comments chunks l (lnum + 1)
+     | _ -> ()
+     end
+
+let chunk_header_comments comments chunks = function
+  | [] -> ()
+  | (DEF_aux (_, l)) :: _ ->
+     pop_header_comments comments chunks l 1
+
 (* Pop comments preceeding location into the chunkstream *)
 let rec pop_comments comments chunks l =
   match Stack.top_opt comments with
@@ -1198,7 +1216,9 @@ let chunk_type_def comments chunks (TD_aux (aux, l)) =
         members = members
       }) chunks;
      Queue.add (Spacer (true, 1)) chunks
- 
+  | _ ->
+     Reporting.unreachable l __POS__ "unhandled type def"
+     
 let chunk_scattered comments chunks (SD_aux (aux, l)) =
   pop_comments comments chunks l;
   match aux with
@@ -1222,7 +1242,9 @@ let chunk_scattered comments chunks (SD_aux (aux, l)) =
        chunk_keyword "scattered function";
        chunk_id id comments
      ]
-
+  | _ ->
+     Reporting.unreachable l __POS__ "unhandled scattered def"
+    
 let def_spacer (_, e) (s, _) =
   match e, s with
   | Some l_e, Some l_s ->
@@ -1311,5 +1333,6 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
 let chunk_defs comments defs =
   let comments = Stack.of_seq (List.to_seq comments) in
   let chunks = Queue.create () in
+  chunk_header_comments comments chunks defs;
   let _ = List.fold_left (fun last_span def -> chunk_def last_span comments chunks def) (None, Some 0) defs in
   chunks

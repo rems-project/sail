@@ -77,6 +77,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
+let opt_config_file : string option ref = ref None
 let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
@@ -136,6 +137,9 @@ let rec options = ref ([
     " drop to an interactive session after running Sail. Differs from \
      -i in that it does not set up the interpreter in the interactive \
      shell.");
+  ( "-config",
+    Arg.String (fun file -> opt_config_file := Some file),
+    "<file> configuration file");
   ( "-fmt",
     Arg.Set opt_format,
     " format input source code");
@@ -316,7 +320,7 @@ let run_sail tgt =
 
   (ast, env, effect_info)
 
-let run_sail_format () =
+let run_sail_format (config : Yojson.Basic.t option) =
   let is_format_file f = match !opt_format_only with
     | [] -> true
     | files -> List.exists (fun f' -> f = f') files
@@ -326,8 +330,16 @@ let run_sail_format () =
     | files -> List.exists (fun f' -> f = f') files
   in
   let module Config = struct
-    let config = Format_sail.default_config
-  end in
+      let config = match config with
+        | Some (`Assoc keys) ->
+           List.assoc_opt "fmt" keys
+           |> Option.map Format_sail.config_from_json
+           |> Option.value ~default:Format_sail.default_config
+        | Some _ ->
+           raise (Reporting.err_general Parse_ast.Unknown "Invalid configuration file (must be a json object)")
+        | None ->
+           Format_sail.default_config
+    end in
   let module Formatter = Format_sail.Make(Config) in
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
   List.iter (fun (f, (comments, parse_ast)) ->
@@ -351,6 +363,45 @@ let get_plugin_dir () =
   | Some path -> path :: Libsail_sites.Sites.plugins
   | None -> Libsail_sites.Sites.plugins
 
+let rec find_file_above ?prev_inode_opt dir file =
+  try
+    let inode = (Unix.stat dir).st_ino in
+    if Option.fold ~none:true ~some:((<>) inode) prev_inode_opt then ( 
+      let filepath = Filename.concat dir file in
+      if Sys.file_exists filepath then (
+        Some filepath
+      ) else (
+        find_file_above ~prev_inode_opt:inode (dir ^ Filename.dir_sep ^ Filename.parent_dir_name) file
+      )
+    ) else (
+      None
+    )
+  with
+  | Unix.Unix_error _ -> None
+
+let get_config_file () =
+  let check_exists file =
+    if Sys.file_exists file then (
+      Some file
+    ) else (
+      Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file);
+      None
+    ) in
+  match !opt_config_file with
+  | Some file -> check_exists file
+  | None ->
+     match Sys.getenv_opt "SAIL_CONFIG" with
+     | Some file -> check_exists file
+     | None -> find_file_above (Sys.getcwd ()) "sail_config.json"
+
+let parse_config_file file =
+  try
+    Some (Yojson.Basic.from_file ~fname:file ~lnum:0 file)
+  with
+  | Yojson.Json_error message ->
+     Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
+     None
+     
 let main () =
   begin match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()
@@ -373,6 +424,8 @@ let main () =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg;
 
+  let config = Option.bind (get_config_file ()) parse_config_file in
+  
   feature_check ();
 
   if !opt_print_version then (
@@ -386,7 +439,7 @@ let main () =
   );
 
   if !opt_format then (
-    run_sail_format ();
+    run_sail_format config;
     exit 0
   );
  

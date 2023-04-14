@@ -65,8 +65,25 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-type config
+type config = {
+    (** The default indentation depth (default 4) *)
+    indent : int;
+    (** If true, the formatter preserves the structure of the AST as
+       much as possible - it won't insert braces around if statements
+       and so on where there weren't any and so on. (default false) *)
+    preserve_structure : bool;
+    (** The desired maximum line width. (default 120) *)
+    line_width : int;
+    (** The fraction (between 0.0 and 1.0) of the maximum line width that
+       can be filled by non whitespace characters before we consider
+       breaking. (default 1.0) *)
+    ribbon_width : float;
+  }
 
+(** Read the config struct from a json object. Raises err_general if
+   the json is not an object, and warns about any invalid keys. *)
+val config_from_json : Yojson.Basic.t -> config
+            
 val default_config : config
 
 module type CONFIG = sig
@@ -74,5 +91,8 @@ module type CONFIG = sig
 end
 
 module Make(Config : CONFIG) : sig
+  (** If debug is true, we print extra debugging information to
+     stderr, and annotate the output with various information on
+     linebreaking decisions. *)
   val format_defs : ?debug:bool -> Lexer.comment list -> Parse_ast.def list -> string
 end

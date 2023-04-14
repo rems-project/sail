@@ -77,14 +77,6 @@ let rec map_last f = function
      let x = f false x in
      x :: map_last f xs
 
-let rec map_sep_last ~default:d ~last:g f = function
-  | [] -> [], d
-  | [x] -> [], g x
-  | x :: xs ->
-     let x = f x in
-     let xs, l = map_sep_last ~default:d ~last:g f xs in
-     (x :: xs, l)
-
 let line_comment_opt = function
   | Comment (Lexer.Comment_line, _, _, contents) -> Some contents
   | _ -> None
@@ -344,25 +336,69 @@ let surround_hardline h n b opening contents closing =
   group (opening ^^ nest n (b ^^ contents) ^^ b ^^ closing)
 
 type config = {
-  tabwidth : int;
-  preserve_structure : bool;
-  line_width : int;
-  ribbon_width : float;
-}
+    indent : int;
+    preserve_structure : bool;
+    line_width : int;
+    ribbon_width : float;
+  }
 
 let default_config = {
-  tabwidth = 4;
-  preserve_structure = true;
-  line_width = 120;
-  ribbon_width = 1.;
-}
+    indent = 4;
+    preserve_structure = false;
+    line_width = 120;
+    ribbon_width = 1.;
+  }
+
+let known_key k =
+  k = "indent"
+  || k = "preserve_structure"
+  || k = "line_width"
+  || k = "ribbon_width"
+
+let int_option k = function
+  | `Int n -> Some n
+  | json ->
+     Reporting.simple_warn (Printf.sprintf "Argument for key %s must be an integer, got %s instead. Using default value." k (Yojson.Basic.to_string json));
+     None
+
+let bool_option k = function
+  | `Bool n -> Some n
+  | json ->
+     Reporting.simple_warn (Printf.sprintf "Argument for key %s must be a boolean, got %s instead. Using default value." k (Yojson.Basic.to_string json));
+     None
+
+let float_option k = function
+  | `Int n -> Some (float_of_int n)
+  | `Float n -> Some n
+  | json ->
+     Reporting.simple_warn (Printf.sprintf "Argument for key %s must be a number, got %s instead. Using default value." k (Yojson.Basic.to_string json));
+     None
+ 
+let get_option ~key:k ~keys:ks ~read:read ~default:d =
+  List.assoc_opt k ks |> (fun opt -> Option.bind opt (read k)) |> Option.value ~default:d 
+  
+let config_from_json (json : Yojson.Basic.t) =
+  match json with
+  | `Assoc keys ->
+     begin match List.find_opt (fun (k, _) -> not (known_key k)) keys with
+     | Some (k, _) ->
+        Reporting.simple_warn (Printf.sprintf "Unknown key %s in formatting config" k)
+     | None -> ()
+     end;
+     { indent = get_option ~key:"indent" ~keys:keys ~read:int_option ~default:default_config.indent;
+       preserve_structure = get_option ~key:"preserve_structure" ~keys:keys ~read:bool_option ~default:default_config.preserve_structure;
+       line_width = get_option ~key:"line_width" ~keys:keys ~read:int_option ~default:default_config.line_width;
+       ribbon_width = get_option ~key:"ribbon_width" ~keys:keys ~read:float_option ~default:default_config.ribbon_width;
+     }
+  | _ ->
+     raise (Reporting.err_general Parse_ast.Unknown "Invalid formatting configuration")
 
 module type CONFIG = sig
   val config : config
 end
 
 module Make(Config : CONFIG) = struct
-  let tabwidth = Config.config.tabwidth
+  let indent = Config.config.indent
   let preserve_structure = Config.config.preserve_structure
 
   let rec doc_chunk ?(ungroup_tuple=false) ?(toplevel=false) opts = function
@@ -371,231 +407,231 @@ module Make(Config : CONFIG) = struct
     | Delim s -> string s ^^ space
     | Opt_delim s -> opt_delim s
     | String_literal s ->
-      utf8string ("\"" ^ String.escaped s ^ "\"")
+       utf8string ("\"" ^ String.escaped s ^ "\"")
     | App (id, args) ->
-      doc_id id
-      ^^ group (surround tabwidth 0 (char '(') (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args) (char ')'))
+       doc_id id
+       ^^ group (surround indent 0 (char '(') (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args) (char ')'))
     | Tuple (l, r, spacing, args) ->
-      let group_fn = if ungroup_tuple then (fun x -> x) else group in
-      group_fn (surround tabwidth spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r))
+       let group_fn = if ungroup_tuple then (fun x -> x) else group in
+       group_fn (surround indent spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r))
     | Intersperse (op, args) ->
-      group (separate_map (space ^^ string op ^^ space) (doc_chunks (atomic opts)) args)
+       group (separate_map (space ^^ string op ^^ space) (doc_chunks (atomic opts)) args)
     | Spacer (line, n) ->
-      if line then
-        repeat n hardline
-      else
-        repeat n space
+       if line then
+         repeat n hardline
+       else
+         repeat n space
     | Unary (op, exp) ->
-      let outer_prec, inner_prec, spacing = unary_operator_precedence op in
-      let doc = string op ^^ spacing ^^ doc_chunks (opts |> inner_prec |> expression_like) exp in
-      if outer_prec > opts.precedence then (
-        parens doc
-      ) else (
-        doc
-      )
+       let outer_prec, inner_prec, spacing = unary_operator_precedence op in
+       let doc = string op ^^ spacing ^^ doc_chunks (opts |> inner_prec |> expression_like) exp in
+       if outer_prec > opts.precedence then (
+         parens doc
+       ) else (
+         doc
+       )
     | Binary (lhs, op, rhs) ->
-      let outer_prec, lhs_prec, rhs_prec, spacing = operator_precedence op in
-      let doc =
-        infix tabwidth spacing (string op)
-          (doc_chunks (opts |> lhs_prec |> expression_like) lhs)
-          (doc_chunks (opts |> rhs_prec |> expression_like) rhs)
-      in
-      if outer_prec > opts.precedence then (
-        parens doc
-      ) else (
-        doc
-      )
+       let outer_prec, lhs_prec, rhs_prec, spacing = operator_precedence op in
+       let doc =
+         infix indent spacing (string op)
+           (doc_chunks (opts |> lhs_prec |> expression_like) lhs)
+           (doc_chunks (opts |> rhs_prec |> expression_like) rhs)
+       in
+       if outer_prec > opts.precedence then (
+         parens doc
+       ) else (
+         doc
+       )
     | Ternary (x, op1, y, op2, z) ->
-      let outer_prec, x_prec, y_prec, z_prec = ternary_operator_precedence (op1, op2) in
-      let doc =
-        prefix tabwidth 1 (doc_chunks (opts |> x_prec |> expression_like) x
-                           ^^ space ^^ string op1 ^^ space
-                           ^^ doc_chunks (opts |> y_prec |> expression_like) y
-                           ^^ space ^^ string op2)
-          (doc_chunks (opts |> z_prec |> expression_like) z)
-      in
-      if outer_prec > opts.precedence then (
-        parens doc
-      ) else (
-        doc
-      )
+       let outer_prec, x_prec, y_prec, z_prec = ternary_operator_precedence (op1, op2) in
+       let doc =
+         prefix indent 1 (doc_chunks (opts |> x_prec |> expression_like) x
+                          ^^ space ^^ string op1 ^^ space
+                          ^^ doc_chunks (opts |> y_prec |> expression_like) y
+                          ^^ space ^^ string op2)
+           (doc_chunks (opts |> z_prec |> expression_like) z)
+       in
+       if outer_prec > opts.precedence then (
+         parens doc
+       ) else (
+         doc
+       )
     | If_then_else (bracing, i, t, e) ->
-      let insert_braces = opts.statement || bracing.then_brace || bracing.else_brace in
-      let i = doc_chunks (opts |> nonatomic |> expression_like) i in
-      let t =
-        if insert_braces && not preserve_structure && not bracing.then_brace then (
-          doc_chunk opts (Block (true, [t]))
-        ) else (
-          doc_chunks (opts |> nonatomic |> expression_like) t
-        ) in
-      let e =
-        if insert_braces && not preserve_structure && not bracing.else_brace then (
-          doc_chunk opts (Block (true, [e]))
-        ) else (
-          doc_chunks (opts |> nonatomic |> expression_like) e
-        ) in
-      separate space [string "if"; i; string "then"; t; string "else"; e]
-      |> atomic_parens opts
+       let insert_braces = opts.statement || bracing.then_brace || bracing.else_brace in
+       let i = doc_chunks (opts |> nonatomic |> expression_like) i in
+       let t =
+         if insert_braces && not preserve_structure && not bracing.then_brace then (
+           doc_chunk opts (Block (true, [t]))
+         ) else (
+           doc_chunks (opts |> nonatomic |> expression_like) t
+         ) in
+       let e =
+         if insert_braces && not preserve_structure && not bracing.else_brace then (
+           doc_chunk opts (Block (true, [e]))
+         ) else (
+           doc_chunks (opts |> nonatomic |> expression_like) e
+         ) in
+       separate space [string "if"; i; string "then"; t; string "else"; e]
+       |> atomic_parens opts
     | If_then (bracing, i, t) ->
-      let i = doc_chunks (opts |> nonatomic |> expression_like) i in
-      let t =
-        if opts.statement && not preserve_structure && not bracing then (
-          doc_chunk opts (Block (true, [t]))
-        ) else (
-          doc_chunks (opts |> nonatomic |> expression_like) t
-        ) in
-      separate space [string "if"; i; string "then"; t]
-      |> atomic_parens opts
+       let i = doc_chunks (opts |> nonatomic |> expression_like) i in
+       let t =
+         if opts.statement && not preserve_structure && not bracing then (
+           doc_chunk opts (Block (true, [t]))
+         ) else (
+           doc_chunks (opts |> nonatomic |> expression_like) t
+         ) in
+       separate space [string "if"; i; string "then"; t]
+       |> atomic_parens opts
     | Vector_updates (exp, updates) ->
-      let opts = opts |> nonatomic |> expression_like in
-      let exp_doc = doc_chunks opts exp in
-      surround tabwidth 0
-        (char '[' ^^ exp_doc ^^ space ^^ string "with" ^^ space)
-        (group (separate_map (char ',' ^^ break 1) (doc_chunk opts) updates))
-        (char ']')
-      |> atomic_parens opts
+       let opts = opts |> nonatomic |> expression_like in
+       let exp_doc = doc_chunks opts exp in
+       surround indent 0
+         (char '[' ^^ exp_doc ^^ space ^^ string "with" ^^ space)
+         (group (separate_map (char ',' ^^ break 1) (doc_chunk opts) updates))
+         (char ']')
+       |> atomic_parens opts
     | Index (exp, ix) ->
-      let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
-      let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
-      exp_doc ^^ surround tabwidth 0 (char '[') ix_doc (char ']')
-      |> atomic_parens opts
+       let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
+       let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
+       exp_doc ^^ surround indent 0 (char '[') ix_doc (char ']')
+       |> atomic_parens opts
     | Exists ex ->
-      let ex_doc =
-        doc_chunks (atomic opts) ex.vars
-        ^^ char ',' ^^ break 1
-        ^^ doc_chunks (nonatomic opts) ex.constr
-        ^^ char '.' ^^ break 1
-        ^^ doc_chunks (nonatomic opts) ex.typ
-      in
-      enclose (char '{') (char '}') (align ex_doc)
+       let ex_doc =
+         doc_chunks (atomic opts) ex.vars
+         ^^ char ',' ^^ break 1
+         ^^ doc_chunks (nonatomic opts) ex.constr
+         ^^ char '.' ^^ break 1
+         ^^ doc_chunks (nonatomic opts) ex.typ
+       in
+       enclose (char '{') (char '}') (align ex_doc)
     | Function_typ ft ->
-      separate space [
-        group (doc_chunks opts ft.lhs);
-        if ft.mapping then string "<->" else string "->";
-        group (doc_chunks opts ft.rhs)
-      ]
+       separate space [
+           group (doc_chunks opts ft.lhs);
+           if ft.mapping then string "<->" else string "->";
+           group (doc_chunks opts ft.rhs)
+         ]
     | Typ_quant typq ->
-      group (
-        align (
-          string "forall" ^^ space
-          ^^ nest 2 (
-            doc_chunks opts typq.vars
-            ^^ (match typq.constr_opt with
-                | None -> char '.'
-                | Some constr -> char ',' ^^ break 1 ^^ doc_chunks opts constr ^^ char '.')
-          )
-        )
-      )
-      ^^ break 1
+       group (
+           align (
+               string "forall" ^^ space
+               ^^ nest 2 (
+                      doc_chunks opts typq.vars
+                      ^^ (match typq.constr_opt with
+                          | None -> char '.'
+                          | Some constr -> char ',' ^^ break 1 ^^ doc_chunks opts constr ^^ char '.')
+                    )
+             )
+         )
+       ^^ break 1
     | Struct_update (exp, fexps) ->
-      surround tabwidth 1 (char '{') (doc_chunks opts exp ^^ space ^^ string "with" ^^ break 1 ^^ separate_map (break 1) (doc_chunks opts) fexps) (char '}')
+       surround indent 1 (char '{') (doc_chunks opts exp ^^ space ^^ string "with" ^^ break 1 ^^ separate_map (break 1) (doc_chunks opts) fexps) (char '}')
     | Comment (comment_type, n, col, contents) ->
-      begin match comment_type with
-        | Lexer.Comment_line ->
+       begin match comment_type with
+       | Lexer.Comment_line ->
           blank n ^^ string "//" ^^ string contents ^^ require_hardline
-        | Lexer.Comment_block ->
+       | Lexer.Comment_block ->
           (* Allow a linebreak after a block comment with newlines. This prevents formatting like:
              /* comment line 1
                 comment line 2 */exp
              by forcing exp on a newline if the comment contains linebreaks
-          *)
+           *)
           match block_comment_lines col contents with
           | [l] -> blank n ^^ string "/*" ^^ l ^^ string "*/" ^^ space
           | ls ->
-            blank n ^^ group (string "/*" ^^ separate hardline ls ^^ string "*/")
-            ^^ require_hardline
-      end
+             blank n ^^ group (string "/*" ^^ separate hardline ls ^^ string "*/")
+             ^^ require_hardline
+       end
     | Function f ->
-      let sep = hardline ^^ string "and" ^^ space in
-      let clauses = match f.funcls with
-        | [] -> Reporting.unreachable (id_loc f.id) __POS__ "Function with no clauses found"
-        | [funcl] -> doc_funcl f.return_typ_opt opts funcl
-        | funcl :: funcls ->
-          doc_funcl f.return_typ_opt opts funcl ^^ sep ^^ separate_map sep (doc_funcl None opts) f.funcls in
-      string "function" ^^ (if f.clause then space ^^ string "clause" else empty) ^^ space ^^ doc_id f.id
-      ^^ (match f.typq_opt with Some typq -> space ^^ doc_chunks opts typq | None -> empty)
-      ^^ clauses ^^ hardline
+       let sep = hardline ^^ string "and" ^^ space in
+       let clauses = match f.funcls with
+         | [] -> Reporting.unreachable (id_loc f.id) __POS__ "Function with no clauses found"
+         | [funcl] -> doc_funcl f.return_typ_opt opts funcl
+         | funcl :: funcls ->
+            doc_funcl f.return_typ_opt opts funcl ^^ sep ^^ separate_map sep (doc_funcl None opts) f.funcls in
+       string "function" ^^ (if f.clause then space ^^ string "clause" else empty) ^^ space ^^ doc_id f.id
+       ^^ (match f.typq_opt with Some typq -> space ^^ doc_chunks opts typq | None -> empty)
+       ^^ clauses ^^ hardline
     | Val vs ->
-      let doc_binding (target, name) = string target ^^ char ':' ^^ space ^^ char '"' ^^ utf8string name ^^ char '"' in
-      string "val" ^^ space ^^ (if vs.is_cast then string "cast" ^^ space else empty) ^^ doc_id vs.id
-      ^^ group (match vs.extern_opt with
-          | Some extern ->
-            space ^^ char '=' ^^ space
-            ^^ string (if extern.pure then "pure" else "monadic") ^^ space
-            ^^ surround tabwidth 1 (char '{') (separate_map (char ',' ^^ break 1) doc_binding extern.bindings) (char '}')
-          | None -> empty)
-      ^^ space ^^ char ':'
-      ^^ group (nest tabwidth ((match vs.typq_opt with
-          | Some typq -> space ^^ doc_chunks opts typq
-          | None -> space)
-                               ^^ doc_chunks opts vs.typ))
+       let doc_binding (target, name) = string target ^^ char ':' ^^ space ^^ char '"' ^^ utf8string name ^^ char '"' in
+       string "val" ^^ space ^^ (if vs.is_cast then string "cast" ^^ space else empty) ^^ doc_id vs.id
+       ^^ group (match vs.extern_opt with
+                 | Some extern ->
+                    space ^^ char '=' ^^ space
+                    ^^ string (if extern.pure then "pure" else "monadic") ^^ space
+                    ^^ surround indent 1 (char '{') (separate_map (char ',' ^^ break 1) doc_binding extern.bindings) (char '}')
+                 | None -> empty)
+       ^^ space ^^ char ':'
+       ^^ group (nest indent ((match vs.typq_opt with
+                               | Some typq -> space ^^ doc_chunks opts typq
+                               | None -> space)
+                              ^^ doc_chunks opts vs.typ))
     | Enum e ->
-      string "enum" ^^ space ^^ doc_id e.id
-      ^^ group (
-        (match e.enum_functions with
-         | Some enum_functions ->
-           space ^^ string "with" ^^ space ^^ align (separate_map softline (doc_chunks opts) enum_functions)
-         | None ->
-           empty
-        )
-        ^^ space ^^ char '=' ^^ space
-        ^^ surround tabwidth 1 (char '{') (separate_map softline (doc_chunks opts) e.members) (char '}')
-      )
+       string "enum" ^^ space ^^ doc_id e.id
+       ^^ group (
+              (match e.enum_functions with
+               | Some enum_functions ->
+                  space ^^ string "with" ^^ space ^^ align (separate_map softline (doc_chunks opts) enum_functions)
+               | None ->
+                  empty
+              )
+              ^^ space ^^ char '=' ^^ space
+              ^^ surround indent 1 (char '{') (separate_map softline (doc_chunks opts) e.members) (char '}')
+            )
     | Pragma (pragma, arg) ->
-      char '$' ^^ string pragma ^^ space ^^ string arg ^^ hardline
+       char '$' ^^ string pragma ^^ space ^^ string arg ^^ hardline
     | Block (always_hardline, exps) ->
-      let exps = map_last (fun no_semi chunks -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks) exps in
-      let sep = if (always_hardline || List.exists snd exps) then hardline else break 1 in
-      let exps = List.map fst exps in
-      surround_hardline always_hardline tabwidth 1 (char '{') (separate sep exps) (char '}')
-      |> atomic_parens opts
+       let exps = map_last (fun no_semi chunks -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks) exps in
+       let sep = if (always_hardline || List.exists snd exps) then hardline else break 1 in
+       let exps = List.map fst exps in
+       surround_hardline always_hardline indent 1 (char '{') (separate sep exps) (char '}')
+       |> atomic_parens opts
     | Block_binder (binder, x, y) ->
-      separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
+       separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
     | Binder (binder, x, y, z) ->
-      prefix tabwidth 1
-        (separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y; string "in"])
-        (doc_chunks (nonatomic opts) z)
+       prefix indent 1
+         (separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y; string "in"])
+         (doc_chunks (nonatomic opts) z)
     | Match m ->
-      let kw1, kw2 = match_keywords m.kind in
-      string kw1 ^^ space ^^ doc_chunks (nonatomic opts) m.exp
-      ^^ (Option.fold ~none:empty ~some:(fun k -> space ^^ string k) kw2) ^^ space
-      ^^ surround tabwidth 1 (char '{') (separate_map hardline (doc_pexp_chunks opts) m.cases) (char '}')
-      |> atomic_parens opts
+       let kw1, kw2 = match_keywords m.kind in
+       string kw1 ^^ space ^^ doc_chunks (nonatomic opts) m.exp
+       ^^ (Option.fold ~none:empty ~some:(fun k -> space ^^ string k) kw2) ^^ space
+       ^^ surround indent 1 (char '{') (separate_map hardline (doc_pexp_chunks opts) m.cases) (char '}')
+       |> atomic_parens opts
     | Foreach loop ->
-      let to_keyword = string (if loop.decreasing then "downto" else "to") in
-      string "foreach" ^^ space
-      ^^ group (surround tabwidth 0 (char '(')
-                  (separate (break 1) ([
-                       doc_chunks (opts |> atomic) loop.var;
-                       string "from" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.from_index;
-                       to_keyword ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.to_index
-                     ]
-                       @ (match loop.step with
-                           | Some step ->
-                             [string "by" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) step]
-                           | None ->
-                             []
-                         )
-                     ))
-                  (char ')'))
-      ^^ space ^^ group (doc_chunks (opts |> nonatomic |> statement_like) loop.body)
+       let to_keyword = string (if loop.decreasing then "downto" else "to") in
+       string "foreach" ^^ space
+       ^^ group (surround indent 0 (char '(')
+                   (separate (break 1) ([
+                          doc_chunks (opts |> atomic) loop.var;
+                          string "from" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.from_index;
+                          to_keyword ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) loop.to_index
+                        ]
+                                        @ (match loop.step with
+                                           | Some step ->
+                                              [string "by" ^^ space ^^ doc_chunks (opts |> atomic |> expression_like) step]
+                                           | None ->
+                                              []
+                                          )
+                   ))
+                   (char ')'))
+       ^^ space ^^ group (doc_chunks (opts |> nonatomic |> statement_like) loop.body)
     | While loop ->
-      let measure = match loop.termination_measure with
-        | Some chunks ->
-          string "termination_measure" ^^ space ^^ group (surround tabwidth 1 (char '{') (doc_chunks opts chunks) (char '}')) ^^ space
-        | None -> empty
-      in
-      let cond = doc_chunks (opts |> nonatomic |> expression_like) loop.cond in
-      let body = doc_chunks (opts |> nonatomic |> statement_like) loop.body in
-      if loop.repeat_until then (
-        string "repeat" ^^ space ^^ measure ^^ body ^^ space ^^ string "until" ^^ space ^^ cond
-      ) else (
-        string "while" ^^ space ^^ measure ^^ cond ^^ space ^^ string "do" ^^ space ^^ body
-      )
+       let measure = match loop.termination_measure with
+         | Some chunks ->
+            string "termination_measure" ^^ space ^^ group (surround indent 1 (char '{') (doc_chunks opts chunks) (char '}')) ^^ space
+         | None -> empty
+       in
+       let cond = doc_chunks (opts |> nonatomic |> expression_like) loop.cond in
+       let body = doc_chunks (opts |> nonatomic |> statement_like) loop.body in
+       if loop.repeat_until then (
+         string "repeat" ^^ space ^^ measure ^^ body ^^ space ^^ string "until" ^^ space ^^ cond
+       ) else (
+         string "while" ^^ space ^^ measure ^^ cond ^^ space ^^ string "do" ^^ space ^^ body
+       )
     | Field (exp, id) ->
-      doc_chunks (subatomic opts) exp ^^ char '.' ^^ doc_id id
+       doc_chunks (subatomic opts) exp ^^ char '.' ^^ doc_id id
     | Raw str ->
-      separate hardline (lines str)
+       separate hardline (lines str)
 
   and doc_pexp_chunks_pair opts pexp =
     let pat = doc_chunks opts pexp.pat in
@@ -603,8 +639,8 @@ module Make(Config : CONFIG) = struct
     match pexp.guard with
     | None -> pat, body
     | Some guard ->
-      separate space [pat; string "if"; doc_chunks opts guard],
-      body
+       separate space [pat; string "if"; doc_chunks opts guard],
+       body
 
   and doc_pexp_chunks opts pexp =
     let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
@@ -612,22 +648,22 @@ module Make(Config : CONFIG) = struct
 
   and doc_funcl return_typ_opt opts pexp =
     let return_typ = match return_typ_opt with
-      | Some chunks -> space ^^ prefix_parens tabwidth (string "->") (doc_chunks opts chunks) ^^ space
+      | Some chunks -> space ^^ prefix_parens indent (string "->") (doc_chunks opts chunks) ^^ space
       | None -> space in
     match pexp.guard with
     | None ->
-      (if pexp.funcl_space then space else empty)
-      ^^ group (
-        doc_chunks ~ungroup_tuple:true opts pexp.pat
-        ^^ return_typ
-      )
-      ^^ string "="
-      ^^ space ^^ doc_chunks opts pexp.body
+       (if pexp.funcl_space then space else empty)
+       ^^ group (
+              doc_chunks ~ungroup_tuple:true opts pexp.pat
+              ^^ return_typ
+            )
+       ^^ string "="
+       ^^ space ^^ doc_chunks opts pexp.body
     | Some guard ->
-      parens (separate space [doc_chunks opts pexp.pat; string "if"; doc_chunks opts guard])
-      ^^ return_typ
-      ^^ string "="
-      ^^ space ^^ doc_chunks opts pexp.body
+       parens (separate space [doc_chunks opts pexp.pat; string "if"; doc_chunks opts guard])
+       ^^ return_typ
+       ^^ string "="
+       ^^ space ^^ doc_chunks opts pexp.body
 
   (* Format an expression in a block, optionally terminating it with a
      semicolon. If the expression has a trailing comment then we will
@@ -646,8 +682,8 @@ module Make(Config : CONFIG) = struct
           if last then
             match line_comment_opt chunk with
             | Some contents ->
-              requires_hardline := true;
-              terminator ^^ space ^^ string "//" ^^ string contents ^^ require_hardline
+               requires_hardline := true;
+               terminator ^^ space ^^ string "//" ^^ string contents ^^ require_hardline
             | None -> doc_chunk opts chunk ^^ terminator
           else
             doc_chunk opts chunk
@@ -685,43 +721,43 @@ module Make(Config : CONFIG) = struct
     String.iter (fun c ->
         let rec pop_dedents () =
           begin match Queue.peek_opt lb_info.dedents with
-            | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
-              if !after_hardline then (
-                pending_spaces := !pending_spaces - amount
-              );
-              if debug then (
-                Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear)
-              );
-              ignore (Queue.take lb_info.dedents);
-              pop_dedents ()
-            | _ -> ();
+          | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
+             if !after_hardline then (
+               pending_spaces := !pending_spaces - amount
+             );
+             if debug then (
+               Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear)
+             );
+             ignore (Queue.take lb_info.dedents);
+             pop_dedents ()
+          | _ -> ();
           end
         in
         pop_dedents ();
 
         if c = '\n' then (
           begin match Queue.take_opt lb_info.hardlines with
-            | Some (l, c, hardline_type) ->
-              begin match hardline_type with
-                | Desired ->
-                  if debug then (
-                    Buffer.add_string buf Util.("H" |> red |> clear)
-                  );
-                  Buffer.add_char buf '\n';
-                  pending_spaces := 0;
-                  if !require_hardline then (
-                    require_hardline := false
-                  );
-                  after_hardline := true
-                | Required ->
-                  if debug then (
-                    Buffer.add_string buf Util.("R" |> red |> clear)
-                  );
-                  require_hardline := true;
-                  after_hardline := true
-              end
-            | None ->
-              Reporting.unreachable Parse_ast.Unknown __POS__ (Printf.sprintf "Missing hardline %d %d" !line !column)
+          | Some (l, c, hardline_type) ->
+             begin match hardline_type with
+             | Desired ->
+                if debug then (
+                  Buffer.add_string buf Util.("H" |> red |> clear)
+                );
+                Buffer.add_char buf '\n';
+                pending_spaces := 0;
+                if !require_hardline then (
+                  require_hardline := false
+                );
+                after_hardline := true
+             | Required ->
+                if debug then (
+                  Buffer.add_string buf Util.("R" |> red |> clear)
+                );
+                require_hardline := true;
+                after_hardline := true
+             end
+          | None ->
+             Reporting.unreachable Parse_ast.Unknown __POS__ (Printf.sprintf "Missing hardline %d %d" !line !column)
           end;
           incr line;
           column := 0;
