@@ -116,7 +116,7 @@ let comment_type_delimiters = function
   | Lexer.Comment_block -> "/*", "*/"
 
 type chunk =
-  | Comment of Lexer.comment_type * int * string
+  | Comment of Lexer.comment_type * int * int * string
   | Spacer of bool * int
   | Function of {
       id : id;
@@ -193,6 +193,7 @@ type chunk =
     }
   | Vector_updates of chunks * chunk list
   | Chunks of chunks
+  | Raw of string
 
 and chunks = chunk Queue.t
 
@@ -207,9 +208,9 @@ let add_chunk q chunk =
   Queue.add chunk q
 
 let rec prerr_chunk indent = function
-  | Comment (comment_type, n, contents) ->
+  | Comment (comment_type, n, col, contents) ->
      let s, e = comment_type_delimiters comment_type in
-     Printf.eprintf "%sComment:%d %s%s%s\n" indent n s contents e
+     Printf.eprintf "%sComment: blank=%d col=%d %s%s%s\n" indent n col s contents e
   | Spacer (line, w) ->
      Printf.eprintf "%sSpacer:%b %d\n" indent line w;
   | Atom str ->
@@ -404,6 +405,8 @@ let rec prerr_chunk indent = function
   | Chunks chunks ->
      Printf.eprintf "%sChunks:\n" indent;
      Queue.iter (prerr_chunk (indent ^ "  ")) chunks
+  | Raw _ ->
+     Printf.eprintf "%sRaw\n" indent
 
 let string_of_var (Kid_aux (Var v, _)) = v
 
@@ -411,11 +414,14 @@ let string_of_var (Kid_aux (Var v, _)) = v
 let rec pop_comments comments chunks l =
   match Stack.top_opt comments with
   | None -> ()
-  | Some (Lexer.Comment (comment_type, _, e, contents)) ->
+  | Some (Lexer.Comment (comment_type, comment_s, e, contents)) ->
      begin match Reporting.simp_loc l with
      | Some (s, _) when e.pos_cnum <= s.pos_cnum ->
         let _ = Stack.pop comments in
-        Queue.add (Comment (comment_type, 0, contents)) chunks;
+        Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents)) chunks;
+        if e.pos_lnum < s.pos_lnum then (
+          Queue.add (Spacer (true, 1)) chunks
+        );
         pop_comments comments chunks l
      | _ -> ()
      end
@@ -427,7 +433,7 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
      begin match Stack.top_opt comments with
      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum ->
         let _ = Stack.pop comments in
-        Queue.add (Comment (comment_type, n, contents)) chunks;
+        Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents)) chunks;
         begin match comment_type with
         | Lexer.Comment_line -> true
         | _ -> false
@@ -604,6 +610,8 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
      Queue.add (Atom "_") chunks
   | P_lit lit ->
      Queue.add (chunk_of_lit lit) chunks
+  | P_app (id, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
+     Queue.add (App (id, [])) chunks
   | P_app (id, pats) ->
      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
      Queue.add (App (id, pats)) chunks
@@ -718,6 +726,8 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
      Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
      Queue.add (Spacer (false, 1)) chunks;
      chunk_exp comments chunks exp
+  | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) ->
+     Queue.add (App (id, [])) chunks
   | E_app (id, args) ->
      let args = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks args in
      Queue.add (App (id, args)) chunks
@@ -788,11 +798,13 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
            | Block_exp exp ->
               chunk_exp comments chunks exp;
            | Block_let (LB_aux (LB_val (pat, exp), _)) ->
+              pop_comments comments chunks s_l;
               let pat_chunks = Queue.create () in
               chunk_pat comments pat_chunks pat;
               let exp_chunks = rec_chunk_exp exp in
               Queue.add (Block_binder (Let_binder, pat_chunks, exp_chunks)) chunks
            | Block_var (lexp, exp) ->
+              pop_comments comments chunks s_l;
               let lexp_chunks = rec_chunk_exp lexp in
               let exp_chunks = rec_chunk_exp exp in
               Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
@@ -1212,11 +1224,38 @@ let chunk_scattered comments chunks (SD_aux (aux, l)) =
      ]
 
 let def_spacer (_, e) (s, _) =
-  prerr_endline ((string_of_line_num e) ^ " " ^ (string_of_line_num s));
   match e, s with
   | Some l_e, Some l_s ->
      if l_s > l_e + 1 then 1 else 0
   | _, _ -> 1
+
+let process_file f filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    f (Buffer.contents buf)
+
+let read_source (p1 : Lexing.position) (p2 : Lexing.position) =
+  process_file (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) p1.pos_fname
+
+let can_handle_td (TD_aux (aux, _)) =
+  match aux with
+  | TD_enum _ -> true
+  | _ -> false
+
+let can_handle_sd (SD_aux (aux, _)) =
+  match aux with
+  | (SD_funcl _ | SD_end _ | SD_function _) -> true
+  | _ -> false
 
 let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = starting_line_num l, ending_line_num l in
@@ -1247,10 +1286,20 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
      chunk_toplevel_let l comments chunks lb
   | DEF_val vs ->
      chunk_val_spec comments chunks vs
-  | DEF_scattered sd ->
+  | DEF_scattered sd when can_handle_sd sd ->
      chunk_scattered comments chunks sd
-  | DEF_type td ->
+  | DEF_type td when can_handle_td td ->
      chunk_type_def comments chunks td
+  | _ ->
+     begin match Reporting.simp_loc l with
+     | Some (p1, p2) ->
+        pop_comments comments chunks l;
+        let source = read_source p1 p2 in
+        Queue.add (Raw source) chunks;
+        Queue.add (Spacer (true, 1)) chunks
+     | None ->
+        Reporting.unreachable l __POS__ "Could not format"
+     end
   end;
   (* Adjust the line span of a pragma to a single line so the spacing works out *)
   if not !pragma_span then (

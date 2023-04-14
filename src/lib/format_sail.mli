@@ -65,4 +65,14 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-val format_defs : Lexer.comment list -> Parse_ast.def list -> string
+type config
+
+val default_config : config
+
+module type CONFIG = sig
+  val config : config
+end
+
+module Make(Config : CONFIG) : sig
+  val format_defs : ?debug:bool -> Lexer.comment list -> Parse_ast.def list -> string
+end

@@ -88,7 +88,7 @@ val match_keywords : match_kind -> string * string option
 val comment_type_delimiters : Lexer.comment_type -> string * string
 
 type chunk =
-  | Comment of Lexer.comment_type * int * string
+  | Comment of Lexer.comment_type * int * int * string
   | Spacer of bool * int
   | Function of {
       id : Parse_ast.id;
@@ -165,6 +165,7 @@ type chunk =
     }
   | Vector_updates of chunks * chunk list
   | Chunks of chunks
+  | Raw of string
 
 and chunks = chunk Queue.t
 

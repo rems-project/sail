@@ -78,6 +78,9 @@ let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
 let opt_format = ref false
+let opt_format_backup : string option ref = ref None
+let opt_format_only : string list ref = ref []
+let opt_format_skip : string list ref = ref []
 
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
@@ -136,6 +139,15 @@ let rec options = ref ([
   ( "-fmt",
     Arg.Set opt_format,
     " format input source code");
+  ( "-fmt_backup",
+    Arg.String (fun suffix -> opt_format_backup := Some suffix),
+    "<suffix> Create backups of formated files as 'file.suffix'");
+  ( "-fmt_only",
+    Arg.String (fun file -> opt_format_only := file :: !opt_format_only),
+    "<file> Format only this file");
+  ( "-fmt_skip",
+    Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
+    "<file> Skip formatting this file");
   ( "-D",
     Arg.String (fun symbol -> Preprocess.add_symbol symbol),
     "<symbol> define a symbol for the preprocessor, as $define does in the source code");
@@ -305,10 +317,24 @@ let run_sail tgt =
   (ast, env, effect_info)
 
 let run_sail_format () =
+  let is_format_file f = match !opt_format_only with
+    | [] -> true
+    | files -> List.exists (fun f' -> f = f') files
+  in
+  let is_skipped_file f = match !opt_format_skip with
+    | [] -> false
+    | files -> List.exists (fun f' -> f = f') files
+  in
+  let module Config = struct
+    let config = Format_sail.default_config
+  end in
+  let module Formatter = Format_sail.Make(Config) in
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
   List.iter (fun (f, (comments, parse_ast)) ->
-      let formatted = Format_sail.format_defs comments parse_ast in
-      print_string formatted
+      if is_format_file f && not (is_skipped_file f) then (
+        let formatted = Formatter.format_defs comments parse_ast in
+        print_string formatted
+      )
     ) parsed_files
   
 let feature_check () =
