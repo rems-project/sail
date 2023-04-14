@@ -88,7 +88,7 @@ module type Config =
   end
 
 module Make(C: Config) : sig
-  val is_complete_wildcarded : Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
-  val is_complete_funcls_wildcarded : Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
-  val is_complete : Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
+  val is_complete_wildcarded : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
+  val is_complete_funcls_wildcarded : ?keyword:string -> Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
+  val is_complete : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
 end

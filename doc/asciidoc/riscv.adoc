@@ -1,0 +1,142 @@
+:riscv-code: sail_doc/riscv_duopod.json
+
+We introduce the basic features of Sail via a small example from our
+RISC-V model that includes just two instructions: add immediate and
+load double. We start by defining the default order (see \ref{sec:vec}
+for details), and including the Sail prelude:
+
+sail::PREAMBLE[from=riscv-code,type=span,trim]
+
+The Sail prelude is very minimal, and it is expected that Sail
+specifications will usually build upon it. Some Sail specifications
+are derived from pre-existing pseudocode, which already use specific
+idioms -- our Sail Arm specification uses `ZeroExtend` and
+`SignExtend` mirroring the ASL code, whereas our MIPS and RISC-V
+specification use `EXTZ` and `EXTS` for the same functions. Therefore for
+this example we define zero-extension and sign-extension functions as:
+
+[source,sail]
+----
+include::sail:EXTZ[from=riscv-code,type=val]
+include::sail:EXTS[from=riscv-code,type=function]
+
+include::sail:EXTS[from=riscv-code,type=val]
+include::sail:EXTS[from=riscv-code,type=function]
+----
+
+We now define an integer type synonym `xlen`, which for this example
+will be equal to 64. Sail supports definitions which are generic over
+both regular types, and integers (think const generics in C++, but
+more expressive). We also create a type `xlenbits` for bitvectors of
+length `xlen`.
+
+[source,sail]
+----
+include::sail:xlen[from=riscv-code,type=type]
+include::sail:xlen_bytes[from=riscv-code,type=type]
+include::sail:xlenbits[from=riscv-code,type=type]
+----
+
+For the purpose of this example, we also introduce a type synonym for
+bitvectors of length 5, which represent registers.
+
+sail::regbits[from=riscv-code,type=type]
+
+We now set up some basic architectural state. First creating a
+register of type `xlenbits` for both the program counter `PC`, and
+the next program counter, `nextPC`. We define the general purpose
+registers as a vector of 32 `xlenbits` bitvectors. The `dec`
+keyword isn't important in this example, but Sail supports two
+different numbering schemes for (bit)vectors `inc`, for most
+significant bit is zero, and `dec` for least significant bit is
+zero. We then define a getter and setter for the registers, which
+ensure that the zero register is treated specially (in
+RISC-V register 0 is always hardcoded to be 0). Finally we overload
+both the read (`rX`) and write (`wX`) functions as simply
+`X`. This allows us to write registers as `X(r) = value` and
+read registers as `value = X(r)`. Sail supports flexible ad-hoc
+overloading, and has an expressive l-value language in assignments,
+with the aim of allowing pseudo-code like definitions.
+
+[source,sail]
+----
+
+include::sail:PC[from=riscv-code,type=register]
+include::sail:nextPC[from=riscv-code,type=register]
+
+include::sail:Xs[from=riscv-code,type=register]
+
+include::sail:rX[from=riscv-code,type=val]
+include::sail:rX[from=riscv-code,type=function]
+
+include::sail:wX[from=riscv-code,type=val]
+include::sail:wX[from=riscv-code,type=function]
+----
+
+We also give a function `MEMr` for reading memory, this function just
+points at a builtin we have defined elsewhere.  The builtin is very
+general (it allows addresses of multiple bitwidths), so we also derive
+a simpler `read_mem` function.
+
+[source,sail]
+----
+include::sail:MEMr[from=riscv-code,type=val]
+
+include::sail:read_mem[from=riscv-code,type=val]
+include::sail:read_mem[from=riscv-code,type=function]
+----
+
+It's common when defining architecture specifications to break
+instruction semantics down into separate functions that handle
+decoding (possibly even in several stages) into custom intermediate
+datatypes and executing the decoded instructions. However it's often
+desirable to group the relevant parts of these functions and datatypes
+together in one place, as they would usually be found in an
+architecture reference manual. To support this Sail supports
+_scattered_ definitions. First we give types for the execute and
+decode functions, as well as the `ast` union.
+
+[source,sail]
+----
+include::sail:iop[from=riscv-code,type=type]
+
+scattered union ast
+
+include::sail:decode[from=riscv-code,type=val]
+include::sail:execute[from=riscv-code,type=val]
+----
+
+Now we provide the clauses for the add-immediate `ast` type, as well
+as its execute and decode clauses. We can define the decode function
+by directly pattern matching on the bitvector representing the
+instruction. Sail supports vector concatenation patterns (`@` is the
+vector concatenation operator), and uses the types provided
+(e.g. `bits(12)` and `regbits`) to destructure the vector in the
+correct way. We use the `EXTS` function that sign-extends its
+argument.
+
+[source,sail]
+----
+union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
+
+include::sail:decode[from=riscv-code,grep="ITYPE"]
+
+include::sail:execute[from=riscv-code,clause="ITYPE(_, _, _, _)"]
+----
+
+Now we do the same thing for the load-double instruction:
+
+[source,sail]
+----
+union clause ast = LOAD : (bits(12), regbits, regbits)
+
+include::sail:decode[from=riscv-code,grep="LOAD"]
+
+include::sail:execute[from=riscv-code,clause="LOAD(_, _, _)"]
+----
+
+Finally we define the fallthrough case for the decode function. Note
+that the clauses in a scattered function will be matched in the order
+they appear in the file.
+
+sail::decode[from=riscv-code,grep="^None"]

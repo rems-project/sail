@@ -66,9 +66,12 @@
 /*  SUCH DAMAGE.                                                                         */
 /*=======================================================================================*/
 
-default Order dec
+$span start PREAMBLE
 
+default Order dec
 $include <prelude.sail>
+
+$span end
 
 val EXTS : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)
 val EXTZ : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)
@@ -82,7 +85,7 @@ type xlenbits         = bits(xlen)
 
 type regbits = bits(5)
 
-val zeros : forall 'n, 'n >= 0. atom('n) -> bits('n)
+val zeros : forall 'n, 'n >= 0. int('n) -> bits('n)
 function zeros n = replicate_bits(0b0, n)
 
 /* Architectural state */
@@ -112,7 +115,7 @@ overload X = {rX, wX}
 
 /* Accessors for memory */
 val MEMr = monadic { lem: "MEMr", coq: "MEMr", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
-   (atom('m), int('n), bits('m), bits('m)) -> bits(8 * 'n)
+   (int('m), int('n), bits('m), bits('m)) -> bits(8 * 'n)
 
 val read_mem : forall 'n, 'n >= 0. (xlenbits, int('n)) -> bits(8 * 'n)
 function read_mem(addr, width) =
@@ -158,3 +161,5 @@ function clause execute(LOAD(imm, rs1, rd)) =
 
 function clause decode _ = None()
 
+// Otherwise Sail will complain about unmatched cases
+function clause execute _ = ()

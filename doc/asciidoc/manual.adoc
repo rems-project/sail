@@ -1,0 +1,29 @@
+:doctype: book
+:bibtex-file: ../manual.bib
+:hide-uri-scheme:
+:source-highlighter: rouge
+
+= The Sail instruction-set semantics specification language
+Alasdair Armstrong; Thomas Bauereiss; Brian Campbell; Shaked Flur; Kathryn E. Gray; Robert Norton-Wright; Christopher Pulte; Peter Sewell
+:title-logo-image: image:../../etc/logo/sail_logo_square.svg[top=25%,align=center,pdfwidth=2in]
+:toc:
+
+== Introduction
+
+include::introduction.adoc[]
+
+== A tutorial RISC-V style example
+
+include::riscv.adoc[]
+
+== Usage
+
+include::usage.adoc[]
+
+== The Sail Language
+
+include::language.adoc[]
+
+== References
+
+bibliography::[]

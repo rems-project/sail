@@ -268,10 +268,6 @@ let doc_var ctxt kid =
   | exception Not_found ->
      string (fix_id ctxt.avoid_target_names true (string_of_kid (try KBindings.find kid ctxt.kid_renames with Not_found -> kid)))
 
-let doc_docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
-  | _ -> empty
-
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),
@@ -1179,6 +1175,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
      | P_vector_concat pats ->
         raise (Reporting.err_unreachable l __POS__
                  "vector concatenation patterns should have been removed before pretty-printing")
+     | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"
      | P_tuple pats  ->
         let typs = match typ with
           | Typ_aux (Typ_tuple typs, _) -> typs
@@ -1368,6 +1365,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
       -> m
     | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
     | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
+    | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"
     | P_typ (_,p) -> merge_pat m p
     | P_as (p,id) -> merge_new_kids id (merge_pat m p)
     | P_id id -> merge_new_kids id m
@@ -2771,7 +2769,7 @@ let merge_var_patterns map pats =
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
 let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set (FCL_aux(FCL_funcl(id, pexp), annot)) =
-  let env = env_of_annot annot in
+  let env = env_of_tannot (snd annot) in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, _) = match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ),_) -> arg_typs, ret_typ, no_effect
@@ -2984,7 +2982,7 @@ let doc_fundef types_mod avoid_target_names effect_info (FD_aux(FD_function(r, t
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_funcl(id,_),annot) as funcl]
-    when not (Env.is_extern id (env_of_annot annot) "coq") ->
+    when not (Env.is_extern id (env_of_tannot (snd annot)) "coq") ->
      begin
        let pre,body = doc_funcl types_mod avoid_target_names effect_info NotMutrec r funcl in
        match r with

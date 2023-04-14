@@ -208,7 +208,7 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   | P_typ(t,p) ->
      let used = fv_of_tannot consider_var bound used tannot in
      let ns = fv_of_typ consider_var bound used t in pat_bindings consider_var bound ns p
-  | P_id id ->
+  | P_id id | P_vector_subrange (id, _, _) ->
      let used = fv_of_tannot consider_var bound used tannot in
      Nameset.add (string_of_id id) bound,used
   | P_var (p, typ_p) ->
@@ -686,6 +686,7 @@ let bindings_from_pat p =
     | P_not (p) -> aux_pat p
     | P_as (p,id) -> id::(aux_pat p)
     | P_typ (_,p) -> aux_pat p
+    | P_vector_subrange (id, _, _) -> [id]
     | P_id id ->
        if pat_id_is_variable env id then [id] else []
     | P_var (p,kid) -> aux_pat p
@@ -742,7 +743,7 @@ let nexp_subst_fns substs =
   let rec s_pat (P_aux (p,(l,annot))) =
     let re p = P_aux (p,(l,s_tannot annot)) in
     match p with
-    | P_lit _ | P_wild | P_id _ -> re p
+    | P_lit _ | P_wild | P_id _ | P_vector_subrange _ -> re p
     | P_or (p1, p2) -> re (P_or (s_pat p1, s_pat p2))
     | P_not (p) -> re (P_not (s_pat p))
     | P_var (p',tpat) -> re (P_var (s_pat p',tpat))

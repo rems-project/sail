@@ -161,10 +161,6 @@ let deinfix = function
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
-let doc_docstring_lem (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
-  | _ -> empty
-
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ, no_effect))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),
@@ -580,6 +576,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_list pats -> brackets (separate_map semi (doc_pat_lem ctxt false) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem ctxt true p) (doc_pat_lem ctxt true p')
   | P_string_append _ -> unreachable l __POS__ "Lem doesn't support string append patterns"
+  | P_vector_subrange _ -> unreachable l __POS__ "Lem doesn't support vector subrange patterns"
   | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 
@@ -1416,7 +1413,8 @@ let doc_fun_body_lem ctxt exp =
   else
     doc_exp
 
-let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((l, _) as annot))) =
+let doc_funcl_lem monadic type_env (FCL_aux(FCL_funcl(id, pexp), ((def_annot, _) as annot))) =
+  let l = def_annot.loc in
   let (tq, typ) =
     try Env.get_val_spec_orig id type_env with
     | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
@@ -1517,8 +1515,7 @@ let doc_spec_lem effect_info env (VS_aux (valspec, annot)) =
      let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
-     doc_docstring_lem annot ^^
-       separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
+     separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 

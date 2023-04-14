@@ -104,6 +104,14 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (omd (and (>= 1.3.1) (< 1.4.0)))))
 
 (package
+  (name sail_doc_backend)
+  (synopsis "Sail documentation generator")
+  (depends
+    (libsail (= :version))
+    (base64 (>= 3.1.0))
+    (omd (and (>= 1.3.1) (< 1.4.0)))))
+
+(package
   (name sail)
   (synopsis "Sail is a language for describing the instruction semantics of processors")
   (description "\

@@ -350,6 +350,7 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
           else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
        | P.P_vector(pats) -> P_vector (List.map (to_ast_pat ctx) pats)
        | P.P_vector_concat(pats) -> P_vector_concat (List.map (to_ast_pat ctx) pats)
+       | P.P_vector_subrange (id, n, m) -> P_vector_subrange (to_ast_id ctx id, n, m)
        | P.P_tuple(pats) -> P_tuple (List.map (to_ast_pat ctx) pats)
        | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
        | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
@@ -769,10 +770,10 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
      let typq, ctx = to_ast_typquant ctx tq in
      Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx
 
-let to_ast_funcl ctx (P.FCL_aux(fcl, l) : P.funcl) : uannot funcl =
+let to_ast_funcl ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
   | P.FCL_funcl (id, pexp) ->
-     FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))
+     FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
 
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
@@ -780,10 +781,10 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
      match List.assoc_opt (string_of_parse_id id) ctx.target_sets with
      | Some targets ->
         List.map (fun target ->
-            FCL_aux (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (l, empty_uannot))
+            FCL_aux (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
           ) targets
      | None ->
-        [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (l, empty_uannot))]
+        [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))]
     
 let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
   match fd with
@@ -792,23 +793,25 @@ let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : uannot fundef =
      FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l, empty_uannot))
 
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
-  MP_aux(
-    (match mpat with
-    | P.MP_lit(lit) -> MP_lit(to_ast_lit lit)
-    | P.MP_id(id) -> MP_id(to_ast_id ctx id)
-    | P.MP_as (mpat, id) -> MP_as (to_ast_mpat ctx mpat, to_ast_id ctx id)
-    | P.MP_app(id,mpats) ->
-      if mpats = []
-      then MP_id (to_ast_id ctx id)
-      else MP_app(to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
-    | P.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_tuple(mpats) -> MP_tuple(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_list(mpats) -> MP_list(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
-    | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
-    | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
-    ), (l, empty_uannot))
+  MP_aux (
+      (match mpat with
+       | P.MP_lit lit -> MP_lit (to_ast_lit lit)
+       | P.MP_id id -> MP_id (to_ast_id ctx id)
+       | P.MP_as (mpat, id) -> MP_as (to_ast_mpat ctx mpat, to_ast_id ctx id)
+       | P.MP_app (id, mpats) ->
+          if mpats = []
+          then MP_id (to_ast_id ctx id)
+          else MP_app (to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector mpats -> MP_vector (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector_concat mpats -> MP_vector_concat (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_vector_subrange (id, n, m) -> MP_vector_subrange (to_ast_id ctx id, n, m)
+       | P.MP_tuple mpats -> MP_tuple (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_list mpats -> MP_list (List.map (to_ast_mpat ctx) mpats)
+       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
+       | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
+       | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
+      ), (l, empty_uannot)
+    )
 
 let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
   match mpexp with
@@ -816,13 +819,14 @@ let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
   | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, empty_uannot))
 
 let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
+  let def_annot = mk_def_annot l in
   match mapcl with
   | P.MCL_bidir (mpexp1, mpexp2) ->
-     MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, empty_uannot))
+     MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (def_annot, empty_uannot))
   | P.MCL_forwards (mpexp, exp) ->
-     MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
+     MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
   | P.MCL_backwards (mpexp, exp) ->
-     MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, empty_uannot))
+     MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
 
 let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : uannot mapdef =
   match md with
@@ -889,9 +893,19 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
-  let annot = mk_def_annot l in
+let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+  let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
+  let annot = { annot with doc_comment = doc } in
   match def with
+  | P.DEF_attribute (attr, arg, def) ->
+     to_ast_def doc ((attr, arg, l) :: attrs) ctx def
+  | P.DEF_doc (doc_comment, def) ->
+     begin match doc with
+     | Some _ ->
+        raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")
+     | None ->
+        to_ast_def (Some doc_comment) attrs ctx def
+     end
   | P.DEF_overload (id, ids) ->
      [DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx
   | P.DEF_fixity (prec, n, op) ->
@@ -916,7 +930,7 @@ let rec to_ast_def ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
   | P.DEF_outcome (outcome_spec, defs) ->
      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
      let defs, _ =
-       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
+       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def doc attrs ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
      [DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx
   | P.DEF_instantiation (id, substs) ->
@@ -968,7 +982,7 @@ let to_ast ctx (P.Defs files) =
   let to_ast_defs ctx (_, defs) =
     let defs = remove_mutrec defs in
     let defs, ctx =
-      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], ctx) defs
+      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def None [] ctx def in (def @ defs, ctx)) ([], ctx) defs
     in
     List.rev defs, ctx
   in

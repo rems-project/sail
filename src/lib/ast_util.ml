@@ -79,7 +79,7 @@ let empty_uannot = {
     attrs = []
   }
 
-let add_attribute l attr arg annot =
+let add_attribute l attr arg (annot : uannot) =
   { attrs = (l, attr, arg) :: annot.attrs }
 
 let get_attribute attr annot =
@@ -88,18 +88,28 @@ let get_attribute attr annot =
 
 let get_attributes annot = annot.attrs
 
+let find_attribute_opt attr1 attrs =
+  List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs
+  |> Option.map (fun (_, _, arg) -> arg)
+
 let mk_def_annot l = {
     doc_comment = None;
     attrs = [];
     loc = l;
   }
+                   
+let map_clause_annot f (def_annot, annot) =
+  let (l, annot') = f (def_annot.loc, annot) in
+  ({ def_annot with loc = l }, annot')
 
+let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc } 
+  
 let add_def_attribute l attr arg (annot : def_annot) =
-  { annot with attrs = (attr, arg, l) :: annot.attrs }
+  { annot with attrs = (l, attr, arg) :: annot.attrs }
 
 let get_def_attribute attr (annot : def_annot) =
-  List.find_opt (fun (attr', arg, l) -> attr = attr') annot.attrs
-  |> Option.map (fun (_, arg, l) -> (l, arg))
+  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs
+  |> Option.map (fun (l, arg, _) -> (l, arg))
 
 type mut = Immutable | Mutable
 
@@ -152,7 +162,6 @@ let rec is_gen_loc = function
   | Parse_ast.Generated l -> true
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range (p1, p2) -> false
-  | Parse_ast.Documented (_, l) -> is_gen_loc l
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
@@ -190,7 +199,8 @@ let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
 let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
-let mk_funcl id pat body = FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body),no_annot)), no_annot)
+let mk_funcl ?loc:(l=Parse_ast.Unknown) id pat body =
+  FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l, empty_uannot))
 
 let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
 
@@ -640,6 +650,43 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
 
+type subrange =
+  | Inc_subrange of l * Big_int.num * Big_int.num
+  | Dec_subrange of l * Big_int.num * Big_int.num
+  | One_subrange of l * Big_int.num
+
+let rec insert_subrange ms (n1, n2) =
+  match ms with
+  | (m1, m2) :: ms ->
+     if Big_int.equal n2 (Big_int.succ m1) then
+       (n1, m2) :: ms
+     else if Big_int.greater n2 m1 then
+       (n1, n2) :: (m1, m2) :: ms
+     else if Big_int.equal m2 (Big_int.succ n1) then
+       insert_subrange ms (m1, n2)
+     else
+       (m1, m2) :: insert_subrange ms (n1, n2)
+  | [] -> [(n1, n2)]
+
+let insert_subranges ns ms = List.fold_left insert_subrange ns ms
+
+let rec pattern_vector_subranges (P_aux (aux, (l, _)) as pat) =
+  match aux with
+  | P_vector_subrange (id, n, m) when Big_int.greater n m ->
+     Bindings.singleton id [(n, m)]
+  | P_vector_subrange (id, n, m) ->
+     Bindings.singleton id [(m, n)]
+  | P_typ (_, pat) | P_var (pat, _) | P_as (pat, _) | P_not pat ->
+     pattern_vector_subranges pat
+  | P_cons (pat1, pat2) | P_or (pat1, pat2) ->
+     Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) (pattern_vector_subranges pat1) (pattern_vector_subranges pat2)
+  | P_tuple pats | P_vector_concat pats | P_app (_, pats) | P_list pats | P_string_append pats | P_vector pats ->
+     List.fold_left (fun ranges pat ->
+         Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) ranges (pattern_vector_subranges pat)
+       ) Bindings.empty pats
+  | P_id _ | P_lit _ | P_wild ->
+     Bindings.empty
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
@@ -703,6 +750,7 @@ and map_pat_annot_aux f = function
   | P_tuple pats -> P_tuple (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
+  | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
   | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
@@ -712,13 +760,14 @@ and map_mpexp_annot_aux f = function
   | MPat_pat mpat -> MPat_pat (map_mpat_annot f mpat)
   | MPat_when (mpat, guard) -> MPat_when (map_mpat_annot f mpat, map_exp_annot f guard)
 
-and map_mapcl_annot f = function
+and map_mapcl_annot f =
+  function
   | (MCL_aux (MCL_bidir (mpexp1, mpexp2), annot)) ->
-     MCL_aux (MCL_bidir (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), f annot)
+     MCL_aux (MCL_bidir (map_mpexp_annot f mpexp1, map_mpexp_annot f mpexp2), map_clause_annot f annot)
   | (MCL_aux (MCL_forwards (mpexp, exp), annot)) ->
-     MCL_aux (MCL_forwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
+     MCL_aux (MCL_forwards (map_mpexp_annot f mpexp, map_exp_annot f exp), map_clause_annot f annot)
   | (MCL_aux (MCL_backwards (mpexp, exp), annot)) ->
-     MCL_aux (MCL_backwards (map_mpexp_annot f mpexp, map_exp_annot f exp), f annot)
+     MCL_aux (MCL_backwards (map_mpexp_annot f mpexp, map_exp_annot f exp), map_clause_annot f annot)
 
 and map_mpat_annot f (MP_aux (mpat, annot)) = MP_aux (map_mpat_annot_aux f mpat, f annot)
 and map_mpat_annot_aux f = function
@@ -729,6 +778,7 @@ and map_mpat_annot_aux f = function
   | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
   | MP_vector mpats -> MP_vector (List.map (map_mpat_annot f) mpats)
+  | MP_vector_subrange (id, n, m) -> MP_vector_subrange (id, n, m)
   | MP_cons (mpat1, mpat2) -> MP_cons (map_mpat_annot f mpat1, map_mpat_annot f mpat2)
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
@@ -758,7 +808,7 @@ and map_fundef_annot_aux f = function
   | FD_function (rec_opt, tannot_opt, funcls) -> FD_function (map_recopt_annot f rec_opt, tannot_opt,
                                                               List.map (map_funcl_annot f) funcls)
 and map_funcl_annot f = function
-  | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, f annot)
+  | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, map_clause_annot f annot)
 and map_funcl_annot_aux f = function
   | FCL_funcl (id, pexp) -> FCL_funcl (id, map_pexp_annot f pexp)
 and map_recopt_annot f = function
@@ -787,9 +837,9 @@ and map_scattered_annot_aux f = function
   | SD_mapcl (id, mcl) -> SD_mapcl (id, map_mapcl_annot f mcl)
   | SD_end id -> SD_end id
 
-and map_decspec_annot f = function
-  | DEC_aux (dec_aux, annot) -> DEC_aux (map_decspec_annot_aux f dec_aux, f annot)
-and map_decspec_annot_aux f = function
+and map_register_annot f = function
+  | DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
+and map_register_annot_aux f = function
   | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
   | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
 
@@ -809,7 +859,7 @@ and map_def_annot f (DEF_aux (aux, annot)) =
     | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
     | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, List.map (map_loop_measure_annot f) measures)
-    | DEF_register ds -> DEF_register (map_decspec_annot f ds)
+    | DEF_register ds -> DEF_register (map_register_annot f ds)
     | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
     | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
   in
@@ -1029,6 +1079,11 @@ and string_of_pat (P_aux (pat, _)) =
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
   | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
+  | P_vector_subrange (id, n, m) ->
+     if Big_int.equal n m then
+       string_of_id id ^ "[" ^ Big_int.to_string n ^ "]"
+     else
+       string_of_id id ^ "[" ^ Big_int.to_string n ^ ".." ^ Big_int.to_string m ^ "]"
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
@@ -1044,6 +1099,7 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
+  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Big_int.to_string n ^ " .. " ^ Big_int.to_string m ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
@@ -1071,11 +1127,10 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ " @ " ^ string_of_index_range ir2 ^ ")"
 
-
 let rec pat_ids (P_aux (pat_aux, _)) =
   match pat_aux with
   | P_lit _ | P_wild -> IdSet.empty
-  | P_id id -> IdSet.singleton id
+  | P_id id | P_vector_subrange (id, _, _) -> IdSet.singleton id
   | P_as (pat, id) -> IdSet.add id (pat_ids pat)
   | P_or (pat1, pat2) -> IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_not (pat)       -> pat_ids pat
@@ -1839,6 +1894,7 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
     | P_app (id, pats) -> P_app (locate_id f id, List.map (locate_pat f) pats)
     | P_vector pats -> P_vector (List.map (locate_pat f) pats)
     | P_vector_concat pats -> P_vector_concat (List.map (locate_pat f) pats)
+    | P_vector_subrange (id, n, m) -> P_vector_subrange (locate_id f id, n, m)
     | P_tuple pats -> P_tuple (List.map (locate_pat f) pats)
     | P_list pats -> P_list (List.map (locate_pat f) pats)
     | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)
@@ -2220,7 +2276,8 @@ and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
     | Pat_when (pat, guard, exp) ->
        option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
 
-let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (l, annot))) =
+let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (def_annot, annot))) =
+  let l = def_annot.loc in
   if not (subloc sl l) then None else
     match find_annot_pexp sl pexp with
     | None -> Some (l, annot)
@@ -2269,4 +2326,4 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Hint (_, l1, l2) -> "Hint(_," ^ simple_string_of_loc l1 ^ "," ^ simple_string_of_loc l2 ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
-  | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
+

@@ -98,6 +98,7 @@ let lem_rewrites =
     ("prover_regstate", [Flag_arg Monomorphise.opt_mwords]);
     ("instantiate_outcomes", [String_arg "lem"]);
     ("realize_mappings", []);
+    ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);

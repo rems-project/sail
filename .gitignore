@@ -59,6 +59,7 @@ lib/hol/sail-heap
 /src/jib.ml
 /src/manifest.ml
 
+/test/__pycache__/
 /test/sailtest.pyc
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
