@@ -1317,3 +1317,23 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : (Lexer.comment list * P
     end
   with
   | Sys_error err -> raise (Reporting.err_general l err)
+
+let get_lexbuf_from_string f s =
+  let lexbuf = Lexing.from_string s in
+  lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f;
+                                Lexing.pos_lnum = 1;
+                                Lexing.pos_bol = 0;
+                                Lexing.pos_cnum = 0; };
+  lexbuf
+                   
+let parse_file_from_string ~filename:f ~contents:s =
+  let lexbuf = get_lexbuf_from_string f s in
+  try
+    Lexer.comments := [];
+    let defs = Parser.file Lexer.token lexbuf in
+    (!Lexer.comments, defs)
+  with
+  | Parser.Error ->
+     let pos = Lexing.lexeme_start_p lexbuf in
+     let tok = Lexing.lexeme lexbuf in
+     raise (Reporting.err_syntax pos ("current token: " ^ tok))

@@ -94,5 +94,5 @@ module Make(Config : CONFIG) : sig
   (** If debug is true, we print extra debugging information to
      stderr, and annotate the output with various information on
      linebreaking decisions. *)
-  val format_defs : ?debug:bool -> Lexer.comment list -> Parse_ast.def list -> string
+  val format_defs : ?debug:bool -> string -> string -> Lexer.comment list -> Parse_ast.def list -> string
 end

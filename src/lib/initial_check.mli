@@ -135,3 +135,5 @@ val constraint_of_string : string -> n_constraint
 
    @param ?loc If we get an error reading the file, report the error at this location *)
 val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
+
+val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list

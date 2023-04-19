@@ -216,7 +216,7 @@ let rec prerr_chunk indent = function
   | Atom str ->
      Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str ->
-     Printf.eprintf "%sString_literal:%s" indent str
+     Printf.eprintf "%sString_literal:%s\n" indent str
   | App (id, args) ->
      Printf.eprintf "%sApp:%s\n" indent (string_of_id id);
      List.iteri (fun i arg ->
@@ -444,6 +444,15 @@ let rec pop_comments comments chunks l =
      | _ -> ()
      end
 
+let rec discard_comments comments (pos : Lexing.position) =
+  match Stack.top_opt comments with
+  | None -> ()
+  | Some (Lexer.Comment (_, _, e, _)) ->
+     if e.pos_cnum <= pos.pos_cnum then (
+        let _ = Stack.pop comments in
+        discard_comments comments pos
+     )
+
 let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
   match line_num with
   | None -> false
@@ -577,11 +586,14 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
      let lhs_chunks = rec_chunk_atyp lhs in
      let rhs_chunks = rec_chunk_atyp rhs in
      Queue.add (Binary (lhs_chunks, op_symbol, rhs_chunks)) chunks
-  | (ATyp_exp arg | ATyp_neg arg) as unop->
-     let op_symbol = match unop with
-       | ATyp_exp _ -> "2^" | ATyp_neg _ -> "-" | _ -> Reporting.unreachable l __POS__ "Invalid unary atyp" in
+  | ATyp_exp arg ->
+     let lhs_chunks = Queue.create () in
+     Queue.add (Atom "2") lhs_chunks;
+     let rhs_chunks = rec_chunk_atyp arg in
+     Queue.add (Binary (lhs_chunks, "^", rhs_chunks)) chunks
+  | ATyp_neg arg ->
      let arg_chunks = rec_chunk_atyp arg in
-     Queue.add (Unary (op_symbol, arg_chunks)) chunks
+     Queue.add (Unary ("-", arg_chunks)) chunks
   | ATyp_inc ->
      Queue.add (Atom "inc") chunks
   | ATyp_dec ->
@@ -598,6 +610,9 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
      let lhs_chunks = rec_chunk_atyp lhs in
      let rhs_chunks = rec_chunk_atyp rhs in
      Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
+  | ATyp_app (id, ([_] as args)) when string_of_id id = "atom" ->
+     let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args in
+     Queue.add (App (Id_aux (Id "int", id_loc id), args)) chunks
   | ATyp_app (id, args) ->
      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args in
      Queue.add (App (id, args)) chunks
@@ -759,6 +774,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
      Queue.add (App (Id_aux (Id "assert", Unknown), [exp_chunks])) chunks
   | E_assert (exp, msg) ->
      let exp_chunks = rec_chunk_exp exp in
+     Queue.add (Delim ",") exp_chunks;
      let msg_chunks = rec_chunk_exp msg in
      Queue.add (App (Id_aux (Id "assert", Unknown), [exp_chunks; msg_chunks])) chunks
   | E_exit exp ->
@@ -1266,8 +1282,8 @@ let process_file f filename =
     close_in chan;
     f (Buffer.contents buf)
 
-let read_source (p1 : Lexing.position) (p2 : Lexing.position) =
-  process_file (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) p1.pos_fname
+let read_source (p1 : Lexing.position) (p2 : Lexing.position) source =
+  String.sub source p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
 
 let can_handle_td (TD_aux (aux, _)) =
   match aux with
@@ -1279,7 +1295,7 @@ let can_handle_sd (SD_aux (aux, _)) =
   | (SD_funcl _ | SD_end _ | SD_function _) -> true
   | _ -> false
 
-let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
+let chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = starting_line_num l, ending_line_num l in
   let spacing = def_spacer last_line_span line_span in
   if spacing > 0 then (
@@ -1316,7 +1332,9 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
      begin match Reporting.simp_loc l with
      | Some (p1, p2) ->
         pop_comments comments chunks l;
-        let source = read_source p1 p2 in
+        (* These comments are within the source we are about to include *)
+        discard_comments comments p2;
+        let source = read_source p1 p2 source in
         Queue.add (Raw source) chunks;
         Queue.add (Spacer (true, 1)) chunks
      | None ->
@@ -1330,9 +1348,9 @@ let chunk_def last_line_span comments chunks (DEF_aux (def, l)) =
     fst line_span, fst line_span
   )
 
-let chunk_defs comments defs =
+let chunk_defs source comments defs =
   let comments = Stack.of_seq (List.to_seq comments) in
   let chunks = Queue.create () in
   chunk_header_comments comments chunks defs;
-  let _ = List.fold_left (fun last_span def -> chunk_def last_span comments chunks def) (None, Some 0) defs in
+  let _ = List.fold_left (fun last_span def -> chunk_def source last_span comments chunks def) (None, Some 0) defs in
   chunks

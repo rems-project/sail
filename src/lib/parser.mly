@@ -626,7 +626,7 @@ atomic_typ:
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
-  | typ
+  | typ Comma?
     { [$1] }
   | typ Comma typ_list
     { $1 :: $3 }
@@ -769,7 +769,7 @@ pat:
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
-  | pat
+  | pat Comma?
     { [$1] }
   | pat Comma pat_list
     { $1 :: $3 }
@@ -1180,7 +1180,7 @@ fexp_exp_list:
     { $1 :: $3 }
 
 exp_list:
-  | exp
+  | exp Comma?
     { [$1] }
   | exp Comma exp_list
     { $1 :: $3 }
@@ -1325,9 +1325,9 @@ enum_bar:
     { ($1, None) :: $3 }
 
 enum:
-  | id
+  | id Comma?
     { [($1, None)] }
-  | id EqGt exp
+  | id EqGt exp Comma?
     { [($1, Some $3)] }
   | id Comma enum
     { ($1, None) :: $3 }

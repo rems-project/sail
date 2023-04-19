@@ -320,6 +320,21 @@ let run_sail tgt =
 
   (ast, env, effect_info)
 
+let file_to_string filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    Buffer.contents buf
+
 let run_sail_format (config : Yojson.Basic.t option) =
   let is_format_file f = match !opt_format_only with
     | [] -> true
@@ -343,9 +358,19 @@ let run_sail_format (config : Yojson.Basic.t option) =
   let module Formatter = Format_sail.Make(Config) in
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
   List.iter (fun (f, (comments, parse_ast)) ->
+      let source = file_to_string f in
       if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs comments parse_ast in
-        print_string formatted
+        let formatted = Formatter.format_defs f source comments parse_ast in
+        begin match !opt_format_backup with
+        | Some backup_file ->
+           let out_chan = open_out backup_file in
+           output_string out_chan source;
+           close_out out_chan
+        | None -> ()
+        end;
+        let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None f in
+        output_string out_chan formatted;
+        Util.close_output_with_check file_info
       )
     ) parsed_files
   
@@ -401,7 +426,7 @@ let parse_config_file file =
   | Yojson.Json_error message ->
      Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
      None
-     
+ 
 let main () =
   begin match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()

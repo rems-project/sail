@@ -178,4 +178,4 @@ and pexp_chunks = {
 
 val prerr_chunk : string -> chunk -> unit
 
-val chunk_defs : Lexer.comment list -> Parse_ast.def list -> chunks
+val chunk_defs : string -> Lexer.comment list -> Parse_ast.def list -> chunks

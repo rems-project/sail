@@ -538,7 +538,7 @@ module Make(Config : CONFIG) = struct
           match block_comment_lines col contents with
           | [l] -> blank n ^^ string "/*" ^^ l ^^ string "*/" ^^ space
           | ls ->
-             blank n ^^ group (string "/*" ^^ separate hardline ls ^^ string "*/")
+             blank n ^^ group (align (string "/*" ^^ separate hardline ls ^^ string "*/"))
              ^^ require_hardline
        end
     | Function f ->
@@ -769,8 +769,9 @@ module Make(Config : CONFIG) = struct
               Buffer.add_char buf '\n';
               require_hardline := false
             );
-            assert (!pending_spaces >= 0);
-            Buffer.add_string buf (String.make !pending_spaces ' ');
+            if !pending_spaces > 0 then (
+              Buffer.add_string buf (String.make !pending_spaces ' ');
+            );
             Buffer.add_char buf c;
             after_hardline := false;
             pending_spaces := 0
@@ -780,14 +781,27 @@ module Make(Config : CONFIG) = struct
       ) s;
     Buffer.contents buf
 
-  let format_defs ?(debug=false) comments defs =
-    let chunks = chunk_defs comments defs in
+  let format_defs_once ?(debug=false) source comments defs =
+    let chunks = chunk_defs source comments defs in
     if debug then (
       Queue.iter (prerr_chunk "") chunks
     );
     let doc = Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
-    let s, lb_info = to_string (doc ^^ hardline) in
-    let s = fixup lb_info s in
-    s
+    let formatted, lb_info = to_string (doc ^^ hardline) in
+    fixup lb_info formatted
 
+  let format_defs ?(debug=false) filename source comments defs =
+    let open Initial_check in
+    let f1 = format_defs_once ~debug:debug source comments defs in
+    let comments, defs = parse_file_from_string ~filename:filename ~contents:f1 in
+    let f2 = format_defs_once ~debug:debug f1 comments defs in
+    let comments, defs = parse_file_from_string ~filename:filename ~contents:f2 in
+    let f3 = format_defs_once ~debug:debug f2 comments defs in
+    if f2 <> f3 then (
+      print_endline f2;
+      print_endline f3;
+      raise (Reporting.err_general Parse_ast.Unknown filename)
+    );
+    f3
+    
 end
