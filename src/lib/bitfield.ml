@@ -191,7 +191,8 @@ let field_updater typ_name field order range =
   let new_bits = update_field_exp range order bits_exp (mk_id_exp new_val_var) in
   let body = set_bits_field (mk_id_exp orig_var) new_bits in
   let funcl = mk_funcl fun_id (mk_pat (P_tuple [mk_id_pat orig_var; mk_id_pat new_val_var])) body in
-  [spec; mk_fundef [funcl]]
+  let overload = defs_of_string __POS__ (Printf.sprintf "overload update_%s = {%s}" (string_of_id field) (string_of_id fun_id)) in
+  [spec; mk_fundef [funcl]] @ overload
 
 let register_field_setter typ_name field order range =
   let size = range_width range in
