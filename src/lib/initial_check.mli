@@ -113,6 +113,7 @@ val undefined_builtin_val_specs : uannot def list
 (** {2 Desugar and process AST } *)
 
 val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
+val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
   
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
