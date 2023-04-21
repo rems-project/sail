@@ -49,6 +49,8 @@ some Sail specifications and related tools.
 
 * A test suite for Sail (in [test/](test/))
 
+The support library for Coq models is in [a separate repository](https://github.com/rems-project/coq-sail) to help our package management.
+
 Sail ISA Models
 ===============
 
