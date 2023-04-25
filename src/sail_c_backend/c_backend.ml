@@ -90,7 +90,7 @@ let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
 let opt_branch_coverage = ref None
-                        
+
 let extra_params () =
   match !opt_extra_params with
   | Some str -> str ^ ", "
@@ -122,7 +122,7 @@ let zencode_uid (id, ctyps) =
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
 
-let ctor_bindings = List.fold_left (fun map (id, ctyp) -> UBindings.add id ctyp map) UBindings.empty
+let ctor_bindings = List.fold_left (fun map (id, ctyp) -> Bindings.add id ctyp map) Bindings.empty
 
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
@@ -252,7 +252,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
        CT_ref (convert_typ ctx typ)
 
-    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
        let (typ_params, fields) = Bindings.find id ctx.records in
        let quants =
@@ -265,9 +265,9 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
        in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-       CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
-                                                         
-    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
+       CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
+
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
        let (typ_params, ctors) = Bindings.find id ctx.variants in
        let quants =
@@ -278,10 +278,10 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
              | _ ->
                 Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
-       in           
+       in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-       CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
- 
+       CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings)
+
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
@@ -1084,7 +1084,7 @@ let rec sgen_ctyp = function
   | CT_float n -> "float" ^ string_of_int n ^ "_t"
   | CT_rounding_mode -> "uint_fast8_t"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-             
+
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
   | CT_bit -> "fbits"
@@ -1153,15 +1153,15 @@ let rec sgen_cval = function
   | V_lit (vl, ctyp) -> sgen_value vl
   | V_call (op, cvals) -> sgen_call op cvals
   | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (sgen_cval f) (sgen_uid field)
+     Printf.sprintf "%s.%s" (sgen_cval f) (sgen_id field)
   | V_tuple_member (f, _, n) ->
      Printf.sprintf "%s.ztup%d" (sgen_cval f) n
-  | V_ctor_kind (f, ctor, unifiers, _) ->
+  | V_ctor_kind (f, ctor, _) ->
      sgen_cval f ^ ".kind"
-     ^ " != Kind_" ^ zencode_uid (ctor, unifiers)
+     ^ " != Kind_" ^ zencode_uid ctor
   | V_struct (fields, _) ->
      Printf.sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> zencode_uid field ^ " = " ^ sgen_cval cval) fields)
+       (Util.string_of_list ", " (fun (field, cval) -> zencode_id field ^ " = " ^ sgen_cval cval) fields)
   | V_ctor_unwrap (f, ctor, _) ->
      Printf.sprintf "%s.%s"
        (sgen_cval f)
@@ -1347,7 +1347,7 @@ let rec sgen_clexp l = function
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
   | CL_id (Global (id, _), _) -> "&" ^ sgen_id id
-  | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_uid field ^ ")"
+  | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_id field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
   | CL_void -> assert false
@@ -1360,7 +1360,7 @@ let rec sgen_clexp_pure l = function
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_id (Global (id, _), _) -> sgen_id id
-  | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_uid field
+  | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_id field
   | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
   | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
   | CL_void -> assert false
@@ -1604,9 +1604,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
        | CT_struct (id, ctors) when is_stack_ctyp ctyp ->
           let gs = ngensym () in
-          let fold (inits, prev) (uid, ctyp) =
+          let fold (inits, prev) (id, ctyp) =
             let init, prev' = codegen_exn_return ctyp in
-            Printf.sprintf ".%s = %s" (sgen_uid uid) init :: inits, prev @ prev'
+            Printf.sprintf ".%s = %s" (sgen_id id) init :: inits, prev @ prev'
           in
           let inits, prev = List.fold_left fold ([], []) ctors in
           sgen_name gs,
@@ -1662,31 +1662,31 @@ let codegen_type_def ctx = function
      (* Generate a set_T function for every struct T *)
      let codegen_set (id, ctyp) =
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf "rop->%s = op.%s;" (sgen_uid id) (sgen_uid id))
+         string (Printf.sprintf "rop->%s = op.%s;" (sgen_id id) (sgen_id id))
        else
-         string (Printf.sprintf "COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_uid id) (sgen_uid id))
+         string (Printf.sprintf "COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
      in
      let codegen_setter id ctors =
        string (let n = sgen_id id in Printf.sprintf "static void COPY(%s)(struct %s *rop, const struct %s op)" n n n) ^^ space
        ^^ surround 2 0 lbrace
-                   (separate_map hardline codegen_set (UBindings.bindings ctors))
+                   (separate_map hardline codegen_set (Bindings.bindings ctors))
                    rbrace
      in
      (* Generate an init/clear_T function for every struct T *)
      let codegen_field_init f (id, ctyp) =
        if not (is_stack_ctyp ctyp) then
-         [string (Printf.sprintf "%s(%s)(&op->%s);" f (sgen_ctyp_name ctyp) (sgen_uid id))]
+         [string (Printf.sprintf "%s(%s)(&op->%s);" f (sgen_ctyp_name ctyp) (sgen_id id))]
        else []
      in
      let codegen_init f id ctors =
        string (let n = sgen_id id in Printf.sprintf "static void %s(%s)(struct %s *op)" f n n) ^^ space
        ^^ surround 2 0 lbrace
-                   (separate hardline (UBindings.bindings ctors |> List.map (codegen_field_init f) |> List.concat))
+                   (separate hardline (Bindings.bindings ctors |> List.map (codegen_field_init f) |> List.concat))
                    rbrace
      in
      let codegen_eq =
        let codegen_eq_test (id, ctyp) =
-         string (Printf.sprintf "EQUAL(%s)(op1.%s, op2.%s)" (sgen_ctyp_name ctyp) (sgen_uid id) (sgen_uid id))
+         string (Printf.sprintf "EQUAL(%s)(op1.%s, op2.%s)" (sgen_ctyp_name ctyp) (sgen_id id) (sgen_id id))
        in
        string (Printf.sprintf "static bool EQUAL(%s)(struct %s op1, struct %s op2)" (sgen_id id) (sgen_id id) (sgen_id id))
        ^^ space
@@ -1698,7 +1698,7 @@ let codegen_type_def ctx = function
      in
      (* Generate the struct and add the generated functions *)
      let codegen_ctor (id, ctyp) =
-       string (sgen_ctyp ctyp) ^^ space ^^ codegen_uid id
+       string (sgen_ctyp ctyp) ^^ space ^^ codegen_id id
      in
      string (Printf.sprintf "// struct %s" (string_of_id id)) ^^ hardline
      ^^ string "struct" ^^ space ^^ codegen_id id ^^ space
@@ -1720,17 +1720,17 @@ let codegen_type_def ctx = function
 
   | CTD_variant (id, tus) ->
      let codegen_tu (ctor_id, ctyp) =
-       separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_uid ctor_id ^^ semi; rbrace]
+       separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
      in
      (* Create an if, else if, ... block that does something for each constructor *)
      let rec each_ctor v f = function
        | [] -> string "{}"
        | [(ctor_id, ctyp)] ->
-          string (Printf.sprintf "if (%skind == Kind_%s)" v (sgen_uid ctor_id)) ^^ lbrace ^^ hardline
+          string (Printf.sprintf "if (%skind == Kind_%s)" v (sgen_id ctor_id)) ^^ lbrace ^^ hardline
           ^^ jump 0 2 (f ctor_id ctyp)
           ^^ hardline ^^ rbrace
        | (ctor_id, ctyp) :: ctors ->
-          string (Printf.sprintf "if (%skind == Kind_%s) " v (sgen_uid ctor_id)) ^^ lbrace ^^ hardline
+          string (Printf.sprintf "if (%skind == Kind_%s) " v (sgen_id ctor_id)) ^^ lbrace ^^ hardline
           ^^ jump 0 2 (f ctor_id ctyp)
           ^^ hardline ^^ rbrace ^^ string " else " ^^ each_ctor v f ctors
      in
@@ -1740,9 +1740,9 @@ let codegen_type_def ctx = function
        string (Printf.sprintf "static void CREATE(%s)(struct %s *op)" n n)
        ^^ hardline
        ^^ surround 2 0 lbrace
-                   (string (Printf.sprintf "op->kind = Kind_%s;" (sgen_uid ctor_id)) ^^ hardline
+                   (string (Printf.sprintf "op->kind = Kind_%s;" (sgen_id ctor_id)) ^^ hardline
                     ^^ if not (is_stack_ctyp ctyp) then
-                         string (Printf.sprintf "CREATE(%s)(&op->%s);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id))
+                         string (Printf.sprintf "CREATE(%s)(&op->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
                        else empty)
                    rbrace
      in
@@ -1754,7 +1754,7 @@ let codegen_type_def ctx = function
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "/* do nothing */")
        else
-         string (Printf.sprintf "KILL(%s)(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_uid ctor_id))
+         string (Printf.sprintf "KILL(%s)(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_id ctor_id))
      in
      let codegen_clear =
        let n = sgen_id id in
@@ -1773,16 +1773,16 @@ let codegen_type_def ctx = function
          in
          Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
        in
-       string (Printf.sprintf "static void %s(%sstruct %s *rop, %s)" (sgen_function_uid ctor_id) (extra_params ()) (sgen_id id) ctor_args) ^^ hardline
+       string (Printf.sprintf "static void %s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
                    (tuple
                     ^^ each_ctor "rop->" (clear_field "rop") tus ^^ hardline
-                    ^^ string ("rop->kind = Kind_" ^ sgen_uid ctor_id) ^^ semi ^^ hardline
+                    ^^ string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi ^^ hardline
                     ^^ if is_stack_ctyp ctyp then
-                         string (Printf.sprintf "rop->%s = op;" (sgen_uid ctor_id))
+                         string (Printf.sprintf "rop->%s = op;" (sgen_id ctor_id))
                        else
-                         string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id)) ^^ hardline
-                         ^^ string (Printf.sprintf "COPY(%s)(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id)) ^^ hardline
+                         string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
+                         ^^ string (Printf.sprintf "COPY(%s)(&rop->%s, op);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)) ^^ hardline
                          ^^ tuple_cleanup)
                    rbrace
      in
@@ -1790,10 +1790,10 @@ let codegen_type_def ctx = function
        let n = sgen_id id in
        let set_field ctor_id ctyp =
          if is_stack_ctyp ctyp then
-           string (Printf.sprintf "rop->%s = op.%s;" (sgen_uid ctor_id) (sgen_uid ctor_id))
+           string (Printf.sprintf "rop->%s = op.%s;" (sgen_id ctor_id) (sgen_id ctor_id))
          else
-           string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id))
-           ^^ string (Printf.sprintf " COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id) (sgen_uid ctor_id))
+           string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
+           ^^ string (Printf.sprintf " COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
        in
        string (Printf.sprintf "static void COPY(%s)(struct %s *rop, struct %s op)" n n n) ^^ hardline
        ^^ surround 2 0 lbrace
@@ -1806,12 +1806,12 @@ let codegen_type_def ctx = function
      in
      let codegen_eq =
        let codegen_eq_test ctor_id ctyp =
-         string (Printf.sprintf "return EQUAL(%s)(op1.%s, op2.%s);" (sgen_ctyp_name ctyp) (sgen_uid ctor_id) (sgen_uid ctor_id))
+         string (Printf.sprintf "return EQUAL(%s)(op1.%s, op2.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
        in
        let rec codegen_eq_tests = function
          | [] -> string "return false;"
          | (ctor_id, ctyp) :: ctors ->
-            string (Printf.sprintf "if (op1.kind == Kind_%s && op2.kind == Kind_%s) " (sgen_uid ctor_id) (sgen_uid ctor_id)) ^^ lbrace ^^ hardline
+            string (Printf.sprintf "if (op1.kind == Kind_%s && op2.kind == Kind_%s) " (sgen_id ctor_id) (sgen_id ctor_id)) ^^ lbrace ^^ hardline
             ^^ jump 0 2 (codegen_eq_test ctor_id ctyp)
             ^^ hardline ^^ rbrace ^^ string " else " ^^ codegen_eq_tests ctors
        in
@@ -1823,7 +1823,7 @@ let codegen_type_def ctx = function
      ^^ string "enum" ^^ space
      ^^ string ("kind_" ^ sgen_id id) ^^ space
      ^^ separate space [ lbrace;
-                         separate_map (comma ^^ space) (fun id -> string ("Kind_" ^ sgen_uid id)) (List.map fst tus);
+                         separate_map (comma ^^ space) (fun id -> string ("Kind_" ^ sgen_id id)) (List.map fst tus);
                          rbrace ^^ semi ]
      ^^ twice hardline
      ^^ string "struct" ^^ space ^^ codegen_id id ^^ space
@@ -1881,12 +1881,12 @@ let codegen_tup ctx ctyps =
     empty
   else
     begin
-      let _, fields = List.fold_left (fun (n, fields) ctyp -> n + 1, UBindings.add (mk_id ("tup" ^ string_of_int n), []) ctyp fields)
-                                     (0, UBindings.empty)
+      let _, fields = List.fold_left (fun (n, fields) ctyp -> n + 1, Bindings.add (mk_id ("tup" ^ string_of_int n)) ctyp fields)
+                                     (0, Bindings.empty)
                                      ctyps
       in
       generated := IdSet.add id !generated;
-      codegen_type_def ctx (CTD_struct (id, UBindings.bindings fields)) ^^ twice hardline
+      codegen_type_def ctx (CTD_struct (id, Bindings.bindings fields)) ^^ twice hardline
     end
 
 let codegen_node id ctyp =

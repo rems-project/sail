@@ -83,7 +83,9 @@ let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
 let zencode_uid (id, ctyps) =
-  Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
+  match ctyps with
+  | [] -> Util.zencode_string (string_of_id id)
+  | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
 
 let opt_ignore_overflow = ref false
 
@@ -199,9 +201,9 @@ let rec smt_ctyp ctx = function
   | CT_enum (id, elems) ->
      mk_enum (zencode_upper_id id) (List.map zencode_id elems)
   | CT_struct (id, fields) ->
-     mk_record (zencode_upper_id id) (List.map (fun (uid, ctyp) -> (zencode_uid uid, smt_ctyp ctx ctyp)) fields)
+     mk_record (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) fields)
   | CT_variant (id, ctors) ->
-     mk_variant (zencode_upper_id id) (List.map (fun (uid, ctyp) -> (zencode_uid uid, smt_ctyp ctx ctyp)) ctors)
+     mk_variant (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) ctors)
   | CT_tup ctyps ->
      ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
      Tuple (List.map (smt_ctyp ctx) ctyps)
@@ -390,24 +392,24 @@ let rec smt_cval ctx cval =
         Fn ("bvsgt", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_call (Iadd, [cval1; cval2]) ->
         Fn ("bvadd", [smt_cval ctx cval1; smt_cval ctx cval2])
-     | V_ctor_kind (union, ctor_id, unifiers, _) ->
-        Fn ("not", [Tester (zencode_uid (ctor_id, unifiers), smt_cval ctx union)])
+     | V_ctor_kind (union, ctor, _) ->
+        Fn ("not", [Tester (zencode_uid ctor, smt_cval ctx union)])
      | V_ctor_unwrap (union, ctor, _) ->
         Fn ("un" ^ zencode_uid ctor, [smt_cval ctx union])
      | V_field (record, field) ->
         begin match cval_ctyp record with
         | CT_struct (struct_id, _) ->
-           Field (zencode_upper_id struct_id ^ "_" ^ zencode_uid field, smt_cval ctx record)
+           Field (zencode_upper_id struct_id ^ "_" ^ zencode_id field, smt_cval ctx record)
         | _ -> failwith "Field for non-struct type"
         end
      | V_struct (fields, ctyp) ->
         begin match ctyp with
         | CT_struct (struct_id, field_ctyps) ->
            let set_field (field, cval) =
-             match Util.assoc_compare_opt UId.compare field field_ctyps with
+             match Util.assoc_compare_opt Id.compare field field_ctyps with
              | None -> failwith "Field type not found"
              | Some ctyp ->
-                zencode_upper_id struct_id ^ "_" ^ zencode_uid field,
+                zencode_upper_id struct_id ^ "_" ^ zencode_id field,
                 smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval)
            in
            Struct (zencode_upper_id struct_id, List.map set_field fields)
@@ -1412,12 +1414,12 @@ let smt_ctype_def ctx = function
   | CTD_struct (id, fields) ->
      [declare_datatypes
        (mk_record (zencode_upper_id id)
-          (List.map (fun (field, ctyp) -> zencode_upper_id id ^ "_" ^ zencode_uid field, smt_ctyp ctx ctyp) fields))]
+          (List.map (fun (field, ctyp) -> zencode_upper_id id ^ "_" ^ zencode_id field, smt_ctyp ctx ctyp) fields))]
 
   | CTD_variant (id, ctors) ->
      [declare_datatypes
        (mk_variant (zencode_upper_id id)
-         (List.map (fun (ctor, ctyp) -> zencode_uid ctor, smt_ctyp ctx ctyp) ctors))]
+         (List.map (fun (ctor, ctyp) -> zencode_id ctor, smt_ctyp ctx ctyp) ctors))]
 
 let rec generate_ctype_defs ctx = function
   | CDEF_type ctd :: cdefs -> smt_ctype_def ctx ctd :: generate_ctype_defs ctx cdefs
@@ -1504,7 +1506,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
        CT_ref (convert_typ ctx typ)
 
-    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
        let (typ_params, fields) = Bindings.find id ctx.records in
        let quants =
@@ -1517,9 +1519,9 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
        in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-       CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
-                                                         
-    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
+       CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
+
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings)
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
        let (typ_params, ctors) = Bindings.find id ctx.variants in
        let quants =
@@ -1530,10 +1532,10 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
              | _ ->
                 Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
            ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
-       in           
+       in
        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-       CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
-      
+       CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings)
+
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
@@ -1797,10 +1799,10 @@ let rmw_modify smt = function
      begin match ctyp with
      | CT_struct (struct_id, fields) ->
         let set_field (field', _) =
-          if UId.compare field field' = 0 then
+          if Id.compare field field' = 0 then
             smt
           else
-            Field (zencode_upper_id struct_id ^ "_" ^ zencode_uid field', Var (rmw_read clexp))
+            Field (zencode_upper_id struct_id ^ "_" ^ zencode_id field', Var (rmw_read clexp))
         in
         Fn (zencode_upper_id struct_id, List.map set_field fields)
      | _ ->

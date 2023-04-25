@@ -108,15 +108,15 @@ uid :: 'UId_' ::=
   | id < ctyp0 , ... , ctypn > :: :: uid
 
 cval :: 'V_' ::=
-  | name : ctyp                                       :: :: id
-  | value : ctyp                                      :: :: lit
-  | ( cval0 , ... , cvaln ) ctyp                      :: :: tuple
-  | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
-  | cval is id ( ctyp0 , ... , ctypn ) ctyp           :: :: ctor_kind
-  | cval as uid ctyp                                  :: :: ctor_unwrap
-  | cval nat0 nat1                                    :: :: tuple_member
-  | op ( cval0 , ... , cvaln )                        :: :: call
-  | cval . uid                                        :: :: field
+  | name : ctyp                                     :: :: id
+  | value : ctyp                                    :: :: lit
+  | ( cval0 , ... , cvaln ) ctyp                    :: :: tuple
+  | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
+  | cval is uid ctyp                                :: :: ctor_kind
+  | cval as uid ctyp                                :: :: ctor_unwrap
+  | cval nat0 nat1                                  :: :: tuple_member
+  | op ( cval0 , ... , cvaln )                      :: :: call
+  | cval . id                                       :: :: field
 
 % Note that init / clear are sometimes referred to as create / kill
 
@@ -161,9 +161,9 @@ ctyp :: 'CT_' ::=
 % into C. We don't fully worry about precise implementation details at
 % this point, as C doesn't have variants or tuples natively, but these
 % need to be encoded.
-  | enum id ( id0 , ... , idn )                      :: :: enum
-  | struct id ( uid0 * ctyp0 , ... , uidn * ctypn )  :: :: struct
-  | variant id ( uid0 * ctyp0 , ... , uidn * ctypn ) :: :: variant
+  | enum id ( id0 , ... , idn )                    :: :: enum
+  | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
+  | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
   | fvector ( nat , bool , ctyp )  :: :: fvector
@@ -177,16 +177,16 @@ ctyp :: 'CT_' ::=
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id
   | name0 rmw name1 : ctyp   :: :: rmw
-  | clexp . uid              :: :: field
+  | clexp . id               :: :: field
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple
   | void                     :: :: void
 
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
-  | enum id = id0 '|' ... '|' idn                      :: :: enum
-  | struct id = { uid0 : ctyp0 , ... , uidn : ctypn }  :: :: struct
-  | variant id = { uid0 : ctyp0 , ... , uidn : ctypn } :: :: variant
+  | enum id = id0 '|' ... '|' idn                    :: :: enum
+  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
+  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
 
 iannot :: '' ::=
   {{ lem nat * nat * nat }}

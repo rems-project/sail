@@ -185,7 +185,7 @@ let rec cval_subst id subst = function
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
   | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_subst id subst cval, len, n)
-  | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, unifiers, ctyp)
+  | V_ctor_kind (cval, ctor, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, ctyp)
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_subst id subst cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_subst id subst) members, ctyp)
@@ -196,7 +196,7 @@ let rec cval_map_id f = function
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
   | V_field (cval, field) -> V_field (cval_map_id f cval, field)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_map_id f cval, len, n)
-  | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_map_id f cval, ctor, unifiers, ctyp)
+  | V_ctor_kind (cval, ctor, ctyp) -> V_ctor_kind (cval_map_id f cval, ctor, ctyp)
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_map_id f cval, ctor, ctyp)
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun (field, cval) -> field, cval_map_id f cval) fields, ctyp)
@@ -455,7 +455,7 @@ let remove_tuples cdefs ctx =
     | CT_tup ctyps ->
        let ctyps = List.map fix_tuples ctyps in
        let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
-       CT_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps)
+       CT_struct (mk_id name, List.mapi (fun n ctyp -> mk_id (name ^ string_of_int n), ctyp) ctyps)
     | CT_struct (id, id_ctyps) ->
        CT_struct (id, List.map (fun (id, ctyp) -> id, fix_tuples ctyp) id_ctyps)
     | CT_variant (id, id_ctyps) ->
@@ -470,8 +470,8 @@ let remove_tuples cdefs ctx =
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
-    | V_ctor_kind (cval, id, unifiers, ctyp) ->
-       V_ctor_kind (fix_cval cval, id, unifiers, ctyp)
+    | V_ctor_kind (cval, ctor, ctyp) ->
+       V_ctor_kind (fix_cval cval, ctor, ctyp)
     | V_ctor_unwrap (cval, ctor, ctyp) ->
        V_ctor_unwrap (fix_cval cval, ctor, ctyp)
     | V_tuple_member (cval, _, n) ->
@@ -482,7 +482,7 @@ let remove_tuples cdefs ctx =
             mk_id (string_of_id id ^ string_of_int n)
          | _ -> assert false
        in
-       V_field (cval, (field, []))
+       V_field (cval, field)
     | V_call (op, cvals) ->
        V_call (op, List.map (fix_cval) cvals)
     | V_field (cval, field) ->
@@ -493,8 +493,8 @@ let remove_tuples cdefs ctx =
        | CT_tup ctyps ->
           let ctyps = List.map fix_tuples ctyps in
           let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
-          let struct_ctyp = CT_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps) in
-          V_struct (List.mapi (fun n member -> (mk_id (name ^ string_of_int n), []), fix_cval member) members, struct_ctyp)
+          let struct_ctyp = CT_struct (mk_id name, List.mapi (fun n ctyp -> mk_id (name ^ string_of_int n), ctyp) ctyps) in
+          V_struct (List.mapi (fun n member -> mk_id (name ^ string_of_int n), fix_cval member) members, struct_ctyp)
        | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple without tuple type"
        end
   in
@@ -509,7 +509,7 @@ let remove_tuples cdefs ctx =
             mk_id (string_of_id id ^ string_of_int n)
          | _ -> assert false
        in
-       CL_field (clexp, (field, []))
+       CL_field (clexp, field)
     | CL_field (clexp, field) -> CL_field (fix_clexp clexp, field)
     | CL_void -> CL_void
     | CL_rmw (read, write, ctyp) -> CL_rmw (read, write, ctyp)
@@ -546,8 +546,8 @@ let remove_tuples cdefs ctx =
   in
   let fix_ctx ctx =
     { ctx with
-      records = Bindings.map (fun (params, fields) -> params, UBindings.map fix_tuples fields) ctx.records;
-      variants = Bindings.map (fun (params, ctors) -> params, UBindings.map fix_tuples ctors) ctx.variants;
+      records = Bindings.map (fun (params, fields) -> params, Bindings.map fix_tuples fields) ctx.records;
+      variants = Bindings.map (fun (params, ctors) -> params, Bindings.map fix_tuples ctors) ctx.variants;
       valspecs = Bindings.map (fun (extern, ctyps, ctyp) -> extern, List.map fix_tuples ctyps, fix_tuples ctyp) ctx.valspecs;
       locals = Bindings.map (fun (mut, ctyp) -> mut, fix_tuples ctyp) ctx.locals
     }
@@ -556,9 +556,9 @@ let remove_tuples cdefs ctx =
     | CT_tup ctyps ->
        let ctyps = List.map fix_tuples ctyps in
        let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
-       let fields = List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps in
+       let fields = List.mapi (fun n ctyp -> mk_id (name ^ string_of_int n), ctyp) ctyps in
        [CDEF_type (CTD_struct (mk_id name, fields));
-        CDEF_pragma ("tuplestruct", Util.string_of_list " " (fun x -> x) (Util.zencode_string name :: List.map (fun ((id, _), _) -> Util.zencode_string (string_of_id id)) fields))]
+        CDEF_pragma ("tuplestruct", Util.string_of_list " " (fun x -> x) (Util.zencode_string name :: List.map (fun (id, _) -> Util.zencode_string (string_of_id id)) fields))]
     | _ -> assert false
   in
   let rec go acc = function

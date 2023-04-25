@@ -90,10 +90,10 @@ let string_of_name =
      "current_exception" ^ ssa_num n
   | Throw_location n ->
      "throw_location" ^ ssa_num n
-    
+
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
-  | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_uid field
+  | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_id field
   | CL_addr clexp -> string_of_clexp clexp ^ "*"
   | CL_tuple (clexp, n) -> string_of_clexp clexp ^ "." ^ string_of_int n
   | CL_void -> "void"
@@ -213,9 +213,9 @@ module Ir_formatter = struct
       | CDEF_type (CTD_enum (id, ids)) ->
          Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "enum") (zencode_id id) (Util.string_of_list ",\n  " zencode_id ids))
       | CDEF_type (CTD_struct (id, ids)) ->
-         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "struct") (zencode_id id) (Util.string_of_list ",\n  " uid_ctyp ids))
+         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "struct") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
       | CDEF_type (CTD_variant (id, ids)) ->
-         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "union") (zencode_id id) (Util.string_of_list ",\n  " uid_ctyp ids))
+         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "union") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
       | CDEF_let (_, bindings, instrs) ->
          let instrs = C.modify_instrs instrs in
          let label_map = C.make_label_map instrs in

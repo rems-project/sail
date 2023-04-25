@@ -139,9 +139,9 @@ let iblock1 = function
    in ctx.locals, so we know when their type changes due to flow
    typing. *)
 type ctx =
-  { records : (kid list * ctyp UBindings.t) Bindings.t;
+  { records : (kid list * ctyp Bindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
-    variants : (kid list * ctyp UBindings.t) Bindings.t;
+    variants : (kid list * ctyp Bindings.t) Bindings.t;
     valspecs : (string option * ctyp list * ctyp) Bindings.t;
     quants : ctyp KBindings.t;
     local_env : Env.t;
@@ -205,7 +205,7 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_ref ctyp -> "&" ^ mangle_string_of_ctyp ctx ctyp
   | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")" 
   | CT_struct (id, fields) ->
-     let generic_fields = Bindings.find id ctx.records |> snd |> UBindings.bindings in
+     let generic_fields = Bindings.find id ctx.records |> snd |> Bindings.bindings in
      (* Note: It might be better to only do this if we actually have polymorphic fields *)
      let unifiers = ctyp_unify (id_loc id) (CT_struct (id, generic_fields)) (CT_struct (id, fields)) |> KBindings.bindings |> List.map snd in
      begin match unifiers with
@@ -213,7 +213,7 @@ let rec mangle_string_of_ctyp ctx = function
      | _ -> "R" ^ string_of_id id ^ "<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) unifiers ^ ">"
      end
   | CT_variant (id, ctors) ->
-     let generic_ctors = Bindings.find id ctx.variants |> snd |> UBindings.bindings in
+     let generic_ctors = Bindings.find id ctx.variants |> snd |> Bindings.bindings in
      let unifiers = ctyp_unify (id_loc id) (CT_variant (id, generic_ctors)) (CT_variant (id, ctors)) |> KBindings.bindings |> List.map snd in
      let prefix = string_of_id id in
      (if prefix = "option" then "O" else "U" ^ prefix) ^ "<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) unifiers ^ ">"
@@ -418,7 +418,7 @@ let rec compile_aval l ctx = function
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup,
-       ((id, []), cval),
+       (id, cval),
        field_cleanup
      in
      let field_triples = List.map compile_fields (Bindings.bindings fields) in
@@ -435,7 +435,7 @@ let rec compile_aval l ctx = function
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (gs, ctyp), (id, []))) cval]
+       @ [icopy l (CL_field (CL_id (gs, ctyp), id)) cval]
        @ field_cleanup
      in
      [idecl l ctyp gs]
@@ -721,13 +721,13 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
                                             (string_of_ctyp (cval_ctyp cval)) (string_of_ctyp (ctyp_of_typ ctx variant_typ))))
         else ();
         let unifiers, ctor_ctyp =
-          let generic_ctors = Bindings.find var_id ctx.variants |> snd |> UBindings.bindings in
+          let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
           let unifiers = ctyp_unify l (CT_variant (var_id, generic_ctors)) (cval_ctyp cval) |> KBindings.bindings |> List.map snd in
-          let is_poly_ctor = List.exists (fun ((id, _), ctyp) -> Id.compare id ctor = 0 && is_polymorphic ctyp) generic_ctors in
+          let is_poly_ctor = List.exists (fun (id, ctyp) -> Id.compare id ctor = 0 && is_polymorphic ctyp) generic_ctors in
           unifiers, if is_poly_ctor then ctyp_suprema pat_ctyp else pat_ctyp
         in
         let pre, instrs, cleanup, ctx = compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label in
-        [ijump l (V_ctor_kind (cval, ctor, unifiers, pat_ctyp)) case_label] @ pre,
+        [ijump l (V_ctor_kind (cval, (ctor, unifiers), pat_ctyp)) case_label] @ pre,
         instrs,
         cleanup,
         ctx
@@ -770,8 +770,8 @@ let rec compile_alexp ctx alexp =
      in
      CL_addr (CL_id (name_or_global ctx id, ctyp))
   | AL_field (alexp, field_id) ->
-     CL_field (compile_alexp ctx alexp, (field_id, []))
-     
+     CL_field (compile_alexp ctx alexp, field_id)
+
 let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -911,14 +911,14 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_struct_update (aval, fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let _ctors = match ctyp with
-       | CT_struct (_, ctors) -> List.fold_left (fun m (k, v) -> UBindings.add k v m) UBindings.empty ctors
+       | CT_struct (_, ctors) -> List.fold_left (fun m (k, v) -> Bindings.add k v m) Bindings.empty ctors
        | _ -> raise (Reporting.err_general l "Cannot perform record update for non-record type")
      in
      let gs = ngensym () in
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (gs, ctyp), (id, []))) cval]
+       @ [icopy l (CL_field (CL_id (gs, ctyp), id)) cval]
        @ field_cleanup
      in
      let setup, cval, cleanup = compile_aval l ctx aval in
@@ -970,7 +970,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (name_or_global ctx id, ctyp_of_typ ctx typ), (field_id, []))) cval]
+       @ [icopy l (CL_field (CL_id (name_or_global ctx id, ctyp_of_typ ctx typ), field_id)) cval]
        @ field_cleanup
      in
      List.concat (List.map compile_fields (Bindings.bindings fields)),
@@ -1069,18 +1069,18 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let setup, cval, cleanup = compile_aval l ctx aval in
      let _ctyp = match cval_ctyp cval with
        | CT_struct (struct_id, fields) ->
-          begin match Util.assoc_compare_opt UId.compare (id, []) fields with
+          begin match Util.assoc_compare_opt Id.compare id fields with
           | Some ctyp -> ctyp
           | None ->
              raise (Reporting.err_unreachable l __POS__
                       ("Struct " ^ string_of_id struct_id ^ " does not have expected field " ^ string_of_id id
-                       ^ "?\nFields: " ^ Util.string_of_list ", " (fun (uid, ctyp) -> string_of_uid uid ^ ": " ^ string_of_ctyp ctyp) fields))
+                       ^ "?\nFields: " ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ ": " ^ string_of_ctyp ctyp) fields))
           end
        | _ ->
           raise (Reporting.err_unreachable l __POS__ "Field access on non-struct type in ANF representation!")
      in
      setup,
-     (fun clexp -> icopy l clexp (V_field (cval, (id, [])))),
+     (fun clexp -> icopy l clexp (V_field (cval, id))),
      cleanup
 
   | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
@@ -1166,10 +1166,10 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
   | TD_record (id, typq, ctors, _) ->
      let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
      let ctors =
-       List.fold_left (fun ctors (typ, id) -> UBindings.add (id, []) (fast_int (ctyp_of_typ record_ctx typ)) ctors) UBindings.empty ctors
+       List.fold_left (fun ctors (typ, id) -> Bindings.add id (fast_int (ctyp_of_typ record_ctx typ)) ctors) Bindings.empty ctors
      in
      let params = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in
-     CTD_struct (id, UBindings.bindings ctors),
+     CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id (params, ctors) ctx.records }
 
   | TD_variant (id, typq, tus, _) ->
@@ -1178,9 +1178,9 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
           let ctx = { ctx with local_env = Env.add_typquant (id_loc id) typq ctx.local_env } in
           ctyp_of_typ ctx typ, id
      in
-     let ctus = List.fold_left (fun ctus (ctyp, id) -> UBindings.add (id, []) ctyp ctus) UBindings.empty (List.map compile_tu tus) in
+     let ctus = List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus) in
      let params = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in
-     CTD_variant (id, UBindings.bindings ctus),
+     CTD_variant (id, Bindings.bindings ctus),
      { ctx with variants = Bindings.add id (params, ctus) ctx.variants }
 
   (* Will be re-written before here, see bitfield.ml *)
@@ -1755,12 +1755,12 @@ let map_structs_and_variants f = function
   | CT_list ctyp -> CT_list (map_ctyp f ctyp)
   | CT_struct (id, fields) ->
      begin match f (CT_struct (id, fields)) with
-     | CT_struct (id, fields) -> CT_struct (id, List.map (fun ((id, ctyps), ctyp) -> (id, List.map (map_ctyp f) ctyps), map_ctyp f ctyp) fields)
+     | CT_struct (id, fields) -> CT_struct (id, List.map (fun (id, ctyp) -> id, map_ctyp f ctyp) fields)
      | _ -> Reporting.unreachable (id_loc id) __POS__ "Struct mapped to non-struct"
      end
   | CT_variant (id, ctors) ->
      begin match f (CT_variant (id, ctors)) with
-     | CT_variant (id, ctors) -> CT_variant (id, List.map (fun ((id, ctyps), ctyp) -> (id, List.map (map_ctyp f) ctyps), map_ctyp f ctyp) ctors)
+     | CT_variant (id, ctors) -> CT_variant (id, List.map (fun (id, ctyp) -> id, map_ctyp f ctyp) ctors)
      | _ -> Reporting.unreachable (id_loc id) __POS__ "Variant mapped to non-variant"
      end
 
@@ -1769,27 +1769,27 @@ let rec specialize_variants ctx prior =
   let fix_variants ctx var_id =
     map_structs_and_variants (function
         | CT_variant (id, ctors) when Id.compare var_id id = 0 ->
-           let generic_ctors = Bindings.find id ctx.variants |> snd |> UBindings.bindings in
+           let generic_ctors = Bindings.find id ctx.variants |> snd |> Bindings.bindings in
            let unifiers = ctyp_unify (id_loc id) (CT_variant (id, generic_ctors)) (CT_variant (id, ctors)) |> KBindings.bindings |> List.map snd in
-           CT_variant (mangle_mono_id id ctx unifiers, List.map (fun ((ctor_id, _), ctyp) -> ((mangle_mono_id ctor_id ctx unifiers, []), ctyp)) ctors)
+           CT_variant (mangle_mono_id id ctx unifiers, List.map (fun (ctor_id, ctyp) -> (mangle_mono_id ctor_id ctx unifiers, ctyp)) ctors)
         | CT_struct (id, fields) when Id.compare var_id id = 0 ->
-           let generic_fields = Bindings.find id ctx.records |> snd |> UBindings.bindings in
+           let generic_fields = Bindings.find id ctx.records |> snd |> Bindings.bindings in
            let unifiers = ctyp_unify (id_loc id) (CT_struct (id, generic_fields)) (CT_struct (id, fields)) |> KBindings.bindings |> List.map snd in
-           CT_struct (mangle_mono_id id ctx unifiers, List.map (fun ((field_id, _), ctyp) -> ((field_id, []), ctyp)) fields)
+           CT_struct (mangle_mono_id id ctx unifiers, List.map (fun (field_id, ctyp) -> (field_id, ctyp)) fields)
         | ctyp -> ctyp
       )
   in
 
   let specialize_cval ctx ctor_id =
     function
-    | V_ctor_kind (cval, id, unifiers, pat_ctyp) when Id.compare id ctor_id = 0 ->
-       V_ctor_kind (cval, mangle_mono_id id ctx unifiers, [], pat_ctyp)
+    | V_ctor_kind (cval, (id, unifiers), pat_ctyp) when Id.compare id ctor_id = 0 ->
+       V_ctor_kind (cval, (mangle_mono_id id ctx unifiers, []), pat_ctyp)
     | V_ctor_unwrap (cval, (id, unifiers), ctor_ctyp) when Id.compare id ctor_id = 0 ->
        V_ctor_unwrap (cval, (mangle_mono_id id ctx unifiers, []), ctor_ctyp)
     | cval -> cval
   in
 
-  let specialize_constructor ctx var_id (ctor_id, existing_unifiers) ctyp =
+  let specialize_constructor ctx var_id ctor_id ctyp =
     function
     | I_aux (I_funcall (clexp, extern, (id, ctyp_args), [cval]), aux) when Id.compare id ctor_id = 0 ->
        instantiations := CTListSet.add ctyp_args !instantiations;
@@ -1801,7 +1801,7 @@ let rec specialize_variants ctx prior =
   let specialize_field ctx struct_id =
     function
     | I_aux (I_decl (CT_struct (struct_id', fields), _), (_, l)) as instr when Id.compare struct_id struct_id' = 0 ->
-       let generic_fields = Bindings.find struct_id ctx.records |> snd |> UBindings.bindings in
+       let generic_fields = Bindings.find struct_id ctx.records |> snd |> Bindings.bindings in
        let unifiers = ctyp_unify l (CT_struct (struct_id, generic_fields)) (CT_struct (struct_id, fields)) |> KBindings.bindings |> List.map snd in
        instantiations := CTListSet.add unifiers !instantiations;
        instr
@@ -1810,7 +1810,7 @@ let rec specialize_variants ctx prior =
 
   let mangled_pragma orig_id mangled_id =
     CDEF_pragma ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)) in
-  
+
   function
   | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
@@ -1820,7 +1820,7 @@ let rec specialize_variants ctx prior =
             let _ = List.map (map_ctyp (fun ctyp ->
                                   match ctyp with
                                   | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
-                                     let generic_ctors = Bindings.find var_id ctx.variants |> snd |> UBindings.bindings in
+                                     let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
                                      let unifiers = ctyp_unify (id_loc var_id') (CT_variant (var_id, generic_ctors)) (CT_variant (var_id, ctors)) |> KBindings.bindings |> List.map snd in
                                      instantiations := CTListSet.add unifiers !instantiations;
                                      ctyp
@@ -1836,29 +1836,29 @@ let rec specialize_variants ctx prior =
          cdefs
          ctors
      in
-     
+
      let monomorphized_variants =
        List.map (fun inst ->
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
            (mangle_mono_id var_id ctx inst,
-            List.map (fun ((ctor_id, _), ctyp) -> (mangle_mono_id ctor_id ctx inst, []), fix_variants ctx var_id (subst_poly substs ctyp)) ctors)
+            List.map (fun (ctor_id, ctyp) -> mangle_mono_id ctor_id ctx inst, fix_variants ctx var_id (subst_poly substs ctyp)) ctors)
          ) (CTListSet.elements !instantiations)
      in
      let ctx =
        List.fold_left (fun ctx (id, ctors) ->
-           { ctx with variants = Bindings.add id ([], UBindings.of_seq (List.to_seq ctors)) ctx.variants })
+           { ctx with variants = Bindings.add id ([], Bindings.of_seq (List.to_seq ctors)) ctx.variants })
          ctx monomorphized_variants
      in
      let mangled_ctors =
        List.map (fun (_, monomorphized_ctors) ->
-           List.map2 (fun ((ctor_id, _), _) ((monomorphized_id, _), _) -> mangled_pragma ctor_id monomorphized_id) ctors monomorphized_ctors
+           List.map2 (fun (ctor_id, _) (monomorphized_id, _) -> mangled_pragma ctor_id monomorphized_id) ctors monomorphized_ctors
          ) monomorphized_variants
        |> List.concat
      in
-     
+
      let prior = List.map (cdef_map_ctyp (fix_variants ctx var_id)) prior in
      let cdefs = List.map (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
- 
+
      let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp) ctx.valspecs } in
      let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
 
@@ -1866,34 +1866,34 @@ let rec specialize_variants ctx prior =
 
   | CDEF_type (CTD_struct (struct_id, fields)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) fields ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty fields in
- 
+
      let cdefs = List.map (cdef_map_instr (specialize_field ctx struct_id)) cdefs in
      let monomorphized_structs =
        List.map (fun inst  ->
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
-           (mangle_mono_id struct_id ctx inst, List.map (fun ((field_id, _), ctyp) -> (field_id, []), fix_variants ctx struct_id (subst_poly substs ctyp)) fields)
+           (mangle_mono_id struct_id ctx inst, List.map (fun (field_id, ctyp) -> field_id, fix_variants ctx struct_id (subst_poly substs ctyp)) fields)
          ) (CTListSet.elements !instantiations)
      in
      let mangled_fields =
        List.map (fun (_, monomorphized_fields) ->
-           List.map2 (fun ((field_id, _), _) ((monomorphized_id, _), _) -> mangled_pragma field_id monomorphized_id) fields monomorphized_fields
+           List.map2 (fun (field_id, _) (monomorphized_id, _) -> mangled_pragma field_id monomorphized_id) fields monomorphized_fields
          ) monomorphized_structs
        |> List.concat
      in
- 
+
      let prior = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
      let cdefs = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
      let ctx = { ctx with valspecs = Bindings.map (fun (extern, param_ctyps, ret_ctyp) -> extern, List.map (fix_variants ctx struct_id) param_ctyps, fix_variants ctx struct_id ret_ctyp) ctx.valspecs } in
-     
+
      let ctx =
        List.fold_left (fun ctx (id, fields) ->
-           { ctx with records = Bindings.add id ([], UBindings.of_seq (List.to_seq fields)) ctx.records })
+           { ctx with records = Bindings.add id ([], Bindings.of_seq (List.to_seq fields)) ctx.records })
          ctx monomorphized_structs
      in
      let ctx = { ctx with records = Bindings.remove struct_id ctx.records } in
-     
+
      specialize_variants ctx (List.concat (List.map (fun (id, fields) -> [CDEF_type (CTD_struct (id, fields)); mangled_pragma struct_id id]) monomorphized_structs) @ mangled_fields @ prior) cdefs
-     
+
   | cdef :: cdefs ->
      specialize_variants ctx (cdef :: prior) cdefs
 
@@ -1972,7 +1972,7 @@ let make_calls_precise ctx cdefs =
 
   let rec precise_calls prior = function
     | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
-       List.iter (fun ((id, _), ctyp) ->
+       List.iter (fun (id, ctyp) ->
            constructor_types := Bindings.add id ([ctyp], CT_variant (var_id, ctors)) !constructor_types
          ) ctors;
        precise_calls (cdef :: prior) cdefs
@@ -2064,11 +2064,11 @@ let compile_ast ctx ast =
   let cdefs = List.concat (List.rev chunks) in
 
   (* If we don't have an exception type, add a dummy one *)
-  let dummy_exn = (mk_id "__dummy_exn#", []) in
+  let dummy_exn = mk_id "__dummy_exn#" in
   let cdefs, ctx =
     if not (Bindings.mem (mk_id "exception") ctx.variants) then
       CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])) :: cdefs,
-      { ctx with variants = Bindings.add (mk_id "exception") ([], UBindings.singleton dummy_exn CT_unit) ctx.variants }
+      { ctx with variants = Bindings.add (mk_id "exception") ([], Bindings.singleton dummy_exn CT_unit) ctx.variants }
     else
       cdefs, ctx
   in
