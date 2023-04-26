@@ -2700,16 +2700,11 @@ let infer_lit env (L_aux (lit_aux, l)) =
   | L_undef -> typ_error env l "Cannot infer the type of undefined"
 
 let instantiate_simple_equations =
-  let is_simple (Nexp_aux (nexp, _)) =
-    match nexp with
-    | (Nexp_var _ | Nexp_constant _) -> true
-    | _ -> false
-  in
   let rec find_eqs kid (NC_aux (nc,_)) = 
     match nc with
     | NC_equal (Nexp_aux (Nexp_var kid',_), nexp)
         when Kid.compare kid kid' == 0 &&
-               not (KidSet.mem kid (nexp_frees nexp)) && is_simple (nexp_simp nexp) ->
+          not (KidSet.mem kid (nexp_frees nexp)) ->
        [arg_nexp nexp]
     | NC_and (nexp1, nexp2) ->
        find_eqs kid nexp1 @ find_eqs kid nexp2
