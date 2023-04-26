@@ -373,7 +373,7 @@ let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
   try Type_check.check_defs env defs with
   | Type_error (env, l, err) ->
      raise (Reporting.err_typ l (string_of_type_error err))
-         
+
 let check : Env.t -> uannot ast -> tannot ast * Env.t =
   fun env defs ->
   try Type_check.check env defs with

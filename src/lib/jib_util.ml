@@ -430,7 +430,7 @@ let rec string_of_cval = function
   | V_call (op, cvals) ->
      Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
   | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (string_of_cval f) (string_of_id field)
+     Printf.sprintf "%s.%s" (string_of_cval f) (Util.zencode_string (string_of_id field))
   | V_tuple_member (f, _, n) ->
      Printf.sprintf "%s.ztup%d" (string_of_cval f) n
   | V_ctor_kind (f, ctor, _) ->
@@ -442,7 +442,7 @@ let rec string_of_cval = function
      | CT_struct (id, _) ->
         Printf.sprintf "struct %s {%s}"
           (Util.zencode_string (string_of_id id))
-          (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ string_of_cval cval) fields)
+          (Util.string_of_list ", " (fun (field, cval) -> Util.zencode_string (string_of_id field) ^ " = " ^ string_of_cval cval) fields)
      | _ ->
         Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
      end
