@@ -23,7 +23,6 @@ skip_tests = {
 }
 skip_tests_mwords = {
     'phantom_option',
-    'constraint_ctor',
     'overload_plus',
     'vector_append_gen',
     'execute_decode_hard',

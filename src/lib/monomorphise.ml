@@ -683,6 +683,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
   let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors defs =
     let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l)) =
+      let env = Env.add_typquant l q env in
       match split_src_type error_opt env id ty q with
       | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
       | Some variants ->
