@@ -21,23 +21,41 @@ skip_tests = {
     'phantom_bitlist_union',
     'vector_pattern_split'
 }
+skip_tests_mwords = {
+    'phantom_option',
+    'constraint_ctor',
+    'overload_plus',
+    'vector_append_gen',
+    'execute_decode_hard',
+    'simple_record_access',
+    'vector_append',
+    'existential_constraint_synonym',
+    'exist_tlb',
+    'vector_pattern_split',
+    'negative_bits_union',
+    'while_MM',
+    'while_PM',
+    'zero_length_bv',
+    'negative_bits_list',
+    'patternrefinement'
+}
 
 print('Sail is {}'.format(sail))
 print('Sail dir is {}'.format(sail_dir))
 
-def test_lem():
-    banner('Testing lem')
-    results = Results('pass')
+def test_lem(name, opts, skip_list):
+    banner('Testing Lem {}'.format(name))
+    results = Results(name)
     for filenames in chunks(os.listdir(test_dir), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
-            if basename in skip_tests:
+            if basename in skip_list:
                 print_skip(filename)
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem -o {} {}/{}'.format(sail, basename, test_dir, filename))
+                step('{} -lem {} -o {} {}/{}'.format(sail, opts, basename, test_dir, filename))
                 step('lem -lib {}/src/gen_lib {}_types.lem {}.lem'.format(sail_dir, basename, basename))
                 step('rm {}_types.lem {}.lem'.format(basename, basename))
                 print_ok(filename)
@@ -47,7 +65,8 @@ def test_lem():
 
 xml = '<testsuites>\n'
 
-xml += test_lem()
+xml += test_lem('with bitlists', '', skip_tests)
+xml += test_lem('with machine words', '-lem_mwords -auto_mono', skip_tests_mwords)
 
 xml += '</testsuites>\n'
 
