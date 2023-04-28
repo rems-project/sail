@@ -464,22 +464,21 @@ let remove_vector_concat_pat pat =
                      then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
                      else Big_int.add (Big_int.sub start length) (Big_int.of_int 1))
           | _ ->
-            raise (Reporting.err_unreachable (fst rannot') __POS__
-              ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))) in
+             Reporting.unreachable (fst rannot') __POS__
+               "unname_vector_concat_elements: vector of unspecified length in vector-concat pattern") in
          let rec aux typ_opt (pos,pat_acc,decl_acc) (P_aux (p,cannot),is_last) =
            let ctyp = Env.base_typ_of (env_of_annot cannot) (typ_of_annot cannot) in
            let (length,ord,_) = vector_typ_args_of ctyp in
-           let (pos',index_j) = match length with
-             | Nexp_aux (Nexp_constant i,_) ->
+           let (pos',index_j) = match Type_check.solve_unique (env_of_annot cannot) length with
+             | Some i ->
                 if is_order_inc ord
                 then (Big_int.add pos i, Big_int.sub (Big_int.add pos i) (Big_int.of_int 1))
                 else (Big_int.sub pos i, Big_int.add (Big_int.sub pos i) (Big_int.of_int 1))
-             | Nexp_aux (_,l) ->
+             | None ->
                 if is_last then (pos,last_idx)
                 else
-                  raise
-                    (Reporting.err_unreachable
-                       l __POS__ ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern")) in
+                  Reporting.unreachable
+                    (fst cannot) __POS__ ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern") in
            (match p with
             (* if we see a named vector pattern, remove the name and remember to
               declare it later *)
@@ -585,34 +584,24 @@ let remove_vector_concat_pat pat =
         let wild _ = P_aux (P_wild,(gen_loc l, mk_tannot env bit_typ)) in
         if is_vector_typ typ || is_bitvector_typ typ then
           match p, vector_typ_args_of typ with
-          | P_vector ps,_ -> acc @ ps
-          | _, (Nexp_aux (Nexp_constant length,_),_,_) ->
-             acc @ (List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1))))
-          | _, _ ->
-            (*if is_last then*) acc @ [wild Big_int.zero]
+          | P_vector ps, _ -> acc @ ps
+          | _, (nexp, _, _) ->
+             begin match Type_check.solve_unique env nexp with
+             | Some length ->
+                acc @ (List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1))))
+             | None ->
+                acc @ [wild Big_int.zero]
+             end
         else raise
           (Reporting.err_unreachable l __POS__
             ("remove_vector_concats: Non-vector in vector-concat pattern " ^
               string_of_typ (typ_of_annot annot))) in
 
-      let has_length (P_aux (p,annot)) =
-        let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
-        match vector_typ_args_of typ with
-        | (Nexp_aux (Nexp_constant length,_),_,_) -> true
-        | _ -> false in
-
       let ps_tagged = tag_last ps in
       let ps' = List.fold_left aux [] ps_tagged in
-      let last_has_length ps = List.exists (fun (p,b) -> b && has_length p) ps_tagged in
 
-      if last_has_length ps then
-        P_vector ps'
-      else
-        (* If the last vector pattern in the vector_concat pattern has unknown
-        length we misuse the P_vector_concat constructor's argument to place in
-        the following way: P_vector_concat [x;y; ... ;z] should be mapped to the
-        pattern-match x :: y :: .. z, i.e. if x : 'a, then z : vector 'a. *)
-        P_vector_concat ps' in
+      P_vector ps'
+    in
 
     {id_pat_alg with p_vector_concat = p_vector_concat} in
 

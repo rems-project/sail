@@ -19,7 +19,6 @@ test_dir = '../typecheck/pass'
 skip_tests = {
     'phantom_option',
     'phantom_bitlist_union',
-    'vector_pattern_split'
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -30,7 +29,6 @@ skip_tests_mwords = {
     'vector_append',
     'existential_constraint_synonym',
     'exist_tlb',
-    'vector_pattern_split',
     'negative_bits_union',
     'while_MM',
     'while_PM',
