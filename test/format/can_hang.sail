@@ -1,0 +1,20 @@
+default Order dec
+
+$include <prelude.sail>
+
+function foo() = {
+  let x = /* block
+             comment */
+  match unit {
+      unit => (),
+  }
+}
+
+function bar() = {
+  /* block
+     comment */
+  let x =
+  match unit {
+      unit => (),
+  }
+}

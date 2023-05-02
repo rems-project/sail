@@ -138,13 +138,14 @@ let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n
 
 let qi_id_of_kopt (KOpt_aux (_, l) as kopt) = QI_aux (QI_id kopt, l)
 
-let mk_recr r n m = (Rec_aux(r, loc n m))
+let mk_recr r n m = Rec_aux (r, loc n m)
+let mk_recn = Rec_aux (Rec_none, Unknown)
 
-let mk_recn = (Rec_aux((Rec_nonrec), Unknown))
-let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
-let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
-let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), loc n m)
-let mk_eannotn = Effect_opt_aux(Effect_opt_none,Unknown)
+let mk_typqn = TypQ_aux (TypQ_no_forall, Unknown)
+
+let mk_tannotn = Typ_annot_opt_aux (Typ_annot_opt_none, Unknown)
+let mk_tannot typq typ n m = Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), loc n m)
+let mk_eannotn = Effect_opt_aux (Effect_opt_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 
@@ -204,7 +205,7 @@ let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
 let fix_extern typschm = function
   | None -> None
   | Some extern -> Some { extern with pure = typschm_is_pure typschm }
-       
+
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
@@ -597,11 +598,9 @@ atomic_typ:
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kopt_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
-  | Lcurly id Colon typ Dot typ Rcurly
-    { mk_typ (ATyp_base ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
-  | typ
+  | typ Comma?
     { [$1] }
   | typ Comma typ_list
     { $1 :: $3 }
@@ -744,7 +743,7 @@ pat:
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
-  | pat
+  | pat Comma?
     { [$1] }
   | pat Comma pat_list
     { $1 :: $3 }
@@ -1159,7 +1158,7 @@ fexp_exp_list:
     { $1 :: $3 }
 
 exp_list:
-  | exp
+  | exp Comma?
     { [$1] }
   | exp Comma exp_list
     { $1 :: $3 }
@@ -1193,6 +1192,8 @@ funcl_patexp_typ:
     { (mk_pexp (Pat_exp ($4, $8)) $startpos $endpos, mk_tannot $2 $6 $startpos $endpos($6)) }
   | Lparen pat If_ exp Rparen Eq exp
     { (mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos, mk_tannotn) }
+  | Lparen pat If_ exp Rparen MinusGt typ Eq exp
+    { (mk_pexp (Pat_when ($2, $4, $9)) $startpos $endpos, mk_tannot mk_typqn $7 $startpos $endpos($7)) }
   | Forall typquant Dot Lparen pat If_ exp Rparen MinusGt typ Eq exp
     { (mk_pexp (Pat_when ($5, $7, $12)) $startpos $endpos, mk_tannot $2 $10 $startpos $endpos($10)) }
 
@@ -1296,6 +1297,8 @@ type_def:
 enum_functions:
   | id MinusGt typ Comma enum_functions
     { ($1, $3) :: $5 }
+  | id MinusGt typ Comma
+    { [($1, $3)] }
   | id MinusGt typ
     { [($1, $3)] }
 
@@ -1306,9 +1309,9 @@ enum_bar:
     { ($1, None) :: $3 }
 
 enum:
-  | id
+  | id Comma?
     { [($1, None)] }
-  | id EqGt exp
+  | id EqGt exp Comma?
     { [($1, Some $3)] }
   | id Comma enum
     { ($1, None) :: $3 }
@@ -1491,19 +1494,15 @@ val_spec_def:
 
 register_def:
   | Register id Colon typ
-    { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      mk_reg_dec (DEC_reg (rreg, wreg, $4, $2, None)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($4, $2, None)) $startpos $endpos }
   | Register id Colon typ Eq exp
-    { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
-      mk_reg_dec (DEC_reg (rreg, wreg, $4, $2, Some $6)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($4, $2, Some $6)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ
-    { mk_reg_dec (DEC_reg ($2, $3, $6, $4, None)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($6, $4, None)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ Eq exp
-    { mk_reg_dec (DEC_reg ($2, $3, $6, $4, Some $8)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($6, $4, Some $8)) $startpos $endpos }
   | Register Configuration id Colon typ Eq exp
-    { mk_reg_dec (DEC_config ($3, $5, $7)) $startpos $endpos }
+    { mk_reg_dec (DEC_reg ($5, $3, Some $7)) $startpos $endpos }
 
 default_def:
   | Default kind Inc

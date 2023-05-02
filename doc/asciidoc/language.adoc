@@ -81,7 +81,18 @@ which would end up being equivalent to
 bits to other numeric types would be highly undesirable. The `bit`
 type itself is a two-element type with members `bitzero` and `bitone`.
 
-=== Mappings
+=== Bitvector Literals
+
+Bitvector literals in Sail are written as either `0x` followed by a
+sequence of hexadecimal digits or `0b` followed by a sequence of
+binary digits, for example `0x12FE or `0b1010100`. The length of a hex
+literal is always four times the number of digits, and the length of
+binary string is always the exact number of digits, so `0x12FE` has
+length 16, while `0b1010100` has length 7. To ensure bitvector logic
+in specifications is precisly specified, we do not do any kind of
+implicit widening or truncation as might occur in C. To change the
+length of a bitvector, explicit zero/sign extension and truncation
+functions must be used.
 
 === Pattern Matching
 :pattern-match: sail_doc/pattern_matching.json
@@ -242,3 +253,27 @@ include::custom_sail_doc/cannot_wildcard_warning[]
 This warning should be heeded, and the match simplified otherwise the
 generated theorem prover definitions produced by Sail may be rejected
 by the prover.
+
+=== Exceptions
+:exn: sail_doc/exn.json
+
+Perhaps surprisingly for a specification language, Sail has exception
+support. This is because exceptions as a language feature do sometimes
+appear in vendor ISA pseudocode (they are a feature in Arm's ASL
+language), and such code would be very difficult to translate into
+Sail if Sail did not itself support exceptions. We already translate
+Sail to monadic theorem prover code, so working with a monad that
+supports exceptions is fairly natural.
+
+For exceptions we have two language features: `throw` statements
+and `try`--`catch` blocks. The throw keyword takes a value of
+type `exception` as an argument, which can be any user defined type
+with that name. There is no builtin exception type, so to use
+exceptions one must be set up on a per-project basis. Usually the
+exception type will be a union, often a scattered union, which allows
+for the exceptions to be declared throughout the specification as they
+would be in OCaml, for example:
+[source,sail]
+----
+include::sail:EXN[from=exn,type=span]
+----

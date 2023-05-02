@@ -81,7 +81,7 @@ type l =
 type 'a annot = l * 'a
 
 type extern = { pure : bool; bindings : (string * string) list }
-              
+
 exception Parse_error_locn of l * string
 
 type x = text (* identifier *)
@@ -173,7 +173,6 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_neg of atyp (* Internal (but not M as I want a datatype constructor) negative nexp *)
  | ATyp_inc (* increasing *)
  | ATyp_dec (* decreasing *)
- | ATyp_default_ord (* default order for increasing or decreasing signficant bits *)
  | ATyp_set of (base_effect) list (* effect set *)
  | ATyp_fn of atyp * atyp * atyp (* Function type, last atyp is an effect *)
  | ATyp_bidir of atyp * atyp * atyp (* Mapping type, last atyp is an effect *)
@@ -181,7 +180,6 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_tuple of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
  | ATyp_exist of kinded_id list * atyp * atyp
- | ATyp_base of id * atyp * atyp
 
 and atyp = 
    ATyp_aux of atyp_aux * l
@@ -230,16 +228,15 @@ type
 pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild                (* wildcard        - always matches *)
- | P_or of pat * pat (* choice pattern  - P|Q matches if P matches or Q matches *)
  | P_typ of atyp * pat (* typed pattern *)
  | P_id of id (* identifier *)
  | P_var of pat * atyp (* bind pat to type variable *)
- | P_app of id * (pat) list (* union constructor pattern *)
- | P_vector of (pat) list (* vector pattern *)
- | P_vector_concat of (pat) list (* concatenated vector pattern *)
+ | P_app of id * pat list (* union constructor pattern *)
+ | P_vector of pat list (* vector pattern *)
+ | P_vector_concat of pat list (* concatenated vector pattern *)
  | P_vector_subrange of id * Big_int.num * Big_int.num
- | P_tuple of (pat) list (* tuple pattern *)
- | P_list of (pat) list (* list pattern *)
+ | P_tuple of pat list (* tuple pattern *)
+ | P_list of pat list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
  | P_string_append of pat list (* string append pattern, x ^^ y *)
  | P_attribute of string * string * pat 
@@ -270,9 +267,9 @@ exp_aux =  (* Expression *)
  | E_deref of exp
  | E_lit of lit (* literal constant *)
  | E_typ of atyp * exp (* cast *)
- | E_app of id * (exp) list (* function application *)
+ | E_app of id * exp list (* function application *)
  | E_app_infix of exp * id * exp (* infix function application *)
- | E_tuple of (exp) list (* tuple *)
+ | E_tuple of exp list (* tuple *)
  | E_if of exp * exp * exp (* conditional *)
  | E_loop of loop * measure * exp * exp
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
@@ -304,12 +301,6 @@ exp_aux =  (* Expression *)
 
 and exp = 
    E_aux of exp_aux * l
-
-and fexp_aux =  (* Field-expression *)
-   FE_fexp of id * exp
-
-and fexp = 
-   FE_aux of fexp_aux * l
 
 and opt_default_aux =  (* Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map *)
    Def_val_empty
@@ -354,8 +345,7 @@ effect_opt_aux =  (* Optional effect annotation for functions *)
 
 type 
 rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+   Rec_none (* no termination measure *)
  | Rec_measure of pat * exp (* recursive with termination measure *)
 
 
@@ -456,7 +446,7 @@ type outcome_spec_aux =  (* outcome declaration *)
 
 type outcome_spec = 
  | OV_aux of outcome_spec_aux * l
- 
+
 type 
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
@@ -475,8 +465,7 @@ val_spec_aux =  (* Value type specification *)
 
 type 
 dec_spec_aux =  (* Register declarations *)
-   DEC_reg of atyp * atyp * atyp * id * exp option
- | DEC_config of id * atyp * exp
+   DEC_reg of atyp * id * exp option
 
 type 
 scattered_def_aux =  (* Function and type union definitions that can be spread across

@@ -65,76 +65,117 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Initial desugaring pass over AST after parsing *)
+(** Module for breaking AST into syntactic chunks and interleaving comments.
 
-open Ast
-open Ast_defs
-open Ast_util
+   This module is part of the Sail formatting system. It takes a
+   parsed AST (not a desugared AST, as for formatting we need to
+   preserve as much as possible), and breaks it up into more abstract
+   syntactic elements - 'chunks' for want of a better term. *)
 
-(** {2 Options} *)
+type binder = Var_binder | Let_binder | Internal_plet_binder
 
-(** Generate undefined_T functions for every type T. False by
-   default. *)
-val opt_undefined_gen : bool ref
+val binder_keyword : binder -> string
 
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
-val opt_fast_undefined : bool ref
+type if_format = {
+    then_brace : bool;
+    else_brace : bool
+  }
 
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
-val opt_magic_hash : bool ref
+type match_kind = Try_match | Match_match
 
-(** When true enums can be automatically casted to range types and
-   back.  Otherwise generated T_of_num and num_of_T functions must be
-   manually used for each enum T *)
-val opt_enum_casts : bool ref
+val match_keywords : match_kind -> string * string option
 
-(** This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the AST
-   once. The original assumption in sail is that the whole AST gets
-   processed at once (therefore they could only get added once), and
-   this isn't true any more with the interpreter. This needs to be
-   public so the interpreter can set it back to false if it unloads
-   all the loaded files. *)
-val have_undefined_builtins : bool ref
+val comment_type_delimiters : Lexer.comment_type -> string * string
 
-(** Val specs of undefined functions for builtin types that get added to
-    the AST if opt_undefined_gen is set (minus those functions that already
-    exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
+type chunk =
+  | Comment of Lexer.comment_type * int * int * string
+  | Spacer of bool * int
+  | Function of {
+      id : Parse_ast.id;
+      clause : bool;
+      rec_opt : chunks option;
+      typq_opt : chunks option;
+      return_typ_opt : chunks option;
+      funcls : pexp_chunks list
+    }
+  | Val of {
+      is_cast : bool;
+      id : Parse_ast.id;
+      extern_opt : Parse_ast.extern option;
+      typq_opt : chunks option;
+      typ : chunks;
+    }
+  | Enum of {
+      id : Parse_ast.id;
+      enum_functions : chunks list option;
+      members : chunks list
+    }
+  | Function_typ of {
+      mapping : bool;
+      lhs : chunks;
+      rhs : chunks;
+    }
+  | Exists of {
+      vars: chunks;
+      constr: chunks;
+      typ: chunks;
+    }
+  | Typ_quant of {
+      vars : chunks;
+      constr_opt : chunks option;
+    }
+  | App of Parse_ast.id * chunks list
+  | Field of chunks * Parse_ast.id
+  | Tuple of string * string * int * chunks list
+  | Intersperse of string * chunks list
+  | Atom of string
+  | String_literal of string
+  | Pragma of string * string
+  | Unary of string * chunks
+  | Binary of chunks * string * chunks
+  | Ternary of chunks * string * chunks * string * chunks
+  | Index of chunks * chunks
+  | Delim of string
+  | Opt_delim of string
+  | Block of (bool * chunks list)
+  | Binder of binder * chunks * chunks * chunks
+  | Block_binder of binder * chunks * chunks
+  | If_then of bool * chunks * chunks
+  | If_then_else of if_format * chunks * chunks * chunks
+  | Struct_update of chunks * chunks list
+  | Match of {
+      kind : match_kind;
+      exp : chunks;
+      aligned : bool;
+      cases : pexp_chunks list
+    }
+  | Foreach of {
+      var : chunks;
+      decreasing : bool;
+      from_index : chunks;
+      to_index : chunks;
+      step : chunks option;
+      body : chunks
+    }
+  | While of {
+      repeat_until : bool;
+      termination_measure : chunks option;
+      cond : chunks;
+      body : chunks
+    }
+  | Vector_updates of chunks * chunk list
+  | Chunks of chunks
+  | Raw of string
 
-(** {2 Desugar and process AST } *)
+and chunks = chunk Queue.t
 
-val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
-  
-(** If the generate flag is false, then we won't generate any
-   auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
+and pexp_chunks = {
+    funcl_space : bool;
+    pat : chunks;
+    guard : chunks option;
+    body : chunks
+  }
 
-(** {2 Parsing expressions and definitions from strings} *)
+val prerr_chunk : string -> chunk -> unit
 
-val extern_of_string : ?pure:bool -> id -> string -> uannot def
-val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : (string * int * int * int) -> string -> uannot def list
-val ast_of_def_string : (string * int * int * int) -> string -> uannot ast
-val ast_of_def_string_with : (string * int * int * int) -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
-val exp_of_string : string -> uannot exp
-val typ_of_string : string -> typ
-val constraint_of_string : string -> n_constraint
-
-(** {2 Parsing files } *)
-  
-(** Parse a file into a sequence of comments and a parse AST
-
-   @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
-
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
+val chunk_defs : string -> Lexer.comment list -> Parse_ast.def list -> chunks

@@ -65,76 +65,34 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Initial desugaring pass over AST after parsing *)
+type config = {
+    (** The default indentation depth (default 4) *)
+    indent : int;
+    (** If true, the formatter preserves the structure of the AST as
+       much as possible - it won't insert braces around if statements
+       and so on where there weren't any and so on. (default false) *)
+    preserve_structure : bool;
+    (** The desired maximum line width. (default 120) *)
+    line_width : int;
+    (** The fraction (between 0.0 and 1.0) of the maximum line width that
+       can be filled by non whitespace characters before we consider
+       breaking. (default 1.0) *)
+    ribbon_width : float;
+  }
 
-open Ast
-open Ast_defs
-open Ast_util
+(** Read the config struct from a json object. Raises err_general if
+   the json is not an object, and warns about any invalid keys. *)
+val config_from_json : Yojson.Basic.t -> config
+            
+val default_config : config
 
-(** {2 Options} *)
+module type CONFIG = sig
+  val config : config
+end
 
-(** Generate undefined_T functions for every type T. False by
-   default. *)
-val opt_undefined_gen : bool ref
-
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
-val opt_fast_undefined : bool ref
-
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
-val opt_magic_hash : bool ref
-
-(** When true enums can be automatically casted to range types and
-   back.  Otherwise generated T_of_num and num_of_T functions must be
-   manually used for each enum T *)
-val opt_enum_casts : bool ref
-
-(** This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the AST
-   once. The original assumption in sail is that the whole AST gets
-   processed at once (therefore they could only get added once), and
-   this isn't true any more with the interpreter. This needs to be
-   public so the interpreter can set it back to false if it unloads
-   all the loaded files. *)
-val have_undefined_builtins : bool ref
-
-(** Val specs of undefined functions for builtin types that get added to
-    the AST if opt_undefined_gen is set (minus those functions that already
-    exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
-
-(** {2 Desugar and process AST } *)
-
-val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
-  
-(** If the generate flag is false, then we won't generate any
-   auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
-
-(** {2 Parsing expressions and definitions from strings} *)
-
-val extern_of_string : ?pure:bool -> id -> string -> uannot def
-val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : (string * int * int * int) -> string -> uannot def list
-val ast_of_def_string : (string * int * int * int) -> string -> uannot ast
-val ast_of_def_string_with : (string * int * int * int) -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
-val exp_of_string : string -> uannot exp
-val typ_of_string : string -> typ
-val constraint_of_string : string -> n_constraint
-
-(** {2 Parsing files } *)
-  
-(** Parse a file into a sequence of comments and a parse AST
-
-   @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
-
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
+module Make(Config : CONFIG) : sig
+  (** If debug is true, we print extra debugging information to
+     stderr, and annotate the output with various information on
+     linebreaking decisions. *)
+  val format_defs : ?debug:bool -> string -> string -> Lexer.comment list -> Parse_ast.def list -> string
+end

@@ -1,0 +1,23 @@
+default Order dec
+
+$include <prelude.sail>
+
+function foo forall 'n 'm, 'n >= 0. (x: int('n), y: int('m)) -> unit = {
+    ()
+}
+
+function foo /* c */ forall 'n 'm, 'n >= 0. (x: int('n), y: int('m)) -> unit = {
+    ()
+}
+
+function foo forall/* c */'n 'm, 'n >= 0. (x: int('n), y: int('m)) -> unit = {
+    ()
+}
+
+function foo forall 'n   'm, /* c */ 'n >= 0. (x: int('n), y: int('m)) -> unit = {
+    ()
+}
+
+function foo forall 'very_long_identifier_that_will_cause_a_line_break 'm, 'n >= 0. (x: int('very_long_identifier_that_will_cause_a_line_break), y: int('m)) -> unit = {
+    ()
+}

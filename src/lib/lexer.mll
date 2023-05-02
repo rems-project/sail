@@ -381,8 +381,6 @@ and comment pos b depth = parse
   | "\n"                                { Buffer.add_string b "\n"; 
                                           Lexing.new_line lexbuf;
                                           comment pos b depth lexbuf }
-  | '"'                                 { ignore(string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf);
-                                          comment pos b depth lexbuf }
   | _ as c                              { Buffer.add_string b (String.make 1 c); comment pos b depth lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
 

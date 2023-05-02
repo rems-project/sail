@@ -452,6 +452,26 @@ let fold_left_concat_map f acc xs =
   let ys, acc = List.fold_left (fun (ys, acc) x -> let acc, zs = f acc x in (List.rev zs @ ys, acc)) ([], acc) xs in
   acc, List.rev ys
 
+let rec fold_left_last f acc = function
+  | [] -> acc
+  | [x] -> f true acc x
+  | x :: xs -> fold_left_last f (f false acc x) xs
+
+let fold_left_index f init xs =
+  let rec go n acc = function
+    | [] -> acc
+    | x :: xs -> go (n + 1) (f n acc x) xs
+  in
+  go 0 init xs
+
+let fold_left_index_last f init xs =
+  let rec go n acc = function
+    | [] -> acc
+    | [x] -> f n true acc x
+    | x :: xs -> go (n + 1) (f n false acc x) xs
+  in
+  go 0 init xs
+
 let rec take n xs = match n, xs with
   | 0, _ -> []
   | _, [] -> []

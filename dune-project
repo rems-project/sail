@@ -133,5 +133,6 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (sail_lem_backend (and (= :version) :post))
     (sail_coq_backend (and (= :version) :post))
     (sail_latex_backend (and (= :version) :post))
+    (sail_doc_backend (and (= :version) :post))
     (sail_output (and (= :version) :post))
     (linenoise (>= 1.1.0))))

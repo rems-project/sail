@@ -183,8 +183,6 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
            ) kopts ([], ctx)
        in
        Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
-    | P.ATyp_base (id, kind, nc) ->
-       raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
   in
   Typ_aux (aux, l)
@@ -336,8 +334,6 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
        | P.P_attribute _ -> assert false
        | P.P_lit lit -> P_lit (to_ast_lit lit)
        | P.P_wild -> P_wild
-       | P.P_or (pat1, pat2) ->
-          P_or (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
        | P.P_var (pat, P.ATyp_aux (P.ATyp_id id, _)) ->
           P_as (to_ast_pat ctx pat, to_ast_id ctx id)
        | P.P_typ (typ, pat) -> P_typ (to_ast_typ ctx typ, to_ast_pat ctx pat)
@@ -369,7 +365,7 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
   match exp with
   | P.E_attribute (attr, arg, exp) ->
      let E_aux (exp, (exp_l, annot)) = to_ast_exp ctx exp in
-     (* The location of an E_attribute node is just the attribute by itself *)
+     (* The location of an E_attribute node is just the attribute itself *)
      let annot = add_attribute l attr arg annot in
      E_aux (exp, (exp_l, annot))
   | _ ->
@@ -748,8 +744,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
 
 let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : uannot rec_opt =
   Rec_aux((match r with
-  | P.Rec_nonrec -> Rec_nonrec
-  | P.Rec_rec -> Rec_rec
+  | P.Rec_none -> Rec_nonrec
   | P.Rec_measure (p,e) ->
      Rec_measure (to_ast_pat ctx p, to_ast_exp ctx e)
   ),l)
@@ -835,16 +830,16 @@ let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : uannot mapdef =
      MD_aux(MD_mapping(to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l, empty_uannot))
 
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
-  DEC_aux((match regdec with
-           | P.DEC_reg (reffect, weffect, typ, id, opt_exp) ->
-              let opt_exp = match opt_exp with
-                | None -> None
-                | Some exp -> Some (to_ast_exp ctx exp)
-              in
-              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
-           | P.DEC_config (id, typ, exp) ->
-              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
-          ), (l, empty_uannot))
+  DEC_aux (
+      (match regdec with
+       | P.DEC_reg (typ, id, opt_exp) ->
+          let opt_exp = match opt_exp with
+            | None -> None
+            | Some exp -> Some (to_ast_exp ctx exp)
+          in
+          DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
+      ), (l, empty_uannot)
+    )
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
   let aux, ctx = match aux with
@@ -1336,3 +1331,23 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : (Lexer.comment list * P
     end
   with
   | Sys_error err -> raise (Reporting.err_general l err)
+
+let get_lexbuf_from_string f s =
+  let lexbuf = Lexing.from_string s in
+  lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f;
+                                Lexing.pos_lnum = 1;
+                                Lexing.pos_bol = 0;
+                                Lexing.pos_cnum = 0; };
+  lexbuf
+                   
+let parse_file_from_string ~filename:f ~contents:s =
+  let lexbuf = get_lexbuf_from_string f s in
+  try
+    Lexer.comments := [];
+    let defs = Parser.file Lexer.token lexbuf in
+    (!Lexer.comments, defs)
+  with
+  | Parser.Error ->
+     let pos = Lexing.lexeme_start_p lexbuf in
+     let tok = Lexing.lexeme lexbuf in
+     raise (Reporting.err_syntax pos ("current token: " ^ tok))

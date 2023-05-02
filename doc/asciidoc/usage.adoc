@@ -39,6 +39,7 @@ handled after the AST is parsed{blank}footnote:[This can affect precedence
 declarations for custom user defined operators -- the precedence must
 be redeclared in the file you are including the operator into.].
 
+<<<
 === C compilation
 
 To compile Sail into C, the `-c` option is used, like so:
@@ -77,6 +78,84 @@ There are several Sail options that affect the C output:
 * `-static` Mark generated C functions as static where possible. This
     is useful for measuring code coverage.
 
+<<<
+=== Automatic formatting (Experimental)
+
+CAUTION: This feature is new and experimental, so be sure to inspect
+changes to source made by the tool and use at your own risk!
+
+Sail supports automatic code formatting similar to tools like `go fmt`
+or `rustfmt`. This is built into Sail itself, and can be used via the
+`-fmt` flag. To format a file `my_file.sail`, we would use the command:
+[source,sh]
+----
+sail -fmt my_file.sail
+----
+
+Note that Sail does not attempt to type-check files when formatting
+them, so in this case we do not necessarily have to pass the other
+files that `my_file.sail` would otherwise require to
+type-check. However, it is perfectly fine to pass multiple files like
+so:
+[source,sh]
+----
+sail -fmt file1.sail file2.sail file3.sail
+----
+
+The one exception is if a file uses a custom infix operator, then the
+file that declares that operator must be passed before any file that
+uses it. So if `my_file.sail` uses an operator declared in
+`operator.sail` (otherwise it would not be able to parenthesize infix
+expressions correctly), we would be required to do:
+[source,sh]
+----
+sail -fmt operator.sail my_file.sail
+----
+This will format both files. If we want to avoid formatting
+`operator.sail`, we could either use `-fmt_skip`, like so:
+[source,sh]
+----
+sail -fmt_skip operator.sail -fmt operator.sail my_file.sail
+----
+or the `-fmt_only` option, like so:
+[source,sh]
+----
+sail -fmt_only my_file.sail -fmt operator.sail my_file.sail
+----
+Both of these options can be passed multiple times if required.
+
+Formatting configuration is done using a JSON configuration file:
+as:
+[source,json]
+----
+include::../../test/format/default/config.json[]
+----
+which is passed to sail with the `-config` flag.
+
+The various keys supported under the `"fmt"` key are as follows:
+
+* `indent` The default indentation level
+
+* `preserve_structure` Preserve the structure of the syntax tree as
+  much as possible. Note that the use of this operation is not
+  recommended as it inhibits many formatting options, such as
+  inserting blocks on if statements and loops.
+
+* `line_width` The desired maximum line-width. Note that this is a
+  soft limit, and the line-width can go beyond if there are no
+  possible line break options (e.g. if you have _extremely_ long
+  identifiers).
+
+* `ribbon_width` A soft limit on what proportion (between 0.0 and 1.0)
+  of the line should be non-whitespace. A value of 1.0 indicates that the
+  entirity of `line_width` can be taken up by non-whitespace.
+
+If this file is not passed on the command line, Sail will check the
+`$SAIL_CONFIG` environment variable, and if that is unset it will
+search for a file named `sail_config.json` in the current working
+directory, then recursively backwards through parent directories.
+
+<<<
 === Interactive mode
 
 Sail has a GHCi-style interactive interpreter. This can be used by
@@ -94,6 +173,7 @@ interactive mode, a list of available commands can be accessed by
 typing `:commands`, while `:help <command>` can be used to provide
 some documentation for each command.
 
+<<<
 === Other options
 
 Here we summarize most of the other options available for

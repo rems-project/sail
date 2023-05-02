@@ -194,7 +194,7 @@ val drop : int -> 'a list -> 'a list
 val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
 val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option
-  
+
 val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
 
 (** find an item in a list and return that item as well as its index *)
@@ -203,7 +203,13 @@ val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
 val find_map : ('a -> 'b option) -> 'a list -> 'b option
 
 val fold_left_concat_map : ('a -> 'b -> 'a * 'c list) -> 'a -> 'b list -> 'a * 'c list
-  
+
+val fold_left_last : (bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+
+val fold_left_index : (int -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+
+val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)

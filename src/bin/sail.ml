@@ -77,7 +77,12 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
- 
+let opt_config_file : string option ref = ref None
+let opt_format = ref false
+let opt_format_backup : string option ref = ref None
+let opt_format_only : string list ref = ref []
+let opt_format_skip : string list ref = ref []
+
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
@@ -88,8 +93,8 @@ let load_plugin opts plugin =
     Dynlink.loadfile_private plugin;
     opts := Arg.align (!opts @ fix_options (Target.extract_options ()))
   with
-  | Dynlink.Error _ ->
-     prerr_endline ("Failed to load plugin " ^ plugin)
+  | Dynlink.Error msg ->
+     prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
 let version =
   let open Manifest in
@@ -132,6 +137,21 @@ let rec options = ref ([
     " drop to an interactive session after running Sail. Differs from \
      -i in that it does not set up the interpreter in the interactive \
      shell.");
+  ( "-config",
+    Arg.String (fun file -> opt_config_file := Some file),
+    "<file> configuration file");
+  ( "-fmt",
+    Arg.Set opt_format,
+    " format input source code");
+  ( "-fmt_backup",
+    Arg.String (fun suffix -> opt_format_backup := Some suffix),
+    "<suffix> Create backups of formated files as 'file.suffix'");
+  ( "-fmt_only",
+    Arg.String (fun file -> opt_format_only := file :: !opt_format_only),
+    "<file> Format only this file");
+  ( "-fmt_skip",
+    Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
+    "<file> Skip formatting this file");
   ( "-D",
     Arg.String (fun symbol -> Preprocess.add_symbol symbol),
     "<symbol> define a symbol for the preprocessor, as $define does in the source code");
@@ -303,6 +323,60 @@ let run_sail tgt =
 
   (ast, env, effect_info)
 
+let file_to_string filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    Buffer.contents buf
+
+let run_sail_format (config : Yojson.Basic.t option) =
+  let is_format_file f = match !opt_format_only with
+    | [] -> true
+    | files -> List.exists (fun f' -> f = f') files
+  in
+  let is_skipped_file f = match !opt_format_skip with
+    | [] -> false
+    | files -> List.exists (fun f' -> f = f') files
+  in
+  let module Config = struct
+      let config = match config with
+        | Some (`Assoc keys) ->
+           List.assoc_opt "fmt" keys
+           |> Option.map Format_sail.config_from_json
+           |> Option.value ~default:Format_sail.default_config
+        | Some _ ->
+           raise (Reporting.err_general Parse_ast.Unknown "Invalid configuration file (must be a json object)")
+        | None ->
+           Format_sail.default_config
+    end in
+  let module Formatter = Format_sail.Make(Config) in
+  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
+  List.iter (fun (f, (comments, parse_ast)) ->
+      let source = file_to_string f in
+      if is_format_file f && not (is_skipped_file f) then (
+        let formatted = Formatter.format_defs f source comments parse_ast in
+        begin match !opt_format_backup with
+        | Some backup_file ->
+           let out_chan = open_out backup_file in
+           output_string out_chan source;
+           close_out out_chan
+        | None -> ()
+        end;
+        let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None f in
+        output_string out_chan formatted;
+        Util.close_output_with_check file_info
+      )
+    ) parsed_files
+  
 let feature_check () =
   match !opt_have_feature with
   | None -> ()
@@ -317,6 +391,45 @@ let get_plugin_dir () =
   | Some path -> path :: Libsail_sites.Sites.plugins
   | None -> Libsail_sites.Sites.plugins
 
+let rec find_file_above ?prev_inode_opt dir file =
+  try
+    let inode = (Unix.stat dir).st_ino in
+    if Option.fold ~none:true ~some:((<>) inode) prev_inode_opt then ( 
+      let filepath = Filename.concat dir file in
+      if Sys.file_exists filepath then (
+        Some filepath
+      ) else (
+        find_file_above ~prev_inode_opt:inode (dir ^ Filename.dir_sep ^ Filename.parent_dir_name) file
+      )
+    ) else (
+      None
+    )
+  with
+  | Unix.Unix_error _ -> None
+
+let get_config_file () =
+  let check_exists file =
+    if Sys.file_exists file then (
+      Some file
+    ) else (
+      Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file);
+      None
+    ) in
+  match !opt_config_file with
+  | Some file -> check_exists file
+  | None ->
+     match Sys.getenv_opt "SAIL_CONFIG" with
+     | Some file -> check_exists file
+     | None -> find_file_above (Sys.getcwd ()) "sail_config.json"
+
+let parse_config_file file =
+  try
+    Some (Yojson.Basic.from_file ~fname:file ~lnum:0 file)
+  with
+  | Yojson.Json_error message ->
+     Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
+     None
+ 
 let main () =
   begin match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()
@@ -339,6 +452,8 @@ let main () =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg;
 
+  let config = Option.bind (get_config_file ()) parse_config_file in
+  
   feature_check ();
 
   if !opt_print_version then (
@@ -348,6 +463,11 @@ let main () =
 
   if !opt_show_sail_dir then (
     print_endline (Reporting.get_sail_dir Manifest.dir);
+    exit 0
+  );
+
+  if !opt_format then (
+    run_sail_format config;
     exit 0
   );
  
