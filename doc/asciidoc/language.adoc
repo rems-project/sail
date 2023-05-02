@@ -1,0 +1,244 @@
+=== Functions
+:mrb: sail_doc/my_replicate_bits.json
+
+In Sail, we often define functions in two parts. First we can write
+the type signature for the function using the `val` keyword, then
+define the body of the function using the `function` keyword. In this
+Subsection, we will write our own version of the `replicate_bits`
+function from the Sail library. This function takes a number `n` and a
+bitvector, and creates a new bitvector containing that bitvector
+copied `n` times.
+
+sail::my_replicate_bits[from=mrb,type=val]
+
+This signature shows how Sail can track the length of bitvectors and
+the value of integer variables in type signatures, using _type
+variables_. Type variables are written with a leading 'tick', so `'n`
+and `'m` are the type variables in the above signature.
+
+NOTE: The leading tick is a convention derived from Standard ML, and
+other functional languages derived from Standard ML, such as
+OCaml. Readers who are familiar with Rust will also recognise this
+naming convention from lifetime variables in Rust types.
+
+The type `bits('m)` is a bitvector of length `'m`, and `int('n)` is an
+integer with the value `'n`. The result of this function will
+therefore be a bitvector of length `'n * 'm`. We can also add
+_constraints_ on these types. Here we require that we are replicating
+the input bitvector at least once with the `'n >= 1` constraint, and
+that the input bitvector length is at least one with the `'m >= 1`
+constraint. Sail will check that all callers of this function are
+guaranteed to satisfy these constraints.
+
+Sail will also ensure that the output of our function has precisely
+the length `bits('n * 'm)` for all possible inputs (hence why the
+keyword uses the mathematical _forall_ quantifier).
+
+A potential implementation of this function looks like:
+
+sail::my_replicate_bits[from=mrb]
+
+Functions may also have implicit parameters, e.g. we can implement a
+zero extension function that implicitly picks up its result length
+from the calling context as follows:
+
+[source,sail]
+----
+include::sail:extz[from=mrb,type=val]
+
+include::sail:extz[from=mrb]
+----
+
+Implicit parameters are always integers, and they must appear first
+before any other parameters in the function type signature. The first argument can then just be omitted when calling the function, like so:
+
+sail::extz_usage[from=mrb,part=body,dedent]
+
+=== Numeric types
+
+Sail has three basic numeric types, `int`, `nat`, and `range`. The
+type `int` which we have already seen above is an arbitrary precision
+mathematical integer. Likewise, `nat` is an arbitrary precision
+natural number. The type `range('n,{nbsp}'m)` is an inclusive range
+between type variables `'n` and `'m`. For both `int` and `nat` we can
+specify a type variable that constrains elements of the type to be
+equal to the value of that type variable. In other words, the values
+of type `int('n)` are integers equal to `'n`. So
+`5{nbsp}:{nbsp}int(5)` and similarly for any integer constant. These
+types can often be used interchangeably provided certain constraints
+are satisified. For example, `int('n)` is equivalent to
+`range('n,{nbsp}'n)` and `range('n,{nbsp}'m)` can be converted into
+`int('n)` when `'n{nbsp}=={nbsp}'m`.
+
+NOTE: The colon operator `:` is used for type ascription, so `x : Y`
+is read as `x` _has type_ `Y`
+
+Note that `bit` isn't a numeric type (i.e. it's not
+`range(0,{nbsp}1)`). This is intentional, as otherwise it would be
+possible to write expressions like `(1{nbsp}:{nbsp}bit){nbsp}+{nbsp}5`
+which would end up being equivalent to
+`6{nbsp}:{nbsp}range(5,{nbsp}6)`. This kind of implicit casting from
+bits to other numeric types would be highly undesirable. The `bit`
+type itself is a two-element type with members `bitzero` and `bitone`.
+
+=== Mappings
+
+=== Pattern Matching
+:pattern-match: sail_doc/pattern_matching.json
+:cannot-wildcard: custom_sail_doc/cannot_wildcard.json
+
+Like most functional languages, Sail supports pattern matching via the
+`match` keyword. For example:
+
+sail::example[from=pattern-match,part=body,dedent]
+
+The `match` keyword takes an expression and then branches by comparing
+the matched value with a _pattern_. Each case in the match expression
+takes the form `<pattern> \=> <expression>`, separated by commas (a
+trailing comma is allowed). The cases are checked sequentially from
+top to bottom, and when the first pattern matches its expression will
+be evaluated.
+
+The concrete match statement syntax in Sail is inspired by the syntax
+used in Rust -- but programmers coming from languages with no pattern
+matching features may be unfamiliar with the concept. One can think of
+the match statement like a super-powered switch statement in C. At its
+most basic level a match statement can function like a switch
+statement (except without any fallthrough). As in the above example we
+can use match to compare an expression against a sequence of values
+like so:
+
+sail::match_switch[from=pattern-match,part=body,dedent]
+
+However the pattern in a match statement can also _bind_ variables. In
+the following example we match on a numeric expression `x + y`, and if
+it is equal to `1` we execute the first match arm. However, if that is
+not the case the value of `x + y` is bound to a new immutable variable
+`z`.
+
+sail::match_bind[from=pattern-match,part=body,dedent]
+
+Finally, we can use patterns to _destructure_ values -- breaking them
+apart into their constituent parts. For example if we have a pair
+expression we can break it apart into the first value in the pair and
+the second, which can then be used as individual variables:
+
+sail::match_destruct[from=pattern-match,part=body,dedent]
+
+These features can be combined, so if we had a pattern `(first, 3)` in
+the above example, the expression for that pattern would be executed
+when the second elemt of the pair is equal to 3, and the first element
+would be bound to the variable `first`.
+
+Sail will check match statements for exhaustiveness (meaning that the
+patterns in the match cover every possible value), and prints a
+warning if the overall match statement is not exhaustive. There are
+some limitations on the exhaustiveness checker which we will discuss
+further below.
+
+==== Guards
+
+What if we need to switch based on more complex logic than just the
+structure and values of the expressions we are matching on? For this
+matches in Sail support _guards_. A guard allows us to combine the
+behavior of a match expression and the boolean logic of an if
+expression -- and the syntax is reflective of this, as we can use the
+`if` keyword to add extra logic to each match arm:
+
+sail::match_guard[from=pattern-match,part=body,dedent]
+
+include::sailcomment:match_guard[from=pattern-match]
+
+We now describe all the things that can be matched on in Sail
+
+==== Matching on literals
+
+First, and as we have already seen, we can match on literal
+values. These literal values can be bitvectors, the boolean values
+`true` and `false`, numbers, and strings.
+
+==== Matching on enumerations
+
+Match can be used to match on possible values of an enum, like so:
+
+sail::match_enum[from=pattern-match,part=body,dedent]
+
+Note that because Sail places no restrictions on the lexical structure
+of enumeration elements to differentiate them from ordinary
+identifiers, pattern matches on variables and enum elements can be
+somewhat ambiguous. Issues with this are usually caught by the
+exhaustiveness checker -- it can warn you if removing an enum
+constructor breaks a pattern match.
+
+==== Matching on tuples
+
+We use match to destructure tuple types, for example:
+
+sail::match_tuple[from=pattern-match,part=body,dedent]
+
+==== Matching on unions
+
+Match can also be used to destructure tagged union constructors, for example
+using the option type from Section~\ref{sec:union}:
+[source,sail]
+----
+include::sail:OPTION[from=pattern-match,type=span]
+----
+Note that like how calling a function with a unit argument can be done
+as `f()` rather than `pass:[f(())]`, matching on a constructor `C` with a
+unit type can be achieved by using `C()` rather than `pass:[C(())]`.
+
+==== Matching on lists
+
+Sail allows lists to be destructured using patterns. There are two
+types of patterns for lists, cons patterns and list literal
+patterns. The cons pattern destructures lists into the first element
+(the _head_) and the rest of the list (the _tail_). For those
+unfamiliar the word 'cons' is derived from Lisp dialects, and has
+become standard functional programming jargon for such an operator --
+see https://en.wikipedia.org/wiki/Cons for more details.
+
+sail::match_cons[from=pattern-match,part=body,dedent]
+
+On the other hand, a list pattern matches on the entire list:
+
+sail::match_list[from=pattern-match,part=body,dedent]
+
+==== As patterns
+
+Like OCaml, Sail also supports naming parts of patterns using the `as`
+keyword. For example, in the above cons pattern example we could bind the
+entire matched list to the `zs` variable:
+
+sail::match_cons_as[from=pattern-match,part=body,dedent]
+
+The `as` pattern has lower precedence than any other keyword or
+operator in a pattern, so in this example the pattern brackets as
+`(x :: xs) as zs`
+
+==== Automatic wildcard insertion
+
+The various theorem provers Sail can produce definitions for are
+strict, and _require_ patterns to be exhaustive. However, their
+pattern exhaustiveness checkers do not understand bitvectors in the
+same way Sail does. For example, Sail can tell that the following
+match is complete:
+
+sail::match_wildcard_remove[from=pattern-match,part=body,dedent]
+
+include::sailcomment:match_wildcard_remove[from=pattern-match]
+
+One can find situations where such wildcards cannot be inserted. For example:
+
+sail::cannot_wildcard[from=cannot-wildcard]
+
+include::sailcomment:cannot_wildcard[from=cannot-wildcard]
+
+In this case Sail will print a warning explaining the problem:
+[source]
+----
+include::custom_sail_doc/cannot_wildcard_warning[]
+----
+This warning should be heeded, and the match simplified otherwise the
+generated theorem prover definitions produced by Sail may be rejected
+by the prover.

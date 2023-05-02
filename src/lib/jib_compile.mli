@@ -87,16 +87,16 @@ val optimize_aarch64_fast_struct : bool ref
    changes - it'll load an old version compiled without said
    changes. *)
 val opt_memo_cache : bool ref
-  
+
 (** {2 Jib context} *)
 
 (** Dynamic context for compiling Sail to Jib. We need to pass a
    (global) typechecking environment given by checking the full
    AST. *)
 type ctx =
-  { records : (kid list * ctyp Jib_util.UBindings.t) Bindings.t;
+  { records : (kid list * ctyp Bindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
-    variants : (kid list * ctyp Jib_util.UBindings.t) Bindings.t;
+    variants : (kid list * ctyp Bindings.t) Bindings.t;
     valspecs : (string option * ctyp list * ctyp) Bindings.t;
     quants : ctyp KBindings.t;
     local_env : Env.t;

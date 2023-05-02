@@ -154,7 +154,7 @@ type env =
     poly_undefineds : bool;
     prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
-    bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
+    bitfields : index_range Bindings.t Bindings.t;
     toplevel : l option;
     outcomes : (typquant * typ * kinded_id list * id list * env) Bindings.t;
     outcome_typschm : (typquant * typ) option;
@@ -587,8 +587,9 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
-  val add_bitfield : id -> (Big_int.num * Big_int.num) Bindings.t -> t -> t
-  val get_bitfield_range : l -> id -> id -> t -> (Big_int.num * Big_int.num)
+  val is_bitfield : id -> t -> bool
+  val add_bitfield : id -> index_range Bindings.t -> t -> t
+  val get_bitfield_ranges : id -> t -> index_range Bindings.t
 
   val no_bindings : t -> t
 
@@ -1523,14 +1524,9 @@ end = struct
       | targ -> rewrap targ in
     aux (expand_synonyms env typ)
 
-  let get_bitfield_range l id field env =
-    match Bindings.find_opt id env.bitfields with
-    | Some ranges ->
-       begin match Bindings.find_opt field ranges with
-       | Some range -> range
-       | None -> typ_error env l (Printf.sprintf "Field %s does not exist in the bitfield %s" (string_of_id field) (string_of_id id))
-       end
-    | None -> typ_error env l (Printf.sprintf "%s is not a bitfield" (string_of_id id))
+  let is_bitfield id env = Bindings.mem id env.bitfields
+
+  let get_bitfield_ranges id env = Bindings.find id env.bitfields
 
   let add_bitfield id ranges env =
     { env with bitfields = Bindings.add id ranges env.bitfields }
@@ -1541,6 +1537,10 @@ end = struct
   let polymorphic_undefineds env = env.poly_undefineds
 
 end
+
+let get_bitfield_range id field env =
+  try Bindings.find_opt field (Env.get_bitfield_ranges id env)
+  with Not_found -> None
 
 let expand_bind_synonyms l env (typq, typ) =
   typq, Env.expand_synonyms (Env.add_typquant l typq env) typ
@@ -2985,7 +2985,7 @@ type pattern_duplicate =
 let is_enum_member id env = match Env.lookup_id id env with
   | Enum _ -> true
   | _ -> false
-                       
+
 (* Check if a pattern contains duplicate bindings, and raise a type
    error if this is the case *)
 let check_pattern_duplicates env pat =
@@ -2993,7 +2993,13 @@ let check_pattern_duplicates env pat =
     | Pattern_duplicate _ -> true
     | _ -> false
   in
-  let rec collect_duplicates ids (P_aux (aux, (l, _))) =
+  let one_loc = function
+    | Pattern_singleton l -> l
+    | Pattern_duplicate (l, _) -> l
+  in
+  let ids = ref Bindings.empty in
+  let subrange_ids = ref Bindings.empty in
+  let rec collect_duplicates (P_aux (aux, (l, _))) =
     let update_id = function
       | None -> Some (Pattern_singleton l)
       | Some (Pattern_singleton l2) -> Some (Pattern_duplicate (l2, l))
@@ -3002,24 +3008,69 @@ let check_pattern_duplicates env pat =
     match aux with
     | P_id id when not (is_enum_member id env) ->
        ids := Bindings.update id update_id !ids
+    | P_vector_subrange (id, _, _) ->
+       subrange_ids := Bindings.add id l !subrange_ids
+    | P_as (p, id) ->
+       ids := Bindings.update id update_id !ids;
+       collect_duplicates p
     | P_id _ | P_lit _ | P_wild -> ()
-    | P_not p | P_as (p, _) | P_typ (_, p) | P_var (p, _) ->
-       collect_duplicates ids p
+    | P_not p | P_typ (_, p) | P_var (p, _) ->
+       collect_duplicates p
     | P_or (p1, p2) | P_cons (p1, p2) ->
-       collect_duplicates ids p1; collect_duplicates ids p2
+       collect_duplicates p1; collect_duplicates p2
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
-       List.iter (collect_duplicates ids) ps
+       List.iter collect_duplicates ps
   in
-  let ids = ref Bindings.empty in
-  collect_duplicates ids pat;
+  collect_duplicates pat;
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
   | Some (id, Pattern_duplicate (l1, l2)) ->
      typ_raise env l2
        (err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
                      l1,
                      Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
-  | _ -> ()
- 
+  | _ ->
+     Bindings.iter (fun subrange_id l ->
+         match Bindings.find_opt subrange_id !ids with
+         | Some pattern_info ->
+            typ_raise env l
+              (err_because (Err_other ("Vector subrange binding " ^ string_of_id subrange_id ^ " is also bound as a regular identifier"),
+                            one_loc pattern_info,
+                            Err_other "Regular binding is here"))
+         | None -> ()
+       ) !subrange_ids
+
+let bitvector_typ_from_range l env n m =
+  let len, order = match Env.get_default_order env with
+    | Ord_aux (Ord_dec, _) ->
+       if Big_int.greater_equal n m then
+         Big_int.sub (Big_int.succ n) m, dec_ord
+       else
+         typ_error env l (Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
+                            (Big_int.to_string n) (Big_int.to_string m))
+    | Ord_aux (Ord_inc, _) ->
+       if Big_int.less_equal n m then
+         Big_int.sub (Big_int.succ m) n, inc_ord
+       else
+         typ_error env l (Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
+                            (Big_int.to_string n) (Big_int.to_string m))
+    | _ ->
+       typ_error env l default_order_error_string
+  in
+  bitvector_typ (nconstant len) order
+
+let bind_pattern_vector_subranges (P_aux (_, (l, _)) as pat) env =
+  let id_ranges = pattern_vector_subranges pat in
+  Bindings.fold (fun id ranges env ->
+      match ranges with
+      | [(n, m)] ->
+         Env.add_local id (Immutable, bitvector_typ_from_range l env n m) env
+      | (_, n) :: (m, _) :: _ ->
+         typ_error env l (Printf.sprintf "Cannot bind %s as pattern subranges are non-contiguous. %s[%s] is not defined."
+                            (string_of_id id) (string_of_id id) (Big_int.to_string (Big_int.succ m)))
+      | _ ->
+         Reporting.unreachable l __POS__ "Found range pattern with no range"
+    ) id_ranges env
+
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -3054,11 +3105,14 @@ let strip_pat pat = map_pat_annot (fun (l, tannot) -> (l, untyped_annot tannot))
 let strip_pexp pexp = map_pexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) pexp
 let strip_lexp lexp = map_lexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) lexp
 
+let strip_letbind lb = map_letbind_annot (fun (l, tannot) -> (l, untyped_annot tannot)) lb
 let strip_mpat mpat = map_mpat_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mpat
 let strip_mpexp mpexp = map_mpexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mpexp
 let strip_mapcl mapcl = map_mapcl_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mapcl
 let strip_funcl funcl = map_funcl_annot (fun (l, tannot) -> (l, untyped_annot tannot)) funcl
 let strip_val_spec vs = map_valspec_annot (fun (l, tannot) -> (l, untyped_annot tannot)) vs
+let strip_register r = map_register_annot (fun (l, tannot) -> (l, untyped_annot tannot)) r
+let strip_typedef td = map_typedef_annot (fun (l, tannot) -> (l, untyped_annot tannot)) td
 let strip_def def = map_def_annot (fun (l, tannot) -> (l, untyped_annot tannot)) def
 let strip_ast ast = map_ast_annot (fun (l, tannot) -> (l, untyped_annot tannot)) ast
 
@@ -3233,6 +3287,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
           check_pattern_duplicates env pat;
+          let env = bind_pattern_vector_subranges pat env in
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
@@ -3483,6 +3538,7 @@ and check_block l env exps ret_typ =
 and check_case env pat_typ pexp typ =
   let pat, guard, case, ((l, _) as annot) = destruct_pexp pexp in
   check_pattern_duplicates env pat;
+  let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
      let guard = match guard, guards with
@@ -3878,6 +3934,9 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
      annot_pat (P_vector pats) (bits_typ env len), env, guards
   | P_vector_concat (pat :: pats) ->
      bind_vector_concat_pat l env uannot pat pats None
+  | P_vector_subrange (id, n, m) ->
+     let typ = bitvector_typ_from_range l env n m in
+     annot_pat (P_vector_subrange (id, n, m)) typ, env, []
   | P_string_append pats ->
      let fold_pats (pats, env, guards) pat =
        let inferred_pat, env, guards' = infer_pat env pat in
@@ -4195,9 +4254,12 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
        | Typ_id id ->
           begin match exp with
           | E_aux (E_id field, _) ->
-             let (hi, lo) = Env.get_bitfield_range l id field env in
-             let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
-             infer_lexp env (LE_aux (LE_vector_range (LE_aux (LE_field (v_lexp, Id_aux (Id "bits", l)), (l, empty_uannot)), hi, lo), (l, uannot)))
+             let field_lexp = Bitfield.set_bits_field_lexp v_lexp in
+             let index_range = match get_bitfield_range id field env with
+               | Some range -> range
+               | None -> typ_error env l (Printf.sprintf "Unknown field %s in bitfield %s" (string_of_id field) (string_of_id id))
+             in
+             infer_lexp env (Bitfield.set_field_lexp index_range field_lexp)
           | _ ->
              typ_error env l (string_of_exp exp ^ " is not a bitfield accessor")
           end
@@ -4441,7 +4503,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
              | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
-                let access_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).get in
+                let access_id = (Bitfield.field_accessor_ids id field).get in
                 infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
              | _, _ ->
                 typ_error env l "Vector access could not be interpreted as a bitfield access"
@@ -4459,7 +4521,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
              | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
-                let update_id = mk_id (Bitfield.field_accessor_ids (string_of_id id) (string_of_id field)).update in
+                let update_id = (Bitfield.field_accessor_ids id field).update in
                 infer_exp env (mk_exp ~loc:l (E_app (update_id, [v; exp])))
              | _, _ ->
                 typ_error env l "Vector update could not be interpreted as a bitfield update"
@@ -4884,6 +4946,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
            let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env (mk_mpat (MP_id var)) typ in
            typed_mpat, env, guard::guards
         | _ -> raise typ_exn
+
 and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) =
   let annot_mpat mpat typ = MP_aux (mpat, (l, mk_tannot env typ)) in
   match mpat_aux with
@@ -4901,6 +4964,51 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) =
        | Local (Mutable, _) | Register _ ->
           typ_error env l ("Cannot shadow mutable local or register in mapping-pattern " ^ string_of_mpat mpat)
        | Enum enum -> annot_mpat (MP_id v) enum, env, []
+     end
+  | MP_vector_subrange (id, n, m) ->
+     let len, order = match Env.get_default_order env with
+       | Ord_aux (Ord_dec, _) ->
+          if Big_int.greater_equal n m then
+            Big_int.sub (Big_int.succ n) m, dec_ord
+          else
+            typ_error env l (Printf.sprintf "%s must be greater than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+       | Ord_aux (Ord_inc, _) ->
+          if Big_int.less_equal n m then
+            Big_int.sub (Big_int.succ m) n, inc_ord
+          else
+            typ_error env l (Printf.sprintf "%s must be less than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+       | _ ->
+          typ_error env l default_order_error_string
+     in
+     begin
+       match Env.lookup_id id env with
+       | Local (Immutable, _) | Unbound _ ->
+          begin match Env.lookup_id id other_env with
+          | Unbound _ ->
+             if allow_unknown then
+               annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, []
+             else
+               typ_error env l "Cannot infer identifier type in vector subrange pattern"
+          | Local (Immutable, other_typ) ->
+             let (id_len, id_order) = destruct_bitvector_typ l env other_typ in
+             if is_order_inc id_order <> is_order_inc order then (
+               typ_error env l "Mismatching bitvector ordering in vector subrange pattern %b %b"
+             );
+             begin match id_len with
+             | Nexp_aux (Nexp_constant id_len, _) when Big_int.greater_equal id_len len ->
+                annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, []
+             | _ ->
+                typ_error env l (Printf.sprintf "%s must have a constant length greater than or equal to %s"
+                                   (string_of_id id) (Big_int.to_string len))
+             end
+          | _ ->
+             typ_error env l "Invalid identifier in vector subrange pattern"
+          end
+       | Local _ | Register _ ->
+          typ_error env l "Invalid identifier in vector subrange pattern"
+       | Enum e ->
+          typ_error env l (Printf.sprintf "Identifier %s is a member of enumeration %s in vector subrange pattern"
+                             (string_of_id id) (string_of_typ e))
      end
   | MP_app (f, _) when Env.is_union_constructor f env ->
      begin
@@ -5045,7 +5153,8 @@ let bind_funcl_arg_typ l env typ =
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
-let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
+let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) typ =
+  let l = def_annot.loc in
   let typ_arg, typ_ret, env = bind_funcl_arg_typ l env typ in
   (* We want to forbid polymorphic undefined values in all cases,
      except when type checking the specific undefined_(type) functions
@@ -5059,40 +5168,40 @@ let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (l, _))) typ =
     else env
   in
   let typed_pexp = check_case env typ_arg pexp typ_ret in
-  FCL_aux (FCL_funcl (id, typed_pexp), (l, mk_expected_tannot env typ (Some typ)))
+  FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
 
 let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
-  fun env (MCL_aux (cl, (l, _))) typ ->
-    match typ with
-    | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
-        match cl with
-        | MCL_bidir (mpexp1, mpexp2) -> begin
-            let testing_env = Env.set_allow_unknowns true env in
-            let left_mpat, _, _ = destruct_mpexp mpexp1 in
-            let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
-            let right_mpat, _, _ = destruct_mpexp mpexp2 in
-            let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
+  fun env (MCL_aux (cl, (def_annot, _))) typ ->
+  match typ with
+  | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
+      match cl with
+      | MCL_bidir (mpexp1, mpexp2) -> begin
+          let testing_env = Env.set_allow_unknowns true env in
+          let left_mpat, _, _ = destruct_mpexp mpexp1 in
+          let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
+          let right_mpat, _, _ = destruct_mpexp mpexp2 in
+          let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
 
-            let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
-            let typed_mpexp2 = check_mpexp left_id_env env mpexp2 typ2 in
-            MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (l, mk_expected_tannot env typ (Some typ)))
-          end
-        | MCL_forwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
-            let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
-            let typed_exp = check_exp mpat_env exp typ2 in
-            MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ (Some typ)))
-          end
-        | MCL_backwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
-            let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
-            let typed_exp = check_exp mpat_env exp typ1 in
-            MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ (Some typ)))
-          end
-      end
-    | _ -> typ_error env l ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")
+          let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
+          let typed_mpexp2 = check_mpexp left_id_env env mpexp2 typ2 in
+          MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+      | MCL_forwards (mpexp, exp) -> begin
+          let mpat, _, _ = destruct_mpexp mpexp in
+          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
+          let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
+          let typed_exp = check_exp mpat_env exp typ2 in
+          MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+      | MCL_backwards (mpexp, exp) -> begin
+          let mpat, _, _ = destruct_mpexp mpexp in
+          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
+          let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
+          let typed_exp = check_exp mpat_env exp typ1 in
+          MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+        end
+    end
+  | _ -> typ_error env def_annot.loc ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")
 
 let infer_funtyp l env tannotopt funcls =
   match tannotopt with
@@ -5152,7 +5261,7 @@ let check_termination_measure_decl env def_annot (id, pat, exp) =
 let check_funcls_complete l env funcls typ =
   let typ_arg, _, env = bind_funcl_arg_typ l env typ in
   let ctx = pattern_completeness_ctx env in
-  match PC.is_complete_funcls_wildcarded l ctx funcls typ_arg with
+  match PC.is_complete_funcls_wildcarded ~keyword:"function" l ctx funcls typ_arg with
     | Some funcls -> funcls, add_def_attribute (gen_loc l) "complete" ""
     | None -> funcls, add_def_attribute (gen_loc l) "incomplete" "" 
 
@@ -5364,25 +5473,20 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> (tannot def) li
      | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
                              A_aux (A_order order, _)]), _)
           when string_of_id v = "bitvector" ->
-        let size = Big_int.to_int size in
-        let eval_index_nexp l nexp =
-          match int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) with
-          | Some i -> i
-          | None -> typ_error env l ("This numeric expression must evaluate to a constant: " ^ string_of_nexp nexp)
+        let rec expand_range_synonyms = function
+          | BF_aux (BF_single nexp, l) ->
+             BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
+          | BF_aux (BF_range (nexp1, nexp2), l) ->
+             let nexp1 = Env.expand_nexp_synonyms env nexp1 in
+             let nexp2 = Env.expand_nexp_synonyms env nexp2 in
+             BF_aux (BF_range (nexp1, nexp2), l)
+          | BF_aux (BF_concat (r1, r2), l) ->
+             BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
         in
         let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
         let ranges =
-          List.fold_left (fun ranges (field, range) ->
-              match range with
-              | BF_aux (BF_single nexp, l) ->
-                 let n = eval_index_nexp l nexp in
-                 Bindings.add field (n, n) ranges
-              | BF_aux (BF_range (hi, lo), l) ->
-                 let hi, lo = eval_index_nexp l hi, eval_index_nexp l lo in
-                 Bindings.add field (hi, lo) ranges
-              | BF_aux (BF_concat _, _) ->
-                 typ_error env l "Bitfield concatenation ranges are not supported"
-            ) Bindings.empty ranges
+          List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges
+          |> List.to_seq |> Bindings.of_seq
         in
         let defs =
           DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
@@ -5425,9 +5529,9 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> (tannot def)
                     'scattered union' declaration" in
          raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg))))
 
-  | SD_funcl (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
+  | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let funcl_env = Env.add_typquant l typq env in
+     let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
      let funcl = check_funcl funcl_env funcl typ in
      [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot:uannot funcl_env typ))), def_annot)],
      env
@@ -5473,14 +5577,14 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
      typ_raise env l (err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
 and check_impldef : Env.t -> def_annot -> uannot funcl -> tannot def list * Env.t =
-  fun env def_annot (FCL_aux (FCL_funcl (id, _), (l, _)) as funcl) ->
+  fun env def_annot (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
   typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
   match env.outcome_typschm with
   | Some (quant, typ) ->
-     let funcl_env = Env.add_typquant l quant env in
+     let funcl_env = Env.add_typquant fcl_def_annot.loc quant env in
      [DEF_aux (DEF_impl (check_funcl funcl_env funcl typ), def_annot)], env
   | None ->
-     typ_error env l "Cannot declare an implementation outside of an outcome"
+     typ_error env fcl_def_annot.loc "Cannot declare an implementation outside of an outcome"
 
 and check_outcome_instantiation : 'a. Env.t -> def_annot -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->

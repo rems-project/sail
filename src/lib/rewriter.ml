@@ -148,7 +148,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
   let rewrap p = P_aux (p,(l,annot)) in
   let rewrite = rewriters.rewrite_pat rewriters in
   match pat with
-  | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
+  | P_lit _ | P_wild | P_id _ | P_var _ | P_vector_subrange _ -> rewrap pat
   | P_or(pat1, pat2) -> rewrap (P_or(rewrite pat1, rewrite pat2))
   | P_not(pat) -> rewrap (P_not(rewrite pat))
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
@@ -259,13 +259,13 @@ let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
   in
   MPat_aux (aux, (l, annot))
   
-let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
+let rewrite_mapcl rewriters (MCL_aux (aux, def_annot)) =
   let aux = match aux with
     | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
     | MCL_forwards (mpexp, exp) -> MCL_forwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
     | MCL_backwards (mpexp, exp) -> MCL_backwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
   in
-  MCL_aux (aux, (l, annot))
+  MCL_aux (aux, def_annot)
 
 let rewrite_mapdef rewriters (MD_aux (MD_mapping (id, tannot_opt, mapcls), annot)) =
   MD_aux (MD_mapping (id, tannot_opt, List.map (rewrite_mapcl rewriters) mapcls), annot)
@@ -277,7 +277,7 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
     | SD_variant _ | SD_unioncl _ | SD_mapping _ | SD_function _ | SD_end _ -> sd
   in
   SD_aux (sd, (l, annot))
-  
+
 let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
   let aux = match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
@@ -301,7 +301,7 @@ let rewrite_ast_defs rewriters defs =
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
   in
   rewrite defs
-                              
+
 let rewrite_ast_base rewriters ast =
   let rec rewrite ds = match ds with
     | [] -> []
@@ -331,103 +331,108 @@ let rewriters_base =
 let rewrite_ast ast = rewrite_ast_base rewriters_base ast
 
 type ('a,'pat,'pat_aux) pat_alg =
-  { p_lit            : lit -> 'pat_aux
-  ; p_wild           : 'pat_aux
-  ; p_or             : 'pat * 'pat -> 'pat_aux
-  ; p_not            : 'pat        -> 'pat_aux
-  ; p_as             : 'pat * id -> 'pat_aux
-  ; p_typ            : Ast.typ * 'pat -> 'pat_aux
-  ; p_id             : id -> 'pat_aux
-  ; p_var            : 'pat * typ_pat -> 'pat_aux
-  ; p_app            : id * 'pat list -> 'pat_aux
-  ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_concat  : 'pat list -> 'pat_aux
-  ; p_tuple          : 'pat list -> 'pat_aux
-  ; p_list           : 'pat list -> 'pat_aux
-  ; p_cons           : 'pat * 'pat -> 'pat_aux
-  ; p_string_append  : 'pat list -> 'pat_aux
-  ; p_aux            : 'pat_aux * 'a annot -> 'pat
+  { p_lit             : lit -> 'pat_aux
+  ; p_wild            : 'pat_aux
+  ; p_or              : 'pat * 'pat -> 'pat_aux
+  ; p_not             : 'pat        -> 'pat_aux
+  ; p_as              : 'pat * id -> 'pat_aux
+  ; p_typ             : Ast.typ * 'pat -> 'pat_aux
+  ; p_id              : id -> 'pat_aux
+  ; p_var             : 'pat * typ_pat -> 'pat_aux
+  ; p_app             : id * 'pat list -> 'pat_aux
+  ; p_vector          : 'pat list -> 'pat_aux
+  ; p_vector_concat   : 'pat list -> 'pat_aux
+  ; p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux
+  ; p_tuple           : 'pat list -> 'pat_aux
+  ; p_list            : 'pat list -> 'pat_aux
+  ; p_cons            : 'pat * 'pat -> 'pat_aux
+  ; p_string_append   : 'pat list -> 'pat_aux
+  ; p_aux             : 'pat_aux * 'a annot -> 'pat
   }
 
 let rec fold_pat_aux (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat_aux -> 'pat_aux =
   function
-  | P_lit lit           -> alg.p_lit lit
-  | P_wild              -> alg.p_wild
-  | P_or(p1, p2)        -> alg.p_or (fold_pat alg p1, fold_pat alg p2)
-  | P_not(p)            -> alg.p_not (fold_pat alg p)
-  | P_id id             -> alg.p_id id
-  | P_var (p,tpat)      -> alg.p_var (fold_pat alg p, tpat)
-  | P_as (p,id)         -> alg.p_as (fold_pat alg p, id)
-  | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
-  | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
-  | P_vector ps         -> alg.p_vector (List.map (fold_pat alg) ps)
-  | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
-  | P_tuple ps          -> alg.p_tuple (List.map (fold_pat alg) ps)
-  | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
-  | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
-  | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
-                         
+  | P_lit lit                    -> alg.p_lit lit
+  | P_wild                       -> alg.p_wild
+  | P_or(p1, p2)                 -> alg.p_or (fold_pat alg p1, fold_pat alg p2)
+  | P_not(p)                     -> alg.p_not (fold_pat alg p)
+  | P_id id                      -> alg.p_id id
+  | P_var (p,tpat)               -> alg.p_var (fold_pat alg p, tpat)
+  | P_as (p,id)                  -> alg.p_as (fold_pat alg p, id)
+  | P_typ (typ,p)                -> alg.p_typ (typ,fold_pat alg p)
+  | P_app (id,ps)                -> alg.p_app (id,List.map (fold_pat alg) ps)
+  | P_vector ps                  -> alg.p_vector (List.map (fold_pat alg) ps)
+  | P_vector_concat ps           -> alg.p_vector_concat (List.map (fold_pat alg) ps)
+  | P_vector_subrange (id, n, m) -> alg.p_vector_subrange (id, n, m)
+  | P_tuple ps                   -> alg.p_tuple (List.map (fold_pat alg) ps)
+  | P_list ps                    -> alg.p_list (List.map (fold_pat alg) ps)
+  | P_cons (ph,pt)               -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
+  | P_string_append ps           -> alg.p_string_append (List.map (fold_pat alg) ps)
+
 and fold_pat (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat -> 'pat =
   function
   | P_aux (pat, annot) -> alg.p_aux (fold_pat_aux alg pat, annot)
 
 let rec fold_mpat_aux (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat_aux -> 'mpat_aux =
   function
-  | MP_lit lit          -> alg.p_lit lit
-  | MP_id id            -> alg.p_id id
-  | MP_as (p, id)       -> alg.p_as (fold_mpat alg p, id)
-  | MP_typ (p, typ)     -> alg.p_typ (typ,fold_mpat alg p)
-  | MP_app (id, ps)     -> alg.p_app (id,List.map (fold_mpat alg) ps)
-  | MP_vector ps        -> alg.p_vector (List.map (fold_mpat alg) ps)
-  | MP_vector_concat ps -> alg.p_vector_concat (List.map (fold_mpat alg) ps)
-  | MP_tuple ps         -> alg.p_tuple (List.map (fold_mpat alg) ps)
-  | MP_list ps          -> alg.p_list (List.map (fold_mpat alg) ps)
-  | MP_cons (ph, pt)    -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
-  | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
+  | MP_lit lit                    -> alg.p_lit lit
+  | MP_id id                      -> alg.p_id id
+  | MP_as (p, id)                 -> alg.p_as (fold_mpat alg p, id)
+  | MP_typ (p, typ)               -> alg.p_typ (typ,fold_mpat alg p)
+  | MP_app (id, ps)               -> alg.p_app (id,List.map (fold_mpat alg) ps)
+  | MP_vector ps                  -> alg.p_vector (List.map (fold_mpat alg) ps)
+  | MP_vector_concat ps           -> alg.p_vector_concat (List.map (fold_mpat alg) ps)
+  | MP_vector_subrange (id, n, m) -> alg.p_vector_subrange (id, n, m)
+  | MP_tuple ps                   -> alg.p_tuple (List.map (fold_mpat alg) ps)
+  | MP_list ps                    -> alg.p_list (List.map (fold_mpat alg) ps)
+  | MP_cons (ph, pt)              -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
+  | MP_string_append ps           -> alg.p_string_append (List.map (fold_mpat alg) ps)
 
 and fold_mpat (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat -> 'mpat =
   function
   | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
-                         
+
 (* identity fold from term alg to term alg *)
 let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
-  { p_lit            = (fun lit -> P_lit lit)
-  ; p_wild           = P_wild
-  ; p_or             = (fun (pat1, pat2) -> P_or(pat1, pat2))
-  ; p_not            = (fun pat -> P_not(pat))
-  ; p_as             = (fun (pat,id) -> P_as (pat,id))
-  ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
-  ; p_id             = (fun id -> P_id id)
-  ; p_var            = (fun (pat,tpat) -> P_var (pat,tpat))
-  ; p_app            = (fun (id,ps) -> P_app (id,ps))
-  ; p_vector         = (fun ps -> P_vector ps)
-  ; p_vector_concat  = (fun ps -> P_vector_concat ps)
-  ; p_tuple          = (fun ps -> P_tuple ps)
-  ; p_list           = (fun ps -> P_list ps)
-  ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
-  ; p_string_append  = (fun ps -> P_string_append ps)
-  ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
+  { p_lit             = (fun lit -> P_lit lit)
+  ; p_wild            = P_wild
+  ; p_or              = (fun (pat1, pat2) -> P_or(pat1, pat2))
+  ; p_not             = (fun pat -> P_not(pat))
+  ; p_as              = (fun (pat,id) -> P_as (pat,id))
+  ; p_typ             = (fun (typ,pat) -> P_typ (typ,pat))
+  ; p_id              = (fun id -> P_id id)
+  ; p_var             = (fun (pat,tpat) -> P_var (pat,tpat))
+  ; p_app             = (fun (id,ps) -> P_app (id,ps))
+  ; p_vector          = (fun ps -> P_vector ps)
+  ; p_vector_concat   = (fun ps -> P_vector_concat ps)
+  ; p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m))
+  ; p_tuple           = (fun ps -> P_tuple ps)
+  ; p_list            = (fun ps -> P_list ps)
+  ; p_cons            = (fun (ph,pt) -> P_cons (ph,pt))
+  ; p_string_append   = (fun ps -> P_string_append ps)
+  ; p_aux             = (fun (pat,annot) -> P_aux (pat,annot))
   }
 
 let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
-  { p_lit            = (fun lit -> Some (MP_lit lit))
-  ; p_wild           = None
-  ; p_or             = (fun _ -> None)
-  ; p_not            = (fun _ -> None)
-  ; p_as             = (fun (pat, id) -> Option.map (fun pat -> MP_as (pat, id)) pat)
-  ; p_typ            = (fun (typ, pat) -> Option.map (fun pat -> MP_typ (pat, typ)) pat)
-  ; p_id             = (fun id -> Some (MP_id id))
-  ; p_var            = (fun _ -> None)
-  ; p_app            = (fun (id, ps) -> Option.map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
-  ; p_vector         = (fun ps -> Option.map (fun ps -> MP_vector ps) (Util.option_all ps))
-  ; p_vector_concat  = (fun ps -> Option.map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
-  ; p_tuple          = (fun ps -> Option.map (fun ps -> MP_tuple ps) (Util.option_all ps))
-  ; p_list           = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps))
-  ; p_cons           = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt))
-  ; p_string_append  = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps))
-  ; p_aux            = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat,annot)) pat)
+  { p_lit             = (fun lit -> Some (MP_lit lit))
+  ; p_wild            = None
+  ; p_or              = (fun _ -> None)
+  ; p_not             = (fun _ -> None)
+  ; p_as              = (fun (pat, id) -> Option.map (fun pat -> MP_as (pat, id)) pat)
+  ; p_typ             = (fun (typ, pat) -> Option.map (fun pat -> MP_typ (pat, typ)) pat)
+  ; p_id              = (fun id -> Some (MP_id id))
+  ; p_var             = (fun _ -> None)
+  ; p_app             = (fun (id, ps) -> Option.map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
+  ; p_vector          = (fun ps -> Option.map (fun ps -> MP_vector ps) (Util.option_all ps))
+  ; p_vector_concat   = (fun ps -> Option.map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
+  ; p_vector_subrange = (fun (id, n, m) -> Some (MP_vector_subrange (id, n, m)))
+  ; p_tuple           = (fun ps -> Option.map (fun ps -> MP_tuple ps) (Util.option_all ps))
+  ; p_list            = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps))
+  ; p_cons            = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt))
+  ; p_string_append   = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps))
+  ; p_aux             = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat,annot)) pat)
   }
-  
+
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux) exp_alg =
@@ -643,23 +648,24 @@ let id_exp_alg =
 let compute_pat_alg bot join =
   let join_list vs = List.fold_left join bot vs in
   let split_join f ps = let (vs,ps) = List.split ps in (join_list vs, f ps) in
-  { p_lit            = (fun lit -> (bot, P_lit lit))
-  ; p_wild           = (bot, P_wild)
+  { p_lit             = (fun lit -> (bot, P_lit lit))
+  ; p_wild            = (bot, P_wild)
   (* todo: I have no idea how to combine v1 and v2 in the following *)
-  ; p_or             = (fun ((v1, pat1), (v2, pat2)) -> (v1, P_or(pat1, pat2)))
-  ; p_not            = (fun (v, pat) -> (v, P_not(pat)))
-  ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
-  ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
-  ; p_id             = (fun id -> (bot, P_id id))
-  ; p_var            = (fun ((v,pat),kid) -> (v, P_var (pat,kid)))
-  ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
-  ; p_vector         = split_join (fun ps -> P_vector ps)
-  ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
-  ; p_tuple          = split_join (fun ps -> P_tuple ps)
-  ; p_list           = split_join (fun ps -> P_list ps)
-  ; p_cons           = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
-  ; p_string_append  = split_join (fun ps -> P_string_append ps)
-  ; p_aux            = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
+  ; p_or              = (fun ((v1, pat1), (v2, pat2)) -> (v1, P_or(pat1, pat2)))
+  ; p_not             = (fun (v, pat) -> (v, P_not(pat)))
+  ; p_as              = (fun ((v,pat),id) -> (v, P_as (pat,id)))
+  ; p_typ             = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
+  ; p_id              = (fun id -> (bot, P_id id))
+  ; p_var             = (fun ((v,pat),kid) -> (v, P_var (pat,kid)))
+  ; p_app             = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
+  ; p_vector          = split_join (fun ps -> P_vector ps)
+  ; p_vector_concat   = split_join (fun ps -> P_vector_concat ps)
+  ; p_vector_subrange = (fun (id, n, m) -> (bot, P_vector_subrange (id, n, m)))
+  ; p_tuple           = split_join (fun ps -> P_tuple ps)
+  ; p_list            = split_join (fun ps -> P_list ps)
+  ; p_cons            = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
+  ; p_string_append   = split_join (fun ps -> P_string_append ps)
+  ; p_aux             = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
   }
 
 let compute_exp_alg bot join =
@@ -749,22 +755,23 @@ let compute_exp_alg bot join =
 
 let pure_pat_alg bot join =
   let join_list vs = List.fold_left join bot vs in
-  { p_lit            = (fun lit -> bot)
-  ; p_wild           = bot
-  ; p_or             = (fun (pat1, pat2) -> bot) (* todo: this is wrong *)
-  ; p_not            = (fun pat -> bot)          (* todo: this is wrong *)
-  ; p_as             = (fun (v,id) -> v)
-  ; p_typ            = (fun (typ,v) -> v)
-  ; p_id             = (fun id -> bot)
-  ; p_var            = (fun (v,kid) -> v)
-  ; p_app            = (fun (id,ps) -> join_list ps)
-  ; p_vector         = join_list
-  ; p_vector_concat  = join_list
-  ; p_tuple          = join_list
-  ; p_list           = join_list
-  ; p_string_append  = join_list
-  ; p_cons           = (fun (vh,vt) -> join vh vt)
-  ; p_aux            = (fun (v,annot) -> v)
+  { p_lit             = (fun _ -> bot)
+  ; p_wild            = bot
+  ; p_or              = (fun (pat1, pat2) -> bot) (* todo: this is wrong *)
+  ; p_not             = (fun _ -> bot)            (* todo: this is wrong *)
+  ; p_as              = (fun (v, _) -> v)
+  ; p_typ             = (fun (_, v) -> v)
+  ; p_id              = (fun id -> bot)
+  ; p_var             = (fun (v,kid) -> v)
+  ; p_app             = (fun (id,ps) -> join_list ps)
+  ; p_vector          = join_list
+  ; p_vector_concat   = join_list
+  ; p_vector_subrange = (fun _ -> bot)
+  ; p_tuple           = join_list
+  ; p_list            = join_list
+  ; p_string_append   = join_list
+  ; p_cons            = (fun (vh,vt) -> join vh vt)
+  ; p_aux             = (fun (v,annot) -> v)
   }
 
 let pure_exp_alg bot join =

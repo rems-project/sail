@@ -93,12 +93,16 @@ val get_attribute : string -> uannot -> (l * string) option
 
 val get_attributes : uannot -> (l * string * string) list
 
+val find_attribute_opt : string -> (l * string * string) list -> string option
+
 val mk_def_annot : l -> def_annot
 
 val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 
 val get_def_attribute : string -> def_annot -> (l * string) option
 
+val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
+  
 (** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
@@ -144,7 +148,7 @@ val mk_lexp : uannot lexp_aux -> uannot lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
-val mk_funcl : id -> uannot pat -> uannot exp -> uannot funcl
+val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
 val mk_fundef : (uannot funcl) list -> uannot def
 val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm
@@ -400,6 +404,7 @@ val map_fundef_annot : ('a annot -> 'b annot) -> 'a fundef -> 'b fundef
 val map_funcl_annot : ('a annot -> 'b annot) -> 'a funcl -> 'b funcl
 val map_mapdef_annot : ('a annot -> 'b annot) -> 'a mapdef -> 'b mapdef
 val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
+val map_register_annot : ('a annot -> 'b annot) -> 'a dec_spec -> 'b dec_spec
 val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
 val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def
@@ -412,6 +417,7 @@ val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
+val nexp_loc : nexp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
 
 (** {1 Printing utilities}
@@ -488,6 +494,8 @@ val tyvars_of_quant_item : quant_item -> KidSet.t
 val is_kid_generated : kid -> bool
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
+
+val pattern_vector_subranges : 'a pat -> (Big_int.num * Big_int.num) list Bindings.t
 
 val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp

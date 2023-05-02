@@ -1,0 +1,147 @@
+In its most basic use-case Sail is a command-line tool, analogous to
+a compiler: one gives it a list of input Sail files; it type-checks
+them and provides translated output.
+
+To simply typecheck Sail files, one can pass them on the command line
+with no other options, for example:
+[source,sh]
+----
+sail prelude.sail riscv_types.sail riscv_mem.sail riscv_sys.sail riscv_vmem.sail riscv.sail
+----
+The sail files passed on the command line are simply treated as if
+they are one large file concatenated together, although the parser
+will keep track of locations on a per-file basis for
+error-reporting. As can be seen, this specification is split into
+several logical components. `prelude.sail` defines the initial
+type environment and builtins, `riscv_types.sail` gives type
+definitions used in the rest of the specification, `riscv_mem.sail`
+and `riscv_vmem.sail` describe the physical and virtual memory
+interaction, and then `riscv_sys.sail` and `riscv.sail`
+implement most of the specification.
+
+For more complex projects, one can use `$include` statements in
+Sail source, for example:
+[source,sail]
+----
+$include <library.sail>
+$include "file.sail"
+----
+
+Here, Sail will look for `library.sail` in the `$SAIL_DIR/lib`
+directory, where `$SAIL_DIR` is usually the root of the sail
+repository (or `opam var sail:share` when Sail is installed using
+opam). It will search for `file.sail` relative to the location of the
+file containing the `$include`. The space after the `$include` before
+the filename is mandatory. Sail also supports `$define`, `$ifdef`, and
+`$ifndef` for basic conditional compilation. These are things that are
+understood by Sail itself, not a separate preprocessor, and are
+handled after the AST is parsed{blank}footnote:[This can affect precedence
+declarations for custom user defined operators -- the precedence must
+be redeclared in the file you are including the operator into.].
+
+=== C compilation
+
+To compile Sail into C, the `-c` option is used, like so:
+[source,sh]
+----
+sail -c FILES 1> out.c
+----
+The translated C is by default printed to stdout, but one can also use
+the `-o` option to output to a file, so
+[source,sh]
+----
+sail -c FILES -o out
+----
+will generate a file called `out.c`. To produce an executable
+this needs to be compiled and linked with the C files in the
+`$SAIL_DIR/lib` directory:
+[source,sh]
+----
+gcc out.c $SAIL_DIR/lib/*.c -lgmp -lz -I $SAIL_DIR/lib/ -o out
+----
+The C output requires the https://gmplib.org/[GMP library] for arbitrary precision
+arithmetic, as well as https://zlib.net/[zlib] for working with compressed ELF binaries.
+
+There are several Sail options that affect the C output:
+
+* `-O` turns on optimisations. The generated C code will be quite slow
+    unless this flag is set.
+
+* `-Oconstant_fold` apply constant folding optimisations.
+
+* `-c_include` Supply additional header files to be included in the
+    generated C.
+    
+* `-c_no_main` Do not generate a `main()` function.
+
+* `-static` Mark generated C functions as static where possible. This
+    is useful for measuring code coverage.
+
+=== Interactive mode
+
+Sail has a GHCi-style interactive interpreter. This can be used by
+starting Sail with `sail -i`.  Sail will still handle any other
+command line arguments as per usual. To use Sail files within the
+interpreter they must be passed on the command line as if they were
+being compiled normally. One can also pass a list of commands to the
+interpreter by using the `-is` flag, as
+[source,sh]
+----
+sail -is <file>
+----
+where `<file>` contains a list of commands. Once inside the
+interactive mode, a list of available commands can be accessed by
+typing `:commands`, while `:help <command>` can be used to provide
+some documentation for each command.
+
+=== Other options
+
+Here we summarize most of the other options available for
+Sail. Debugging options (usually for debugging Sail itself) are
+indicated by starting with the letter `d`.
+
+* `-v` Print the Sail version.
+
+* `-help` Print a list of options.
+
+* `-no_warn` Turn off warnings.
+
+* `-enum_casts` Allow elements of enumerations to be
+  automatically cast to numbers.
+
+* `-memo_z3` Memoize calls to the Z3 solver. This can greatly improve
+  typechecking times if you are repeatedly typechecking the same
+  specification while developing it.
+
+* `-no_lexp_bounds_check` Turn off bounds checking in the left hand
+  side of assignments.
+
+* `-undefined_gen` Generate functions that create undefined values of
+  user-defined types. Every type `T` will get a `undefined_T` function
+  created for it. This flag is set automatically by some backends that
+  want to re-write `undefined`.
+
+* `-just_check` Force Sail to terminate immediately after
+  typechecking.
+
+* `-dtc_verbose <verbosity>` Make the typechecker print a
+  trace of typing judgements. If the verbosity level is 1, then this
+  should only include fairly readable judgements about checking and
+  inference rules. If verbosity is 2 then it will include a large
+  amount of debugging information. This option can be useful to
+  diagnose tricky type-errors, especially if the error message isn't
+  very good.
+
+* `-ddump_tc_ast` Write the typechecked AST to stdout after
+  typechecking
+
+* `-ddump_rewrite_ast <prefix>` Write the AST out after each
+  re-writing pass. The output from each pass is placed in a file
+  starting with `prefix`.
+
+* `-dmagic_hash` Allow the `#` symbol in identifiers. It's
+  currently used as a magic symbol to separate generated identifiers
+  from those the user can write, so this option allows for the output
+  of the various other debugging options to be fed back into Sail. The
+  name comes from the GHC option with the same purpose:
+  https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/magic_hash.html

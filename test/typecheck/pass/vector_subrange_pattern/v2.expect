@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/vector_subrange_pattern/v2.sail[0m:7.13-56:
+7[96m |[0mfunction foo imm[19] @ imm[8..0] @ imm[10] @ imm[18..11] = {
+ [91m |[0m             [91m^-----------------------------------------^[0m
+ [91m |[0m Cannot bind imm as pattern subranges are non-contiguous. imm[9] is not defined.

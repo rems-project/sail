@@ -549,7 +549,7 @@ let rename_variables graph root children =
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
-    | V_ctor_kind (f, ctor, unifiers, ctyp) -> V_ctor_kind (fold_cval f, ctor, unifiers, ctyp)
+    | V_ctor_kind (f, ctor, ctyp) -> V_ctor_kind (fold_cval f, ctor, ctyp)
     | V_ctor_unwrap (f, ctor, ctyp) -> V_ctor_unwrap (fold_cval f, ctor, ctyp)
     | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, fold_cval cval) fields, ctyp)
     | V_tuple (members, ctyp) -> V_tuple (List.map fold_cval members, ctyp)

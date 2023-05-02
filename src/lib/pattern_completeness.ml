@@ -157,6 +157,7 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_app (ctor, ps) -> P_app (ctor, List.map (go counter) ps)
       | P_vector ps -> P_vector (List.map (go counter) ps)
       | P_vector_concat ps -> P_vector_concat (List.map (go counter) ps)
+      | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
       | P_tuple ps -> P_tuple (List.map (go counter) ps)
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
@@ -249,6 +250,7 @@ module Make(C: Config) = struct
         | P_app (ctor, ps) -> P_app (ctor, List.map (go wild) ps)
         | P_vector ps -> P_vector (List.map (go wild) ps)
         | P_vector_concat ps -> P_vector_concat (List.map (go wild) ps)
+        | P_vector_subrange (id, n, m) -> P_vector_subrange (id, n, m)
         | P_tuple ps -> P_tuple (List.map (go wild) ps)
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
@@ -397,6 +399,8 @@ module Make(C: Config) = struct
     | P_as (pat, _) -> generalize ctx head_exp_typ pat
     | P_typ (_, pat) -> generalize ctx head_exp_typ pat
 
+    | P_vector_subrange _ -> GP_wild
+  
     | P_id id ->
        begin match List.find_opt (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings ctx.enums) with
        | Some (enum, _) -> GP_enum (enum, id)
@@ -783,9 +787,9 @@ module Make(C: Config) = struct
        end
 
   (* Just highlight the match keyword and not the whole match block. *)
-  let shrink_loc = function
+  let shrink_loc keyword = function
     | Parse_ast.Range (n, m) ->
-       Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + 5 }))
+       Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + String.length keyword }))
     | l -> l
 
   let rec cases_to_pats from have_guard = function
@@ -807,7 +811,7 @@ module Make(C: Config) = struct
     | _, _ ->
        Reporting.unreachable l __POS__ "Impossible case in update_cases" [@coverage off]
 
-  let is_complete_wildcarded l ctx cases head_exp_typ =
+  let is_complete_wildcarded ?(keyword="match") l ctx cases head_exp_typ =
     try
       match cases_to_pats 0 false cases with
       | _, [] -> None
@@ -816,7 +820,7 @@ module Make(C: Config) = struct
          begin match matrix_is_complete l ctx matrix with
          | Incomplete (unmatched :: _) ->
             let guard_info = if have_guard then " by unguarded patterns" else "" in
-            Reporting.warn "Incomplete pattern match statement at" (shrink_loc l)
+            Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
               ("The following expression is unmatched" ^ guard_info ^ ": " ^ (string_of_exp unmatched |> Util.yellow |> Util.clear));
             None
          | Incomplete [] ->
@@ -835,15 +839,15 @@ module Make(C: Config) = struct
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | exn -> None
 
-  let is_complete_funcls_wildcarded l ctx funcls head_exp_typ =
+  let is_complete_funcls_wildcarded ?(keyword="match") l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
     let cases = List.map destruct_funcl funcls in
-    match is_complete_wildcarded l ctx (List.map snd cases) head_exp_typ with
+    match is_complete_wildcarded ~keyword:keyword l ctx (List.map snd cases) head_exp_typ with
     | Some pexps ->
        Some (List.map2 (fun ((id, annot), _) pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) cases pexps)
     | None ->
        None
 
-  let is_complete l ctx cases head_exp_typ = Option.is_some (is_complete_wildcarded l ctx cases head_exp_typ)
+  let is_complete ?(keyword="match") l ctx cases head_exp_typ = Option.is_some (is_complete_wildcarded ~keyword:keyword l ctx cases head_exp_typ)
 
 end

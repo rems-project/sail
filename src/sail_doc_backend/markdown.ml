@@ -1,4 +1,4 @@
-(*==========================================================================*)
+(****************************************************************************)
 (*     Sail                                                                 *)
 (*                                                                          *)
 (*  Sail and the Sail architecture models here, comprising all files and    *)
@@ -63,14 +63,68 @@
 (*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
 (*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
 (*  SUCH DAMAGE.                                                            *)
-(*==========================================================================*)
+(****************************************************************************)
 
-Require Export Sail.TypeCasts.
-Require Export Sail.Instr_kinds.
-Require Export Sail.Values.
-Require Export Sail.String.
-Require Export Sail.Operators_mwords.
-Require Export Sail.Prompt_monad.
-Require Export Sail.Prompt.
-Require Export Sail.State.
-Require Export Sail.Undefined.
+open Libsail
+
+module type CONVERTER = sig
+  type config
+
+  val default_config : loc:Parse_ast.l -> config
+
+  val convert : config -> string -> string
+end
+
+module IdentityConverter : CONVERTER = struct
+  type config = unit
+
+  let default_config ~loc:_ = ()
+
+  let convert _ comment = comment
+end
+
+module AsciidocConverter : CONVERTER = struct
+  open Printf
+  open Omd
+
+  type config = {
+      this : Ast.id option;
+      loc : Parse_ast.l;
+      list_depth : int
+    }
+
+  let default_config ~loc = {
+      this = None;
+      loc = loc;
+      list_depth = 1
+    }
+
+  let rec format_elem (conf: config) = function
+    | Paragraph elems -> format conf elems ^ "\n\n"
+    | Text str -> str
+    | Emph elems -> sprintf "_%s_" (format conf elems)
+    | Bold elems -> sprintf "*%s*" (format conf elems)
+    | Code (_, code) -> sprintf "`%s`" code
+    | Code_block (lang, code) ->
+       sprintf "[source,%s]\n----\n%s\n----\n\n" lang code
+    | Br -> "\n"
+    | NL -> "\n"
+    | H1 header -> "= " ^ format conf header ^ "\n"
+    | H2 header -> "== " ^ format conf header ^ "\n"
+    | H3 header -> "=== " ^ format conf header ^ "\n"
+    | H4 header -> "==== " ^ format conf header ^ "\n"
+    | (Ul list | Ulp list) ->
+       Util.string_of_list "" (fun item ->
+           let new_conf = { conf with list_depth = conf.list_depth + 1 } in
+           "\n" ^ String.make conf.list_depth '*' ^ " " ^ format new_conf item
+         ) list
+    | _ ->
+       raise (Reporting.err_general conf.loc "Cannot convert markdown element to Asciidoc")
+
+  and format conf elems =
+    String.concat "" (List.map (format_elem conf) elems)
+
+  let convert conf comment =
+    format conf (Omd.of_string comment)
+
+end

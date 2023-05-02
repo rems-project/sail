@@ -102,10 +102,6 @@ let doc_kopt = function
 
 let doc_int n = string (Big_int.to_string n)
 
-let docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string "/*! " ^^ string str ^^ string " */" ^^ hardline
-  | _ -> empty
-
 let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_var v -> doc_kid v
   | Ord_inc -> string "inc"
@@ -338,6 +334,11 @@ let rec doc_pat (P_aux (p_aux, (_, uannot))) =
   | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
+  | P_vector_subrange (id, n, m) ->
+     if Big_int.equal n m then
+       doc_id id ^^ brackets (string (Big_int.to_string n))
+     else
+       doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
   | P_wild -> string "_"
   | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
@@ -628,14 +629,13 @@ let doc_rec (Rec_aux (r,_)) =
   | Rec_measure (pat,exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
 
 let doc_fundef (FD_aux (FD_function (r, _, funcls), annot)) =
-  docstring annot
-  ^^ match funcls with
-     | [] -> failwith "Empty function list"
-     | _ ->
-        let rec_pp = doc_rec r in
-        let sep = hardline ^^ string "and" ^^ space in
-        let clauses = separate_map sep doc_funcl funcls in
-        string "function" ^^ space ^^ rec_pp ^^ clauses
+  match funcls with
+  | [] -> failwith "Empty function list"
+  | _ ->
+     let rec_pp = doc_rec r in
+     let sep = hardline ^^ string "and" ^^ space in
+     let clauses = separate_map sep doc_funcl funcls in
+     string "function" ^^ space ^^ rec_pp ^^ clauses
 
 let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   match mp_aux with
@@ -696,7 +696,7 @@ let rec doc_index_range (BF_aux (ir, _)) =
   match ir with
   | BF_single i -> doc_nexp i
   | BF_range (i, j) -> doc_nexp i ^^ string ".." ^^ doc_nexp j
-  | BF_concat (i, j) -> doc_index_range i ^^ comma ^^ space ^^ doc_index_range j
+  | BF_concat (i, j) -> parens (doc_index_range i ^^ space ^^ at ^^ space ^^ doc_index_range j)
 
 let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
@@ -731,7 +731,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
      doc_op equals (separate space [string "bitfield"; doc_id id; colon; doc_typ typ])
                    (surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace)
 
-let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
+let doc_spec (VS_aux (v, annot)) =
   let doc_extern ext =
     match ext with
     | Some ext ->
@@ -743,8 +743,7 @@ let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
-     (if comment then docstring annot else empty)
-     ^^ string "val" ^^ space
+     string "val" ^^ space
      ^^ (if is_cast then (string "cast" ^^ space) else empty)
      ^^ doc_id id ^^ space
      ^^ doc_extern ext
@@ -788,10 +787,15 @@ let doc_filter = function
   | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
   | _ -> true
     
-let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, _)) =
+let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, def_annot)) =
+  (match def_annot.doc_comment with
+   | Some str when comment ->
+      string "/*! " ^^ string str ^^ string " */" ^^ hardline
+   | _ -> empty)
+  ^^
   match aux with
   | DEF_default df -> doc_default df
-  | DEF_val v_spec -> doc_spec ~comment:comment v_spec
+  | DEF_val v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
@@ -825,8 +829,8 @@ let rec doc_def_no_hardline ?comment:(comment=false) (DEF_aux (aux, _)) =
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (Id_aux (_, l) as id, ids) ->
-     (if comment then docstring (l, no_annot) else empty) ^^
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
+
 and doc_def ?comment:(comment=false) def = group (doc_def_no_hardline ~comment:comment def ^^ hardline)
 
 let doc_ast ?comment:(comment=false) { defs; _ } =

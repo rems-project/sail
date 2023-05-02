@@ -254,7 +254,11 @@ let rec map_split f = function
      | Error y' ->
         let (xs', ys') = map_split f xs in
         (xs', y' :: ys')
-                   
+
+let list_empty = function
+  | [] -> true
+  | _ -> false
+        
 let list_index p l =
   let rec aux i l =
     match l with [] -> None

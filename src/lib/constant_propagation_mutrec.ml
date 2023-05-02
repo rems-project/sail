@@ -231,13 +231,13 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
                List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs
              in
              let valspec, ksubsts = generate_val_spec env id args l annot in
-             let const_prop_funcl (FCL_aux (FCL_funcl (_, pexp), (l, _))) =
+             let const_prop_funcl (FCL_aux (FCL_funcl (_, pexp), (fcl_def_annot, _))) =
                let pexp' =
                  prop_args_pexp target ast ksubsts args pexp
                  |> rewrite_pexp
                  |> strip_pexp
                in
-               FCL_aux (FCL_funcl (id', pexp'), (Parse_ast.Generated l, empty_uannot))
+               FCL_aux (FCL_funcl (id', pexp'), (def_annot_map_loc gen_loc fcl_def_annot, empty_uannot))
              in
              valspecs := valspec :: !valspecs;
              let fundef = mk_fundef (List.map const_prop_funcl fcls) in

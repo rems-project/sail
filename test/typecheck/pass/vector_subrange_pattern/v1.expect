@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/vector_subrange_pattern/v1.sail[0m:7.54-65:
+7[96m |[0mfunction foo imm[19] @ (imm[9..0] as imm) @ imm[10] @ imm[18..11] = {
+ [91m |[0m                                                      [91m^---------^[0m
+ [91m |[0m Vector subrange binding imm is also bound as a regular identifier
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mpass/vector_subrange_pattern/v1.sail[0m:7.24-40:
+ [91m |[0m 7[96m |[0mfunction foo imm[19] @ (imm[9..0] as imm) @ imm[10] @ imm[18..11] = {
+ [91m |[0m  [91m |[0m                        [91m^--------------^[0m
+ [91m |[0m  [91m |[0m Regular binding is here

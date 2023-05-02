@@ -77,7 +77,6 @@ type l =
   | Generated of l
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
-  | Documented of string * l
 
 type 'a annot = l * 'a
 
@@ -235,6 +234,7 @@ pat_aux =  (* Pattern *)
  | P_app of id * pat list (* union constructor pattern *)
  | P_vector of pat list (* vector pattern *)
  | P_vector_concat of pat list (* concatenated vector pattern *)
+ | P_vector_subrange of id * Big_int.num * Big_int.num
  | P_tuple of pat list (* tuple pattern *)
  | P_list of pat list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
@@ -409,6 +409,7 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_app of id * ( mpat) list
  | MP_vector of ( mpat) list
  | MP_vector_concat of ( mpat) list
+ | MP_vector_subrange of id * Big_int.num * Big_int.num
  | MP_tuple of ( mpat) list
  | MP_list of ( mpat) list
  | MP_cons of ( mpat) * ( mpat)
@@ -531,6 +532,8 @@ type def_aux =  (* Top-level definition *)
  | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
  | DEF_register of dec_spec (* register declaration *)
  | DEF_pragma of string * string
+ | DEF_attribute of string * string * def
+ | DEF_doc of string * def
  | DEF_internal_mutrec of fundef list
 
 and def = DEF_aux of def_aux * l

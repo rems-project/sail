@@ -1,4 +1,4 @@
-(*==========================================================================*)
+(****************************************************************************)
 (*     Sail                                                                 *)
 (*                                                                          *)
 (*  Sail and the Sail architecture models here, comprising all files and    *)
@@ -63,69 +63,89 @@
 (*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
 (*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
 (*  SUCH DAMAGE.                                                            *)
-(*==========================================================================*)
+(****************************************************************************)
 
-Require Import Sail.Values.
-Require Import Sail.Prompt_monad.
-Require Import Sail.Prompt.
-Require Import Sail.State_monad.
-Import ListNotations.
+open Libsail
 
-(* Lifting from prompt monad to state monad *)
-(*val liftState : forall 'regval 'regs 'a 'e. register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e*)
-Fixpoint liftState {Regval Regs A E} (ra : register_accessors Regs Regval) (m : monad Regval A E) : monadS Regs A E :=
- match m with
-  | (Done a)                   => returnS a
-  | (Read_mem rk a sz k)       => bindS (read_mem_bytesS rk a sz)       (fun v => liftState ra (k v))
-  | (Read_memt rk a sz k)      => bindS (read_memt_bytesS rk a sz)      (fun v => liftState ra (k v))
-  | (Write_mem wk a sz v k)    => bindS (write_mem_bytesS wk a sz v)    (fun v => liftState ra (k v))
-  | (Write_memt wk a sz v t k) => bindS (write_memt_bytesS wk a sz v t) (fun v => liftState ra (k v))
-  | (Write_tag wk a t k)       => bindS (write_tag_rawS wk a t)         (fun v => liftState ra (k v))
-  | (Read_reg r k)             => bindS (read_regvalS ra r)             (fun v => liftState ra (k v))
-  | (Excl_res k)               => bindS (excl_resultS tt)               (fun v => liftState ra (k v))
-  | (Choose _ ty k)            => bindS (chooseS ty)                    (fun v => liftState ra (k v))
-  | (Write_reg r v k)          => seqS (write_regvalS ra r v)           (liftState ra k)
-  | (Write_ea _ _ _ k)         => liftState ra k
-  | (Footprint k)              => liftState ra k
-  | (Barrier _ k)              => liftState ra k
-  | (Print _ k)                => liftState ra k (* TODO *)
-  | (Fail descr)               => failS descr
-  | (Exception e)              => throwS e
-end.
+let opt_doc_format = ref "asciidoc"
+let opt_doc_files = ref []
+let opt_doc_embed = ref None
+let opt_doc_compact = ref false
+let opt_doc_bundle = ref "doc.json"
 
-Local Open Scope bool_scope.
+let embedding_option () = match !opt_doc_embed with
+  | None -> None
+  | Some "plain" -> Some Docinfo.Plain
+  | Some "base64" -> Some Docinfo.Base64
+  | Some embedding ->
+     Printf.eprintf "Unknown embedding type %s for -doc_embed, allowed values are 'plain' or 'base64'\n" embedding;
+     exit 1
 
-(*val emitEventS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> event 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)*)
-Definition emitEventS {Regval Regs} `{forall (x y : Regval), Decidable (x = y)} (ra : register_accessors Regs Regval) (e : event Regval) (s : sequential_state Regs) : option (sequential_state Regs) :=
-match e with
-  | E_read_mem _ addr sz v =>
-     option_bind (get_mem_bytes addr sz s) (fun '(v', _) =>
-     if generic_eq v' v then Some s else None)
-  | E_read_memt _ addr sz (v, tag) =>
-     option_bind (get_mem_bytes addr sz s) (fun '(v', tag') =>
-     if generic_eq v' v && generic_eq tag' tag then Some s else None)
-  | E_write_mem _ addr sz v success =>
-     if success then Some (put_mem_bytes addr sz v B0 s) else None
-  | E_write_memt _ addr sz v tag success =>
-     if success then Some (put_mem_bytes addr sz v tag s) else None
-  | E_write_tag _ addr sz tag success =>
-     if success then Some (put_tag addr tag s) else None
-  | E_read_reg r v =>
-     let (read_reg, _) := ra in
-     option_bind (read_reg r s.(ss_regstate)) (fun v' =>
-     if generic_eq v' v then Some s else None)
-  | E_write_reg r v =>
-     let (_, write_reg) := ra in
-     option_bind (write_reg r v s.(ss_regstate)) (fun rs' =>
-     Some {| ss_regstate := rs'; ss_memstate := s.(ss_memstate); ss_tagstate := s.(ss_tagstate) |})
-  | _ => Some s
-end.
+let doc_options = [
+  ( "-doc_format",
+    Arg.String (fun format -> opt_doc_format := format),
+    "<format> Output documentation in the chosen format, either latex or asciidoc (default asciidoc)");
+  ( "-doc_file",
+    Arg.String (fun file -> opt_doc_files := file :: !opt_doc_files),
+    "<file> Document only the provided files");
+  ( "-doc_embed",
+    Arg.String (fun format -> opt_doc_embed := Some format),
+    "<plain|base64> Embed all documentation contents into the documentation bundle rather than referencing it");
+  ( "-doc_compact",
+    Arg.Unit (fun _ -> opt_doc_compact := true),
+    " Use compact documentation format");
+  ( "-doc_bundle",
+    Arg.String (fun file -> opt_doc_bundle := file),
+    "<file> Name for documentation bundle file");
+  ]
 
-Local Close Scope bool_scope.
+let output_docinfo doc_dir docinfo =
+  let chan = open_out (Filename.concat doc_dir !opt_doc_bundle) in
+  let json = Docinfo.docinfo_to_json docinfo in
+  if !opt_doc_compact then (
+    Yojson.to_channel ~std:true chan json
+  ) else (
+    Yojson.pretty_to_channel ~std:true chan json
+  );
+  output_char chan '\n';
+  close_out chan
 
-(*val runTraceS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> trace 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)*)
-Fixpoint runTraceS {Regval Regs} `{forall (x y : Regval), Decidable (x = y)} (ra : register_accessors Regs Regval) (t : trace Regval) (s : sequential_state Regs) : option (sequential_state Regs) :=
-match t with
-  | [] => Some s
-  | e :: t' => option_bind (emitEventS ra e s) (runTraceS ra t')
-end.
+let doc_target _ out_file ast effect_info env =
+  Reporting.opt_warnings := true;
+  let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
+  begin
+    try
+      if not (Sys.is_directory doc_dir) then (
+        prerr_endline ("Failure: documentation output location exists and is not a directory: " ^ doc_dir);
+        exit 1
+      )
+    with Sys_error(_) -> Unix.mkdir doc_dir 0o755
+  end;
+  if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then (
+    let module Config = struct
+        let embedding_mode = embedding_option()
+        let the_ast = ast
+      end in
+    let module Gen = Docinfo.Generator(Markdown.AsciidocConverter)(Config) in
+    let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in
+    output_docinfo doc_dir docinfo
+  ) else if !opt_doc_format = "identity" then (
+    let module Config = struct
+        let embedding_mode = embedding_option()
+      end in
+    let module Gen = Docinfo.Generator(Markdown.IdentityConverter)(Config) in
+    let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in
+    output_docinfo doc_dir docinfo
+  ) else (
+    Printf.eprintf "Unknown documentation format: %s\n" !opt_doc_format
+  )
+
+let _ =
+  Target.register
+    ~name:"doc"
+    ~options:doc_options
+    ~pre_parse_hook:(fun () ->
+      Type_check.opt_expand_valspec := false;
+      Type_check.opt_no_bitfield_expansion := true
+    )
+    doc_target

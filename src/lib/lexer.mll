@@ -287,7 +287,7 @@ rule token = parse
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
-    { let attr = attribute (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Attribute(i, String.trim attr) }
+    { let attr = attribute 0 (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Attribute(i, String.trim attr) }
   | "$" (ident+ as i)
     { let p = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in Pragma(i, String.trim p) }
   | "infix" ws (digit as p) ws (operator as op)
@@ -323,12 +323,13 @@ rule token = parse
                                               (Lexing.lexeme_start_p lexbuf)
                                               (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
 
-and attribute pos b = parse
-  | "]"                                 { Buffer.contents b }
-  | "\n"                                { Buffer.add_char b '\n'; Lexing.new_line lexbuf; attribute pos b lexbuf }
+and attribute depth pos b = parse
+  | "["                                 { Buffer.add_char b '['; attribute (depth + 1) pos b lexbuf }
+  | "]"                                 { if depth = 0 then Buffer.contents b else (Buffer.add_char b ']'; attribute (depth - 1) pos b lexbuf) }
+  | "\n"                                { Buffer.add_char b '\n'; Lexing.new_line lexbuf; attribute depth pos b lexbuf }
   | "//"                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Line comment is not allowed within an attribute") }
   | "/*"                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Block comment is not allowed within an attribute") }
-  | _ as c                              { Buffer.add_char b c; attribute pos b lexbuf }
+  | _ as c                              { Buffer.add_char b c; attribute depth pos b lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "File ended before this attribute has been closed") }
 
 (* The after_block logic here allows a pragma to end with either a
