@@ -49,4 +49,10 @@ printf "==========================================\n"
 
 ./smt/run_tests.py || returncode=1
 
+printf "\n==========================================\n"
+printf "SMT tests\n"
+printf "==========================================\n"
+
+./format/run_tests.py || returncode=1
+
 exit $returncode
