@@ -333,7 +333,7 @@ let rec doc_pat (P_aux (p_aux, (_, uannot))) =
      doc_kid kid
   | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
-  | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
+  | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
   | P_vector_subrange (id, n, m) ->
      if Big_int.equal n m then
        doc_id id ^^ brackets (string (Big_int.to_string n))
@@ -343,7 +343,7 @@ let rec doc_pat (P_aux (p_aux, (_, uannot))) =
   | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
-  | P_cons (hd_pat, tl_pat) -> separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat]
+  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
   | P_string_append [] -> string "\"\""
   | P_string_append pats ->
      parens (separate_map (string " ^ ") doc_pat pats)

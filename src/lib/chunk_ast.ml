@@ -207,6 +207,7 @@ and pexp_chunks = {
 let add_chunk q chunk =
   Queue.add chunk q
 
+[@@@coverage off]
 let rec prerr_chunk indent = function
   | Comment (comment_type, n, col, contents) ->
      let s, e = comment_type_delimiters comment_type in
@@ -407,7 +408,8 @@ let rec prerr_chunk indent = function
      Queue.iter (prerr_chunk (indent ^ "  ")) chunks
   | Raw _ ->
      Printf.eprintf "%sRaw\n" indent
-
+[@@@coverage on]
+    
 let string_of_var (Kid_aux (Var v, _)) = v
 
 let rec pop_header_comments comments chunks l lnum =
@@ -486,7 +488,7 @@ let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind), l)) =
      Atom (Util.string_of_list " " string_of_var vars)
   | _, _ ->
      (* No other KOpt should be parseable *)
-     Reporting.unreachable l __POS__ "Invalid KOpt in formatter"
+     Reporting.unreachable l __POS__ "Invalid KOpt in formatter" [@coverage off]
 
 let chunk_of_lit (L_aux (aux, _)) =
   match aux with
@@ -582,7 +584,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
      Queue.add (Atom (Printf.sprintf "%s in {%s}" (string_of_var n) (Util.string_of_list ", " Big_int.to_string set))) chunks
   | (ATyp_times (lhs, rhs) | ATyp_sum (lhs, rhs) | ATyp_minus (lhs, rhs)) as binop ->
      let op_symbol = match binop with
-       | ATyp_times _ -> "*" | ATyp_sum _ -> "+" | ATyp_minus _ -> "-" | _ -> Reporting.unreachable l __POS__ "Invalid binary atyp" in
+       | ATyp_times _ -> "*" | ATyp_sum _ -> "+" | ATyp_minus _ -> "-" | _ -> Reporting.unreachable l __POS__ "Invalid binary atyp" [@coverage off] in
      let lhs_chunks = rec_chunk_atyp lhs in
      let rhs_chunks = rec_chunk_atyp rhs in
      Queue.add (Binary (lhs_chunks, op_symbol, rhs_chunks)) chunks
@@ -663,6 +665,20 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
   | P_vector_concat pats ->
      let pats = chunk_delimit ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
      Queue.add (Intersperse ("@", pats)) chunks
+  | P_vector_subrange (id, n, m) ->
+     let id_chunks = Queue.create () in
+     Queue.add (Atom (string_of_id id)) id_chunks;
+     let ix_chunks = Queue.create () in
+     if Big_int.equal n m then (
+       Queue.add (Atom (Big_int.to_string n)) ix_chunks
+     ) else (
+       let n_chunks = Queue.create () in
+       Queue.add (Atom (Big_int.to_string n)) n_chunks;
+       let m_chunks = Queue.create () in
+       Queue.add (Atom (Big_int.to_string m)) m_chunks;
+       Queue.add (Binary (n_chunks, "..", m_chunks)) ix_chunks
+     );
+     Queue.add (Index (id_chunks, ix_chunks)) chunks
   | P_typ (typ, pat) ->
      let pat_chunks = rec_chunk_pat pat in
      let typ_chunks = Queue.create () in

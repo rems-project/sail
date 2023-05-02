@@ -282,7 +282,9 @@ let nonatomic opts = { opts with precedence = 10 }
    setting the allowed precedence below zero *)
 let subatomic opts = { opts with precedence = -1 }
 
-let atomic_parens opts doc = if opts.precedence <> 10 then parens doc else doc
+let precedence n opts = { opts with precedence = n }
+                   
+let atomic_parens opts doc = if opts.precedence <= 0 then parens doc else doc
 
 (* While everything in Sail is an expression, for formatting we
    recognize that some constructs will appear as either statement-like
@@ -308,7 +310,12 @@ let operator_precedence = function
   | "=" -> 10, atomic, nonatomic, 1
   | ":" -> 0, subatomic, subatomic, 1
   | ".." -> 10, atomic, atomic, 0
+  | "@" -> 6, precedence 5, precedence 6, 1
   | _ -> 10, subatomic, subatomic, 1
+
+let intersperse_operator_precedence = function
+  | "@" -> 6, precedence 5
+  | _ -> 10, subatomic
 
 let ternary_operator_precedence = function
   | ("..", "=") -> 0, atomic, atomic, nonatomic
@@ -328,7 +335,7 @@ let can_hang chunks =
   match Queue.peek_opt chunks with
   | Some (Comment _) -> false
   | _ -> true
-       
+ 
 let opt_delim s = ifflat empty (string s)
 
 let softline = break 0
@@ -420,7 +427,13 @@ module Make(Config : CONFIG) = struct
        let group_fn = if ungroup_tuple then (fun x -> x) else group in
        group_fn (surround indent spacing (string l) (separate_map softline (doc_chunks (nonatomic opts)) args) (string r))
     | Intersperse (op, args) ->
-       group (separate_map (space ^^ string op ^^ space) (doc_chunks (atomic opts)) args)
+       let outer_prec, prec = intersperse_operator_precedence op in
+       let doc = group (separate_map (space ^^ string op ^^ space) (doc_chunks (opts |> prec |> expression_like)) args) in
+       if outer_prec > opts.precedence then (
+         parens doc
+       ) else (
+         doc
+       )
     | Spacer (line, n) ->
        if line then
          repeat n hardline

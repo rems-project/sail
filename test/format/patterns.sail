@@ -1,0 +1,16 @@
+default Order dec
+
+$include    <prelude.sail>
+
+function foo(ys: bits(6), xs: bits(6)) -> unit = {
+    match ys {
+        xs[3..1] @ xs[0..0] @ xs[5..4] => (),
+        (xs[3..1] @ xs[0..0]) @ xs[5..4] => (), // should have brackets
+        xs[3..1] @ (xs[0..0] @ xs[5..4]) => (), // brackets here will also be preserved for now
+        _ => (),
+    };
+    let _ = xs[3..1] @ xs[0..0] @ xs[5..4];
+    let _ = (xs[3..1] @ xs[0..0]) @ xs[5..4]; // should have brackets
+    let _ = xs[3..1] @ (xs[0..0] @ xs[5..4]);
+    ()
+}
