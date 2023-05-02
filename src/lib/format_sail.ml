@@ -324,6 +324,11 @@ let unary_operator_precedence = function
   | "2^" -> 10, atomic, empty
   | _ -> 10, subatomic, empty
 
+let can_hang chunks =
+  match Queue.peek_opt chunks with
+  | Some (Comment _) -> false
+  | _ -> true
+       
 let opt_delim s = ifflat empty (string s)
 
 let softline = break 0
@@ -586,7 +591,12 @@ module Make(Config : CONFIG) = struct
        surround_hardline always_hardline indent 1 (char '{') (separate sep exps) (char '}')
        |> atomic_parens opts
     | Block_binder (binder, x, y) ->
-       separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
+       if can_hang y then (
+         separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
+       ) else (
+         separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '=']
+         ^^ nest 4 (hardline ^^ doc_chunks (nonatomic opts) y)
+       )
     | Binder (binder, x, y, z) ->
        prefix indent 1
          (separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y; string "in"])
