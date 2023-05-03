@@ -385,7 +385,7 @@ and string_of_uid (id, ctyps) =
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id) ^ "<" ^ Util.string_of_list "," string_of_ctyp ctyps ^ ">"
 
-(** This function is like string_of_ctyp, but recursively prints all
+(* This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " full_string_of_ctyp ctyps ^ ")"
@@ -577,23 +577,6 @@ end
 module CTSet = Set.Make(CT)
 module CTMap = Map.Make(CT)
 module CTListSet = Set.Make(CTList)
- 
-module UId = struct
-  type t = (id * ctyp list)
-  let lex_ord c1 c2 = if c1 = 0 then c2 else c1
-  let rec compare_ctyps ctyps1 ctyps2 =
-    match ctyps1, ctyps2 with
-    | (ctyp1 :: ctyps1), (ctyp2 :: ctyps2) ->
-       lex_ord (CT.compare ctyp1 ctyp2) (compare_ctyps ctyps1 ctyps2)
-    | [], [] -> 0
-    | [], _ -> 1
-    | _, [] -> -1
-  let compare (id1, ctyps1) (id2, ctyps2) =
-    let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
-    lex_ord (Id.compare id1 id2) (compare_ctyps ctyps1 ctyps2)
-end
-
-module UBindings = Map.Make(UId)
 
 let rec ctyp_vars = function
   | CT_poly kid -> KidSet.singleton kid
@@ -864,8 +847,6 @@ let rec map_instr_cval f (I_aux (instr, aux)) =
   in
   I_aux (instr, aux)
 
-
-(** Map over each instruction within an instruction, bottom-up *)
 let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
@@ -880,7 +861,6 @@ let rec map_instr f (I_aux (instr, aux)) =
   in
   f (I_aux (instr, aux))
 
-(** Map over each instruction within an instruction, bottom-up *)
 let rec concatmap_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
@@ -895,7 +875,6 @@ let rec concatmap_instr f (I_aux (instr, aux)) =
   in
   f (I_aux (instr, aux))
 
-(** Iterate over each instruction within an instruction, bottom-up *)
 let rec iter_instr f (I_aux (instr, aux)) =
   match instr with
   | I_decl _ | I_init _ | I_reset _ | I_reinit _
@@ -907,7 +886,6 @@ let rec iter_instr f (I_aux (instr, aux)) =
   | I_block instrs | I_try_block instrs ->
      List.iter (iter_instr f) instrs
 
-(** Map over each instruction in a cdef using map_instr *)
 let cdef_map_instr f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.map (map_instr f) instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr f) instrs)
@@ -918,7 +896,6 @@ let cdef_map_instr f = function
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
-(** Map over function calls in an instruction sequence, including exception handler where present *)
 let rec map_funcall f instrs =
   match instrs with
   | [] -> []
@@ -943,7 +920,6 @@ let rec map_funcall f instrs =
           I_try_block (map_funcall f instrs)
      in (I_aux (instr, aux)) :: map_funcall f tail
 
-(** Map over each function call in a cdef using map_funcall *)
 let cdef_map_funcall f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, map_funcall f instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, map_funcall f instrs)
@@ -954,7 +930,6 @@ let cdef_map_funcall f = function
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
-(** Map over each instruction in a cdef using concatmap_instr *)
 let cdef_concatmap_instr f = function
   | CDEF_register (id, ctyp, instrs) ->
      CDEF_register (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
@@ -975,7 +950,7 @@ let ctype_def_map_ctyp f = function
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
 
-(** Map over each ctyp in a cdef using map_instr_ctyp *)
+(* Map over each ctyp in a cdef using map_instr_ctyp *)
 let cdef_map_ctyp f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, f ctyp, List.map (map_instr_ctyp f) instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr_ctyp f) instrs)
@@ -1027,7 +1002,7 @@ let rec filter_instrs f instrs =
   in
   List.filter f (List.map filter_instrs' instrs)
 
-(** GLOBAL: label_counter is used to make sure all labels have unique
+(* GLOBAL: label_counter is used to make sure all labels have unique
    names. Like gensym_counter it should be safe to reset between
    top-level definitions. **)
 let label_counter = ref 0
