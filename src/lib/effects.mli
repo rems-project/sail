@@ -76,12 +76,12 @@ open Ast
 open Ast_defs
 open Ast_util
 
+type side_effect
 (** A function is side-effectful if it throws an exception, can exit
    abnormally (either via an assertion failing or an explicit exit
    statement), contains a (possibly) incomplete pattern match, or
    touches a register. Finally, it is transitively side-effectful if
    it calls another function doing any of the above. *)
-type side_effect
 
 module EffectSet : sig
   include Set.S with type elt = side_effect
@@ -90,13 +90,12 @@ end
 (* Note we intentionally keep the side effect type abstract, and
    expose some functions on effect sets based on what we actually
    need. *)
-     
+
 val throws : EffectSet.t -> bool
-
 val pure : EffectSet.t -> bool
-
 val effectful : EffectSet.t -> bool
 
+val has_outcome : id -> EffectSet.t -> bool
 (** Outcome identifiers correspond to the set of user-defined prompt
    monad constructors in the concurrency interface, replacing the
    various ad-hoc rmem, wmem, barrier, and so on effects in previous
@@ -105,52 +104,51 @@ val effectful : EffectSet.t -> bool
 
    has_outcome (mk_id "sail_mem_write_request") effects
    *)
-val has_outcome : id -> EffectSet.t -> bool
 
 type side_effect_info = {
-    functions : EffectSet.t Bindings.t;
-    letbinds : EffectSet.t Bindings.t;
-    mappings : EffectSet.t Bindings.t
-  }
+  functions : EffectSet.t Bindings.t;
+  letbinds : EffectSet.t Bindings.t;
+  mappings : EffectSet.t Bindings.t;
+}
 
 val empty_side_effect_info : side_effect_info
-
 val function_is_pure : id -> side_effect_info -> bool
 
+val infer_side_effects : bool -> Type_check.tannot ast -> side_effect_info
 (** [infer_side_effects asserts_termination ast] infers all of the
    side effect information for [ast].  If [asserts_termination] is
    true then it is assumed that the backend will enforce the
    termination measures with assertions. *)
-val infer_side_effects : bool -> Type_check.tannot ast -> side_effect_info
 
+val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
 (** Checks constraints on side effects, raising an error if they are
    violated. Currently these are that termination measures and
    top-level letbindings must be pure. *)
-val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
 
+val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
 (** [copy_function_effect id_from info id_to] copies the effect
    information from id_from to id_to in the side effect
    information. The order of arguments is to make it convenient to use
    with List.fold_left. *)
-val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
+
 val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
 
+val add_function_effect : id -> side_effect_info -> id -> side_effect_info
 (** [add_function_effect id_from info id_to] adds the effect
    information from id_from to id_to in the side effect information,
    preserving any existing effects for id_to. The order of arguments is
    to make it convenient to use with List.fold_left. *)
-val add_function_effect : id -> side_effect_info -> id -> side_effect_info
 
+val add_monadic_built_in : id -> side_effect_info -> side_effect_info
 (** [add_monadic_built_in id info] notes that [id] is a monadic
    external function. *)
-val add_monadic_built_in : id -> side_effect_info -> side_effect_info
 
+val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast
 (** Previous code mostly assumes that side effect info is attached to
    nodes in the AST. To keep this code working, this rewrite pass
    attaches effect info into to the AST. Note that the effect info is
    simplified in its annotated form - it just becomes a boolean
    representing effectful/non-effectful *)
-val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast
 
-(** Dumps the given side effect information to stderr. *)
 val dump_effects : side_effect_info -> unit
+(** Dumps the given side effect information to stderr. *)

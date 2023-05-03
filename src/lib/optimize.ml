@@ -79,58 +79,59 @@ let rec split_at_function' id defs acc =
 let split_at_function id defs =
   match split_at_function' id defs [] with
   | None -> None
-  | Some (pre_defs, def, post_defs) ->
-     Some (List.rev pre_defs, def, post_defs)
+  | Some (pre_defs, def, post_defs) -> Some (List.rev pre_defs, def, post_defs)
 
-let rec last_env = function
-  | [] -> Type_check.initial_env
-  | [(_, env)] -> env
-  | _ :: xs -> last_env xs
-    
-let recheck ({ defs; _} as ast) =
+let rec last_env = function [] -> Type_check.initial_env | [(_, env)] -> env | _ :: xs -> last_env xs
+
+let recheck ({ defs; _ } as ast) =
   let defs = Type_check.check_with_envs Type_check.initial_env (List.map Type_check.strip_def defs) in
 
   let rec find_optimizations = function
-    | ([DEF_aux (DEF_pragma ("optimize", pragma, p_l), _)], env) :: ([DEF_aux (DEF_val vs, vs_annot) as def1], _) :: defs ->
-       let id = id_of_val_spec vs in
-       let args = Str.split (Str.regexp " +") (String.trim pragma) in
-       begin match args with
-       | ["unroll"; n]->
-          let n = int_of_string n in
-          begin match split_at_function id defs with
-          | Some (intervening_defs, ((DEF_aux (DEF_fundef fdef, fdef_annot) as def2, _)), defs) ->
-             let rw_app subst (fn, args) =
-               if Id.compare id fn = 0 then E_app (subst, args) else E_app (fn, args)
-             in
-             let rw_exp subst = { id_exp_alg with e_app = rw_app subst } in
-             let rw_defs subst = { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rw_exp subst)) } in
+    | ([DEF_aux (DEF_pragma ("optimize", pragma, p_l), _)], env)
+      :: ([(DEF_aux (DEF_val vs, vs_annot) as def1)], _)
+      :: defs ->
+        let id = id_of_val_spec vs in
+        let args = Str.split (Str.regexp " +") (String.trim pragma) in
+        begin
+          match args with
+          | ["unroll"; n] ->
+              let n = int_of_string n in
+              begin
+                match split_at_function id defs with
+                | Some (intervening_defs, ((DEF_aux (DEF_fundef fdef, fdef_annot) as def2), _), defs) ->
+                    let rw_app subst (fn, args) =
+                      if Id.compare id fn = 0 then E_app (subst, args) else E_app (fn, args)
+                    in
+                    let rw_exp subst = { id_exp_alg with e_app = rw_app subst } in
+                    let rw_defs subst = { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rw_exp subst)) } in
 
-             let specs = ref [def1] in
-             let bodies = ref [rewrite_def (rw_defs (append_id id "_unroll_1")) def2] in
+                    let specs = ref [def1] in
+                    let bodies = ref [rewrite_def (rw_defs (append_id id "_unroll_1")) def2] in
 
-             for i = 1 to n do
-               let current_id = append_id id ("_unroll_" ^ string_of_int i) in
-               let next_id = if i = n then current_id else append_id id ("_unroll_" ^ string_of_int (i + 1)) in
-               (* Create a valspec for the new unrolled function *)
-               specs := !specs @ [DEF_aux (DEF_val (rename_valspec current_id vs), vs_annot)];
-               (* Then duplicate its function body and make it call the next unrolled function *)
-               bodies := !bodies @ [rewrite_def (rw_defs next_id) (DEF_aux (DEF_fundef (rename_fundef current_id fdef), fdef_annot))]
-             done;
+                    for i = 1 to n do
+                      let current_id = append_id id ("_unroll_" ^ string_of_int i) in
+                      let next_id = if i = n then current_id else append_id id ("_unroll_" ^ string_of_int (i + 1)) in
+                      (* Create a valspec for the new unrolled function *)
+                      specs := !specs @ [DEF_aux (DEF_val (rename_valspec current_id vs), vs_annot)];
+                      (* Then duplicate its function body and make it call the next unrolled function *)
+                      bodies :=
+                        !bodies
+                        @ [
+                            rewrite_def (rw_defs next_id)
+                              (DEF_aux (DEF_fundef (rename_fundef current_id fdef), fdef_annot));
+                          ]
+                    done;
 
-             !specs @ List.concat (List.map fst intervening_defs) @ !bodies @ find_optimizations defs
-
+                    !specs @ List.concat (List.map fst intervening_defs) @ !bodies @ find_optimizations defs
+                | _ ->
+                    Reporting.warn "Could not find function body for unroll pragma at " p_l "";
+                    def1 :: find_optimizations defs
+              end
           | _ ->
-             Reporting.warn "Could not find function body for unroll pragma at " p_l "";
-             def1 :: find_optimizations defs
-          end
-       | _ ->
-          Reporting.warn "Unrecognised optimize pragma at" p_l "";
-          def1 :: find_optimizations defs
-       end
-
-    | (defs, _) :: defs' ->
-       defs @ find_optimizations defs'
-
+              Reporting.warn "Unrecognised optimize pragma at" p_l "";
+              def1 :: find_optimizations defs
+        end
+    | (defs, _) :: defs' -> defs @ find_optimizations defs'
     | [] -> []
   in
 

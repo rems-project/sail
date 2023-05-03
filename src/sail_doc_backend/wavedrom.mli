@@ -67,6 +67,7 @@
 
 open Libsail
 
+val of_pattern : labels:string option -> Type_check.tannot Ast.pat -> string option
 (** Convert a Sail pattern into a WaveDrom diagram.
 
    See {{: https://wavedrom.com/ } the WaveDrom website} for details
@@ -100,4 +101,3 @@ open Libsail
 
    This function will return None if the pattern cannot be converted into a diagram.
 *)
-val of_pattern : labels:string option -> Type_check.tannot Ast.pat -> string option

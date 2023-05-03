@@ -68,11 +68,11 @@
 open Ast
 open Ast_util
 
-(** [opt_nl_flow] must be true for [analyze] to do anything. *)
 val opt_nl_flow : bool ref
+(** [opt_nl_flow] must be true for [analyze] to do anything. *)
 
+val analyze : uannot exp list -> uannot exp list
 (** Analyze a basic block for flow typing properties that do not
    follow the lexical structure of the code (and therefore the
    syntax-directed typing rules), and insert assertions for discovered
    constraints *)
-val analyze : uannot exp list -> uannot exp list

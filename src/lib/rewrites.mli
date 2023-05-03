@@ -78,24 +78,24 @@ val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
 
+val opt_coq_warn_nonexhaustive : bool ref
 (** Warn about matches where we add a default case for Coq because
    they're not exhaustive *)
-val opt_coq_warn_nonexhaustive : bool ref
 
+val opt_ddump_rewrite_ast : (string * int) option ref
 (** Output each rewrite step (as produced by the rewrite function) to
    a file for debugging *)
-val opt_ddump_rewrite_ast : ((string * int) option) ref
-  
-(** Generate a fresh id with the given prefix *)
-val fresh_id : string -> l -> id
 
-(** Move loop termination measures into loop AST nodes *)
+val fresh_id : string -> l -> id
+(** Generate a fresh id with the given prefix *)
+
 val move_loop_measures : 'a ast -> 'a ast
+(** Move loop termination measures into loop AST nodes *)
 
 val pat_of_mpat : 'a mpat -> 'a pat
-  
-(** Re-write undefined to functions created by -undefined_gen flag *)
+
 val rewrite_undefined : bool -> Env.t -> tannot ast -> tannot ast
+(** Re-write undefined to functions created by -undefined_gen flag *)
 
 type rewriter =
   | Base_rewriter of (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)
@@ -104,10 +104,10 @@ type rewriter =
   | Literal_rewriter of ((lit -> bool) -> rewriter)
 
 val describe_rewriter : rewriter -> string list
-                      
 val all_rewriters : (string * rewriter) list
 
-type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list
+type rewrite_sequence =
+  (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list
 
 val rewrite_lit_ocaml : lit -> bool
 val rewrite_lit_lem : lit -> bool
@@ -121,12 +121,12 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
 
-(** Get the list of instantiated rewrites for a list of rewrites *)
 val instantiate_rewrites : (string * rewriter_arg list) list -> rewrite_sequence
+(** Get the list of instantiated rewrites for a list of rewrites *)
 
+val rewrite :
+  Effects.side_effect_info -> Env.t -> rewrite_sequence -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t
 (** Apply a sequence of rewrites to an AST *)
-val rewrite : Effects.side_effect_info -> Env.t -> rewrite_sequence -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t
 
 val rewrites_interpreter : (string * rewriter_arg list) list
-  
 val simple_typ : typ -> typ

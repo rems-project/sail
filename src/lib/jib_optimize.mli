@@ -67,31 +67,26 @@
 
 open Jib
 
+val optimize_unit : instr list -> instr list
 (** Remove redundant assignments and variables of type
    unit. unit-typed identifiers that are assigned to are replaced with
    CL_void, and cvals (which should be pure!) are replaced with unit
    types are replaced by unit-literals. *)
-val optimize_unit : instr list -> instr list
 
+val flatten_instrs : instr list -> instr list
 (** Remove all instructions that can contain other nested
    instructions, prodcing a flat list of instructions. *)
-val flatten_instrs : instr list -> instr list
+
 val flatten_cdef : cdef -> cdef
 val reset_flat_counter : unit -> unit
-
 val unique_per_function_ids : cdef list -> cdef list
-
 val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
-
 val remove_clear : instr list -> instr list
 
-(** Remove gotos immediately followed by the label it jumps to *)
 val remove_pointless_goto : instr list -> instr list
+(** Remove gotos immediately followed by the label it jumps to *)
 
 val remove_unused_labels : instr list -> instr list
-
 val remove_dead_after_goto : instr list -> instr list
-
 val remove_dead_code : instr list -> instr list
-
 val remove_tuples : cdef list -> Jib_compile.ctx -> cdef list * Jib_compile.ctx

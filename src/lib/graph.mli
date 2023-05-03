@@ -67,60 +67,53 @@
 
 (** Generic graph type based on OCaml Set and Map *)
 
-module type OrderedType =
-  sig
-    type t
-    val compare : t -> t -> int
-  end
+module type OrderedType = sig
+  type t
 
-module type S =
-  sig
-    type node
-    type graph
-    type node_set
+  val compare : t -> t -> int
+end
 
-    val leaves : graph -> node_set
+module type S = sig
+  type node
+  type graph
+  type node_set
 
-    val empty : graph
+  val leaves : graph -> node_set
+  val empty : graph
 
-    (** Add an edge from the first node to the second node, creating
+  val add_edge : node -> node -> graph -> graph
+  (** Add an edge from the first node to the second node, creating
        the nodes if they do not exist. *)
-    val add_edge : node -> node -> graph -> graph
-    val add_edges : node -> node list -> graph -> graph
 
-    val children : graph -> node -> node list
+  val add_edges : node -> node list -> graph -> graph
+  val children : graph -> node -> node list
+  val nodes : graph -> node list
 
-    val nodes : graph -> node list
-      
-    (** Return the set of nodes that are reachable from the first set
+  val reachable : node_set -> node_set -> graph -> node_set
+  (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
        nodes (cuts). *)
-    val reachable : node_set -> node_set -> graph -> node_set
 
-    (** Prune a graph from roots to cuts. *)
-    val prune : node_set -> node_set -> graph -> graph
+  val prune : node_set -> node_set -> graph -> graph
+  (** Prune a graph from roots to cuts. *)
 
-    val remove_self_loops : graph -> graph
+  val remove_self_loops : graph -> graph
+  val self_loops : graph -> node list
+  val reverse : graph -> graph
 
-    val self_loops : graph -> node list
+  exception Not_a_DAG of node * graph
 
-    val reverse : graph -> graph
-
-    exception Not_a_DAG of node * graph;;
-
-    (** Topologically sort a graph. Throws Not_a_DAG if the graph is
+  val topsort : graph -> node list
+  (** Topologically sort a graph. Throws Not_a_DAG if the graph is
        not directed acyclic. *)
-    val topsort : graph -> node list
 
-    (** Find strongly connected components using Tarjan's algorithm.
+  val scc : ?original_order:node list -> graph -> node list list
+  (** Find strongly connected components using Tarjan's algorithm.
         This algorithm also returns a topological sorting of the graph
         components. *)
-    val scc : ?original_order:(node list) -> graph -> node list list
 
-    val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
-  end
+  val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
+end
 
-module Make(Ord: OrderedType) : S
-       with type node = Ord.t
-        and type node_set = Set.Make(Ord).t
-        and type graph = Set.Make(Ord).t Map.Make(Ord).t
+module Make (Ord : OrderedType) :
+  S with type node = Ord.t and type node_set = Set.Make(Ord).t and type graph = Set.Make(Ord).t Map.Make(Ord).t

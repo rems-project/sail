@@ -49,20 +49,15 @@ let opt_elf_tohost = ref Nat_big_num.zero
 
 type word8 = int
 
-let escape_char c =
-  if int_of_char c <= 31 then '.'
-  else if int_of_char c >= 127 then '.'
-  else c
+let escape_char c = if int_of_char c <= 31 then '.' else if int_of_char c >= 127 then '.' else c
 
 let hex_line bs =
-  let hex_char i c =
-    (if i mod 2 == 0 && i <> 0 then " " else "") ^ Printf.sprintf "%02x" (int_of_char c)
-  in
-  String.concat "" (List.mapi hex_char bs) ^ " " ^ String.concat "" (List.map (fun c -> Printf.sprintf "%c" (escape_char c)) bs)
+  let hex_char i c = (if i mod 2 == 0 && i <> 0 then " " else "") ^ Printf.sprintf "%02x" (int_of_char c) in
+  String.concat "" (List.mapi hex_char bs)
+  ^ " "
+  ^ String.concat "" (List.map (fun c -> Printf.sprintf "%c" (escape_char c)) bs)
 
-let rec break n = function
-  | [] -> []
-  | (_ :: _ as xs) -> [Lem_list.take n xs] @ break n (Lem_list.drop n xs)
+let rec break n = function [] -> [] | _ :: _ as xs -> [Lem_list.take n xs] @ break n (Lem_list.drop n xs)
 
 let print_segment seg =
   let bs = seg.Elf_interpreted_segment.elf64_segment_body in
@@ -73,32 +68,33 @@ let read name =
   let info = Sail_interface.populate_and_obtain_global_symbol_init_info name in
 
   prerr_endline "Elf read:";
-  let (elf_file, elf_epi, symbol_map) =
-    begin match info with
-    | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
-    | Error.Success ((elf_file: Elf_file.elf_file),
-                     (elf_epi: Sail_interface.executable_process_image),
-                     (symbol_map: Elf_file.global_symbol_init_info))
-      ->
-       (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
-       prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);*)
-       (elf_file, elf_epi, symbol_map)
+  let elf_file, elf_epi, symbol_map =
+    begin
+      match info with
+      | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
+      | Error.Success
+          ( (elf_file : Elf_file.elf_file),
+            (elf_epi : Sail_interface.executable_process_image),
+            (symbol_map : Elf_file.global_symbol_init_info)
+          ) ->
+          (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
+             prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);*)
+          (elf_file, elf_epi, symbol_map)
     end
   in
 
   prerr_endline "\nElf segments:";
-  let (segments, e_entry, e_machine) =
-    begin match elf_epi, elf_file with
-    | (Sail_interface.ELF_Class_32 _, _) -> failwith "cannot handle ELF_Class_32"
-    | (_, Elf_file.ELF_File_32 _)  -> failwith "cannot handle ELF_File_32"
-    | (Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1) ->
-       (* remove all the auto generated segments (they contain only 0s) *)
-       let segments =
-         Lem_list.mapMaybe
-           (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None)
-           segments
-       in
-       (segments, e_entry, e_machine)
+  let segments, e_entry, e_machine =
+    begin
+      match (elf_epi, elf_file) with
+      | Sail_interface.ELF_Class_32 _, _ -> failwith "cannot handle ELF_Class_32"
+      | _, Elf_file.ELF_File_32 _ -> failwith "cannot handle ELF_File_32"
+      | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1 ->
+          (* remove all the auto generated segments (they contain only 0s) *)
+          let segments =
+            Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segments
+          in
+          (segments, e_entry, e_machine)
     end
   in
   (segments, e_entry, symbol_map)
@@ -113,14 +109,16 @@ let write_file chan paddr i byte =
 let load_elf name =
   let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
-  (if List.mem_assoc "tohost" symbol_map then
-     let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
-     opt_elf_tohost := tohost_addr);
+  if List.mem_assoc "tohost" symbol_map then (
+    let _, _, tohost_addr, _, _ = List.assoc "tohost" symbol_map in
+    opt_elf_tohost := tohost_addr
+  );
   (*List.iter (load_segment ~writer:writer) segments*)
   segments
 
 (* The sail model can access this by externing a unit -> Big_int.t function
    as Elf_loader.elf_entry. *)
 let elf_entry () = Big_int.big_int_of_string (Nat_big_num.to_string !opt_elf_entry)
+
 (* Used by RISCV sail model test harness for exiting test *)
 let elf_tohost () = Big_int.big_int_of_string (Nat_big_num.to_string !opt_elf_tohost)

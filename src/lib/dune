@@ -1,65 +1,111 @@
 (env
-  (dev
-    (flags (:standard -w -33 -w -27)))
-  (release
-    (flags (:standard -w -33 -w -27))))
+ (dev
+  (flags
+   (:standard -w -33 -w -27)))
+ (release
+  (flags
+   (:standard -w -33 -w -27))))
 
 (rule
-  (target ast.lem)
-  (deps (:sail_ott ../../language/sail.ott))
-  (action (run ott -sort false -generate_aux_rules true -o %{target} -picky_multiple_parses true %{sail_ott})))
+ (target ast.lem)
+ (deps
+  (:sail_ott ../../language/sail.ott))
+ (action
+  (run
+   ott
+   -sort
+   false
+   -generate_aux_rules
+   true
+   -o
+   %{target}
+   -picky_multiple_parses
+   true
+   %{sail_ott})))
 
 (rule
-  (target jib.lem)
-  (deps (:jib_ott ../../language/jib.ott) ast.lem)
-  (action (run ott -sort false -generate_aux_rules true -o %{target} -picky_multiple_parses true %{jib_ott})))
+ (target jib.lem)
+ (deps
+  (:jib_ott ../../language/jib.ott)
+  ast.lem)
+ (action
+  (run
+   ott
+   -sort
+   false
+   -generate_aux_rules
+   true
+   -o
+   %{target}
+   -picky_multiple_parses
+   true
+   %{jib_ott})))
 
 (rule
-  (target ast.ml)
-  (deps (:ast ast.lem) (:sed ast.sed))
-  (action
-    (progn (run lem -ocaml %{ast})
-           (run sed -i.bak -f %{sed} %{target}))))
+ (target ast.ml)
+ (deps
+  (:ast ast.lem)
+  (:sed ast.sed))
+ (action
+  (progn
+   (run lem -ocaml %{ast})
+   (run sed -i.bak -f %{sed} %{target}))))
 
 (copy_files ../gen_lib/*.lem)
 
 (rule
-  (targets
-    value2.ml
-    sail2_values.ml
-    sail2_prompt.ml
-    sail2_instr_kinds.ml
-    sail2_prompt_monad.ml
-    sail2_operators.ml
-    sail2_operators_bitlists.ml)
-  (deps
-    value2.lem
-    sail2_prompt.lem
-    sail2_values.lem
-    sail2_instr_kinds.lem
-    sail2_prompt_monad.lem
-    sail2_operators.lem
-    sail2_operators_bitlists.lem)
-  (action (run lem -wl_rename ign -wl_pat_comp ign -wl_comp_message ign -ocaml %{deps})))
+ (targets
+  value2.ml
+  sail2_values.ml
+  sail2_prompt.ml
+  sail2_instr_kinds.ml
+  sail2_prompt_monad.ml
+  sail2_operators.ml
+  sail2_operators_bitlists.ml)
+ (deps
+  value2.lem
+  sail2_prompt.lem
+  sail2_values.lem
+  sail2_instr_kinds.lem
+  sail2_prompt_monad.lem
+  sail2_operators.lem
+  sail2_operators_bitlists.lem)
+ (action
+  (run
+   lem
+   -wl_rename
+   ign
+   -wl_pat_comp
+   ign
+   -wl_comp_message
+   ign
+   -ocaml
+   %{deps})))
 
 (rule
-  (target jib.ml)
-  (deps (:jib jib.lem) (:sed ast.sed) value2.ml (glob_files lem/*.lem))
-  (action
-    (progn (run lem -ocaml %{jib} -lib . -lib lem/)
-           (run sed -i.bak -f %{sed} %{target}))))
+ (target jib.ml)
+ (deps
+  (:jib jib.lem)
+  (:sed ast.sed)
+  value2.ml
+  (glob_files lem/*.lem))
+ (action
+  (progn
+   (run lem -ocaml %{jib} -lib . -lib lem/)
+   (run sed -i.bak -f %{sed} %{target}))))
 
 (menhir
-  (modules parser))
+ (modules parser))
 
 (ocamllex lexer)
 
 (generate_sites_module
-  (module libsail_sites)
-  (sites libsail))
- 
+ (module libsail_sites)
+ (sites libsail))
+
 (library
-  (name libsail)
-  (public_name libsail)
-  (libraries lem linksem pprint dune-site yojson)
-  (instrumentation (backend bisect_ppx)))
+ (name libsail)
+ (public_name libsail)
+ (libraries lem linksem pprint dune-site yojson)
+ (instrumentation
+  (backend bisect_ppx)))

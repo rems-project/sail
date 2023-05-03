@@ -71,8 +71,8 @@ module Big_int = Nat_big_num
 open Ast
 open Ast_util
 
-(** Print generated SMT problems (for debugging) *)
 val opt_smt_verbose : bool ref
+(** Print generated SMT problems (for debugging) *)
 
 val set_solver : string -> unit
 
@@ -80,15 +80,9 @@ type smt_result = Unknown | Sat | Unsat
 
 val load_digests : unit -> unit
 val save_digests : unit -> unit
-
 val constraint_to_smt : l -> n_constraint -> string * (kid -> string * bool) * string list
-
 val call_smt : l -> n_constraint -> smt_result
-
 val call_smt_solve_bitvector : l -> string -> (int * string) list -> (int * lit) list option
-  
 val solve_smt : l -> n_constraint -> kid -> Big_int.num option
-
 val solve_all_smt : l -> n_constraint -> kid -> Big_int.num list option
-
 val solve_unique_smt : l -> n_constraint -> kid -> Big_int.num option

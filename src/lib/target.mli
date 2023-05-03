@@ -77,23 +77,29 @@ open Ast_defs
 open Type_check
 
 (** {2 Target type and accessor functions} *)
-   
+
 type target
 
 val name : target -> string
-
 val run_pre_parse_hook : target -> unit -> unit
-
 val run_pre_rewrites_hook : target -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
-
 val rewrites : target -> Rewrites.rewrite_sequence
-  
 val action : target -> string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
-
 val asserts_termination : target -> bool
 
 (** {2 Target registration} *)
-  
+
+val register :
+  name:string ->
+  ?flag:string ->
+  ?description:string ->
+  ?options:(Arg.key * Arg.spec * Arg.doc) list ->
+  ?pre_parse_hook:(unit -> unit) ->
+  ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  ?rewrites:(string * Rewrites.rewriter_arg list) list ->
+  ?asserts_termination:bool ->
+  (string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  target
 (** Used for plugins to register custom Sail targets/backends.
 
    [register_target ~name:"foo" action] will create an option -foo,
@@ -115,24 +121,13 @@ val asserts_termination : target -> bool
    The final unnamed parameter is the main backend function that is called after the frontend
    has finished processing the input.
  *)
-val register :
-  name:string ->
-  ?flag:string ->
-  ?description:string ->
-  ?options:(Arg.key * Arg.spec * Arg.doc) list ->
-  ?pre_parse_hook:(unit -> unit) ->
-  ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
-  ?rewrites:(string * Rewrites.rewriter_arg list) list ->
-  ?asserts_termination:bool ->
-  (string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
-  target
 
+val get_the_target : unit -> target option
 (** Return the current target. For example, if we register a 'coq'
    target, and Sail is invoked with `sail -coq`, then this function
    will return the coq target. *)
-val get_the_target : unit -> target option
 
 val get : name:string -> target option
 
-(** Used internally to dynamically update the option list when loading plugins *)
 val extract_options : unit -> (Arg.key * Arg.spec * Arg.doc) list
+(** Used internally to dynamically update the option list when loading plugins *)

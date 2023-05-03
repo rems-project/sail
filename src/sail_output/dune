@@ -1,10 +1,12 @@
 (executable
-  (name sail_plugin_output)
-  (modes (native plugin))
-  (libraries libsail))
+ (name sail_plugin_output)
+ (modes
+  (native plugin))
+ (libraries libsail))
 
 (install
-  (section (site (libsail plugins)))
-  (package sail_output)
-  (files sail_plugin_output.cmxs))
- 
+ (section
+  (site
+   (libsail plugins)))
+ (package sail_output)
+ (files sail_plugin_output.cmxs))

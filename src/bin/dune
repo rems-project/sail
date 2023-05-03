@@ -1,122 +1,200 @@
-
 (rule
-  (target manifest.ml)
-  (mode fallback)
-  (action
-    (with-outputs-to %{target}
-      (chdir %{workspace_root}
-        (run sail_manifest -gen_manifest)))))
+ (target manifest.ml)
+ (mode fallback)
+ (action
+  (with-outputs-to
+   %{target}
+   (chdir
+    %{workspace_root}
+    (run sail_manifest -gen_manifest)))))
 
 (executable
-  (name sail)
-  (public_name sail)
-  (package sail)
-  (link_flags -linkall)
-  (libraries libsail linenoise dynlink))
+ (name sail)
+ (public_name sail)
+ (package sail)
+ (link_flags -linkall)
+ (libraries libsail linenoise dynlink))
 
 ; For legacy reasons install all the Sail files in lib as part of this package
+
 (install
-  (section share)
-  (package sail)
-  (files
-    (%{workspace_root}/src/lib/util.ml as src/lib/util.ml)
-    (%{workspace_root}/src/lib/sail_lib.ml as src/lib/sail_lib.ml)
-    (%{workspace_root}/src/lib/elf_loader.ml as src/lib/elf_loader.ml)
-    (%{workspace_root}/lib/_tags as lib/_tags)
-    (%{workspace_root}/lib/_tags_coverage as lib/_tags_coverage)
-    (%{workspace_root}/lib/arith.sail as lib/arith.sail)
-    (%{workspace_root}/lib/concurrency_interface.sail as lib/concurrency_interface.sail)
-    (%{workspace_root}/lib/concurrency_interface/v1.sail as lib/concurrency_interface/v1.sail)
-    (%{workspace_root}/lib/concurrency_interface/emulator_memory.sail as lib/concurrency_interface/emulator_memory.sail)
-    (%{workspace_root}/lib/concurrency_interface/exception.sail as lib/concurrency_interface/exception.sail)
-    (%{workspace_root}/lib/concurrency_interface/tlbi.sail as lib/concurrency_interface/tlbi.sail)
-    (%{workspace_root}/lib/concurrency_interface/barrier.sail as lib/concurrency_interface/barrier.sail)
-    (%{workspace_root}/lib/concurrency_interface/cache_op.sail as lib/concurrency_interface/cache_op.sail)
-    (%{workspace_root}/lib/concurrency_interface/common.sail as lib/concurrency_interface/common.sail)
-    (%{workspace_root}/lib/concurrency_interface/read_write.sail as lib/concurrency_interface/read_write.sail)
-    (%{workspace_root}/lib/coverage/Cargo.toml as lib/coverage/Cargo.toml)
-    (%{workspace_root}/lib/coverage/Makefile as lib/coverage/Makefile)
-    (%{workspace_root}/lib/coverage/src/lib.rs as lib/coverage/src/lib.rs)
-    (%{workspace_root}/lib/elf.c as lib/elf.c)
-    (%{workspace_root}/lib/elf.h as lib/elf.h)
-    (%{workspace_root}/lib/elf.sail as lib/elf.sail)
-    (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
-    (%{workspace_root}/lib/exception_result.sail as lib/exception_result.sail)
-    (%{workspace_root}/lib/exception.sail as lib/exception.sail)
-    (%{workspace_root}/lib/flow.sail as lib/flow.sail)
-    (%{workspace_root}/lib/generic_equality.sail as lib/generic_equality.sail)
-    (%{workspace_root}/lib/hol/.gitignore as lib/hol/.gitignore)
-    (%{workspace_root}/lib/hol/Holmakefile as lib/hol/Holmakefile)
-    (%{workspace_root}/lib/hol/Makefile as lib/hol/Makefile)
-    (%{workspace_root}/lib/hol/sail2_prompt.lem as lib/hol/sail2_prompt.lem)
-    (%{workspace_root}/lib/hol/sail2_prompt_monad.lem as lib/hol/sail2_prompt_monad.lem)
-    (%{workspace_root}/lib/hol/sail2_stateAuxiliaryScript.sml as lib/hol/sail2_stateAuxiliaryScript.sml)
-    (%{workspace_root}/lib/hol/sail2_undefined.lem as lib/hol/sail2_undefined.lem)
-    (%{workspace_root}/lib/hol/sail2_valuesAuxiliaryScript.sml as lib/hol/sail2_valuesAuxiliaryScript.sml)
-    (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
-    (%{workspace_root}/lib/int128/rts.c as lib/int128/rts.c)
-    (%{workspace_root}/lib/int128/rts.h as lib/int128/rts.h)
-    (%{workspace_root}/lib/int128/sail.c as lib/int128/sail.c)
-    (%{workspace_root}/lib/int128/sail.h as lib/int128/sail.h)
-    (%{workspace_root}/lib/isabelle/.gitignore as lib/isabelle/.gitignore)
-    (%{workspace_root}/lib/isabelle/Add_Cancel_Distinct.thy as lib/isabelle/Add_Cancel_Distinct.thy)
-    (%{workspace_root}/lib/isabelle/Hoare.thy as lib/isabelle/Hoare.thy)
-    (%{workspace_root}/lib/isabelle/Makefile as lib/isabelle/Makefile)
-    (%{workspace_root}/lib/isabelle/ROOT as lib/isabelle/ROOT)
-    (%{workspace_root}/lib/isabelle/Sail2_operators_mwords_lemmas.thy as lib/isabelle/Sail2_operators_mwords_lemmas.thy)
-    (%{workspace_root}/lib/isabelle/Sail2_prompt_monad_lemmas.thy as lib/isabelle/Sail2_prompt_monad_lemmas.thy)
-    (%{workspace_root}/lib/isabelle/Sail2_state_lemmas.thy as lib/isabelle/Sail2_state_lemmas.thy)
-    (%{workspace_root}/lib/isabelle/Sail2_state_monad_lemmas.thy as lib/isabelle/Sail2_state_monad_lemmas.thy)
-    (%{workspace_root}/lib/isabelle/Sail2_values_lemmas.thy as lib/isabelle/Sail2_values_lemmas.thy)
-    (%{workspace_root}/lib/isabelle/document/root.tex as lib/isabelle/document/root.tex)
-    (%{workspace_root}/lib/isabelle/manual/Manual.thy as lib/isabelle/manual/Manual.thy)
-    (%{workspace_root}/lib/isabelle/manual/ROOT as lib/isabelle/manual/ROOT)
-    (%{workspace_root}/lib/isabelle/manual/document/root.tex as lib/isabelle/manual/document/root.tex)
-    (%{workspace_root}/lib/isla.sail as lib/isla.sail)
-    (%{workspace_root}/lib/main.ml as lib/main.ml)
-    (%{workspace_root}/lib/mapping.sail as lib/mapping.sail)
-    (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
-    (%{workspace_root}/lib/myocamlbuild_coverage.ml as lib/myocamlbuild_coverage.ml)
-    (%{workspace_root}/lib/nostd/sail.c as lib/nostd/sail.c)
-    (%{workspace_root}/lib/nostd/sail.h as lib/nostd/sail.h)
-    (%{workspace_root}/lib/nostd/sail_alloc.h as lib/nostd/sail_alloc.h)
-    (%{workspace_root}/lib/nostd/sail_arena.c as lib/nostd/sail_arena.c)
-    (%{workspace_root}/lib/nostd/sail_arena.h as lib/nostd/sail_arena.h)
-    (%{workspace_root}/lib/nostd/sail_failure.h as lib/nostd/sail_failure.h)
-    (%{workspace_root}/lib/nostd/sail_spinlock.h as lib/nostd/sail_spinlock.h)
-    (%{workspace_root}/lib/nostd/stubs/sail_failure.c as lib/nostd/stubs/sail_failure.c)
-    (%{workspace_root}/lib/nostd/test/test.c as lib/nostd/test/test.c)
-    (%{workspace_root}/lib/option.sail as lib/option.sail)
-    (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)
-    (%{workspace_root}/lib/real.sail as lib/real.sail)
-    (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
-    (%{workspace_root}/lib/result.sail as lib/result.sail)
-    (%{workspace_root}/lib/float.sail as lib/float.sail)
-    (%{workspace_root}/lib/reverse_endianness.sail as lib/reverse_endianness.sail)
-    (%{workspace_root}/lib/rts.c as lib/rts.c)
-    (%{workspace_root}/lib/rts.h as lib/rts.h)
-    (%{workspace_root}/lib/sail.c as lib/sail.c)
-    (%{workspace_root}/lib/sail.h as lib/sail.h)
-    (%{workspace_root}/lib/sail.tex as lib/sail.tex)
-    (%{workspace_root}/lib/sail_coverage.h as lib/sail_coverage.h)
-    (%{workspace_root}/lib/sail_failure.c as lib/sail_failure.c)
-    (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)
-    (%{workspace_root}/lib/sail_state.h as lib/sail_state.h)
-    (%{workspace_root}/lib/smt.sail as lib/smt.sail)
-    (%{workspace_root}/lib/string.sail as lib/string.sail)
-    (%{workspace_root}/lib/trace.sail as lib/trace.sail)
-    (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
-    (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
-    (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem as src/gen_lib/sail2_deep_shallow_convert.lem)
-    (%{workspace_root}/src/gen_lib/sail2_instr_kinds.lem as src/gen_lib/sail2_instr_kinds.lem)
-    (%{workspace_root}/src/gen_lib/sail2_operators.lem as src/gen_lib/sail2_operators.lem)
-    (%{workspace_root}/src/gen_lib/sail2_operators_bitlists.lem as src/gen_lib/sail2_operators_bitlists.lem)
-    (%{workspace_root}/src/gen_lib/sail2_operators_mwords.lem as src/gen_lib/sail2_operators_mwords.lem)
-    (%{workspace_root}/src/gen_lib/sail2_prompt.lem as src/gen_lib/sail2_prompt.lem)
-    (%{workspace_root}/src/gen_lib/sail2_prompt_monad.lem as src/gen_lib/sail2_prompt_monad.lem)
-    (%{workspace_root}/src/gen_lib/sail2_state.lem as src/gen_lib/sail2_state.lem)
-    (%{workspace_root}/src/gen_lib/sail2_state_lifting.lem as src/gen_lib/sail2_state_lifting.lem)
-    (%{workspace_root}/src/gen_lib/sail2_state_monad.lem as src/gen_lib/sail2_state_monad.lem)
-    (%{workspace_root}/src/gen_lib/sail2_string.lem as src/gen_lib/sail2_string.lem)
-    (%{workspace_root}/src/gen_lib/sail2_undefined.lem as src/gen_lib/sail2_undefined.lem)
-    (%{workspace_root}/src/gen_lib/sail2_values.lem as src/gen_lib/sail2_values.lem)))
+ (section share)
+ (package sail)
+ (files
+  (%{workspace_root}/src/lib/util.ml as src/lib/util.ml)
+  (%{workspace_root}/src/lib/sail_lib.ml as src/lib/sail_lib.ml)
+  (%{workspace_root}/src/lib/elf_loader.ml as src/lib/elf_loader.ml)
+  (%{workspace_root}/lib/_tags as lib/_tags)
+  (%{workspace_root}/lib/_tags_coverage as lib/_tags_coverage)
+  (%{workspace_root}/lib/arith.sail as lib/arith.sail)
+  (%{workspace_root}/lib/concurrency_interface.sail
+   as
+   lib/concurrency_interface.sail)
+  (%{workspace_root}/lib/concurrency_interface/v1.sail
+   as
+   lib/concurrency_interface/v1.sail)
+  (%{workspace_root}/lib/concurrency_interface/emulator_memory.sail
+   as
+   lib/concurrency_interface/emulator_memory.sail)
+  (%{workspace_root}/lib/concurrency_interface/exception.sail
+   as
+   lib/concurrency_interface/exception.sail)
+  (%{workspace_root}/lib/concurrency_interface/tlbi.sail
+   as
+   lib/concurrency_interface/tlbi.sail)
+  (%{workspace_root}/lib/concurrency_interface/barrier.sail
+   as
+   lib/concurrency_interface/barrier.sail)
+  (%{workspace_root}/lib/concurrency_interface/cache_op.sail
+   as
+   lib/concurrency_interface/cache_op.sail)
+  (%{workspace_root}/lib/concurrency_interface/common.sail
+   as
+   lib/concurrency_interface/common.sail)
+  (%{workspace_root}/lib/concurrency_interface/read_write.sail
+   as
+   lib/concurrency_interface/read_write.sail)
+  (%{workspace_root}/lib/coverage/Cargo.toml as lib/coverage/Cargo.toml)
+  (%{workspace_root}/lib/coverage/Makefile as lib/coverage/Makefile)
+  (%{workspace_root}/lib/coverage/src/lib.rs as lib/coverage/src/lib.rs)
+  (%{workspace_root}/lib/elf.c as lib/elf.c)
+  (%{workspace_root}/lib/elf.h as lib/elf.h)
+  (%{workspace_root}/lib/elf.sail as lib/elf.sail)
+  (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
+  (%{workspace_root}/lib/exception_result.sail as lib/exception_result.sail)
+  (%{workspace_root}/lib/exception.sail as lib/exception.sail)
+  (%{workspace_root}/lib/flow.sail as lib/flow.sail)
+  (%{workspace_root}/lib/generic_equality.sail as lib/generic_equality.sail)
+  (%{workspace_root}/lib/hol/.gitignore as lib/hol/.gitignore)
+  (%{workspace_root}/lib/hol/Holmakefile as lib/hol/Holmakefile)
+  (%{workspace_root}/lib/hol/Makefile as lib/hol/Makefile)
+  (%{workspace_root}/lib/hol/sail2_prompt.lem as lib/hol/sail2_prompt.lem)
+  (%{workspace_root}/lib/hol/sail2_prompt_monad.lem
+   as
+   lib/hol/sail2_prompt_monad.lem)
+  (%{workspace_root}/lib/hol/sail2_stateAuxiliaryScript.sml
+   as
+   lib/hol/sail2_stateAuxiliaryScript.sml)
+  (%{workspace_root}/lib/hol/sail2_undefined.lem
+   as
+   lib/hol/sail2_undefined.lem)
+  (%{workspace_root}/lib/hol/sail2_valuesAuxiliaryScript.sml
+   as
+   lib/hol/sail2_valuesAuxiliaryScript.sml)
+  (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
+  (%{workspace_root}/lib/int128/rts.c as lib/int128/rts.c)
+  (%{workspace_root}/lib/int128/rts.h as lib/int128/rts.h)
+  (%{workspace_root}/lib/int128/sail.c as lib/int128/sail.c)
+  (%{workspace_root}/lib/int128/sail.h as lib/int128/sail.h)
+  (%{workspace_root}/lib/isabelle/.gitignore as lib/isabelle/.gitignore)
+  (%{workspace_root}/lib/isabelle/Add_Cancel_Distinct.thy
+   as
+   lib/isabelle/Add_Cancel_Distinct.thy)
+  (%{workspace_root}/lib/isabelle/Hoare.thy as lib/isabelle/Hoare.thy)
+  (%{workspace_root}/lib/isabelle/Makefile as lib/isabelle/Makefile)
+  (%{workspace_root}/lib/isabelle/ROOT as lib/isabelle/ROOT)
+  (%{workspace_root}/lib/isabelle/Sail2_operators_mwords_lemmas.thy
+   as
+   lib/isabelle/Sail2_operators_mwords_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_prompt_monad_lemmas.thy
+   as
+   lib/isabelle/Sail2_prompt_monad_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_state_lemmas.thy
+   as
+   lib/isabelle/Sail2_state_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_state_monad_lemmas.thy
+   as
+   lib/isabelle/Sail2_state_monad_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_values_lemmas.thy
+   as
+   lib/isabelle/Sail2_values_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/document/root.tex
+   as
+   lib/isabelle/document/root.tex)
+  (%{workspace_root}/lib/isabelle/manual/Manual.thy
+   as
+   lib/isabelle/manual/Manual.thy)
+  (%{workspace_root}/lib/isabelle/manual/ROOT as lib/isabelle/manual/ROOT)
+  (%{workspace_root}/lib/isabelle/manual/document/root.tex
+   as
+   lib/isabelle/manual/document/root.tex)
+  (%{workspace_root}/lib/isla.sail as lib/isla.sail)
+  (%{workspace_root}/lib/main.ml as lib/main.ml)
+  (%{workspace_root}/lib/mapping.sail as lib/mapping.sail)
+  (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
+  (%{workspace_root}/lib/myocamlbuild_coverage.ml
+   as
+   lib/myocamlbuild_coverage.ml)
+  (%{workspace_root}/lib/nostd/sail.c as lib/nostd/sail.c)
+  (%{workspace_root}/lib/nostd/sail.h as lib/nostd/sail.h)
+  (%{workspace_root}/lib/nostd/sail_alloc.h as lib/nostd/sail_alloc.h)
+  (%{workspace_root}/lib/nostd/sail_arena.c as lib/nostd/sail_arena.c)
+  (%{workspace_root}/lib/nostd/sail_arena.h as lib/nostd/sail_arena.h)
+  (%{workspace_root}/lib/nostd/sail_failure.h as lib/nostd/sail_failure.h)
+  (%{workspace_root}/lib/nostd/sail_spinlock.h as lib/nostd/sail_spinlock.h)
+  (%{workspace_root}/lib/nostd/stubs/sail_failure.c
+   as
+   lib/nostd/stubs/sail_failure.c)
+  (%{workspace_root}/lib/nostd/test/test.c as lib/nostd/test/test.c)
+  (%{workspace_root}/lib/option.sail as lib/option.sail)
+  (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)
+  (%{workspace_root}/lib/real.sail as lib/real.sail)
+  (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
+  (%{workspace_root}/lib/result.sail as lib/result.sail)
+  (%{workspace_root}/lib/float.sail as lib/float.sail)
+  (%{workspace_root}/lib/reverse_endianness.sail
+   as
+   lib/reverse_endianness.sail)
+  (%{workspace_root}/lib/rts.c as lib/rts.c)
+  (%{workspace_root}/lib/rts.h as lib/rts.h)
+  (%{workspace_root}/lib/sail.c as lib/sail.c)
+  (%{workspace_root}/lib/sail.h as lib/sail.h)
+  (%{workspace_root}/lib/sail.tex as lib/sail.tex)
+  (%{workspace_root}/lib/sail_coverage.h as lib/sail_coverage.h)
+  (%{workspace_root}/lib/sail_failure.c as lib/sail_failure.c)
+  (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)
+  (%{workspace_root}/lib/sail_state.h as lib/sail_state.h)
+  (%{workspace_root}/lib/smt.sail as lib/smt.sail)
+  (%{workspace_root}/lib/string.sail as lib/string.sail)
+  (%{workspace_root}/lib/trace.sail as lib/trace.sail)
+  (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
+  (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
+  (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem
+   as
+   src/gen_lib/sail2_deep_shallow_convert.lem)
+  (%{workspace_root}/src/gen_lib/sail2_instr_kinds.lem
+   as
+   src/gen_lib/sail2_instr_kinds.lem)
+  (%{workspace_root}/src/gen_lib/sail2_operators.lem
+   as
+   src/gen_lib/sail2_operators.lem)
+  (%{workspace_root}/src/gen_lib/sail2_operators_bitlists.lem
+   as
+   src/gen_lib/sail2_operators_bitlists.lem)
+  (%{workspace_root}/src/gen_lib/sail2_operators_mwords.lem
+   as
+   src/gen_lib/sail2_operators_mwords.lem)
+  (%{workspace_root}/src/gen_lib/sail2_prompt.lem
+   as
+   src/gen_lib/sail2_prompt.lem)
+  (%{workspace_root}/src/gen_lib/sail2_prompt_monad.lem
+   as
+   src/gen_lib/sail2_prompt_monad.lem)
+  (%{workspace_root}/src/gen_lib/sail2_state.lem
+   as
+   src/gen_lib/sail2_state.lem)
+  (%{workspace_root}/src/gen_lib/sail2_state_lifting.lem
+   as
+   src/gen_lib/sail2_state_lifting.lem)
+  (%{workspace_root}/src/gen_lib/sail2_state_monad.lem
+   as
+   src/gen_lib/sail2_state_monad.lem)
+  (%{workspace_root}/src/gen_lib/sail2_string.lem
+   as
+   src/gen_lib/sail2_string.lem)
+  (%{workspace_root}/src/gen_lib/sail2_undefined.lem
+   as
+   src/gen_lib/sail2_undefined.lem)
+  (%{workspace_root}/src/gen_lib/sail2_values.lem
+   as
+   src/gen_lib/sail2_values.lem)))

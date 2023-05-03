@@ -68,25 +68,20 @@
 open Ast
 open Ast_util
 
-(** Create an L-expression for setting the bits of a bitfield defined by an index_range type. *)
 val set_field_lexp : index_range -> uannot lexp -> uannot lexp
+(** Create an L-expression for setting the bits of a bitfield defined by an index_range type. *)
 
-(** Create an L-expression for setting all the bits of a bitfield *)
 val set_bits_field_lexp : uannot lexp -> uannot lexp
+(** Create an L-expression for setting all the bits of a bitfield *)
 
-type field_accessor_ids = {
-    get : id;
-    set : id;
-    update : id;
-    overload : id;
-  }
+type field_accessor_ids = { get : id; set : id; update : id; overload : id }
 
+val field_accessor_ids : id -> id -> field_accessor_ids
 (** The [macro] function generates multiple definitions to get, set,
    and update fields, so we can use this function to find the names of
    those functions in a consistent way. *)
-val field_accessor_ids : id -> id -> field_accessor_ids
 
+val macro : id -> Big_int.num -> order -> index_range Bindings.t -> uannot def list
 (** Bitfields work a bit like a macro, which generate a struct wrapper
    around a simple bitvector type, along with a host of accessor
    functions. *)
-val macro : id -> Big_int.num -> order -> index_range Bindings.t -> uannot def list

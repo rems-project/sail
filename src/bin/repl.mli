@@ -68,10 +68,18 @@
 (** This module contains the function that starts an interactive sail read-eval-print loop *)
 
 open Libsail
-
 open Ast_defs
 open Type_check
 
+val start_repl :
+  ?banner:bool ->
+  ?commands:string list ->
+  ?auto_rewrites:bool ->
+  options:(Arg.key * Arg.spec * Arg.doc) list ->
+  Env.t ->
+  Effects.side_effect_info ->
+  tannot ast ->
+  unit
 (** Start an interactive top-level interpreter.
 
     @param banner If true (default), then print an ASCII-art Sail logo.
@@ -79,12 +87,3 @@ open Type_check
     @param auto_rewrites Performs default rewrites (target "interpreter") on the ast passed to the repl
     @param options This is the set of options for the :options interactive command
  *)
-val start_repl :
-  ?banner:bool ->
-  ?commands:(string list) ->
-  ?auto_rewrites:bool ->
-  options:((Arg.key * Arg.spec * Arg.doc) list) ->
-  Env.t ->
-  Effects.side_effect_info ->
-  tannot ast ->
-  unit

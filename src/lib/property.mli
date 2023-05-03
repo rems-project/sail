@@ -73,6 +73,7 @@ open Ast_defs
 open Ast_util
 open Type_check
 
+val find_properties : 'a ast -> (string * string * l * 'a val_spec) Bindings.t
 (** [find_properties defs] returns a mapping from ids to of 4-tuples of the form
    (prop_type, command, loc, val_spec), which contains the information
    from any pragmas of the form
@@ -84,8 +85,8 @@ open Type_check
    where prop_type is either "counterexample" or "property" and the
    location loc is the location that was attached to the pragma
 *)
-val find_properties : 'a ast -> (string * string * l * 'a val_spec) Bindings.t
 
+val rewrite : tannot ast -> tannot ast
 (** For a property
 
    $prop_type val f : forall X, C. T -> bool
@@ -104,7 +105,6 @@ val find_properties : 'a ast -> (string * string * l * 'a val_spec) Bindings.t
    generation/proving we want to ensure that inputs outside the
    constraints of the function are ignored.
 *)
-val rewrite : tannot ast -> tannot ast
 
 type event = Overflow | Assertion | Assumption | Match | Return
 
@@ -112,21 +112,14 @@ val string_of_event : event -> string
 
 module Event : sig
   type t = event
+
   val compare : event -> event -> int
 end
 
-type query =
-   | Q_all of event
-   | Q_exist of event
-   | Q_not of query
-   | Q_and of query list
-   | Q_or of query list
+type query = Q_all of event | Q_exist of event | Q_not of query | Q_and of query list | Q_or of query list
 
 val default_query : query
 
-type pragma = {
-    query : query;
-    litmus : string list;
-  }
+type pragma = { query : query; litmus : string list }
 
 val parse_pragma : Parse_ast.l -> string -> pragma

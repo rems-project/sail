@@ -1,6 +1,4 @@
-open Cheri_export;;
-
-
+open Cheri_export
 
 (**************************************************************************)
 (*     Sail                                                               *)
@@ -52,18 +50,13 @@ open Cheri_export;;
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Elf_loader;;
+open Elf_loader
 
 let opt_file_arguments = ref ([] : string list)
-
 let options = Arg.align []
-
 let usage_msg = "Sail OCaml RTS options:"
-
-let () =
-  Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
-
-let (>>) = Sail2_state_monad.bindS
+let () = Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
+let ( >> ) = Sail2_state_monad.bindS
 (*let liftS = Sail2_state_lifting.liftState (Cheri_types.get_regval, Cheri_types.set_regval)*)
 
 let load_elf_segment seg =
@@ -82,11 +75,6 @@ let load_elf_segment seg =
 
 let _ =
   Random.self_init ();
-  let elf_segments = match !opt_file_arguments with
-    | f :: _ -> load_elf f
-    | _ -> []
-  in
+  let elf_segments = match !opt_file_arguments with f :: _ -> load_elf f | _ -> [] in
   (* State_monad.prerr_results *)
-    (Cheri_code.initial_state |>
-    (Sail2_state.iterS load_elf_segment elf_segments >> (fun _ ->
-    (Cheri_code.mainS ()))));
+  Cheri_code.initial_state |> (Sail2_state.iterS load_elf_segment elf_segments >> fun _ -> Cheri_code.mainS ())

@@ -68,25 +68,15 @@
 open Printf
 
 let opt_gen_manifest = ref false
+let options = Arg.align [("-gen_manifest", Arg.Set opt_gen_manifest, "generate manifest.ml")]
 
-let options = Arg.align [
-  ( "-gen_manifest",
-    Arg.Set opt_gen_manifest,
-    "generate manifest.ml")
-]
- 
 let git_command args =
   try
     let git_out, git_in, git_err = Unix.open_process_full ("git " ^ args) (Unix.environment ()) in
     let res = input_line git_out in
-    match Unix.close_process_full (git_out, git_in, git_err) with
-    | Unix.WEXITED 0 ->
-       res
-    | _ ->
-       "unknown"
-  with
-  | _ -> "unknown"
-            
+    match Unix.close_process_full (git_out, git_in, git_err) with Unix.WEXITED 0 -> res | _ -> "unknown"
+  with _ -> "unknown"
+
 let gen_manifest () =
   ksprintf print_endline "let dir = \"%s\"" (Sys.getcwd ());
   ksprintf print_endline "let commit = \"%s\"" (git_command "rev-parse HEAD");
@@ -94,11 +84,9 @@ let gen_manifest () =
   ksprintf print_endline "let version = \"%s\"" (git_command "describe")
 
 let usage = "sail_install_tool <options>"
-  
+
 let main () =
   Arg.parse options (fun _ -> ()) usage;
-  if !opt_gen_manifest then (
-    gen_manifest ()
-  )
+  if !opt_gen_manifest then gen_manifest ()
 
 let () = main ()

@@ -54,22 +54,29 @@ open Pathname
 open Outcome
 
 (* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
-let lem_opts = [ A "-lib"; P "../../../../src/gen_lib";
-                 A "-lib"; P "..";
-                 A "-wl_pat_comp"; P "ign";
-                 A "-wl_pat_exh";  P "ign";
-                 A "-wl_pat_fail"; P "ign";
-                 A "-wl_unused_vars";   P "ign" ];;
+let lem_opts =
+  [
+    A "-lib";
+    P "../../../../src/gen_lib";
+    A "-lib";
+    P "..";
+    A "-wl_pat_comp";
+    P "ign";
+    A "-wl_pat_exh";
+    P "ign";
+    A "-wl_pat_fail";
+    P "ign";
+    A "-wl_unused_vars";
+    P "ign";
+  ]
+;;
 
-dispatch begin function
-| After_rules ->
-    rule "lem -> ml"
-    ~prod: "%.ml"
-    ~dep: "%.lem"
-    (fun env builder -> Seq [
-      Cmd (S ([P "lem"] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
-      ]);
-
-| _ -> ()
-end;;
-
+dispatch
+  begin
+    function
+    | After_rules ->
+        rule "lem -> ml" ~prod:"%.ml" ~dep:"%.lem" (fun env builder ->
+            Seq [Cmd (S ([P "lem"] @ lem_opts @ [A "-ocaml"; P (env "%.lem")]))]
+        )
+    | _ -> ()
+  end

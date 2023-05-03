@@ -67,42 +67,29 @@
 
 let opt_profile = ref false
 
-type profile = {
-    smt_calls : int;
-    smt_time : float
-  }
+type profile = { smt_calls : int; smt_time : float }
 
-let new_profile = {
-    smt_calls = 0;
-    smt_time = 0.0
-  }
-
+let new_profile = { smt_calls = 0; smt_time = 0.0 }
 let profile_stack = ref []
-
-let update_profile f =
-  match !profile_stack with
-  | [] -> ()
-  | (p :: ps) ->
-     profile_stack := f p :: ps
+let update_profile f = match !profile_stack with [] -> () | p :: ps -> profile_stack := f p :: ps
 
 let start_smt () =
   update_profile (fun p -> { p with smt_calls = p.smt_calls + 1 });
   Sys.time ()
 
-let finish_smt t =
-  update_profile (fun p -> { p with smt_time = p.smt_time +. (Sys.time () -. t) })
+let finish_smt t = update_profile (fun p -> { p with smt_time = p.smt_time +. (Sys.time () -. t) })
 
 let start () =
   profile_stack := new_profile :: !profile_stack;
   Sys.time ()
 
 let finish msg t =
-  if !opt_profile then
-    begin match !profile_stack with
+  if !opt_profile then begin
+    match !profile_stack with
     | p :: ps ->
-       prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t));
-       prerr_endline (Printf.sprintf "  SMT calls: %d, SMT time: %fs" p.smt_calls p.smt_time);
-       profile_stack := ps
+        prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t));
+        prerr_endline (Printf.sprintf "  SMT calls: %d, SMT time: %fs" p.smt_calls p.smt_time);
+        profile_stack := ps
     | [] -> ()
-    end
+  end
   else ()

@@ -66,34 +66,34 @@
 (****************************************************************************)
 
 open Libsail
-
 open Ast_defs
 open Jib
 open Type_check
 
 (** Global compilation options *)
 
-(** Define generated functions as static *)
 val opt_static : bool ref
+(** Define generated functions as static *)
 
-(** Do not generate a main function *)
 val opt_no_main : bool ref
+(** Do not generate a main function *)
 
+val opt_no_rts : bool ref
 (** (WIP) Do not include rts.h (the runtime), and do not generate code
    that requires any setup or teardown routines to be run by a runtime
    before executing any instruction semantics. *)
-val opt_no_rts : bool ref
 
-(** Do not include sail.h by default *)
 val opt_no_lib : bool ref
+(** Do not include sail.h by default *)
 
+val opt_prefix : string ref
 (** Ordinarily we use plain z-encoding to name-mangle generated Sail
    identifiers into a form suitable for C. If opt_prefix is set, then
    the "z" which is added on the front of each generated C function
    will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
    give sail_my_function rather than zmy_function. *)
-val opt_prefix : string ref
 
+val opt_extra_params : string option ref
 (** opt_extra_params and opt_extra_arguments allow additional state to
    be threaded through the generated C code by adding an additional
    parameter to each function type, and then giving an extra argument
@@ -105,11 +105,10 @@ val opt_prefix : string ref
    and every generated function will take a pointer to a QEMU MIPS
    processor state, and each function will be passed the env argument
    when it is called. *)
-val opt_extra_params : string option ref
-val opt_extra_arguments : string option ref
 
+val opt_extra_arguments : string option ref
 val opt_branch_coverage : out_channel option ref
- 
+
 (** Optimization flags *)
 
 val optimize_primops : bool ref
@@ -118,8 +117,6 @@ val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
-
 val jib_of_ast : Env.t -> Effects.side_effect_info -> tannot ast -> cdef list * Jib_compile.ctx
 val compile_ast : Env.t -> Effects.side_effect_info -> out_channel -> string list -> tannot ast -> unit
-
 val compile_ast_clib : Env.t -> Effects.side_effect_info -> tannot ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit

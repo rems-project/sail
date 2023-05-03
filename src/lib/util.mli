@@ -72,184 +72,170 @@ val opt_verbosity : int ref
 
 (* Last element of a list *)
 val last : 'a list -> 'a
-
 val last_opt : 'a list -> 'a option
-  
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
-module Duplicate(S : Set.S) : sig
-  type dups =
-    | No_dups of S.t
-    | Has_dups of S.elt
+module Duplicate (S : Set.S) : sig
+  type dups = No_dups of S.t | Has_dups of S.elt
+
   val duplicates : S.elt list -> dups
 end
 
+val remove_duplicates : 'a list -> 'a list
 (** [remove_duplicates l] removes duplicate elements from
     the list l. As a side-effect, the list might be reordered. *)
-val remove_duplicates : 'a list -> 'a list
 
-(** [remove_dups compare eq l] as remove_duplicates but with parameterised comparison and equality *)
 val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
+(** [remove_dups compare eq l] as remove_duplicates but with parameterised comparison and equality *)
 
-(** Lift a comparison order to the lexical order on lists *)
 val lex_ord_list : ('a -> 'a -> int) -> 'a list -> 'a list -> int
+(** Lift a comparison order to the lexical order on lists *)
 
+val assoc_equal_opt : ('a -> 'a -> bool) -> 'a -> ('a * 'b) list -> 'b option
 (** [assoc_equal_opt] and [assoc_compare_opt] are like List.assoc_opt
    but take equality/comparison functions as arguments, rather than
    relying on OCaml's built in equality *)
-val assoc_equal_opt : ('a -> 'a -> bool) -> 'a -> ('a * 'b) list -> 'b option
 
 val assoc_compare_opt : ('a -> 'a -> int) -> 'a -> ('a * 'b) list -> 'b option
-
 val power : int -> int -> int
 
-(** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
+(** Map but pass true to the function for the last element *)
 
 val iter_last : (bool -> 'a -> unit) -> 'a list -> unit
-  
+
 (** {2 Option Functions} *)
 
+val option_cases : 'a option -> ('a -> 'b) -> (unit -> 'b) -> 'b
 (** [option_cases None f_s f_n] returns [f_n], whereas
     [option_cases (Some x) f_s f_n] returns [f_s x]. *)
-val option_cases : 'a option -> ('a -> 'b) -> (unit -> 'b) -> 'b
 
+val option_binop : ('a -> 'a -> 'b) -> 'a option -> 'a option -> 'b option
 (** [option_binop f (Some x) (Some y)] returns [Some (f x y)],
     and in all other cases, [option_binop] returns [None]. *)
-val option_binop : ('a -> 'a -> 'b) -> 'a option -> 'a option -> 'b option
 
+val option_get_exn : exn -> 'a option -> 'a
 (** [option_get_exn exn None] throws the exception [exn],
     whereas [option_get_exn exn (Some x)] returns [x]. *)
-val option_get_exn : exn -> 'a option -> 'a
 
+val option_these : 'a option list -> 'a list
 (** [option_these xs] extracts the elements of the list [xs]
     wrapped in [Some]. *)
-val option_these : 'a option list -> 'a list
 
+val option_all : 'a option list -> 'a list option
 (** [option_all xs] extracts the elements of the list [xs] if all of
    them are wrapped in Some. If any are None then the result is None is
    None. [option_all []] is [Some []] *)
-val option_all : 'a option list -> 'a list option
 
 (** {2 List Functions} *)
 
 val list_empty : 'a list -> bool
-  
+
+val list_index : ('a -> bool) -> 'a list -> int option
 (** [list_index p l] returns the first index [i] such that
     the predicate [p (l!i)] holds. If no such [i] exists,
     [None] is returned. *)
-val list_index: ('a -> bool) -> 'a list -> int option
 
+val option_first : ('a -> 'b option) -> 'a list -> 'b option
 (** [option_first f l] searches for the first element [x] of [l] such
     that the [f x] is not [None]. If such an element exists, [f x] is
     returned, otherwise [None]. *)
-val option_first: ('a -> 'b option) -> 'a list -> 'b option
 
+val map_changed : ('a -> 'a option) -> 'a list -> 'a list option
 (** [map_changed f l] maps [f] over [l].
     If for all elements of [l] the
     function [f] returns [None], then [map_changed f l] returns [None].
     Otherwise, it uses [x] for all elements, where [f x] returns [None],
     and returns the resulting list. *)
-val map_changed : ('a -> 'a option) -> 'a list -> 'a list option
 
+val map_changed_default : ('a -> 'b) -> ('a -> 'b option) -> 'a list -> 'b list option
 (** [map_changed_default d f l] maps [f] over [l].
     If for all elements of [l] the
     function [f] returns [None], then [map_changed f l] returns [None].
     Otherwise, it uses [d x] for all elements [x], where [f x] returns [None],
     and returns the resulting list. *)
-val map_changed_default : ('a -> 'b) -> ('a -> 'b option) -> 'a list -> 'b list option
 
+val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
 (** [list_iter sf f [a1; ...; an]] applies function [f] in turn to [a1; ...; an] and
     calls [sf ()] in between. It is equivalent to [begin f a1; sf(); f a2; sf(); ...; f an; () end]. *)
-val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
 
 val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
-  
+
+val map_all : ('a -> 'b option) -> 'a list -> 'b list option
 (** [map_all f l] maps [f] over [l]. If at least one entry is [None], [None] is returned. Otherwise,
     the [Some] function is removed from the list. *)
-val map_all : ('a -> 'b option) -> 'a list -> 'b list option
 
+val list_to_front : int -> 'a list -> 'a list
 (** [list_to_front i l] resorts the list [l] by bringing the element at index [i]
     to the front. 
     @throws Failure if [i] is not smaller than the length of [l]*)
-val list_to_front : int -> 'a list -> 'a list
 
+val undo_list_to_front : int -> 'a list -> 'a list
 (** [undo_list_to_front i l] resorts the list [l] by moving the head element to index index [i]
     It's the inverse of [list_to_front i l]. *)
-val undo_list_to_front : int -> 'a list -> 'a list
 
+val split_after : int -> 'a list -> 'a list * 'a list
 (** [split_after n l] splits the first [n] elemenst from list [l], i.e. it returns two lists
     [l1] and [l2], with [length l1 = n] and [l1 @ l2 = l]. Fails if n is too small or large. *)
-val split_after : int -> 'a list -> 'a list * 'a list
 
-(** [split3 l] splits a list of triples into a triple of lists *)
 val split3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list
+(** [split3 l] splits a list of triples into a triple of lists *)
 
 val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
-
 val take : int -> 'a list -> 'a list
 val drop : int -> 'a list -> 'a list
-
-val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
-
+val take_drop : ('a -> bool) -> 'a list -> 'a list * 'a list
 val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option
+val find_next : ('a -> bool) -> 'a list -> 'a list * ('a * 'a list) option
 
-val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
-
-(** find an item in a list and return that item as well as its index *)
 val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
+(** find an item in a list and return that item as well as its index *)
 
 val find_map : ('a -> 'b option) -> 'a list -> 'b option
-
 val fold_left_concat_map : ('a -> 'b -> 'a * 'c list) -> 'a -> 'b list -> 'a * 'c list
-
 val fold_left_last : (bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
-
 val fold_left_index : (int -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
-
 val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
-
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)
 
+val copy_file : string -> string -> unit
 (** [copy_file src dst] copies file [src] to file [dst]. Only files are supported,
     no directories. *)
-val copy_file : string -> string -> unit
 
+val move_file : string -> string -> unit
 (** [move_file src dst] moves file [src] to file [dst]. In contrast to [Sys.rename] no error is
     produced, if [dst] already exists. Moreover, in case [Sys.rename] fails for some reason (e.g. because
     it does not work over filesystem boundaries), [copy_file] and [Sys.remove] are used as
     fallback. *)
-val move_file : string -> string -> unit
 
+val input_byte_opt : in_channel -> int option
 (** [input_byte_opt chan] tries to read a byte [b] from input channel [chan], and
     returns [Some b] in case of success, or [None] if the end of the file was reached. *)
-val input_byte_opt : in_channel -> int option
 
+val same_content_files : string -> string -> bool
 (** [same_content_files file1 file2] checks, whether the files [file1] and [file2] have the same content.
 If at least one of the files does not exist, [false] is returned. [same_content_files] throws an exception,
 if one of the files exists, but cannot be read. *)
-val same_content_files : string -> string -> bool
 
 (** {2 Strings} *)
 
-(** [string_to_list l] translates the string [l] to the list of its characters. *)
 val string_to_list : string -> char list
+(** [string_to_list l] translates the string [l] to the list of its characters. *)
 
 (** {2 Useful Sets} *)
 
-(** Sets of Integers *)
 module IntSet : Set.S with type elt = int
+(** Sets of Integers *)
+
 module IntIntSet : Set.S with type elt = int * int
 
 (** {2 Formatting functions} *)
 
 val string_of_list : string -> ('a -> string) -> 'a list -> string
-
 val string_of_option : ('a -> string) -> 'a option -> string
-
 val split_on_char : char -> string -> string list
 
 (** {2 Terminal color codes} *)
@@ -277,27 +263,25 @@ val clear : string -> string
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
 
+val file_encode_string : string -> string
 (** Encode string for use as a filename. We can't use zencode directly
    because some operating systems make the mistake of being
    case-insensitive. *)
-val file_encode_string : string -> string
 
 (** {2 Misc output functions} *)
 
 val log_line : string -> int -> string -> string
-
 val header : string -> int -> string
-
 val progress : string -> string -> int -> int -> unit
 
+val always_replace_files : bool ref
 (** [always_replace_files] determines whether Sail only updates modified files.
     If it is set to [true], all output files are written, regardless of whether the
     files existed before. If it is set to [false] and an output file already exists,
     the output file is only updated, if its content really changes. *)
-val always_replace_files : bool ref
- 
-val open_output_with_check : string option -> string -> (Format.formatter * (out_channel * string * string option * string))
 
-val open_output_with_check_unformatted : string option -> string -> (out_channel * string * string option * string)
+val open_output_with_check :
+  string option -> string -> Format.formatter * (out_channel * string * string option * string)
 
-val close_output_with_check : (out_channel * string * string option * string) -> unit
+val open_output_with_check_unformatted : string option -> string -> out_channel * string * string option * string
+val close_output_with_check : out_channel * string * string option * string -> unit

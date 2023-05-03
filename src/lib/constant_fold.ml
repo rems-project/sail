@@ -69,19 +69,17 @@ open Ast
 open Ast_util
 open Type_check
 open Rewriter
-
-module StringMap = Map.Make(String);;
+module StringMap = Map.Make (String)
 
 (* Flag controls whether any constant folding will occur.
    false = no folding, true = perform constant folding. *)
 let optimize_constant_fold = ref false
 
-let rec fexp_of_ctor (field, value) =
-  FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
+let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
 
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
-   *)
+*)
 and exp_of_value =
   let open Value in
   function
@@ -91,15 +89,11 @@ and exp_of_value =
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
-  | V_record ctors ->
-     mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings ctors)))
-  | V_vector vs ->
-     mk_exp (E_vector (List.map exp_of_value vs))
-  | V_tuple vs ->
-     mk_exp (E_tuple (List.map exp_of_value vs))
+  | V_record ctors -> mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings ctors)))
+  | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
+  | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
-  | V_attempted_read str ->
-     mk_exp (E_id (mk_id str))
+  | V_attempted_read str -> mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
 (* We want to avoid evaluating things like print statements at compile
@@ -109,7 +103,8 @@ let safe_primops =
   List.fold_left
     (fun m k -> StringMap.remove k m)
     !Value.primops
-    [ "print_endline";
+    [
+      "print_endline";
       "prerr_endline";
       "putchar";
       "print";
@@ -125,7 +120,7 @@ let safe_primops =
       "write_ram";
       "get_time_ns";
       "Elf_loader.elf_entry";
-      "Elf_loader.elf_tohost"
+      "Elf_loader.elf_tohost";
     ]
 
 (** We can specify a list of identifiers that we want to remove from
@@ -147,11 +142,7 @@ let safe_primops =
 let opt_fold_to_unit = ref []
 
 let fold_to_unit id =
-  let remove =
-    !opt_fold_to_unit
-    |> List.map mk_id
-    |> List.fold_left (fun m id -> IdSet.add id m) IdSet.empty
-  in
+  let remove = !opt_fold_to_unit |> List.map mk_id |> List.fold_left (fun m id -> IdSet.add id m) IdSet.empty in
   IdSet.mem id remove
 
 let rec is_constant (E_aux (e_aux, _) as exp) =
@@ -161,10 +152,9 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
   | E_struct fexps -> List.for_all is_constant_fexp fexps
   | E_typ (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
-  | E_id id ->
-     (match Env.lookup_id id (env_of exp) with
-      | Enum _ -> true
-      | _ -> false)
+  | E_id id -> (
+      match Env.lookup_id id (env_of exp) with Enum _ -> true | _ -> false
+    )
   | _ -> false
 
 and is_constant_fexp (FE_aux (FE_fexp (_, exp), _)) = is_constant exp
@@ -174,19 +164,16 @@ let rec run frame =
   match frame with
   | Interpreter.Done (state, v) -> v
   | Interpreter.Fail _ ->
-     (* something went wrong, raise exception to abort constant folding *)
-     assert false
-  | Interpreter.Step (lazy_str, _, _, _) ->
-     run (Interpreter.eval_frame frame)
-  | Interpreter.Break frame ->
-     run (Interpreter.eval_frame frame)
+      (* something went wrong, raise exception to abort constant folding *)
+      assert false
+  | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
+  | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
   | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, cont)) ->
-     (* return a dummy value to read_reg requests which we handle above
-        if an expression finally evals to it, but the interpreter
-        will fail if it tries to actually use. See value.ml *)
-     run (cont (Value.V_attempted_read reg) st)
-  | Interpreter.Effect_request _ ->
-     assert false (* effectful, raise exception to abort constant folding *)
+      (* return a dummy value to read_reg requests which we handle above
+         if an expression finally evals to it, but the interpreter
+         will fail if it tries to actually use. See value.ml *)
+      run (cont (Value.V_attempted_read reg) st)
+  | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
 (** This rewriting pass looks for function applications (E_app)
    expressions where every argument is a literal. It passes these
@@ -205,18 +192,11 @@ let rec run frame =
    - Throws an exception that isn't caught.
  *)
 
-let initial_state ast env =
-  Interpreter.initial_state ~registers:false ast env safe_primops
+let initial_state ast env = Interpreter.initial_state ~registers:false ast env safe_primops
 
-type fixed = {
-    registers: tannot exp Bindings.t;
-    fields: tannot exp Bindings.t Bindings.t;
-  }
+type fixed = { registers : tannot exp Bindings.t; fields : tannot exp Bindings.t Bindings.t }
 
-let no_fixed = {
-    registers = Bindings.empty;
-    fields = Bindings.empty;
-  }
+let no_fixed = { registers = Bindings.empty; fields = Bindings.empty }
 
 let rw_exp fixed target ok not_ok istate =
   let evaluate e_aux annot =
@@ -225,87 +205,85 @@ let rw_exp fixed target ok not_ok istate =
       begin
         let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
         let exp = exp_of_value v in
-        try (ok (); Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)) with
-        | Type_error (env, l, err) ->
-           (* A type error here would be unexpected, so don't ignore it! *)
-           Reporting.warn "" l
-             ("Type error when folding constants in "
-              ^ string_of_exp (E_aux (e_aux, annot))
-              ^ "\n" ^ Type_error.string_of_type_error err);
-           not_ok ();
-           E_aux (e_aux, annot)
+        try
+          ok ();
+          Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
+        with Type_error (env, l, err) ->
+          (* A type error here would be unexpected, so don't ignore it! *)
+          Reporting.warn "" l
+            ("Type error when folding constants in "
+            ^ string_of_exp (E_aux (e_aux, annot))
+            ^ "\n" ^ Type_error.string_of_type_error err
+            );
+          not_ok ();
+          E_aux (e_aux, annot)
       end
     with
     (* Otherwise if anything goes wrong when trying to constant
        fold, just continue without optimising. *)
-    | _ -> E_aux (e_aux, annot)
+    | _ ->
+      E_aux (e_aux, annot)
   in
 
   let rw_funcall e_aux annot =
     match e_aux with
     | E_app (id, args) when fold_to_unit id ->
-       ok (); E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
-
-    | E_id id ->
-       begin match Bindings.find_opt id fixed.registers with
-       | Some exp ->
-          ok (); exp
-       | None ->
-          E_aux (e_aux, annot)
-       end
-
-    | E_field (E_aux (E_id id, _), field) ->
-       begin match Bindings.find_opt id fixed.fields with
-       | Some fields ->
-          begin match Bindings.find_opt field fields with
-          | Some exp ->
-             ok (); exp
-          | None ->
-             E_aux (e_aux, annot)
+        ok ();
+        E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
+    | E_id id -> begin
+        match Bindings.find_opt id fixed.registers with
+        | Some exp ->
+            ok ();
+            exp
+        | None -> E_aux (e_aux, annot)
+      end
+    | E_field (E_aux (E_id id, _), field) -> begin
+        match Bindings.find_opt id fixed.fields with
+        | Some fields -> begin
+            match Bindings.find_opt field fields with
+            | Some exp ->
+                ok ();
+                exp
+            | None -> E_aux (e_aux, annot)
           end
-       | None ->
-          E_aux (e_aux, annot)
-       end
-
+        | None -> E_aux (e_aux, annot)
+      end
     (* Short-circuit boolean operators with constants *)
     | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as false_exp); _]) when string_of_id id = "and_bool" ->
-       ok (); false_exp
-
+        ok ();
+        false_exp
     | E_app (id, [(E_aux (E_lit (L_aux (L_true, _)), _) as true_exp); _]) when string_of_id id = "or_bool" ->
-       ok (); true_exp
-
+        ok ();
+        true_exp
     | E_app (id, args) when List.for_all is_constant args ->
-       let env = env_of_annot annot in
-       (* We want to fold all primitive operations, but avoid folding
-          non-primitives that are defined in target-specific way. *)
-       let is_primop =
-         Env.is_extern id env "interpreter" && StringMap.mem (Env.get_extern id env "interpreter") safe_primops
-       in
-       if not (Env.is_extern id env target) || is_primop then
-         evaluate e_aux annot
-       else
-         E_aux (e_aux, annot)
-
-    | E_typ (typ, (E_aux (E_lit _, _) as lit)) -> ok (); lit
-
-    | E_field (exp, id) when is_constant exp ->
-       evaluate e_aux annot
-
-    | E_if (E_aux (E_lit (L_aux (L_true, _)), _), then_exp, _) -> ok (); then_exp
-    | E_if (E_aux (E_lit (L_aux (L_false, _)), _), _, else_exp) -> ok (); else_exp
-
+        let env = env_of_annot annot in
+        (* We want to fold all primitive operations, but avoid folding
+           non-primitives that are defined in target-specific way. *)
+        let is_primop =
+          Env.is_extern id env "interpreter" && StringMap.mem (Env.get_extern id env "interpreter") safe_primops
+        in
+        if (not (Env.is_extern id env target)) || is_primop then evaluate e_aux annot else E_aux (e_aux, annot)
+    | E_typ (typ, (E_aux (E_lit _, _) as lit)) ->
+        ok ();
+        lit
+    | E_field (exp, id) when is_constant exp -> evaluate e_aux annot
+    | E_if (E_aux (E_lit (L_aux (L_true, _)), _), then_exp, _) ->
+        ok ();
+        then_exp
+    | E_if (E_aux (E_lit (L_aux (L_false, _)), _), _, else_exp) ->
+        ok ();
+        else_exp
     (* We only propagate lets in the simple case where we know that
        the id will have the inferred type of the argument. For more
        complex let bindings trying to propagate them may result in
        type errors due to how type variables are bound by let bindings
-       *)
+    *)
     | E_let (LB_aux (LB_val (P_aux (P_id id, _), bind), _), exp) when is_constant bind ->
-       ok ();
-       subst id bind exp
-
+        ok ();
+        subst id bind exp
     | _ -> E_aux (e_aux, annot)
   in
-  fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)}
+  fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot) }
 
 let rewrite_exp_once target = rw_exp no_fixed target (fun _ -> ()) (fun _ -> ())
 
@@ -315,86 +293,96 @@ let rec rewrite_constant_function_calls' fixed target ast =
   let not_ok () = decr rewrite_count in
   let istate = initial_state ast Type_check.initial_env in
 
-  let rw_defs = {
-      rewriters_base with
-      rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate)
-    } in
+  let rw_defs = { rewriters_base with rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate) } in
   let ast = rewrite_ast_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
-  if !rewrite_count > 0
-  then rewrite_constant_function_calls' fixed target ast
-  else ast
+  if !rewrite_count > 0 then rewrite_constant_function_calls' fixed target ast else ast
 
 let rewrite_constant_function_calls fixed target ast =
-  if !optimize_constant_fold then
-    rewrite_constant_function_calls' fixed target ast
-  else
-    ast
+  if !optimize_constant_fold then rewrite_constant_function_calls' fixed target ast else ast
 
-type to_constant =
-  | Register of id * typ * tannot exp
-  | Register_field of id * id * typ * tannot exp
+type to_constant = Register of id * typ * tannot exp | Register_field of id * id * typ * tannot exp
 
 let () =
   let open Interactive in
   let open Printf in
-
   let update_fixed fixed = function
-    | Register (id, _, exp) ->
-       { fixed with registers = Bindings.add id exp fixed.registers }
+    | Register (id, _, exp) -> { fixed with registers = Bindings.add id exp fixed.registers }
     | Register_field (id, field, _, exp) ->
-       let prev_fields = match Bindings.find_opt id fixed.fields with Some f -> f | None -> Bindings.empty in
-       let updated_fields = Bindings.add field exp prev_fields in
-       { fixed with fields = Bindings.add id updated_fields fixed.fields }
+        let prev_fields = match Bindings.find_opt id fixed.fields with Some f -> f | None -> Bindings.empty in
+        let updated_fields = Bindings.add field exp prev_fields in
+        { fixed with fields = Bindings.add id updated_fields fixed.fields }
   in
 
-  ArgString ("target", fun target -> ArgString ("assignments", fun assignments -> Action (fun istate ->
-    let assignments = Str.split (Str.regexp " +") assignments in
-    let assignments =
-      List.map (fun assignment ->
-          match String.split_on_char '=' assignment with
-          | [reg; value] ->
-             begin match String.split_on_char '.' reg with
-             | [reg; field] ->
-                let reg = mk_id reg in
-                let field = mk_id field in
-                begin match Env.lookup_id reg istate.env with
-                | Register (Typ_aux (Typ_id rec_id, _)) ->
-                   let (_, fields) = Env.get_record rec_id istate.env in
-                   let typ = match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
-                     | Some (typ, _) -> typ
-                     | None -> failwith (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
-                   in
-                   let exp = Initial_check.exp_of_string value in
-                   let exp = check_exp istate.env exp typ in
-                   Register_field (reg, field, typ, exp)
-                | _ ->
-                   failwith (sprintf "Register %s is not defined as a record in the current environment" (string_of_id reg))
-                end
-             | _ ->
-                let reg = mk_id reg in
-                begin match Env.lookup_id reg istate.env with
-                | Register typ ->
-                   let exp = Initial_check.exp_of_string value in
-                   let exp = check_exp istate.env exp typ in
-                   Register (reg, typ, exp)
-                | _ ->
-                   failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
-                end
-             end
-          | _ -> failwith (sprintf "Could not parse '%s' as an assignment <register>=<value>" assignment)
-        ) assignments in
-    let assignments = List.fold_left update_fixed no_fixed assignments in
+  ArgString
+    ( "target",
+      fun target ->
+        ArgString
+          ( "assignments",
+            fun assignments ->
+              Action
+                (fun istate ->
+                  let assignments = Str.split (Str.regexp " +") assignments in
+                  let assignments =
+                    List.map
+                      (fun assignment ->
+                        match String.split_on_char '=' assignment with
+                        | [reg; value] -> begin
+                            match String.split_on_char '.' reg with
+                            | [reg; field] ->
+                                let reg = mk_id reg in
+                                let field = mk_id field in
+                                begin
+                                  match Env.lookup_id reg istate.env with
+                                  | Register (Typ_aux (Typ_id rec_id, _)) ->
+                                      let _, fields = Env.get_record rec_id istate.env in
+                                      let typ =
+                                        match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
+                                        | Some (typ, _) -> typ
+                                        | None ->
+                                            failwith
+                                              (sprintf "Register %s does not have a field %s" (string_of_id reg)
+                                                 (string_of_id field)
+                                              )
+                                      in
+                                      let exp = Initial_check.exp_of_string value in
+                                      let exp = check_exp istate.env exp typ in
+                                      Register_field (reg, field, typ, exp)
+                                  | _ ->
+                                      failwith
+                                        (sprintf "Register %s is not defined as a record in the current environment"
+                                           (string_of_id reg)
+                                        )
+                                end
+                            | _ ->
+                                let reg = mk_id reg in
+                                begin
+                                  match Env.lookup_id reg istate.env with
+                                  | Register typ ->
+                                      let exp = Initial_check.exp_of_string value in
+                                      let exp = check_exp istate.env exp typ in
+                                      Register (reg, typ, exp)
+                                  | _ ->
+                                      failwith
+                                        (sprintf "Register %s is not defined in the current environment"
+                                           (string_of_id reg)
+                                        )
+                                end
+                          end
+                        | _ -> failwith (sprintf "Could not parse '%s' as an assignment <register>=<value>" assignment)
+                      )
+                      assignments
+                  in
+                  let assignments = List.fold_left update_fixed no_fixed assignments in
 
-    { istate with ast = rewrite_constant_function_calls' assignments target istate.ast})))
-  |> register_command
-       ~name:"fix_registers"
-       ~help:"Fix the value of specified registers, specified as a \
-              list of <register>=<value>. Can also fix a specific \
-              register field as <register>.<field>=<value>. Note that \
-              this is not used to set registers normally, but instead \
-              fixes their value such that the constant folding rewrite \
-              (which is subsequently invoked by this command) will \
-              replace register reads with the fixed values. Requires a \
-              target (c, lem, etc.), as the set of functions that can \
-              be constant folded can differ on a per-target basis."
+                  { istate with ast = rewrite_constant_function_calls' assignments target istate.ast }
+                )
+          )
+    )
+  |> register_command ~name:"fix_registers"
+       ~help:
+         "Fix the value of specified registers, specified as a list of <register>=<value>. Can also fix a specific \
+          register field as <register>.<field>=<value>. Note that this is not used to set registers normally, but \
+          instead fixes their value such that the constant folding rewrite (which is subsequently invoked by this \
+          command) will replace register reads with the fixed values. Requires a target (c, lem, etc.), as the set of \
+          functions that can be constant folded can differ on a per-target basis."

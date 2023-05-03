@@ -73,10 +73,11 @@ open Ast_util
 
 (** {2 Options} *)
 
+val opt_undefined_gen : bool ref
 (** Generate undefined_T functions for every type T. False by
    default. *)
-val opt_undefined_gen : bool ref
 
+val opt_fast_undefined : bool ref
 (** Generate faster undefined_T functions. Rather than generating
    functions that allow for the undefined values of enums and variants
    to be picked at runtime using a RNG or similar, this creates
@@ -85,17 +86,17 @@ val opt_undefined_gen : bool ref
    faster. These functions don't have the right effects, so the
    -no_effects flag may be needed if this is true. False by
    default. *)
-val opt_fast_undefined : bool ref
 
+val opt_magic_hash : bool ref
 (** Allow # in identifiers when set, much like the GHC option of the same
    name *)
-val opt_magic_hash : bool ref
 
+val opt_enum_casts : bool ref
 (** When true enums can be automatically casted to range types and
    back.  Otherwise generated T_of_num and num_of_T functions must be
    manually used for each enum T *)
-val opt_enum_casts : bool ref
 
+val have_undefined_builtins : bool ref
 (** This is a bit of a hack right now - it ensures that the undefiend
    builtins (undefined_vector etc), only get added to the AST
    once. The original assumption in sail is that the whole AST gets
@@ -103,38 +104,40 @@ val opt_enum_casts : bool ref
    this isn't true any more with the interpreter. This needs to be
    public so the interpreter can set it back to false if it unloads
    all the loaded files. *)
-val have_undefined_builtins : bool ref
 
+val undefined_builtin_val_specs : uannot def list
 (** Val specs of undefined functions for builtin types that get added to
     the AST if opt_undefined_gen is set (minus those functions that already
     exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
 
 (** {2 Desugar and process AST } *)
 
 val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
 val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
-  
+
+val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
 
 (** {2 Parsing expressions and definitions from strings} *)
 
 val extern_of_string : ?pure:bool -> id -> string -> uannot def
 val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : (string * int * int * int) -> string -> uannot def list
-val ast_of_def_string : (string * int * int * int) -> string -> uannot ast
-val ast_of_def_string_with : (string * int * int * int) -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
+val defs_of_string : string * int * int * int -> string -> uannot def list
+val ast_of_def_string : string * int * int * int -> string -> uannot ast
+
+val ast_of_def_string_with :
+  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
+
 val exp_of_string : string -> uannot exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint
 
 (** {2 Parsing files } *)
-  
+
+val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
 (** Parse a file into a sequence of comments and a parse AST
 
    @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
 
 val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list

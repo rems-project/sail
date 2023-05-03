@@ -1,6 +1,4 @@
-open Aarch64_export;;
-
-
+open Aarch64_export
 
 (**************************************************************************)
 (*     Sail                                                               *)
@@ -52,18 +50,13 @@ open Aarch64_export;;
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Elf_loader;;
+open Elf_loader
 
 let opt_file_arguments = ref ([] : string list)
-
 let options = Arg.align []
-
 let usage_msg = "Sail OCaml RTS options:"
-
-let () =
-  Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
-
-let (>>) = Aarch64.bindS
+let () = Arg.parse options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg
+let ( >> ) = Aarch64.bindS
 let liftS = Aarch64.liftState (Aarch64.get_regval, Aarch64.set_regval)
 
 let load_elf_segment seg =
@@ -83,11 +76,6 @@ let load_elf_segment seg =
 
 let _ =
   Random.self_init ();
-  let elf_segments = match !opt_file_arguments with
-    | f :: _ -> load_elf f
-    | _ -> []
-  in
+  let elf_segments = match !opt_file_arguments with f :: _ -> load_elf f | _ -> [] in
   Aarch64.prerr_results
-    (Aarch64.initial_state |>
-    (Aarch64.iterS load_elf_segment elf_segments >> (fun _ ->
-    liftS (Aarch64.main ()))));
+    (Aarch64.initial_state |> (Aarch64.iterS load_elf_segment elf_segments >> fun _ -> liftS (Aarch64.main ())))

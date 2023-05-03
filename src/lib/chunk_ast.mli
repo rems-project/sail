@@ -76,15 +76,10 @@ type binder = Var_binder | Let_binder | Internal_plet_binder
 
 val binder_keyword : binder -> string
 
-type if_format = {
-    then_brace : bool;
-    else_brace : bool
-  }
-
+type if_format = { then_brace : bool; else_brace : bool }
 type match_kind = Try_match | Match_match
 
 val match_keywords : match_kind -> string * string option
-
 val comment_type_delimiters : Lexer.comment_type -> string * string
 
 type chunk =
@@ -96,7 +91,7 @@ type chunk =
       rec_opt : chunks option;
       typq_opt : chunks option;
       return_typ_opt : chunks option;
-      funcls : pexp_chunks list
+      funcls : pexp_chunks list;
     }
   | Val of {
       is_cast : bool;
@@ -105,25 +100,10 @@ type chunk =
       typq_opt : chunks option;
       typ : chunks;
     }
-  | Enum of {
-      id : Parse_ast.id;
-      enum_functions : chunks list option;
-      members : chunks list
-    }
-  | Function_typ of {
-      mapping : bool;
-      lhs : chunks;
-      rhs : chunks;
-    }
-  | Exists of {
-      vars: chunks;
-      constr: chunks;
-      typ: chunks;
-    }
-  | Typ_quant of {
-      vars : chunks;
-      constr_opt : chunks option;
-    }
+  | Enum of { id : Parse_ast.id; enum_functions : chunks list option; members : chunks list }
+  | Function_typ of { mapping : bool; lhs : chunks; rhs : chunks }
+  | Exists of { vars : chunks; constr : chunks; typ : chunks }
+  | Typ_quant of { vars : chunks; constr_opt : chunks option }
   | App of Parse_ast.id * chunks list
   | Field of chunks * Parse_ast.id
   | Tuple of string * string * int * chunks list
@@ -143,39 +123,22 @@ type chunk =
   | If_then of bool * chunks * chunks
   | If_then_else of if_format * chunks * chunks * chunks
   | Struct_update of chunks * chunks list
-  | Match of {
-      kind : match_kind;
-      exp : chunks;
-      aligned : bool;
-      cases : pexp_chunks list
-    }
+  | Match of { kind : match_kind; exp : chunks; aligned : bool; cases : pexp_chunks list }
   | Foreach of {
       var : chunks;
       decreasing : bool;
       from_index : chunks;
       to_index : chunks;
       step : chunks option;
-      body : chunks
+      body : chunks;
     }
-  | While of {
-      repeat_until : bool;
-      termination_measure : chunks option;
-      cond : chunks;
-      body : chunks
-    }
+  | While of { repeat_until : bool; termination_measure : chunks option; cond : chunks; body : chunks }
   | Vector_updates of chunks * chunk list
   | Chunks of chunks
   | Raw of string
 
 and chunks = chunk Queue.t
-
-and pexp_chunks = {
-    funcl_space : bool;
-    pat : chunks;
-    guard : chunks option;
-    body : chunks
-  }
+and pexp_chunks = { funcl_space : bool; pat : chunks; guard : chunks option; body : chunks }
 
 val prerr_chunk : string -> chunk -> unit
-
 val chunk_defs : string -> Lexer.comment list -> Parse_ast.def list -> chunks

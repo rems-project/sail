@@ -68,49 +68,43 @@
 open Parse_ast
 
 (* Simple preprocessor features for conditional file loading *)
-module StringSet = Set.Make(String)
+module StringSet = Set.Make (String)
 
 let default_symbols =
-  List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
-    [ "FEATURE_IMPLICITS";
-      "FEATURE_CONSTANT_TYPES";
-      "FEATURE_BITVECTOR_TYPE";
-      "FEATURE_UNION_BARRIER";
-    ]
+  List.fold_left
+    (fun set str -> StringSet.add str set)
+    StringSet.empty
+    ["FEATURE_IMPLICITS"; "FEATURE_CONSTANT_TYPES"; "FEATURE_BITVECTOR_TYPE"; "FEATURE_UNION_BARRIER"]
 
 let symbols = ref default_symbols
-
-let have_symbol symbol =
-  StringSet.mem symbol !symbols
-
+let have_symbol symbol = StringSet.mem symbol !symbols
 let clear_symbols () = symbols := default_symbols
-
 let add_symbol str = symbols := StringSet.add str !symbols
-                     
+
 let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in
   let then_defs = ref [] in
   let else_defs = ref [] in
 
-  let push_def def =
-    if !in_then then
-      then_defs := (def :: !then_defs)
-    else
-      else_defs := (def :: !else_defs)
-  in
+  let push_def def = if !in_then then then_defs := def :: !then_defs else else_defs := def :: !else_defs in
 
   let rec scan = function
-    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 ->
-       (List.rev !then_defs, List.rev !else_defs, defs)
+    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
     | DEF_aux (DEF_pragma ("else", _), _) :: defs when !depth = 0 ->
-       in_then := false; scan defs
+        in_then := false;
+        scan defs
     | (DEF_aux (DEF_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
-       incr depth; push_def def; scan defs
-    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs->
-       decr depth; push_def def; scan defs
+        incr depth;
+        push_def def;
+        scan defs
+    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs ->
+        decr depth;
+        push_def def;
+        scan defs
     | def :: defs ->
-       push_def def; scan defs
+        push_def def;
+        scan defs
     | [] -> raise (Reporting.err_general l "$ifdef, $ifndef, or $iftarget never ended by $endif")
   in
   scan defs
@@ -119,8 +113,11 @@ let cond_pragma l defs =
    just silently ignoring them, so we have a list here of all
    recognised pragmas. *)
 let all_pragmas =
-  List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
-    [ "define";
+  List.fold_left
+    (fun set str -> StringSet.add str set)
+    StringSet.empty
+    [
+      "define";
       "anchor";
       "span";
       "include";
@@ -139,112 +136,108 @@ let all_pragmas =
       "include_end";
       "sail_internal";
       "target_set";
-      "non_exec"
+      "non_exec";
     ]
 
 let wrap_include l file = function
   | [] -> []
-  | defs ->
-     [DEF_aux (DEF_pragma ("include_start", file), l)]
-     @ defs
-     @ [DEF_aux (DEF_pragma ("include_end", file), l)]
+  | defs -> [DEF_aux (DEF_pragma ("include_start", file), l)] @ defs @ [DEF_aux (DEF_pragma ("include_end", file), l)]
 
 let rec preprocess dir target opts =
   let module P = Parse_ast in
   function
   | [] -> []
   | DEF_aux (DEF_pragma ("define", symbol), _) :: defs ->
-     symbols := StringSet.add symbol !symbols;
-     preprocess dir target opts defs
-
+      symbols := StringSet.add symbol !symbols;
+      preprocess dir target opts defs
   | (DEF_aux (DEF_pragma ("option", command), l) as opt_pragma) :: defs ->
-     begin
-       let first_line err_msg = match String.split_on_char '\n' err_msg with
-         | line :: _ -> "\n" ^ line
-         | [] -> "" [@coverage off] (* Don't expect this should ever happen, but we are fine if it does *)
-       in
-       try
-         let args = Str.split (Str.regexp " +") command in
-         let file_arg file = raise (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive")) in
-         Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts file_arg "";
-       with
-       | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
-       | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
-     end;
-     opt_pragma :: preprocess dir target opts defs
-
+      begin
+        let first_line err_msg =
+          match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
+          (* Don't expect this should ever happen, but we are fine if it does *)
+        in
+        try
+          let args = Str.split (Str.regexp " +") command in
+          let file_arg file =
+            raise (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive"))
+          in
+          Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts file_arg ""
+        with
+        | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
+        | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
+      end;
+      opt_pragma :: preprocess dir target opts defs
   | DEF_aux (DEF_pragma ("ifndef", symbol), l) :: defs ->
-     let then_defs, else_defs, defs = cond_pragma l defs in
-     if not (StringSet.mem symbol !symbols) then
-       preprocess dir target opts (then_defs @ defs)
-     else
-       preprocess dir target opts (else_defs @ defs)
-
+      let then_defs, else_defs, defs = cond_pragma l defs in
+      if not (StringSet.mem symbol !symbols) then preprocess dir target opts (then_defs @ defs)
+      else preprocess dir target opts (else_defs @ defs)
   | DEF_aux (DEF_pragma ("ifdef", symbol), l) :: defs ->
-     let then_defs, else_defs, defs = cond_pragma l defs in
-     if StringSet.mem symbol !symbols then
-       preprocess dir target opts (then_defs @ defs)
-     else
-       preprocess dir target opts (else_defs @ defs)
-
+      let then_defs, else_defs, defs = cond_pragma l defs in
+      if StringSet.mem symbol !symbols then preprocess dir target opts (then_defs @ defs)
+      else preprocess dir target opts (else_defs @ defs)
   | DEF_aux (DEF_pragma ("iftarget", t), l) :: defs ->
-     let then_defs, else_defs, defs = cond_pragma l defs in
-     begin match target with
-     | Some t' when t = t' ->
-        preprocess dir target opts (then_defs @ defs)
-     | _ ->
-        preprocess dir target opts (else_defs @ defs)
-     end
-       
+      let then_defs, else_defs, defs = cond_pragma l defs in
+      begin
+        match target with
+        | Some t' when t = t' -> preprocess dir target opts (then_defs @ defs)
+        | _ -> preprocess dir target opts (else_defs @ defs)
+      end
   | DEF_aux (DEF_pragma ("include", file), l) :: defs ->
-     let len = String.length file in
-     if len = 0 then
-       (Reporting.warn "" l "Skipping bad $include. No file argument."; preprocess dir target opts defs)
-     else if file.[0] = '"' && file.[len - 1] = '"' then
-       let relative = match l with
-         | Parse_ast.Range (pos, _) -> Filename.dirname (Lexing.(pos.pos_fname))
-         | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
-       in
-       let file = String.sub file 1 (len - 2) in
-       let include_file = Filename.concat relative file in
-       let include_defs = Initial_check.parse_file ~loc:l (Filename.concat relative file) |> snd |> preprocess dir target opts in
-       wrap_include l include_file include_defs @ preprocess dir target opts defs
-     else if file.[0] = '<' && file.[len - 1] = '>' then
-       let file = String.sub file 1 (len - 2) in
-       let sail_dir = Reporting.get_sail_dir dir in
-       let file = Filename.concat sail_dir ("lib/" ^ file) in
-       let include_defs = Initial_check.parse_file ~loc:l file |> snd |> preprocess dir target opts in
-       wrap_include l file include_defs @ preprocess dir target opts defs
-     else
-       let help = "Make sure the filename is surrounded by quotes or angle brackets" in
-       (Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess dir target opts defs)
-
+      let len = String.length file in
+      if len = 0 then (
+        Reporting.warn "" l "Skipping bad $include. No file argument.";
+        preprocess dir target opts defs
+      )
+      else if file.[0] = '"' && file.[len - 1] = '"' then (
+        let relative =
+          match l with
+          | Parse_ast.Range (pos, _) -> Filename.dirname Lexing.(pos.pos_fname)
+          | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
+        in
+        let file = String.sub file 1 (len - 2) in
+        let include_file = Filename.concat relative file in
+        let include_defs =
+          Initial_check.parse_file ~loc:l (Filename.concat relative file) |> snd |> preprocess dir target opts
+        in
+        wrap_include l include_file include_defs @ preprocess dir target opts defs
+      )
+      else if file.[0] = '<' && file.[len - 1] = '>' then (
+        let file = String.sub file 1 (len - 2) in
+        let sail_dir = Reporting.get_sail_dir dir in
+        let file = Filename.concat sail_dir ("lib/" ^ file) in
+        let include_defs = Initial_check.parse_file ~loc:l file |> snd |> preprocess dir target opts in
+        wrap_include l file include_defs @ preprocess dir target opts defs
+      )
+      else (
+        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
+        Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help);
+        preprocess dir target opts defs
+      )
   | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
-     begin match Reporting.simp_loc l with
-     | None -> () (* This shouldn't happen, but if it does just continue *)
-     | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
-     end;
-     preprocess dir target opts defs
-
+      begin
+        match Reporting.simp_loc l with
+        | None -> () (* This shouldn't happen, but if it does just continue *)
+        | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
+      end;
+      preprocess dir target opts defs
   (* Filter file_start and file_end out of the AST so when we
      round-trip files through the compiler we don't end up with
      incorrect start/end annotations *)
   | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs ->
-     preprocess dir target opts defs
- 
+      preprocess dir target opts defs
   | DEF_aux (DEF_pragma (p, arg), l) :: defs ->
-     if not (StringSet.mem p all_pragmas) then
-       Reporting.warn "" l ("Unrecognised directive: " ^ p);
-     DEF_aux (DEF_pragma (p, arg), l) :: preprocess dir target opts defs
-
+      if not (StringSet.mem p all_pragmas) then Reporting.warn "" l ("Unrecognised directive: " ^ p);
+      DEF_aux (DEF_pragma (p, arg), l) :: preprocess dir target opts defs
   | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
-     DEF_aux (DEF_outcome (outcome_spec, preprocess dir target opts inner_defs), l) :: preprocess dir target opts defs
-     
-  | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs ->
-     begin match atyp with
-     | Parse_ast.ATyp_inc -> symbols := StringSet.add "_DEFAULT_INC" !symbols; def :: preprocess dir target opts defs
-     | Parse_ast.ATyp_dec -> symbols := StringSet.add "_DEFAULT_DEC" !symbols; def :: preprocess dir target opts defs
-     | _ -> def :: preprocess dir target opts defs
-     end
-
+      DEF_aux (DEF_outcome (outcome_spec, preprocess dir target opts inner_defs), l) :: preprocess dir target opts defs
+  | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> begin
+      match atyp with
+      | Parse_ast.ATyp_inc ->
+          symbols := StringSet.add "_DEFAULT_INC" !symbols;
+          def :: preprocess dir target opts defs
+      | Parse_ast.ATyp_dec ->
+          symbols := StringSet.add "_DEFAULT_DEC" !symbols;
+          def :: preprocess dir target opts defs
+      | _ -> def :: preprocess dir target opts defs
+    end
   | def :: defs -> def :: preprocess dir target opts defs

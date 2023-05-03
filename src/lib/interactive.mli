@@ -71,18 +71,17 @@ open Type_check
 
 val opt_interactive : bool ref
 
+type istate = {
+  ast : Type_check.tannot ast;
+  effect_info : Effects.side_effect_info;
+  env : Type_check.Env.t;
+  default_sail_dir : string;
+}
 (** Each interactive command is passed this struct, containing the
    abstract syntax tree, effect info and the type-checking
    environment. Also contains the default Sail directory *)
-type istate = {
-    ast : Type_check.tannot ast;
-    effect_info : Effects.side_effect_info;
-    env : Type_check.Env.t;
-    default_sail_dir : string;
-  }
 
 val initial_istate : string -> istate
-
 val arg : string -> string
 val command : string -> string
 
@@ -93,14 +92,10 @@ type action =
   | ActionUnit of (istate -> unit)
 
 val reflect_typ : action -> typ
-
 val get_command : string -> (string * action) option
-
 val all_commands : unit -> (string * (string * action)) list
-  
 val generate_help : string -> string -> action -> string
-
 val run_action : istate -> string -> string -> action -> istate
 
-(** This is the main function used to register new interactive commands. *)
 val register_command : name:string -> help:string -> action -> unit
+(** This is the main function used to register new interactive commands. *)
