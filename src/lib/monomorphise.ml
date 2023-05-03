@@ -716,7 +716,6 @@ let split_defs target all_errors (splits : split_req list) env ast =
   let subst_exp ref_vars substs ksubsts exp =
     let substs = bindings_from_list substs, KBindings.map fst ksubsts in
     let exp = fst (const_prop ref_vars substs Bindings.empty exp) in
-    let env = env_of exp in
     KBindings.fold (fun kid (nexp, should_assert) exp ->
         if should_assert && not (is_kid_generated kid) then
           let assert_nc = nc_eq (nvar kid) nexp in
@@ -1490,7 +1489,6 @@ in *)
   let fn_sizes = List.fold_left sizes_def Bindings.empty ast.defs in
 
   let rewrite_funcl (FCL_aux (FCL_funcl (id,pexp),(def_annot,annot))) =
-    let l = def_annot.loc in
     let pat,guard,body,(pl,_) = destruct_pexp pexp in
     let pat,guard,body, nexps =
       (* Update pattern and add itself -> nat wrapper to body *)

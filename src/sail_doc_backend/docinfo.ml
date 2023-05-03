@@ -219,7 +219,7 @@ let rec pat_to_json (P_aux (aux, _)) =
   | P_app (id, pats) -> `Assoc [pat_type "app"; ("id", `String (string_of_id id)); ("patterns", `List (List.map pat_to_json pats))]
   | P_vector pats -> seq_pat_json "vector" pats
   | P_vector_concat pats -> seq_pat_json "vector_concat" pats
-  | P_vector_subrange (id, n, m) -> `Assoc [pat_type "vector_subrange"; ("from", `Int (Big_int.to_int n)); ("to", `Int (Big_int.to_int m))]
+  | P_vector_subrange (id, n, m) -> `Assoc [pat_type "vector_subrange"; ("id", `String (string_of_id id)); ("from", `Int (Big_int.to_int n)); ("to", `Int (Big_int.to_int m))]
   | P_tuple pats -> seq_pat_json "tuple" pats
   | P_list pats -> seq_pat_json "list" pats
   | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", pat_to_json pat_hd); ("tl", pat_to_json pat_tl)]
@@ -447,7 +447,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
       exp_source = Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Pretty_print_sail.doc_exp exp) exp
     }
 
-  let docinfo_for_let (LB_aux (LB_val (pat, exp), annot) as lbind) = {
+  let docinfo_for_let (LB_aux (LB_val (_, exp), annot) as lbind) = {
       source = doc_loc (fst annot) Type_check.strip_letbind Pretty_print_sail.doc_letbind lbind;
       exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp;
     }
@@ -478,15 +478,15 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
        | _ ->
           raise (Reporting.err_general l ("Could not split on variable " ^ string_of_id split_id))
 
-  let docinfo_for_funcl ~ast ?files ?outer_annot n (FCL_aux (FCL_funcl (id, pexp), annot) as clause) =
-    (** If we have just a single clause, we use the annotation for the
+  let docinfo_for_funcl ~ast ?outer_annot n (FCL_aux (FCL_funcl (_, pexp), annot) as clause) =
+    (* If we have just a single clause, we use the annotation for the
        outer FD_aux wrapper, except we prefer documentation comments
        attached to the inner function clause type where available. *)
     let comment = get_doc_comment (fst annot) in
     let annot = match outer_annot with None -> annot | Some annot -> annot in
     let comment = match comment with None -> get_doc_comment (fst annot) | comment -> comment in
 
-    (** Try to use the inner attributes if we have no outer attributes. *)
+    (* Try to use the inner attributes if we have no outer attributes. *)
     let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
 
     let source = doc_loc (fst annot).loc Type_check.strip_funcl Pretty_print_sail.doc_funcl clause in
@@ -522,7 +522,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
 
   let included_clause files (FCL_aux (_, (clause_annot, _))) = included_loc files clause_annot.loc
 
-  let docinfo_for_fundef ~ast def_annot files (FD_aux (FD_function (_, _, clauses), annot) as fdef) =
+  let docinfo_for_fundef ~ast def_annot files (FD_aux (FD_function (_, _, clauses), annot)) =
     let clauses = List.filter (included_clause files) clauses in
     match clauses with
     | [] -> None
@@ -531,7 +531,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
     | _ ->
        Some (Multiple_clauses (List.mapi (docinfo_for_funcl ~ast:ast) clauses))
 
-  let docinfo_for_mpexp (MPat_aux (aux, annot)) =
+  let docinfo_for_mpexp (MPat_aux (aux, _)) =
     match aux with
     | MPat_pat mpat -> Rewrites.pat_of_mpat mpat
     | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
@@ -569,7 +569,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
 
   let included_mapping_clause files (MCL_aux (_, (def_annot, _))) = included_loc files def_annot.loc
 
-  let docinfo_for_mapdef files (MD_aux (MD_mapping (_, _, clauses), annot) as mdef) =
+  let docinfo_for_mapdef files (MD_aux (MD_mapping (_, _, clauses), _)) =
     let clauses = List.filter (included_mapping_clause files) clauses in
     match clauses with
     | [] -> None
@@ -614,7 +614,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
          -doc_file flags are passed, include everything. *)
       | DEF_pragma (("file_start" | "include_start"), path, _) ->
          docinfo, (skip_file path :: skips)
-      | DEF_pragma (("file_end" | "include_end"), path, _) ->
+      | DEF_pragma (("file_end" | "include_end"), _, _) ->
          docinfo, (match skips with _ :: skips -> skips | [] -> [])
 
       (* Function definiton may be scattered, so we can't skip it *)
@@ -652,7 +652,7 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
          { docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers },
          skips
 
-      | DEF_let (LB_aux (LB_val (pat, _ ), annot) as letbind) ->
+      | DEF_let (LB_aux (LB_val (pat, _ ), _) as letbind) ->
          let ids = pat_ids pat in
          IdSet.fold (fun id docinfo ->
              { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets }
@@ -666,7 +666,6 @@ module Generator(Converter : Markdown.CONVERTER)(Config : CONFIG) = struct
 
     let process_anchors docinfo =
       let anchored = ref Bindings.empty in
-      let pending_anchor = ref None in
       List.iter (fun (DEF_aux (aux, def_annot) as def) ->
           let l = def_loc def in
           match aux with

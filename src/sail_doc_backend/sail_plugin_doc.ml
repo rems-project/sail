@@ -110,7 +110,7 @@ let output_docinfo doc_dir docinfo =
   output_char chan '\n';
   close_out chan
 
-let doc_target _ out_file ast effect_info env =
+let doc_target _ out_file ast _ _ =
   Reporting.opt_warnings := true;
   let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
   begin
@@ -124,7 +124,6 @@ let doc_target _ out_file ast effect_info env =
   if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then (
     let module Config = struct
         let embedding_mode = embedding_option()
-        let the_ast = ast
       end in
     let module Gen = Docinfo.Generator(Markdown.AsciidocConverter)(Config) in
     let docinfo = Gen.docinfo_for_ast ~files:!opt_doc_files ~hyperlinks:Docinfo.hyperlinks_from_def ast in

@@ -650,11 +650,6 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
 
-type subrange =
-  | Inc_subrange of l * Big_int.num * Big_int.num
-  | Dec_subrange of l * Big_int.num * Big_int.num
-  | One_subrange of l * Big_int.num
-
 let rec insert_subrange ms (n1, n2) =
   match ms with
   | (m1, m2) :: ms ->
@@ -670,7 +665,7 @@ let rec insert_subrange ms (n1, n2) =
 
 let insert_subranges ns ms = List.fold_left insert_subrange ns ms
 
-let rec pattern_vector_subranges (P_aux (aux, (l, _)) as pat) =
+let rec pattern_vector_subranges (P_aux (aux, (l, _))) =
   match aux with
   | P_vector_subrange (id, n, m) when Big_int.greater n m ->
      Bindings.singleton id [(n, m)]

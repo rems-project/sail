@@ -136,10 +136,6 @@ end
 
 module PC = Pattern_completeness.Make(PC_config)
 
-let rec funcls_to_pexps = function
-  | FCL_aux (FCL_funcl (_, pexp), _) :: funcls -> pexp :: funcls_to_pexps funcls
-  | [] -> []
-
 let funcls_info = function
   | FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
   | FCL_aux (FCL_funcl (id, Pat_aux (Pat_when (pat, _, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)

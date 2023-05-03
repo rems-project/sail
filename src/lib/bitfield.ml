@@ -75,11 +75,6 @@ open Ast_util
 let bitvec_typ size order = bitvector_typ (nconstant size) order
 let fun_typschm arg_typs ret_typ = mk_typschm (mk_typquant []) (function_typ arg_typs ret_typ)
 
-let exp_of_index_nexp nexp =
-  match int_of_nexp_opt (nexp_simp nexp) with
-  | Some i -> mk_lit_exp (L_num i)
-  | None -> raise (Reporting.err_typ (nexp_loc nexp) "non-constant bitfield index")
-
 let index_of_nexp nexp =
   match int_of_nexp_opt (nexp_simp nexp) with
   | Some i -> i
@@ -116,8 +111,6 @@ let get_field_exp range inner_exp =
   in
   aux (List.map mk_slice (indices_of_range range))
 
-let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
-
 let set_field_lexp range inner_lexp =
   let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, mk_num_exp j)) in
   match List.map mk_slice (indices_of_range range) with
@@ -133,14 +126,6 @@ let set_bits_field exp value =
 
 let update_field_exp range order inner_exp new_value =
   let single = (List.length (indices_of_range range) == 1) in
-  let mk_update e vi vj i j =
-    let rhs =
-      if single then new_value else begin
-        mk_exp (E_vector_subrange (new_value, mk_num_exp vi, mk_num_exp vj))
-      end
-    in
-    mk_exp (E_vector_update_subrange (e, mk_num_exp i, mk_num_exp j, rhs))
-  in
   let rec aux e vi = function
     | (i, j) :: is ->
        let w = slice_width (i, j) in

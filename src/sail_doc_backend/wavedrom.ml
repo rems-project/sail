@@ -87,7 +87,7 @@ let process_attr_arg = function
 let rec zip_labels xs ys =
   match xs, ys with
   | [], ys -> List.map (fun y -> (None, y)) ys
-  | xs, [] -> []
+  | _, [] -> []
   | x :: xs, y :: ys -> (x, y) :: zip_labels xs ys
 
 let wavedrom_label size = function
@@ -115,7 +115,7 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
-  | P_vector_subrange (id, n, m) when Big_int.equal n m ->
+  | P_vector_subrange (_, n, m) when Big_int.equal n m ->
      Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }"
        size (Big_int.to_string n) (wavedrom_label size label)
   | P_vector_subrange (id, n, m) ->

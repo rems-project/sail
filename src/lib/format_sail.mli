@@ -66,18 +66,18 @@
 (****************************************************************************)
 
 type config = {
-    (** The default indentation depth (default 4) *)
     indent : int;
+    (** The default indentation depth (default 4) *)
+    preserve_structure : bool;
     (** If true, the formatter preserves the structure of the AST as
        much as possible - it won't insert braces around if statements
        and so on where there weren't any and so on. (default false) *)
-    preserve_structure : bool;
-    (** The desired maximum line width. (default 120) *)
     line_width : int;
+    (** The desired maximum line width. (default 120) *)
+    ribbon_width : float;
     (** The fraction (between 0.0 and 1.0) of the maximum line width that
        can be filled by non whitespace characters before we consider
        breaking. (default 1.0) *)
-    ribbon_width : float;
   }
 
 (** Read the config struct from a json object. Raises err_general if

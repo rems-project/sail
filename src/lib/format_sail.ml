@@ -185,18 +185,11 @@ module PPrintWrapper = struct
 
   let ifflat doc1 doc2 = Ifflat (doc1, doc2)
 
-  let concat = List.fold_left (^^) Empty
-
   let separate_map sep f xs =
     Util.fold_left_index (fun n acc x ->
         if n = 0 then f x else acc ^^ sep ^^ f x
       ) Empty xs
-
-  let separate_map_last sep f xs =
-    Util.fold_left_index_last (fun n last acc x ->
-        if n = 0 then f last x else acc ^^ sep ^^ f last x
-      ) Empty xs
-  
+ 
   let separate sep xs = separate_map sep (fun x -> x) xs
 
   let concat_map_last f xs =
@@ -215,8 +208,6 @@ module PPrintWrapper = struct
 
   let surround n b opening contents closing =
     opening ^^ Nest (n, break b ^^ contents) ^^ break b ^^ closing
-
-  let twice doc = doc ^^ doc
 
   let repeat n doc =
     let rec go n acc =
@@ -723,9 +714,6 @@ module Make(Config : CONFIG) = struct
     let lb_info = empty_linebreak_info () in
     PPrint.ToBuffer.pretty Config.config.ribbon_width Config.config.line_width b (to_pprint lb_info doc);
     Buffer.contents b, lb_info
-
-  let backspace buf =
-    Buffer.truncate buf (Buffer.length buf - 1)
 
   let fixup ?(debug=false) lb_info s =
     let buf = Buffer.create (String.length s) in

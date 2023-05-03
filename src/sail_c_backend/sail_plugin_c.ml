@@ -158,7 +158,10 @@ let c_target _ out_file ast effect_info _ =
   let close, output_chan = match out_file with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
   Reporting.opt_warnings := true;
   C_backend.compile_ast env effect_info output_chan (!opt_includes_c) ast;
-  flush output_chan
+  flush output_chan;
+  if close then (
+    close_out output_chan
+  )
 
 let _ =
   Target.register

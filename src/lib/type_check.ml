@@ -3162,7 +3162,7 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
      let lexp_is_update lexp = lexp_assignment_type env lexp |> is_update in
      let lexp_is_declaration lexp = lexp_assignment_type env lexp |> is_declaration in
      begin match List.find_opt lexp_is_update lexps, List.find_opt lexp_is_declaration lexps with
-     | Some (LE_aux (_, (l_u, _)) as lexp_u), Some (LE_aux (_, (l_d, _)) as lexp_d) ->
+     | Some (LE_aux (_, (l_u, _))), Some (LE_aux (_, (l_d, _)) as lexp_d) ->
         typ_raise env l_d (Err_inner (Err_other ("Assignment declaring new variable " ^ string_of_lexp lexp_d ^ " is also assigning to an existing variable"),
                                       l_u,
                                       "",
@@ -3187,8 +3187,6 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
   | _ -> false
 
 let tc_assume nc (E_aux (aux, annot)) =
-  let l = gen_loc (fst annot) in
-  let env = env_of_annot annot in
   E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
  
 module PC_config = struct

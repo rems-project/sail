@@ -1,6 +1,3 @@
-(env
-  (dev
-    (flags (:standard -w -33))))
 
 (rule
   (target manifest.ml)

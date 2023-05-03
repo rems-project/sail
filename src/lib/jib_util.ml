@@ -697,14 +697,6 @@ let rec subst_poly substs = function
   | (CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real
      | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode as ctyp) -> ctyp
  
-let is_ref_ctyp = function
-  | CT_ref _ -> true
-  | _ -> false
-
-let unref_ctyp = function
-  | CT_ref ctyp -> ctyp
-  | ctyp -> ctyp
- 
 let rec is_polymorphic = function
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
     | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_float _ | CT_rounding_mode -> false
@@ -978,9 +970,6 @@ let rec map_instrs f (I_aux (instr, aux)) =
 
 let map_instr_list f instrs =
   List.map (map_instr f) instrs
-
-let map_instrs_list f instrs =
-  f (List.map (map_instrs f) instrs)
 
 let instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in

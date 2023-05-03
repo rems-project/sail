@@ -185,9 +185,11 @@ val clexp_ctyp : clexp -> ctyp
 val cdef_ctyps : cdef -> CTSet.t
 
 (** {1 Functions for mapping over and extracting information from instructions, values, and definitions} *)
-  
-val instr_ids : instr -> NameSet.t
 
+val instr_ids : instr -> NameSet.t
+val instr_reads : instr -> NameSet.t
+val instr_writes : instr -> NameSet.t
+  
 val instr_typed_writes : instr -> NameCTSet.t
  
 val map_cval : (cval -> cval) -> cval -> cval
@@ -196,7 +198,7 @@ val map_cval : (cval -> cval) -> cval -> cval
 val map_instr : (instr -> instr) -> instr -> instr
 
 val map_instrs : (instr list -> instr list) -> instr -> instr
-  
+
 (** Concat-map over each instruction within an instruction, bottom-up *)
 val concatmap_instr : (instr -> instr list) -> instr -> instr list
   
@@ -225,6 +227,8 @@ val map_funcall : (instr -> instr list -> instr list) -> instr list -> instr lis
 (** Map over each function call in a cdef using map_funcall *)
 val cdef_map_funcall : (instr -> instr list -> instr list) -> cdef -> cdef
 
+val cdef_map_cval : (cval -> cval) -> cdef -> cdef
+  
 (** Map over each instruction in a cdef using concatmap_instr *)
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
 

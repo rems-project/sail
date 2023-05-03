@@ -1,8 +1,3 @@
-(env
-  (dev
-    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37)))
-  (release
-    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37))))
 
 (executable
   (name sail_plugin_doc)

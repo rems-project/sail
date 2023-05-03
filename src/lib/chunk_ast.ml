@@ -75,12 +75,6 @@ let string_of_id (Id_aux (id, l)) = string_of_id_aux id
 
 let id_loc (Id_aux (_, l)) = l
 
-type line_num = int option
-
-let string_of_line_num = function
-  | Some n -> string_of_int n
-  | None -> "?"
-
 let starting_line_num l = match Reporting.simp_loc l with
   | Some (s, _) -> Some s.pos_lnum
   | None -> None
@@ -579,7 +573,6 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_lit lit ->
      Queue.add (chunk_of_lit lit) chunks
   | ATyp_nset (n, set) ->
-     let n_chunk = Queue.create () in
      (* We would need more granular location information to do anything better here *)
      Queue.add (Atom (Printf.sprintf "%s in {%s}" (string_of_var n) (Util.string_of_list ", " Big_int.to_string set))) chunks
   | (ATyp_times (lhs, rhs) | ATyp_sum (lhs, rhs) | ATyp_minus (lhs, rhs)) as binop ->
@@ -1282,21 +1275,6 @@ let def_spacer (_, e) (s, _) =
   | Some l_e, Some l_s ->
      if l_s > l_e + 1 then 1 else 0
   | _, _ -> 1
-
-let process_file f filename =
-  let chan = open_in filename in
-  let buf = Buffer.create 4096 in
-  try
-    let rec loop () =
-      let line = input_line chan in
-      Buffer.add_string buf line;
-      Buffer.add_char buf '\n';
-      loop ()
-    in
-    loop ()
-  with End_of_file ->
-    close_in chan;
-    f (Buffer.contents buf)
 
 let read_source (p1 : Lexing.position) (p2 : Lexing.position) source =
   String.sub source p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
