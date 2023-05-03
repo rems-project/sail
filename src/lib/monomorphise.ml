@@ -4343,9 +4343,6 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
     let spec_map, def = rewrite_def spec_map def in
     (spec_map, def::t)) (Bindings.empty, []) defs
   in
-  (* Allow use of div and mod in nexp rewriting during later typechecking passes
-     to help prove equivalences such as (8 * 'n) = 'p8_times_n# *)
-  Type_check.opt_smt_div := true;
   { ast with defs = List.rev defs }
 
 (* Move complex sizes in record field types into the parameters. *)

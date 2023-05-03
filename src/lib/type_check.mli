@@ -91,9 +91,6 @@ val opt_expand_valspec : bool ref
    the SMT solver to use non-linear arithmetic. *)
 val opt_smt_linearize : bool ref
 
-(** Allow use of div and mod when rewriting nexps *)
-val opt_smt_div : bool ref
-
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 

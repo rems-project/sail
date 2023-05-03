@@ -90,9 +90,6 @@ let opt_expand_valspec = ref true
    the SMT solver to use non-linear arithmetic. *)
 let opt_smt_linearize = ref false
 
-(* Allow use of div and mod when rewriting nexps *)
-let opt_smt_div = ref false
-
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
                               
@@ -2039,7 +2036,12 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
 
           mod(m, C) = 0 && C != 0 --> (C * n = m <--> n = m / C)
 
-          to help us unify multiplications and divisions. *)
+          to help us unify multiplications and divisions.
+
+          In particular, the nexp rewriting used in monomorphisation adds
+          constraints of the form 8 * 'n == 'p8_times_n, and we sometimes need
+          to solve for 'n.
+        *)
        let valid n c = prove __POS__ env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove __POS__ env (nc_neq c (nint 0)) in
        (*if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
          unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
@@ -2057,7 +2059,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
                    unify_nexp l env goals n1b (nconstant (Big_int.div c2 c1))
                 | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
               end
-           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1a && !opt_smt_div ->
+           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1a ->
               unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a])
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
@@ -2066,7 +2068,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1a n2a
-           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1b && !opt_smt_div ->
+           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1b ->
               unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
