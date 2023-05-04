@@ -1874,20 +1874,27 @@ exception Unification_error of l * string;;
 
 let unify_error l str = raise (Unification_error (l, str))
 
-let merge_unifiers l kid uvar1 uvar2 =
+let merge_unifiers env l kid uvar1 uvar2 =
   match uvar1, uvar2 with
+  | Some arg1, Some arg2 when typ_arg_identical arg1 arg2 -> Some arg1
+  (* If the unifiers are equivalent nexps, use one, preferably a variable *)
+  | Some (A_aux (A_nexp nexp1, _) as arg1),
+    Some (A_aux (A_nexp nexp2, _) as arg2)
+       when prove __POS__ env (nc_eq nexp1 nexp2) ->
+     begin match nexp1, nexp2 with
+     | Nexp_aux (Nexp_var _, _), _ -> Some arg1
+     | _, Nexp_aux (Nexp_var _, _) -> Some arg2
+     | _, _ -> Some arg1
+     end
   | Some arg1, Some arg2 ->
-     if typ_arg_identical arg1 arg2 then
-       Some arg1
-     else
        unify_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
                       ^ ": " ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2)
   | None, Some u2 -> Some u2
   | Some u1, None -> Some u1
   | None, None -> None
 
-let merge_uvars l unifiers1 unifiers2 =
-  KBindings.merge (merge_unifiers l) unifiers1 unifiers2
+let merge_uvars env l unifiers1 unifiers2 =
+  KBindings.merge (merge_unifiers env l) unifiers1 unifiers2
 
 let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as typ2) =
   typ_debug (lazy (Util.("Unify type " |> magenta |> clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2
@@ -1917,22 +1924,22 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
         if prove __POS__ env (nc_and (nc_lteq n1 m) (nc_lteq m n2)) then KBindings.empty
         else unify_error l (string_of_typ typ1 ^ " is not contained within " ^ string_of_typ typ1)
      | _, _ ->
-        merge_uvars l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
+        merge_uvars env l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
      end
 
   | Typ_app (id1, args1), Typ_app (id2, args2) when List.length args1 = List.length args2 && Id.compare id1 id2 = 0 ->
-     List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
+     List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
 
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
   | Typ_id id1, Typ_app (id2, []) when Id.compare id1 id2 = 0 -> KBindings.empty
   | Typ_id id1, Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
 
   | Typ_tuple typs1, Typ_tuple typs2 when List.length typs1 = List.length typs2 ->
-     List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) typs1 typs2)
+     List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ l env goals) typs1 typs2)
 
   | Typ_fn (arg_typs1, ret_typ1), Typ_fn (arg_typs2, ret_typ2) when List.length arg_typs1 = List.length arg_typs2 ->
-     merge_uvars l
-       (List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) arg_typs1 arg_typs2))
+     merge_uvars env l
+       (List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ l env goals) arg_typs1 arg_typs2))
        (unify_typ l env goals ret_typ1 ret_typ2)
  
   | _, _ -> unify_error l ("Could not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
@@ -1955,27 +1962,27 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
        try
          let conjs1 = List.sort NC.compare (constraint_conj nc1) in
          let conjs2 = List.sort NC.compare (constraint_conj nc2) in
-         let unify_merge uv nc1 nc2 = merge_uvars l uv (unify_constraint l env goals nc1 nc2) in
+         let unify_merge uv nc1 nc2 = merge_uvars env l uv (unify_constraint l env goals nc1 nc2) in
          List.fold_left2 unify_merge KBindings.empty conjs1 conjs2
        with
-       | _ -> merge_uvars l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
+       | _ -> merge_uvars env l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
      end
   | NC_or (nc1a, nc2a), NC_or (nc1b, nc2b) ->
-     merge_uvars l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
+     merge_uvars env l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
   | NC_app (f1, args1), NC_app (f2, args2) when Id.compare f1 f2 = 0 && List.length args1 = List.length args2 ->
-     List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
+     List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
   | NC_equal (n1a, n2a), NC_equal (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_not_equal (n1a, n2a), NC_not_equal (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_gt (n1a, n2a), NC_bounded_gt (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_le (n1a, n2a), NC_bounded_le (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_lt (n1a, n2a), NC_bounded_lt (n1b, n2b) ->
-     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+     merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_true, NC_true -> KBindings.empty
   | NC_false, NC_false -> KBindings.empty
   | _, _ -> unify_error l ("Could not unify constraints " ^ string_of_n_constraint nc1 ^ " and " ^ string_of_n_constraint nc2)
@@ -2022,7 +2029,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
               else
                 if KidSet.is_empty (nexp_frees n2a)
                 then unify_nexp l env goals n2a (nminus nexp1 n2b)
-                else merge_uvars l (unify_nexp l env goals n1a n2a) (unify_nexp l env goals n1b n2b)
+                else merge_uvars env l (unify_nexp l env goals n1a n2a) (unify_nexp l env goals n1b n2b)
            | _ -> unify_error l ("Both sides of Int expression " ^ string_of_nexp nexp1
                                ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
          end
@@ -4637,7 +4644,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   let record_unifiers unifiers =
     let previous_unifiers = !all_unifiers in
     let updated_unifiers = KBindings.map (subst_unifiers_typ_arg unifiers) previous_unifiers in
-    all_unifiers := merge_uvars l updated_unifiers unifiers;
+    all_unifiers := merge_uvars env l updated_unifiers unifiers;
   in
 
   let quants, typ_args, typ_ret =
