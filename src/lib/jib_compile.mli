@@ -93,19 +93,19 @@ val opt_memo_cache : bool ref
 (** Dynamic context for compiling Sail to Jib. We need to pass a
    (global) typechecking environment given by checking the full
    AST. *)
-type ctx =
-  { records : (kid list * ctyp Bindings.t) Bindings.t;
-    enums : IdSet.t Bindings.t;
-    variants : (kid list * ctyp Bindings.t) Bindings.t;
-    valspecs : (string option * ctyp list * ctyp) Bindings.t;
-    quants : ctyp KBindings.t;
-    local_env : Env.t;
-    tc_env : Env.t;
-    effect_info : Effects.side_effect_info;
-    locals : (mut * ctyp) Bindings.t;
-    letbinds : int list;
-    no_raw : bool;
-  }
+type ctx = {
+  records : (kid list * ctyp Bindings.t) Bindings.t;
+  enums : IdSet.t Bindings.t;
+  variants : (kid list * ctyp Bindings.t) Bindings.t;
+  valspecs : (string option * ctyp list * ctyp) Bindings.t;
+  quants : ctyp KBindings.t;
+  local_env : Env.t;
+  tc_env : Env.t;
+  effect_info : Effects.side_effect_info;
+  locals : (mut * ctyp) Bindings.t;
+  letbinds : int list;
+  no_raw : bool;
+}
 
 val ctx_is_extern : id -> ctx -> bool
 
@@ -160,10 +160,10 @@ end
 module IdGraph : sig
   include Graph.S with type node = id
 end
-                   
+
 val callgraph : cdef list -> IdGraph.graph
 
-module Make(C: Config) : sig
+module Make (C : Config) : sig
   (** Compile a Sail definition into a Jib definition. The first two
        arguments are is the current definition number and the total
        number of definitions, and can be used to drive a progress bar

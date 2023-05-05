@@ -102,11 +102,11 @@ type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 
 and 'a aexp_aux =
   | AE_val of 'a aval
-  | AE_app of id * ('a aval) list * 'a
+  | AE_app of id * 'a aval list * 'a
   | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
-  | AE_block of ('a aexp) list * 'a aexp * 'a
+  | AE_block of 'a aexp list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
   | AE_exit of 'a aval * 'a
   | AE_throw of 'a aval * 'a
@@ -114,7 +114,7 @@ and 'a aexp_aux =
   | AE_field of 'a aval * id * 'a
   | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
   | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_struct_update of 'a aval * ('a aval) Bindings.t * 'a
+  | AE_struct_update of 'a aval * 'a aval Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
@@ -124,7 +124,7 @@ and sc_op = SC_and | SC_or
 and 'a apat = AP_aux of 'a apat_aux * Env.t * l
 
 and 'a apat_aux =
-  | AP_tuple of ('a apat) list
+  | AP_tuple of 'a apat list
   | AP_id of id * 'a
   | AP_global of id * 'a
   | AP_app of id * 'a apat * 'a
@@ -140,25 +140,22 @@ and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
   | AV_ref of id * 'a lvar
-  | AV_tuple of ('a aval) list
-  | AV_list of ('a aval) list * 'a
-  | AV_vector of ('a aval) list * 'a
-  | AV_record of ('a aval) Bindings.t * 'a
+  | AV_tuple of 'a aval list
+  | AV_list of 'a aval list * 'a
+  | AV_vector of 'a aval list * 'a
+  | AV_record of 'a aval Bindings.t * 'a
   | AV_cval of cval * 'a
 
-and 'a alexp =
-  | AL_id of id * 'a
-  | AL_addr of id * 'a
-  | AL_field of 'a alexp * id
- 
+and 'a alexp = AL_id of id * 'a | AL_addr of id * 'a | AL_field of 'a alexp * id
+
 (** When ANF translation has to introduce new bindings it uses a
 counter to ensure uniqueness. This function resets that counter. *)
 val reset_anf_counter : unit -> unit
 
 val aexp_loc : 'a aexp -> Parse_ast.l
-  
+
 (** {2 Functions for transforming ANF expressions} *)
-  
+
 val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
 
@@ -166,12 +163,12 @@ val aexp_typ : typ aexp -> typ
 val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
 (** Map over all function calls in an ANF expression *)
-val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+val map_functions : (Env.t -> Ast.l -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
 val aexp_bindings : 'a aexp -> IdSet.t
-  
+
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 

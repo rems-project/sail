@@ -110,7 +110,7 @@ type type_error =
 
 type env
 
-exception Type_error of env * l * type_error;;
+exception Type_error of env * l * type_error
 
 val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
@@ -130,7 +130,7 @@ module Env : sig
       type variables. *)
   val get_val_spec : id -> t -> typquant * typ
 
-  val get_val_specs : t -> (typquant * typ ) Bindings.t
+  val get_val_specs : t -> (typquant * typ) Bindings.t
 
   val get_defined_val_specs : t -> IdSet.t
 
@@ -165,7 +165,7 @@ module Env : sig
   (** Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
-  val add_constraint : ?reason:(Ast.l * string) -> n_constraint -> t -> t
+  val add_constraint : ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into
       an environment *)
@@ -306,6 +306,7 @@ type tannot
    calling destruct_tannot followed by mk_tannot returns an identical
    type annotation. *)
 val destruct_tannot : tannot -> (Env.t * typ) option
+
 val mk_tannot : ?uannot:uannot -> Env.t -> typ -> tannot
 
 val untyped_annot : tannot -> uannot
@@ -328,6 +329,7 @@ val strip_exp : tannot exp -> uannot exp
 
 (** Strip the type annotations from a pattern *)
 val strip_pat : tannot pat -> uannot pat
+
 val strip_mpat : tannot mpat -> uannot mpat
 
 (** Strip the type annotations from a pattern-expression *)
@@ -348,6 +350,7 @@ val strip_ast : tannot ast -> uannot ast
 
 (** Strip location information from types for comparison purposes *)
 val strip_typ : typ -> typ
+
 val strip_typq : typquant -> typquant
 val strip_id : id -> id
 val strip_kid : kid -> kid
@@ -391,14 +394,15 @@ val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
    this is only exposed so that it can be used during descattering to
    check completeness of scattered functions, and should not be called
    otherwise. *)
-val check_funcls_complete : Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * (def_annot -> def_annot) 
+val check_funcls_complete :
+  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * (def_annot -> def_annot)
 
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
    the constraint true. Note that this does not guarantee that the
    constraint is actually false, as the constraint solver is somewhat
    untrustworthy. *)
-val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
+val prove : string * int * int * int -> Env.t -> n_constraint -> bool
 
 (** Returns Some c if there is a unique c such that nexp = c *)
 val solve_unique : Env.t -> nexp -> Big_int.num option
@@ -464,6 +468,7 @@ val expected_typ_of : Ast.l * tannot -> typ option
    a collision. The "plain" version does not treat numeric types
    (i.e. range, int, nat) as existentials. *)
 val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
+
 val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option

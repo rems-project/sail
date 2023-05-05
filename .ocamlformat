@@ -1,0 +1,9 @@
+profile = default
+version = 0.25.1
+margin = 120
+exp-grouping = preserve
+parens-ite = true
+space-around-lists = false
+indicate-multiline-delimiters = closing-on-separate-line
+module-item-spacing = preserve
+doc-comments = before

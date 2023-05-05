@@ -1,6 +1,5 @@
 (executable
-  (name sail_manifest)
-  (public_name sail_manifest)
-  (package sail_manifest)
-  (libraries unix))
-
+ (name sail_manifest)
+ (public_name sail_manifest)
+ (package sail_manifest)
+ (libraries unix))

@@ -80,28 +80,17 @@ val opt_explain_all_variables : bool ref
 (** If false (default), we'll list relevant constraints, but not go
    into detail about how they were derived *)
 val opt_explain_constraints : bool ref
-  
-type suggestion = 
-  | Suggest_add_constraint of Ast.n_constraint
-  | Suggest_none
+
+type suggestion = Suggest_add_constraint of Ast.n_constraint | Suggest_none
 
 (** Analyze an unresolved quantifier type error *)
-val analyze_unresolved_quant : 
-  (Ast_util.mut * Ast.typ) Ast_util.Bindings.t ->
-  Ast.n_constraint list ->
-  Ast.quant_item ->
-  suggestion
+val analyze_unresolved_quant :
+  (Ast_util.mut * Ast.typ) Ast_util.Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
 
 val collapse_errors : Type_check.type_error -> Type_check.type_error
-  
+
 val string_of_type_error : Type_check.type_error -> string
 
-val check_defs : 
-  Type_check.Env.t ->
-  uannot Ast.def list ->
-  Type_check.tannot Ast.def list * Type_check.Env.t
+val check_defs : Type_check.Env.t -> uannot Ast.def list -> Type_check.tannot Ast.def list * Type_check.Env.t
 
-val check : 
-  Type_check.Env.t ->
-  uannot Ast_defs.ast ->
-  Type_check.tannot Ast_defs.ast * Type_check.Env.t
+val check : Type_check.Env.t -> uannot Ast_defs.ast -> Type_check.tannot Ast_defs.ast * Type_check.Env.t

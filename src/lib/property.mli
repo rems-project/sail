@@ -115,18 +115,10 @@ module Event : sig
   val compare : event -> event -> int
 end
 
-type query =
-   | Q_all of event
-   | Q_exist of event
-   | Q_not of query
-   | Q_and of query list
-   | Q_or of query list
+type query = Q_all of event | Q_exist of event | Q_not of query | Q_and of query list | Q_or of query list
 
 val default_query : query
 
-type pragma = {
-    query : query;
-    litmus : string list;
-  }
+type pragma = { query : query; litmus : string list }
 
 val parse_pragma : Parse_ast.l -> string -> pragma

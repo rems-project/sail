@@ -114,7 +114,7 @@ val undefined_builtin_val_specs : uannot def list
 
 val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
 val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
-  
+
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
 val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
@@ -123,15 +123,16 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
 
 val extern_of_string : ?pure:bool -> id -> string -> uannot def
 val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : (string * int * int * int) -> string -> uannot def list
-val ast_of_def_string : (string * int * int * int) -> string -> uannot ast
-val ast_of_def_string_with : (string * int * int * int) -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
+val defs_of_string : string * int * int * int -> string -> uannot def list
+val ast_of_def_string : string * int * int * int -> string -> uannot ast
+val ast_of_def_string_with :
+  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
 val exp_of_string : string -> uannot exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint
 
 (** {2 Parsing files } *)
-  
+
 (** Parse a file into a sequence of comments and a parse AST
 
    @param ?loc If we get an error reading the file, report the error at this location *)

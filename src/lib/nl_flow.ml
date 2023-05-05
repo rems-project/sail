@@ -77,10 +77,7 @@ let rec escapes (E_aux (aux, _)) =
   | E_block exps -> escapes (List.hd (List.rev exps))
   | _ -> false
 
-let is_bitvector_literal (L_aux (aux, _)) =
-  match aux with
-  | L_bin _ | L_hex _ -> true
-  | _ -> false
+let is_bitvector_literal (L_aux (aux, _)) = match aux with L_bin _ | L_hex _ -> true | _ -> false
 
 let bitvector_unsigned (L_aux (aux, _)) =
   let open Sail_lib in
@@ -90,11 +87,7 @@ let bitvector_unsigned (L_aux (aux, _)) =
   | _ -> assert false
 
 let rec pat_id (P_aux (aux, _)) =
-  match aux with
-  | P_id id -> Some id
-  | P_as (_, id) -> Some id
-  | P_var (pat, _) -> pat_id pat
-  | _ -> None
+  match aux with P_id id -> Some id | P_as (_, id) -> Some id | P_var (pat, _) -> pat_id pat | _ -> None
 
 let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
   let msg = mk_lit_exp (L_string "") in
@@ -107,29 +100,30 @@ let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
    will also know that y != unsigned(bitv) *)
 let modify_unsigned id value (E_aux (aux, annot) as exp) =
   match aux with
-  | E_let (LB_aux (LB_val (pat, E_aux (E_app (f, [E_aux (E_id id', _)]), _)), _) as lb, exp')
-       when (string_of_id f = "unsigned" || string_of_id f = "UInt") && Id.compare id id' = 0 ->
-     begin match pat_id pat with
-     | None -> exp
-     | Some uid ->
-        E_aux (E_let (lb,
-                      add_assert (mk_exp (E_app_infix (mk_exp (E_id uid), mk_id "!=", mk_lit_exp (L_num value)))) exp'),
-               annot)
-     end
+  | E_let ((LB_aux (LB_val (pat, E_aux (E_app (f, [E_aux (E_id id', _)]), _)), _) as lb), exp')
+    when (string_of_id f = "unsigned" || string_of_id f = "UInt") && Id.compare id id' = 0 -> begin
+      match pat_id pat with
+      | None -> exp
+      | Some uid ->
+          E_aux
+            ( E_let
+                (lb, add_assert (mk_exp (E_app_infix (mk_exp (E_id uid), mk_id "!=", mk_lit_exp (L_num value)))) exp'),
+              annot
+            )
+    end
   | _ -> exp
 
 let analyze' exps =
   match exps with
-  | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp ->
-     begin match cond with
-     | E_aux (E_app_infix (E_aux (E_id id, _), op, E_aux (E_lit lit, _)), _)
-     | E_aux (E_app_infix (E_aux (E_lit lit, _), op, E_aux (E_id id, _)), _)
-          when string_of_id op = "==" && is_bitvector_literal lit ->
-        let value = bitvector_unsigned lit in
-        List.map (modify_unsigned id value) exps
-     | _ -> exps
-     end
+  | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp -> begin
+      match cond with
+      | E_aux (E_app_infix (E_aux (E_id id, _), op, E_aux (E_lit lit, _)), _)
+      | E_aux (E_app_infix (E_aux (E_lit lit, _), op, E_aux (E_id id, _)), _)
+        when string_of_id op = "==" && is_bitvector_literal lit ->
+          let value = bitvector_unsigned lit in
+          List.map (modify_unsigned id value) exps
+      | _ -> exps
+    end
   | _ -> exps
 
-let analyze exps =
-  if !opt_nl_flow then analyze' exps else exps
+let analyze exps = if !opt_nl_flow then analyze' exps else exps

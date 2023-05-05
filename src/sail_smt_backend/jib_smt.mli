@@ -93,54 +93,48 @@ val opt_default_lbits_index : int ref
 val opt_default_vector_index : int ref
 
 type ctx = {
-    lbits_index : int;
-    (** Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
-    lint_size : int;
-    (** The size we use for integers where we don't know how large they are statically. *)
-    vector_index : int;
-    (** A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
+  lbits_index : int;
+      (** Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
+  lint_size : int;  (** The size we use for integers where we don't know how large they are statically. *)
+  vector_index : int;
+      (** A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
        We need to take care that vector_index is large enough for all generic vectors. *)
-    register_map : id list CTMap.t;
-    (** A map from each ctyp to a list of registers of that ctyp *)
-    tuple_sizes : IntSet.t ref;
-    (** A set to keep track of all the tuple sizes we need to generate types for *)
-    tc_env : Type_check.Env.t;
-    (** tc_env is the global type-checking environment *)
-    pragma_l : Ast.l;
-    (** A location, usually the $counterexample or $property we are
+  register_map : id list CTMap.t;  (** A map from each ctyp to a list of registers of that ctyp *)
+  tuple_sizes : IntSet.t ref;  (** A set to keep track of all the tuple sizes we need to generate types for *)
+  tc_env : Type_check.Env.t;  (** tc_env is the global type-checking environment *)
+  pragma_l : Ast.l;
+      (** A location, usually the $counterexample or $property we are
        generating the SMT for. Used for error messages. *)
-    arg_stack : (int * string) Stack.t;
-    (** Used internally to keep track of function argument names *)
-    ast : Type_check.tannot ast;
-    (** The fully type-checked ast *)
-    shared : ctyp Bindings.t;
-    (** Shared variables. These variables do not get renamed by
+  arg_stack : (int * string) Stack.t;  (** Used internally to keep track of function argument names *)
+  ast : Type_check.tannot ast;  (** The fully type-checked ast *)
+  shared : ctyp Bindings.t;
+      (** Shared variables. These variables do not get renamed by
        Smtlib.suffix_variables_def, and their SSA number is
        omitted. They should therefore only ever be read and never
        written. Used by sail-axiomatic for symbolic values in the
        initial litmus state. *)
-    preserved : IdSet.t;
-    (** icopy instructions to an id in preserved will generated a
+  preserved : IdSet.t;
+      (** icopy instructions to an id in preserved will generated a
        define-const (by using Smtlib.Preserved_const) that will not be
        simplified away or renamed. It will also not get a SSA
        number. Such variables can therefore only ever be written to
        once, and never read. They are used by sail-axiomatic to
        extract information from the generated SMT. *)
-    events : smt_exp Stack.t EventMap.t ref;
-    (** For every event type we have a stack of boolean SMT
+  events : smt_exp Stack.t EventMap.t ref;
+      (** For every event type we have a stack of boolean SMT
        expressions for each occurance of that event. See
        src/property.ml for the event types *)
-    node : int;
-    pathcond : smt_exp Lazy.t;
-    (** When generating SMT for an instruction pathcond will contain
+  node : int;
+  pathcond : smt_exp Lazy.t;
+      (** When generating SMT for an instruction pathcond will contain
        the global path conditional of the containing block/node in the
        control flow graph *)
-    use_string : bool ref;
-    use_real : bool ref
-    (** Set if we need to use strings or real numbers in the generated
+  use_string : bool ref;
+  use_real : bool ref;
+      (** Set if we need to use strings or real numbers in the generated
        SMT, which then requires set-logic ALL or similar depending on
        the solver *)
-  }
+}
 
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
 val compile : Type_check.Env.t -> Effects.side_effect_info -> Type_check.tannot ast -> cdef list * Jib_compile.ctx * ctx
@@ -155,7 +149,8 @@ val smt_header : ctx -> cdef list -> smt_def list
 
 val smt_query : ctx -> Property.query -> smt_exp
 
-val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * int * (ssa_elem list * cf_node) Jib_ssa.array_graph
+val smt_instr_list :
+  string -> ctx -> cdef list -> instr list -> smt_def Stack.t * int * (ssa_elem list * cf_node) Jib_ssa.array_graph
 
 module type Sequence = sig
   type 'a t
@@ -168,22 +163,21 @@ end
    final SMTLIB file. Depending on the order in which we want to
    process the results we can either use a FIFO queue or a LIFO
    stack, or any other structure. *)
-module Make_optimizer(S : Sequence) : sig
+module Make_optimizer (S : Sequence) : sig
   val optimize : smt_def Stack.t -> smt_def S.t
 end
 
-val serialize_smt_model :
-  string -> Type_check.Env.t -> Effects.side_effect_info -> Type_check.tannot ast -> unit
+val serialize_smt_model : string -> Type_check.Env.t -> Effects.side_effect_info -> Type_check.tannot ast -> unit
 
-val deserialize_smt_model :
-  string -> cdef list * ctx
+val deserialize_smt_model : string -> cdef list * ctx
 
 (** Generate SMT for all the $property and $counterexample pragmas in
    an AST, and write it to appropriately named files. *)
 val generate_smt :
-  (string * string * l * 'a val_spec) Bindings.t (* See Property.find_properties *)
-  -> (string -> string) (* Applied to each function name to generate the file name for the smtlib file *)
-  -> Type_check.Env.t
-  -> Effects.side_effect_info
-  -> Type_check.tannot ast
-  -> unit
+  (string * string * l * 'a val_spec) Bindings.t (* See Property.find_properties *) ->
+  (string -> string) ->
+  (* Applied to each function name to generate the file name for the smtlib file *)
+  Type_check.Env.t ->
+  Effects.side_effect_info ->
+  Type_check.tannot ast ->
+  unit

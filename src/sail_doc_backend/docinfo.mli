@@ -85,6 +85,7 @@ module type CONFIG = sig
   val embedding_mode : embedding option
 end
 
-module Generator(Converter : Markdown.CONVERTER)(Config: CONFIG) : sig
-  val docinfo_for_ast : files:string list -> hyperlinks:(string list -> tannot def -> hyperlink list) -> tannot ast -> tannot docinfo
+module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) : sig
+  val docinfo_for_ast :
+    files:string list -> hyperlinks:(string list -> tannot def -> hyperlink list) -> tannot ast -> tannot docinfo
 end

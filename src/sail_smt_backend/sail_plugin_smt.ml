@@ -67,26 +67,24 @@
 
 open Libsail
 
-let smt_options = [
-  ( "-smt_auto",
-    Arg.Tuple [Arg.Set Jib_smt.opt_auto],
-    " generate SMT and automatically call the CVC4 solver");
-  ( "-smt_ignore_overflow",
-    Arg.Set Jib_smt.opt_ignore_overflow,
-    " ignore integer overflow in generated SMT");
-  ( "-smt_propagate_vars",
-    Arg.Set Jib_smt.opt_propagate_vars,
-    " propgate variables through generated SMT");
-  ( "-smt_int_size",
-    Arg.String (fun n -> Jib_smt.opt_default_lint_size := int_of_string n),
-    "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)");
-  ( "-smt_bits_size",
-    Arg.String (fun n -> Jib_smt.opt_default_lbits_index := int_of_string n),
-    "<n> set a bound of 2 ^ n for bitvector bitwidth in generated SMT (default 8)");
-  ( "-smt_vector_size",
-    Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
-    "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)");
-]
+let smt_options =
+  [
+    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the CVC4 solver");
+    ("-smt_ignore_overflow", Arg.Set Jib_smt.opt_ignore_overflow, " ignore integer overflow in generated SMT");
+    ("-smt_propagate_vars", Arg.Set Jib_smt.opt_propagate_vars, " propgate variables through generated SMT");
+    ( "-smt_int_size",
+      Arg.String (fun n -> Jib_smt.opt_default_lint_size := int_of_string n),
+      "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)"
+    );
+    ( "-smt_bits_size",
+      Arg.String (fun n -> Jib_smt.opt_default_lbits_index := int_of_string n),
+      "<n> set a bound of 2 ^ n for bitvector bitwidth in generated SMT (default 8)"
+    );
+    ( "-smt_vector_size",
+      Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
+      "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)"
+    );
+  ]
 
 let smt_rewrites =
   let open Rewrites in
@@ -117,7 +115,7 @@ let smt_rewrites =
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);
     ("constant_fold", [String_arg "c"]);
-    ("properties", [])
+    ("properties", []);
   ]
 
 let smt_target _ out_file ast effect_info env =
@@ -127,18 +125,13 @@ let smt_target _ out_file ast effect_info env =
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
   Specialize.add_initial_calls prop_ids;
   let ast_smt, env, effect_info = Specialize.(specialize typ_ord_specialization env ast effect_info) in
-  let ast_smt, env, effect_info = Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info) in
+  let ast_smt, env, effect_info =
+    Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info)
+  in
   let name_file =
-    match out_file with
-    | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"
-    | None -> fun str -> str ^ ".smt2"
+    match out_file with Some f -> fun str -> f ^ "_" ^ str ^ ".smt2" | None -> fun str -> str ^ ".smt2"
   in
   Reporting.opt_warnings := true;
   Jib_smt.generate_smt props name_file env effect_info ast_smt
 
-let _ =
-  Target.register
-    ~name:"smt"
-    ~options:smt_options
-    ~rewrites:smt_rewrites
-    smt_target
+let _ = Target.register ~name:"smt" ~options:smt_options ~rewrites:smt_rewrites smt_target

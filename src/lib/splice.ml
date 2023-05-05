@@ -77,46 +77,42 @@ open Ast_util
 let scan_ast { defs; _ } =
   let scan (ids, specs) (DEF_aux (aux, _) as def) =
     match aux with
-    | DEF_fundef fd ->
-       IdSet.add (id_of_fundef fd) ids, specs
-    | DEF_val (VS_aux (VS_val_spec (_,id,_,_),_) as vs) ->
-       ids, Bindings.add id vs specs
-    | DEF_pragma (("file_start" | "file_end"), _ ,_) ->
-       ids, specs
-    | _ -> raise (Reporting.err_general (def_loc def)
-                    "Definition in splice file isn't a spec or function")
-  in List.fold_left scan (IdSet.empty, Bindings.empty) defs
+    | DEF_fundef fd -> (IdSet.add (id_of_fundef fd) ids, specs)
+    | DEF_val (VS_aux (VS_val_spec (_, id, _, _), _) as vs) -> (ids, Bindings.add id vs specs)
+    | DEF_pragma (("file_start" | "file_end"), _, _) -> (ids, specs)
+    | _ -> raise (Reporting.err_general (def_loc def) "Definition in splice file isn't a spec or function")
+  in
+  List.fold_left scan (IdSet.empty, Bindings.empty) defs
 
 let filter_old_ast repl_ids repl_specs { defs; _ } =
-  let check (rdefs,spec_found) (DEF_aux (aux, def_annot) as def) =
+  let check (rdefs, spec_found) (DEF_aux (aux, def_annot) as def) =
     match aux with
     | DEF_fundef fd ->
-       let id = id_of_fundef fd in
-       if IdSet.mem id repl_ids
-       then rdefs, spec_found
-       else def::rdefs, spec_found
-    | DEF_val (VS_aux (VS_val_spec (_,id,_,_),_)) ->
-       (match Bindings.find_opt id repl_specs with
-        | Some vs -> DEF_aux (DEF_val vs, def_annot) :: rdefs, IdSet.add id spec_found
-        | None -> def::rdefs, spec_found)
-    | _ -> def::rdefs, spec_found
+        let id = id_of_fundef fd in
+        if IdSet.mem id repl_ids then (rdefs, spec_found) else (def :: rdefs, spec_found)
+    | DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)) -> (
+        match Bindings.find_opt id repl_specs with
+        | Some vs -> (DEF_aux (DEF_val vs, def_annot) :: rdefs, IdSet.add id spec_found)
+        | None -> (def :: rdefs, spec_found)
+      )
+    | _ -> (def :: rdefs, spec_found)
   in
-  let rdefs, spec_found = List.fold_left check ([],IdSet.empty) defs in
+  let rdefs, spec_found = List.fold_left check ([], IdSet.empty) defs in
   (List.rev rdefs, spec_found)
 
 let filter_replacements spec_found { defs; _ } =
   let not_found = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_,id,_,_),_)),_) -> not (IdSet.mem id spec_found)
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)), _) -> not (IdSet.mem id spec_found)
     | _ -> true
-  in List.filter not_found defs
+  in
+  List.filter not_found defs
 
 let splice ast file =
   let parsed_ast = Initial_check.parse_file file |> snd in
   let repl_ast = Initial_check.process_ast ~generate:false (Parse_ast.Defs [(file, parsed_ast)]) in
   let repl_ast = Rewrites.move_loop_measures repl_ast in
-  let repl_ast = map_ast_annot (fun (l,_) -> l,Type_check.empty_tannot) repl_ast in
+  let repl_ast = map_ast_annot (fun (l, _) -> (l, Type_check.empty_tannot)) repl_ast in
   let repl_ids, repl_specs = scan_ast repl_ast in
   let defs1, specs_found = filter_old_ast repl_ids repl_specs ast in
   let defs2 = filter_replacements specs_found repl_ast in
   Type_error.check Type_check.initial_env (Type_check.strip_ast { ast with defs = defs1 @ defs2 })
-

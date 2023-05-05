@@ -81,9 +81,9 @@ open Type_check
  *)
 val start_repl :
   ?banner:bool ->
-  ?commands:(string list) ->
+  ?commands:string list ->
   ?auto_rewrites:bool ->
-  options:((Arg.key * Arg.spec * Arg.doc) list) ->
+  options:(Arg.key * Arg.spec * Arg.doc) list ->
   Env.t ->
   Effects.side_effect_info ->
   tannot ast ->
