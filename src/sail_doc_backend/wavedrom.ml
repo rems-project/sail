@@ -78,14 +78,11 @@ exception Invalid_wavedrom
 let process_attr_arg = function
   | None -> []
   | Some arg ->
-     let labels = String.split_on_char ' ' arg |> List.filter (fun label -> label <> "") in
-     List.map (function
-         | "_" -> None
-         | label -> Some label
-       ) labels
+      let labels = String.split_on_char ' ' arg |> List.filter (fun label -> label <> "") in
+      List.map (function "_" -> None | label -> Some label) labels
 
 let rec zip_labels xs ys =
-  match xs, ys with
+  match (xs, ys) with
   | [], ys -> List.map (fun y -> (None, y)) ys
   | _, [] -> []
   | x :: xs, y :: ys -> (x, y) :: zip_labels xs ys
@@ -96,56 +93,45 @@ let wavedrom_label size = function
 
 let binary_to_hex str =
   let open Sail2_values in
-  let padded = match String.length str mod 4 with
-    | 0 -> str
-    | 1 -> "000" ^ str
-    | 2 -> "00" ^ str
-    | _ -> "0" ^ str in
+  let padded = match String.length str mod 4 with 0 -> str | 1 -> "000" ^ str | 2 -> "00" ^ str | _ -> "0" ^ str in
   Util.string_to_list padded
   |> List.map (function '0' -> B0 | _ -> B1)
-  |> hexstring_of_bits
-  |> Option.get
+  |> hexstring_of_bits |> Option.get
   |> Util.string_of_list "" (fun c -> String.make 1 c)
 
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
   | P_id id ->
-     Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
+      Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
   | P_lit (L_aux (L_bin bin, _)) ->
-     Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
+      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
-     Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
+      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
   | P_vector_subrange (_, n, m) when Big_int.equal n m ->
-     Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }"
-       size (Big_int.to_string n) (wavedrom_label size label)
+      Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }" size (Big_int.to_string n) (wavedrom_label size label)
   | P_vector_subrange (id, n, m) ->
-     Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }"
-       size (string_of_id id) (Big_int.to_string n) (Big_int.to_string m) (wavedrom_label size label)
-  | P_as (pat, _) | P_typ (_, pat) ->
-     wavedrom_elem_string size label pat
+      Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Big_int.to_string n)
+        (Big_int.to_string m) (wavedrom_label size label)
+  | P_as (pat, _) | P_typ (_, pat) -> wavedrom_elem_string size label pat
   | _ -> raise Invalid_wavedrom
 
 let wavedrom_elem (label, (P_aux (_, (_, tannot)) as pat)) =
   match Type_check.destruct_tannot tannot with
   | None -> raise Invalid_wavedrom
-  | Some (env, typ) ->
-     match Type_check.destruct_bitvector env typ with
-     | Some (Nexp_aux (Nexp_constant size, _), _) ->
-        let size = Big_int.to_int size in
-        wavedrom_elem_string size label pat
-     | _ -> raise Invalid_wavedrom
+  | Some (env, typ) -> (
+      match Type_check.destruct_bitvector env typ with
+      | Some (Nexp_aux (Nexp_constant size, _), _) ->
+          let size = Big_int.to_int size in
+          wavedrom_elem_string size label pat
+      | _ -> raise Invalid_wavedrom
+    )
 
 let of_pattern' attr_arg = function
   | P_aux (P_vector_concat xs, _) ->
-     let labels = process_attr_arg attr_arg in
-     let elems = List.rev_map wavedrom_elem (zip_labels labels xs) in
-     let strs = Util.string_of_list ",\n" (fun x -> x) elems in
-     Printf.sprintf "{reg:[\n%s\n]}" strs
-  | _ ->
-     raise Invalid_wavedrom
+      let labels = process_attr_arg attr_arg in
+      let elems = List.rev_map wavedrom_elem (zip_labels labels xs) in
+      let strs = Util.string_of_list ",\n" (fun x -> x) elems in
+      Printf.sprintf "{reg:[\n%s\n]}" strs
+  | _ -> raise Invalid_wavedrom
 
-let of_pattern ~labels:attr_arg pat =
-  try
-    Some (of_pattern' attr_arg pat)
-  with
-  | Invalid_wavedrom -> None
+let of_pattern ~labels:attr_arg pat = try Some (of_pattern' attr_arg pat) with Invalid_wavedrom -> None

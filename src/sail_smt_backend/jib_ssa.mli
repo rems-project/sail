@@ -119,9 +119,7 @@ val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) 
    dominators for a control flow graph with a specified root node. *)
 val immediate_dominators : 'a array_graph -> int -> int array
 
-type ssa_elem =
-  | Phi of Jib.name * Jib.ctyp * Jib.name list
-  | Pi of Jib.cval list
+type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
 
 (** Convert a list of instructions into SSA form *)
 val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph

@@ -1,17 +1,22 @@
 (env
-  (dev
-    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37)))
-  (release
-    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37))))
+ (dev
+  (flags
+   (:standard -w -33 -w -27 -w -32 -w -26 -w -37)))
+ (release
+  (flags
+   (:standard -w -33 -w -27 -w -32 -w -26 -w -37))))
 
 (executable
-  (name sail_plugin_ocaml)
-  (modes (native plugin))
-  (link_flags -linkall)
-  (libraries libsail base64)
-  (embed_in_plugin_libraries base64))
+ (name sail_plugin_ocaml)
+ (modes
+  (native plugin))
+ (link_flags -linkall)
+ (libraries libsail base64)
+ (embed_in_plugin_libraries base64))
 
 (install
-  (section (site (libsail plugins)))
-  (package sail_ocaml_backend)
-  (files sail_plugin_ocaml.cmxs))
+ (section
+  (site
+   (libsail plugins)))
+ (package sail_ocaml_backend)
+ (files sail_plugin_ocaml.cmxs))

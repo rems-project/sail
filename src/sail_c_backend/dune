@@ -1,10 +1,12 @@
-
 (executable
-  (name sail_plugin_c)
-  (modes (native plugin))
-  (libraries libsail))
+ (name sail_plugin_c)
+ (modes
+  (native plugin))
+ (libraries libsail))
 
 (install
-  (section (site (libsail plugins)))
-  (package sail_c_backend)
-  (files sail_plugin_c.cmxs))
+ (section
+  (site
+   (libsail plugins)))
+ (package sail_c_backend)
+ (files sail_plugin_c.cmxs))

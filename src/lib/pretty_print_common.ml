@@ -97,5 +97,5 @@ let doc_int i = string (Big_int.to_string i)
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
 
-let print ?(len=100) channel doc = ToChannel.pretty 1. len channel doc
-let to_buf ?(len=100) buf doc = ToBuffer.pretty 1. len buf doc
+let print ?(len = 100) channel doc = ToChannel.pretty 1. len channel doc
+let to_buf ?(len = 100) buf doc = ToBuffer.pretty 1. len buf doc

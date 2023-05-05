@@ -71,16 +71,16 @@ open Ast_util
 open Util
 open Type_check
 
-(*Determines if the first typ is within the range of the the second typ, 
-  using the constraints provided when the first typ contains variables. 
+(*Determines if the first typ is within the range of the the second typ,
+  using the constraints provided when the first typ contains variables.
   It is an error for second typ to be anything other than a range type
-  If the first typ is a vector, then determines if the max representable 
+  If the first typ is a vector, then determines if the max representable
   number is in the range of the second; it is an error for the first typ
   to be anything other than a vector, a range, an atom, or a bit (after
-  suitable unwrapping of abbreviations, reg, and registers). 
+  suitable unwrapping of abbreviations, reg, and registers).
 *)
 (* val is_within_range: typ -> typ -> nexp_range list -> triple
-val is_within_machine64 : typ -> nexp_range list -> triple *)
+   val is_within_machine64 : typ -> nexp_range list -> triple *)
 
 (* free variables and dependencies *)
 
@@ -98,12 +98,14 @@ val top_sort_defs : tannot ast -> tannot ast
 
 (** Return the set of mutable variables assigned to in the given AST. *)
 val assigned_vars : 'a exp -> IdSet.t
+
 val assigned_vars_in_fexps : 'a fexp list -> IdSet.t
 val assigned_vars_in_pexp : 'a pexp -> IdSet.t
 val assigned_vars_in_lexp : 'a lexp -> IdSet.t
 
 (** Variable bindings in patterns and expressions *)
 val pat_id_is_variable : env -> id -> bool
+
 val bindings_from_pat : tannot pat -> id list
 val bound_vars : 'a exp -> IdSet.t
 
@@ -113,4 +115,5 @@ val equal_kids : env -> kid -> KidSet.t
 (** Type-level substitutions into patterns and expressions.  Also attempts to
     update type annotations, but not the associated environments. *)
 val nexp_subst_pat : nexp KBindings.t -> tannot pat -> tannot pat
+
 val nexp_subst_exp : nexp KBindings.t -> tannot exp -> tannot exp

@@ -102,7 +102,7 @@ val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 val get_def_attribute : string -> def_annot -> (l * string) option
 
 val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
-  
+
 (** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
    a common pattern is generating code with [no_annot], then adding location
@@ -117,7 +117,7 @@ val gen_loc : Parse_ast.l -> Parse_ast.l
 val is_gen_loc : Parse_ast.l -> bool
 
 (** {1 Variable information} *)
-  
+
 type mut = Immutable | Mutable
 
 (** [lvar] is the type of variables - they can either be registers,
@@ -126,14 +126,14 @@ type mut = Immutable | Mutable
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
 val is_unbound : 'a lvar -> bool
-                                                                          
+
 (** Note: Partial function -- fails for {!Unbound} lvars *)
 val lvar_typ : ?loc:l -> 'a lvar -> 'a
-  
+
 (** {1 Functions for building and destructuring untyped AST elements} *)
 
 (** {2 Functions for building untyped AST elements} *)
-  
+
 val mk_id : string -> id
 val mk_kid : string -> kid
 val mk_ord : order_aux -> order
@@ -149,7 +149,7 @@ val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
-val mk_fundef : (uannot funcl) list -> uannot def
+val mk_fundef : uannot funcl list -> uannot def
 val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm
 val mk_typquant : quant_item list -> typquant
@@ -160,7 +160,7 @@ val mk_fexp : id -> uannot exp -> uannot fexp
 val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> 'a def_aux -> 'a def
-  
+
 val inc_ord : order
 val dec_ord : order
 
@@ -203,7 +203,7 @@ val is_typ_arg_nexp : typ_arg -> bool
 val is_typ_arg_typ : typ_arg -> bool
 val is_typ_arg_order : typ_arg -> bool
 val is_typ_arg_bool : typ_arg -> bool
-  
+
 (** {2 Sail built-in types} *)
 
 val unknown_typ : typ
@@ -252,7 +252,7 @@ val constraint_conj : n_constraint -> n_constraint list
 val constraint_disj : n_constraint -> n_constraint list
 
 type effect
- 
+
 val no_effect : effect
 val monadic_effect : effect
 
@@ -261,7 +261,7 @@ val effectful : effect -> bool
 val equal_effects : effect -> effect -> bool
 val subseteq_effects : effect -> effect -> bool
 val union_effects : effect -> effect -> effect
-     
+
 (** {2 Functions for building numeric expressions} *)
 
 val nconstant : Big_int.num -> nexp
@@ -330,13 +330,13 @@ module NC : sig
   type t = n_constraint
   val compare : n_constraint -> n_constraint -> int
 end
-     
+
 (* NB: the comparison function does not expand synonyms *)
 module Typ : sig
   type t = typ
   val compare : typ -> typ -> int
 end
-     
+
 module IdSet : sig
   include Set.S with type elt = id
 end
@@ -376,7 +376,7 @@ end
 module TypMap : sig
   include Map.S with type key = typ
 end
- 
+
 (** {1 Functions for working with type quantifiers} *)
 
 val quant_add : quant_item -> typquant -> typquant
@@ -412,6 +412,7 @@ val map_ast_annot : ('a annot -> 'b annot) -> 'a ast -> 'b ast
 
 (** {1 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
+
 val kid_loc : kid -> Parse_ast.l
 val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
@@ -455,7 +456,7 @@ val id_of_mapdef : 'a mapdef -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id
-  
+
 (** {2 Functions for manipulating identifiers} *)
 
 val id_of_kid : kid -> id
@@ -497,11 +498,11 @@ val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
 val pattern_vector_subranges : 'a pat -> (Big_int.num * Big_int.num) list Bindings.t
 
-val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
-val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
+val destruct_pexp : 'a pexp -> 'a pat * 'a exp option * 'a exp * (Ast.l * 'a)
+val construct_pexp : 'a pat * 'a exp option * 'a exp * (Ast.l * 'a) -> 'a pexp
 
-val destruct_mpexp : 'a mpexp -> 'a mpat * ('a exp) option * (Ast.l * 'a)
-val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
+val destruct_mpexp : 'a mpexp -> 'a mpat * 'a exp option * (Ast.l * 'a)
+val construct_mpexp : 'a mpat * 'a exp option * (Ast.l * 'a) -> 'a mpexp
 
 val is_valspec : id -> 'a def -> bool
 val is_fundef : id -> 'a def -> bool

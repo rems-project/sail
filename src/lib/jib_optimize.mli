@@ -76,6 +76,7 @@ val optimize_unit : instr list -> instr list
 (** Remove all instructions that can contain other nested
    instructions, prodcing a flat list of instructions. *)
 val flatten_instrs : instr list -> instr list
+
 val flatten_cdef : cdef -> cdef
 val reset_flat_counter : unit -> unit
 

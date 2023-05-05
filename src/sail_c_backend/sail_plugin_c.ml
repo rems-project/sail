@@ -70,57 +70,61 @@ open Libsail
 let opt_includes_c : string list ref = ref []
 let opt_specialize_c = ref false
 
-let c_options = [
-  ( "-c_include",
-    Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
-    "<filename> provide additional include for C output");
-  ( "-c_no_main",
-    Arg.Set C_backend.opt_no_main,
-    " do not generate the main() function" );
-  ( "-c_no_rts",
-    Arg.Set C_backend.opt_no_rts,
-    " do not include the Sail runtime" );
-  ( "-c_no_lib",
-    Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
-    " do not include the Sail runtime or library" );
-  ( "-c_prefix",
-    Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
-    "<prefix> prefix generated C functions" );
-  ( "-c_extra_params",
-    Arg.String (fun params -> C_backend.opt_extra_params := Some params),
-    "<parameters> generate C functions with additional parameters" );
-  ( "-c_extra_args",
-    Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
-    "<arguments> supply extra argument to every generated C function call" );
-  ( "-c_specialize",
-    Arg.Set opt_specialize_c,
-    " specialize integer arguments in C output");
-  ( "-c_preserve",
-    Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
-    " make sure the provided function identifier is preserved in C output");
-  ( "-c_fold_unit",
-    Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
-    " remove comma separated list of functions from C output, replacing them with unit");
-  ( "-c_coverage",
-    Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
-    "<file> Turn on coverage tracking and output information about all branches and functions to a file");
-  ( "-O",
-    Arg.Tuple [Arg.Set C_backend.optimize_primops;
-               Arg.Set C_backend.optimize_hoist_allocations;
-               Arg.Set Initial_check.opt_fast_undefined;
-               Arg.Set C_backend.optimize_struct_updates;
-               Arg.Set C_backend.optimize_alias],
-    " turn on optimizations for C compilation");
-  ( "-Ofixed_int",
-    Arg.Set C_backend.optimize_fixed_int,
-    " assume fixed size integers rather than GMP arbitrary precision integers");
-  ( "-Ofixed_bits",
-    Arg.Set C_backend.optimize_fixed_bits,
-    " assume fixed size bitvectors rather than arbitrary precision bitvectors");
-  ( "-static",
-    Arg.Set C_backend.opt_static,
-    " make generated C functions static");
-]
+let c_options =
+  [
+    ( "-c_include",
+      Arg.String (fun i -> opt_includes_c := i :: !opt_includes_c),
+      "<filename> provide additional include for C output"
+    );
+    ("-c_no_main", Arg.Set C_backend.opt_no_main, " do not generate the main() function");
+    ("-c_no_rts", Arg.Set C_backend.opt_no_rts, " do not include the Sail runtime");
+    ( "-c_no_lib",
+      Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
+      " do not include the Sail runtime or library"
+    );
+    ("-c_prefix", Arg.String (fun prefix -> C_backend.opt_prefix := prefix), "<prefix> prefix generated C functions");
+    ( "-c_extra_params",
+      Arg.String (fun params -> C_backend.opt_extra_params := Some params),
+      "<parameters> generate C functions with additional parameters"
+    );
+    ( "-c_extra_args",
+      Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
+      "<arguments> supply extra argument to every generated C function call"
+    );
+    ("-c_specialize", Arg.Set opt_specialize_c, " specialize integer arguments in C output");
+    ( "-c_preserve",
+      Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
+      " make sure the provided function identifier is preserved in C output"
+    );
+    ( "-c_fold_unit",
+      Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
+      " remove comma separated list of functions from C output, replacing them with unit"
+    );
+    ( "-c_coverage",
+      Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
+      "<file> Turn on coverage tracking and output information about all branches and functions to a file"
+    );
+    ( "-O",
+      Arg.Tuple
+        [
+          Arg.Set C_backend.optimize_primops;
+          Arg.Set C_backend.optimize_hoist_allocations;
+          Arg.Set Initial_check.opt_fast_undefined;
+          Arg.Set C_backend.optimize_struct_updates;
+          Arg.Set C_backend.optimize_alias;
+        ],
+      " turn on optimizations for C compilation"
+    );
+    ( "-Ofixed_int",
+      Arg.Set C_backend.optimize_fixed_int,
+      " assume fixed size integers rather than GMP arbitrary precision integers"
+    );
+    ( "-Ofixed_bits",
+      Arg.Set C_backend.optimize_fixed_bits,
+      " assume fixed size bitvectors rather than arbitrary precision bitvectors"
+    );
+    ("-static", Arg.Set C_backend.opt_static, " make generated C functions static");
+  ]
 
 let c_rewrites =
   let open Rewrites in
@@ -150,23 +154,18 @@ let c_rewrites =
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);
-    ("constant_fold", [String_arg "c"])
+    ("constant_fold", [String_arg "c"]);
   ]
 
 let c_target _ out_file ast effect_info _ =
   let ast, env = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
-  let close, output_chan = match out_file with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
+  let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".c")) | None -> (false, stdout) in
   Reporting.opt_warnings := true;
-  C_backend.compile_ast env effect_info output_chan (!opt_includes_c) ast;
+  C_backend.compile_ast env effect_info output_chan !opt_includes_c ast;
   flush output_chan;
-  if close then (
-    close_out output_chan
-  )
+  if close then close_out output_chan
 
 let _ =
-  Target.register
-    ~name:"c"
-    ~options:c_options
+  Target.register ~name:"c" ~options:c_options
     ~pre_parse_hook:(fun () -> Initial_check.opt_undefined_gen := true)
-    ~rewrites:c_rewrites
-    c_target
+    ~rewrites:c_rewrites c_target

@@ -74,14 +74,12 @@ val opt_verbosity : int ref
 val last : 'a list -> 'a
 
 val last_opt : 'a list -> 'a option
-  
+
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
-module Duplicate(S : Set.S) : sig
-  type dups =
-    | No_dups of S.t
-    | Has_dups of S.elt
+module Duplicate (S : Set.S) : sig
+  type dups = No_dups of S.t | Has_dups of S.elt
   val duplicates : S.elt list -> dups
 end
 
@@ -108,7 +106,7 @@ val power : int -> int -> int
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
 
 val iter_last : (bool -> 'a -> unit) -> 'a list -> unit
-  
+
 (** {2 Option Functions} *)
 
 (** [option_cases None f_s f_n] returns [f_n], whereas
@@ -135,16 +133,16 @@ val option_all : 'a option list -> 'a list option
 (** {2 List Functions} *)
 
 val list_empty : 'a list -> bool
-  
+
 (** [list_index p l] returns the first index [i] such that
     the predicate [p (l!i)] holds. If no such [i] exists,
     [None] is returned. *)
-val list_index: ('a -> bool) -> 'a list -> int option
+val list_index : ('a -> bool) -> 'a list -> int option
 
 (** [option_first f l] searches for the first element [x] of [l] such
     that the [f x] is not [None]. If such an element exists, [f x] is
     returned, otherwise [None]. *)
-val option_first: ('a -> 'b option) -> 'a list -> 'b option
+val option_first : ('a -> 'b option) -> 'a list -> 'b option
 
 (** [map_changed f l] maps [f] over [l].
     If for all elements of [l] the
@@ -165,7 +163,7 @@ val map_changed_default : ('a -> 'b) -> ('a -> 'b option) -> 'a list -> 'b list 
 val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
 
 val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
-  
+
 (** [map_all f l] maps [f] over [l]. If at least one entry is [None], [None] is returned. Otherwise,
     the [Some] function is removed from the list. *)
 val map_all : ('a -> 'b option) -> 'a list -> 'b list option
@@ -191,11 +189,11 @@ val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 val take : int -> 'a list -> 'a list
 val drop : int -> 'a list -> 'a list
 
-val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
+val take_drop : ('a -> bool) -> 'a list -> 'a list * 'a list
 
 val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option
 
-val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
+val find_next : ('a -> bool) -> 'a list -> 'a list * ('a * 'a list) option
 
 (** find an item in a list and return that item as well as its index *)
 val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
@@ -242,6 +240,7 @@ val string_to_list : string -> char list
 
 (** Sets of Integers *)
 module IntSet : Set.S with type elt = int
+
 module IntIntSet : Set.S with type elt = int * int
 
 (** {2 Formatting functions} *)
@@ -295,9 +294,10 @@ val progress : string -> string -> int -> int -> unit
     files existed before. If it is set to [false] and an output file already exists,
     the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref
- 
-val open_output_with_check : string option -> string -> (Format.formatter * (out_channel * string * string option * string))
 
-val open_output_with_check_unformatted : string option -> string -> (out_channel * string * string option * string)
+val open_output_with_check :
+  string option -> string -> Format.formatter * (out_channel * string * string option * string)
 
-val close_output_with_check : (out_channel * string * string option * string) -> unit
+val open_output_with_check_unformatted : string option -> string -> out_channel * string * string option * string
+
+val close_output_with_check : out_channel * string * string option * string -> unit

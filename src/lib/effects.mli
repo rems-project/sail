@@ -90,7 +90,7 @@ end
 (* Note we intentionally keep the side effect type abstract, and
    expose some functions on effect sets based on what we actually
    need. *)
-     
+
 val throws : EffectSet.t -> bool
 
 val pure : EffectSet.t -> bool
@@ -108,10 +108,10 @@ val effectful : EffectSet.t -> bool
 val has_outcome : id -> EffectSet.t -> bool
 
 type side_effect_info = {
-    functions : EffectSet.t Bindings.t;
-    letbinds : EffectSet.t Bindings.t;
-    mappings : EffectSet.t Bindings.t
-  }
+  functions : EffectSet.t Bindings.t;
+  letbinds : EffectSet.t Bindings.t;
+  mappings : EffectSet.t Bindings.t;
+}
 
 val empty_side_effect_info : side_effect_info
 
@@ -133,6 +133,7 @@ val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
    information. The order of arguments is to make it convenient to use
    with List.fold_left. *)
 val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
+
 val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
 
 (** [add_function_effect id_from info id_to] adds the effect

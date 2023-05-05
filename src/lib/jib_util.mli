@@ -72,7 +72,7 @@ open Ast_util
 open Jib
 
 (** {1 Instruction construction functions, and Jib names } *)
-   
+
 (** Create a generator that produces fresh names, paired with a
    function that resets the generator (allowing it to regenerate the
    same name). *)
@@ -102,7 +102,7 @@ val ijump : l -> cval -> string -> instr
 
 (** Create a new unique label by concatenating a string with a unique identifier *)
 val label : string -> string
-  
+
 module Name : sig
   type t = name
   val compare : name -> name -> int
@@ -123,7 +123,7 @@ val return : name
 
 val name : id -> name
 val global : id -> name
-  
+
 val cval_rename : name -> name -> cval -> cval
 val clexp_rename : name -> name -> clexp -> clexp
 val instr_rename : name -> name -> instr -> instr
@@ -137,7 +137,7 @@ val string_of_value : Value2.vl -> string
 val string_of_cval : cval -> string
 
 (** {1. Functions and modules for working with ctyps} *)
-  
+
 val map_ctyp : (ctyp -> ctyp) -> ctyp -> ctyp
 val ctyp_equal : ctyp -> ctyp -> bool
 val ctyp_compare : ctyp -> ctyp -> int
@@ -157,13 +157,13 @@ end
 module NameCTSet : sig
   include Set.S with type elt = name * ctyp
 end
-     
+
 module NameCTMap : sig
   include Map.S with type key = name * ctyp
 end
 
 (** {2 Operations for polymorphic Jib ctyps} *)
-     
+
 val ctyp_unify : l -> ctyp -> ctyp -> ctyp KBindings.t
 
 val merge_unifiers : kid -> ctyp -> ctyp -> ctyp option
@@ -179,7 +179,7 @@ val is_polymorphic : ctyp -> bool
 val subst_poly : ctyp KBindings.t -> ctyp -> ctyp
 
 (** {2 Infer types} *)
-  
+
 val cval_ctyp : cval -> ctyp
 val clexp_ctyp : clexp -> ctyp
 val cdef_ctyps : cdef -> CTSet.t
@@ -189,11 +189,11 @@ val cdef_ctyps : cdef -> CTSet.t
 val instr_ids : instr -> NameSet.t
 val instr_reads : instr -> NameSet.t
 val instr_writes : instr -> NameSet.t
-  
+
 val instr_typed_writes : instr -> NameCTSet.t
- 
+
 val map_cval : (cval -> cval) -> cval -> cval
-  
+
 (** Map over each instruction within an instruction, bottom-up *)
 val map_instr : (instr -> instr) -> instr -> instr
 
@@ -201,7 +201,7 @@ val map_instrs : (instr list -> instr list) -> instr -> instr
 
 (** Concat-map over each instruction within an instruction, bottom-up *)
 val concatmap_instr : (instr -> instr list) -> instr -> instr list
-  
+
 (** Iterate over each instruction within an instruction, bottom-up *)
 val iter_instr : (instr -> unit) -> instr -> unit
 
@@ -216,19 +216,19 @@ val cdef_map_ctyp : (ctyp -> ctyp) -> cdef -> cdef
 val map_instr_cval : (cval -> cval) -> instr -> instr
 
 val map_instr_list : (instr -> instr) -> instr list -> instr list
-  
+
 val filter_instrs : (instr -> bool) -> instr list -> instr list
 
-val instr_split_at : (instr -> bool) -> instr list -> (instr list * instr list)
+val instr_split_at : (instr -> bool) -> instr list -> instr list * instr list
 
 (** Map over function calls in an instruction sequence, including exception handler where present *)
 val map_funcall : (instr -> instr list -> instr list) -> instr list -> instr list
-  
+
 (** Map over each function call in a cdef using map_funcall *)
 val cdef_map_funcall : (instr -> instr list -> instr list) -> cdef -> cdef
 
 val cdef_map_cval : (cval -> cval) -> cdef -> cdef
-  
+
 (** Map over each instruction in a cdef using concatmap_instr *)
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
 

@@ -74,12 +74,7 @@ val set_field_lexp : index_range -> uannot lexp -> uannot lexp
 (** Create an L-expression for setting all the bits of a bitfield *)
 val set_bits_field_lexp : uannot lexp -> uannot lexp
 
-type field_accessor_ids = {
-    get : id;
-    set : id;
-    update : id;
-    overload : id;
-  }
+type field_accessor_ids = { get : id; set : id; update : id; overload : id }
 
 (** The [macro] function generates multiple definitions to get, set,
    and update fields, so we can use this function to find the names of

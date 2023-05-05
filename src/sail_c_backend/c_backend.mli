@@ -106,10 +106,11 @@ val opt_prefix : string ref
    processor state, and each function will be passed the env argument
    when it is called. *)
 val opt_extra_params : string option ref
+
 val opt_extra_arguments : string option ref
 
 val opt_branch_coverage : out_channel option ref
- 
+
 (** Optimization flags *)
 
 val optimize_primops : bool ref

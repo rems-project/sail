@@ -68,19 +68,21 @@
 open Ast_defs
 
 val opt_mwords : bool ref
-   
+
 type options = {
-  auto : bool;                    (* Analyse ast to find splits for monomorphisation *)
-  debug_analysis : int;           (* Debug output level for the automatic analysis *)
+  auto : bool; (* Analyse ast to find splits for monomorphisation *)
+  debug_analysis : int; (* Debug output level for the automatic analysis *)
   all_split_errors : bool;
-  continue_anyway : bool
+  continue_anyway : bool;
 }
 
 val monomorphise :
-  string -> (* Target backend *)
+  string ->
+  (* Target backend *)
   Effects.side_effect_info ->
   options ->
-  ((string * int) * string) list -> (* List of splits from the command line *)
+  ((string * int) * string) list ->
+  (* List of splits from the command line *)
   Type_check.tannot ast ->
   Type_check.tannot ast
 

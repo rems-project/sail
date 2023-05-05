@@ -67,25 +67,25 @@
 
 open Ast_defs
 open Type_check
-   
-module StringMap = Map.Make(String)
+
+module StringMap = Map.Make (String)
 
 type target = {
-    name : string;
-    options : (Arg.key * Arg.spec * Arg.doc) list;
-    pre_parse_hook : (unit -> unit);
-    pre_rewrites_hook : (tannot ast -> Effects.side_effect_info -> Env.t -> unit);
-    rewrites : (string * Rewrites.rewriter_arg list) list;
-    action : string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
-    asserts_termination : bool;
-  }
+  name : string;
+  options : (Arg.key * Arg.spec * Arg.doc) list;
+  pre_parse_hook : unit -> unit;
+  pre_rewrites_hook : tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+  rewrites : (string * Rewrites.rewriter_arg list) list;
+  action : string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+  asserts_termination : bool;
+}
 
 let name tgt = tgt.name
 
 let run_pre_parse_hook tgt = tgt.pre_parse_hook
 
 let run_pre_rewrites_hook tgt = tgt.pre_rewrites_hook
-                              
+
 let action tgt = tgt.action
 
 let rewrites tgt = Rewrites.instantiate_rewrites tgt.rewrites
@@ -96,78 +96,76 @@ let targets = ref StringMap.empty
 
 let the_target = ref None
 
-let register
-      ~name:name
-      ?flag:flag
-      ?description:desc
-      ?options:(options = [])
-      ?pre_parse_hook:(pre_parse_hook = (fun () -> ()))
-      ?pre_rewrites_hook:(pre_rewrites_hook = (fun _ _ _ -> ()))
-      ?rewrites:(rewrites = [])
-      ?asserts_termination:(asserts_termination = false)
-      action =
-  let set_target () = match !the_target with
+let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fun () -> ())
+    ?(pre_rewrites_hook = fun _ _ _ -> ()) ?(rewrites = []) ?(asserts_termination = false) action =
+  let set_target () =
+    match !the_target with
     | None -> the_target := Some name
     | Some tgt ->
-       prerr_endline ("Cannot use multiple Sail targets simultaneously: " ^ tgt ^ " and " ^ name);
-       exit 1
+        prerr_endline ("Cannot use multiple Sail targets simultaneously: " ^ tgt ^ " and " ^ name);
+        exit 1
   in
-  let desc = match desc with
-    | Some desc -> desc
-    | None -> " invoke the Sail " ^ name ^ " target"
-  in
-  let flag = match flag with
-    | Some flag -> flag
-    | None -> name
-  in
-  let tgt = {
-      name = name;
+  let desc = match desc with Some desc -> desc | None -> " invoke the Sail " ^ name ^ " target" in
+  let flag = match flag with Some flag -> flag | None -> name in
+  let tgt =
+    {
+      name;
       options = ("-" ^ flag, Arg.Unit set_target, desc) :: options;
-      pre_parse_hook = pre_parse_hook;
-      pre_rewrites_hook = pre_rewrites_hook;
-      rewrites = rewrites;
-      action = action;
-      asserts_termination = asserts_termination;
-    } in
+      pre_parse_hook;
+      pre_rewrites_hook;
+      rewrites;
+      action;
+      asserts_termination;
+    }
+  in
   targets := StringMap.add name tgt !targets;
   tgt
 
-let get_the_target () =
-  match !the_target with
-  | Some name -> StringMap.find_opt name !targets
-  | None -> None
+let get_the_target () = match !the_target with Some name -> StringMap.find_opt name !targets | None -> None
 
-let get ~name:name =
-  StringMap.find_opt name !targets
+let get ~name = StringMap.find_opt name !targets
 
 let extract_options () =
-  let opts =
-    StringMap.bindings !targets
-    |> List.map (fun (_, tgt) -> tgt.options)
-    |> List.concat in
+  let opts = StringMap.bindings !targets |> List.map (fun (_, tgt) -> tgt.options) |> List.concat in
   targets := StringMap.map (fun tgt -> { tgt with options = [] }) !targets;
   opts
 
 let () =
   let open Interactive in
-  ActionUnit (fun _ ->
-    List.iter (fun (name, _) ->
-        print_endline name
-      ) (StringMap.bindings !targets)
-  ) |> register_command ~name:"list_targets" ~help:"list available Sail targets for use with :target";
+  ActionUnit (fun _ -> List.iter (fun (name, _) -> print_endline name) (StringMap.bindings !targets))
+  |> register_command ~name:"list_targets" ~help:"list available Sail targets for use with :target";
 
-  ArgString ("target", fun name -> Action (fun istate ->
-    match get ~name:name with
-    | Some tgt ->
-       let ast, effect_info, env = Rewrites.rewrite istate.effect_info istate.env (rewrites tgt) istate.ast in
-       { istate with ast = ast; env = env; effect_info = effect_info }
-    | None ->
-       print_endline ("No target " ^ name);
-       istate
-  )) |> register_command ~name:"rewrites" ~help:"perform rewrites for a target. See :list_targets for a list of targets";
-                
-  ArgString ("target", fun name -> ArgString ("out", fun out -> ActionUnit (fun istate ->
-    match get ~name:name with
-    | Some tgt -> action tgt istate.default_sail_dir (Some out) istate.ast istate.effect_info istate.env;
-    | None -> print_endline ("No target " ^ name)
-  ))) |> register_command ~name:"target" ~help:"invoke Sail target. See :list_targets for a list of targets. out parameter is equivalent to command line -o option"
+  ArgString
+    ( "target",
+      fun name ->
+        Action
+          (fun istate ->
+            match get ~name with
+            | Some tgt ->
+                let ast, effect_info, env = Rewrites.rewrite istate.effect_info istate.env (rewrites tgt) istate.ast in
+                { istate with ast; env; effect_info }
+            | None ->
+                print_endline ("No target " ^ name);
+                istate
+          )
+    )
+  |> register_command ~name:"rewrites" ~help:"perform rewrites for a target. See :list_targets for a list of targets";
+
+  ArgString
+    ( "target",
+      fun name ->
+        ArgString
+          ( "out",
+            fun out ->
+              ActionUnit
+                (fun istate ->
+                  match get ~name with
+                  | Some tgt -> action tgt istate.default_sail_dir (Some out) istate.ast istate.effect_info istate.env
+                  | None -> print_endline ("No target " ^ name)
+                )
+          )
+    )
+  |> register_command ~name:"target"
+       ~help:
+         "invoke Sail target. See :list_targets for a list of targets. out parameter is equivalent to command line -o \
+          option"
