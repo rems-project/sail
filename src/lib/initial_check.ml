@@ -1118,6 +1118,55 @@ let generate_undefineds vs_ids defs =
     | [pat] -> pat
     | pats -> mk_pat (P_tuple pats)
   in
+  let undefined_union id typq tus =
+    let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
+    let body =
+      if !opt_fast_undefined && List.length tus > 0 then
+        undefined_tu (List.hd tus)
+      else
+        (* Deduplicate arguments for each constructor to keep definitions
+           manageable. *)
+        let extract_tu = function
+          | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) -> (id, typs)
+          | Tu_aux (Tu_ty_id (typ, id), _) -> (id, [typ])
+        in
+        let record_arg_typs m (_,typs) =
+          let m' =
+            List.fold_left (fun m typ ->
+              TypMap.add typ (1 + try TypMap.find typ m with Not_found -> 0) m) TypMap.empty typs in
+          TypMap.merge (fun _ x y -> match x,y with Some m, Some n -> Some (max m n)
+          | None, x -> x
+          | x, None -> x) m m'
+        in
+        let make_undef_var typ n (i,lbs,m) =
+          let j = i+n in
+          let rec aux k =
+            if k = j then [] else
+              let v = mk_id ("u_" ^ string_of_int k) in
+              (mk_letbind (mk_pat (P_typ (typ,mk_pat (P_id v)))) (mk_lit_exp L_undef))::
+                (aux (k+1))
+          in
+          (j, aux i @ lbs, TypMap.add typ i m)
+        in
+        let make_constr m (id,typs) =
+          let args, _ = List.fold_right (fun typ (acc,m) ->
+            let i = TypMap.find typ m in
+            (mk_exp (E_id (mk_id ("u_" ^ string_of_int i)))::acc,
+             TypMap.add typ (i+1) m)) typs ([],m) in
+          mk_exp (E_app (id, args))
+        in
+        let constr_args = List.map extract_tu tus in
+        let typs_needed = List.fold_left record_arg_typs TypMap.empty constr_args in
+        let (_,letbinds,typ_to_var) = TypMap.fold make_undef_var typs_needed (0,[],TypMap.empty) in
+        List.fold_left (fun e lb -> mk_exp (E_let (lb,e)))
+          (mk_exp (E_app (mk_id "internal_pick",
+                          [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))]))) letbinds
+    in
+    (mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false)),
+     mk_fundef [mk_funcl (prepend_id "undefined_" id)
+                   pat
+                   body])
+  in
   let undefined_td = function
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
@@ -1136,58 +1185,21 @@ let generate_undefineds vs_ids defs =
                             pat
                             (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
     | TD_variant (id, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-       let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
-       let body =
-         if !opt_fast_undefined && List.length tus > 0 then
-           undefined_tu (List.hd tus)
-         else
-           (* Deduplicate arguments for each constructor to keep definitions
-              manageable. *)
-           let extract_tu = function
-             | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) -> (id, typs)
-             | Tu_aux (Tu_ty_id (typ, id), _) -> (id, [typ])
-           in
-           let record_arg_typs m (_,typs) =
-             let m' =
-               List.fold_left (fun m typ ->
-                 TypMap.add typ (1 + try TypMap.find typ m with Not_found -> 0) m) TypMap.empty typs in
-             TypMap.merge (fun _ x y -> match x,y with Some m, Some n -> Some (max m n)
-             | None, x -> x
-             | x, None -> x) m m'
-           in
-           let make_undef_var typ n (i,lbs,m) =
-             let j = i+n in
-             let rec aux k =
-               if k = j then [] else
-                 let v = mk_id ("u_" ^ string_of_int k) in
-                 (mk_letbind (mk_pat (P_typ (typ,mk_pat (P_id v)))) (mk_lit_exp L_undef))::
-                   (aux (k+1))
-             in
-             (j, aux i @ lbs, TypMap.add typ i m)
-           in
-           let make_constr m (id,typs) =
-             let args, _ = List.fold_right (fun typ (acc,m) ->
-               let i = TypMap.find typ m in
-               (mk_exp (E_id (mk_id ("u_" ^ string_of_int i)))::acc,
-                TypMap.add typ (i+1) m)) typs ([],m) in
-             mk_exp (E_app (id, args))
-           in
-           let constr_args = List.map extract_tu tus in
-           let typs_needed = List.fold_left record_arg_typs TypMap.empty constr_args in
-           let (_,letbinds,typ_to_var) = TypMap.fold make_undef_var typs_needed (0,[],TypMap.empty) in
-           List.fold_left (fun e lb -> mk_exp (E_let (lb,e)))
-             (mk_exp (E_app (mk_id "internal_pick",
-                             [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))]))) letbinds
-       in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
-        mk_fundef [mk_funcl (prepend_id "undefined_" id)
-                      pat
-                      body]]
+       let vs, def = undefined_union id typq tus in
+       [vs; def]
     | _ -> []
+  in
+  let undefined_scattered id typq =
+    let tus = get_scattered_union_clauses id defs in
+    undefined_union id typq tus
   in
   let rec undefined_defs = function
     | DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def :: defs ->
        def :: undefined_td td_aux @ undefined_defs defs
+    (* The function definition must come after the scattered type definition is complete, so put it at the end. *)
+    | DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), _)), _) as def :: defs ->
+       let vs, fn = undefined_scattered id typq in
+       def :: vs :: undefined_defs defs @ [fn]
     | def :: defs ->
        def :: undefined_defs defs
     | [] -> []

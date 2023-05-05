@@ -525,7 +525,9 @@ val ids_of_ast : 'a ast -> IdSet.t
 val val_spec_ids : 'a def list -> IdSet.t
 
 val record_ids : 'a def list -> IdSet.t
-  
+
+val get_scattered_union_clauses : id -> 'a def list -> type_union list
+
 val pat_ids : 'a pat -> IdSet.t
 
 val subst : id -> 'a exp -> 'a exp -> 'a exp

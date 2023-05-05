@@ -1019,8 +1019,6 @@ let rec initialize_registers allow_registers gstate =
        | Some exp ->
           { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_aux (DEF_fundef fdef, _) ->
-       { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
   function
@@ -1030,6 +1028,12 @@ let rec initialize_registers allow_registers gstate =
 
 let initial_state ?(registers=true) ast env primops =
   let gstate = initial_gstate primops ast.defs env in
+  let add_function gstate = function
+    | DEF_aux (DEF_fundef fdef, _) ->
+       { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | _ -> gstate
+  in
+  let gstate = List.fold_left add_function gstate ast.defs in
   let gstate =
     { (initialize_registers registers gstate ast.defs)
       with allow_registers = registers }

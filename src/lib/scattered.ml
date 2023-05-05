@@ -88,13 +88,6 @@ let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
-let rec get_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
-     tu :: get_union_clauses id defs
-  | _ :: defs ->
-     get_union_clauses id defs
-  | [] -> []
-
 let rec filter_union_clauses id = function
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
      filter_union_clauses id defs
@@ -165,7 +158,7 @@ let rec descatter' funcls mapcls = function
      immediately grab all the future clauses and turn it into a
      regular union declaration. *)
   | DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))), def_annot) :: defs ->
-     let tus = get_union_clauses id defs in
+     let tus = get_scattered_union_clauses id defs in
      begin match tus with
      | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
      | _ ->

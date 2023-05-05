@@ -1205,6 +1205,13 @@ let record_ids defs =
   in
   IdSet.of_list (rec_ids defs)
 
+let rec get_scattered_union_clauses id = function
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
+     tu :: get_scattered_union_clauses id defs
+  | _ :: defs ->
+     get_scattered_union_clauses id defs
+  | [] -> []
+
 let order_compare (Ord_aux (o1,_)) (Ord_aux (o2,_)) =
   match o1, o2 with
   | Ord_var k1, Ord_var k2 -> Kid.compare k1 k2
