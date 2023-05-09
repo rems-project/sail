@@ -109,6 +109,8 @@ let get_field_exp range inner_exp =
   in
   aux (List.map mk_slice (indices_of_range range))
 
+let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
+
 let set_field_lexp range inner_lexp =
   let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, mk_num_exp j)) in
   match List.map mk_slice (indices_of_range range) with [e] -> e | es -> mk_lexp (LE_vector_concat es)
