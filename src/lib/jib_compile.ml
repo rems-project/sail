@@ -275,29 +275,33 @@ module Make (C : CONFIG) = struct
 
   let rec chunkify n xs = match (Util.take n xs, Util.drop n xs) with xs, [] -> [xs] | xs, ys -> xs :: chunkify n ys
 
+  (* Counters to provide unique IDs for branches, branch targets and functions. *)
   let coverage_branch_count = ref 0
+  let coverage_branch_target_count = ref 0
+  let coverage_function_count = ref 0
 
   let coverage_loc_args l =
     match Reporting.simp_loc l with
-    | None -> None
+    (* Scattered definitions may not have a known location but we still want
+       to measure coverage of them. *)
+    | None -> "\"\", 0, 0, 0, 0"
     | Some (p1, p2) ->
-        Some
-          (Printf.sprintf "\"%s\", %d, %d, %d, %d" (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
-             p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
-          )
+        Printf.sprintf "\"%s\", %d, %d, %d, %d" (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
+          p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
 
+  (* A branch is a `match` (including `mapping`), `if` or short-circuiting and/or.
+     This returns a new ID for the branch, and the C code to call. It also
+     writes the static branch info to C.branch_coverage. *)
   let coverage_branch_reached l =
-    let branch_id = !coverage_branch_count in
-    incr coverage_branch_count;
-    ( branch_id,
-      match C.branch_coverage with
-      | Some _ -> begin
-          match coverage_loc_args l with
-          | None -> []
-          | Some args -> [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
-        end
-      | _ -> []
-    )
+    match C.branch_coverage with
+    | Some out -> begin
+        let branch_id = !coverage_branch_count in
+        incr coverage_branch_count;
+        let args = coverage_loc_args l in
+        Printf.fprintf out "%s\n" ("B " ^ string_of_int branch_id ^ ", " ^ args);
+        (branch_id, [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)])
+      end
+    | _ -> (0, [])
 
   let append_into_block instrs instr = match instrs with [] -> instr | _ -> iblock (instrs @ [instr])
 
@@ -308,26 +312,33 @@ module Make (C : CONFIG) = struct
         match e with AE_typ (e', _) -> find_aexp_loc e' | _ -> l
       )
 
-  let coverage_branch_taken branch_id aexp =
+  (* This is called when an *arm* of a branch is taken. For example if you
+     have a `match`, it is called for the match arm that is taken.
+     For `if` without `else` then it may not be called at all. Same for
+     short-circuiting boolean expressions. `branch_id` is the ID for the entire
+     conditional expression (the whole `match` etc.). *)
+  let coverage_branch_target_taken branch_id aexp =
     match C.branch_coverage with
     | None -> []
     | Some out -> begin
-        match coverage_loc_args (find_aexp_loc aexp) with
-        | None -> []
-        | Some args ->
-            Printf.fprintf out "%s\n" ("B " ^ args);
-            [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
+        let branch_target_id = !coverage_branch_target_count in
+        incr coverage_branch_target_count;
+        let args = coverage_loc_args (find_aexp_loc aexp) in
+        Printf.fprintf out "%s\n" ("T " ^ string_of_int branch_id ^ ", " ^ string_of_int branch_target_id ^ ", " ^ args);
+        [iraw (Printf.sprintf "sail_branch_target_taken(%d, %d, %s);" branch_id branch_target_id args)]
       end
 
+  (* Generate code and static branch info for function entry coverage.
+     `id` is the name of the function. *)
   let coverage_function_entry id l =
     match C.branch_coverage with
     | None -> []
     | Some out -> begin
-        match coverage_loc_args l with
-        | None -> []
-        | Some args ->
-            Printf.fprintf out "%s\n" ("F " ^ args);
-            [iraw (Printf.sprintf "sail_function_entry(\"%s\", %s);" (string_of_id id) args)]
+        let function_id = !coverage_function_count in
+        incr coverage_function_count;
+        let args = coverage_loc_args l in
+        Printf.fprintf out "%s\n" ("F " ^ string_of_int function_id ^ ", \"" ^ string_of_id id ^ "\", " ^ args);
+        [iraw (Printf.sprintf "sail_function_entry(%d, \"%s\", %s);" function_id (string_of_id id) args)]
       end
 
   let rec compile_aval l ctx = function
@@ -765,7 +776,7 @@ module Make (C : CONFIG) = struct
                       ]
                   else []
                 )
-              @ (if num_cases > 1 then coverage_branch_taken branch_id body else [])
+              @ (if num_cases > 1 then coverage_branch_target_taken branch_id body else [])
               @ body_setup
               @ [body_call (CL_id (case_return_id, ctyp))]
               @ body_cleanup @ destructure_cleanup
@@ -775,6 +786,7 @@ module Make (C : CONFIG) = struct
           )
         in
         ( aval_setup
+          @ [icomment ("Case with num_cases: " ^ string_of_int num_cases)]
           @ (if num_cases > 1 then on_reached else [])
           @ [idecl l ctyp case_return_id]
           @ List.concat (List.map compile_case cases)
@@ -843,7 +855,7 @@ module Make (C : CONFIG) = struct
           let branch_id, on_reached = coverage_branch_reached l in
           let compile_branch aexp =
             let setup, call, cleanup = compile_aexp ctx aexp in
-            fun clexp -> coverage_branch_taken branch_id aexp @ setup @ [call clexp] @ cleanup
+            fun clexp -> coverage_branch_target_taken branch_id aexp @ setup @ [call clexp] @ cleanup
           in
           let setup, cval, cleanup = compile_aval l ctx aval in
           ( setup,
@@ -880,7 +892,7 @@ module Make (C : CONFIG) = struct
         let branch_id, on_reached = coverage_branch_reached l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_taken branch_id aexp in
+        let right_coverage = coverage_branch_target_taken branch_id aexp in
         let gs = ngensym () in
         ( left_setup @ on_reached
           @ [
@@ -898,7 +910,7 @@ module Make (C : CONFIG) = struct
         let branch_id, on_reached = coverage_branch_reached l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_taken branch_id aexp in
+        let right_coverage = coverage_branch_target_taken branch_id aexp in
         let gs = ngensym () in
         ( left_setup @ on_reached
           @ [
