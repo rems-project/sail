@@ -926,6 +926,8 @@ and sgen_call op cvals =
   let open Printf in
   match (op, cvals) with
   | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
+  | Band, vs -> "(" ^ Util.string_of_list " && " sgen_cval vs ^ ")"
+  | Bor, vs -> "(" ^ Util.string_of_list " || " sgen_cval vs ^ ")"
   | List_hd, [v] -> sprintf "(%s).hd" ("*" ^ sgen_cval v)
   | List_tl, [v] -> sprintf "(%s).tl" ("*" ^ sgen_cval v)
   | Eq, [v1; v2] -> begin
@@ -1159,8 +1161,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
       ^^ ksprintf string "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)
   | I_copy (clexp, cval) -> codegen_conversion l clexp cval
   | I_jump (cval, label) -> ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label
+  | I_if (cval, [], else_instrs, ctyp) -> codegen_instr fid ctx (iif l (V_call (Bnot, [cval])) else_instrs [] ctyp)
   | I_if (cval, [then_instr], [], _) ->
-      ksprintf string "  if (%s)" (sgen_cval cval) ^^ hardline ^^ twice space ^^ codegen_instr fid ctx then_instr
+      ksprintf string "  if (%s)" (sgen_cval cval)
+      ^^ space
+      ^^ surround 2 0 lbrace (codegen_instr fid ctx then_instr) (twice space ^^ rbrace)
   | I_if (cval, then_instrs, [], _) ->
       string "  if" ^^ space
       ^^ parens (string (sgen_cval cval))
