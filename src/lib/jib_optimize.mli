@@ -96,3 +96,5 @@ val remove_dead_after_goto : instr list -> instr list
 val remove_dead_code : instr list -> instr list
 
 val remove_tuples : cdef list -> Jib_compile.ctx -> cdef list * Jib_compile.ctx
+
+val structure_control_flow_block : instr list -> instr list
