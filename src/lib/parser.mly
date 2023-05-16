@@ -101,6 +101,7 @@ let deinfix = function
 let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_pat p n m = P_aux (p, loc n m)
+let mk_fpat fp n m = FP_aux (fp, loc n m)
 let mk_pexp p n m = Pat_aux (p, loc n m)
 let mk_exp e n m = E_aux (e, loc n m)
 let mk_measure meas n m = Measure_aux (meas, loc n m)
@@ -783,9 +784,11 @@ atomic_pat:
 
 fpat:
   | id Eq pat
-    { ($1, $3) }
+    { mk_fpat (FP_field ($1, $3)) $startpos $endpos }
   | id
-    { ($1, mk_pat (P_id $1) $startpos $endpos) }
+    { mk_fpat (FP_field ($1, mk_pat (P_id $1) $startpos $endpos)) $startpos $endpos }
+  | DotDot
+    { mk_fpat FP_wild $startpos $endpos }
 
 lit:
   | True

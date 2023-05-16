@@ -353,6 +353,8 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_app (f, typs) -> TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 
+let is_wild_fpat = function P.FP_aux (P.FP_wild, _) -> true | _ -> false
+
 let rec to_ast_pat ctx (P.P_aux (aux, l)) =
   match aux with
   | P.P_attribute (attr, arg, pat) ->
@@ -381,9 +383,25 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-        | P.P_struct fpats -> P_struct (List.map (fun (id, pat) -> (to_ast_id ctx id, to_ast_pat ctx pat)) fpats)
+        | P.P_struct fpats ->
+            begin
+              match List.filter is_wild_fpat fpats with
+              | FP_aux (_, l1) :: FP_aux (_, l2) :: _ ->
+                  raise
+                    (Reporting.err_general
+                       (Parse_ast.Hint ("previous field wildcard here", l1, l2))
+                       "Duplicate field wildcards in struct pattern"
+                    )
+              | _ -> ()
+            end;
+            P_struct (List.map (to_ast_fpat ctx) fpats)
       in
       P_aux (aux, (l, empty_uannot))
+
+and to_ast_fpat ctx (P.FP_aux (aux, l)) =
+  match aux with
+  | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
+  | FP_wild -> raise (Reporting.err_general l "Wildcard pattern in struct pattern unsupported")
 
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))

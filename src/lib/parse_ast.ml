@@ -204,13 +204,13 @@ type pat_aux =
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
-  | P_struct of (id * pat) list (* struct pattern *)
+  | P_struct of fpat list (* struct pattern *)
   | P_attribute of string * string * pat
 
 and pat = P_aux of pat_aux * l
 
 and fpat_aux = (* Field pattern *)
-  | FP_Fpat of id * pat
+  | FP_field of id * pat | FP_wild
 
 and fpat = FP_aux of fpat_aux * l
 
