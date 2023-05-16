@@ -234,7 +234,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
       | _ -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
     end
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
-  | P_struct fpats ->
+  | P_struct (fpats, FP_no_wild) ->
       lbrace ^^ space
       ^^ separate_map (semi ^^ space) (fun (field, p) -> ocaml_fpat (pat_record_id l pat) ctx field p) fpats
       ^^ space ^^ rbrace

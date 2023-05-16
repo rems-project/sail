@@ -714,7 +714,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           (hd_match && tl_match, Bindings.merge combine hd_bind tl_bind)
       | None -> (false, Bindings.empty)
     end
-  | P_struct fpats ->
+  | P_struct (fpats, _) ->
       List.fold_left
         (fun (matches, binds) (field, pat) ->
           match StringMap.find_opt (string_of_id field) (coerce_record value) with

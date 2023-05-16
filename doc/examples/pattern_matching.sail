@@ -50,6 +50,32 @@ function match_destruct(pair: (int, int)) -> unit = {
     }
 }
 
+struct my_struct = {
+    field1 : bits(16),
+    field2 : int,
+}
+
+function match_struct(value: my_struct) -> unit = {
+    match value {
+        // match against literals in the struct fields
+        struct { field1 = 0x0000, field2 = 3 } => (),
+
+        // bind the struct field values to immutable variables
+        struct { field1 = x, field2 = y } => {
+            print_bits("value.field1 = ", x);
+            print_int("value.field2 = ", y)
+        }
+    }
+}
+
+function match_struct2(value: my_struct) -> unit = {
+    match value {
+        struct { field1 = x, .. } => {
+            print_bits("value.field1 = ", x)
+        }
+    }
+}
+
 /*!
 You may wonder -- why not write `z if z < 0` for the final case? Here
 we run into one of the limitations of the exhaustiveness checker

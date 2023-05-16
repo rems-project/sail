@@ -140,7 +140,7 @@ val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
-val mk_pat : uannot pat_aux -> uannot pat
+val mk_pat : ?loc:l -> uannot pat_aux -> uannot pat
 val mk_mpat : uannot mpat_aux -> uannot mpat
 val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
 val mk_mpexp : uannot mpexp_aux -> uannot mpexp

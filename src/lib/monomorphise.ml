@@ -522,7 +522,7 @@ let freshen_pat_bindings p =
     | P_tuple ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_tuple ps), List.concat vs)
-    | P_struct fps ->
+    | P_struct (fps, fwild) ->
         let fps, vs =
           List.split
             (List.map
@@ -533,7 +533,7 @@ let freshen_pat_bindings p =
                fps
             )
         in
-        (mkp (P_struct fps), List.concat vs)
+        (mkp (P_struct (fps, fwild)), List.concat vs)
     | P_list ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_list ps), List.concat vs)
@@ -970,9 +970,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | P_vector_concat ps -> relist spl (fun ps -> P_vector_concat ps) ps
         | P_string_append ps -> relist spl (fun ps -> P_string_append ps) ps
         | P_tuple ps -> relist spl (fun ps -> P_tuple ps) ps
-        | P_struct fps ->
+        | P_struct (fps, fwild) ->
             let fields, ps = List.split fps in
-            relist spl (fun ps -> P_struct (List.combine fields ps)) ps
+            relist spl (fun ps -> P_struct (List.combine fields ps, fwild)) ps
         | P_list ps -> relist spl (fun ps -> P_list ps) ps
         | P_cons (p1, p2) -> re2 spl (fun p1' p2' -> P_cons (p1', p2')) p1 p2
         | P_vector_subrange _ ->
@@ -2621,7 +2621,7 @@ module Analysis = struct
             (s, v, KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty, LetSplits.empty)) k) kids k)
         | P_app (_, pats) -> of_list pats
         | P_vector pats | P_vector_concat pats | P_string_append pats | P_tuple pats | P_list pats -> of_list pats
-        | P_struct fpats -> List.map snd fpats |> of_list
+        | P_struct (fpats, _) -> List.map snd fpats |> of_list
         | P_cons (p1, p2) -> of_list [p1; p2]
         | P_vector_subrange _ ->
             Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"

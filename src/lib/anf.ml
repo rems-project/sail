@@ -583,7 +583,7 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, annot) as pat) =
         (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, id, typ_of_pat pat))
-  | P_struct fpats ->
+  | P_struct (fpats, FP_no_wild) ->
       mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
   | _ ->
       Reporting.unreachable (fst annot) __POS__

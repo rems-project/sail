@@ -128,7 +128,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
   p_string_append : 'pat list -> 'pat_aux;
-  p_struct : (id * 'pat) list -> 'pat_aux;
+  p_struct : (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
   p_aux : 'pat_aux * 'a annot -> 'pat;
 }
 

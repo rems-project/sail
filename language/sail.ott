@@ -368,6 +368,10 @@ typ_pat :: 'TP_' ::=
   | kid                             :: :: var
   | id ( typ_pat1 , .. , typ_patn ) :: :: app
 
+field_pat_wildcard :: 'FP_' ::=
+  | '..' l :: :: wild
+  |        :: :: no_wild
+
 pat :: 'P_' ::=
   {{ com pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -405,7 +409,7 @@ pat :: 'P_' ::=
     {{ com Cons patterns }}
   | pat1 ^^ ... ^^ patn                      :: :: string_append
     {{ com string append pattern, x ^^ y }}
-  | struct { id1 = pat1 , ... , idn = patn } :: :: struct
+  | struct { id1 = pat1 , ... , idn = patn , field_pat_wildcard } :: :: struct
     {{ com struct pattern }}
 
 parsing

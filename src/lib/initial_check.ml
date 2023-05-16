@@ -384,17 +384,19 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
         | P.P_struct fpats ->
-            begin
-              match List.filter is_wild_fpat fpats with
+            let wild_fpats, fpats = List.partition is_wild_fpat fpats in
+            let field_wildcard =
+              match wild_fpats with
               | FP_aux (_, l1) :: FP_aux (_, l2) :: _ ->
                   raise
                     (Reporting.err_general
                        (Parse_ast.Hint ("previous field wildcard here", l1, l2))
                        "Duplicate field wildcards in struct pattern"
                     )
-              | _ -> ()
-            end;
-            P_struct (List.map (to_ast_fpat ctx) fpats)
+              | [FP_aux (_, l)] -> FP_wild l
+              | [] -> FP_no_wild
+            in
+            P_struct (List.map (to_ast_fpat ctx) fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
 

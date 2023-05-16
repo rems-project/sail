@@ -630,7 +630,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p, (l, annot)) as pa) =
   | P_vector pats ->
       let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
       if apat_needed then parens ppp else ppp
-  | P_struct fpats ->
+  | P_struct (fpats, FP_no_wild) ->
       let doc_field field =
         match destruct_tannot annot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
@@ -645,11 +645,9 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p, (l, annot)) as pa) =
            (fun (field, pat) -> separate space [doc_field field; equals; doc_pat_lem ctxt false pat])
            fpats
       ^^ space ^^ string "|>"
+  | P_struct (_, FP_wild l) -> Reporting.unreachable l __POS__ "field wildcard should not have reached lem backend"
   | P_vector_concat pats ->
-      raise
-        (Reporting.err_unreachable l __POS__
-           "vector concatenation patterns should have been removed before pretty-printing"
-        )
+      Reporting.unreachable l __POS__ "vector concatenation patterns should have been removed before pretty-printing"
   | P_tuple pats -> (
       match pats with
       | [p] -> doc_pat_lem ctxt apat_needed p

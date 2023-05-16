@@ -3076,7 +3076,7 @@ let check_pattern_duplicates env pat =
         collect_duplicates p2
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
         List.iter collect_duplicates ps
-    | P_struct fpats -> List.iter (fun (_, pat) -> collect_duplicates pat) fpats
+    | P_struct (fpats, _) -> List.iter (fun (_, pat) -> collect_duplicates pat) fpats
   in
   collect_duplicates pat;
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
@@ -3993,7 +3993,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
       let nc = match destruct_atom_bool env typ with Some nc -> nc | None -> assert false in
       (annot_pat (P_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, [])
   | P_vector_concat (pat :: pats) -> bind_vector_concat_pat l env uannot pat pats (Some typ)
-  | P_struct fpats ->
+  | P_struct (fpats, fwild) ->
       let rectyp_id =
         match Env.expand_synonyms env typ with
         | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
@@ -4013,10 +4013,20 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
         ((field, typed_pat) :: fpats, env, guards @ new_guards)
       in
       let fpats, env, guards = List.fold_left bind_fpat ([], env, []) fpats in
-      if IdSet.is_empty !record_fields then (annot_pat (P_struct (List.rev fpats)) typ, env, guards)
-      else
-        typ_error env l
-          ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
+      if IdSet.is_empty !record_fields then (annot_pat (P_struct (List.rev fpats, FP_no_wild)) typ, env, guards)
+      else (
+        (* If we have a field wildcard .. then insert the missing `field = _` here *)
+        match fwild with
+        | FP_wild fwild_loc ->
+            let missing_fields =
+              List.map (fun id -> (id, mk_pat ~loc:fwild_loc P_wild)) (IdSet.elements !record_fields)
+            in
+            let missing_fpats, env, guards = List.fold_left bind_fpat ([], env, []) missing_fields in
+            (annot_pat (P_struct (List.rev fpats @ missing_fpats, FP_no_wild)) typ, env, guards)
+        | FP_no_wild ->
+            typ_error env l
+              ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
+      )
   | _ -> (
       let inferred_pat, env, guards = infer_pat env pat in
       match subtyp l env typ (typ_of_pat inferred_pat) with
