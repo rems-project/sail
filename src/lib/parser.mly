@@ -1511,6 +1511,8 @@ default_def:
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
 
 scattered_def:
+  | Scattered Enum id
+    { mk_sd (SD_enum $3) $startpos $endpos }
   | Scattered Union id typaram
     { mk_sd (SD_variant($3, $4)) $startpos $endpos }
   | Scattered Union id
@@ -1521,6 +1523,8 @@ scattered_def:
     { mk_sd (SD_mapping ($3, mk_tannotn)) $startpos $endpos }
   | Scattered Mapping id Colon funcl_typ
     { mk_sd (SD_mapping ($3, $5)) $startpos $endpos }
+  | Enum Clause id Eq id
+    { mk_sd (SD_enumcl ($3, $5)) $startpos $endpos }
   | Function_ Clause funcl
     { mk_sd (SD_funcl $3) $startpos $endpos }
   | Union Clause id Eq type_union

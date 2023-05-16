@@ -528,6 +528,7 @@ val val_spec_ids : 'a def list -> IdSet.t
 val record_ids : 'a def list -> IdSet.t
 
 val get_scattered_union_clauses : id -> 'a def list -> type_union list
+val get_scattered_enum_clauses : id -> 'a def list -> id list
 
 val pat_ids : 'a pat -> IdSet.t
 

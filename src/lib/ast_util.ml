@@ -766,6 +766,8 @@ and map_scattered_annot_aux f = function
   | SD_mapping (id, tannot_opt) -> SD_mapping (id, tannot_opt)
   | SD_mapcl (id, mcl) -> SD_mapcl (id, map_mapcl_annot f mcl)
   | SD_end id -> SD_end id
+  | SD_enum id -> SD_enum id
+  | SD_enumcl (id, member) -> SD_enumcl (id, member)
 
 and map_register_annot f = function DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
 
@@ -1098,7 +1100,9 @@ let id_of_scattered (SD_aux (sdef, _)) =
   | SD_variant (id, _)
   | SD_unioncl (id, _)
   | SD_mapping (id, _)
-  | SD_mapcl (id, _) ->
+  | SD_mapcl (id, _)
+  | SD_enum id
+  | SD_enumcl (id, _) ->
       id
 
 let ids_of_def (DEF_aux (aux, _)) =
@@ -1136,6 +1140,12 @@ let rec get_scattered_union_clauses id = function
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
       tu :: get_scattered_union_clauses id defs
   | _ :: defs -> get_scattered_union_clauses id defs
+  | [] -> []
+
+let rec get_scattered_enum_clauses id = function
+  | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, member), _)), _) :: defs when Id.compare id uid = 0 ->
+      member :: get_scattered_enum_clauses id defs
+  | _ :: defs -> get_scattered_enum_clauses id defs
   | [] -> []
 
 let order_compare (Ord_aux (o1, _)) (Ord_aux (o2, _)) =

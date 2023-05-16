@@ -751,6 +751,8 @@ let doc_scattered (SD_aux (sd_aux, _)) =
   | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), _)) ->
       separate space [string "scattered mapping"; doc_id id; colon; doc_binding (typq, typ)]
   | SD_unioncl (id, tu) -> separate space [string "union clause"; doc_id id; equals; doc_union tu]
+  | SD_enum id -> separate space [string "scattered enum"; doc_id id]
+  | SD_enumcl (id, member) -> separate space [string "enum clause"; doc_id id; equals; doc_id member]
 
 let doc_filter = function
   | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
@@ -761,6 +763,16 @@ let rec doc_def_no_hardline ?(comment = false) (DEF_aux (aux, def_annot)) =
   | Some str when comment -> string "/*! " ^^ string str ^^ string " */" ^^ hardline
   | _ -> empty
   )
+  ^^ ( match def_annot.attrs with
+     | [] -> empty
+     | attrs ->
+         separate_map hardline
+           (fun (_, attr, arg) ->
+             if arg = "" then Printf.ksprintf string "$[%s]" attr else Printf.ksprintf string "$[%s %s]" attr arg
+           )
+           attrs
+         ^^ hardline
+     )
   ^^
   match aux with
   | DEF_default df -> doc_default df

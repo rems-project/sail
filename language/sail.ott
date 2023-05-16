@@ -711,6 +711,10 @@ scattered_def :: 'SD_' ::=
 
   | mapping clause id = mapcl :: :: mapcl
 
+  | scattered enum id :: :: enum
+
+  | enum clause id1 = id2 :: :: enumcl
+
   | end id  :: :: end
 {{ texlong }} {{ com scattered definition end }}
 

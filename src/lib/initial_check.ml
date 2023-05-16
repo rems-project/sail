@@ -925,6 +925,13 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
         let id = to_ast_id ctx id in
         let mapcl = to_ast_mapcl ctx mapcl in
         (SD_mapcl (id, mapcl), ctx)
+    | P.SD_enum id ->
+        let id = to_ast_id ctx id in
+        (SD_enum id, ctx)
+    | P.SD_enumcl (id, member) ->
+        let id = to_ast_id ctx id in
+        let member = to_ast_id ctx member in
+        (SD_enumcl (id, member), ctx)
   in
   (SD_aux (aux, (l, empty_uannot)), ctx)
 
@@ -1307,54 +1314,58 @@ let generate_initialize_registers vs_ids defs =
 
 let generate_enum_functions vs_ids defs =
   let rec gen_enums = function
-    | (DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), _) as enum) :: defs ->
-        let enum_val_spec name quants typ =
-          mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
-        in
-        let range_constraint kid =
-          nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))
-        in
-
-        (* Create a function that converts a number to an enum. *)
-        let to_enum =
-          let kid = mk_kid "e" in
-          let name = append_id id "_of_num" in
-          let pexp n id =
-            let pat =
-              if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+    | (DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), def_annot) as enum) :: defs -> begin
+        match get_def_attribute "no_enum_functions" def_annot with
+        | Some _ -> enum :: gen_enums defs
+        | None ->
+            let enum_val_spec name quants typ =
+              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
             in
-            mk_pexp (Pat_exp (pat, mk_exp (E_id id)))
-          in
-          let funcl =
-            mk_funcl name
-              (mk_pat (P_id (mk_id "arg#")))
-              (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
-          in
-          if IdSet.mem name vs_ids then []
-          else
-            [
-              enum_val_spec name
-                [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
-                (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
-              mk_fundef [funcl];
-            ]
-        in
+            let range_constraint kid =
+              nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))
+            in
 
-        (* Create a function that converts from an enum to a number. *)
-        let from_enum =
-          let kid = mk_kid "e" in
-          let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-          let name = prepend_id "num_of_" id in
-          let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
-          let funcl =
-            mk_funcl name
-              (mk_pat (P_id (mk_id "arg#")))
-              (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
-          in
-          if IdSet.mem name vs_ids then []
-          else [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
-        in
-        (enum :: to_enum) @ from_enum @ gen_enums defs
+            (* Create a function that converts a number to an enum. *)
+            let to_enum =
+              let kid = mk_kid "e" in
+              let name = append_id id "_of_num" in
+              let pexp n id =
+                let pat =
+                  if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+                in
+                mk_pexp (Pat_exp (pat, mk_exp (E_id id)))
+              in
+              let funcl =
+                mk_funcl name
+                  (mk_pat (P_id (mk_id "arg#")))
+                  (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+              in
+              if IdSet.mem name vs_ids then []
+              else
+                [
+                  enum_val_spec name
+                    [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
+                    (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
+                  mk_fundef [funcl];
+                ]
+            in
+
+            (* Create a function that converts from an enum to a number. *)
+            let from_enum =
+              let kid = mk_kid "e" in
+              let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
+              let name = prepend_id "num_of_" id in
+              let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+              let funcl =
+                mk_funcl name
+                  (mk_pat (P_id (mk_id "arg#")))
+                  (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+              in
+              if IdSet.mem name vs_ids then []
+              else [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
+            in
+            (enum :: to_enum) @ from_enum @ gen_enums defs
+      end
     | def :: defs -> def :: gen_enums defs
     | [] -> []
   in
