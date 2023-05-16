@@ -395,6 +395,8 @@ type scattered_def_aux =
      a file. Each one must end in $_$ *)
   | SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
   | SD_funcl of funcl (* scattered function definition clause *)
+  | SD_enum of id (* scattered enumeration definition header *)
+  | SD_enumcl of id * id (* scattered enumeration member clause *)
   | SD_variant of id * typquant (* scattered union definition header *)
   | SD_unioncl of id * type_union (* scattered union definition member *)
   | SD_mapping of id * tannot_opt

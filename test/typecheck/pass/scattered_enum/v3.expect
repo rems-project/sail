@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/scattered_enum/v3.sail[0m:2.12-13:
+2[96m |[0menum clause E = A
+ [91m |[0m            [91m^[0m
+ [91m |[0m Enumeration E does not exist

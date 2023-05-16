@@ -136,7 +136,7 @@ type env = {
   typ_synonyms : (typquant * typ_arg) Bindings.t;
   typ_params : typquant Bindings.t;
   overloads : id list Bindings.t;
-  enums : IdSet.t Bindings.t;
+  enums : (bool * IdSet.t) Bindings.t;
   records : (typquant * (typ * id) list) Bindings.t;
   accessors : (typquant * typ) Bindings.t;
   externs : extern Bindings.t;
@@ -551,6 +551,8 @@ module Env : sig
   val get_default_order_option : t -> order option
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
+  val add_scattered_enum : id -> t -> t
+  val add_enum_clause : id -> id -> t -> t
   val get_enum : id -> t -> id list
   val get_enums : t -> IdSet.t Bindings.t
   val is_enum : id -> t -> bool
@@ -1371,19 +1373,33 @@ end = struct
 
   let is_mapping id env = Bindings.mem id env.mappings
 
-  let add_enum id ids env =
+  let add_enum' is_scattered id ids env =
     if bound_typ_id env id then already_bound "enum" id env
     else (
       typ_print (lazy (adding ^ "enum " ^ string_of_id id));
-      { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
+      { env with enums = Bindings.add id (is_scattered, IdSet.of_list ids) env.enums }
     )
+
+  let add_scattered_enum id env = add_enum' true id [] env
+  let add_enum id ids env = add_enum' false id ids env
+
+  let add_enum_clause id member env =
+    match Bindings.find_opt id env.enums with
+    | Some (true, members) ->
+        if IdSet.mem member members then
+          typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " already has a member " ^ string_of_id member)
+        else { env with enums = Bindings.add id (true, IdSet.add member members) env.enums }
+    | Some (false, _) ->
+        typ_error env (id_loc id)
+          ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
+    | None -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let get_enum id env =
     match Bindings.find_opt id env.enums with
-    | Some enum -> IdSet.elements enum
+    | Some (_, enum) -> IdSet.elements enum
     | None -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
-  let get_enums env = env.enums
+  let get_enums env = Bindings.map snd env.enums
 
   let is_enum id env = Bindings.mem id env.enums
 
@@ -1549,7 +1565,7 @@ end = struct
         Register typ
       with Not_found -> (
         try
-          let enum, _ = List.find (fun (_, ctors) -> IdSet.mem id ctors) (Bindings.bindings env.enums) in
+          let enum, _ = List.find (fun (_, (_, ctors)) -> IdSet.mem id ctors) (Bindings.bindings env.enums) in
           Enum (mk_typ (Typ_id enum))
         with Not_found -> Unbound id
       )
@@ -5729,6 +5745,12 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def l
  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
   | SD_function _ | SD_end _ | SD_mapping _ -> ([], env)
+  | SD_enum id ->
+      ([DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)], Env.add_scattered_enum id env)
+  | SD_enumcl (id, member) ->
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
+        Env.add_enum_clause id member env
+      )
   | SD_variant (id, typq) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot))), def_annot)],
         Env.add_scattered_variant id typq env

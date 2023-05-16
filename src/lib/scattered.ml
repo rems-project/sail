@@ -87,8 +87,14 @@ let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
 let rec filter_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
       filter_union_clauses id defs
+  | def :: defs -> def :: filter_union_clauses id defs
+  | [] -> []
+
+let rec filter_enum_clauses id = function
+  | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
+      filter_enum_clauses id defs
   | def :: defs -> def :: filter_union_clauses id defs
   | [] -> []
 
@@ -165,6 +171,16 @@ let rec descatter' funcls mapcls = function
   (* Therefore we should never see SD_unioncl... *)
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl _, (l, _))), _) :: _ ->
       raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")
+  | DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, _))), def_annot) :: defs ->
+      let members = get_scattered_enum_clauses id defs in
+      begin
+        match members with
+        | [] -> raise (Reporting.err_general l "No clauses found for scattered enum type")
+        | _ ->
+            let def_annot = add_def_attribute (gen_loc l) "no_enum_functions" "" def_annot in
+            DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
+            :: descatter' funcls mapcls (filter_enum_clauses id defs)
+      end
   | def :: defs -> def :: descatter' funcls mapcls defs
   | [] -> []
 

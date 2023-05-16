@@ -68,6 +68,8 @@
 open Ast_util
 open Ast_defs
 
+module StringMap = Map.Make (String)
+
 let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref true
