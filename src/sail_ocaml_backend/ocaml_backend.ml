@@ -205,7 +205,15 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | _ -> string "LIT"
 
-let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
+let pat_record_id l pat =
+  match typ_of_pat pat with
+  | Typ_aux (Typ_id id, _) when Env.is_record id (env_of_pat pat) -> id
+  | Typ_aux (Typ_app (id, _), _) when Env.is_record id (env_of_pat pat) -> id
+  | typ ->
+      Reporting.unreachable l __POS__
+        ("Found a struct without a record type when generating OCaml. Type found: " ^ string_of_typ typ)
+
+let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
   match pat_aux with
   | P_id id -> begin
       match Env.lookup_id id (env_of_pat pat) with
@@ -226,7 +234,14 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
       | _ -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
     end
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
+  | P_struct fpats ->
+      lbrace ^^ space
+      ^^ separate_map (semi ^^ space) (fun (field, p) -> ocaml_fpat (pat_record_id l pat) ctx field p) fpats
+      ^^ space ^^ rbrace
   | _ -> string ("PAT<" ^ string_of_pat pat ^ ">")
+
+and ocaml_fpat record_id ctx id pat =
+  separate space [zencode_upper ctx record_id ^^ dot ^^ zencode ctx id; equals; ocaml_pat ctx pat]
 
 let begin_end doc = group (string "begin" ^^ nest 2 (break 1 ^^ doc) ^/^ string "end")
 

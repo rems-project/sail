@@ -1134,6 +1134,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs ((P_aux (p, (l, annot)) as pat)
       in
       doc_op (string "::") (doc_pat ctxt true true (p, el_typ)) (doc_pat ctxt true true (p', typ))
   | P_string_append _ -> unreachable l __POS__ "string append pattern found in Coq backend, should have been rewritten"
+  | P_struct _ -> unreachable l __POS__ "Coq backend doesn't support struct patterns"
   | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
 
@@ -1295,6 +1296,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
   let rec merge_pat m (P_aux (p, (l, _))) =
     match p with
     | P_lit _ | P_wild -> m
+    | P_struct _ -> unreachable l __POS__ "Coq backend doesn't support struct patterns"
     | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
     | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
     | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"

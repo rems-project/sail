@@ -173,6 +173,7 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
       | P_string_append ps -> P_string_append (List.map (go counter) ps)
+      | P_struct fps -> P_struct (List.map (fun (field, p) -> (field, go counter p)) fps)
       | P_id id -> P_id id
       | P_lit lit -> P_lit lit
       | P_wild -> P_wild
@@ -263,6 +264,7 @@ module Make (C : Config) = struct
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
+        | P_struct fps -> P_struct (List.map (fun (field, p) -> (field, go wild p)) fps)
         | P_id id -> P_id id
         | P_lit (L_aux (L_num n, _)) when wild ->
             t := C.add_attribute (gen_loc l) "int_wildcard" (Big_int.to_string n) !t;

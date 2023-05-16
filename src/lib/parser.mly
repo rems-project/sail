@@ -778,6 +778,14 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
+  | Struct Lcurly separated_nonempty_list(Comma, fpat) Rcurly
+    { mk_pat (P_struct $3) $startpos $endpos }
+
+fpat:
+  | id Eq pat
+    { ($1, $3) }
+  | id
+    { ($1, mk_pat (P_id $1) $startpos $endpos) }
 
 lit:
   | True

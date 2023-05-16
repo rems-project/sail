@@ -371,40 +371,42 @@ typ_pat :: 'TP_' ::=
 pat :: 'P_' ::=
   {{ com pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | lit                                     :: :: lit
+  | lit                                      :: :: lit
     {{ com literal constant pattern }}
-  | _                                       :: :: wild
+  | _                                        :: :: wild
     {{ com wildcard }}
-  | pat1 | pat2                             :: :: or
+  | pat1 | pat2                              :: :: or
     {{ com pattern disjunction }}
-  | ~ pat                                   :: :: not
+  | ~ pat                                    :: :: not
     {{ com pattern negation }}
-  | ( pat as id )                           :: :: as
+  | ( pat as id )                            :: :: as
     {{ com named pattern }}
-  | ( typ ) pat                             :: :: typ
+  | ( typ ) pat                              :: :: typ
     {{ com typed pattern }}
-  | id                                      :: :: id
+  | id                                       :: :: id
     {{ com identifier  }}
-  | pat typ_pat                             :: :: var
+  | pat typ_pat                              :: :: var
     {{ com bind pattern to type variable }}
-  | id ( pat1 , .. , patn )                 :: :: app
+  | id ( pat1 , .. , patn )                  :: :: app
     {{ com union constructor pattern }}
-  | [ pat1 , ... , patn  ]                  :: :: vector
+  | [ pat1 , ... , patn  ]                   :: :: vector
     {{ com vector pattern }}
-  |  pat1 @ ... @ patn                      :: :: vector_concat
+  | pat1 @ ... @ patn                        :: :: vector_concat
     {{ com concatenated vector pattern }}
-  | id [ num1 '..' num2 ]                   :: :: vector_subrange
+  | id [ num1 '..' num2 ]                    :: :: vector_subrange
     {{ com vector subrange pattern }}
-  | ( pat1 , .... , patn )                  :: :: tuple
+  | ( pat1 , .... , patn )                   :: :: tuple
     {{ com tuple pattern }}
-  | [|| pat1 , .. , patn ||]                :: :: list
+  | [|| pat1 , .. , patn ||]                 :: :: list
     {{ com list pattern }}
-  | ( pat )                                 :: S :: paren
+  | ( pat )                                  :: S :: paren
     {{ ichlo [[pat]] }}
-  | pat1 '::' pat2                          :: :: cons
+  | pat1 '::' pat2                           :: :: cons
     {{ com Cons patterns }}
-  | pat1 ^^ ... ^^ patn                     :: :: string_append
+  | pat1 ^^ ... ^^ patn                      :: :: string_append
     {{ com string append pattern, x ^^ y }}
+  | struct { id1 = pat1 , ... , idn = patn } :: :: struct
+    {{ com struct pattern }}
 
 parsing
 P_app <= P_app

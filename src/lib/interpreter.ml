@@ -714,6 +714,16 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           (hd_match && tl_match, Bindings.merge combine hd_bind tl_bind)
       | None -> (false, Bindings.empty)
     end
+  | P_struct fpats ->
+      List.fold_left
+        (fun (matches, binds) (field, pat) ->
+          match StringMap.find_opt (string_of_id field) (coerce_record value) with
+          | Some value ->
+              let field_match, field_binds = pattern_match env pat value in
+              (matches && field_match, Bindings.merge combine field_binds binds)
+          | None -> (false, Bindings.empty)
+        )
+        (true, Bindings.empty) fpats
   | P_string_append _ -> assert false (* TODO *)
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =

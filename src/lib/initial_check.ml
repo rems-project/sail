@@ -381,6 +381,7 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
+        | P.P_struct fpats -> P_struct (List.map (fun (id, pat) -> (to_ast_id ctx id, to_ast_pat ctx pat)) fpats)
       in
       P_aux (aux, (l, empty_uannot))
 

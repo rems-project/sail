@@ -204,6 +204,7 @@ type pat_aux =
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
+  | P_struct of (id * pat) list (* struct pattern *)
   | P_attribute of string * string * pat
 
 and pat = P_aux of pat_aux * l

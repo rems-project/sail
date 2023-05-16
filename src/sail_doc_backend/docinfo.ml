@@ -231,6 +231,8 @@ let rec pat_to_json (P_aux (aux, _)) =
   | P_list pats -> seq_pat_json "list" pats
   | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", pat_to_json pat_hd); ("tl", pat_to_json pat_tl)]
   | P_string_append pats -> seq_pat_json "string_append" pats
+  | P_struct fpats ->
+      `Assoc (pat_type "struct" :: List.map (fun (field, pat) -> (string_of_id field, pat_to_json pat)) fpats)
   | P_or _ | P_not _ -> `Null
 
 type 'a function_clause_doc = {

@@ -224,6 +224,9 @@ let rec pat_bindings consider_var bound used (P_aux (p, (_, tannot))) =
       list_fv bound (Nameset.add (string_of_id id) used) pats
   | P_vector pats | Ast.P_vector_concat pats | Ast.P_tuple pats | Ast.P_list pats | P_string_append pats ->
       list_fv bound used pats
+  | P_struct fpats ->
+      let pats = List.map snd fpats in
+      list_fv bound used pats
   | P_cons (p1, p2) ->
       let b1, u1 = pat_bindings consider_var bound used p1 in
       pat_bindings consider_var b1 u1 p2
@@ -683,6 +686,7 @@ let bindings_from_pat p =
     | P_vector ps | P_vector_concat ps | P_string_append ps | P_app (_, ps) | P_tuple ps | P_list ps ->
         List.concat (List.map aux_pat ps)
     | P_cons (p1, p2) -> aux_pat p1 @ aux_pat p2
+    | P_struct fps -> List.map snd fps |> List.map aux_pat |> List.concat
   in
   aux_pat p
 
@@ -742,6 +746,7 @@ let nexp_subst_fns substs =
     | P_tuple ps -> re (P_tuple (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1, p2) -> re (P_cons (s_pat p1, s_pat p2))
+    | P_struct fps -> re (P_struct (List.map (fun (field, p) -> (field, s_pat p)) fps))
   in
   let rec s_exp (E_aux (e, (l, annot))) =
     let re e = E_aux (e, (l, s_tannot annot)) in

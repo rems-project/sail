@@ -80,6 +80,11 @@ let starting_column_num l =
 
 let ending_line_num l = match Reporting.simp_loc l with Some (_, e) -> Some e.pos_lnum | None -> None
 
+let merge_loc l1 l2 =
+  match (Reporting.simp_loc l1, Reporting.simp_loc l2) with
+  | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
+  | _, _ -> Parse_ast.Unknown
+
 type binder = Var_binder | Let_binder | Internal_plet_binder
 
 type if_format = { then_brace : bool; else_brace : bool }
@@ -653,6 +658,17 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let hd_pat_chunks = rec_chunk_pat hd_pat in
       let tl_pat_chunks = rec_chunk_pat tl_pat in
       Queue.add (Binary (hd_pat_chunks, "::", tl_pat_chunks)) chunks
+  | P_struct fpats ->
+      let chunk_fpat comments chunks (field, pat) =
+        pop_comments comments chunks (id_loc field);
+        let field_chunks = Queue.create () in
+        Queue.add (Atom (string_of_id field)) field_chunks;
+        let pat_chunks = rec_chunk_pat pat in
+        Queue.add (Binary (field_chunks, "=", pat_chunks)) chunks
+      in
+      let fpat_loc (field, P_aux (_, l)) = merge_loc (id_loc field) l in
+      let fpats = chunk_delimit ~delim:"," ~get_loc:fpat_loc ~chunk:chunk_fpat comments chunks fpats in
+      Queue.add (Tuple ("struct {", "}", 1, fpats)) chunks
   | P_attribute (attr, arg, pat) ->
       Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
       Queue.add (Spacer (false, 1)) chunks;
