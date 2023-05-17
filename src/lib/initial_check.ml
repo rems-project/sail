@@ -355,6 +355,19 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
 
 let is_wild_fpat = function P.FP_aux (P.FP_wild, _) -> true | _ -> false
 
+let check_duplicate_fields ~error ~field_id fields =
+  List.fold_left
+    (fun seen field ->
+      let id = field_id field in
+      match IdSet.find_opt id seen with
+      | Some seen_id ->
+          raise
+            (Reporting.err_general (Hint ("Previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
+      | None -> IdSet.add id seen
+    )
+    IdSet.empty fields
+  |> ignore
+
 let rec to_ast_pat ctx (P.P_aux (aux, l)) =
   match aux with
   | P.P_attribute (attr, arg, pat) ->
@@ -396,14 +409,16 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
               | [FP_aux (_, l)] -> FP_wild l
               | [] -> FP_no_wild
             in
-            P_struct (List.map (to_ast_fpat ctx) fpats, field_wildcard)
+            let fpats = List.map (to_ast_fpat ctx) fpats in
+            check_duplicate_fields ~error:(fun f -> "Duplicate field " ^ f ^ " in struct pattern") ~field_id:fst fpats;
+            P_struct (fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
 
 and to_ast_fpat ctx (P.FP_aux (aux, l)) =
   match aux with
   | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
-  | FP_wild -> raise (Reporting.err_general l "Wildcard pattern in struct pattern unsupported")
+  | FP_wild -> Reporting.unreachable l __POS__ "Unexpected field wildcard"
 
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))

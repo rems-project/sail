@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mfail/struct_pattern_duplicate_field.sail[0m:13.17-19:
+13[96m |[0m        struct { f1 = x, f1 = y, .. } => ()
+  [92m |[0m                 [92m^^[0m [92mPrevious field here[0m
+[96mfail/struct_pattern_duplicate_field.sail[0m:13.25-27:
+13[96m |[0m        struct { f1 = x, f1 = y, .. } => ()
+  [91m |[0m                         [91m^^[0m
+  [91m |[0m Duplicate field f1 in struct pattern
