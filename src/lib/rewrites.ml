@@ -4450,9 +4450,34 @@ module MakeExhaustive = struct
               List.map (fun l -> RP_app (id, l)) res_args @ Bindings.find id ctx.constructor_to_rest
           | _ -> inconsistent ()
         )
-      | P_struct (_, _) ->
-          (* TODO: Implement this case *)
-          Reporting.unreachable (fst ann) __POS__ "P_struct in remove_clause_from_pattern"
+      | P_struct (field_pats, _) ->
+          let all_ids, res_pats =
+            match res_pat with
+            | RP_struct res_fields ->
+                let all_ids = List.map fst res_fields in
+                let res_pats = List.map snd res_fields in
+                (all_ids, res_pats)
+            | RP_any ->
+                let record_id =
+                  match Env.expand_synonyms ctx.env (typ_of_annot ann) with
+                  | Typ_aux (Typ_id id, _) | Typ_aux (Typ_app (id, _), _) -> id
+                  | _ -> Reporting.unreachable (fst ann) __POS__ "Record is not a record"
+                in
+                let _, fields = Env.get_record record_id ctx.env in
+                (List.map snd fields, List.map (fun _ -> RP_any) fields)
+            | _ -> inconsistent ()
+          in
+          let cur_pats =
+            List.map
+              (fun id ->
+                List.find_opt (fun (x, _) -> Id.compare id x == 0) field_pats
+                |> Option.map snd
+                |> Option.value ~default:(P_aux (P_wild, (Unknown, empty_tannot)))
+              )
+              all_ids
+          in
+          let res_pats' = subpats cur_pats res_pats in
+          List.map (fun rps -> RP_struct (List.combine all_ids rps)) res_pats'
       | P_list ps -> (
           match ps with
           | p1 :: ptl -> remove_clause_from_pattern ctx (P_aux (P_cons (p1, P_aux (P_list ptl, ann)), ann)) res_pat
