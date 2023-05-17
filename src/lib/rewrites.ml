@@ -902,6 +902,7 @@ let pats_complete l env ps typ =
   let ctx =
     {
       Pattern_completeness.variants = Env.get_variants env;
+      Pattern_completeness.structs = Env.get_records env;
       Pattern_completeness.enums = Env.get_enums env;
       Pattern_completeness.constraints = Env.get_constraints env;
     }

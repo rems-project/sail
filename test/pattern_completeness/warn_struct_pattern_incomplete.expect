@@ -1,0 +1,6 @@
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_struct_pattern_incomplete.sail[0m:13.4-9:
+13[96m |[0m    match (struct { f1 = Some(0b00), f2 = n } : foo('n, 2)) {
+  [91m |[0m    [91m^---^[0m
+  [91m |[0m 
+The following expression is unmatched: [93mstruct { f1 = None(undefined); f2 = 5 }[0m
+

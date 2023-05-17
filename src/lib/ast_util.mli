@@ -490,6 +490,7 @@ val kopts_of_quant_item : quant_item -> KOptSet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+val tyvars_of_typ_arg : typ_arg -> KidSet.t
 val tyvars_of_constraint : n_constraint -> KidSet.t
 val tyvars_of_quant_item : quant_item -> KidSet.t
 val is_kid_generated : kid -> bool

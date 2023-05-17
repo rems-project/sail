@@ -76,6 +76,7 @@ let opt_debug_no_literals = ref false
 
 type ctx = {
   variants : (typquant * type_union list) Bindings.t;
+  structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
   constraints : n_constraint list;
 }
@@ -93,6 +94,7 @@ type 'a columns = Columns of 'a list
 
 type column_type =
   | Tuple_column of int
+  | Struct_column of id
   | App_column of id
   | Bool_column
   | Enum_column of id
@@ -110,6 +112,35 @@ type complete_info = {
   (* These rows are redundant *)
   redundant : IntSet.t;
 }
+
+let fresh_gen vars =
+  let counter = ref 0 in
+
+  let rec fresh_var v =
+    let fresh = Kid_aux (Var (string_of_kid v ^ string_of_int !counter), Parse_ast.Unknown) in
+    incr counter;
+    if not (KidSet.mem fresh vars) then fresh else fresh_var v
+  in
+
+  let freshen_var v (typq, typ) =
+    let fresh = fresh_var v in
+    if KidSet.mem v (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+      (typquant_subst_kid v fresh typq, subst_kid typ_subst v fresh typ)
+    else (typq, typ)
+  in
+
+  let freshen_struct_var v (typq, field_typs) =
+    let fresh = fresh_var v in
+    if KidSet.mem v (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+      ( typquant_subst_kid v fresh typq,
+        List.map (fun (typ, field) -> (subst_kid typ_subst v fresh typ, field)) field_typs
+      )
+    else (typq, field_typs)
+  in
+
+  let freshen_bind bind = List.fold_left (fun bind v -> freshen_var v bind) bind (KidSet.elements vars) in
+  let freshen_struct s = List.fold_left (fun s v -> freshen_struct_var v s) s (KidSet.elements vars) in
+  (freshen_bind, freshen_struct)
 
 let union_complete lhs rhs =
   let all_wildcards = IntIntSet.union lhs.wildcards rhs.wildcards in
@@ -292,6 +323,7 @@ module Make (C : Config) = struct
     | GP_bool of bool
     | GP_empty_list
     | GP_cons of gpat * gpat
+    | GP_struct of id * gpat Bindings.t
 
   [@@@coverage off]
   let rec _string_of_gpat = function
@@ -307,6 +339,12 @@ module Make (C : Config) = struct
     | GP_vector gpats -> "[" ^ Util.string_of_list ", " _string_of_gpat gpats ^ "]"
     | GP_empty_list -> "[||]"
     | GP_cons (hd_gpat, tl_gpat) -> _string_of_gpat hd_gpat ^ " :: " ^ _string_of_gpat tl_gpat
+    | GP_struct (_, gfpats) ->
+        "struct { "
+        ^ Util.string_of_list ", "
+            (fun (field, gpat) -> string_of_id field ^ " = " ^ _string_of_gpat gpat)
+            (Bindings.bindings gfpats)
+        ^ " }"
 
   let _debug_rc_matrix (Rows rs) =
     prerr_endline "=== MATRIX ===";
@@ -409,6 +447,51 @@ module Make (C : Config) = struct
     | P_cons (hd_pat, tl_pat) -> GP_cons (generalize ctx head_exp_typ hd_pat, generalize ctx head_exp_typ tl_pat)
     | P_list xs ->
         List.fold_right (fun pat tl_gpat -> GP_cons (generalize ctx head_exp_typ pat, tl_gpat)) xs GP_empty_list
+    | P_struct (fpats, FP_no_wild) -> begin
+        let get_field_typs struct_id =
+          match Bindings.find_opt struct_id ctx.structs with
+          | Some (typq, field_typs) -> (typq, field_typs)
+          | None -> Reporting.unreachable l __POS__ ("Could not find struct with id " ^ string_of_id struct_id)
+        in
+        let struct_id, field_typs =
+          match head_exp_typ with
+          | Some (Typ_aux (Typ_id struct_id, _)) ->
+              let _, field_typs = get_field_typs struct_id in
+              (struct_id, field_typs)
+          | Some (Typ_aux (Typ_app (struct_id, typ_args), _)) ->
+              let vars = List.map tyvars_of_typ_arg typ_args |> List.fold_left KidSet.union KidSet.empty in
+              let _, freshen_record = fresh_gen vars in
+              (* Make sure to avoid subsitution issues by replacing any
+                 variables in the struct type that clash with those in
+                 the type arguments. *)
+              let typq, field_typs = freshen_record (get_field_typs struct_id) in
+              let kopts = quant_kopts typq in
+              let field_typs =
+                List.map
+                  (fun (typ, field) ->
+                    ( List.fold_left2 (fun typ kopt typ_arg -> typ_subst (kopt_kid kopt) typ_arg typ) typ kopts typ_args,
+                      field
+                    )
+                  )
+                  field_typs
+              in
+              (struct_id, field_typs)
+          | _ -> Reporting.unreachable l __POS__ "P_struct pattern with non-struct type"
+        in
+        let field_typs = List.fold_left (fun m (typ, field) -> Bindings.add field typ m) Bindings.empty field_typs in
+        GP_struct
+          ( struct_id,
+            List.fold_left
+              (fun gfpats (field, pat) ->
+                begin
+                  match Bindings.find_opt field field_typs with
+                  | Some typ -> Bindings.add field (generalize ctx (Some typ) pat) gfpats
+                  | None -> Bindings.add field (generalize ctx None pat) gfpats
+                end
+              )
+              Bindings.empty fpats
+          )
+      end
     | _ -> GP_unknown
 
   let rec find_smtlib_type = function
@@ -421,6 +504,7 @@ module Make (C : Config) = struct
 
   let rec column_type = function
     | (_, GP_tuple gpats) :: _ -> Tuple_column (List.length gpats)
+    | (_, GP_struct (struct_id, _)) :: _ -> Struct_column struct_id
     | (_, GP_app (typ_id, _, _)) :: _ -> App_column typ_id
     | (_, GP_bool _) :: _ -> Bool_column
     | (_, GP_enum (typ_id, _)) :: _ -> Enum_column typ_id
@@ -579,6 +663,25 @@ module Make (C : Config) = struct
          (rows_to_list matrix)
       )
 
+  let flatten_struct_column fields i matrix =
+    let num_fields = List.length fields in
+    let flatten = function
+      | GP_struct (_, fpats) ->
+          List.map (fun field -> match Bindings.find_opt field fpats with Some gpat -> gpat | None -> GP_wild) fields
+      | GP_wild -> List.init num_fields (fun _ -> GP_wild)
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct column contains invalid pattern" [@coverage off]
+    in
+    Rows
+      (List.map
+         (fun (l, row) ->
+           ( l,
+             Columns
+               (List.mapi (fun j gpat -> if i = j then flatten gpat else [gpat]) (columns_to_list row) |> List.concat)
+           )
+         )
+         (rows_to_list matrix)
+      )
+
   let split_matrix_ctor ctx c ctor ctor_rows matrix =
     let row_indices = List.fold_left (fun set (r, _) -> IntSet.add r set) IntSet.empty ctor_rows in
     let flatten = function
@@ -650,6 +753,13 @@ module Make (C : Config) = struct
     let zs = Util.drop width ys in
     xs @ (mk_exp (E_tuple tuple_elems) :: zs)
 
+  let restruct fields i unmatcheds =
+    let num_fields = List.length fields in
+    let xs, ys = Util.split_after i unmatcheds in
+    let field_elems = Util.take num_fields ys in
+    let zs = Util.drop num_fields ys in
+    xs @ (mk_exp (E_struct (List.map2 (fun field elem -> mk_fexp field elem) fields field_elems)) :: zs)
+
   let rector ctor i unmatcheds =
     let xs, ys = Util.split_after i unmatcheds in
     match ys with
@@ -690,6 +800,14 @@ module Make (C : Config) = struct
         | Tuple_column width ->
             matrix_is_complete l ctx (flatten_tuple_column width i matrix)
             |> completeness_map (retuple width i) (fun w -> w)
+        | Struct_column struct_id -> begin
+            match Bindings.find_opt struct_id ctx.structs with
+            | Some (_, field_typs) ->
+                let fields = List.map snd field_typs in
+                matrix_is_complete l ctx (flatten_struct_column fields i matrix)
+                |> completeness_map (restruct fields i) (fun w -> w)
+            | None -> Reporting.unreachable l __POS__ ("Could not find struct type " ^ string_of_id struct_id)
+          end
         | Lit_column ->
             let wild_matrix = split_matrix_wild i matrix in
             begin
