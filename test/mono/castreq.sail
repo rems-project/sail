@@ -120,6 +120,35 @@ function assign5(m,x) = {
   y
 }
 
+/* Perform a check that resolves the size of a mutable variable, then use it.
+   This doesn't actually need a cast in Lem (because the type system can't
+   check the subrange), but the rewrite doesn't know that and the intermediate
+   Sail representations wouldn't typecheck anyway.
+*/
+
+val refine_mutable_exp1 : forall 'n, 'n in {32,64}. (int('n), bits('n)) -> bits('n)
+
+function refine_mutable_exp1(n, x) = {
+  y : bits('n) = x;
+  let z: bits(2) = if n > 36 then y[35..34] else y[7..6];
+  y[1..0] = z;
+  y
+}
+
+/* Similar, but forgetting the reason that the subrange is valid and having to
+   assert it.
+ */
+
+val refine_mutable_exp2 : forall 'n, 'n in {32,64}. (int('n), bits('n)) -> bits('n)
+
+function refine_mutable_exp2(n, x) = {
+  y : bits('n) = x;
+  let b : bool = n > 36;
+  let z: bits(2) = if b then { assert('n > 36); y[35..34] } else y[7..6];
+  y[1..0] = z;
+  y
+}
+
 /* Adding casts for top-level pattern matches */
 
 val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (atom('n), bits('m)) -> bits('n) effect pure
@@ -171,6 +200,10 @@ function run () = {
     assert(assign4(0x1234) == 0x1289);
     assert(assign5(0x12) == 0x13);
     assert(assign5(0x1234) == 0x1289);
+    assert(refine_mutable_exp1(32,0x12345678) == 0x12345679);
+    assert(refine_mutable_exp1(64,0x12345678abcdef05) == 0x12345678ABCDEF06);
+    assert(refine_mutable_exp2(32,0x12345678) == 0x12345679);
+    assert(refine_mutable_exp2(64,0x12345678abcdef05) == 0x12345678ABCDEF06);
     assert(foo2(32,0x12) == 0x00120012);
     assert(foo2(64,0x12) == 0x0012001200120012);
     assert(foo3(4,0x12) == 0x00120012);

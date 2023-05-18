@@ -3843,10 +3843,22 @@ module BitvectorSizeCasts = struct
     let assigns_in = Bindings.fold (fun var (_, typ) acc -> mk_assign_in var typ @ acc) mutables [] in
     let assigns_out = Bindings.fold (fun var (_, typ) acc -> mk_assign_out var typ @ acc) mutables [] in
     let exp =
-      match (assigns_in, exp) with
-      | [], _ -> exp
-      | _ :: _, E_aux (E_block es, ann) -> E_aux (E_block (assigns_in @ es @ assigns_out), ann)
-      | _ :: _, E_aux (_, (l, ann)) -> E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l, ann))
+      match (assigns_in, exp, typ_of exp) with
+      | [], _, _ -> exp
+      | _ :: _, E_aux (E_block es, ann), Typ_aux (Typ_id id, _) when Id.compare id (mk_id "unit") == 0 ->
+          E_aux (E_block (assigns_in @ es @ assigns_out), ann)
+      | _ :: _, E_aux (E_block es, ann), _ ->
+          let ret_var = mk_id "cast#env#result" in
+          let lb = LB_aux (LB_val (P_aux (P_id ret_var, ann), E_aux (E_block es, ann)), ann) in
+          let suffix = E_aux (E_block (assigns_out @ [E_aux (E_id ret_var, ann)]), ann) in
+          E_aux (E_block (assigns_in @ [E_aux (E_let (lb, suffix), ann)]), ann)
+      | _ :: _, E_aux (_, (l, ann)), Typ_aux (Typ_id id, _) when Id.compare id (mk_id "unit") == 0 ->
+          E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l, ann))
+      | _ :: _, E_aux (_, ann), _ ->
+          let ret_var = mk_id "cast#env#result" in
+          let lb = LB_aux (LB_val (P_aux (P_id ret_var, ann), exp), ann) in
+          let suffix = E_aux (E_block (assigns_out @ [E_aux (E_id ret_var, ann)]), ann) in
+          E_aux (E_block (assigns_in @ [E_aux (E_let (lb, suffix), ann)]), ann)
     in
     let add_immutables exp =
       Bindings.fold (fun var (mut, typ) exp -> if mut = Immutable then mk_cast var typ exp else exp) immutables exp
@@ -4093,7 +4105,7 @@ module BitvectorSizeCasts = struct
             let result_typ = Env.base_typ_of env (typ_of_annot ann) in
             let rec aux = function
               | [] -> []
-              | (E_aux (E_assert (assert_exp, msg), ann) as h) :: t ->
+              | (E_aux (E_assert (assert_exp, msg), _) as h) :: t ->
                   (* Check the assertion for constraints that instantiate kids *)
                   let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
                   begin
@@ -4128,9 +4140,9 @@ module BitvectorSizeCasts = struct
                           (* Propagate new instantiations and insert casts *)
                           let t' = aux t in
                           let et = E_aux (E_block t', ann) in
-                          let et = make_bitvector_env_casts env env_post quant_kids insts et in
                           let src_typ = subst_kids_typ insts result_typ in
                           let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
+                          let et = make_bitvector_env_casts env env_post quant_kids insts et in
                           [h; et]
                         end
                     | _ -> h :: aux t
