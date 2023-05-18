@@ -79,6 +79,17 @@ let rec map_last f = function
 
 let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents) -> Some contents | _ -> None
 
+(* Remove additional (> 1) trailing newlines at the end of a string *)
+let discard_extra_trailing_newlines s =
+  let len = String.length s in
+  let i = ref (len - 1) in
+  let newlines = ref 0 in
+  while s.[!i] = '\n' do
+    incr newlines;
+    decr i
+  done;
+  if !newlines > 1 then String.sub s 0 (len - (!newlines - 1)) else s
+
 (** We implement a small wrapper around a subset of the PPrint API to
     track line breaks and dedents (points where the indentation level
     decreases), re-implementing a few core combinators. *)
@@ -681,7 +692,11 @@ module Make (Config : CONFIG) = struct
           begin
             match Queue.peek_opt lb_info.dedents with
             | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
-                if !after_hardline then pending_spaces := !pending_spaces - amount;
+                (* This happens when the formatter removes trailing
+                   whitespace premptively, so we never reach the dedent
+                   column. *)
+                if l < !line && debug then Buffer.add_string buf Util.(">" ^ string_of_int c |> yellow |> clear);
+                if !after_hardline && l = !line then pending_spaces := !pending_spaces - amount;
                 if debug then Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear);
                 ignore (Queue.take lb_info.dedents);
                 pop_dedents ()
@@ -734,8 +749,13 @@ module Make (Config : CONFIG) = struct
     let chunks = chunk_defs source comments defs in
     if debug then Queue.iter (prerr_chunk "") chunks;
     let doc = Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
+    if debug then (
+      let formatted, lb_info = to_string (doc ^^ hardline) in
+      let debug_src = fixup ~debug lb_info formatted in
+      prerr_endline debug_src
+    );
     let formatted, lb_info = to_string (doc ^^ hardline) in
-    fixup lb_info formatted
+    fixup lb_info formatted |> discard_extra_trailing_newlines
 
   let format_defs ?(debug = false) filename source comments defs =
     let open Initial_check in

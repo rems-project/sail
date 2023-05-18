@@ -411,7 +411,7 @@ let chunk_header_comments comments chunks = function
   | DEF_aux (_, l) :: _ -> pop_header_comments comments chunks l 1
 
 (* Pop comments preceeding location into the chunkstream *)
-let rec pop_comments comments chunks l =
+let rec pop_comments ?(spacer = true) comments chunks l =
   match Stack.top_opt comments with
   | None -> ()
   | Some (Lexer.Comment (comment_type, comment_s, e, contents)) -> begin
@@ -419,7 +419,7 @@ let rec pop_comments comments chunks l =
       | Some (s, _) when e.pos_cnum <= s.pos_cnum ->
           let _ = Stack.pop comments in
           Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents)) chunks;
-          if e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
+          if spacer && e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
           pop_comments comments chunks l
       | _ -> ()
     end
@@ -864,12 +864,12 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let lexp_chunks = rec_chunk_exp lexp in
       let exp_chunks = rec_chunk_exp exp in
       Queue.add (Binary (lexp_chunks, "=", exp_chunks)) chunks
-  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _)) ->
+  | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _), keywords) ->
       let then_brace = match t with E_aux (E_block _, _) -> true | _ -> false in
       let i_chunks = rec_chunk_exp i in
       let t_chunks = rec_chunk_exp t in
       Queue.add (If_then (then_brace, i_chunks, t_chunks)) chunks
-  | E_if (i, t, e) ->
+  | E_if (i, t, e, keywords) ->
       let if_format =
         {
           then_brace = (match t with E_aux (E_block _, _) -> true | _ -> false);
@@ -877,7 +877,9 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
         }
       in
       let i_chunks = rec_chunk_exp i in
+      pop_comments ~spacer:false comments i_chunks keywords.then_loc;
       let t_chunks = rec_chunk_exp t in
+      (match keywords.else_loc with Some l -> pop_comments comments t_chunks l | None -> ());
       let e_chunks = rec_chunk_exp e in
       Queue.add (If_then_else (if_format, i_chunks, t_chunks, e_chunks)) chunks
   | (E_throw exp | E_return exp | E_deref exp | E_internal_return exp) as unop ->

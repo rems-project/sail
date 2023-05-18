@@ -845,9 +845,17 @@ exp:
   | Throw exp
     { mk_exp (E_throw $2) $startpos $endpos }
   | If_ exp Then exp Else exp
-    { mk_exp (E_if ($2, $4, $6)) $startpos $endpos }
+    { let keywords = { if_loc = loc $startpos($1) $endpos($1);
+                       then_loc = loc $startpos($3) $endpos($3);
+                       else_loc = Some (loc $startpos($5) $endpos($5))
+                     } in
+      mk_exp (E_if ($2, $4, $6, keywords)) $startpos $endpos }
   | If_ exp Then exp
-    { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4))) $startpos $endpos }
+    { let keywords = { if_loc = loc $startpos($1) $endpos($1);
+                       then_loc = loc $startpos($3) $endpos($3);
+                       else_loc = None
+                     } in
+      mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4), keywords)) $startpos $endpos }
   | Match exp Lcurly case_list Rcurly
     { mk_exp (E_match ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
