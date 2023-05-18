@@ -239,9 +239,7 @@ module Env : sig
   (** Check if the type with the given id is a bitfield type *)
   val is_bitfield : id -> t -> bool
 
-  (** [get_bitfield_ranges id env] returns the index ranges of bitfield type [id],
-      or raises [Not_found] if [id] is not a bitfield type. *)
-  val get_bitfield_ranges : id -> t -> index_range Bindings.t
+  val get_bitfield : id -> t -> typ * index_range Bindings.t
 
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
@@ -275,6 +273,10 @@ end
 
 (** {4 Environment helper functions} *)
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
+
+(** [get_bitfield_ranges id env] returns the index ranges of bitfield type [id],
+    or raises [Not_found] if [id] is not a bitfield type. *)
+val get_bitfield_ranges : id -> Env.t -> index_range Bindings.t
 
 (** [get_bitfield_range id field env] returns the [index_range] of [field]
     in bitfield type [id], or [None] if the field does not exist. *)

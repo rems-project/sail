@@ -1831,7 +1831,7 @@ let find_exc_typ defs =
 
 let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env { defs; _ } top_line =
   (* let regtypes = find_regtypes d in *)
-  let state_ids = State.generate_regstate_defs !Monomorphise.opt_mwords defs |> val_spec_ids in
+  let state_ids = State.generate_regstate_defs type_env defs |> val_spec_ids in
   let is_state_def = function
     | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
     | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
@@ -1845,9 +1845,7 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
   let register_ref_tannot typ =
     string " : register_ref regstate register_value " ^^ parens (doc_typ_lem params_to_print type_env typ)
   in
-  let register_refs =
-    State.register_refs_lem !Monomorphise.opt_mwords register_ref_tannot (State.find_registers defs)
-  in
+  let register_refs = State.register_refs_lem register_ref_tannot type_env (State.find_registers defs) in
   (print types_file)
     (concat
        [

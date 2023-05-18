@@ -3314,11 +3314,11 @@ let builtin_target_names defs =
   in
   List.fold_left check_def StringSet.empty defs
 
-let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module effect_info { defs; _ } top_line
-    suppress_MR_M =
+let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module effect_info type_env { defs; _ }
+    top_line suppress_MR_M =
   try
     (* let regtypes = find_regtypes d in *)
-    let state_ids = State.generate_regstate_defs true defs |> val_spec_ids in
+    let state_ids = State.generate_regstate_defs type_env defs |> val_spec_ids in
     let is_state_def = function
       | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
       | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
@@ -3331,7 +3331,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     let unimplemented = find_unimplemented defs in
     let avoid_target_names = builtin_target_names defs in
     let bare_doc_id = doc_id { empty_ctxt with avoid_target_names } in
-    let register_refs = State.register_refs_coq bare_doc_id (State.find_registers defs) in
+    let register_refs = State.register_refs_coq bare_doc_id type_env (State.find_registers defs) in
     let generic_eq_types = types_used_with_generic_eq defs in
     let doc_def = doc_def type_defs_module unimplemented avoid_target_names generic_eq_types effect_info in
     let () =

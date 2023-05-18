@@ -98,7 +98,7 @@ let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc }
 let add_def_attribute l attr arg (annot : def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
 
 let get_def_attribute attr (annot : def_annot) =
-  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs |> Option.map (fun (l, arg, _) -> (l, arg))
+  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 type mut = Immutable | Mutable
 

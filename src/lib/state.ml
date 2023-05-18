@@ -80,6 +80,14 @@ let opt_type_grouped_regstate = ref false
 
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs defs)
 
+let get_bitfield_typ_id env typ =
+  match unaux_typ (Env.expand_synonyms env typ) with Typ_id id when Env.is_bitfield id env -> Some id | _ -> None
+
+let is_bitfield_typ env typ = Option.is_some (get_bitfield_typ_id env typ)
+
+let regval_base_typ env typ =
+  match get_bitfield_typ_id env typ with Some id -> fst (Env.get_bitfield id env) | _ -> typ
+
 let has_default_order defs =
   List.exists (function DEF_aux (DEF_default (DT_aux (DT_order _, _)), _) -> true | _ -> false) defs
 
@@ -100,32 +108,37 @@ let generate_register_id_enum = function
       let reg (typ, id) = string_of_id id in
       ["type register_id = " ^ String.concat " | " (List.map reg registers)]
 
-let rec id_of_regtyp builtins mwords (Typ_aux (t, l) as typ) =
+let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
   match t with
   | Typ_id id -> id
   | Typ_app (id, args) ->
       let name_arg (A_aux (targ, _)) =
         match targ with
-        | A_typ targ -> string_of_id (id_of_regtyp builtins mwords targ)
+        | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
         | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
         | A_order (Ord_aux (Ord_inc, _)) -> "inc"
         | A_order (Ord_aux (Ord_dec, _)) -> "dec"
         | _ -> raise (Reporting.err_typ l "Unsupported register type")
       in
-      if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id
+      if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
       else append_id id (String.concat "_" ("" :: List.map name_arg args))
   | _ -> raise (Reporting.err_typ l "Unsupported register type")
 
-let regstate_field typ = append_id (id_of_regtyp IdSet.empty false typ) "_reg"
+let regstate_field typ = append_id (id_of_regtyp IdSet.empty typ) "_reg"
 
-let generate_regstate registers =
+let generate_regstate env registers =
   let regstate_def =
     if registers = [] then TD_abbrev (mk_id "regstate", mk_typquant [], mk_typ_arg (A_typ unit_typ))
     else (
       let fields =
-        if !opt_type_grouped_regstate then
-          List.map (fun (typ, id) -> (function_typ [string_typ] typ, regstate_field typ)) registers
-          |> List.sort_uniq (fun (typ1, id1) (typ2, id2) -> Id.compare id1 id2)
+        if !opt_type_grouped_regstate then (
+          let type_field (typ, id) =
+            let base_typ = regval_base_typ env typ in
+            (function_typ [string_typ] base_typ, regstate_field base_typ)
+          in
+          let cmp_id (_, id1) (_, id2) = Id.compare id1 id2 in
+          List.map type_field registers |> List.sort_uniq cmp_id
+        )
         else registers
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
@@ -133,15 +146,15 @@ let generate_regstate registers =
   in
   [DEF_aux (DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))), mk_def_annot Unknown)]
 
-let generate_initial_regstate defs =
+let generate_initial_regstate env defs =
   let registers = find_registers defs in
   if registers = [] then []
   else (
     try
       (* Recursively choose a default value for every type in the spec.
          vals, constructed below, maps user-defined types to default values. *)
-      let rec lookup_init_val vals (Typ_aux (typ_aux, _)) =
-        match typ_aux with
+      let rec lookup_init_val vals typ =
+        match unaux_typ typ with
         | Typ_id id ->
             if string_of_id id = "bool" then "false"
             else if string_of_id id = "bit" then "bitzero"
@@ -150,6 +163,8 @@ let generate_initial_regstate defs =
             else if string_of_id id = "real" then "0"
             else if string_of_id id = "string" then "\"\""
             else if string_of_id id = "unit" then "()"
+            else if Env.is_bitfield id env then lookup_init_val vals (fst (Env.get_bitfield id env))
+              (* TODO: Construct bitfield exp *)
             else Bindings.find id vals []
         | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
         | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "atom" -> string_of_nexp nexp
@@ -231,23 +246,37 @@ let regval_constr_id =
   id_of_regtyp
     (IdSet.of_list (List.map mk_id ["bool"; "int"; "real"; "string"; "vector"; "bitvector"; "list"; "option"]))
 
-let register_base_types mwords typs =
+let register_base_types env typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =
     let builtins =
       IdSet.of_list (List.map mk_id ["bool"; "atom_bool"; "atom"; "int"; "real"; "string"; "vector"; "list"; "option"])
     in
     match t with
-    | Typ_app (id, args) when IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) ->
+    | Typ_app (id, args) when IdSet.mem id builtins && not (is_bitvector_typ typ) ->
         let add_typ_arg base_typs (A_aux (targ, _)) =
           match targ with A_typ typ -> add_base_typs base_typs typ | _ -> base_typs
         in
         List.fold_left add_typ_arg typs args
     | Typ_id id when IdSet.mem id builtins -> typs
-    | _ -> Bindings.add (regval_constr_id mwords typ) typ typs
+    | Typ_id id when Env.is_bitfield id env -> add_base_typs typs (fst (Env.get_bitfield id env))
+    | _ -> Bindings.add (regval_constr_id typ) typ typs
   in
   List.fold_left add_base_typs Bindings.empty (bit_typ :: typs)
 
-let generate_regval_typ typs =
+let register_bitfield_types env typs =
+  let rec add_bitfield_typs typs typ =
+    match unaux_typ typ with
+    | Typ_id id when Env.is_bitfield id env -> Bindings.add id typ typs
+    | Typ_app (id, args) when List.mem (string_of_id id) ["vector"; "list"; "option"] ->
+        let add_typ_arg typs (A_aux (targ, _)) =
+          match targ with A_typ typ -> add_bitfield_typs typs typ | _ -> typs
+        in
+        List.fold_left add_typ_arg typs args
+    | _ -> typs
+  in
+  List.fold_left add_bitfield_typs Bindings.empty typs
+
+let generate_regval_typ env typs =
   let constr (constr_id, typ) = Printf.sprintf "Regval_%s : %s" (string_of_id constr_id) (to_string (doc_typ typ)) in
   let builtins =
     "Regval_vector : list(register_value), " ^ "Regval_list : list(register_value), "
@@ -283,46 +312,65 @@ let regval_instance_lem =
     @ ["end"]
     )
 
-let add_regval_conv id typ defs =
-  let id = string_of_id id in
+let regval_base_convs typ =
+  let id = string_of_id (regval_constr_id typ) in
+  if List.mem id (List.map fst regval_class_typs_lem) then (id ^ "_of_register_value", "register_value_of_" ^ id)
+  else (id ^ "_of_regval", "regval_of_" ^ id)
+
+let add_regval_conv env id typ defs =
   let typ_str = to_string (doc_typ typ) in
+  let v_exp = mk_exp (E_id (mk_id "v")) in
+  let base_typ = regval_base_typ env typ in
   (* Create a function that converts from regval to the target type. *)
-  let from_name = id ^ "_of_regval" in
+  let from_name, to_name = regval_base_convs typ in
+  let from_base, to_base = regval_base_convs base_typ in
+  let constr_name = string_of_id (regval_constr_id base_typ) in
   let from_val = Printf.sprintf "val %s : register_value -> option(%s)" from_name typ_str in
   let from_function =
-    String.concat "\n"
-      [Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name id; Printf.sprintf "and %s _ = None()" from_name]
+    match get_bitfield_typ_id env typ with
+    | Some id ->
+        let base_exp = mk_exp (E_app (mk_id from_base, [v_exp])) in
+        let result_exp = Bitfield.construct_bitfield_struct id v_exp in
+        let some_clause = "Some(v) => Some(" ^ string_of_exp result_exp ^ ")" in
+        let clauses = " { " ^ some_clause ^ ", None() => None() }" in
+        "function " ^ from_name ^ " v = match " ^ string_of_exp base_exp ^ clauses
+    | _ ->
+        String.concat "\n"
+          [
+            Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name constr_name;
+            Printf.sprintf "and %s _ = None()" from_name;
+          ]
   in
   let from_defs = if is_defined defs from_name then [] else [from_val; from_function] in
   (* Create a function that converts from target type to regval. *)
-  let to_name = "regval_of_" ^ id in
   let to_val = Printf.sprintf "val %s : %s -> register_value" to_name typ_str in
-  let to_function = Printf.sprintf "function %s v = Regval_%s(v)" to_name id in
+  let to_exp =
+    if is_bitfield_typ env typ then mk_exp (E_app (mk_id to_base, [Bitfield.get_bits_field v_exp]))
+    else mk_exp (E_app (mk_id ("Regval_" ^ constr_name), [v_exp]))
+  in
+  let to_function = Printf.sprintf "function %s v = %s" to_name (string_of_exp to_exp) in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
   let cdefs = List.concat (List.map (defs_of_string __POS__) (from_defs @ to_defs)) in
   defs @ cdefs
 
-let rec regval_convs mwords wrap_fun (Typ_aux (t, _) as typ) =
+let rec regval_convs wrap_fun (Typ_aux (t, _) as typ) =
   match t with
-  | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (mwords && is_bitvector_typ typ) ->
+  | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (is_bitvector_typ typ) ->
       let size, ord, etyp = vector_typ_args_of typ in
-      let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+      let etyp_of, of_etyp = regval_convs wrap_fun etyp in
       ("vector_of_regval " ^ wrap_fun etyp_of, "regval_of_vector " ^ wrap_fun of_etyp)
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "list" ->
-      let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+      let etyp_of, of_etyp = regval_convs wrap_fun etyp in
       ("list_of_regval " ^ wrap_fun etyp_of, "regval_of_list " ^ wrap_fun of_etyp)
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "option" ->
-      let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+      let etyp_of, of_etyp = regval_convs wrap_fun etyp in
       ("option_of_regval " ^ wrap_fun etyp_of, "regval_of_option " ^ wrap_fun of_etyp)
-  | _ ->
-      let id = string_of_id (regval_constr_id mwords typ) in
-      if List.mem id (List.map fst regval_class_typs_lem) then (id ^ "_of_register_value", "register_value_of_" ^ id)
-      else (id ^ "_of_regval", "regval_of_" ^ id)
+  | _ -> regval_base_convs typ
 
-let regval_convs_lem mwords = regval_convs mwords (fun conv -> "(fun v -> " ^ conv ^ " v)")
-let regval_convs_isa mwords = regval_convs mwords (fun conv -> "(\\<lambda>v. " ^ conv ^ " v)")
+let regval_convs_lem = regval_convs (fun conv -> "(fun v -> " ^ conv ^ " v)")
+let regval_convs_isa = regval_convs (fun conv -> "(\\<lambda>v. " ^ conv ^ " v)")
 
-let register_refs_lem mwords pp_tannot registers =
+let register_refs_lem pp_tannot env registers =
   let generic_convs =
     separate_map hardline string
       [
@@ -360,16 +408,26 @@ let register_refs_lem mwords pp_tannot registers =
     let idd = string (string_of_id id) in
     let read_from, write_to =
       if !opt_type_grouped_regstate then (
-        let field_idd = string (string_of_id (regstate_field typ)) in
-        ( field_idd ^^ space ^^ dquotes idd,
-          doc_op equals field_idd
-            (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)")
-        )
-      )
+        match get_bitfield_typ_id env typ with
+        | Some bitfield_id ->
+            let base_typ, _ = Env.get_bitfield bitfield_id env in
+            let field_idd = string (string_of_id (regstate_field base_typ)) in
+            let bits_idd = string (string_of_id bitfield_id ^ "_bits") in
+            ( string "<| " ^^ bits_idd ^^ string " = s." ^^ field_idd ^^ space ^^ dquotes idd ^^ string " |>",
+              doc_op equals field_idd
+                (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v." ^^ bits_idd ^^ string " else s." ^^ field_idd ^^ string " reg)")
+            )
+        | _ ->
+          let field_idd = string (string_of_id (regstate_field typ)) in
+          ( string "s." ^^ field_idd ^^ space ^^ dquotes idd,
+            doc_op equals field_idd
+              (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)")
+          )
+    )
       else (idd, doc_op equals idd (string "v"))
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
-    let of_regval, regval_of = regval_convs_lem mwords typ in
+    let of_regval, regval_of = regval_convs_lem typ in
     let tannot = pp_tannot typ in
     concat
       [
@@ -383,7 +441,7 @@ let register_refs_lem mwords pp_tannot registers =
         idd;
         string "\";";
         hardline;
-        string "  read_from = (fun s -> s.";
+        string "  read_from = (fun s -> ";
         read_from;
         string ");";
         hardline;
@@ -435,7 +493,7 @@ let register_refs_lem mwords pp_tannot registers =
 (* TODO Generate well-typedness predicate for register states (and events),
    asserting that all lists representing non-bit-vectors have the right length. *)
 
-let generate_isa_lemmas mwords defs =
+let generate_isa_lemmas env defs =
   let rec drop_while f = function x :: xs when f x -> drop_while f xs | xs -> xs in
   let remove_leading_underscores str = String.concat "_" (drop_while (fun s -> s = "") (Util.split_on_char '_' str)) in
   let remove_trailing_underscores str =
@@ -443,7 +501,8 @@ let generate_isa_lemmas mwords defs =
   in
   let remove_underscores str = remove_leading_underscores (remove_trailing_underscores str) in
   let registers = find_registers defs in
-  let regtyp_ids = register_base_types mwords (List.map fst registers) |> Bindings.bindings |> List.map fst in
+  let regtyp_ids = register_base_types env (List.map fst registers) |> Bindings.bindings |> List.map fst in
+  let bitfield_ids = register_bitfield_types env (List.map fst registers) |> Bindings.bindings |> List.map fst in
   let regval_class_typ_ids = List.map (fun (t, _) -> mk_id t) regval_class_typs_lem in
   let register_defs =
     let reg_id id = remove_leading_underscores (string_of_id id) in
@@ -472,6 +531,15 @@ let generate_isa_lemmas mwords defs =
     ^^ hardline
     ^^ string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " v) = Some v\"")
     ^^ hardline ^^ string "  by auto"
+  in
+  let bitfield_conv_lemma typ_id =
+    let typ_id = remove_trailing_underscores (string_of_id typ_id) in
+    let typ_id' = remove_leading_underscores typ_id in
+    let of_rv, rv_of = (typ_id' ^ "_of_regval", "regval_of_" ^ typ_id) in
+    string ("lemma regval_" ^ typ_id ^ "[simp]:")
+    ^^ hardline
+    ^^ string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " v) = Some v\"")
+    ^^ hardline ^^ string ("  by (auto simp: " ^ of_rv ^ "_def " ^ rv_of ^ "_def)")
   in
   let register_lemmas (typ, id) =
     let id = remove_leading_underscores (string_of_id id) in
@@ -512,11 +580,12 @@ let generate_isa_lemmas mwords defs =
       )
   in
   let module StringMap = Map.Make (String) in
-  let field_id typ = remove_leading_underscores (string_of_id (id_of_regtyp IdSet.empty false typ)) in
+  let field_id typ = remove_leading_underscores (string_of_id (id_of_regtyp IdSet.empty typ)) in
   let field_id_stripped typ = remove_trailing_underscores (field_id typ) in
+  (* TODO: Handle bitfield registers *)
   let set_regval_type_cases =
     let add_reg_case cases (typ, id) =
-      let of_regval = remove_underscores (fst (regval_convs_isa mwords typ)) in
+      let of_regval = remove_underscores (fst (regval_convs_isa typ)) in
       let case =
         "(" ^ field_id_stripped typ ^ ") v where " ^ "\"" ^ of_regval ^ " rv = Some v\" and " ^ "\"s' = s\\<lparr>"
         ^ field_id typ ^ "_reg := (" ^ field_id typ ^ "_reg s)(r := v)\\<rparr>\""
@@ -544,7 +613,7 @@ let generate_isa_lemmas mwords defs =
   in
   let get_regval_type_cases =
     let add_reg_case cases (typ, id) =
-      let regval_of = remove_underscores (snd (regval_convs_isa mwords typ)) in
+      let regval_of = remove_underscores (snd (regval_convs_isa typ)) in
       let case =
         "(" ^ field_id_stripped typ ^ ") \"get_regval r = (\\<lambda>s. Some (" ^ regval_of ^ " (" ^ field_id typ
         ^ "_reg s r)))\""
@@ -577,6 +646,8 @@ let generate_isa_lemmas mwords defs =
   ^^ hardline ^^ hardline ^^ register_defs ^^ hardline ^^ hardline
   ^^ separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids @ regtyp_ids)
   ^^ hardline ^^ hardline
+  ^^ separate_map (hardline ^^ hardline) bitfield_conv_lemma (bitfield_ids)
+  ^^ hardline ^^ hardline
   ^^ separate_map hardline string
        [
          "lemma vector_of_rv_rv_of_vector[simp]:";
@@ -604,24 +675,24 @@ let generate_isa_lemmas mwords defs =
   ^^ separate_map (hardline ^^ hardline) register_lemmas registers
   ^^ hardline ^^ hardline ^^ set_regval_type_cases ^^ hardline ^^ hardline ^^ get_regval_type_cases
 
-let rec regval_convs_coq (Typ_aux (t, _) as typ) =
+let rec regval_convs_coq env (Typ_aux (t, _) as typ) =
   match t with
   | Typ_app _ when is_vector_typ typ && not (is_bitvector_typ typ) ->
       let size, ord, etyp = vector_typ_args_of typ in
       let size = string_of_nexp (nexp_simp size) in
-      let etyp_of, of_etyp = regval_convs_coq etyp in
+      let etyp_of, of_etyp = regval_convs_coq env etyp in
       ("(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)", "(fun v => regval_of_vector " ^ of_etyp ^ " v)")
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "list" ->
-      let etyp_of, of_etyp = regval_convs_coq etyp in
+      let etyp_of, of_etyp = regval_convs_coq env etyp in
       ("(fun v => list_of_regval " ^ etyp_of ^ " v)", "(fun v => regval_of_list " ^ of_etyp ^ " v)")
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "option" ->
-      let etyp_of, of_etyp = regval_convs_coq etyp in
+      let etyp_of, of_etyp = regval_convs_coq env etyp in
       ("(fun v => option_of_regval " ^ etyp_of ^ " v)", "(fun v => regval_of_option " ^ of_etyp ^ " v)")
   | _ ->
-      let id = string_of_id (regval_constr_id true typ) in
+      let id = string_of_id (regval_constr_id typ) in
       ("(fun v => " ^ id ^ "_of_regval v)", "(fun v => regval_of_" ^ id ^ " v)")
 
-let register_refs_coq doc_id registers =
+let register_refs_coq doc_id env registers =
   let generic_convs =
     separate_map hardline string
       [
@@ -679,7 +750,7 @@ let register_refs_coq doc_id registers =
   let register_ref (typ, id) =
     let idd = doc_id id in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
-    let of_regval, regval_of = regval_convs_coq typ in
+    let of_regval, regval_of = regval_convs_coq env typ in
     concat
       [
         string "Definition ";
@@ -745,7 +816,7 @@ let register_refs_coq doc_id registers =
   in
   separate hardline [generic_convs; refs; getters_setters]
 
-let generate_regstate_defs mwords defs =
+let generate_regstate_defs env defs =
   (* FIXME We currently don't want to generate undefined_type functions
      for register state and values.  For the Lem backend, this would require
      taking the dependencies of those functions into account when partitioning
@@ -753,26 +824,33 @@ let generate_regstate_defs mwords defs =
   let gen_undef = !Initial_check.opt_undefined_gen in
   Initial_check.opt_undefined_gen := false;
   let registers = find_registers defs in
-  let regtyps = register_base_types mwords (List.map fst registers) in
+  let regtyps = List.map fst registers in
+  let base_regtyps = register_base_types env regtyps in
+  let bitfield_regtyps = register_bitfield_types env regtyps in
+  let regtyps_with_ids = Bindings.union (fun _ x _ -> Some x) base_regtyps bitfield_regtyps in
   let option_typ =
     if is_defined defs "option" then []
     else [defs_of_string __POS__ "union option ('a : Type) = {None : unit, Some : 'a}"]
   in
-  let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ regtyps in
-  let regstate_typ = if is_defined defs "regstate" then [] else [generate_regstate registers] in
+  let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ env base_regtyps in
+  let regstate_typ = if is_defined defs "regstate" then [] else [generate_regstate env registers] in
   let initregstate =
     (* Don't create initial regstate if it is already defined or if we generated
        a regstate record with registers grouped per type; the latter would
        require record fields storing functions, which is not supported in
        Sail. *)
-    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else generate_initial_regstate defs
+    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else generate_initial_regstate env defs
   in
   let defs =
-    option_typ @ regval_typ @ regstate_typ @ initregstate |> List.concat |> Bindings.fold add_regval_conv regtyps
+    option_typ @ regval_typ @ regstate_typ @ initregstate
+    |> List.concat
+    |> Bindings.fold (add_regval_conv env) regtyps_with_ids
   in
+  let typdefs, defs = List.partition (function DEF_aux (DEF_type _, _) -> true | _ -> false) defs in
+  let valspecs, defs = List.partition (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs in
   Initial_check.opt_undefined_gen := gen_undef;
-  defs
+  typdefs @ valspecs @ defs
 
 let add_regstate_defs mwords env ast =
-  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs mwords ast.defs) in
+  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs env ast.defs) in
   (env, append_ast_defs ast reg_defs)
