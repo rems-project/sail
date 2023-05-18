@@ -161,6 +161,7 @@ type atyp_aux =
   | ATyp_tuple of atyp list (* Tuple type *)
   | ATyp_app of id * atyp list (* type constructor application *)
   | ATyp_exist of kinded_id list * atyp * atyp
+  | ATyp_parens of atyp
 
 and atyp = ATyp_aux of atyp_aux * l
 
@@ -204,12 +205,13 @@ type pat_aux =
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
+  | P_struct of fpat list (* struct pattern *)
   | P_attribute of string * string * pat
 
 and pat = P_aux of pat_aux * l
 
 and fpat_aux = (* Field pattern *)
-  | FP_Fpat of id * pat
+  | FP_field of id * pat | FP_wild
 
 and fpat = FP_aux of fpat_aux * l
 
@@ -347,6 +349,7 @@ type mpat_aux =
   | MP_string_append of mpat list
   | MP_typ of mpat * atyp
   | MP_as of mpat * id
+  | MP_struct of (id * mpat) list
 
 and mpat = MP_aux of mpat_aux * l
 

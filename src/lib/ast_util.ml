@@ -124,6 +124,8 @@ let typ_loc = function Typ_aux (_, l) -> l
 
 let pat_loc = function P_aux (_, (l, _)) -> l
 
+let mpat_loc = function MP_aux (_, (l, _)) -> l
+
 let exp_loc = function E_aux (_, (l, _)) -> l
 
 let nexp_loc = function Nexp_aux (_, l) -> l
@@ -153,7 +155,7 @@ let uncast_exp = function
   | E_aux (E_typ (typ, exp), _) -> (exp, Some typ)
   | exp -> (exp, None)
 
-let mk_pat pat_aux = P_aux (pat_aux, no_annot)
+let mk_pat ?loc:(l = Parse_ast.Unknown) pat_aux = P_aux (pat_aux, (l, empty_uannot))
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 let untyp_pat = function P_aux (P_typ (typ, pat), _) -> (pat, Some typ) | pat -> (pat, None)
 
@@ -599,6 +601,13 @@ let rec pattern_vector_subranges (P_aux (aux, (l, _))) =
           Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) ranges (pattern_vector_subranges pat)
         )
         Bindings.empty pats
+  | P_struct (fpats, _) ->
+      let pats = List.map snd fpats in
+      List.fold_left
+        (fun ranges pat ->
+          Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) ranges (pattern_vector_subranges pat)
+        )
+        Bindings.empty pats
   | P_id _ | P_lit _ | P_wild -> Bindings.empty
 
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
@@ -681,6 +690,7 @@ and map_pat_annot_aux f = function
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
   | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
+  | P_struct (fpats, fwild) -> P_struct (List.map (fun (field, pat) -> (field, map_pat_annot f pat)) fpats, fwild)
 
 and map_mpexp_annot f (MPat_aux (mpexp, annot)) = MPat_aux (map_mpexp_annot_aux f mpexp, f annot)
 
@@ -711,6 +721,7 @@ and map_mpat_annot_aux f = function
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
   | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
+  | MP_struct fmpats -> MP_struct (List.map (fun (field, mpat) -> (field, map_mpat_annot f mpat)) fmpats)
 
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 
@@ -975,8 +986,8 @@ and string_of_fexp (FE_aux (FE_fexp (field, exp), _)) = string_of_id field ^ " =
 
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
-  | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp
-  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " when " ^ string_of_exp guard ^ " -> " ^ string_of_exp exp
+  | Pat_exp (pat, exp) -> string_of_pat pat ^ " => " ^ string_of_exp exp
+  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " if " ^ string_of_exp guard ^ " => " ^ string_of_exp exp
 
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   match tpat_aux with
@@ -1005,6 +1016,11 @@ and string_of_pat (P_aux (pat, _)) =
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
+  | P_struct (fpats, fwild) ->
+      let wild_string = function FP_wild _ -> ", .." | FP_no_wild -> "" in
+      "struct { "
+      ^ Util.string_of_list ", " (fun (field, pat) -> string_of_id field ^ " = " ^ string_of_pat pat) fpats
+      ^ wild_string fwild ^ " }"
 
 and string_of_mpat (MP_aux (pat, _)) =
   match pat with
@@ -1020,6 +1036,10 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
+  | MP_struct fmpats ->
+      "struct { "
+      ^ Util.string_of_list ", " (fun (field, mpat) -> string_of_id field ^ " = " ^ string_of_mpat mpat) fmpats
+      ^ " }"
 
 and string_of_lexp (LE_aux (lexp, _)) =
   match lexp with
@@ -1052,9 +1072,10 @@ let rec pat_ids (P_aux (pat_aux, _)) =
   | P_not pat -> pat_ids pat
   | P_var (pat, _) | P_typ (_, pat) -> pat_ids pat
   | P_app (_, pats) | P_tuple pats | P_vector pats | P_vector_concat pats | P_list pats ->
-      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
+      List.fold_left IdSet.union IdSet.empty (List.map pat_ids pats)
   | P_cons (pat1, pat2) -> IdSet.union (pat_ids pat1) (pat_ids pat2)
-  | P_string_append pats -> List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
+  | P_string_append pats -> List.fold_left IdSet.union IdSet.empty (List.map pat_ids pats)
+  | P_struct (fpats, _) -> List.fold_left IdSet.union IdSet.empty (List.map (fun (_, pat) -> pat_ids pat) fpats)
 
 let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
   match
@@ -1779,6 +1800,7 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat =
     | P_list pats -> P_list (List.map (locate_pat f) pats)
     | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)
     | P_string_append pats -> P_string_append (List.map (locate_pat f) pats)
+    | P_struct (fpats, fwild) -> P_struct (List.map (fun (field, pat) -> (field, locate_pat f pat)) fpats, fwild)
   in
   P_aux (p_aux, (f l, annot))
 

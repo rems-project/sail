@@ -157,6 +157,7 @@ let rewrite_pat rewriters (P_aux (pat, (l, annot))) =
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
+  | P_struct (fpats, fwild) -> rewrap (P_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats, fwild))
 
 let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrap e = E_aux (e, (l, annot)) in
@@ -350,6 +351,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
   p_string_append : 'pat list -> 'pat_aux;
+  p_struct : (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
   p_aux : 'pat_aux * 'a annot -> 'pat;
 }
 
@@ -370,6 +372,7 @@ let rec fold_pat_aux (alg : ('a, 'pat, 'pat_aux) pat_alg) : 'a pat_aux -> 'pat_a
   | P_list ps -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph, pt) -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps -> alg.p_string_append (List.map (fold_pat alg) ps)
+  | P_struct (fpats, fwild) -> alg.p_struct (List.map (fun (field, pat) -> (field, fold_pat alg pat)) fpats, fwild)
 
 and fold_pat (alg : ('a, 'pat, 'pat_aux) pat_alg) : 'a pat -> 'pat = function
   | P_aux (pat, annot) -> alg.p_aux (fold_pat_aux alg pat, annot)
@@ -387,6 +390,7 @@ let rec fold_mpat_aux (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat_aux -> 'm
   | MP_list ps -> alg.p_list (List.map (fold_mpat alg) ps)
   | MP_cons (ph, pt) -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
   | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
+  | MP_struct fmpats -> alg.p_struct (List.map (fun (field, mpat) -> (field, fold_mpat alg mpat)) fmpats, FP_no_wild)
 
 and fold_mpat (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat -> 'mpat = function
   | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
@@ -410,6 +414,7 @@ let id_pat_alg : ('a, 'a pat, 'a pat_aux) pat_alg =
     p_list = (fun ps -> P_list ps);
     p_cons = (fun (ph, pt) -> P_cons (ph, pt));
     p_string_append = (fun ps -> P_string_append ps);
+    p_struct = (fun (fpats, fwild) -> P_struct (fpats, fwild));
     p_aux = (fun (pat, annot) -> P_aux (pat, annot));
   }
 
@@ -431,6 +436,7 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_list = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps));
     p_cons = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt));
     p_string_append = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps));
+    p_struct = (fun _ -> None);
     p_aux = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat, annot)) pat);
   }
 
@@ -688,6 +694,12 @@ let compute_pat_alg bot join =
     p_list = split_join (fun ps -> P_list ps);
     p_cons = (fun ((vh, ph), (vt, pt)) -> (join vh vt, P_cons (ph, pt)));
     p_string_append = split_join (fun ps -> P_string_append ps);
+    p_struct =
+      (fun (fpats, fwild) ->
+        let fields, ps = List.split fpats in
+        let vs, ps = List.split ps in
+        (join_list vs, P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild))
+      );
     p_aux = (fun ((v, pat), annot) -> (v, P_aux (pat, annot)));
   }
 
@@ -811,6 +823,7 @@ let pure_pat_alg bot join =
     p_tuple = join_list;
     p_list = join_list;
     p_string_append = join_list;
+    p_struct = (fun (xs, _) -> join_list (List.map snd xs));
     p_cons = (fun (vh, vt) -> join vh vt);
     p_aux = (fun (v, annot) -> v);
   }

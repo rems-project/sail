@@ -218,6 +218,11 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
           else graph := G.add_edge self (Function id) !graph
       | E_ref id -> graph := G.add_edge self (Register id) !graph
       | E_typ (typ, _) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+      | E_struct _ -> begin
+          match typ_of_annot annot with
+          | Typ_aux ((Typ_id id | Typ_app (id, _)), _) -> graph := G.add_edge self (Type id) !graph
+          | _ -> Reporting.unreachable (fst annot) __POS__ "Struct without struct type"
+        end
       | _ -> ()
     end;
     E_aux (e_aux, annot)

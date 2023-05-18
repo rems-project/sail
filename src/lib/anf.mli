@@ -130,6 +130,7 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
+  | AP_struct of (id * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 

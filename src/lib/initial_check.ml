@@ -154,52 +154,51 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
       )
 
 let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
-  let aux =
-    match aux with
-    | P.ATyp_id id -> Typ_id (to_ast_id ctx id)
-    | P.ATyp_var v -> Typ_var (to_ast_var v)
-    | P.ATyp_fn (from_typ, to_typ, _) ->
-        let from_typs =
-          match from_typ with
-          | P.ATyp_aux (P.ATyp_tuple typs, _) -> List.map (to_ast_typ ctx) typs
-          | _ -> [to_ast_typ ctx from_typ]
-        in
-        Typ_fn (from_typs, to_ast_typ ctx to_typ)
-    | P.ATyp_bidir (typ1, typ2, _) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2)
-    | P.ATyp_tuple typs -> Typ_tuple (List.map (to_ast_typ ctx) typs)
-    | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) -> Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int])
-    | P.ATyp_app (P.Id_aux (P.Id "bool", il), [n]) ->
-        Typ_app (Id_aux (Id "atom_bool", il), [to_ast_typ_arg ctx n K_bool])
-    | P.ATyp_app (id, args) ->
-        let id = to_ast_id ctx id in
-        begin
-          match Bindings.find_opt id ctx.type_constructors with
-          | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-          | Some kinds when List.length args <> List.length kinds ->
-              raise
-                (Reporting.err_typ l
-                   (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
-                      (format_kind_aux_list kinds) (List.length kinds) (List.length args)
-                   )
-                )
-          | Some kinds -> Typ_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
-        end
-    | P.ATyp_exist (kopts, nc, atyp) ->
-        let kopts, ctx =
-          List.fold_right
-            (fun kopt (kopts, ctx) ->
-              let (kopts', ctx), attr = to_ast_kopts ctx kopt in
-              match attr with
-              | None -> (kopts' @ kopts, ctx)
-              | Some attr ->
-                  raise (Reporting.err_typ l (sprintf "Attribute %s cannot appear within an existential type" attr))
-            )
-            kopts ([], ctx)
-        in
-        Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
-    | _ -> raise (Reporting.err_typ l "Invalid type")
-  in
-  Typ_aux (aux, l)
+  match aux with
+  | P.ATyp_id id -> Typ_aux (Typ_id (to_ast_id ctx id), l)
+  | P.ATyp_var v -> Typ_aux (Typ_var (to_ast_var v), l)
+  | P.ATyp_fn (from_typ, to_typ, _) ->
+      let from_typs =
+        match from_typ with
+        | P.ATyp_aux (P.ATyp_tuple typs, _) -> List.map (to_ast_typ ctx) typs
+        | _ -> [to_ast_typ ctx from_typ]
+      in
+      Typ_aux (Typ_fn (from_typs, to_ast_typ ctx to_typ), l)
+  | P.ATyp_bidir (typ1, typ2, _) -> Typ_aux (Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2), l)
+  | P.ATyp_tuple typs -> Typ_aux (Typ_tuple (List.map (to_ast_typ ctx) typs), l)
+  | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
+      Typ_aux (Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int]), l)
+  | P.ATyp_app (P.Id_aux (P.Id "bool", il), [n]) ->
+      Typ_aux (Typ_app (Id_aux (Id "atom_bool", il), [to_ast_typ_arg ctx n K_bool]), l)
+  | P.ATyp_app (id, args) ->
+      let id = to_ast_id ctx id in
+      begin
+        match Bindings.find_opt id ctx.type_constructors with
+        | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
+        | Some kinds when List.length args <> List.length kinds ->
+            raise
+              (Reporting.err_typ l
+                 (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
+                    (format_kind_aux_list kinds) (List.length kinds) (List.length args)
+                 )
+              )
+        | Some kinds -> Typ_aux (Typ_app (id, List.map2 (to_ast_typ_arg ctx) args kinds), l)
+      end
+  | P.ATyp_exist (kopts, nc, atyp) ->
+      let kopts, ctx =
+        List.fold_right
+          (fun kopt (kopts, ctx) ->
+            let (kopts', ctx), attr = to_ast_kopts ctx kopt in
+            match attr with
+            | None -> (kopts' @ kopts, ctx)
+            | Some attr ->
+                raise (Reporting.err_typ l (sprintf "Attribute %s cannot appear within an existential type" attr))
+          )
+          kopts ([], ctx)
+      in
+      Typ_aux (Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp), l)
+  | P.ATyp_parens atyp -> to_ast_typ ctx atyp
+  | _ -> raise (Reporting.err_typ l "Invalid type")
 
 and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_type -> A_aux (A_typ (to_ast_typ ctx atyp), l)
@@ -208,91 +207,93 @@ and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_bool -> A_aux (A_bool (to_ast_constraint ctx atyp), l)
 
 and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
-  let aux =
-    match aux with
-    | P.ATyp_id id -> Nexp_id (to_ast_id ctx id)
-    | P.ATyp_var v -> Nexp_var (to_ast_var v)
-    | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_constant c
-    | P.ATyp_sum (t1, t2) -> Nexp_sum (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.ATyp_exp t1 -> Nexp_exp (to_ast_nexp ctx t1)
-    | P.ATyp_neg t1 -> Nexp_neg (to_ast_nexp ctx t1)
-    | P.ATyp_times (t1, t2) -> Nexp_times (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.ATyp_minus (t1, t2) -> Nexp_minus (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-    | P.ATyp_app (id, ts) -> Nexp_app (to_ast_id ctx id, List.map (to_ast_nexp ctx) ts)
-    | _ -> raise (Reporting.err_typ l "Invalid numeric expression in type")
-  in
-  Nexp_aux (aux, l)
+  match aux with
+  | P.ATyp_id id -> Nexp_aux (Nexp_id (to_ast_id ctx id), l)
+  | P.ATyp_var v -> Nexp_aux (Nexp_var (to_ast_var v), l)
+  | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_aux (Nexp_constant c, l)
+  | P.ATyp_sum (t1, t2) -> Nexp_aux (Nexp_sum (to_ast_nexp ctx t1, to_ast_nexp ctx t2), l)
+  | P.ATyp_exp t1 -> Nexp_aux (Nexp_exp (to_ast_nexp ctx t1), l)
+  | P.ATyp_neg t1 -> Nexp_aux (Nexp_neg (to_ast_nexp ctx t1), l)
+  | P.ATyp_times (t1, t2) -> Nexp_aux (Nexp_times (to_ast_nexp ctx t1, to_ast_nexp ctx t2), l)
+  | P.ATyp_minus (t1, t2) -> Nexp_aux (Nexp_minus (to_ast_nexp ctx t1, to_ast_nexp ctx t2), l)
+  | P.ATyp_app (id, ts) -> Nexp_aux (Nexp_app (to_ast_id ctx id, List.map (to_ast_nexp ctx) ts), l)
+  | P.ATyp_parens atyp -> to_ast_nexp ctx atyp
+  | _ -> raise (Reporting.err_typ l "Invalid numeric expression in type")
 
 and to_ast_bitfield_index_nexp ctx (P.ATyp_aux (aux, l)) =
-  let aux =
-    match aux with
-    | P.ATyp_id id -> Nexp_id (to_ast_id ctx id)
-    | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_constant c
-    | P.ATyp_sum (t1, t2) -> Nexp_sum (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2)
-    | P.ATyp_exp t1 -> Nexp_exp (to_ast_bitfield_index_nexp ctx t1)
-    | P.ATyp_neg t1 -> Nexp_neg (to_ast_bitfield_index_nexp ctx t1)
-    | P.ATyp_times (t1, t2) -> Nexp_times (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2)
-    | P.ATyp_minus (t1, t2) -> Nexp_minus (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2)
-    | P.ATyp_app (id, ts) -> Nexp_app (to_ast_id ctx id, List.map (to_ast_bitfield_index_nexp ctx) ts)
-    | _ -> raise (Reporting.err_typ l "Invalid numeric expression in field index")
-  in
-  Nexp_aux (aux, l)
+  match aux with
+  | P.ATyp_id id -> Nexp_aux (Nexp_id (to_ast_id ctx id), l)
+  | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_aux (Nexp_constant c, l)
+  | P.ATyp_sum (t1, t2) -> Nexp_aux (Nexp_sum (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2), l)
+  | P.ATyp_exp t1 -> Nexp_aux (Nexp_exp (to_ast_bitfield_index_nexp ctx t1), l)
+  | P.ATyp_neg t1 -> Nexp_aux (Nexp_neg (to_ast_bitfield_index_nexp ctx t1), l)
+  | P.ATyp_times (t1, t2) ->
+      Nexp_aux (Nexp_times (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2), l)
+  | P.ATyp_minus (t1, t2) ->
+      Nexp_aux (Nexp_minus (to_ast_bitfield_index_nexp ctx t1, to_ast_bitfield_index_nexp ctx t2), l)
+  | P.ATyp_app (id, ts) -> Nexp_aux (Nexp_app (to_ast_id ctx id, List.map (to_ast_bitfield_index_nexp ctx) ts), l)
+  | P.ATyp_parens atyp -> to_ast_bitfield_index_nexp ctx atyp
+  | _ -> raise (Reporting.err_typ l "Invalid numeric expression in field index")
 
 and to_ast_order ctx (P.ATyp_aux (aux, l)) =
   match aux with
-  | ATyp_var v -> Ord_aux (Ord_var (to_ast_var v), l)
-  | ATyp_inc -> Ord_aux (Ord_inc, l)
-  | ATyp_dec -> Ord_aux (Ord_dec, l)
+  | P.ATyp_var v -> Ord_aux (Ord_var (to_ast_var v), l)
+  | P.ATyp_inc -> Ord_aux (Ord_inc, l)
+  | P.ATyp_dec -> Ord_aux (Ord_dec, l)
+  | P.ATyp_parens atyp -> to_ast_order ctx atyp
   | _ -> raise (Reporting.err_typ l "Invalid order in type")
 
 and to_ast_constraint ctx (P.ATyp_aux (aux, l)) =
-  let aux =
-    match aux with
-    | P.ATyp_app ((Id_aux (Operator op, _) as id), [t1; t2]) -> begin
-        match op with
-        | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | "!=" -> NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | ">=" -> NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | "<=" -> NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | ">" -> NC_bounded_gt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | "<" -> NC_bounded_lt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-        | "&" -> NC_and (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
-        | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
-        | _ -> (
+  match aux with
+  | P.ATyp_parens atyp -> to_ast_constraint ctx atyp
+  | _ ->
+      let aux =
+        match aux with
+        | P.ATyp_app ((Id_aux (Operator op, _) as id), [t1; t2]) -> begin
+            match op with
+            | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | "!=" -> NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | ">=" -> NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | "<=" -> NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | ">" -> NC_bounded_gt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | "<" -> NC_bounded_lt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+            | "&" -> NC_and (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
+            | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
+            | _ -> (
+                let id = to_ast_id ctx id in
+                match Bindings.find_opt id ctx.type_constructors with
+                | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
+                | Some kinds when List.length kinds <> 2 ->
+                    raise
+                      (Reporting.err_typ l
+                         (sprintf "%s : %s -> Bool expected %d arguments, given 2" (string_of_id id)
+                            (format_kind_aux_list kinds) (List.length kinds)
+                         )
+                      )
+                | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) [t1; t2] kinds)
+              )
+          end
+        | P.ATyp_app (id, args) ->
             let id = to_ast_id ctx id in
-            match Bindings.find_opt id ctx.type_constructors with
-            | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-            | Some kinds when List.length kinds <> 2 ->
-                raise
-                  (Reporting.err_typ l
-                     (sprintf "%s : %s -> Bool expected %d arguments, given 2" (string_of_id id)
-                        (format_kind_aux_list kinds) (List.length kinds)
-                     )
-                  )
-            | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) [t1; t2] kinds)
-          )
-      end
-    | P.ATyp_app (id, args) ->
-        let id = to_ast_id ctx id in
-        begin
-          match Bindings.find_opt id ctx.type_constructors with
-          | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-          | Some kinds when List.length args <> List.length kinds ->
-              raise
-                (Reporting.err_typ l
-                   (sprintf "%s : %s -> Bool expected %d arguments, given %d" (string_of_id id)
-                      (format_kind_aux_list kinds) (List.length kinds) (List.length args)
-                   )
-                )
-          | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
-        end
-    | P.ATyp_var v -> NC_var (to_ast_var v)
-    | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
-    | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
-    | P.ATyp_nset (id, bounds) -> NC_set (to_ast_var id, bounds)
-    | _ -> raise (Reporting.err_typ l "Invalid constraint")
-  in
-  NC_aux (aux, l)
+            begin
+              match Bindings.find_opt id ctx.type_constructors with
+              | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
+              | Some kinds when List.length args <> List.length kinds ->
+                  raise
+                    (Reporting.err_typ l
+                       (sprintf "%s : %s -> Bool expected %d arguments, given %d" (string_of_id id)
+                          (format_kind_aux_list kinds) (List.length kinds) (List.length args)
+                       )
+                    )
+              | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
+            end
+        | P.ATyp_var v -> NC_var (to_ast_var v)
+        | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
+        | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
+        | P.ATyp_nset (id, bounds) -> NC_set (to_ast_var id, bounds)
+        | _ -> raise (Reporting.err_typ l "Invalid constraint")
+      in
+      NC_aux (aux, l)
 
 let to_ast_quant_items ctx (P.QI_aux (aux, l)) =
   match aux with
@@ -353,6 +354,21 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_app (f, typs) -> TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 
+let is_wild_fpat = function P.FP_aux (P.FP_wild, _) -> true | _ -> false
+
+let check_duplicate_fields ~error ~field_id fields =
+  List.fold_left
+    (fun seen field ->
+      let id = field_id field in
+      match IdSet.find_opt id seen with
+      | Some seen_id ->
+          raise
+            (Reporting.err_general (Hint ("Previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
+      | None -> IdSet.add id seen
+    )
+    IdSet.empty fields
+  |> ignore
+
 let rec to_ast_pat ctx (P.P_aux (aux, l)) =
   match aux with
   | P.P_attribute (attr, arg, pat) ->
@@ -381,8 +397,29 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
+        | P.P_struct fpats ->
+            let wild_fpats, fpats = List.partition is_wild_fpat fpats in
+            let field_wildcard =
+              match wild_fpats with
+              | FP_aux (_, l1) :: FP_aux (_, l2) :: _ ->
+                  raise
+                    (Reporting.err_general
+                       (Parse_ast.Hint ("previous field wildcard here", l1, l2))
+                       "Duplicate field wildcards in struct pattern"
+                    )
+              | [FP_aux (_, l)] -> FP_wild l
+              | [] -> FP_no_wild
+            in
+            let fpats = List.map (to_ast_fpat ctx) fpats in
+            check_duplicate_fields ~error:(fun f -> "Duplicate field " ^ f ^ " in struct pattern") ~field_id:fst fpats;
+            P_struct (fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
+
+and to_ast_fpat ctx (P.FP_aux (aux, l)) =
+  match aux with
+  | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
+  | FP_wild -> Reporting.unreachable l __POS__ "Unexpected field wildcard"
 
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
@@ -859,6 +896,8 @@ let rec to_ast_mpat ctx (P.MP_aux (mpat, l)) =
       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
       | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
       | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
+      | P.MP_struct fmpats ->
+          MP_struct (List.map (fun (field, mpat) -> (to_ast_id ctx field, to_ast_mpat ctx mpat)) fmpats)
       ),
       (l, empty_uannot)
     )

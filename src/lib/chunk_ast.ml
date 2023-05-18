@@ -80,6 +80,11 @@ let starting_column_num l =
 
 let ending_line_num l = match Reporting.simp_loc l with Some (_, e) -> Some e.pos_lnum | None -> None
 
+let merge_loc l1 l2 =
+  match (Reporting.simp_loc l1, Reporting.simp_loc l2) with
+  | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
+  | _, _ -> Parse_ast.Unknown
+
 type binder = Var_binder | Let_binder | Internal_plet_binder
 
 type if_format = { then_brace : bool; else_brace : bool }
@@ -531,6 +536,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
     chunks
   in
   match aux with
+  | ATyp_parens atyp -> chunk_atyp comments chunks atyp
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
@@ -653,6 +659,24 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let hd_pat_chunks = rec_chunk_pat hd_pat in
       let tl_pat_chunks = rec_chunk_pat tl_pat in
       Queue.add (Binary (hd_pat_chunks, "::", tl_pat_chunks)) chunks
+  | P_struct fpats ->
+      let is_fpat_wild = function FP_aux (FP_wild, _) -> true | _ -> false in
+      let wild_fpats, field_fpats = List.partition is_fpat_wild fpats in
+      let fpats = field_fpats @ wild_fpats in
+      let chunk_fpat comments chunks (FP_aux (aux, l)) =
+        pop_comments comments chunks l;
+        match aux with
+        | FP_field (field, pat) ->
+            let field_chunks = Queue.create () in
+            Queue.add (Atom (string_of_id field)) field_chunks;
+            let pat_chunks = rec_chunk_pat pat in
+            Queue.add (Binary (field_chunks, "=", pat_chunks)) chunks
+        | FP_wild -> Queue.add (Atom "..") chunks
+      in
+      let fpats =
+        chunk_delimit ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments chunks fpats
+      in
+      Queue.add (Tuple ("struct {", "}", 1, fpats)) chunks
   | P_attribute (attr, arg, pat) ->
       Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
       Queue.add (Spacer (false, 1)) chunks;

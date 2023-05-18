@@ -3076,6 +3076,7 @@ let check_pattern_duplicates env pat =
         collect_duplicates p2
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
         List.iter collect_duplicates ps
+    | P_struct (fpats, _) -> List.iter (fun (_, pat) -> collect_duplicates pat) fpats
   in
   collect_duplicates pat;
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
@@ -3274,6 +3275,7 @@ module PC = Pattern_completeness.Make (PC_config)
 let pattern_completeness_ctx env =
   {
     Pattern_completeness.variants = Env.get_variants env;
+    Pattern_completeness.structs = Env.get_records env;
     Pattern_completeness.enums = Env.get_enums env;
     Pattern_completeness.constraints = Env.get_constraints env;
   }
@@ -3992,6 +3994,40 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
       let nc = match destruct_atom_bool env typ with Some nc -> nc | None -> assert false in
       (annot_pat (P_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, [])
   | P_vector_concat (pat :: pats) -> bind_vector_concat_pat l env uannot pat pats (Some typ)
+  | P_struct (fpats, fwild) ->
+      let rectyp_id =
+        match Env.expand_synonyms env typ with
+        | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
+            rectyp_id
+        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
+      in
+      let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
+      let bind_fpat (fpats, env, guards) (field, pat) =
+        record_fields := IdSet.remove field !record_fields;
+        let typq, rectyp_q, field_typ = Env.get_accessor rectyp_id field env in
+        let unifiers =
+          try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ
+          with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
+        in
+        let field_typ' = subst_unifiers unifiers field_typ in
+        let typed_pat, env, new_guards = bind_pat env pat field_typ' in
+        ((field, typed_pat) :: fpats, env, guards @ new_guards)
+      in
+      let fpats, env, guards = List.fold_left bind_fpat ([], env, []) fpats in
+      if IdSet.is_empty !record_fields then (annot_pat (P_struct (List.rev fpats, FP_no_wild)) typ, env, guards)
+      else (
+        (* If we have a field wildcard .. then insert the missing `field = _` here *)
+        match fwild with
+        | FP_wild fwild_loc ->
+            let missing_fields =
+              List.map (fun id -> (id, mk_pat ~loc:fwild_loc P_wild)) (IdSet.elements !record_fields)
+            in
+            let missing_fpats, env, guards = List.fold_left bind_fpat ([], env, []) missing_fields in
+            (annot_pat (P_struct (List.rev fpats @ missing_fpats, FP_no_wild)) typ, env, guards)
+        | FP_no_wild ->
+            typ_error env l
+              ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
+      )
   | _ -> (
       let inferred_pat, env, guards = infer_pat env pat in
       match subtyp l env typ (typ_of_pat inferred_pat) with
@@ -5145,7 +5181,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
               typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
           )
         end
-      | _ -> typ_error env l "unifying mapping type, expanded synonyms to non-mapping type??"
+      | _ -> Reporting.unreachable l __POS__ "unifying mapping type, expanded synonyms to non-mapping type!"
     end
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
       typ_error env l
@@ -5167,6 +5203,30 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
   | MP_lit (L_aux (L_false, _) as lit) when is_atom_bool typ ->
       let nc = match destruct_atom_bool env typ with Some n -> n | None -> assert false in
       (annot_mpat (MP_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, [])
+  | MP_struct fmpats ->
+      let rectyp_id =
+        match Env.expand_synonyms env typ with
+        | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
+            rectyp_id
+        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
+      in
+      let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
+      let bind_fmpat (fmpats, env, guards) (field, mpat) =
+        record_fields := IdSet.remove field !record_fields;
+        let typq, rectyp_q, field_typ = Env.get_accessor rectyp_id field env in
+        let unifiers =
+          try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ
+          with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
+        in
+        let field_typ' = subst_unifiers unifiers field_typ in
+        let typed_mpat, env, new_guards = bind_mpat allow_unknown other_env env mpat field_typ' in
+        ((field, typed_mpat) :: fmpats, env, guards @ new_guards)
+      in
+      let fmpats, env, guards = List.fold_left bind_fmpat ([], env, []) fmpats in
+      if IdSet.is_empty !record_fields then (annot_mpat (MP_struct (List.rev fmpats)) typ, env, guards)
+      else
+        typ_error env l
+          ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
   | _ -> (
       let inferred_mpat, env, guards = infer_mpat allow_unknown other_env env mpat in
       match subtyp l env typ (typ_of_mpat inferred_mpat) with

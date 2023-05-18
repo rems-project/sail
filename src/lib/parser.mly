@@ -101,6 +101,7 @@ let deinfix = function
 let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_pat p n m = P_aux (p, loc n m)
+let mk_fpat fp n m = FP_aux (fp, loc n m)
 let mk_pexp p n m = Pat_aux (p, loc n m)
 let mk_exp e n m = E_aux (e, loc n m)
 let mk_measure meas n m = Measure_aux (meas, loc n m)
@@ -585,7 +586,7 @@ atomic_typ:
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
   | Lparen typ Rparen
-    { $2 }
+    { mk_typ (ATyp_parens $2) $startpos $endpos }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tuple ($2 :: $4)) $startpos $endpos }
   | LcurlyBar num_list RcurlyBar
@@ -778,6 +779,16 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
+  | Struct Lcurly separated_nonempty_list(Comma, fpat) Rcurly
+    { mk_pat (P_struct $3) $startpos $endpos }
+
+fpat:
+  | id Eq pat
+    { mk_fpat (FP_field ($1, $3)) $startpos $endpos }
+  | id
+    { mk_fpat (FP_field ($1, mk_pat (P_id $1) $startpos $endpos)) $startpos $endpos }
+  | DotDot
+    { mk_fpat FP_wild $startpos $endpos }
 
 lit:
   | True
@@ -1415,6 +1426,14 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
+  | Struct Lcurly separated_nonempty_list(Comma, fmpat) Rcurly
+    { mk_mpat (MP_struct $3) $startpos $endpos }
+
+fmpat:
+  | id Eq mpat
+    { ($1, $3) }
+  | id
+    { ($1, mk_mpat (MP_id $1) $startpos $endpos) }
 
 %inline mpexp:
   | mpat

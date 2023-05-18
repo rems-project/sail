@@ -140,7 +140,7 @@ val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
-val mk_pat : uannot pat_aux -> uannot pat
+val mk_pat : ?loc:l -> uannot pat_aux -> uannot pat
 val mk_mpat : uannot mpat_aux -> uannot mpat
 val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
 val mk_mpexp : uannot mpexp_aux -> uannot mpexp
@@ -417,6 +417,7 @@ val kid_loc : kid -> Parse_ast.l
 val kopt_loc : kinded_id -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
 val pat_loc : 'a pat -> Parse_ast.l
+val mpat_loc : 'a mpat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val nexp_loc : nexp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
@@ -490,6 +491,7 @@ val kopts_of_quant_item : quant_item -> KOptSet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+val tyvars_of_typ_arg : typ_arg -> KidSet.t
 val tyvars_of_constraint : n_constraint -> KidSet.t
 val tyvars_of_quant_item : quant_item -> KidSet.t
 val is_kid_generated : kid -> bool

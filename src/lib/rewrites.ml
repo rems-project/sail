@@ -368,6 +368,7 @@ let remove_vector_concat_pat pat =
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
       p_cons = (fun (p, ps) -> P_cons (p false, ps false));
       p_string_append = (fun ps -> P_string_append (List.map (fun p -> p false) ps));
+      p_struct = (fun (fpats, fwild) -> P_struct (List.map (fun (field, p) -> (field, p false)) fpats, fwild));
       p_aux =
         (fun (pat, ((l, _) as annot)) contained_in_p_as ->
           match pat with
@@ -533,6 +534,12 @@ let remove_vector_concat_pat pat =
         (fun ps ->
           let ps, decls = List.split ps in
           (P_string_append ps, List.flatten decls)
+        );
+      p_struct =
+        (fun (fpats, fwild) ->
+          let fields, ps = List.split fpats in
+          let ps, decls = List.split ps in
+          (P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild), List.flatten decls)
         );
       p_cons = (fun ((p, decls), (p', decls')) -> (P_cons (p, p'), decls @ decls'));
       p_aux = (fun ((pat, decls), annot) -> p_aux ((pat, decls), annot));
@@ -715,6 +722,9 @@ let rec is_irrefutable_pattern (P_aux (p, ann)) =
   | P_app (f, args) ->
       Env.is_singleton_union_constructor f (env_of_annot ann) && List.for_all is_irrefutable_pattern args
   | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps -> List.for_all is_irrefutable_pattern ps
+  | P_struct (fpats, _) ->
+      let ps = List.map snd fpats in
+      List.for_all is_irrefutable_pattern ps
   | P_cons (p1, p2) -> is_irrefutable_pattern p1 && is_irrefutable_pattern p2
   | P_string_append ps -> List.for_all is_irrefutable_pattern ps
 
@@ -837,7 +847,7 @@ let rec pat_to_exp (P_aux (pat, (l, annot)) as p_aux) =
   let typ = typ_of_pat p_aux in
   match pat with
   | P_lit lit -> rewrap (E_lit lit)
-  | P_wild -> raise (Reporting.err_unreachable l __POS__ "pat_to_exp given wildcard pattern")
+  | P_wild -> Reporting.unreachable l __POS__ "pat_to_exp given wildcard pattern"
   | P_or (pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1
   | P_not pat -> (* todo: insert boolean not *) pat_to_exp pat
   | P_as (pat, id) -> rewrap (E_id id)
@@ -862,6 +872,12 @@ let rec pat_to_exp (P_aux (pat, (l, annot)) as p_aux) =
       let string_append str1 str2 = annot_exp (E_app (mk_id "string_append", [str1; str2])) l env string_typ in
       List.fold_right string_append (List.map pat_to_exp pats) empty_string
     end
+  | P_struct (fpats, FP_no_wild) ->
+      rewrap
+        (E_struct
+           (List.map (fun (field, pat) -> FE_aux (FE_fexp (field, pat_to_exp pat), (gen_loc l, empty_tannot))) fpats)
+        )
+  | P_struct (_, FP_wild l) -> Reporting.unreachable l __POS__ "pat_to_exp given field wildcard"
 
 let case_exp e t cs =
   let l = get_loc_exp e in
@@ -886,6 +902,7 @@ let pats_complete l env ps typ =
   let ctx =
     {
       Pattern_completeness.variants = Env.get_variants env;
+      Pattern_completeness.structs = Env.get_records env;
       Pattern_completeness.enums = Env.get_enums env;
       Pattern_completeness.constraints = Env.get_constraints env;
     }
@@ -1031,6 +1048,7 @@ let rec contains_bitvector_pat (P_aux (pat, annot)) =
   | P_app (_, pats) | P_tuple pats | P_list pats -> List.exists contains_bitvector_pat pats
   | P_cons (p, ps) -> contains_bitvector_pat p || contains_bitvector_pat ps
   | P_string_append ps -> List.exists contains_bitvector_pat ps
+  | P_struct (fpats, _) -> List.exists contains_bitvector_pat (List.map snd fpats)
 
 let contains_bitvector_pexp = function
   | Pat_aux (Pat_exp (pat, _), _) | Pat_aux (Pat_when (pat, _, _), _) -> contains_bitvector_pat pat
@@ -1065,6 +1083,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       p_tuple = (fun ps -> P_tuple (List.map (fun p -> p false) ps));
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
       p_cons = (fun (p, ps) -> P_cons (p false, ps false));
+      p_struct = (fun (fpats, fwild) -> P_struct (List.map (fun (field, p) -> (field, p false)) fpats, fwild));
       p_aux =
         (fun (pat, annot) contained_in_p_as ->
           let env = env_of_annot annot in
@@ -1219,6 +1238,12 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
         (fun ps ->
           let ps, gdls = List.split ps in
           (P_string_append ps, flatten_guards_decls gdls)
+        );
+      p_struct =
+        (fun (fpats, fwild) ->
+          let fields, ps = List.split fpats in
+          let ps, gdls = List.split ps in
+          (P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild), flatten_guards_decls gdls)
         );
       p_tuple =
         (fun ps ->
@@ -2493,6 +2518,7 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
   | P_not p | P_typ (_, p) | P_var (p, _) -> bindings_of_pat p
   | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
       List.map bindings_of_pat ps |> List.flatten
+  | P_struct (fpats, _) -> List.map snd fpats |> List.map bindings_of_pat |> List.flatten
 
 let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
@@ -2508,6 +2534,7 @@ let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
   | P_not p | P_typ (_, p) | P_var (p, _) -> binding_typs_of_pat p
   | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
       List.map binding_typs_of_pat ps |> List.flatten
+  | P_struct (fpats, _) -> List.map snd fpats |> List.map binding_typs_of_pat |> List.flatten
 
 let construct_toplevel_string_append_call env f_id bindings binding_typs guard expr =
   (* s# if match f#(s#) { Some (bindings) => guard, _ => false) } => let Some(bindings) = f#(s#) in expr *)
@@ -3025,6 +3052,17 @@ let rewrite_ast_pat_string_append env =
         let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
         let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
         (P_aux (P_cons (pat1, pat2), p_annot), guards, expr)
+    | P_aux (P_struct (fpats, fwild), p_annot) ->
+        let fpats, guards, expr =
+          List.fold_left
+            (fun (fpats, guards, exp) (field, pat) ->
+              let pat, guards, expr = rewrite_pat env (pat, guards, expr) in
+              ((field, pat) :: fpats, guards, expr)
+            )
+            ([], guards, expr) fpats
+        in
+        let fpats = List.rev fpats in
+        (P_aux (P_struct (fpats, fwild), p_annot), guards, expr)
     | P_aux (P_id _, _) | P_aux (P_vector_subrange _, _) | P_aux (P_lit _, _) | P_aux (P_wild, _) -> (pat, guards, expr)
   in
 
@@ -3090,9 +3128,9 @@ let rewrite_ast_mapping_patterns env =
                 )
         in
 
-        let mapping_direction = if mapping_in_typ = typ1 then "forwards" else "backwards" in
+        let mapping_direction = if alpha_equivalent env mapping_in_typ typ1 then "forwards" else "backwards" in
 
-        let mapping_out_typ = if mapping_in_typ = typ2 then typ2 else typ1 in
+        let mapping_in_typ, mapping_out_typ = if mapping_direction = "backwards" then (typ1, typ2) else (typ2, typ1) in
 
         let mapping_name = match mapping_id with Id_aux (Id id, _) | Id_aux (Operator id, _) -> id in
 
@@ -3102,7 +3140,7 @@ let rewrite_ast_mapping_patterns env =
 
         let s_exp = annot_exp (E_id s_id) unk env mapping_in_typ in
         let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) unk env bool_typ in
-        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env typ2 in
+        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env mapping_out_typ in
         let new_letbind, expr =
           match arg_pats with
           | [] -> assert false
@@ -3110,7 +3148,7 @@ let rewrite_ast_mapping_patterns env =
               let arg_pat, _, expr = rewrite_pat env (arg_pat, [], expr) in
               (LB_aux (LB_val (arg_pat, new_binding), unkt), expr)
           | arg_pats ->
-              let checked_tup = annot_pat (P_tuple arg_pats) unk env mapping_out_typ in
+              let checked_tup = annot_pat (P_tuple arg_pats) unk env mapping_in_typ in
               (LB_aux (LB_val (checked_tup, new_binding), unkt), expr)
         in
 
@@ -3133,7 +3171,7 @@ let rewrite_ast_mapping_patterns env =
                 unk env bool_typ
         in
 
-        ( annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ,
+        ( annot_pat (P_typ (mapping_out_typ, annot_pat (P_id s_id) unk env mapping_out_typ)) unk env mapping_out_typ,
           [new_complete_guard],
           new_let
         )
@@ -3175,6 +3213,17 @@ let rewrite_ast_mapping_patterns env =
     | P_aux (P_not p, p_annot) ->
         let p', guards, expr = rewrite_pat env (p, guards, expr) in
         (P_aux (P_not p', p_annot), guards, expr)
+    | P_aux (P_struct (fpats, fwild), p_annot) ->
+        let fpats, guards, expr =
+          List.fold_left
+            (fun (fpats, guards, exp) (field, pat) ->
+              let pat, guards, expr = rewrite_pat env (pat, guards, expr) in
+              ((field, pat) :: fpats, guards, expr)
+            )
+            ([], guards, expr) fpats
+        in
+        let fpats = List.rev fpats in
+        (P_aux (P_struct (fpats, fwild), p_annot), guards, expr)
     | P_aux (P_id _, _) | P_aux (P_vector_subrange _, _) | P_aux (P_lit _, _) | P_aux (P_wild, _) -> (pat, guards, expr)
   in
 
@@ -3839,6 +3888,8 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_string_append mpats -> P_aux (P_string_append (List.map pat_of_mpat mpats), annot)
   | MP_typ (mpat, typ) -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
   | MP_as (mpat, id) -> P_aux (P_as (pat_of_mpat mpat, id), annot)
+  | MP_struct fmpats ->
+      P_aux (P_struct (List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
 
 let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
@@ -3862,6 +3913,20 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   | MP_as (mpat, id) ->
       E_aux
         ( E_match (E_aux (E_id id, (l, annot)), [Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l, annot))]),
+          (l, annot)
+        )
+  | MP_struct fmpats ->
+      let combined_loc field mpat =
+        match (Reporting.simp_loc (id_loc field), Reporting.simp_loc (mpat_loc mpat)) with
+        | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
+        | _, _ -> Parse_ast.Unknown
+      in
+      E_aux
+        ( E_struct
+            (List.map
+               (fun (field, mpat) -> FE_aux (FE_fexp (field, exp_of_mpat mpat), (combined_loc field mpat, empty_uannot)))
+               fmpats
+            ),
           (l, annot)
         )
 (* TODO FIXME location information? *)
@@ -4270,6 +4335,7 @@ module MakeExhaustive = struct
     | RP_tuple of residual_pattern list
     | RP_nil
     | RP_cons of residual_pattern * residual_pattern
+    | RP_struct of (id * residual_pattern) list
 
   let rec string_of_rp = function
     | RP_any -> "_"
@@ -4279,6 +4345,10 @@ module MakeExhaustive = struct
     | RP_tuple rps -> "(" ^ String.concat "," (List.map string_of_rp rps) ^ ")"
     | RP_nil -> "[| |]"
     | RP_cons (rp1, rp2) -> string_of_rp rp1 ^ "::" ^ string_of_rp rp2
+    | RP_struct frps ->
+        "struct { "
+        ^ Util.string_of_list ", " (fun (field, rp) -> string_of_id field ^ " = " ^ string_of_rp rp) frps
+        ^ " }"
 
   type ctx = {
     env : Env.t;
@@ -4397,6 +4467,34 @@ module MakeExhaustive = struct
               List.map (fun l -> RP_app (id, l)) res_args @ Bindings.find id ctx.constructor_to_rest
           | _ -> inconsistent ()
         )
+      | P_struct (field_pats, _) ->
+          let all_ids, res_pats =
+            match res_pat with
+            | RP_struct res_fields ->
+                let all_ids = List.map fst res_fields in
+                let res_pats = List.map snd res_fields in
+                (all_ids, res_pats)
+            | RP_any ->
+                let record_id =
+                  match Env.expand_synonyms ctx.env (typ_of_annot ann) with
+                  | Typ_aux (Typ_id id, _) | Typ_aux (Typ_app (id, _), _) -> id
+                  | _ -> Reporting.unreachable (fst ann) __POS__ "Record is not a record"
+                in
+                let _, fields = Env.get_record record_id ctx.env in
+                (List.map snd fields, List.map (fun _ -> RP_any) fields)
+            | _ -> inconsistent ()
+          in
+          let cur_pats =
+            List.map
+              (fun id ->
+                List.find_opt (fun (x, _) -> Id.compare id x == 0) field_pats
+                |> Option.map snd
+                |> Option.value ~default:(P_aux (P_wild, (Unknown, empty_tannot)))
+              )
+              all_ids
+          in
+          let res_pats' = subpats cur_pats res_pats in
+          List.map (fun rps -> RP_struct (List.combine all_ids rps)) res_pats'
       | P_list ps -> (
           match ps with
           | p1 :: ptl -> remove_clause_from_pattern ctx (P_aux (P_cons (p1, P_aux (P_list ptl, ann)), ann)) res_pat
@@ -5040,7 +5138,6 @@ let instantiate_rewriter rewriter args =
 let all_rewriters =
   [
     ("recheck_defs", checking_rewriter (fun _ ast -> Type_error.check initial_env (strip_ast ast)));
-    ("optimize_recheck_defs", checking_rewriter (fun _ -> Optimize.recheck));
     ("realize_mappings", Base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", Base_rewriter rewrite_ast_toplevel_string_append);

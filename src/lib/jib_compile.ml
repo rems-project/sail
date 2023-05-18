@@ -666,6 +666,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
     | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
     | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
     | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
+    | AP_struct (_, typ) -> ctyp_of_typ ctx typ
 
   let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
     let ctx = { ctx with local_env = env } in
@@ -692,6 +693,14 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
           iclear id_ctyp (name id) :: cleanup,
           ctx
         )
+    | AP_struct (afpats, _) -> begin
+        let fold (pre, instrs, cleanup, ctx) (field, apat) =
+          let pre', instrs', cleanup', ctx = compile_match ctx apat (V_field (cval, field)) case_label in
+          (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
+        in
+        let pre, instrs, cleanup, ctx = List.fold_left fold ([], [], [], ctx) afpats in
+        (pre, instrs, cleanup, ctx)
+      end
     | AP_tuple apats -> begin
         let get_tup n = V_tuple_member (cval, List.length apats, n) in
         let fold (pre, instrs, cleanup, n, ctx) apat ctyp =
@@ -702,7 +711,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
         | CT_tup ctyps ->
             let pre, instrs, cleanup, _, ctx = List.fold_left2 fold ([], [], [], 0, ctx) apats ctyps in
             (pre, instrs, cleanup, ctx)
-        | _ -> failwith ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
+        | _ -> Reporting.unreachable l __POS__ ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
       end
     | AP_app (ctor, apat, variant_typ) -> begin
         match ctyp with

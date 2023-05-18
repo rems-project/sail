@@ -94,6 +94,8 @@ let kbindings_filter_map f m =
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 
+let prefix_recordtype = true
+
 (****************************************************************************
  * PPrint-based sail-to-coq pprinter
 ****************************************************************************)
@@ -1047,37 +1049,14 @@ let filter_dep_pattern_tuple ctxt kopts (P_aux (p, ann) as pat) typ =
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
-let rec doc_pat ctxt apat_needed exists_as_pairs ((P_aux (p, (l, annot)) as pat), typ) =
+let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
   let env = env_of_annot (l, annot) in
-  let typ = Env.expand_synonyms env typ in
+  let typ = Env.expand_synonyms env (typ_of_annot (l, annot)) in
   match p with
   (* Special case translation of the None constructor to remove the unit arg *)
   | P_app (id, _) when string_of_id id = "None" -> string "None"
   | P_app (id, (_ :: _ as pats)) -> begin
-      (* Following the type checker to get the subpattern types, TODO perhaps ought
-         to persuade the type checker to output these somehow. *)
-      let typq, ctor_typ = Env.get_union_id id env in
-      let arg_typs =
-        match Env.expand_synonyms env ctor_typ with
-        | Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
-            let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
-            List.map (subst_unifiers unifiers) arg_typs
-        | _ -> assert false
-      in
-      debug ctxt
-        ( lazy
-          ("constructor " ^ string_of_id id ^ " with type " ^ string_of_typ ctor_typ
-         ^ " gives types for subpatterns of "
-          ^ String.concat ", " (List.map string_of_typ arg_typs)
-          )
-          );
-      (* Constructors that were specified without a return type might get
-         an extra tuple in their type; expand that here if necessary.
-         TODO: this should go away if we enforce proper arities. *)
-      let arg_typs =
-        match (pats, arg_typs) with _ :: _ :: _, [Typ_aux (Typ_tuple typs, _)] -> typs | _, _ -> arg_typs
-      in
-      let pats_pp = separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs) in
+      let pats_pp = separate_map comma (doc_pat ctxt true) pats in
       let pats_pp = match pats with [_] -> pats_pp | _ -> parens pats_pp in
       let ppp = doc_unop (doc_id_ctor ctxt id) pats_pp in
       if apat_needed then parens ppp else ppp
@@ -1086,20 +1065,15 @@ let rec doc_pat ctxt apat_needed exists_as_pairs ((P_aux (p, (l, annot)) as pat)
   | P_lit lit -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id ctxt id
-  | P_var (p, _) -> doc_pat ctxt true exists_as_pairs (p, typ)
-  | P_as (p, id) -> parens (separate space [doc_pat ctxt true exists_as_pairs (p, typ); string "as"; doc_id ctxt id])
+  | P_var (p, _) -> doc_pat ctxt true p
+  | P_as (p, id) -> parens (separate space [doc_pat ctxt true p; string "as"; doc_id ctxt id])
   | P_typ (ptyp, p) ->
-      let doc_p = doc_pat ctxt true exists_as_pairs (p, typ) in
+      let doc_p = doc_pat ctxt true p in
       doc_p
   (* Type annotations aren't allowed everywhere in patterns in Coq *)
   (*parens (doc_op colon doc_p (doc_typ typ))*)
   | P_vector pats ->
-      let el_typ =
-        match destruct_vector env typ with
-        | Some (_, _, t) -> t
-        | None -> raise (Reporting.err_unreachable l __POS__ "vector pattern doesn't have vector type")
-      in
-      let ppp = brackets (separate_map semi (fun p -> doc_pat ctxt true exists_as_pairs (p, el_typ)) pats) in
+      let ppp = brackets (separate_map semi (fun p -> doc_pat ctxt true p) pats) in
       if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
       raise
@@ -1108,32 +1082,26 @@ let rec doc_pat ctxt apat_needed exists_as_pairs ((P_aux (p, (l, annot)) as pat)
         )
   | P_vector_subrange _ -> unreachable l __POS__ "Must have been rewritten before Coq backend"
   | P_tuple pats -> (
-      let typs =
-        match typ with
-        | Typ_aux (Typ_tuple typs, _) -> typs
-        | Typ_aux (Typ_exist _, _) -> raise (Reporting.err_todo l "existential types not yet supported here")
-        | _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern doesn't have tuple type")
-      in
-      match (pats, typs) with
-      | [p], [typ'] -> doc_pat ctxt apat_needed true (p, typ')
-      | [_], _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern length does not match tuple type length")
-      | _ -> parens (separate_map comma_sp (doc_pat ctxt false true) (List.combine pats typs))
+      match pats with [p] -> doc_pat ctxt apat_needed p | _ -> parens (separate_map comma_sp (doc_pat ctxt false) pats)
     )
-  | P_list pats ->
-      let el_typ =
-        match typ with
-        | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ, _)]), _) when Id.compare f (mk_id "list") = 0 -> el_typ
-        | _ -> raise (Reporting.err_unreachable l __POS__ "list pattern not a list")
-      in
-      brackets (separate_map semi (fun p -> doc_pat ctxt false true (p, el_typ)) pats)
-  | P_cons (p, p') ->
-      let el_typ =
-        match typ with
-        | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ, _)]), _) when Id.compare f (mk_id "list") = 0 -> el_typ
-        | _ -> raise (Reporting.err_unreachable l __POS__ "list pattern not a list")
-      in
-      doc_op (string "::") (doc_pat ctxt true true (p, el_typ)) (doc_pat ctxt true true (p', typ))
+  | P_list pats -> brackets (separate_map semi (doc_pat ctxt false) pats)
+  | P_cons (p, p') -> doc_op (string "::") (doc_pat ctxt true p) (doc_pat ctxt true p')
   | P_string_append _ -> unreachable l __POS__ "string append pattern found in Coq backend, should have been rewritten"
+  | P_struct (fpats, _) ->
+      let type_prefix =
+        match typ with
+        | (Typ_aux (Typ_id tid, _) | Typ_aux (Typ_app (tid, _), _)) when Env.is_record tid env -> string_of_id tid ^ "_"
+        | _ -> Reporting.unreachable l __POS__ "P_struct pattern with no record type"
+      in
+      let doc_field field =
+        if prefix_recordtype && type_prefix <> "regstate_" then string type_prefix ^^ doc_id ctxt field
+        else doc_id ctxt field
+      in
+      string "{|" ^^ space
+      ^^ separate_map (semi ^^ space)
+           (fun (field, pat) -> separate space [doc_field field; coloneq; doc_pat ctxt false pat])
+           fpats
+      ^^ space ^^ string "|}"
   | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
 
@@ -1311,6 +1279,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
        they'd do *)
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
         List.fold_left merge_pat m ps
+    | P_struct (fields, _) -> List.fold_left merge_pat m (List.map snd fields)
     | P_cons (p1, p2) -> merge_pat (merge_pat m p1) p2
   in
   let m, r = IdSet.fold remove_binding (pat_ids pat) (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) in
@@ -1320,7 +1289,6 @@ let merge_new_tyvars ctxt old_env pat new_env =
 let maybe_parens_comma_list f ls =
   match ls with [x] -> f true x | xs -> parens (separate (string ", ") (List.map (f false) xs))
 
-let prefix_recordtype = true
 let report = Reporting.err_unreachable
 let doc_exp, doc_let =
   let rec top_exp (ctxt : context) (aexp_needed : bool) (E_aux (e, (l, annot)) as full_exp) =
@@ -2081,31 +2049,24 @@ let doc_exp, doc_let =
                       let binder = parens (separate space [doc_id ctxt id; colon; doc_typ ctxt outer_env typ]) in
                       separate space [string ">>= fun"; binder; bigarrow]
                   | P_aux (P_id id, _) ->
-                      let typ = typ_of e1 in
                       (* Ideally we'd drop the parens and the squote when possible, but it's
                          easier to keep both, and avoids clashes with 'b"..." bitvector literals. *)
-                      let binder = squote ^^ parens (doc_pat ctxt false true (pat, typ_of e1)) in
+                      let binder = squote ^^ parens (doc_pat ctxt false pat) in
                       separate space [string ">>= fun"; binder; bigarrow]
                   | P_aux (P_typ (typ, pat'), _) ->
                       separate space
                         [
                           string ">>= fun";
-                          squote
-                          ^^ parens
-                               (doc_pat ctxt true true (pat, typ_of e1) ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ);
+                          squote ^^ parens (doc_pat ctxt true pat ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ);
                           bigarrow;
                         ]
-                  | _ ->
-                      separate space
-                        [string ">>= fun"; squote ^^ parens (doc_pat ctxt false true (pat, typ_of e1)); bigarrow]
+                  | _ -> separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt false pat); bigarrow]
                 )
                 else (
                   match pat with
                   | (P_aux (P_wild, _) | P_aux (P_typ (_, P_aux (P_wild, _)), _)) when is_unit_typ (typ_of_pat pat) ->
                       string ">>$"
-                  | _ ->
-                      separate space
-                        [string ">>$= fun"; squote ^^ parens (doc_pat ctxt false false (pat, typ_of e1)); bigarrow]
+                  | _ -> separate space [string ">>$= fun"; squote ^^ parens (doc_pat ctxt false pat); bigarrow]
                 )
               in
               let e1_pp = expY e1 in
@@ -2214,11 +2175,11 @@ let doc_exp, doc_let =
           (top_exp ctxt false e)
     | LB_val (P_aux (P_typ (typ, pat), _), (E_aux (_, e_ann) as e)) ->
         prefix 2 1
-          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true false (pat, typ)); coloneq])
+          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true pat); coloneq])
           (top_exp ctxt false (E_aux (E_typ (typ, e), e_ann)))
     | LB_val (pat, e) ->
         prefix 2 1
-          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true false (pat, typ_of e)); coloneq])
+          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true pat); coloneq])
           (top_exp ctxt false e)
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
     let fname =
@@ -2231,11 +2192,7 @@ let doc_exp, doc_let =
   and doc_case ctxt old_env typ = function
     | Pat_aux (Pat_exp (pat, e), _) ->
         let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
-        group
-          (prefix 3 1
-             (separate space [pipe; doc_pat ctxt false false (pat, typ); bigarrow])
-             (group (top_exp new_ctxt false e))
-          )
+        group (prefix 3 1 (separate space [pipe; doc_pat ctxt false pat; bigarrow]) (group (top_exp new_ctxt false e)))
     | Pat_aux (Pat_when (_, _, _), (l, _)) ->
         raise
           (Reporting.err_unreachable l __POS__
@@ -2881,7 +2838,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
     | None ->
         let typ = match classify_ex_type ctxt env ~binding:id exp_typ with _, _, typ' -> typ' in
         used_a_pattern := true;
-        squote ^^ parens (separate space [doc_pat ctxt true true (pat, exp_typ); colon; doc_typ ctxt Env.empty typ])
+        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt Env.empty typ])
   in
   let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = List.filter_map (atom_constraint ctxt) pats in

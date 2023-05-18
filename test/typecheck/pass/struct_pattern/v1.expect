@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mpass/struct_pattern/v1.sail[0m:14.29-31:
+14[96m |[0m        struct { field1 = b, .., .. } => {
+  [92m |[0m                             [92m^^[0m [92mprevious field wildcard here[0m
+[96mpass/struct_pattern/v1.sail[0m:14.33-35:
+14[96m |[0m        struct { field1 = b, .., .. } => {
+  [91m |[0m                                 [91m^^[0m
+  [91m |[0m Duplicate field wildcards in struct pattern

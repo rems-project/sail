@@ -110,6 +110,7 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
+  | AP_struct of (id * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -139,6 +140,8 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
   | AP_nil _ -> IdSet.empty
   | AP_wild _ -> IdSet.empty
+  | AP_struct (afpats, _) ->
+      List.fold_left IdSet.union IdSet.empty (List.map (fun (_, apat) -> apat_bindings apat) afpats)
 
 (** This function returns the types of all bound variables in a
    pattern. It ignores AP_global, apat_globals is used for that. *)
@@ -160,6 +163,8 @@ let rec apat_types (AP_aux (apat_aux, env, _)) =
   | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
   | AP_nil _ -> Bindings.empty
   | AP_wild _ -> Bindings.empty
+  | AP_struct (afpats, _) ->
+      List.fold_left (Bindings.merge merge) Bindings.empty (List.map (fun (_, apat) -> apat_types apat) afpats)
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
   let apat_aux =
@@ -174,6 +179,8 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
     | AP_as (apat, id, typ) -> AP_as (apat, id, typ)
     | AP_nil typ -> AP_nil typ
     | AP_wild typ -> AP_wild typ
+    | AP_struct (afpats, typ) ->
+        AP_struct (List.map (fun (field, apat) -> (field, apat_rename from_id to_id apat)) afpats, typ)
   in
   AP_aux (apat_aux, env, l)
 
@@ -505,7 +512,15 @@ and pp_apat (AP_aux (apat_aux, _, _)) =
   | AP_app (id, apat, typ) -> pp_annot typ (pp_id id ^^ parens (pp_apat apat))
   | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
-  | AP_as (apat, id, ctyp) -> pp_apat apat ^^ string " as " ^^ pp_id id
+  | AP_as (apat, id, _) -> pp_apat apat ^^ string " as " ^^ pp_id id
+  | AP_struct (afpats, _) ->
+      separate space
+        [
+          string "struct";
+          lbrace;
+          separate_map (comma ^^ space) (fun (id, apat) -> separate space [pp_id id; equals; pp_apat apat]) afpats;
+          rbrace;
+        ]
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
 
@@ -568,6 +583,8 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, annot) as pat) =
         (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, id, typ_of_pat pat))
+  | P_struct (fpats, FP_no_wild) ->
+      mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
   | _ ->
       Reporting.unreachable (fst annot) __POS__
         ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
@@ -580,6 +597,7 @@ let rec apat_globals (AP_aux (aux, _, _)) =
   | AP_app (_, apat, _) -> apat_globals apat
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
   | AP_as (apat, _, _) -> apat_globals apat
+  | AP_struct (afpats, _) -> List.concat (List.map (fun (_, apat) -> apat_globals apat) afpats)
 
 let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in

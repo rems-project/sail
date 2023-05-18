@@ -71,11 +71,13 @@ open Ast_util
 (** For testing, we don't want our tests to print exact literals in
     warnings, otherwise they would be overly brittle. This is because
     we use an SMT solver to find counterexamples to complex
-    constrained patterns. *)
+    constrained patterns, and it's not guaranteed to find the same one
+    each run, or between different versions of the solver. *)
 val opt_debug_no_literals : bool ref
 
 type ctx = {
   variants : (typquant * type_union list) Bindings.t;
+  structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
   constraints : n_constraint list;
 }

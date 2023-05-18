@@ -197,6 +197,8 @@ and doc_typ ?(simple = false) (Typ_aux (typ_aux, l)) =
       enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kopts, nc, typ) ->
       braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
+  | Typ_fn ([Typ_aux (Typ_tuple typs, _)], typ) ->
+      separate space [parens (doc_arg_typs typs); string "->"; doc_typ ~simple typ]
   | Typ_fn (typs, typ) -> separate space [doc_arg_typs typs; string "->"; doc_typ ~simple typ]
   | Typ_bidir (typ1, typ2) -> separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -314,6 +316,11 @@ let rec doc_pat (P_aux (p_aux, (_, uannot))) =
   | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
   | P_string_append [] -> string "\"\""
   | P_string_append pats -> parens (separate_map (string " ^ ") doc_pat pats)
+  | P_struct (fpats, fwild) ->
+      let fpats = List.map (fun (field, pat) -> separate space [doc_id field; equals; doc_pat pat]) fpats in
+      let fwild = match fwild with FP_wild _ -> [string ".."] | FP_no_wild -> [] in
+      let fpats = fpats @ fwild in
+      separate space [string "struct"; lbrace; separate (comma ^^ break 1) fpats; rbrace]
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this
