@@ -10,15 +10,15 @@ struct foo = {
 
 function bar(x: foo) -> unit = {
     match x {
-        struct { .. } => ()
+        struct { _ } => ()
     };
     match x {
         struct { f1 = _, f2 = _, f3 = _ } => ()
     };
     match x {
-        struct { f1 = 0, f2 = _, .. } => (),
-        struct { f1 = _, f2 = 0, .. } => (),
-        struct { f1 = x, f2 = y, .. } => (),
+        struct { f1 = 0, f2 = _, _ } => (),
+        struct { f1 = _, f2 = 0, _ } => (),
+        struct { f1 = x, f2 = y, _ } => (),
     }
 }
 
@@ -36,6 +36,6 @@ function quux forall 'n, 'n == 32. (x: baz('n)) -> unit = {
 function quux2 forall 'n, 'n in {32, 64}. (x: baz('n)) -> unit = {
     match x {
         struct { len = 32, value = _ } => (),
-        struct { len = 64, .. } => (),
+        struct { len = 64, _ } => (),
     }
 }

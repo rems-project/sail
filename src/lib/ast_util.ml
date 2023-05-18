@@ -1017,7 +1017,7 @@ and string_of_pat (P_aux (pat, _)) =
   | P_string_append [] -> "\"\""
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
   | P_struct (fpats, fwild) ->
-      let wild_string = function FP_wild _ -> ", .." | FP_no_wild -> "" in
+      let wild_string = function FP_wild _ -> ", _" | FP_no_wild -> "" in
       "struct { "
       ^ Util.string_of_list ", " (fun (field, pat) -> string_of_id field ^ " = " ^ string_of_pat pat) fpats
       ^ wild_string fwild ^ " }"

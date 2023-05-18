@@ -70,7 +70,7 @@ function match_struct(value: my_struct) -> unit = {
 
 function match_struct2(value: my_struct) -> unit = {
     match value {
-        struct { field1 = x, .. } => {
+        struct { field1 = x, _ } => {
             print_bits("value.field1 = ", x)
         }
     }

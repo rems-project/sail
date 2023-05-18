@@ -10,6 +10,6 @@ struct foo = {
 
 function bar(x: foo) -> unit = {
     match x {
-        struct { f1 = x, f1 = y, .. } => ()
+        struct { f1 = x, f1 = y, _ } => ()
     }
 }

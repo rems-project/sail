@@ -226,7 +226,8 @@ include::sail:my_struct[from=pattern-match,type=type]
 include::sail:match_struct[from=pattern-match]
 ----
 
-We can omit fields from the match by using `..` in place of some of the fields:
+We can omit fields from the match by using a wildcard `_` in place of
+some of the fields:
 
 sail::match_struct2[from=pattern-match,part=body,dedent]
 

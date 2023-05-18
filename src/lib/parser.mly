@@ -787,7 +787,7 @@ fpat:
     { mk_fpat (FP_field ($1, $3)) $startpos $endpos }
   | id
     { mk_fpat (FP_field ($1, mk_pat (P_id $1) $startpos $endpos)) $startpos $endpos }
-  | DotDot
+  | Under
     { mk_fpat FP_wild $startpos $endpos }
 
 lit:
