@@ -1432,6 +1432,8 @@ atomic_mpat:
 fmpat:
   | id Eq mpat
     { ($1, $3) }
+  | id
+    { ($1, mk_mpat (MP_id $1) $startpos $endpos) }
 
 %inline mpexp:
   | mpat

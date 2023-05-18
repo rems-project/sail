@@ -5181,7 +5181,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
               typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
           )
         end
-      | _ -> typ_error env l "unifying mapping type, expanded synonyms to non-mapping type??"
+      | _ -> Reporting.unreachable l __POS__ "unifying mapping type, expanded synonyms to non-mapping type!"
     end
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
       typ_error env l

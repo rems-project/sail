@@ -3128,9 +3128,9 @@ let rewrite_ast_mapping_patterns env =
                 )
         in
 
-        let mapping_direction = if mapping_in_typ = typ1 then "forwards" else "backwards" in
+        let mapping_direction = if alpha_equivalent env mapping_in_typ typ1 then "forwards" else "backwards" in
 
-        let mapping_out_typ = if mapping_in_typ = typ2 then typ2 else typ1 in
+        let mapping_in_typ, mapping_out_typ = if mapping_direction = "backwards" then (typ1, typ2) else (typ2, typ1) in
 
         let mapping_name = match mapping_id with Id_aux (Id id, _) | Id_aux (Operator id, _) -> id in
 
@@ -3140,7 +3140,7 @@ let rewrite_ast_mapping_patterns env =
 
         let s_exp = annot_exp (E_id s_id) unk env mapping_in_typ in
         let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) unk env bool_typ in
-        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env typ2 in
+        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env mapping_out_typ in
         let new_letbind, expr =
           match arg_pats with
           | [] -> assert false
@@ -3148,7 +3148,7 @@ let rewrite_ast_mapping_patterns env =
               let arg_pat, _, expr = rewrite_pat env (arg_pat, [], expr) in
               (LB_aux (LB_val (arg_pat, new_binding), unkt), expr)
           | arg_pats ->
-              let checked_tup = annot_pat (P_tuple arg_pats) unk env mapping_out_typ in
+              let checked_tup = annot_pat (P_tuple arg_pats) unk env mapping_in_typ in
               (LB_aux (LB_val (checked_tup, new_binding), unkt), expr)
         in
 
@@ -3171,7 +3171,7 @@ let rewrite_ast_mapping_patterns env =
                 unk env bool_typ
         in
 
-        ( annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ,
+        ( annot_pat (P_typ (mapping_out_typ, annot_pat (P_id s_id) unk env mapping_out_typ)) unk env mapping_out_typ,
           [new_complete_guard],
           new_let
         )
