@@ -197,6 +197,8 @@ and doc_typ ?(simple = false) (Typ_aux (typ_aux, l)) =
       enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kopts, nc, typ) ->
       braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
+  | Typ_fn ([Typ_aux (Typ_tuple typs, _)], typ) ->
+      separate space [parens (doc_arg_typs typs); string "->"; doc_typ ~simple typ]
   | Typ_fn (typs, typ) -> separate space [doc_arg_typs typs; string "->"; doc_typ ~simple typ]
   | Typ_bidir (typ1, typ2) -> separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")

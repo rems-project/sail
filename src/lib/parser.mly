@@ -586,7 +586,7 @@ atomic_typ:
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
   | Lparen typ Rparen
-    { $2 }
+    { mk_typ (ATyp_parens $2) $startpos $endpos }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tuple ($2 :: $4)) $startpos $endpos }
   | LcurlyBar num_list RcurlyBar
@@ -1426,6 +1426,12 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
+  | Struct Lcurly separated_nonempty_list(Comma, fmpat) Rcurly
+    { mk_mpat (MP_struct $3) $startpos $endpos }
+
+fmpat:
+  | id Eq mpat
+    { ($1, $3) }
 
 %inline mpexp:
   | mpat

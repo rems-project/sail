@@ -3888,6 +3888,8 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_string_append mpats -> P_aux (P_string_append (List.map pat_of_mpat mpats), annot)
   | MP_typ (mpat, typ) -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
   | MP_as (mpat, id) -> P_aux (P_as (pat_of_mpat mpat, id), annot)
+  | MP_struct fmpats ->
+      P_aux (P_struct (List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
 
 let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
@@ -3911,6 +3913,20 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   | MP_as (mpat, id) ->
       E_aux
         ( E_match (E_aux (E_id id, (l, annot)), [Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l, annot))]),
+          (l, annot)
+        )
+  | MP_struct fmpats ->
+      let combined_loc field mpat =
+        match (Reporting.simp_loc (id_loc field), Reporting.simp_loc (mpat_loc mpat)) with
+        | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
+        | _, _ -> Parse_ast.Unknown
+      in
+      E_aux
+        ( E_struct
+            (List.map
+               (fun (field, mpat) -> FE_aux (FE_fexp (field, exp_of_mpat mpat), (combined_loc field mpat, empty_uannot)))
+               fmpats
+            ),
           (l, annot)
         )
 (* TODO FIXME location information? *)

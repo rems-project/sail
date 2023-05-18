@@ -124,6 +124,8 @@ let typ_loc = function Typ_aux (_, l) -> l
 
 let pat_loc = function P_aux (_, (l, _)) -> l
 
+let mpat_loc = function MP_aux (_, (l, _)) -> l
+
 let exp_loc = function E_aux (_, (l, _)) -> l
 
 let nexp_loc = function Nexp_aux (_, l) -> l
@@ -719,6 +721,7 @@ and map_mpat_annot_aux f = function
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
   | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
+  | MP_struct fmpats -> MP_struct (List.map (fun (field, mpat) -> (field, map_mpat_annot f mpat)) fmpats)
 
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 
@@ -1033,6 +1036,10 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
+  | MP_struct fmpats ->
+      "struct { "
+      ^ Util.string_of_list ", " (fun (field, mpat) -> string_of_id field ^ " = " ^ string_of_mpat mpat) fmpats
+      ^ " }"
 
 and string_of_lexp (LE_aux (lexp, _)) =
   match lexp with

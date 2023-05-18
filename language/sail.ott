@@ -622,6 +622,7 @@ mpat :: 'MP_' ::=
   | mpat1 ^^ ... ^^ mpatn              ::   :: string_append
   | mpat : typ                         ::   :: typ
   | mpat as id                         ::   :: as
+  | struct { id1 = mpat1 , ... , idn = mpatn } :: :: struct
 
 mpexp :: 'MPat_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}

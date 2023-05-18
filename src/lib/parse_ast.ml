@@ -161,6 +161,7 @@ type atyp_aux =
   | ATyp_tuple of atyp list (* Tuple type *)
   | ATyp_app of id * atyp list (* type constructor application *)
   | ATyp_exist of kinded_id list * atyp * atyp
+  | ATyp_parens of atyp
 
 and atyp = ATyp_aux of atyp_aux * l
 
@@ -348,6 +349,7 @@ type mpat_aux =
   | MP_string_append of mpat list
   | MP_typ of mpat * atyp
   | MP_as of mpat * id
+  | MP_struct of (id * mpat) list
 
 and mpat = MP_aux of mpat_aux * l
 

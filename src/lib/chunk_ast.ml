@@ -536,6 +536,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
     chunks
   in
   match aux with
+  | ATyp_parens atyp -> chunk_atyp comments chunks atyp
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks

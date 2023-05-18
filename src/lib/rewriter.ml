@@ -390,6 +390,7 @@ let rec fold_mpat_aux (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat_aux -> 'm
   | MP_list ps -> alg.p_list (List.map (fold_mpat alg) ps)
   | MP_cons (ph, pt) -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
   | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
+  | MP_struct fmpats -> alg.p_struct (List.map (fun (field, mpat) -> (field, fold_mpat alg mpat)) fmpats, FP_no_wild)
 
 and fold_mpat (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat -> 'mpat = function
   | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
