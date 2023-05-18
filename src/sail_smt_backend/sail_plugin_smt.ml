@@ -113,7 +113,7 @@ let smt_rewrites =
     ("simple_struct_assignments", []);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
-    ("optimize_recheck_defs", []);
+    ("recheck_defs", []);
     ("constant_fold", [String_arg "c"]);
     ("properties", []);
   ]
