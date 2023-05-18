@@ -149,7 +149,7 @@ type env = {
   poly_undefineds : bool;
   prove : (env -> n_constraint -> bool) option;
   allow_unknowns : bool;
-  bitfields : index_range Bindings.t Bindings.t;
+  bitfields : (typ * index_range Bindings.t) Bindings.t;
   toplevel : l option;
   outcomes : (typquant * typ * kinded_id list * id list * env) Bindings.t;
   outcome_typschm : (typquant * typ) option;
@@ -571,8 +571,8 @@ module Env : sig
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
   val is_bitfield : id -> t -> bool
-  val add_bitfield : id -> index_range Bindings.t -> t -> t
-  val get_bitfield_ranges : id -> t -> index_range Bindings.t
+  val add_bitfield : id -> typ -> index_range Bindings.t -> t -> t
+  val get_bitfield : id -> t -> typ * index_range Bindings.t
 
   val no_bindings : t -> t
 
@@ -1621,17 +1621,18 @@ end = struct
 
   let is_bitfield id env = Bindings.mem id env.bitfields
 
-  let get_bitfield_ranges id env = Bindings.find id env.bitfields
+  let get_bitfield id env = Bindings.find id env.bitfields
 
-  let add_bitfield id ranges env = { env with bitfields = Bindings.add id ranges env.bitfields }
+  let add_bitfield id typ ranges env = { env with bitfields = Bindings.add id (typ, ranges) env.bitfields }
 
   let allow_polymorphic_undefineds env = { env with poly_undefineds = true }
 
   let polymorphic_undefineds env = env.poly_undefineds
 end
 
-let get_bitfield_range id field env =
-  try Bindings.find_opt field (Env.get_bitfield_ranges id env) with Not_found -> None
+let get_bitfield_ranges id env = snd (Env.get_bitfield id env)
+
+let get_bitfield_range id field env = try Bindings.find_opt field (get_bitfield_ranges id env) with Not_found -> None
 
 let expand_bind_synonyms l env (typq, typ) = (typq, Env.expand_synonyms (Env.add_typquant l typq env) typ)
 
@@ -5782,6 +5783,14 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       forbid_recursive_types l (fun () ->
           List.iter (fun ((Typ_aux (_, l) as field), _) -> wf_binding l env (typq, field)) fields
       );
+      let env =
+        try
+          match get_def_attribute "bitfield" def_annot with
+          | Some (_, size) when not (Env.is_bitfield id env) ->
+              Env.add_bitfield id (bits_typ env (nconstant (Big_int.of_string size))) Bindings.empty env
+          | _ -> env
+        with _ -> env
+      in
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_record id typq fields env)
   | TD_variant (id, typq, arms, _) ->
       let rec_env = Env.add_variant id (typq, arms) env in
@@ -5813,6 +5822,15 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             let ranges =
               List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
             in
+            let def_annot =
+              (* Remember that the record definition came from a bitfield for later rewrites
+                 (although only if we are using a bitvector type of default order,
+                 so that we can store only the width in the attribute) *)
+              match Env.get_default_order_option env with
+              | Some order' when order_compare order order' = 0 ->
+                  add_def_attribute l "bitfield" (Big_int.to_string size) def_annot
+              | _ -> def_annot
+            in
             let defs =
               DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
               :: Bitfield.macro id size order ranges
@@ -5821,7 +5839,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
               if !Initial_check.opt_undefined_gen then Initial_check.generate_undefineds IdSet.empty defs else defs
             in
             let defs, env = check_defs env defs in
-            let env = Env.add_bitfield id ranges env in
+            let env = Env.add_bitfield id typ ranges env in
             if !opt_no_bitfield_expansion then
               ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
             else (defs, env)

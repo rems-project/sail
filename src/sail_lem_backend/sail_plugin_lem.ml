@@ -175,7 +175,7 @@ let output_lem filename libs effect_info type_env ast =
         string ("    " ^ String.capitalize_ascii filename);
         string "begin";
         string "";
-        State.generate_isa_lemmas !Monomorphise.opt_mwords ast.defs;
+        State.generate_isa_lemmas type_env ast.defs;
         string "";
         string "end";
       ]

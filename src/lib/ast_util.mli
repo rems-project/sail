@@ -168,6 +168,7 @@ val pat_of_mpat : 'a mpat -> 'a pat
 
 val inc_ord : order
 val dec_ord : order
+val order_compare : order -> order -> int
 
 (** {2 Unwrap aux constructors} *)
 
