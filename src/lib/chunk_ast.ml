@@ -671,7 +671,7 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
             Queue.add (Atom (string_of_id field)) field_chunks;
             let pat_chunks = rec_chunk_pat pat in
             Queue.add (Binary (field_chunks, "=", pat_chunks)) chunks
-        | FP_wild -> Queue.add (Atom "..") chunks
+        | FP_wild -> Queue.add (Atom "_") chunks
       in
       let fpats =
         chunk_delimit ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments chunks fpats

@@ -318,9 +318,9 @@ let rec doc_pat (P_aux (p_aux, (_, uannot))) =
   | P_string_append pats -> parens (separate_map (string " ^ ") doc_pat pats)
   | P_struct (fpats, fwild) ->
       let fpats = List.map (fun (field, pat) -> separate space [doc_id field; equals; doc_pat pat]) fpats in
-      let fwild = match fwild with FP_wild _ -> [string ".."] | FP_no_wild -> [] in
+      let fwild = match fwild with FP_wild _ -> [string "_"] | FP_no_wild -> [] in
       let fpats = fpats @ fwild in
-      separate space [string "struct"; lbrace; separate (comma ^^ break 1) fpats; rbrace]
+      separate space [string "struct"; lbrace; separate (comma ^^ space) fpats; rbrace]
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this
