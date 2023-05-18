@@ -465,7 +465,7 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
           )
         | P.E_app_infix (left, op, right) -> E_app_infix (to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
         | P.E_tuple exps -> E_tuple (List.map (to_ast_exp ctx) exps)
-        | P.E_if (e1, e2, e3) -> E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
+        | P.E_if (e1, e2, e3, _) -> E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
         | P.E_for (id, e1, e2, e3, atyp, e4) ->
             E_for
               ( to_ast_id ctx id,

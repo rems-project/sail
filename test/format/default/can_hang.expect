@@ -18,4 +18,3 @@ function bar () = {
         unit => (),
     }
 }
-

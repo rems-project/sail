@@ -26,4 +26,3 @@ function foo forall 'very_long_identifier_that_will_cause_a_line_break 'm, 'n >=
 (x : int('very_long_identifier_that_will_cause_a_line_break), y : int('m)) -> unit = {
     ()
 }
-

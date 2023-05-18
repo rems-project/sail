@@ -64,4 +64,3 @@ function has_loops () = {
 }
 
 type foo = bar
-

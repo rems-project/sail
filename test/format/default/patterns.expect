@@ -14,4 +14,3 @@ function foo(ys : bits(6), xs : bits(6)) -> unit = {
     let _ = xs[3..1] @ xs[0..0] @ xs[5..4];
     ()
 }
-

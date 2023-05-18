@@ -25,4 +25,3 @@ function foo () = {
 
     print_endline("string3")
 }
-

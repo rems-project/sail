@@ -217,6 +217,8 @@ and fpat = FP_aux of fpat_aux * l
 
 type loop = While | Until
 
+type if_loc = { if_loc : l; then_loc : l; else_loc : l option }
+
 type measure_aux = (* optional termination measure for a loop *)
   | Measure_none | Measure_some of exp
 
@@ -233,7 +235,7 @@ and exp_aux =
   | E_app of id * exp list (* function application *)
   | E_app_infix of exp * id * exp (* infix function application *)
   | E_tuple of exp list (* tuple *)
-  | E_if of exp * exp * exp (* conditional *)
+  | E_if of exp * exp * exp * if_loc (* conditional *)
   | E_loop of loop * measure * exp * exp
   | E_for of id * exp * exp * exp * atyp * exp (* loop *)
   | E_vector of exp list (* vector (indexed from 0) *)
