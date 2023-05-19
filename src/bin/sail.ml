@@ -343,8 +343,8 @@ let run_sail_format (config : Yojson.Basic.t option) =
         let formatted = Formatter.format_defs f source comments parse_ast in
         begin
           match !opt_format_backup with
-          | Some backup_file ->
-              let out_chan = open_out backup_file in
+          | Some suffix ->
+              let out_chan = open_out (f ^ "." ^ suffix) in
               output_string out_chan source;
               close_out out_chan
           | None -> ()
