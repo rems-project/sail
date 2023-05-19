@@ -90,6 +90,33 @@ let discard_extra_trailing_newlines s =
   done;
   if !newlines > 1 then String.sub s 0 (len - (!newlines - 1)) else s
 
+(* This function inserts a space before each comment if there is not
+   already one, so "2/* comment */" will become "2 /* comment */"
+   and similarly for line comments. *)
+let fixup_comments ~filename source =
+  (* Using the full parser is bit inefficient, it would be better to just tokenize *)
+  let comments, _ = Initial_check.parse_file_from_string ~filename ~contents:source in
+  let comment_stack = Stack.of_seq (List.to_seq comments) in
+  let fixed = Buffer.create (String.length source) in
+  let needs_space = ref false in
+  String.iteri
+    (fun cnum c ->
+      begin
+        match Stack.top_opt comment_stack with
+        | Some (Lexer.Comment (_, start, _, _)) ->
+            if c = ' ' || c = '\n' then needs_space := false
+            else if cnum = start.pos_cnum then (
+              if !needs_space then Buffer.add_char fixed ' ';
+              ignore (Stack.pop comment_stack)
+            )
+            else needs_space := true
+        | None -> ()
+      end;
+      Buffer.add_char fixed c
+    )
+    source;
+  Buffer.contents fixed
+
 (** We implement a small wrapper around a subset of the PPrint API to
     track line breaks and dedents (points where the indentation level
     decreases), re-implementing a few core combinators. *)
@@ -745,7 +772,7 @@ module Make (Config : CONFIG) = struct
       s;
     Buffer.contents buf
 
-  let format_defs_once ?(debug = false) source comments defs =
+  let format_defs_once ?(debug = false) filename source comments defs =
     let chunks = chunk_defs source comments defs in
     if debug then Queue.iter (prerr_chunk "") chunks;
     let doc = Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~toplevel:true default_opts chunk) empty chunks in
@@ -755,15 +782,15 @@ module Make (Config : CONFIG) = struct
       prerr_endline debug_src
     );
     let formatted, lb_info = to_string (doc ^^ hardline) in
-    fixup lb_info formatted |> discard_extra_trailing_newlines
+    fixup lb_info formatted |> fixup_comments ~filename |> discard_extra_trailing_newlines
 
   let format_defs ?(debug = false) filename source comments defs =
     let open Initial_check in
-    let f1 = format_defs_once ~debug source comments defs in
+    let f1 = format_defs_once ~debug filename source comments defs in
     let comments, defs = parse_file_from_string ~filename ~contents:f1 in
-    let f2 = format_defs_once ~debug f1 comments defs in
+    let f2 = format_defs_once ~debug filename f1 comments defs in
     let comments, defs = parse_file_from_string ~filename ~contents:f2 in
-    let f3 = format_defs_once ~debug f2 comments defs in
+    let f3 = format_defs_once ~debug filename f2 comments defs in
     if f2 <> f3 then (
       print_endline f2;
       print_endline f3;
