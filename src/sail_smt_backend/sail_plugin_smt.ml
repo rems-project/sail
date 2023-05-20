@@ -94,7 +94,7 @@ let smt_rewrites =
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("truncate_hex_literals", []);
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);

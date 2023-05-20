@@ -115,7 +115,7 @@ let coq_rewrites =
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("add_unspecified_rec", []);
     ("undefined", [Bool_arg true]);
     ("vector_string_pats_to_bit_list", []);

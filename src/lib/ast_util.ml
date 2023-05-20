@@ -77,6 +77,8 @@ let empty_uannot = { attrs = [] }
 
 let add_attribute l attr arg (annot : uannot) = { attrs = (l, attr, arg) :: annot.attrs }
 
+let remove_attribute attr1 (annot : uannot) = { attrs = List.filter (fun (_, attr2, _) -> attr1 <> attr2) annot.attrs }
+
 let get_attribute attr annot =
   List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
@@ -193,6 +195,23 @@ let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 let mk_val_spec vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown)
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def = DEF_aux (def, mk_def_annot l)
+
+let rec pat_of_mpat (MP_aux (mpat, annot)) =
+  match mpat with
+  | MP_lit lit -> P_aux (P_lit lit, annot)
+  | MP_id id -> P_aux (P_id id, annot)
+  | MP_app (id, args) -> P_aux (P_app (id, List.map pat_of_mpat args), annot)
+  | MP_vector mpats -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
+  | MP_vector_concat mpats -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
+  | MP_vector_subrange (id, n, m) -> P_aux (P_vector_subrange (id, n, m), annot)
+  | MP_tuple mpats -> P_aux (P_tuple (List.map pat_of_mpat mpats), annot)
+  | MP_list mpats -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
+  | MP_cons (mpat1, mpat2) -> P_aux (P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot)
+  | MP_string_append mpats -> P_aux (P_string_append (List.map pat_of_mpat mpats), annot)
+  | MP_typ (mpat, typ) -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
+  | MP_as (mpat, id) -> P_aux (P_as (pat_of_mpat mpat, id), annot)
+  | MP_struct fmpats ->
+      P_aux (P_struct (List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
 
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k

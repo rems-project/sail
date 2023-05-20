@@ -527,7 +527,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     | _ -> Some (Multiple_clauses (List.mapi (docinfo_for_funcl ~ast) clauses))
 
   let docinfo_for_mpexp (MPat_aux (aux, _)) =
-    match aux with MPat_pat mpat -> Rewrites.pat_of_mpat mpat | MPat_when (mpat, _) -> Rewrites.pat_of_mpat mpat
+    match aux with MPat_pat mpat -> pat_of_mpat mpat | MPat_when (mpat, _) -> pat_of_mpat mpat
 
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Type_check.strip_mapcl Pretty_print_sail.doc_mapcl clause in

@@ -146,7 +146,6 @@ The file
 ```OCaml
 let all_rewrites = [
     ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
-    ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
     ("monomorphise", Basic_rewriter monomorphise);
@@ -161,7 +160,7 @@ let rewrites_interpreter = [
     ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);

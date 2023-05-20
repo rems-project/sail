@@ -145,6 +145,7 @@ SAIL_BUILTIN_TYPE(sail_string)
 
 void dec_str(sail_string *str, const mpz_t n);
 void hex_str(sail_string *str, const mpz_t n);
+void hex_str_upper(sail_string *str, const mpz_t n);
 
 void undefined_string(sail_string *str, const unit u);
 
@@ -154,6 +155,7 @@ bool EQUAL(sail_string)(const sail_string, const sail_string);
 void concat_str(sail_string *stro, const sail_string str1, const sail_string str2);
 bool string_startswith(sail_string s, sail_string prefix);
 
+                       
 /* ***** Sail integers ***** */
 
 typedef int64_t mach_int;
@@ -480,6 +482,12 @@ void string_of_lbits(sail_string *str, const lbits op);
 void string_of_fbits(sail_string *str, const fbits op);
 void decimal_string_of_lbits(sail_string *str, const lbits op);
 void decimal_string_of_fbits(sail_string *str, const fbits op);
+
+/* ***** Mapping support ***** */
+
+void parse_hex_bits(lbits *stro, const mpz_t n, const sail_string str);
+
+bool valid_hex_bits(const mpz_t n, const sail_string str);
 
 /*
  * Utility function not callable from Sail!

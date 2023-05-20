@@ -3264,6 +3264,9 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
   | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
   | _ -> false
 
+let forwards_attr l uannot = add_attribute l "forwards" "" (remove_attribute "forwards" uannot)
+let backwards_attr l uannot = add_attribute l "backwards" "" (remove_attribute "backwards" uannot)
+
 let tc_assume nc (E_aux (aux, annot)) = E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
 
 module PC_config = struct
@@ -3288,7 +3291,11 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
   match (exp_aux, typ_aux) with
   | E_block exps, _ -> annot_exp (E_block (check_block l env exps (Some typ))) typ
   | E_match (exp, cases), _ ->
-      let inferred_exp = irule infer_exp env exp in
+      let inferred_exp =
+        if Option.is_some (get_attribute "mapping_match" uannot) then
+          crule check_exp env exp (app_typ (mk_id "option") [mk_typ_arg (A_typ typ)])
+        else irule infer_exp env exp
+      in
       let inferred_typ = typ_of inferred_exp in
       let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
       let checked_cases, attr_update =
@@ -3791,7 +3798,8 @@ and bind_pat_no_guard env (P_aux (_, (l, _)) as pat) typ =
 and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
   let typ, env = bind_existential l (name_pat pat) typ env in
   typ_print (lazy (Util.("Binding " |> yellow |> clear) ^ string_of_pat pat ^ " to " ^ string_of_typ typ));
-  let annot_pat pat typ' = P_aux (pat, (l, mk_expected_tannot ~uannot env typ' (Some typ))) in
+  let annot_pat_uannot uannot pat typ' = P_aux (pat, (l, mk_expected_tannot ~uannot env typ' (Some typ))) in
+  let annot_pat pat typ = annot_pat_uannot uannot pat typ in
   let switch_typ pat typ =
     match pat with
     | P_aux (pat_aux, (l, (Some tannot, uannot))) -> P_aux (pat_aux, (l, (Some { tannot with typ }, uannot)))
@@ -3910,8 +3918,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               let arg_typ' = subst_unifiers unifiers arg_typ in
               let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
               if not (List.for_all (solve_quant env) quants') then
-                typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
-              else ();
+                typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
               let _ret_typ' = subst_unifiers unifiers ret_typ in
               let arg_typ', env = bind_existential l None arg_typ' env in
               let tpat, env, guards = bind_pat env pat arg_typ' in
@@ -3933,17 +3940,11 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
             let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
             let arg_typ' = subst_unifiers unifiers typ1 in
             let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-            if match quants' with [] -> false | _ -> true then
-              typ_error env l
-                ("Quantifiers "
-                ^ string_of_list ", " string_of_quant_item quants'
-                ^ " not resolved in pattern " ^ string_of_pat pat
-                )
-            else ();
-
+            if not (List.for_all (solve_quant env) quants') then
+              typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
             let _ret_typ' = subst_unifiers unifiers typ2 in
             let tpat, env, guards = bind_pat env pat arg_typ' in
-            (annot_pat (P_app (f, [tpat])) typ, env, guards)
+            (annot_pat_uannot (backwards_attr (gen_loc l) uannot) (P_app (f, [tpat])) typ, env, guards)
           with Unification_error (l, _) -> (
             try
               typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
@@ -3951,16 +3952,11 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
               let arg_typ' = subst_unifiers unifiers typ2 in
               let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-              if match quants' with [] -> false | _ -> true then
-                typ_error env l
-                  ("Quantifiers "
-                  ^ string_of_list ", " string_of_quant_item quants'
-                  ^ " not resolved in pattern " ^ string_of_pat pat
-                  )
-              else ();
+              if not (List.for_all (solve_quant env) quants') then
+                typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
               let _ret_typ' = subst_unifiers unifiers typ1 in
               let tpat, env, guards = bind_pat env pat arg_typ' in
-              (annot_pat (P_app (f, [tpat])) typ, env, guards)
+              (annot_pat_uannot (forwards_attr (gen_loc l) uannot) (P_app (f, [tpat])) typ, env, guards)
             with Unification_error (l, m) ->
               typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
           )
@@ -5442,16 +5438,17 @@ let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) typ =
   let typed_pexp = check_case env typ_arg pexp typ_ret in
   FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
 
-let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
- fun env (MCL_aux (cl, (def_annot, _))) typ ->
+let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
   match typ with
   | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
       match cl with
       | MCL_bidir (mpexp1, mpexp2) -> begin
           let testing_env = Env.set_allow_unknowns true env in
           let left_mpat, _, _ = destruct_mpexp mpexp1 in
+          check_pattern_duplicates env (pat_of_mpat left_mpat);
           let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
           let right_mpat, _, _ = destruct_mpexp mpexp2 in
+          check_pattern_duplicates env (pat_of_mpat right_mpat);
           let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
 
           let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
@@ -5460,6 +5457,7 @@ let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
         end
       | MCL_forwards (mpexp, exp) -> begin
           let mpat, _, _ = destruct_mpexp mpexp in
+          check_pattern_duplicates env (pat_of_mpat mpat);
           let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
           let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
           let typed_exp = check_exp mpat_env exp typ2 in
@@ -5467,6 +5465,7 @@ let check_mapcl : Env.t -> uannot mapcl -> typ -> tannot mapcl =
         end
       | MCL_backwards (mpexp, exp) -> begin
           let mpat, _, _ = destruct_mpexp mpexp in
+          check_pattern_duplicates env (pat_of_mpat mpat);
           let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
           let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
           let typed_exp = check_exp mpat_env exp typ1 in

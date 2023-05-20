@@ -106,7 +106,7 @@ let ocaml_rewrites =
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
     ("tuple_assignments", []);
@@ -157,7 +157,7 @@ let tofrominterp_rewrites =
     ("realize_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);

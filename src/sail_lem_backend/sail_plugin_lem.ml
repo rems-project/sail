@@ -102,7 +102,7 @@ let lem_rewrites =
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("undefined", [Bool_arg false]);

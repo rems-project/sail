@@ -89,6 +89,8 @@ val empty_uannot : uannot
 *)
 val add_attribute : l -> string -> string -> uannot -> uannot
 
+val remove_attribute : string -> uannot -> uannot
+
 val get_attribute : string -> uannot -> (l * string) option
 
 val get_attributes : uannot -> (l * string * string) list
@@ -160,6 +162,9 @@ val mk_fexp : id -> uannot exp -> uannot fexp
 val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> 'a def_aux -> 'a def
+
+(** Mapping patterns are a subset of patterns, so we can always convert one to the other *)
+val pat_of_mpat : 'a mpat -> 'a pat
 
 val inc_ord : order
 val dec_ord : order

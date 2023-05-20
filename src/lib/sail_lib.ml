@@ -1056,7 +1056,46 @@ let string_of_bool = function true -> "true" | false -> "false"
 
 let dec_str x = Big_int.to_string x
 
-let hex_str x = Big_int.to_string x
+let to_lower_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 87) else Char.chr (n + 48)
+
+let to_upper_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 55) else Char.chr (n + 48)
+
+let hex_str_helper to_char x =
+  if Big_int.equal x Big_int.zero then "0x0"
+  else (
+    let x = ref x in
+    let s = ref "" in
+    while not (Big_int.equal !x Big_int.zero) do
+      let lower_4 = Big_int.to_int (Big_int.bitwise_and !x (Big_int.of_int 15)) in
+      s := String.make 1 (to_char lower_4) ^ !s;
+      x := Big_int.shift_right !x 4
+    done;
+    "0x" ^ !s
+  )
+
+let hex_str = hex_str_helper to_lower_hex_char
+let hex_str_upper = hex_str_helper to_upper_hex_char
+
+let is_hex_char ch =
+  let c = Char.code ch in
+  (Char.code '0' <= c && c <= Char.code '9')
+  || (Char.code 'a' <= c && c <= Char.code 'f')
+  || (Char.code 'A' <= c && c <= Char.code 'F')
+
+let valid_hex_bits (n, s) =
+  let len = String.length s in
+  (* We must have at least the 0x prefix, then one character *)
+  if len < 3 || String.sub s 0 2 <> "0x" then false
+  else (
+    let hex = String.sub s 2 (len - 2) in
+    let is_valid = ref true in
+    String.iter (fun c -> is_valid := !is_valid && is_hex_char c) hex;
+    !is_valid
+  )
+
+let parse_hex_bits (n, s) =
+  if not (valid_hex_bits (n, s)) then zeros n
+  else bits_of_string (String.sub s 2 (String.length s - 2)) |> List.rev |> Util.take (Big_int.to_int n) |> List.rev
 
 let trace_memory_write (_, _, _) = ()
 let trace_memory_read (_, _, _) = ()
