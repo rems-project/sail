@@ -3919,13 +3919,9 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
           end
         | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
       end
-  | P_app (f, pats) when Env.is_union_constructor f env ->
-      (* Treat Ctor(x, y) as Ctor((x, y)) *)
-      bind_pat env (P_aux (P_app (f, [mk_pat (P_tuple pats)]), (l, uannot))) typ
-  | P_app (f, pats) when Env.is_mapping f env -> begin
+  | P_app (f, [pat]) when Env.is_mapping f env -> begin
       let typq, mapping_typ = Env.get_val_spec f env in
       let quants = quant_items typq in
-      let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with Typ_tuple typs -> typs | _ -> [typ] in
       match Env.expand_synonyms env mapping_typ with
       | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
           try
@@ -3944,11 +3940,8 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
             else ();
 
             let _ret_typ' = subst_unifiers unifiers typ2 in
-            let tpats, env, guards =
-              try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ')
-              with Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-            in
-            (annot_pat (P_app (f, List.rev tpats)) typ, env, guards)
+            let tpat, env, guards = bind_pat env pat arg_typ' in
+            (annot_pat (P_app (f, [tpat])) typ, env, guards)
           with Unification_error (l, _) -> (
             try
               typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
@@ -3964,17 +3957,17 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
                   )
               else ();
               let _ret_typ' = subst_unifiers unifiers typ1 in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ')
-                with Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-              in
-              (annot_pat (P_app (f, List.rev tpats)) typ, env, guards)
+              let tpat, env, guards = bind_pat env pat arg_typ' in
+              (annot_pat (P_app (f, [tpat])) typ, env, guards)
             with Unification_error (l, m) ->
               typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
           )
         end
       | _ -> typ_error env l ("Mal-formed mapping " ^ string_of_id f)
     end
+  | P_app (f, pats) when Env.is_union_constructor f env || Env.is_mapping f env ->
+      (* Treat Ctor(x, y) as Ctor((x, y)), and the same for mappings *)
+      bind_pat env (P_aux (P_app (f, [mk_pat (P_tuple pats)]), (l, uannot))) typ
   | P_app (f, _) when (not (Env.is_union_constructor f env)) && not (Env.is_mapping f env) ->
       typ_error env l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
@@ -5016,7 +5009,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   typ_debug (lazy ("Returning: " ^ string_of_exp exp));
   exp
 
-and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) typ =
+and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpat) typ =
   let typ, env = bind_existential l None typ env in
   typ_print (lazy (Util.("Binding " |> yellow |> clear) ^ string_of_mpat mpat ^ " to " ^ string_of_typ typ));
   let annot_mpat mpat typ' = MP_aux (mpat, (l, mk_expected_tannot env typ' (Some typ))) in
@@ -5131,10 +5124,9 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
         end
       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
     end
-  | MP_app (other, mpats) when Env.is_mapping other env -> begin
+  | MP_app (other, [mpat]) when Env.is_mapping other env -> begin
       let typq, mapping_typ = Env.get_val_spec other env in
       let quants = quant_items typq in
-      let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with Typ_tuple typs -> typs | _ -> [typ] in
       match Env.expand_synonyms env mapping_typ with
       | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
           try
@@ -5151,11 +5143,8 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
                 )
             else ();
             let _ret_typ' = subst_unifiers unifiers typ2 in
-            let tpats, env, guards =
-              try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ')
-              with Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-            in
-            (annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards)
+            let tpat, env, guards = bind_mpat allow_unknown other_env env mpat arg_typ' in
+            (annot_mpat (MP_app (other, [tpat])) typ, env, guards)
           with Unification_error (l, _) -> (
             try
               typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
@@ -5172,17 +5161,16 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, _)) as mpat) ty
                   )
               else ();
               let _ret_typ' = subst_unifiers unifiers typ1 in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ')
-                with Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-              in
-              (annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards)
+              let tpat, env, guards = bind_mpat allow_unknown other_env env mpat arg_typ' in
+              (annot_mpat (MP_app (other, [tpat])) typ, env, guards)
             with Unification_error (l, m) ->
               typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
           )
         end
       | _ -> Reporting.unreachable l __POS__ "unifying mapping type, expanded synonyms to non-mapping type!"
     end
+  | MP_app (other, mpats) when Env.is_mapping other env ->
+      bind_mpat allow_unknown other_env env (MP_aux (MP_app (other, [mk_mpat (MP_tuple mpats)]), (l, uannot))) typ
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
       typ_error env l
         (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)

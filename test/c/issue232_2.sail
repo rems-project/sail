@@ -15,13 +15,10 @@ struct eful =
   }
 
 val eful_unpack : eful <-> (E,E)
-mapping eful_unpack = { struct { e1, e2 } <-> (e1, e2) }
-/*
 function eful_unpack_backwards_matches(x) = true
 function eful_unpack_forwards(s) = (s.e1, s.e2)
 function eful_unpack_forwards_matches(x) = true
 function eful_unpack_backwards(e1,e2) = struct { e1 = e1, e2 = e2 }
-*/
 
 union F = { FE : eful }
 
