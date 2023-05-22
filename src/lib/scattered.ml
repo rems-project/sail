@@ -95,7 +95,7 @@ let rec filter_union_clauses id = function
 let rec filter_enum_clauses id = function
   | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
       filter_enum_clauses id defs
-  | def :: defs -> def :: filter_union_clauses id defs
+  | def :: defs -> def :: filter_enum_clauses id defs
   | [] -> []
 
 let patch_funcl_loc def_annot (FCL_aux (aux, (_, tannot))) = FCL_aux (aux, (def_annot, tannot))
