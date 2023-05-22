@@ -1390,7 +1390,9 @@ end = struct
           typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " already has a member " ^ string_of_id member)
         else { env with enums = Bindings.add id (true, IdSet.add member members) env.enums }
     | Some (false, _) ->
-        typ_error env (id_loc id)
+        let prev_id, _ = Bindings.find_first (fun prev_id -> Id.compare id prev_id = 0) env.enums in
+        typ_error env
+          (Parse_ast.Hint ("Declared as regular enumeration here", id_loc prev_id, id_loc id))
           ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
     | None -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
