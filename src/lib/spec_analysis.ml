@@ -555,7 +555,7 @@ module NameGraph = Graph.Make (String)
 let add_def_to_map id d defset =
   Namemap.add id (match Namemap.find id defset with t -> t @ [d] | exception Not_found -> [d]) defset
 
-let add_def_to_graph (prelude, original_order, defset, graph) d =
+let add_def_to_graph (prelude_rev, original_order_rev, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used =
     match d with
@@ -580,7 +580,7 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
       NameGraph.add_edges id (other_ids @ Nameset.elements used) graph
       |> List.fold_right (fun id' g -> NameGraph.add_edge id' id g) other_ids
     in
-    (prelude, original_order @ [id], add_def_to_map id d defset, graph')
+    (prelude_rev, id :: original_order_rev, add_def_to_map id d defset, graph')
   with Not_found ->
     (* Some definitions do not bind any identifiers at all.  This *should*
        only happen for default bitvector order declarations, operator fixity
@@ -591,7 +591,7 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
        default order and fixity declarations, this means that specifications
        currently have to assume those declarations are moved to the
        beginning when using a backend that requires topological sorting. *)
-    (prelude @ [d], original_order, defset, graph)
+    (d :: prelude_rev, original_order_rev, defset, graph)
 
 let def_of_component graph defset comp =
   let get_def id = if Namemap.mem id defset then Namemap.find id defset else [] in
@@ -615,9 +615,10 @@ let def_of_component graph defset comp =
   | defs -> defs
 
 let top_sort_defs ast =
-  let prelude, original_order, defset, graph =
+  let prelude_rev, original_order_rev, defset, graph =
     List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs
   in
+  let prelude, original_order = (List.rev prelude_rev, List.rev original_order_rev) in
   let components = NameGraph.scc ~original_order graph in
   { ast with defs = prelude @ List.concat (List.map (def_of_component graph defset) components) }
 
