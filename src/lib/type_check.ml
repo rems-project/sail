@@ -6013,13 +6013,15 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
 
 and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def list * Env.t =
  fun n total env defs ->
-  match defs with
-  | [] -> ([], env)
-  | def :: defs ->
-      Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
-      let def, env = check_def env def in
-      let defs, env = check_defs_progress (n + 1) total env defs in
-      (def @ defs, env)
+  let rec aux n total acc env defs =
+    match defs with
+    | [] -> (List.rev acc, env)
+    | def :: defs ->
+        Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
+        let def, env = check_def env def in
+        aux (n + 1) total (List.rev def @ acc) env defs
+  in
+  aux n total [] env defs
 
 and check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
  fun env defs ->
