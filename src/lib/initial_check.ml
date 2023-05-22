@@ -1352,10 +1352,10 @@ let generate_initialize_registers vs_ids defs =
   defs @ initialize_registers
 
 let generate_enum_functions vs_ids defs =
-  let rec gen_enums = function
+  let rec gen_enums acc = function
     | (DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), def_annot) as enum) :: defs -> begin
         match get_def_attribute "no_enum_functions" def_annot with
-        | Some _ -> enum :: gen_enums defs
+        | Some _ -> gen_enums (enum :: acc) defs
         | None ->
             let enum_val_spec name quants typ =
               mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
@@ -1403,12 +1403,12 @@ let generate_enum_functions vs_ids defs =
               if IdSet.mem name vs_ids then []
               else [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
             in
-            (enum :: to_enum) @ from_enum @ gen_enums defs
+            gen_enums (List.rev ((enum :: to_enum) @ from_enum) @ acc) defs
       end
-    | def :: defs -> def :: gen_enums defs
-    | [] -> []
+    | def :: defs -> gen_enums (def :: acc) defs
+    | [] -> List.rev acc
   in
-  gen_enums defs
+  gen_enums [] defs
 
 let incremental_ctx = ref initial_ctx
 
