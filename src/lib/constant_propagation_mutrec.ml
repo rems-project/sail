@@ -195,8 +195,8 @@ let prop_args_pexp target ast ksubsts args pexp =
 
 let rewrite_ast target effect_info env ({ defs; _ } as ast) =
   let effect_info = ref effect_info in
-  let rec rewrite = function
-    | [] -> []
+  let rec rewrite acc = function
+    | [] -> List.rev acc
     | DEF_aux (DEF_internal_mutrec mutrecs, def_annot) :: ds ->
         let mutrec_ids = IdSet.of_list (List.map id_of_fundef mutrecs) in
         let valspecs = ref ([] : uannot def list) in
@@ -248,8 +248,8 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
         in
         let mutrecs' = List.map (fun fd -> DEF_aux (DEF_fundef (rewrite_fundef fd), def_annot)) mutrecs in
         let fdefs = fst (check_defs env (!valspecs @ !fundefs)) in
-        mutrecs' @ fdefs @ rewrite ds
-    | d :: ds -> d :: rewrite ds
+        rewrite (List.rev (mutrecs' @ fdefs) @ acc) ds
+    | d :: ds -> rewrite (d :: acc) ds
   in
-  let new_ast = Spec_analysis.top_sort_defs { ast with defs = rewrite defs } in
+  let new_ast = Spec_analysis.top_sort_defs { ast with defs = rewrite [] defs } in
   (new_ast, !effect_info, env)
