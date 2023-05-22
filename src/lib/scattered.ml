@@ -110,7 +110,7 @@ end
 
 module PC = Pattern_completeness.Make (PC_config)
 
-let rec descatter' funcls mapcls = function
+let rec descatter' accumulator funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function
      clause into a DEF_fundef containing all the clauses. *)
@@ -125,18 +125,21 @@ let rec descatter' funcls mapcls = function
       let clauses, update_attr =
         Type_check.(check_funcls_complete l (env_of_tannot tannot) clauses (typ_of_tannot tannot))
       in
-      DEF_aux
-        ( DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
-          update_attr (mk_def_annot (gen_loc l))
-        )
-      :: descatter' funcls mapcls defs
+      let accumulator =
+        DEF_aux
+          ( DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
+            update_attr (mk_def_annot (gen_loc l))
+          )
+        :: accumulator
+      in
+      descatter' accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, _))), def_annot) :: defs ->
       let id = funcl_id funcl in
       let funcl = patch_funcl_loc def_annot funcl in
       begin
         match Bindings.find_opt id funcls with
-        | Some clauses -> descatter' (Bindings.add id (funcl :: clauses) funcls) mapcls defs
-        | None -> descatter' (Bindings.add id [funcl] funcls) mapcls defs
+        | Some clauses -> descatter' accumulator (Bindings.add id (funcl :: clauses) funcls) mapcls defs
+        | None -> descatter' accumulator (Bindings.add id [funcl] funcls) mapcls defs
       end
   (* Scattered mappings are handled the same way as scattered functions *)
   | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, tannot))), def_annot) :: defs
@@ -145,15 +148,20 @@ let rec descatter' funcls mapcls = function
       let clauses =
         match Bindings.find_opt id mapcls with Some clauses -> List.rev (mapcl :: clauses) | None -> [mapcl]
       in
-      DEF_aux
-        (DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))), mk_def_annot (gen_loc l))
-      :: descatter' funcls mapcls defs
+      let accumulator =
+        DEF_aux
+          ( DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))),
+            mk_def_annot (gen_loc l)
+          )
+        :: accumulator
+      in
+      descatter' accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), _)), def_annot) :: defs ->
       let mapcl = patch_mapcl_annot def_annot mapcl in
       begin
         match Bindings.find_opt id mapcls with
-        | Some clauses -> descatter' funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
-        | None -> descatter' funcls (Bindings.add id [mapcl] mapcls) defs
+        | Some clauses -> descatter' accumulator funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
+        | None -> descatter' accumulator funcls (Bindings.add id [mapcl] mapcls) defs
       end
   (* For scattered unions, when we find a union declaration we
      immediately grab all the future clauses and turn it into a
@@ -164,9 +172,12 @@ let rec descatter' funcls mapcls = function
         match tus with
         | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
         | _ ->
-            DEF_aux
-              (DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
-            :: descatter' funcls mapcls (filter_union_clauses id defs)
+            let accumulator =
+              DEF_aux
+                (DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
+              :: accumulator
+            in
+            descatter' accumulator funcls mapcls (filter_union_clauses id defs)
       end
   (* Therefore we should never see SD_unioncl... *)
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl _, (l, _))), _) :: _ ->
@@ -178,10 +189,13 @@ let rec descatter' funcls mapcls = function
         | [] -> raise (Reporting.err_general l "No clauses found for scattered enum type")
         | _ ->
             let def_annot = add_def_attribute (gen_loc l) "no_enum_functions" "" def_annot in
-            DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
-            :: descatter' funcls mapcls (filter_enum_clauses id defs)
+            let accumulator =
+              DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
+              :: accumulator
+            in
+            descatter' accumulator funcls mapcls (filter_enum_clauses id defs)
       end
-  | def :: defs -> def :: descatter' funcls mapcls defs
-  | [] -> []
+  | def :: defs -> descatter' (def :: accumulator) funcls mapcls defs
+  | [] -> List.rev accumulator
 
-let descatter ast = { ast with defs = descatter' Bindings.empty Bindings.empty ast.defs }
+let descatter ast = { ast with defs = descatter' [] Bindings.empty Bindings.empty ast.defs }
