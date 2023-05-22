@@ -292,35 +292,41 @@ let doc_lit (L_aux (l, _)) =
     )
 
 let rec doc_pat (P_aux (p_aux, (_, uannot))) =
-  concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
-  ^^
-  match p_aux with
-  | P_id id -> doc_id id
-  | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
-  | P_not pat -> string "~" ^^ parens (doc_pat pat)
-  | P_tuple pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
-  | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
-  | P_lit lit -> doc_lit lit
-  (* P_var short form sugar *)
-  | P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)) when Id.compare (id_of_kid kid) id == 0 -> doc_kid kid
-  | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
-  | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
-  | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
-  | P_vector_subrange (id, n, m) ->
-      if Big_int.equal n m then doc_id id ^^ brackets (string (Big_int.to_string n))
-      else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
-  | P_wild -> string "_"
-  | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
-  | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
-  | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
-  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
-  | P_string_append [] -> string "\"\""
-  | P_string_append pats -> parens (separate_map (string " ^ ") doc_pat pats)
-  | P_struct (fpats, fwild) ->
-      let fpats = List.map (fun (field, pat) -> separate space [doc_id field; equals; doc_pat pat]) fpats in
-      let fwild = match fwild with FP_wild _ -> [string "_"] | FP_no_wild -> [] in
-      let fpats = fpats @ fwild in
-      separate space [string "struct"; lbrace; separate (comma ^^ space) fpats; rbrace]
+  let wrap, attrs_doc =
+    match get_attributes uannot with
+    | [] -> ((fun x -> x), empty)
+    | _ -> (parens, concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot))
+  in
+  let pat_doc =
+    match p_aux with
+    | P_id id -> doc_id id
+    | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
+    | P_not pat -> string "~" ^^ parens (doc_pat pat)
+    | P_tuple pats -> lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
+    | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
+    | P_lit lit -> doc_lit lit
+    (* P_var short form sugar *)
+    | P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)) when Id.compare (id_of_kid kid) id == 0 -> doc_kid kid
+    | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
+    | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
+    | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
+    | P_vector_subrange (id, n, m) ->
+        if Big_int.equal n m then doc_id id ^^ brackets (string (Big_int.to_string n))
+        else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
+    | P_wild -> string "_"
+    | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
+    | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
+    | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
+    | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
+    | P_string_append [] -> string "\"\""
+    | P_string_append pats -> parens (separate_map (string " ^ ") doc_pat pats)
+    | P_struct (fpats, fwild) ->
+        let fpats = List.map (fun (field, pat) -> separate space [doc_id field; equals; doc_pat pat]) fpats in
+        let fwild = match fwild with FP_wild _ -> [string "_"] | FP_no_wild -> [] in
+        let fpats = fpats @ fwild in
+        separate space [string "struct"; lbrace; separate (comma ^^ space) fpats; rbrace]
+  in
+  wrap (attrs_doc ^^ pat_doc)
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this

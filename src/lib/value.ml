@@ -591,6 +591,20 @@ let value_decimal_string_of_bits = function
   | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
   | _ -> failwith "value decimal_string_of_bits"
 
+let value_hex_str = function [v] -> V_string (Sail_lib.hex_str (coerce_int v)) | _ -> failwith "value hex_str"
+
+let value_hex_str_upper = function
+  | [v] -> V_string (Sail_lib.hex_str_upper (coerce_int v))
+  | _ -> failwith "value hex_str_upper"
+
+let value_valid_hex_bits = function
+  | [v1; v2] -> V_bool (Sail_lib.valid_hex_bits (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value valid_hex_bits"
+
+let value_parse_hex_bits = function
+  | [v1; v2] -> mk_vector (Sail_lib.parse_hex_bits (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value parse_hex_bits"
+
 let primops =
   ref
     (List.fold_left
@@ -732,6 +746,10 @@ let primops =
          ("string_length", value_string_length);
          ("string_startswith", value_string_startswith);
          ("string_drop", value_string_drop);
+         ("hex_str", value_hex_str);
+         ("hex_str_upper", value_hex_str_upper);
+         ("parse_hex_bits", value_parse_hex_bits);
+         ("valid_hex_bits", value_valid_hex_bits);
          ("skip", fun _ -> V_unit);
        ]
     )

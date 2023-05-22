@@ -186,6 +186,12 @@ void hex_str(sail_string *str, const mpz_t n)
   gmp_asprintf(str, "0x%Zx", n);
 }
 
+void hex_str_upper(sail_string *str, const mpz_t n)
+{
+  sail_free(*str);
+  gmp_asprintf(str, "0x%ZX", n);
+}
+
 bool eq_string(const sail_string str1, const sail_string str2)
 {
   return strcmp(str1, str2) == 0;
@@ -1600,6 +1606,42 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
 {
   sail_free(*str);
   gmp_asprintf(str, "%Z", *op.bits);
+}
+
+void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
+{
+  if (strncmp(hex, "0x", 2) != 0) {
+    printf("invalid prefix");
+    goto failure;
+  }
+
+  mpz_t value;
+  mpz_init(value);
+  if (mpz_set_str(value, hex + 2, 16) == 0) {
+    res->len = mpz_get_ui(n);
+    mpz_set(*res->bits, value);
+    return;
+  }
+
+  // On failure, we return a zero bitvector of the correct width
+failure:
+  res->len = mpz_get_ui(n);
+  mpz_set_ui(*res->bits, 0);
+}
+
+bool valid_hex_bits(const mpz_t n, const sail_string hex) {
+  if (strncmp(hex, "0x", 2) != 0) {
+    return false;
+  }
+
+  for (int i = 2; i < strlen(hex); i++) {
+    char c = hex[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void fprint_bits(const sail_string pre,

@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/issue243.sail[0m:17.70-72:
+17[96m |[0mmapping f_bits = { FE(struct { e1 = e1, v1 = v1 }) <-> e_pair_bits(e1,e1) @ v1 }
+  [91m |[0m                                                                      [91m^^[0m
+  [91m |[0m Duplicate binding for e1 in pattern
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/issue243.sail[0m:17.67-69:
+  [91m |[0m 17[96m |[0mmapping f_bits = { FE(struct { e1 = e1, v1 = v1 }) <-> e_pair_bits(e1,e1) @ v1 }
+  [91m |[0m   [91m |[0m                                                                   [91m^^[0m
+  [91m |[0m   [91m |[0m Previous binding of e1 here

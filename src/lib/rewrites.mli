@@ -92,8 +92,6 @@ val fresh_id : string -> l -> id
 (** Move loop termination measures into loop AST nodes *)
 val move_loop_measures : 'a ast -> 'a ast
 
-val pat_of_mpat : 'a mpat -> 'a pat
-
 (** Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> Env.t -> tannot ast -> tannot ast
 

@@ -1143,6 +1143,7 @@ let ocaml_compile default_sail_dir spec ast generator_types =
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then
     ignore (Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
+  List.iter (fun w -> output_string out_chan (Printf.sprintf "[@@@warning \"-%d\"]\n" w)) [8; 9; 11; 23; 26];
   ocaml_pp_ast out_chan ast generator_types;
   close_out out_chan;
   if IdSet.mem (mk_id "main") (val_spec_ids ast.defs) then begin

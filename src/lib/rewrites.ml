@@ -394,8 +394,8 @@ let remove_vector_concat_pat pat =
         | P_wild -> P_aux (P_wild, a)
         | P_app (id, pats) when Env.is_mapping id (env_of_annot a) -> P_aux (P_app (id, List.map aux pats), a)
         | _ ->
-            raise
-              (Reporting.err_unreachable l __POS__ "name_vector_concat_elements: Non-vector in vector-concat pattern")
+            Reporting.unreachable l __POS__
+              ("name_vector_concat_elements: Non-vector " ^ string_of_pat pat ^ " in vector-concat pattern")
       in
       P_vector_concat (List.map aux pats)
     in
@@ -3087,167 +3087,6 @@ let rewrite_ast_pat_string_append env =
 
   pexp_rewriters rewrite_pexp
 
-let mappingpatterns_counter = ref 0
-
-let fresh_mappingpatterns_id () =
-  let id = mk_id ("_mappingpatterns_" ^ string_of_int !mappingpatterns_counter ^ "#") in
-  mappingpatterns_counter := !mappingpatterns_counter + 1;
-  id
-
-let rewrite_ast_mapping_patterns env =
-  let rec rewrite_pat env (pat, guards, expr) =
-    let guards_ref = ref guards in
-    let expr_ref = ref expr in
-    let folder p =
-      let p, g, e = rewrite_pat env (p, !guards_ref, !expr_ref) in
-      guards_ref := g;
-      expr_ref := e;
-      p
-    in
-    let env = env_of_pat pat in
-    match pat with
-    (*
-          mapping(args) if g => expr ----> s# if mapping_matches(s#)
-                                                 & (if mapping_matches(s#) then let args = mapping(s#) in g)
-                                             => let args = mapping(s#) in expr
-
-          (plus 'infer the mapping type' shenanigans)
-       *)
-    | P_aux (P_app (mapping_id, arg_pats), p_annot) when Env.is_mapping mapping_id env ->
-        let mapping_in_typ = typ_of_annot p_annot in
-
-        let x = Env.get_val_spec mapping_id env in
-
-        let typ1, typ2 =
-          match x with
-          | _, Typ_aux (Typ_bidir (typ1, typ2), _) -> (typ1, typ2)
-          | _, typ ->
-              raise
-                (Reporting.err_unreachable (fst p_annot) __POS__
-                   ("Must be bi-directional mapping: " ^ string_of_typ typ)
-                )
-        in
-
-        let mapping_direction = if alpha_equivalent env mapping_in_typ typ1 then "forwards" else "backwards" in
-
-        let mapping_in_typ, mapping_out_typ = if mapping_direction = "backwards" then (typ1, typ2) else (typ2, typ1) in
-
-        let mapping_name = match mapping_id with Id_aux (Id id, _) | Id_aux (Operator id, _) -> id in
-
-        let mapping_matches_id = mk_id (mapping_name ^ "_" ^ mapping_direction ^ "_matches") in
-        let mapping_perform_id = mk_id (mapping_name ^ "_" ^ mapping_direction) in
-        let s_id = fresh_mappingpatterns_id () in
-
-        let s_exp = annot_exp (E_id s_id) unk env mapping_in_typ in
-        let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) unk env bool_typ in
-        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env mapping_out_typ in
-        let new_letbind, expr =
-          match arg_pats with
-          | [] -> assert false
-          | [arg_pat] ->
-              let arg_pat, _, expr = rewrite_pat env (arg_pat, [], expr) in
-              (LB_aux (LB_val (arg_pat, new_binding), unkt), expr)
-          | arg_pats ->
-              let checked_tup = annot_pat (P_tuple arg_pats) unk env mapping_in_typ in
-              (LB_aux (LB_val (checked_tup, new_binding), unkt), expr)
-        in
-
-        let new_let = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
-
-        let false_exp = annot_exp (E_lit (L_aux (L_false, unk))) unk env bool_typ in
-        let new_complete_guard =
-          match guards with
-          | [] -> new_guard
-          | _ ->
-              annot_exp
-                (E_if
-                   ( new_guard,
-                     annot_exp
-                       (E_let (new_letbind, annot_exp (E_typ (bool_typ, fold_typed_guards env guards)) unk env bool_typ))
-                       unk env bool_typ,
-                     false_exp
-                   )
-                )
-                unk env bool_typ
-        in
-
-        ( annot_pat (P_typ (mapping_out_typ, annot_pat (P_id s_id) unk env mapping_out_typ)) unk env mapping_out_typ,
-          [new_complete_guard],
-          new_let
-        )
-    | P_aux (P_as (inner_pat, inner_id), p_annot) ->
-        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
-        (P_aux (P_as (inner_pat, inner_id), p_annot), guards, expr)
-    | P_aux (P_typ (inner_typ, inner_pat), p_annot) ->
-        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
-        (P_aux (P_typ (inner_typ, inner_pat), p_annot), guards, expr)
-    | P_aux (P_var (inner_pat, typ_pat), p_annot) ->
-        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
-        (P_aux (P_var (inner_pat, typ_pat), p_annot), guards, expr)
-    | P_aux (P_vector pats, p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_vector pats, p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_vector_concat pats, p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_vector_concat pats, p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_tuple pats, p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_tuple pats, p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_list pats, p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_list pats, p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_app (f, pats), p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_app (f, pats), p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_string_append pats, p_annot) ->
-        let pats = List.map folder pats in
-        (P_aux (P_string_append pats, p_annot), !guards_ref, !expr_ref)
-    | P_aux (P_cons (pat1, pat2), p_annot) ->
-        let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
-        let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
-        (P_aux (P_cons (pat1, pat2), p_annot), guards, expr)
-    | P_aux (P_or (pat1, pat2), p_annot) ->
-        let pat1, guards, expr = rewrite_pat env (pat1, guards, expr) in
-        let pat2, guards, expr = rewrite_pat env (pat2, guards, expr) in
-        (P_aux (P_or (pat1, pat2), p_annot), guards, expr)
-    | P_aux (P_not p, p_annot) ->
-        let p', guards, expr = rewrite_pat env (p, guards, expr) in
-        (P_aux (P_not p', p_annot), guards, expr)
-    | P_aux (P_struct (fpats, fwild), p_annot) ->
-        let fpats, guards, expr =
-          List.fold_left
-            (fun (fpats, guards, exp) (field, pat) ->
-              let pat, guards, expr = rewrite_pat env (pat, guards, expr) in
-              ((field, pat) :: fpats, guards, expr)
-            )
-            ([], guards, expr) fpats
-        in
-        let fpats = List.rev fpats in
-        (P_aux (P_struct (fpats, fwild), p_annot), guards, expr)
-    | P_aux (P_id _, _) | P_aux (P_vector_subrange _, _) | P_aux (P_lit _, _) | P_aux (P_wild, _) -> (pat, guards, expr)
-  in
-
-  let rewrite_pexp (Pat_aux (pexp_aux, pexp_annot)) =
-    (* merge cases of Pat_exp and Pat_when *)
-    let (P_aux (p_aux, p_annot) as pat), guards, expr =
-      match pexp_aux with Pat_exp (pat, expr) -> (pat, [], expr) | Pat_when (pat, guard, expr) -> (pat, [guard], expr)
-    in
-
-    let env = env_of_annot p_annot in
-
-    let new_pat, new_guards, new_expr = rewrite_pat env (pat, guards, expr) in
-
-    (* un-merge Pat_exp and Pat_when cases *)
-    let new_pexp =
-      match new_guards with
-      | [] -> Pat_aux (Pat_exp (new_pat, new_expr), pexp_annot)
-      | gs -> Pat_aux (Pat_when (new_pat, fold_typed_guards env gs, new_expr), pexp_annot)
-    in
-    new_pexp
-  in
-
-  pexp_rewriters rewrite_pexp
-
 let rewrite_lit_lem (L_aux (lit, _)) =
   match lit with L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true | _ -> false
 
@@ -3873,23 +3712,6 @@ let merge_funcls env ast =
     | d -> d
   in
   { ast with defs = List.map merge_in_def ast.defs }
-
-let rec pat_of_mpat (MP_aux (mpat, annot)) =
-  match mpat with
-  | MP_lit lit -> P_aux (P_lit lit, annot)
-  | MP_id id -> P_aux (P_id id, annot)
-  | MP_app (id, args) -> P_aux (P_app (id, List.map pat_of_mpat args), annot)
-  | MP_vector mpats -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
-  | MP_vector_concat mpats -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
-  | MP_vector_subrange (id, n, m) -> P_aux (P_vector_subrange (id, n, m), annot)
-  | MP_tuple mpats -> P_aux (P_tuple (List.map pat_of_mpat mpats), annot)
-  | MP_list mpats -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
-  | MP_cons (mpat1, mpat2) -> P_aux (P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot)
-  | MP_string_append mpats -> P_aux (P_string_append (List.map pat_of_mpat mpats), annot)
-  | MP_typ (mpat, typ) -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
-  | MP_as (mpat, id) -> P_aux (P_as (pat_of_mpat mpat, id), annot)
-  | MP_struct fmpats ->
-      P_aux (P_struct (List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
 
 let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   let empty_vec = E_aux (E_vector [], (l, empty_uannot)) in
@@ -5142,7 +4964,7 @@ let all_rewriters =
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", Base_rewriter rewrite_ast_toplevel_string_append);
     ("pat_string_append", basic_rewriter rewrite_ast_pat_string_append);
-    ("mapping_builtins", basic_rewriter rewrite_ast_mapping_patterns);
+    ("mapping_patterns", basic_rewriter (fun _ -> Mappings.rewrite_ast));
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
     ("mono_rewrites", basic_rewriter mono_rewrites);
     ("complete_record_params", basic_rewriter rewrite_complete_record_params);
@@ -5218,7 +5040,7 @@ let rewrites_interpreter =
     ("realize_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
-    ("mapping_builtins", []);
+    ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
