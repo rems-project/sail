@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/issue244_2.sail[0m:10.30-37:
+10[96m |[0mmapping clause test = (0b000, zeros_3) <-> 0b000001
+  [91m |[0m                              [91m^-----^[0m
+  [91m |[0m Identifier zeros_3 found on left hand side of mapping, but not on right

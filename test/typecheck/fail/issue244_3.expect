@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/issue244_3.sail[0m:10.32-39:
+10[96m |[0mmapping clause test = (zeros_3, zeros_3) <-> 0b000010
+  [91m |[0m                                [91m^-----^[0m
+  [91m |[0m Duplicate binding for zeros_3 in pattern
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/issue244_3.sail[0m:10.23-30:
+  [91m |[0m 10[96m |[0mmapping clause test = (zeros_3, zeros_3) <-> 0b000010
+  [91m |[0m   [91m |[0m                       [91m^-----^[0m
+  [91m |[0m   [91m |[0m Previous binding of zeros_3 here
