@@ -1306,9 +1306,9 @@ let rewrite_fun_remove_bitvector_pat rewriters (FD_aux (FD_function (recopt, tan
           let pat, fguard, exp, pannot = destruct_pexp pexp in
           let pat, (guard, decls, _) = remove_bitvector_pat pat in
           let guard =
-            match (guard, fguard) with
-            | None, e | e, None -> e
-            | Some g, Some wh -> Some (bitwise_and_exp g (decls (rewriters.rewrite_exp rewriters wh)))
+            let guard = Option.map (rewriters.rewrite_exp rewriters) guard in
+            let fguard = Option.map (rewriters.rewrite_exp rewriters) fguard in
+            match (guard, fguard) with None, e | e, None -> e | Some g, Some wh -> Some (bitwise_and_exp g (decls wh))
           in
           let exp = decls (rewriters.rewrite_exp rewriters exp) in
           (* AA: Why can't this use pannot ? *)
@@ -1467,6 +1467,7 @@ let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r, t, funcls), (l, 
     | FCL_aux (FCL_funcl (id, pexp), fcl_annot) :: _ ->
         let clause (FCL_aux (FCL_funcl (_, pexp), annot)) =
           let pat, guard, exp, _ = destruct_pexp pexp in
+          let guard = Option.map (rewriters.rewrite_exp rewriters) guard in
           let exp = rewriters.rewrite_exp rewriters exp in
           (pat, guard, exp, annot)
         in
