@@ -219,7 +219,8 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
       raise (Reporting.err_unreachable l __POS__ "Internal return found before it should have been introduced")
   | E_internal_plet _ ->
       raise (Reporting.err_unreachable l __POS__ " Internal plet found before it should have been introduced")
-  | _ -> rewrap exp
+  | E_internal_assume (nc, exp) -> rewrap (E_internal_assume (nc, rewriters.rewrite_exp rewriters exp))
+  | E_ref _ | E_internal_value _ | E_constraint _ -> rewrap exp
 
 let rewrite_let rewriters (LB_aux (letbind, (l, annot))) =
   match letbind with
