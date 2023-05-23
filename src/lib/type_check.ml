@@ -3105,7 +3105,22 @@ let check_pattern_duplicates env pat =
                 )
           | None -> ()
         )
-        !subrange_ids
+        !subrange_ids;
+      !ids
+
+(* Test that the output of two calls to check pattern duplicates refer to the same identifiers *)
+let same_bindings env lhs rhs =
+  match Bindings.find_first_opt (fun id -> not (Bindings.mem id rhs)) lhs with
+  | Some (id, _) ->
+      typ_error env (id_loc id)
+        ("Identifier " ^ string_of_id id ^ " found on left hand side of mapping, but not on right")
+  | None -> (
+      match Bindings.find_first_opt (fun id -> not (Bindings.mem id lhs)) rhs with
+      | Some (id, _) ->
+          typ_error env (id_loc id)
+            ("Identifier " ^ string_of_id id ^ " found on right hand side of mapping, but not on left")
+      | None -> ()
+    )
 
 let bitvector_typ_from_range l env n m =
   let len, order =
@@ -3375,7 +3390,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       | LB_val ((P_aux (P_typ (ptyp, _), _) as pat), bind) ->
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
-          check_pattern_duplicates env pat;
+          ignore (check_pattern_duplicates env pat);
           let env = bind_pattern_vector_subranges pat env in
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp
@@ -3383,7 +3398,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
             (check_shadow_leaks l inner_env env typ)
       | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
-          check_pattern_duplicates env pat;
+          ignore (check_pattern_duplicates env pat);
           let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp
             (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
@@ -3659,7 +3674,7 @@ and check_block l env exps ret_typ =
 
 and check_case env pat_typ pexp typ =
   let pat, guard, case, ((l, _) as annot) = destruct_pexp pexp in
-  check_pattern_duplicates env pat;
+  ignore (check_pattern_duplicates env pat);
   let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
@@ -4811,7 +4826,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
             let inferred_bind = irule infer_exp env bind in
             (inferred_bind, pat, typ_of inferred_bind)
       in
-      check_pattern_duplicates env pat;
+      ignore (check_pattern_duplicates env pat);
       let tpat, inner_env = bind_pat_no_guard env pat ptyp in
       let inferred_exp = irule infer_exp inner_env exp in
       annot_exp
@@ -5445,10 +5460,11 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
       | MCL_bidir (mpexp1, mpexp2) -> begin
           let testing_env = Env.set_allow_unknowns true env in
           let left_mpat, _, _ = destruct_mpexp mpexp1 in
-          check_pattern_duplicates env (pat_of_mpat left_mpat);
+          let left_dups = check_pattern_duplicates env (pat_of_mpat left_mpat) in
           let _, left_id_env, _ = bind_mpat true Env.empty testing_env left_mpat typ1 in
           let right_mpat, _, _ = destruct_mpexp mpexp2 in
-          check_pattern_duplicates env (pat_of_mpat right_mpat);
+          let right_dups = check_pattern_duplicates env (pat_of_mpat right_mpat) in
+          same_bindings env left_dups right_dups;
           let _, right_id_env, _ = bind_mpat true Env.empty testing_env right_mpat typ2 in
 
           let typed_mpexp1 = check_mpexp right_id_env env mpexp1 typ1 in
@@ -5457,7 +5473,7 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
         end
       | MCL_forwards (mpexp, exp) -> begin
           let mpat, _, _ = destruct_mpexp mpexp in
-          check_pattern_duplicates env (pat_of_mpat mpat);
+          ignore (check_pattern_duplicates env (pat_of_mpat mpat));
           let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
           let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
           let typed_exp = check_exp mpat_env exp typ2 in
@@ -5465,7 +5481,7 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
         end
       | MCL_backwards (mpexp, exp) -> begin
           let mpat, _, _ = destruct_mpexp mpexp in
-          check_pattern_duplicates env (pat_of_mpat mpat);
+          ignore (check_pattern_duplicates env (pat_of_mpat mpat));
           let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
           let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
           let typed_exp = check_exp mpat_env exp typ1 in
