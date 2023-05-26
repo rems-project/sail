@@ -4501,23 +4501,23 @@ let minimise_recursive_functions env ast =
 
 (* Move recursive function termination measures into the function definitions. *)
 let move_termination_measures env ast =
-  let scan_for id defs =
-    let rec aux = function
-      | [] -> None
-      | DEF_aux (DEF_measure (id', pat, exp), _) :: t -> if Id.compare id id' == 0 then Some (pat, exp) else aux t
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_funcl (id', _), _) :: _), _)), _) :: _
-      | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id', _, _), _)), _) :: _
-        when Id.compare id id' == 0 ->
-          None
-      | _ :: t -> aux t
-    in
-    aux defs
+  let measures =
+    List.fold_left
+      (fun m def ->
+        match def with
+        | DEF_aux (DEF_measure (id, pat, exp), ann) ->
+            if Bindings.mem id m then
+              raise (Reporting.err_general ann.loc ("Second termination measure given for " ^ string_of_id id))
+            else Bindings.add id (pat, exp) m
+        | _ -> m
+      )
+      Bindings.empty ast.defs
   in
   let rec aux acc = function
     | [] -> List.rev acc
     | (DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) as d) :: t -> begin
         let id = match fs with [] -> assert false (* TODO *) | FCL_aux (FCL_funcl (id, _), _) :: _ -> id in
-        match scan_for id t with
+        match Bindings.find_opt id measures with
         | None -> aux (d :: acc) t
         | Some (pat, exp) ->
             let r = Rec_aux (Rec_measure (pat, exp), Generated l) in
