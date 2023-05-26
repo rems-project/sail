@@ -187,8 +187,13 @@ let is_enum env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 
 let rec fix_id avoid remove_tick name =
   match name with
-  | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try" | "match" | "with" | "check"
-  | "field" | "LT" | "GT" | "EQ" | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" ->
+  (* Coq keywords (from 8.17.0 manual) *)
+  | "Axiom" | "CoFixpoint" | "Definition" | "Fixpoint" | "Hypothesis" | "Parameter" | "Prop" | "SProp" | "Set"
+  | "Theorem" | "Type" | "Variable" | "as" | "at" | "cofix" | "else" | "end" | "fix" | "for" | "forall" | "fun" | "if"
+  | "in" | "let" | "match" | "return" | "then" | "where" | "with" | "by" | "exists" | "exists2" | "using"
+  (* other identifiers we shouldn't override *)
+  | "assert" | "lsl" | "lsr" | "asr" | "type" | "function" | "raise" | "try" | "check" | "field" | "LT" | "GT" | "EQ"
+  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" ->
       name ^ "'"
   | _ ->
       if StringSet.mem name avoid then name ^ "'"
