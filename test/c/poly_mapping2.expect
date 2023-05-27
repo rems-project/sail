@@ -1,0 +1,6 @@
+zero_int_bits_forwards 0x00000000
+zero_int_bits_backwards 4
+test1m 0b00111
+test1m 0b111
+test2m 0b00111
+test2m 0b111
