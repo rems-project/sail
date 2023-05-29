@@ -1239,6 +1239,36 @@ let is_prefix s s' =
   let l = String.length s in
   String.length s' >= l && String.sub s' 0 l = s
 
+(* If there's a type deep in a pattern then we extract it to put it in a cast.
+   For example, after
+     let (_, v : bits('n)) = <exp>;
+   we add
+     let v : bits('n) = v;
+   where v's annotation has the original type from <exp>.
+*)
+let rebind_cast_pattern_vars pat typ exp =
+  let rec aux pat typ =
+    match (pat, typ) with
+    | P_aux (P_typ (target_typ, P_aux (P_id id, (l, ann))), _), source_typ when not (is_enum (env_of exp) id) ->
+        if Typ.compare target_typ source_typ == 0 then []
+        else (
+          let l = Parse_ast.Generated l in
+          let cast_annot = Type_check.replace_typ source_typ ann in
+          let e_annot = Type_check.mk_tannot (env_of exp) source_typ in
+          [LB_aux (LB_val (pat, E_aux (E_id id, (l, e_annot))), (l, ann))]
+        )
+    | P_aux (P_tuple pats, _), Typ_aux (Typ_tuple typs, _) -> List.concat (List.map2 aux pats typs)
+    | _ -> []
+  in
+  let add_lb (E_aux (_, ann) as exp) lb = E_aux (E_let (lb, exp), ann) in
+  (* Don't introduce new bindings at the top-level, we'd just go into a loop. *)
+  let lbs =
+    match (pat, typ) with
+    | P_aux (P_tuple pats, _), Typ_aux (Typ_tuple typs, _) -> List.concat (List.map2 aux pats typs)
+    | _ -> []
+  in
+  List.fold_left add_lb exp lbs
+
 let merge_new_tyvars ctxt old_env pat new_env =
   let remove_binding id (m, r) =
     match Bindings.find_opt id r with
@@ -1404,10 +1434,11 @@ let doc_exp, doc_let =
       when Id.compare id1 id2 == 0 && Typ.compare (atom_typ (nvar kid1)) (typ_of_annot e_ann) == 0 ->
         top_exp ctxt aexp_needed exp2
     | E_let (leb, e) ->
-        let pat = match leb with LB_aux (LB_val (p, _), _) -> p in
+        let pat, lb_exp = match leb with LB_aux (LB_val (p, lbe), _) -> (p, lbe) in
         let () = debug ctxt (lazy ("Let with pattern " ^ string_of_pat pat)) in
         let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l, annot)) pat (env_of e) in
-        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
+        let e' = rebind_cast_pattern_vars pat (typ_of lb_exp) e in
+        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e' in
         if aexp_needed then parens epp else epp
     | E_app (f, args) ->
         let env = env_of full_exp in
