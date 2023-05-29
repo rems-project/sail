@@ -1395,6 +1395,14 @@ let doc_exp, doc_let =
     | E_for (id, exp1, exp2, exp3, Ord_aux (order, _), exp4) ->
         raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
+    (* Special case to catch rebinding (our extra vector monomorphisation in asl-to-sail
+       leaves "let 'VL = VL;" around), which would trigger our shadowed type detection. *)
+    | E_let
+        ( LB_aux (LB_val (P_aux (P_var (P_aux (P_id id1, _), TP_aux (TP_var kid1, _)), _), E_aux (E_id id2, e_ann)), _),
+          exp2
+        )
+      when Id.compare id1 id2 == 0 && Typ.compare (atom_typ (nvar kid1)) (typ_of_annot e_ann) == 0 ->
+        top_exp ctxt aexp_needed exp2
     | E_let (leb, e) ->
         let pat = match leb with LB_aux (LB_val (p, _), _) -> p in
         let () = debug ctxt (lazy ("Let with pattern " ^ string_of_pat pat)) in
