@@ -473,9 +473,10 @@ let fresh_kid ?(kid = mk_kid "") env =
   fresh
 
 let freshen_kid env kid (typq, typ) =
-  let fresh = fresh_kid ~kid env in
-  if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+  if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then (
+    let fresh = fresh_kid ~kid env in
     (typquant_subst_kid kid fresh typq, subst_kid typ_subst kid fresh typ)
+  )
   else (typq, typ)
 
 let freshen_bind env bind =
