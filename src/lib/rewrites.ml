@@ -4199,7 +4199,8 @@ module MakeExhaustive = struct
       match (ids, l) with
       | [], [] -> m
       | id :: ids, rp :: t ->
-          let m = aux ids (acc @ [rp]) t in
+          (* We don't need to keep the ordering inside acc *)
+          let m = aux ids (rp :: acc) t in
           Bindings.add id (acc @ t) m
       | _ -> assert false
     in
@@ -4217,12 +4218,17 @@ module MakeExhaustive = struct
     }
 
   let rec remove_clause_from_pattern ctx (P_aux (rm_pat, ann)) res_pat =
+    (* Remove the tuple rm_pats from the tuple of res_pats *)
     let subpats rm_pats res_pats =
+      (* Pointwise removal *)
       let res_pats' = List.map2 (remove_clause_from_pattern ctx) rm_pats res_pats in
+      (* Form the list of residual tuples by combining one position from the
+         pointwise removal with the original residual of the other positions. *)
       let rec aux acc fixed residual =
         match (fixed, residual) with
         | [], [] -> []
         | fh :: ft, rh :: rt ->
+            (* ... so order matters here *)
             let rt' = aux (acc @ [fh]) ft rt in
             let newr = List.map (fun x -> acc @ (x :: ft)) rh in
             newr @ rt'
@@ -4477,7 +4483,7 @@ module MakeExhaustive = struct
         rewrite_lexp;
         rewrite_fun;
         rewrite_def;
-        rewrite_ast = rewrite_ast_base;
+        rewrite_ast = rewrite_ast_base_progress "Make patterns exhaustive";
       }
 end
 
