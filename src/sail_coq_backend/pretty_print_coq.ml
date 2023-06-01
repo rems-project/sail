@@ -2114,7 +2114,8 @@ let doc_exp, doc_let =
                 )
               in
               let e1_pp = expY e1 in
-              let e2_pp = top_exp new_ctxt false e2 in
+              let e2' = rebind_cast_pattern_vars pat (typ_of e1) e2 in
+              let e2_pp = top_exp new_ctxt false e2' in
               infix 0 1 middle e1_pp e2_pp
             in
             if aexp_needed then parens (align epp) else epp
