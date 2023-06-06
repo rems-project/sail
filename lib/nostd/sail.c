@@ -2,6 +2,10 @@
 #include <sail_failure.h>
 #include <sail.h>
 
+#define ALIGN (sizeof(size_t))
+#define ONES ((size_t)-1/UCHAR_MAX)
+#define HIGHS (ONES * (UCHAR_MAX/2+1))
+#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
 
 /* ********************************************************************** */
 /* Sail strings                                                           */
@@ -31,13 +35,17 @@ void RECREATE(sail_string)(sail_string *str)
 
 size_t sail_strlen(const sail_string str)
 {
-     size_t i = 0;
-     while (true) {
-	  if (str[i] == '\0') {
-	       return i;
-	  }
-	  i++;
+     const char *a = s;
+     typedef size_t __attribute__((__may_alias__)) word;
+     const word *w;
+     for (; (uintptr_t) s % ALIGN; s++)  {
+         if (!*s) {
+             return s - a;
+         }
      }
+     for (w = (const void *)s; !HASZERO(*w); w++);
+     s = (const void *) w;
+     return s - a;
 }
 
 char *sail_strcpy(char *dest, const char *src)
