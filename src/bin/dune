@@ -93,6 +93,12 @@
   (%{workspace_root}/lib/isabelle/Hoare.thy as lib/isabelle/Hoare.thy)
   (%{workspace_root}/lib/isabelle/Makefile as lib/isabelle/Makefile)
   (%{workspace_root}/lib/isabelle/ROOT as lib/isabelle/ROOT)
+  (%{workspace_root}/lib/isabelle/Sail2_concurrency_interface_lemmas.thy
+   as
+   lib/isabelle/Sail2_concurrency_interface_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_monadic_combinators_lemmas.thy
+   as
+   lib/isabelle/Sail2_monadic_combinators_lemmas.thy)
   (%{workspace_root}/lib/isabelle/Sail2_operators_mwords_lemmas.thy
    as
    lib/isabelle/Sail2_operators_mwords_lemmas.thy)
@@ -108,6 +114,9 @@
   (%{workspace_root}/lib/isabelle/Sail2_values_lemmas.thy
    as
    lib/isabelle/Sail2_values_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Trace_Properties.thy
+   as
+   lib/isabelle/Trace_Properties.thy)
   (%{workspace_root}/lib/isabelle/document/root.tex
    as
    lib/isabelle/document/root.tex)
@@ -159,12 +168,18 @@
   (%{workspace_root}/lib/trace.sail as lib/trace.sail)
   (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
   (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface.lem
+   as
+   src/gen_lib/sail2_concurrency_interface.lem)
   (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem
    as
    src/gen_lib/sail2_deep_shallow_convert.lem)
   (%{workspace_root}/src/gen_lib/sail2_instr_kinds.lem
    as
    src/gen_lib/sail2_instr_kinds.lem)
+  (%{workspace_root}/src/gen_lib/sail2_monadic_combinators.lem
+   as
+   src/gen_lib/sail2_monadic_combinators.lem)
   (%{workspace_root}/src/gen_lib/sail2_operators.lem
    as
    src/gen_lib/sail2_operators.lem)
