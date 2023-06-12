@@ -23,13 +23,13 @@ type ex 'e =
   | Failure of string
   | Throw of 'e
 
-type result 'a 'e =
+type state_result 'a 'e =
   | Value of 'a
   | Ex of (ex 'e)
 
 (* State, nondeterminism and exception monad with result value type 'a
    and exception type 'e. *)
-type monadS 'regs 'a 'e = sequential_state 'regs -> set (result 'a 'e * sequential_state 'regs)
+type monadS 'regs 'a 'e = sequential_state 'regs -> set (state_result 'a 'e * sequential_state 'regs)
 
 val returnS : forall 'regs 'a 'e. 'a -> monadS 'regs 'a 'e
 let returnS a s = {(Value a,s)}
@@ -276,14 +276,14 @@ let update_reg_field_bit regfield i reg_val bit =
 let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)*)
 
 (* TODO Add Show typeclass for value and exception type *)
-val show_result : forall 'a 'e. result 'a 'e -> string
+val show_result : forall 'a 'e. state_result 'a 'e -> string
 let show_result = function
   | Value _ -> "Value ()"
   | Ex (Failure msg) -> "Failure " ^ msg
   | Ex (Throw _) -> "Throw"
 end
 
-val prerr_results : forall 'a 'e 's. SetType 's => set (result 'a 'e * 's) -> unit
+val prerr_results : forall 'a 'e 's. SetType 's => set (state_result 'a 'e * 's) -> unit
 let prerr_results rs =
   let _ = Set.map (fun (r, _) -> let _ = prerr_endline (show_result r) in ()) rs in
   ()

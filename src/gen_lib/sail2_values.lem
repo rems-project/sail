@@ -2,6 +2,7 @@ open import Pervasives_extra
 open import Machine_word
 (*open import Sail_impl_base*)
 
+type result 'a 'b = | Ok of ('a) | Err of ('b)
 
 type ii = integer
 type nn = natural

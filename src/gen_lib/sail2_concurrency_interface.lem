@@ -2,7 +2,6 @@ open import Pervasives_extra
 open import Sail2_values
 open import Sail2_string
 
-type result 'a 'b = | Ok of ('a) | Err of ('b)
 
 
 
@@ -22,26 +21,68 @@ type Access_kind 'arch_ak = | AK_explicit of (Explicit_access_kind) | AK_ifetch 
 
 
 
-(* TODO: Add conversions for some of the fields of the following two types
-   between machine words and bitlists; we use the latter in the monad below due to
-   a lack of support for variable/dependent bitvector lengths in Isabelle/HOL *)
-type Mem_read_request 'pa 'ts 'arch_ak =
+(* This is the type for read requests as Sail would generate, using
+   machine words.  We also define a version with bitlists below and a
+   conversion because we use the latter in the monad below due to a
+   lack of support for variable/dependent bitvector lengths in
+   Isabelle/HOL *)
+
+type Mem_read_request 'vasize 'pa 'ts 'arch_ak =
   <| Mem_read_request_access_kind : (Access_kind 'arch_ak);
-     Mem_read_request_va : maybe (list bitU);
+     Mem_read_request_va : maybe (mword 'vasize);
      Mem_read_request_pa : 'pa;
      Mem_read_request_translation : 'ts;
      Mem_read_request_size : integer;
      Mem_read_request_tag : bool; |>
+declare isabelle target_sorts Mem_read_request = `len` _ _ _
 
+type Mem_read_request_bl 'pa 'ts 'arch_ak =
+  <| Mem_read_request_bl_access_kind : (Access_kind 'arch_ak);
+     Mem_read_request_bl_va : maybe (list bitU);
+     Mem_read_request_bl_pa : 'pa;
+     Mem_read_request_bl_translation : 'ts;
+     Mem_read_request_bl_size : integer;
+     Mem_read_request_bl_tag : bool; |>
 
-type Mem_write_request 'pa 'ts 'arch_ak =
-  <| Mem_write_request_access_kind : (Access_kind 'arch_ak);
-     Mem_write_request_va : maybe (list bitU);
+val mem_read_request_to_bl : forall  'vasize 'pa 'ts 'arch_ak. Size 'vasize => Mem_read_request  'vasize 'pa 'ts 'arch_ak -> Mem_read_request_bl 'pa 'ts 'arch_ak
+let mem_read_request_to_bl req =
+  <| Mem_read_request_bl_access_kind = req.Mem_read_request_access_kind;
+     Mem_read_request_bl_va = Maybe.map bits_of req.Mem_read_request_va;
+     Mem_read_request_bl_pa = req.Mem_read_request_pa;
+     Mem_read_request_bl_translation = req.Mem_read_request_translation;
+     Mem_read_request_bl_size = req.Mem_read_request_size;
+     Mem_read_request_bl_tag = req.Mem_read_request_tag; |>
+
+(* Similarly, we have machine word and bitlist versions of write requests. *)
+
+type Mem_write_request 'vasize 'pa 'ts 'arch_ak 'p8_times_n =
+  <| Mem_write_request_access_kind : Access_kind 'arch_ak;
+     Mem_write_request_va : maybe (mword 'vasize);
      Mem_write_request_pa : 'pa;
      Mem_write_request_translation : 'ts;
      Mem_write_request_size : integer;
-     Mem_write_request_value : maybe (list bitU);
+     Mem_write_request_value : maybe (mword 'p8_times_n);
      Mem_write_request_tag : maybe bool; |>
+declare isabelle target_sorts Mem_write_request = `len` _ _ _ `len`
+
+type Mem_write_request_bl 'pa 'ts 'arch_ak =
+  <| Mem_write_request_bl_access_kind : (Access_kind 'arch_ak);
+     Mem_write_request_bl_va : maybe (list bitU);
+     Mem_write_request_bl_pa : 'pa;
+     Mem_write_request_bl_translation : 'ts;
+     Mem_write_request_bl_size : integer;
+     Mem_write_request_bl_value : maybe (list bitU);
+     Mem_write_request_bl_tag : maybe bool; |>
+
+val mem_write_request_to_bl : forall  'vasize 'pa 'ts 'arch_ak 'p8_times_n. Size 'vasize, Size 'p8_times_n => Mem_write_request 'vasize 'pa 'ts 'arch_ak 'p8_times_n -> Mem_write_request_bl 'pa 'ts 'arch_ak
+let mem_write_request_to_bl req =
+  <| Mem_write_request_bl_access_kind = req.Mem_write_request_access_kind;
+     Mem_write_request_bl_va = Maybe.map bits_of req.Mem_write_request_va;
+     Mem_write_request_bl_pa = req.Mem_write_request_pa;
+     Mem_write_request_bl_translation = req.Mem_write_request_translation;
+     Mem_write_request_bl_size = req.Mem_write_request_size;
+     Mem_write_request_bl_value = Maybe.map bits_of req.Mem_write_request_value;
+     Mem_write_request_bl_tag = req.Mem_write_request_tag; |>
 
 type Mem_write_announce_address 'pa =
   <| Mem_write_announce_address_pa : 'pa;
@@ -55,8 +96,8 @@ type monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'ar
   | Choose of string * ('regval -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
   | Read_reg of string * ('regval -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
   | Write_reg of string * 'regval * monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e
-  | Mem_read_request of Mem_read_request 'pa 'translation_summary 'arch_ak * (result (list bitU * maybe bool) 'abort -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
-  | Mem_write_request of Mem_write_request 'pa 'translation_summary 'arch_ak * (result (maybe bool) 'abort -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
+  | Mem_read_request of Mem_read_request_bl 'pa 'translation_summary 'arch_ak * (result (list bitU * maybe bool) 'abort -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
+  | Mem_write_request of Mem_write_request_bl 'pa 'translation_summary 'arch_ak * (result (maybe bool) 'abort -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e)
   | Mem_write_announce_address of Mem_write_announce_address 'pa * monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e
   | Branch_announce_address of (list bitU) * monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e
   | Barrier_request of 'barrier * monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'a 'e
@@ -69,8 +110,8 @@ type event 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'ar
   | E_choose of string * 'regval
   | E_read_reg of string * 'regval
   | E_write_reg of string * 'regval
-  | E_mem_read_request of Mem_read_request 'pa 'translation_summary 'arch_ak * result (list bitU * maybe bool) 'abort
-  | E_mem_write_request of Mem_write_request 'pa 'translation_summary 'arch_ak * result (maybe bool) 'abort
+  | E_mem_read_request of Mem_read_request_bl 'pa 'translation_summary 'arch_ak * result (list bitU * maybe bool) 'abort
+  | E_mem_write_request of Mem_write_request_bl 'pa 'translation_summary 'arch_ak * result (maybe bool) 'abort
   | E_mem_write_announce_address of Mem_write_announce_address 'pa
   | E_branch_announce_address of (list bitU)
   | E_barrier_request of 'barrier
@@ -239,8 +280,8 @@ let tailM = function
   | [] -> Fail "tailM"
 end
 
-val sail_mem_read : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'bv 'e. Bitvector 'bv =>
-  Mem_read_request 'pa 'translation_summary 'arch_ak ->
+val sail_mem_read : forall 'vasize 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'bv 'e. Size 'vasize, Bitvector 'bv =>
+  Mem_read_request 'vasize 'pa 'translation_summary 'arch_ak ->
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval (result ('bv * maybe bool) 'abort) 'e
 let sail_mem_read req =
   let k = function
@@ -251,12 +292,12 @@ let sail_mem_read req =
        end
     | Err e -> return (Err e)
   end in
-  Mem_read_request req k
+  Mem_read_request (mem_read_request_to_bl req) k
 
-val sail_mem_write : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e.
-  Mem_write_request 'pa 'translation_summary 'arch_ak ->
+val sail_mem_write : forall 'vasize 'valuesize 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e. Size 'vasize, Size 'valuesize =>
+  Mem_write_request 'vasize 'pa 'translation_summary 'arch_ak 'valuesize ->
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval (result (maybe bool) 'abort) 'e
-let sail_mem_write req = Mem_write_request req return
+let sail_mem_write req = Mem_write_request (mem_write_request_to_bl req) return
 
 val sail_mem_write_announce_address : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e.
   Mem_write_announce_address 'pa ->

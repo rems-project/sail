@@ -15,7 +15,7 @@ lemma bindS_ext_cong[fundef_cong]:
   assumes m: "m1 s = m2 s"
     and f: "\<And>a s'. (Value a, s') \<in> (m2 s) \<Longrightarrow> f1 a s' = f2 a s'"
   shows "bindS m1 f1 s = bindS m2 f2 s"
-  using assms unfolding bindS_def by (auto split: result.splits)
+  using assms unfolding bindS_def by (auto split: state_result.splits)
 
 lemma bindS_cong[fundef_cong]:
   assumes m: "m1 = m2"
@@ -27,7 +27,7 @@ lemma bindS_returnS_left[simp]: "bindS (returnS x) f = f x"
   by (auto simp add: bindS_def returnS_def)
 
 lemma bindS_returnS_right[simp]: "bindS m returnS = (m :: ('regs, 'a, 'e) monadS)"
-  by (intro ext) (auto simp: bindS_def returnS_def split: result.splits)
+  by (intro ext) (auto simp: bindS_def returnS_def split: state_result.splits)
 
 lemma bindS_readS: "bindS (readS f) m = (\<lambda>s. m (f s) s)"
   by (auto simp: bindS_def readS_def returnS_def)
@@ -42,7 +42,7 @@ lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x
   by (intro ext) (auto simp: bindS_def chooseS_def returnS_def)
 
 lemma result_cases:
-  fixes r :: "('a, 'e) result"
+  fixes r :: "('a, 'e) state_result"
   obtains (Value) a where "r = Value a"
   | (Throw) e where "r = Ex (Throw e)"
   | (Failure) msg where "r = Ex (Failure msg)"
@@ -51,7 +51,7 @@ proof (cases r)
 qed
 
 lemma result_state_cases:
-  fixes rs :: "('a, 'e) result \<times> 's"
+  fixes rs :: "('a, 'e) state_result \<times> 's"
   obtains (Value) a s where "rs = (Value a, s)"
   | (Throw) e s where "rs = (Ex (Throw e), s)"
   | (Failure) msg s where "rs = (Ex (Failure msg), s)"
@@ -84,7 +84,7 @@ lemma bindS_cases:
   obtains (Value) a a' s'' where "r = Value a" and "(Value a', s'') \<in> m s" and "(Value a, s') \<in> f a' s''"
   | (Ex_Left) e where "r = Ex e" and "(Ex e, s') \<in> m s"
   | (Ex_Right) e a s'' where "r = Ex e" and "(Value a, s'') \<in> m s" and "(Ex e, s') \<in> f a s''"
-  using assms by (cases r; auto simp: bindS_def split: result.splits)
+  using assms by (cases r; auto simp: bindS_def split: state_result.splits)
 
 lemma bindS_intros:
   "\<And>m f s a s' a' s''. (Value a', s'') \<in> m s \<Longrightarrow> (Value a, s') \<in> f a' s'' \<Longrightarrow> (Value a, s') \<in> bindS m f s"
@@ -126,7 +126,7 @@ lemma try_catchS_cases:
   | (Fail) msg where "r = Ex (Failure msg)" and "(Ex (Failure msg), s') \<in> m s"
   | (h) e s'' where "(Ex (Throw e), s'') \<in> m s" and "(r, s') \<in> h e s''"
   using assms
-  by (cases r rule: result_cases) (auto simp: try_catchS_def returnS_def split: result.splits ex.splits)
+  by (cases r rule: result_cases) (auto simp: try_catchS_def returnS_def split: state_result.splits ex.splits)
 
 lemma try_catchS_intros:
   "\<And>m h s a s'. (Value a, s') \<in> m s \<Longrightarrow> (Value a, s') \<in> try_catchS m h s"
@@ -141,7 +141,7 @@ lemma no_Ex_basic_builtins[simp]:
   "\<And>s e s' xs. (Ex e, s') \<in> chooseS xs s \<longleftrightarrow> False"
   by (auto simp: readS_def updateS_def returnS_def chooseS_def)
 
-fun ignore_throw_aux :: "(('a, 'e1) result \<times> 's) \<Rightarrow> (('a, 'e2) result \<times> 's) set" where
+fun ignore_throw_aux :: "(('a, 'e1) state_result \<times> 's) \<Rightarrow> (('a, 'e2) state_result \<times> 's) set" where
   "ignore_throw_aux (Value a, s') = {(Value a, s')}"
 | "ignore_throw_aux (Ex (Throw e), s') = {}"
 | "ignore_throw_aux (Ex (Failure msg), s') = {(Ex (Failure msg), s')}"

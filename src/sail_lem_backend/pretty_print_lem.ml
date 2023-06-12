@@ -81,6 +81,7 @@ open Pretty_print_common
 ****************************************************************************)
 
 let opt_sequential = ref false
+let opt_extern_types : string list ref = ref []
 
 let prefix_recordtype = true
 
@@ -1807,7 +1808,9 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
+  | DEF_type t_def ->
+      if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types then empty
+      else group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
   | DEF_register dec -> group (doc_dec_lem dec)
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
@@ -1829,7 +1832,8 @@ let find_exc_typ defs =
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env { defs; _ } top_line =
+let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env { defs; _ }
+    concurrency_monad_params top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids = State.generate_regstate_defs type_env defs |> val_spec_ids in
   let is_state_def = function
@@ -1846,6 +1850,11 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
     string " : register_ref regstate register_value " ^^ parens (doc_typ_lem params_to_print type_env typ)
   in
   let register_refs = State.register_refs_lem register_ref_tannot type_env (State.find_registers defs) in
+  let extra_monad_params =
+    match concurrency_monad_params with
+    | None -> empty
+    | Some params -> space ^^ separate_map space (doc_typ_lem_brackets params_to_print type_env) params
+  in
   (print types_file)
     (concat
        [
@@ -1880,12 +1889,12 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
          hardline;
          register_refs;
          hardline;
-         (* TODO: Support for new concurrency interface *)
          concat
            [
-             string ("type MR 'a 'r = base_monadR register_value regstate 'a 'r " ^ exc_typ);
+             string "type MR 'a 'r = base_monadR" ^^ extra_monad_params
+             ^^ string (" register_value regstate 'a 'r " ^ exc_typ);
              hardline;
-             string ("type M 'a = base_monad register_value regstate 'a " ^ exc_typ);
+             string "type M 'a = base_monad" ^^ extra_monad_params ^^ string (" register_value regstate 'a " ^ exc_typ);
              hardline;
            ];
        ]

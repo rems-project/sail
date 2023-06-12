@@ -13,7 +13,7 @@ subsection \<open>Hoare triples\<close>
 
 type_synonym 'regs predS = "'regs sequential_state \<Rightarrow> bool"
 
-definition PrePost :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> (('a, 'e) result \<Rightarrow> 'regs predS) \<Rightarrow> bool" ("\<lbrace>_\<rbrace> _ \<lbrace>_\<rbrace>")
+definition PrePost :: "'regs predS \<Rightarrow> ('regs, 'a, 'e) monadS \<Rightarrow> (('a, 'e) state_result \<Rightarrow> 'regs predS) \<Rightarrow> bool" ("\<lbrace>_\<rbrace> _ \<lbrace>_\<rbrace>")
   where "PrePost P f Q \<equiv> (\<forall>s. P s \<longrightarrow> (\<forall>(r, s') \<in> f s. Q r s'))"
 
 lemma PrePostI:
@@ -151,7 +151,7 @@ proof (rule PrePost_bindS)
     using r by auto
 next
   show "PrePost P l (\<lambda>r. case r of Value a \<Rightarrow> if a then R else Q (Value False) | Ex e \<Rightarrow> Q (Ex e))"
-    using l by (elim PrePost_weaken_post) (auto split: result.splits)
+    using l by (elim PrePost_weaken_post) (auto split: state_result.splits)
 qed
 
 lemma PrePost_or_boolS[PrePost_compositeI]:
@@ -166,7 +166,7 @@ proof (rule PrePost_bindS)
     using r by auto
 next
   show "PrePost P l (\<lambda>r. case r of Value a \<Rightarrow> if a then Q (Value True) else R | Ex e \<Rightarrow> Q (Ex e))"
-    using l by (elim PrePost_weaken_post) (auto split: result.splits)
+    using l by (elim PrePost_weaken_post) (auto split: state_result.splits)
 qed
 
 lemma PrePost_assert_expS[intro, PrePost_atomI]: "PrePost (if c then P (Value ()) else P (Ex (Failure m))) (assert_expS c m) P"
@@ -180,7 +180,7 @@ lemma PrePost_failS[intro, PrePost_atomI]: "PrePost (Q (Ex (Failure msg))) (fail
 
 lemma case_result_combine[simp]:
   "(case r of Value a \<Rightarrow> Q (Value a) | Ex e \<Rightarrow> Q (Ex e)) = Q r"
-  by (auto split: result.splits)
+  by (auto split: state_result.splits)
 
 lemma PrePost_foreachS_Nil[intro, simp, PrePost_atomI]:
   "PrePost (Q (Value vars)) (foreachS [] vars body) Q"
@@ -202,7 +202,7 @@ proof (use assms in \<open>induction xs arbitrary: vars\<close>)
     fix vars'
     show "PrePost (Q (Value vars')) (foreachS xs vars' body) Q"
       using Cons by auto
-    show "PrePost (Q (Value vars)) (body x vars) (\<lambda>r. case r of Value a \<Rightarrow> Q (Value a) | result.Ex e \<Rightarrow> Q (result.Ex e))"
+    show "PrePost (Q (Value vars)) (body x vars) (\<lambda>r. case r of Value a \<Rightarrow> Q (Value a) | state_result.Ex e \<Rightarrow> Q (state_result.Ex e))"
       unfolding case_result_combine
       using Cons by auto
   qed
@@ -228,7 +228,7 @@ lemma PrePostE_I[case_names Val Err]:
   assumes "\<And>s a s'. P s \<Longrightarrow> (Value a, s') \<in> f s \<Longrightarrow> Q a s'"
     and "\<And>s e s'. P s \<Longrightarrow> (Ex e, s') \<in> f s \<Longrightarrow> E e s'"
   shows "PrePostE P f Q E"
-  using assms unfolding PrePostE_def by (intro PrePostI) (auto split: result.splits)
+  using assms unfolding PrePostE_def by (intro PrePostI) (auto split: state_result.splits)
 
 lemma PrePostE_PrePost:
   assumes "PrePost P m (\<lambda>v. case v of Value a \<Rightarrow> Q a | Ex e \<Rightarrow> E e)"
@@ -246,7 +246,7 @@ lemma PrePostE_consequence:
   assumes "PrePostE A f B C"
     and "\<And>s. P s \<Longrightarrow> A s" and "\<And>v s. B v s \<Longrightarrow> Q v s" and "\<And>e s. C e s \<Longrightarrow> E e s"
   shows "PrePostE P f Q E"
-  using assms unfolding PrePostE_def by (auto elim: PrePost_consequence split: result.splits)
+  using assms unfolding PrePostE_def by (auto elim: PrePost_consequence split: state_result.splits)
 
 lemma PrePostE_strengthen_pre:
   assumes "PrePostE R f Q E" and "\<And>s. P s \<Longrightarrow> R s"
@@ -280,11 +280,11 @@ lemma PrePostE_cong:
     and "\<And>e s. E1 e s \<longleftrightarrow> E2 e s"
   shows "PrePostE P1 m1 Q1 E1 \<longleftrightarrow> PrePostE P2 m2 Q2 E2"
   using assms unfolding PrePostE_def PrePost_def
-  by (auto split: result.splits)
+  by (auto split: state_result.splits)
 
 lemma PrePostE_True_post[PrePostE_atomI, intro, simp]:
   "PrePostE P m (\<lambda>_ _. True) (\<lambda>_ _. True)"
-  unfolding PrePost_defs by (auto split: result.splits)
+  unfolding PrePost_defs by (auto split: state_result.splits)
 
 lemma PrePostE_any: "PrePostE (\<lambda>s. \<forall>(r, s') \<in> m s. case r of Value a \<Rightarrow> Q a s' | Ex e \<Rightarrow> E e s') m Q E"
   by (intro PrePostE_I) auto
@@ -298,7 +298,7 @@ lemma PrePostE_bindS[intro, PrePostE_compositeI]:
     and m: "PrePostE P m R E"
   shows "PrePostE P (bindS m f) Q E"
   using assms
-  by (fastforce simp: PrePostE_def cong: result.case_cong)
+  by (fastforce simp: PrePostE_def cong: state_result.case_cong)
 
 lemma PrePostE_bindS_ignore:
   assumes f: "PrePostE R f Q E"
@@ -372,14 +372,14 @@ lemma PrePostE_and_boolS[PrePostE_compositeI]:
     and l: "PrePostE P l (\<lambda>r. if r then R else Q False) E"
   shows "PrePostE P (and_boolS l r) Q E"
   using assms unfolding PrePostE_def
-  by (intro PrePost_and_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
+  by (intro PrePost_and_boolS) (auto elim: PrePost_weaken_post split: if_splits state_result.splits)
 
 lemma PrePostE_or_boolS[PrePostE_compositeI]:
   assumes r: "PrePostE R r Q E"
     and l: "PrePostE P l (\<lambda>r. if r then Q True else R) E"
   shows "PrePostE P (or_boolS l r) Q E"
   using assms unfolding PrePostE_def
-  by (intro PrePost_or_boolS) (auto elim: PrePost_weaken_post split: if_splits result.splits)
+  by (intro PrePost_or_boolS) (auto elim: PrePost_weaken_post split: if_splits state_result.splits)
 
 lemma PrePostE_assert_expS[PrePostE_atomI, intro]:
   "PrePostE (if c then P () else Q (Failure m)) (assert_expS c m) P Q"
@@ -411,7 +411,7 @@ lemma PrePostE_try_catchS[PrePostE_compositeI]:
 proof (intro PrePostI)
   fix s r s'
   assume "(r, s') \<in> try_catchS m h s" and P: "P s"
-  then show "(case r of Value a \<Rightarrow> Q a | result.Ex e \<Rightarrow> E e) s'" using m
+  then show "(case r of Value a \<Rightarrow> Q a | state_result.Ex e \<Rightarrow> E e) s'" using m
   proof (cases rule: try_catchS_cases)
     case (h e s'')
     then have "Ph e s''" using P m by (auto elim!: PrePostE_elim)
@@ -455,7 +455,7 @@ proof (unfold PrePostE_def, rule PrePostI)
   fix s r s'
   assume Inv_s: "Inv Q vars s" and r: "(r, s') \<in> untilS vars cond body s"
   with dom[OF Inv_s] cond body
-  show "(case r of Value a \<Rightarrow> Q a | result.Ex e \<Rightarrow> E e) s'"
+  show "(case r of Value a \<Rightarrow> Q a | state_result.Ex e \<Rightarrow> E e) s'"
   proof (induction vars cond body s rule: untilS.pinduct[case_names Step])
     case (Step vars cond body s)
     consider
