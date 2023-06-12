@@ -424,7 +424,7 @@ let register_refs_lem pp_tannot env registers =
               (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)")
           )
     )
-      else (idd, doc_op equals idd (string "v"))
+      else (string "s." ^^ idd, doc_op equals idd (string "v"))
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem typ in
