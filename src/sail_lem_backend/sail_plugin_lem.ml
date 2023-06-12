@@ -90,6 +90,10 @@ let lem_options =
     );
     ("-lem_sequential", Arg.Set Pretty_print_lem.opt_sequential, " use sequential state monad for Lem output");
     ("-lem_mwords", Arg.Set Monomorphise.opt_mwords, " use native machine word library for Lem output");
+    ( "-lem_extern_type",
+      Arg.String Pretty_print_lem.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
+      "<type name> do not generate a definition for the type"
+    );
   ]
 
 let lem_rewrites =
@@ -156,8 +160,11 @@ let output_lem filename libs effect_info type_env ast =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = filename ^ "_types" in
-  (* TODO: Support both old monad and new concurrency interface *)
-  let monad_modules = ["Sail2_concurrency_interface"; "Sail2_monadic_combinators"] in
+  let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
+  let monad_modules =
+    if Option.is_some concurrency_monad_params then ["Sail2_concurrency_interface"; "Sail2_monadic_combinators"]
+    else ["Sail2_prompt_monad"; "Sail2_prompt"]
+  in
   let undefined_modules = if !Initial_check.opt_undefined_gen then ["Sail2_undefined"] else [] in
   let operators_module = if !Monomorphise.opt_mwords then "Sail2_operators_mwords" else "Sail2_operators_bitlists" in
   (* let libs = List.map (fun lib -> lib ^ seq_suffix) libs in *)
@@ -188,7 +195,7 @@ let output_lem filename libs effect_info type_env ast =
   let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted !opt_lem_output_dir (filename ^ ".lem") in
   Pretty_print_lem.pp_ast_lem (ot, base_imports)
     (o, base_imports @ (String.capitalize_ascii types_module :: libs))
-    effect_info type_env ast generated_line;
+    effect_info type_env ast concurrency_monad_params generated_line;
   Util.close_output_with_check ext_ot;
   Util.close_output_with_check ext_o;
   let ((ol, _, _, _) as ext_ol) = Util.open_output_with_check_unformatted !opt_isa_output_dir (isa_thy_name ^ ".thy") in

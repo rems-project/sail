@@ -183,14 +183,14 @@ lemma liftRS_bindS:
   fixes m :: "('regs, 'a, 'e) monadS" and f :: "'a \<Rightarrow> ('regs, 'b, 'e) monadS"
   shows "(liftRS (bindS m f) :: ('regs, 'b, 'r, 'e) monadRS) = bindS (liftRS m) (liftRS \<circ> f)"
 proof (intro ext set_eqI iffI)
-  fix s and rs' :: "('b, 'r + 'e) result \<times> 'regs sequential_state"
+  fix s and rs' :: "('b, 'r + 'e) state_result \<times> 'regs sequential_state"
   assume lhs: "rs' \<in> liftRS (bindS m f) s"
   then show "rs' \<in> bindS (liftRS m) (liftRS \<circ> f) s"
     by (cases rs')
        (fastforce simp: liftRS_def throwS_def elim!: bindS_cases try_catchS_cases
                   intro: bindS_intros try_catchS_intros)
 next
-  fix s and rs' :: "('b, 'r + 'e) result \<times> 'regs sequential_state"
+  fix s and rs' :: "('b, 'r + 'e) state_result \<times> 'regs sequential_state"
   assume "rs' \<in> bindS (liftRS m) (liftRS \<circ> f) s"
   then show "rs' \<in> liftRS (bindS m f) s"
     by (cases rs')

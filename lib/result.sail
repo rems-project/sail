@@ -75,6 +75,7 @@ $include <option.sail>
 // Like the option type, the result type may also be treated specially
 // by various Sail backends.
 
+$option -lem_extern_type result
 union result('a : Type, 'b : Type) = {
     Ok : 'a,
     Err : 'b

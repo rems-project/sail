@@ -72,23 +72,27 @@ $define _CONCURRENCY_INTERFACE_READ_WRITE
 
 $include <concurrency_interface/common.sail>
 
+$option -lem_extern_type Access_variety
 enum Access_variety = {
   AV_plain,
   AV_exclusive,
   AV_atomic_rmw
 }
 
+$option -lem_extern_type Access_strength
 enum Access_strength = {
   AS_normal,
   AS_rel_or_acq, // Release or acquire
   AS_acq_rcpc // Release-consistency with processor consistency
 }
 
+$option -lem_extern_type Explicit_access_kind
 struct Explicit_access_kind = {
   variety : Access_variety,
   strength : Access_strength
 }
 
+$option -lem_extern_type Access_kind
 union Access_kind('arch_ak : Type) = {
   AK_explicit: Explicit_access_kind,
   AK_ifetch : unit, // Instruction fetch
@@ -96,6 +100,7 @@ union Access_kind('arch_ak : Type) = {
   AK_arch : 'arch_ak // Architecture specific type of access
 }
 
+$option -lem_extern_type Mem_read_request
 struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                         'arch_ak: Type), 'n > 0 = {
   access_kind : Access_kind('arch_ak),
@@ -190,6 +195,7 @@ with
     }
 }
 
+$option -lem_extern_type Mem_write_request
 struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                          'arch_ak : Type), 'n > 0 = {
   access_kind : Access_kind('arch_ak),
