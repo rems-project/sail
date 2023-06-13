@@ -161,7 +161,7 @@ void RECREATE(sail_string)(sail_string *str)
 void COPY(sail_string)(sail_string *str1, const sail_string str2)
 {
   size_t len = strlen(str2);
-  *str1 = realloc(*str1, len + 1);
+  *str1 = (sail_string)realloc(*str1, len + 1);
   *str1 = strcpy(*str1, str2);
 }
 
@@ -202,7 +202,7 @@ void undefined_string(sail_string *str, const unit u) {}
 
 void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
 {
-  *stro = realloc(*stro, strlen(str1) + strlen(str2) + 1);
+  *stro = (sail_string)realloc(*stro, strlen(str1) + strlen(str2) + 1);
   (*stro)[0] = '\0';
   strcat(*stro, str1);
   strcat(*stro, str2);
@@ -223,11 +223,11 @@ void string_drop(sail_string *dst, sail_string s, sail_int ns)
   size_t len = strlen(s);
   mach_int n = CREATE_OF(mach_int, sail_int)(ns);
   if (len >= n) {
-    *dst = realloc(*dst, (len - n) + 1);
+    *dst = (sail_string)realloc(*dst, (len - n) + 1);
     memcpy(*dst, s + n, len - n);
     (*dst)[len - n] = '\0';
   } else {
-    *dst = realloc(*dst, 1);
+    *dst = (sail_string)realloc(*dst, 1);
     **dst = '\0';
   }
 }
@@ -242,7 +242,7 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
   } else {
     to_copy = n;
   }
-  *dst = realloc(*dst, to_copy + 1);
+  *dst = (sail_string)realloc(*dst, to_copy + 1);
   memcpy(*dst, s, to_copy);
   (*dst)[to_copy] = '\0';
 }
@@ -541,7 +541,7 @@ bool EQUAL(ref_fbits)(const fbits *op1, const fbits *op2)
 
 void CREATE(lbits)(lbits *rop)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = 0;
   mpz_init(*rop->bits);
 }
@@ -566,7 +566,7 @@ void KILL(lbits)(lbits *rop)
 
 void CREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len, const bool direction)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = len;
   mpz_init_set_ui(*rop->bits, op);
 }
@@ -600,7 +600,7 @@ void RECREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len
 
 void CREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = op.len;
   mpz_init_set_ui(*rop->bits, op.bits);
 }
@@ -1653,7 +1653,7 @@ void fprint_bits(const sail_string pre,
     mpz_t buf;
     mpz_init_set(buf, *op.bits);
 
-    char *hex = sail_malloc((op.len / 4) * sizeof(char));
+    char *hex = (char *)sail_malloc((op.len / 4) * sizeof(char));
 
     for (int i = 0; i < op.len / 4; ++i) {
       char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);

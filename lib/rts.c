@@ -163,9 +163,9 @@ void write_mem(uint64_t address, uint64_t byte)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  struct block *new_block = malloc(sizeof(struct block));
+  struct block *new_block = (struct block *)malloc(sizeof(struct block));
   new_block->block_id = mask;
-  new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
+  new_block->mem = (uint8_t *)calloc(MASK + 1, sizeof(uint8_t));
   new_block->mem[offset] = (uint8_t) byte;
   new_block->next = sail_memory;
   sail_memory = new_block;
@@ -209,9 +209,9 @@ unit write_tag_bool(const uint64_t address, const bool tag)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  struct tag_block *new_block = malloc(sizeof(struct tag_block));
+  struct tag_block *new_block = (struct tag_block *)malloc(sizeof(struct tag_block));
   new_block->block_id = mask;
-  new_block->mem = calloc(MASK + 1, sizeof(bool));
+  new_block->mem = (bool *)calloc(MASK + 1, sizeof(bool));
   new_block->mem[offset] = tag;
   new_block->next = sail_tags;
   sail_tags = new_block;
