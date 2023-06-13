@@ -1611,7 +1611,6 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
 void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
 {
   if (strncmp(hex, "0x", 2) != 0) {
-    printf("invalid prefix");
     goto failure;
   }
 
@@ -1620,8 +1619,10 @@ void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
   if (mpz_set_str(value, hex + 2, 16) == 0) {
     res->len = mpz_get_ui(n);
     mpz_set(*res->bits, value);
+    mpz_clear(value);
     return;
   }
+  mpz_clear(value);
 
   // On failure, we return a zero bitvector of the correct width
 failure:
