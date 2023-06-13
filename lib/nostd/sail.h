@@ -99,15 +99,16 @@ static inline bool UNDEFINED(bool)(const unit u)
  * Sail strings are just C strings.
  */
 typedef char *sail_string;
+typedef const char *const_sail_string;
 
 SAIL_BUILTIN_TYPE(sail_string)
 
 void undefined_string(sail_string *str, const unit u);
 
-bool eq_string(const sail_string, const sail_string);
-bool EQUAL(sail_string)(const sail_string, const sail_string);
+bool eq_string(const_sail_string, const_sail_string);
+bool EQUAL(sail_string)(const_sail_string, const_sail_string);
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2);
+void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2);
 bool string_startswith(sail_string s, sail_string prefix);
 
 /* ********************************************************************** */
@@ -163,11 +164,11 @@ static inline uint64_t sail_int_get_ui(const sail_int op)
 #endif
 
 SAIL_INT_FUNCTION(CREATE_OF(sail_int, mach_int), const mach_int);
-SAIL_INT_FUNCTION(CREATE_OF(sail_int, sail_string), const sail_string);
+SAIL_INT_FUNCTION(CREATE_OF(sail_int, sail_string), const_sail_string);
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
 
 SAIL_INT_FUNCTION(CONVERT_OF(sail_int, mach_int), const mach_int);
-SAIL_INT_FUNCTION(CONVERT_OF(sail_int, sail_string), const sail_string);
+SAIL_INT_FUNCTION(CONVERT_OF(sail_int, sail_string), const_sail_string);
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
 
 /*
@@ -361,8 +362,8 @@ typedef mpq_t real;
 
 SAIL_BUILTIN_TYPE(real)
 
-void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
-void CONVERT_OF(real, sail_string)(real *rop, const sail_string op);
+void CREATE_OF(real, sail_string)(real *rop, const_sail_string op);
+void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op);
 
 void UNDEFINED(real)(real *rop, unit u);
 

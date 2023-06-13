@@ -297,7 +297,7 @@ void read_ram(lbits *data,
   }
 }
 
-unit load_raw(fbits addr, const sail_string file)
+unit load_raw(fbits addr, const_sail_string file)
 {
   FILE *fp = fopen(file, "r");
 

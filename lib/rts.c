@@ -386,7 +386,7 @@ unit platform_barrier()
 }
 
 
-unit load_raw(fbits addr, const sail_string file)
+unit load_raw(fbits addr, const_sail_string file)
 {
   FILE *fp = fopen(file, "r");
 
@@ -472,7 +472,7 @@ void trace_unit(const unit u) {
   if (g_trace_enabled) fputs("()", stderr);
 }
 
-void trace_sail_string(const sail_string str) {
+void trace_sail_string(const_sail_string str) {
   if (g_trace_enabled) fputs(str, stderr);
 }
 

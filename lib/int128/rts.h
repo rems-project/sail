@@ -71,7 +71,7 @@ sbits fast_read_ram(const int64_t data_size,
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 
-unit load_raw(fbits addr, const sail_string file);
+unit load_raw(fbits addr, const_sail_string file);
 
 void load_image(char *);
 

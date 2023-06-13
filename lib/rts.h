@@ -147,7 +147,7 @@ unit platform_barrier();
 
 
 
-unit load_raw(fbits addr, const sail_string file);
+unit load_raw(fbits addr, const_sail_string file);
 
 void load_image(char *);
 
@@ -184,7 +184,7 @@ bool is_tracing(const unit);
 void trace_sail_int(const sail_int);
 void trace_bool(const bool);
 void trace_unit(const unit);
-void trace_sail_string(const sail_string);
+void trace_sail_string(const_sail_string);
 void trace_fbits(const fbits);
 void trace_lbits(const lbits);
 

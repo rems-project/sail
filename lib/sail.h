@@ -145,6 +145,7 @@ bool UNDEFINED(bool)(const unit);
  * Sail strings are just C strings.
  */
 typedef char *sail_string;
+typedef const char *const_sail_string;
 
 SAIL_BUILTIN_TYPE(sail_string)
 
@@ -154,10 +155,10 @@ void hex_str_upper(sail_string *str, const mpz_t n);
 
 void undefined_string(sail_string *str, const unit u);
 
-bool eq_string(const sail_string, const sail_string);
-bool EQUAL(sail_string)(const sail_string, const sail_string);
+bool eq_string(const_sail_string, const_sail_string);
+bool EQUAL(sail_string)(const_sail_string, const_sail_string);
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2);
+void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2);
 bool string_startswith(sail_string s, sail_string prefix);
 
                        
@@ -180,10 +181,10 @@ void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
 
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
 
-void CREATE_OF(sail_int, sail_string)(sail_int *, const sail_string);
-void RECREATE_OF(sail_int, sail_string)(mpz_t *, const sail_string);
+void CREATE_OF(sail_int, sail_string)(sail_int *, const_sail_string);
+void RECREATE_OF(sail_int, sail_string)(mpz_t *, const_sail_string);
 
-void CONVERT_OF(sail_int, sail_string)(sail_int *, const sail_string);
+void CONVERT_OF(sail_int, sail_string)(sail_int *, const_sail_string);
 
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
 void CONVERT_OF(sail_int, mach_int)(sail_int *, const mach_int);
@@ -439,8 +440,8 @@ typedef mpq_t real;
 
 SAIL_BUILTIN_TYPE(real)
 
-void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
-void CONVERT_OF(real, sail_string)(real *rop, const sail_string op);
+void CREATE_OF(real, sail_string)(real *rop, const_sail_string op);
+void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op);
 
 void UNDEFINED(real)(real *rop, unit u);
 
@@ -468,8 +469,8 @@ bool gteq_real(const real op1, const real op2);
 
 void real_power(real *rop, const real base, const sail_int exp);
 
-unit print_real(const sail_string, const real);
-unit prerr_real(const sail_string, const real);
+unit print_real(const_sail_string, const real);
+unit prerr_real(const_sail_string, const real);
 
 void random_real(real *rop, unit);
 
@@ -490,29 +491,29 @@ void decimal_string_of_fbits(sail_string *str, const fbits op);
 
 /* ***** Mapping support ***** */
 
-void parse_hex_bits(lbits *stro, const mpz_t n, const sail_string str);
+void parse_hex_bits(lbits *stro, const mpz_t n, const_sail_string str);
 
-bool valid_hex_bits(const mpz_t n, const sail_string str);
+bool valid_hex_bits(const mpz_t n, const_sail_string str);
 
 /*
  * Utility function not callable from Sail!
  */
-void fprint_bits(const sail_string pre,
+void fprint_bits(const_sail_string pre,
 		 const lbits op,
-		 const sail_string post,
+		 const_sail_string post,
 		 FILE *stream);
 
-unit print_bits(const sail_string str, const lbits op);
-unit prerr_bits(const sail_string str, const lbits op);
+unit print_bits(const_sail_string str, const lbits op);
+unit prerr_bits(const_sail_string str, const lbits op);
 
-unit print(const sail_string str);
-unit print_endline(const sail_string str);
+unit print(const_sail_string str);
+unit print_endline(const_sail_string str);
 
-unit prerr(const sail_string str);
-unit prerr_endline(const sail_string str);
+unit prerr(const_sail_string str);
+unit prerr_endline(const_sail_string str);
 
-unit print_int(const sail_string str, const sail_int op);
-unit prerr_int(const sail_string str, const sail_int op);
+unit print_int(const_sail_string str, const sail_int op);
+unit prerr_int(const_sail_string str, const sail_int op);
 
 unit sail_putchar(const sail_int op);
 

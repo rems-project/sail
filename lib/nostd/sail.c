@@ -29,7 +29,7 @@ void RECREATE(sail_string)(sail_string *str)
      *str = istr;
 }
 
-size_t sail_strlen(const sail_string str)
+size_t sail_strlen(const_sail_string str)
 {
      size_t i = 0;
      while (true) {
@@ -71,7 +71,7 @@ char *sail_strcat(char *dest, const char *src)
      return sail_strcpy(dest + i, src);
 }
 
-void COPY(sail_string)(sail_string *str1, const sail_string str2)
+void COPY(sail_string)(sail_string *str1, const_sail_string str2)
 {
      size_t len = sail_strlen(str2);
      *str1 = sail_realloc(*str1, len + 1);
@@ -83,19 +83,19 @@ void KILL(sail_string)(sail_string *str)
      sail_free(*str);
 }
 
-bool eq_string(const sail_string str1, const sail_string str2)
+bool eq_string(const_sail_string str1, const_sail_string str2)
 {
      return sail_strcmp(str1, str2) == 0;
 }
 
-bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
+bool EQUAL(sail_string)(const_sail_string str1, const_sail_string str2)
 {
      return sail_strcmp(str1, str2) == 0;
 }
 
 void undefined_string(sail_string *str, const unit u) {}
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
+void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
      *stro = sail_realloc(*stro, sail_strlen(str1) + sail_strlen(str2) + 1);
      (*stro)[0] = '\0';

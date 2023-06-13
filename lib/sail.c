@@ -158,7 +158,7 @@ void RECREATE(sail_string)(sail_string *str)
   *str = istr;
 }
 
-void COPY(sail_string)(sail_string *str1, const sail_string str2)
+void COPY(sail_string)(sail_string *str1, const_sail_string str2)
 {
   size_t len = strlen(str2);
   *str1 = (sail_string)realloc(*str1, len + 1);
@@ -188,19 +188,19 @@ void hex_str_upper(sail_string *str, const mpz_t n)
   gmp_asprintf(str, "0x%ZX", n);
 }
 
-bool eq_string(const sail_string str1, const sail_string str2)
+bool eq_string(const_sail_string str1, const_sail_string str2)
 {
   return strcmp(str1, str2) == 0;
 }
 
-bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
+bool EQUAL(sail_string)(const_sail_string str1, const_sail_string str2)
 {
   return strcmp(str1, str2) == 0;
 }
 
 void undefined_string(sail_string *str, const unit u) {}
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
+void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
   *stro = (sail_string)realloc(*stro, strlen(str1) + strlen(str2) + 1);
   (*stro)[0] = '\0';
@@ -1497,7 +1497,7 @@ void real_power(real *rop, const real base, const sail_int exp)
   mpq_clear(b);
 }
 
-void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
+void CREATE_OF(real, sail_string)(real *rop, const_sail_string op)
 {
   int decimal;
   int total;
@@ -1515,7 +1515,7 @@ void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
   mpq_add(*rop, *rop, sail_lib_tmp_real);
 }
 
-void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
+void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op)
 {
   int decimal;
   int total;
@@ -1532,13 +1532,13 @@ void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
   mpq_add(*rop, *rop, sail_lib_tmp_real);
 }
 
-unit print_real(const sail_string str, const real op)
+unit print_real(const_sail_string str, const real op)
 {
   gmp_printf("%s%Qd\n", str, op);
   return UNIT;
 }
 
-unit prerr_real(const sail_string str, const real op)
+unit prerr_real(const_sail_string str, const real op)
 {
   gmp_fprintf(stderr, "%s%Qd\n", str, op);
   return UNIT;
@@ -1604,7 +1604,7 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
   gmp_asprintf(str, "%Z", *op.bits);
 }
 
-void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
+void parse_hex_bits(lbits *res, const mpz_t n, const_sail_string hex)
 {
   if (strncmp(hex, "0x", 2) != 0) {
     goto failure;
@@ -1626,7 +1626,7 @@ failure:
   mpz_set_ui(*res->bits, 0);
 }
 
-bool valid_hex_bits(const mpz_t n, const sail_string hex) {
+bool valid_hex_bits(const mpz_t n, const_sail_string hex) {
   if (strncmp(hex, "0x", 2) != 0) {
     return false;
   }
@@ -1641,9 +1641,9 @@ bool valid_hex_bits(const mpz_t n, const sail_string hex) {
   return true;
 }
 
-void fprint_bits(const sail_string pre,
+void fprint_bits(const_sail_string pre,
 		 const lbits op,
-		 const sail_string post,
+		 const_sail_string post,
 		 FILE *stream)
 {
   fputs(pre, stream);
@@ -1677,43 +1677,43 @@ void fprint_bits(const sail_string pre,
   fputs(post, stream);
 }
 
-unit print_bits(const sail_string str, const lbits op)
+unit print_bits(const_sail_string str, const lbits op)
 {
   fprint_bits(str, op, "\n", stdout);
   return UNIT;
 }
 
-unit prerr_bits(const sail_string str, const lbits op)
+unit prerr_bits(const_sail_string str, const lbits op)
 {
   fprint_bits(str, op, "\n", stderr);
   return UNIT;
 }
 
-unit print(const sail_string str)
+unit print(const_sail_string str)
 {
   printf("%s", str);
   return UNIT;
 }
 
-unit print_endline(const sail_string str)
+unit print_endline(const_sail_string str)
 {
   printf("%s\n", str);
   return UNIT;
 }
 
-unit prerr(const sail_string str)
+unit prerr(const_sail_string str)
 {
   fprintf(stderr, "%s", str);
   return UNIT;
 }
 
-unit prerr_endline(const sail_string str)
+unit prerr_endline(const_sail_string str)
 {
   fprintf(stderr, "%s\n", str);
   return UNIT;
 }
 
-unit print_int(const sail_string str, const sail_int op)
+unit print_int(const_sail_string str, const sail_int op)
 {
   fputs(str, stdout);
   mpz_out_str(stdout, 10, op);
@@ -1721,7 +1721,7 @@ unit print_int(const sail_string str, const sail_int op)
   return UNIT;
 }
 
-unit prerr_int(const sail_string str, const sail_int op)
+unit prerr_int(const_sail_string str, const sail_int op)
 {
   fputs(str, stderr);
   mpz_out_str(stderr, 10, op);
