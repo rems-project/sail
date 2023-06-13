@@ -297,7 +297,7 @@ sbits fast_read_ram(const int64_t data_size,
     r = r << 8;
     r = r + byte;
   }
-  sbits res = {.len = data_size * 8, .bits = r };
+  sbits res = {.len = (uint64_t)data_size * 8, .bits = r };
   return res;
 }
 
