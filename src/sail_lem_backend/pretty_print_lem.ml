@@ -1270,11 +1270,13 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
       let typq_to_print = typq_to_print params_to_print id typq in
       let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
+      let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq_to_print in
       doc_op equals
         (separate space
            [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print)]
         )
         (doc_typschm_lem params_to_print env false typschm)
+      ^^ hardline ^^ sorts_pp
   | TD_abbrev _ -> empty
   | TD_record (id, typq, fs, _) ->
       let fname fid =
