@@ -74,10 +74,12 @@ static inline bool EQUAL(unit)(const unit u1, const unit u2)
  * proper short-circuiting evaluation.
  */
 
-static inline bool not(const bool b)
+#ifndef __cplusplus
+static inline bool not(bool b)
 {
      return !b;
 }
+#endif
 
 static inline bool EQUAL(bool)(const bool a, const bool b)
 {

@@ -48,10 +48,6 @@ bool eq_bit(const fbits a, const fbits b)
 
 /* ***** Sail booleans ***** */
 
-bool not(const bool b) {
-  return !b;
-}
-
 bool EQUAL(bool)(const bool a, const bool b) {
   return a == b;
 }
