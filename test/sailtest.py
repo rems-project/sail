@@ -70,9 +70,9 @@ def step(string, expected_status=0):
     if status != expected_status:
         print("{}Failed{}: {}".format(color.FAIL, color.END, string))
         print('{}stdout{}:'.format(color.NOTICE, color.END))
-        print(out)
+        print(out.decode('utf-8'))
         print('{}stderr{}:'.format(color.NOTICE, color.END))
-        print(err)
+        print(err.decode('utf-8'))
         sys.exit(1)
 
 def banner(string):
