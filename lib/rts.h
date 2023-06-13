@@ -75,6 +75,10 @@
 #include "sail.h"
 #include "sail_failure.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 unit sail_exit(unit);
 
 /*
@@ -226,5 +230,9 @@ void cleanup_rts(void);
 
 unit z__SetConfig(sail_string, sail_int);
 unit z__ListConfig(const unit u);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

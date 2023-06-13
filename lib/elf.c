@@ -77,6 +77,10 @@
 // Use the zlib library to uncompress ELF.gz files
 #include <zlib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Define ELF constants/types. These come from the
 // Tool Interface Standard Executable and Linking Format Specification 1.2
 
@@ -628,3 +632,6 @@ fail:
 // ELF Loader
 ////////////////////////////////////////////////////////////////
 
+#ifdef __cplusplus
+}
+#endif

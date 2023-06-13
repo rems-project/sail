@@ -68,7 +68,15 @@
 #ifndef SAIL_STATE_H
 #define SAIL_STATE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct sail_state;
 typedef struct sail_state sail_state;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

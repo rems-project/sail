@@ -67,6 +67,10 @@
 
 #include "sail_failure.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void sail_match_failure(sail_string msg)
 {
   fprintf(stderr, "Pattern match failure in %s\n", msg);
@@ -79,3 +83,7 @@ unit sail_assert(bool b, sail_string msg)
   fprintf(stderr, "Assertion failed: %s\n", msg);
   exit(EXIT_FAILURE);
 }
+
+#ifdef __cplusplus
+}
+#endif

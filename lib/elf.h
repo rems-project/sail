@@ -71,5 +71,13 @@
 #include<stdbool.h>
 #include<stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void load_elf(char *filename, bool *is32bit_p, uint64_t *entry);
 int  lookup_sym(const char *filename, const char *symname, uint64_t *value);
+
+#ifdef __cplusplus
+}
+#endif

@@ -70,6 +70,10 @@
 
 #include "sail.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * This function should be called whenever a pattern match failure
  * occurs. Pattern match failures are always fatal.
@@ -81,5 +85,9 @@ void sail_match_failure(sail_string msg);
  * assertion fails we immediately exit the model.
  */
 unit sail_assert(bool b, sail_string msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

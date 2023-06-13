@@ -76,6 +76,10 @@
 
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline void *sail_malloc(size_t size)
 {
   return malloc(size);
@@ -524,5 +528,9 @@ void get_time_ns(sail_int*, const unit);
 /* ***** ARM optimisations ***** */
 
 void arm_align(lbits *, const lbits, const sail_int);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

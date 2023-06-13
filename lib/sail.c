@@ -78,6 +78,10 @@
 
 #include"sail.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // zero bits from high index, same semantics as bzhi intrinsic
 uint64_t bzhi_u64(uint64_t bits, uint64_t len)
 {
@@ -1770,3 +1774,7 @@ void size_itself_int(sail_int *rop, const sail_int op)
 {
   mpz_set(*rop, op);
 }
+
+#ifdef __cplusplus
+}
+#endif
