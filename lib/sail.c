@@ -65,7 +65,9 @@
 /*  SUCH DAMAGE.                                                            */
 /****************************************************************************/
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include<assert.h>
 #include<inttypes.h>
 #include<stdbool.h>
