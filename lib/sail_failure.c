@@ -71,13 +71,13 @@
 extern "C" {
 #endif
 
-void sail_match_failure(sail_string msg)
+void sail_match_failure(const_sail_string msg)
 {
   fprintf(stderr, "Pattern match failure in %s\n", msg);
   exit(EXIT_FAILURE);
 }
 
-unit sail_assert(bool b, sail_string msg)
+unit sail_assert(bool b, const_sail_string msg)
 {
   if (b) return UNIT;
   fprintf(stderr, "Assertion failed: %s\n", msg);
