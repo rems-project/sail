@@ -111,12 +111,12 @@ void cleanup_library(void);
 #define UNDEFINED(type) undefined_ ## type
 #define EQUAL(type) eq_ ## type
 
-#define SAIL_BUILTIN_TYPE(type)\
+#define SAIL_BUILTIN_TYPE_IMPL(type, const_type)\
   void create_ ## type(type *);\
   void recreate_ ## type(type *);\
-  void copy_ ## type(type *, const type);\
+  void copy_ ## type(type *, const_type);\
   void kill_ ## type(type *);
-
+#define SAIL_BUILTIN_TYPE(type) SAIL_BUILTIN_TYPE_IMPL(type, const type)
 /* ***** Sail unit type ***** */
 
 typedef int unit;
@@ -151,7 +151,7 @@ bool UNDEFINED(bool)(const unit);
 typedef char *sail_string;
 typedef const char *const_sail_string;
 
-SAIL_BUILTIN_TYPE(sail_string)
+SAIL_BUILTIN_TYPE_IMPL(sail_string, const_sail_string)
 
 void dec_str(sail_string *str, const mpz_t n);
 void hex_str(sail_string *str, const mpz_t n);
