@@ -1466,9 +1466,8 @@ let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r, t, funcls), (l, 
     match funcls with
     | FCL_aux (FCL_funcl (id, pexp), fcl_annot) :: _ ->
         let clause (FCL_aux (FCL_funcl (_, pexp), annot)) =
-          let pat, guard, exp, _ = destruct_pexp pexp in
-          let guard = Option.map (rewriters.rewrite_exp rewriters) guard in
-          let exp = rewriters.rewrite_exp rewriters exp in
+          let pexp' = rewrite_pexp rewriters pexp in
+          let pat, guard, exp, _ = destruct_pexp pexp' in
           (pat, guard, exp, annot)
         in
         let pexp_pat_typ, pexp_ret_typ =
