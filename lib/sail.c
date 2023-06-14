@@ -214,17 +214,17 @@ void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str
   strcat(*stro, str2);
 }
 
-bool string_startswith(sail_string s, sail_string prefix)
+bool string_startswith(const_sail_string s, const_sail_string prefix)
 {
   return strstr(s, prefix) == s;
 }
 
-void string_length(sail_int *len, sail_string s)
+void string_length(sail_int *len, const_sail_string s)
 {
   mpz_set_ui(*len, strlen(s));
 }
 
-void string_drop(sail_string *dst, sail_string s, sail_int ns)
+void string_drop(sail_string *dst, const_sail_string s, sail_int ns)
 {
   size_t len = strlen(s);
   mach_int n = CREATE_OF(mach_int, sail_int)(ns);
@@ -238,7 +238,7 @@ void string_drop(sail_string *dst, sail_string s, sail_int ns)
   }
 }
 
-void string_take(sail_string *dst, sail_string s, sail_int ns)
+void string_take(sail_string *dst, const_sail_string s, sail_int ns)
 {
   size_t len = strlen(s);
   mach_int n = CREATE_OF(mach_int, sail_int)(ns);

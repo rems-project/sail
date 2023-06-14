@@ -77,7 +77,7 @@ bool eq_string(const_sail_string, const_sail_string);
 bool EQUAL(sail_string)(const_sail_string, const_sail_string);
 
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2);
-bool string_startswith(sail_string s, sail_string prefix);
+bool string_startswith(const_sail_string s, const_sail_string prefix);
 
 /* ***** Sail integers ***** */
 
@@ -372,8 +372,8 @@ void random_real(real *rop, unit);
 /* ***** String utilities ***** */
 
 SAIL_INT_FUNCTION(string_length, sail_int, sail_string);
-void string_drop(sail_string *dst, sail_string s, sail_int len);
-void string_take(sail_string *dst, sail_string s, sail_int len);
+void string_drop(sail_string *dst, const_sail_string s, sail_int len);
+void string_take(sail_string *dst, const_sail_string s, sail_int len);
 
 /* ***** Printing ***** */
 
