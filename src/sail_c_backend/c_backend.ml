@@ -1604,7 +1604,7 @@ let codegen_cons id ctyp =
        (sgen_id id)
     )
   ^^ string "  bool same = *rop == xs;\n"
-  ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  *rop = sail_new(struct node_%s);\n" (sgen_id id))
   ^^ string "  (*rop)->rc = 1;\n"
   ^^ ( if is_stack_ctyp ctyp then string "  (*rop)->hd = x;\n"
        else
@@ -1671,7 +1671,7 @@ let codegen_vector (direction, ctyp) =
       string (Printf.sprintf "static void COPY(%s)(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
       ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
       ^^ string "  rop->len = op.len;\n"
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, rop->len);\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < op.len; i++) {\n"
       ^^ string
            ( if is_stack_ctyp ctyp then "    (rop->data)[i] = op.data[i];\n"
@@ -1747,7 +1747,7 @@ let codegen_vector (direction, ctyp) =
       string
         (Printf.sprintf "static void internal_vector_init_%s(%s *rop, const int64_t len) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  rop->len = len;\n"
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, len);\n" (sgen_ctyp ctyp))
       ^^ ( if not (is_stack_ctyp ctyp) then
              string "  for (int i = 0; i < len; i++) {\n"
              ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
@@ -1762,7 +1762,7 @@ let codegen_vector (direction, ctyp) =
            (sgen_ctyp ctyp)
         )
       ^^ string (Printf.sprintf "  rop->len = sail_int_get_ui(len);\n")
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, rop->len);\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < (rop->len); i++) {\n"
       ^^ string
            ( if is_stack_ctyp ctyp then "    (rop->data)[i] = elem;\n"
@@ -1998,9 +1998,9 @@ let compile_ast env effect_info output_chan c_includes ast =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], [])
       else
         ( [
-            "  current_exception = (struct zexception *)sail_malloc(sizeof(struct zexception));";
+            "  current_exception = sail_new(struct zexception);";
             "  CREATE(zexception)(current_exception);";
-            "  throw_location = (sail_string *)sail_malloc(sizeof(sail_string));";
+            "  throw_location = sail_new(sail_string);";
             "  CREATE(sail_string)(throw_location);";
           ],
           [

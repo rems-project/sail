@@ -90,6 +90,9 @@ static inline void sail_free(void *ptr)
   free(ptr);
 }
 
+#define sail_new(type) (type *)(sail_malloc(sizeof(type)))
+#define sail_new_array(type, len) (type *)(sail_malloc((len) * sizeof(type)))
+
 /*
  * Called by the RTS to initialise and clear any library state.
  */
