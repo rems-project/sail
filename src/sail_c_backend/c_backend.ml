@@ -1990,6 +1990,7 @@ let compile_ast env effect_info output_chan c_includes ast =
         @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
         @ (if Option.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
         @ List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes
+        @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
         )
     in
 
@@ -2095,7 +2096,7 @@ let compile_ast env effect_info output_chan c_includes ast =
           else List.map string ["int main(int argc, char *argv[])"; "{"; "  return model_main(argc, argv);"; "}"]
         )
     in
-
+    let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
     let hlhl = hardline ^^ hardline in
 
     Pretty_print_sail.to_string
@@ -2104,7 +2105,7 @@ let compile_ast env effect_info output_chan c_includes ast =
              model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
            else empty
          )
-      ^^ model_main ^^ hardline
+      ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
       )
     |> output_string output_chan
   with Type_error (_, l, err) ->
