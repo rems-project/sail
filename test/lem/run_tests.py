@@ -19,6 +19,9 @@ test_dir = '../typecheck/pass'
 skip_tests = {
     'phantom_option',
     'phantom_bitlist_union',
+    # The Lem backend needs sail_mem_read to be instantiated at a minimum
+    'concurrency_interface_dec',
+    'concurrency_interface_inc',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -36,7 +39,10 @@ skip_tests_mwords = {
     'negative_bits_list',
     'patternrefinement',
     # Due to an incompatibility between -auto_mono and -smt_linearize
-    'pow_32_64'
+    'pow_32_64',
+    # The Lem backend needs sail_mem_read to be instantiated at a minimum
+    'concurrency_interface_dec',
+    'concurrency_interface_inc',
 }
 
 print('Sail is {}'.format(sail))
