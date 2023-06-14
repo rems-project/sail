@@ -415,15 +415,17 @@ let register_refs_lem pp_tannot env registers =
             let bits_idd = string (string_of_id bitfield_id ^ "_bits") in
             ( string "<| " ^^ bits_idd ^^ string " = s." ^^ field_idd ^^ space ^^ dquotes idd ^^ string " |>",
               doc_op equals field_idd
-                (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v." ^^ bits_idd ^^ string " else s." ^^ field_idd ^^ string " reg)")
+                (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v." ^^ bits_idd ^^ string " else s."
+               ^^ field_idd ^^ string " reg)"
+                )
             )
         | _ ->
-          let field_idd = string (string_of_id (regstate_field typ)) in
-          ( string "s." ^^ field_idd ^^ space ^^ dquotes idd,
-            doc_op equals field_idd
-              (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)")
-          )
-    )
+            let field_idd = string (string_of_id (regstate_field typ)) in
+            ( string "s." ^^ field_idd ^^ space ^^ dquotes idd,
+              doc_op equals field_idd
+                (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)")
+            )
+      )
       else (string "s." ^^ idd, doc_op equals idd (string "v"))
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
@@ -539,7 +541,8 @@ let generate_isa_lemmas env defs =
     string ("lemma regval_" ^ typ_id ^ "[simp]:")
     ^^ hardline
     ^^ string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " v) = Some v\"")
-    ^^ hardline ^^ string ("  by (auto simp: " ^ of_rv ^ "_def " ^ rv_of ^ "_def)")
+    ^^ hardline
+    ^^ string ("  by (auto simp: " ^ of_rv ^ "_def " ^ rv_of ^ "_def)")
   in
   let register_lemmas (typ, id) =
     let id = remove_leading_underscores (string_of_id id) in
@@ -646,7 +649,7 @@ let generate_isa_lemmas env defs =
   ^^ hardline ^^ hardline ^^ register_defs ^^ hardline ^^ hardline
   ^^ separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids @ regtyp_ids)
   ^^ hardline ^^ hardline
-  ^^ separate_map (hardline ^^ hardline) bitfield_conv_lemma (bitfield_ids)
+  ^^ separate_map (hardline ^^ hardline) bitfield_conv_lemma bitfield_ids
   ^^ hardline ^^ hardline
   ^^ separate_map hardline string
        [
