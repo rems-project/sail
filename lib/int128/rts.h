@@ -10,13 +10,13 @@
  * This function should be called whenever a pattern match failure
  * occurs. Pattern match failures are always fatal.
  */
-void sail_match_failure(sail_string msg);
+void sail_match_failure(const_sail_string msg);
 
 /*
  * sail_assert implements the assert construct in Sail. If any
  * assertion fails we immediately exit the model.
  */
-unit sail_assert(bool b, sail_string msg);
+unit sail_assert(bool b, const_sail_string msg);
 
 unit sail_exit(unit);
 
@@ -71,7 +71,7 @@ sbits fast_read_ram(const int64_t data_size,
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 
-unit load_raw(fbits addr, const sail_string file);
+unit load_raw(fbits addr, const_sail_string file);
 
 void load_image(char *);
 
@@ -104,5 +104,5 @@ int process_arguments(int, char**);
 void setup_rts(void);
 void cleanup_rts(void);
 
-unit z__SetConfig(sail_string, sail_int);
+unit z__SetConfig(const_sail_string, sail_int);
 unit z__ListConfig(const unit u);

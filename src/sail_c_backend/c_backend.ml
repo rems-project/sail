@@ -858,6 +858,8 @@ let rec sgen_ctyp = function
   | CT_rounding_mode -> "uint_fast8_t"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
+let rec sgen_const_ctyp = function CT_string -> "const_sail_string" | ty -> sgen_ctyp ty
+
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
   | CT_bit -> "fbits"
@@ -1273,11 +1275,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
         | CT_enum (_, ctor :: _) -> (sgen_id ctor, [])
         | CT_tup ctyps when is_stack_ctyp ctyp ->
             let gs = ngensym () in
-            let fold (inits, prev) (n, ctyp) =
+            let fold (n, ctyp) (inits, prev) =
               let init, prev' = codegen_exn_return ctyp in
               (Printf.sprintf ".ztup%d = %s" n init :: inits, prev @ prev')
             in
-            let inits, prev = List.fold_left fold ([], []) (List.mapi (fun i x -> (i, x)) ctyps) in
+            let inits, prev = List.fold_right fold (List.mapi (fun i x -> (i, x)) ctyps) ([], []) in
             ( sgen_name gs,
               [
                 Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
@@ -1439,7 +1441,7 @@ let codegen_type_def = function
         ^^ surround 2 0 lbrace (each_ctor "op->" (clear_field "op") tus ^^ semi) rbrace
       in
       let codegen_ctor (ctor_id, ctyp) =
-        let ctor_args, tuple, tuple_cleanup = (Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty) in
+        let ctor_args, tuple, tuple_cleanup = (Printf.sprintf "%s op" (sgen_const_ctyp ctyp), empty, empty) in
         string
           (Printf.sprintf "static void %s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ())
              (sgen_id id) ctor_args
@@ -1600,11 +1602,11 @@ let codegen_list_copy id =
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
   string
-    (Printf.sprintf "static void %s(%s *rop, %s x, %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp)
-       (sgen_id id)
+    (Printf.sprintf "static void %s(%s *rop, %s x, %s xs) {\n" (sgen_function_id cons_id) (sgen_id id)
+       (sgen_const_ctyp ctyp) (sgen_id id)
     )
   ^^ string "  bool same = *rop == xs;\n"
-  ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  *rop = sail_new(struct node_%s);\n" (sgen_id id))
   ^^ string "  (*rop)->rc = 1;\n"
   ^^ ( if is_stack_ctyp ctyp then string "  (*rop)->hd = x;\n"
        else
@@ -1671,7 +1673,7 @@ let codegen_vector (direction, ctyp) =
       string (Printf.sprintf "static void COPY(%s)(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
       ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
       ^^ string "  rop->len = op.len;\n"
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, rop->len);\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < op.len; i++) {\n"
       ^^ string
            ( if is_stack_ctyp ctyp then "    (rop->data)[i] = op.data[i];\n"
@@ -1747,7 +1749,7 @@ let codegen_vector (direction, ctyp) =
       string
         (Printf.sprintf "static void internal_vector_init_%s(%s *rop, const int64_t len) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  rop->len = len;\n"
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, len);\n" (sgen_ctyp ctyp))
       ^^ ( if not (is_stack_ctyp ctyp) then
              string "  for (int i = 0; i < len; i++) {\n"
              ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
@@ -1762,7 +1764,7 @@ let codegen_vector (direction, ctyp) =
            (sgen_ctyp ctyp)
         )
       ^^ string (Printf.sprintf "  rop->len = sail_int_get_ui(len);\n")
-      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_new_array(%s, rop->len);\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < (rop->len); i++) {\n"
       ^^ string
            ( if is_stack_ctyp ctyp then "    (rop->data)[i] = elem;\n"
@@ -1818,13 +1820,13 @@ let codegen_def' ctx = function
       else if is_stack_ctyp ret_ctyp then
         string
           (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ())
-             (Util.string_of_list ", " sgen_ctyp arg_ctyps)
+             (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
           )
       else
         string
           (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ())
              (sgen_ctyp ret_ctyp)
-             (Util.string_of_list ", " sgen_ctyp arg_ctyps)
+             (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
           )
   | CDEF_fundef (id, ret_arg, args, instrs) ->
       let _, arg_ctyps, ret_ctyp =
@@ -1847,7 +1849,7 @@ let codegen_def' ctx = function
       let args =
         Util.string_of_list ", "
           (fun x -> x)
-          (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args)
+          (List.map2 (fun ctyp arg -> sgen_const_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args)
       in
       let function_header =
         match ret_arg with
@@ -1990,6 +1992,7 @@ let compile_ast env effect_info output_chan c_includes ast =
         @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
         @ (if Option.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
         @ List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes
+        @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
         )
     in
 
@@ -1997,9 +2000,9 @@ let compile_ast env effect_info output_chan c_includes ast =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], [])
       else
         ( [
-            "  current_exception = sail_malloc(sizeof(struct zexception));";
+            "  current_exception = sail_new(struct zexception);";
             "  CREATE(zexception)(current_exception);";
-            "  throw_location = sail_malloc(sizeof(sail_string));";
+            "  throw_location = sail_new(sail_string);";
             "  CREATE(sail_string)(throw_location);";
           ],
           [
@@ -2095,7 +2098,7 @@ let compile_ast env effect_info output_chan c_includes ast =
           else List.map string ["int main(int argc, char *argv[])"; "{"; "  return model_main(argc, argv);"; "}"]
         )
     in
-
+    let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
     let hlhl = hardline ^^ hardline in
 
     Pretty_print_sail.to_string
@@ -2104,7 +2107,7 @@ let compile_ast env effect_info output_chan c_includes ast =
              model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
            else empty
          )
-      ^^ model_main ^^ hardline
+      ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
       )
     |> output_string output_chan
   with Type_error (_, l, err) ->

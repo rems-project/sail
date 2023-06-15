@@ -24,9 +24,12 @@ def no_valgrind():
     except FileNotFoundError:
         return True
 
-def test_c(name, c_opts, sail_opts, valgrind):
+def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
     results = Results(name)
+    if compiler == 'c++':
+        # tl_pat.c:66:31: error: ‘zX::<unnamed union>::<unnamed struct>::zX’ has the same name as the class in which it is declared
+        results.expect_failure("tl_pat.sail", "same name as the class in which it is declared")
     if valgrind and no_valgrind():
         print('skipping because no valgrind found')
         return results.finish()
@@ -37,7 +40,7 @@ def test_c(name, c_opts, sail_opts, valgrind):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('gcc {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}.bin'.format(c_opts, basename, sail_dir, sail_dir, basename))
+                step('{} {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
@@ -135,7 +138,9 @@ xml = '<testsuites>\n'
 
 #xml += test_c2('unoptimized C', '', '', True)
 xml += test_c('unoptimized C', '', '', False)
+xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
 xml += test_c('optimized C', '-O2', '-O', True)
+xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
 xml += test_c('constant folding', '', '-Oconstant_fold', False)
 #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
 xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)

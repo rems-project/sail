@@ -70,9 +70,9 @@ def step(string, expected_status=0):
     if status != expected_status:
         print("{}Failed{}: {}".format(color.FAIL, color.END, string))
         print('{}stdout{}:'.format(color.NOTICE, color.END))
-        print(out)
+        print(out.decode('utf-8'))
         print('{}stderr{}:'.format(color.NOTICE, color.END))
-        print(err)
+        print(err.decode('utf-8'))
         sys.exit(1)
 
 def banner(string):
@@ -85,22 +85,42 @@ class Results:
     def __init__(self, name):
         self.passes = 0
         self.failures = 0
+        self.xfails = 0
+        self._xfail_reasons = {}
         self.xml = ""
         self.name = name
+
+    def expect_failure(self, test, reason):
+        self._xfail_reasons[test] = reason
+
+    def _add_status(self, test, result, msg):
+        self.xml += f'    <testcase name="{test}">\n      <{result} message="{msg}">{msg}</{result}>\n    </testcase>\n'
+
+    def _add_failure(self, test, msg):
+        self.failures += 1
+        self._add_status(test, "error", msg)
 
     def collect(self, tests):
         for test in tests:
             _, status = os.waitpid(tests[test], 0)
+            if test in self._xfail_reasons:
+                reason = self._xfail_reasons[test]
+                if status == 0:
+                    self._add_failure(test, "XPASS: " + reason)
+                else:
+                    self.xfails += 1
+                    self._add_status(test, "skipped", "XFAIL: " + reason)
+                continue
             if status != 0:
-                self.failures += 1
-                self.xml += '    <testcase name="{}">\n      <error message="fail">fail</error>\n    </testcase>\n'.format(test)
+                self._add_failure(test, "fail")
             else:
                 self.passes += 1
                 self.xml += '    <testcase name="{}"/>\n'.format(test)
         sys.stdout.flush()
 
     def finish(self):
-        print('{}{} passes and {} failures{}'.format(color.NOTICE, self.passes, self.failures, color.END))
+        xfail_msg = f' ({self.xfails} expected failures)' if self.xfails else ''
+        print('{}{} passes and {} failures{}{}'.format(color.NOTICE, self.passes, self.failures, xfail_msg, color.END))
 
         time = datetime.datetime.utcnow()
         suite = '  <testsuite name="{}" tests="{}" failures="{}" timestamp="{}">\n{}  </testsuite>\n'

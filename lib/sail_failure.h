@@ -70,16 +70,24 @@
 
 #include "sail.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * This function should be called whenever a pattern match failure
  * occurs. Pattern match failures are always fatal.
  */
-void sail_match_failure(sail_string msg);
+void sail_match_failure(const_sail_string msg);
 
 /*
  * sail_assert implements the assert construct in Sail. If any
  * assertion fails we immediately exit the model.
  */
-unit sail_assert(bool b, sail_string msg);
+unit sail_assert(bool b, const_sail_string msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

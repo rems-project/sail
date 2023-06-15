@@ -73,6 +73,10 @@
 #include "rts.h"
 #include "elf.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static uint64_t g_elf_entry;
 uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
@@ -163,9 +167,9 @@ void write_mem(uint64_t address, uint64_t byte)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  struct block *new_block = malloc(sizeof(struct block));
+  struct block *new_block = (struct block *)malloc(sizeof(struct block));
   new_block->block_id = mask;
-  new_block->mem = calloc(MASK + 1, sizeof(uint8_t));
+  new_block->mem = (uint8_t *)calloc(MASK + 1, sizeof(uint8_t));
   new_block->mem[offset] = (uint8_t) byte;
   new_block->next = sail_memory;
   sail_memory = new_block;
@@ -209,9 +213,9 @@ unit write_tag_bool(const uint64_t address, const bool tag)
    * If we couldn't find a block matching the mask, allocate a new
    * one, write the byte, and put it at the front of the block list.
    */
-  struct tag_block *new_block = malloc(sizeof(struct tag_block));
+  struct tag_block *new_block = (struct tag_block *)malloc(sizeof(struct tag_block));
   new_block->block_id = mask;
-  new_block->mem = calloc(MASK + 1, sizeof(bool));
+  new_block->mem = (bool *)calloc(MASK + 1, sizeof(bool));
   new_block->mem[offset] = tag;
   new_block->next = sail_tags;
   sail_tags = new_block;
@@ -297,7 +301,7 @@ sbits fast_read_ram(const int64_t data_size,
     r = r << 8;
     r = r + byte;
   }
-  sbits res = {.len = data_size * 8, .bits = r };
+  sbits res = {.len = (uint64_t)data_size * 8, .bits = r };
   return res;
 }
 
@@ -386,7 +390,7 @@ unit platform_barrier()
 }
 
 
-unit load_raw(fbits addr, const sail_string file)
+unit load_raw(fbits addr, const_sail_string file)
 {
   FILE *fp = fopen(file, "r");
 
@@ -472,7 +476,7 @@ void trace_unit(const unit u) {
   if (g_trace_enabled) fputs("()", stderr);
 }
 
-void trace_sail_string(const sail_string str) {
+void trace_sail_string(const_sail_string str) {
   if (g_trace_enabled) fputs(str, stderr);
 }
 
@@ -707,3 +711,7 @@ void cleanup_rts(void)
   cleanup_library();
   kill_mem();
 }
+
+#ifdef __cplusplus
+}
+#endif
