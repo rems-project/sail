@@ -3,7 +3,7 @@ THYS = Sail2_instr_kinds.thy Sail2_values.thy Sail2_operators.thy \
   Sail2_state_monad.thy Sail2_state.thy Sail2_state_lifting.thy \
   Sail2_prompt_monad.thy Sail2_prompt.thy Sail2_undefined.thy \
   Sail2_string.thy Sail2_concurrency_interface.thy \
-  Sail2_monadic_combinators.thy
+  Sail2_monadic_combinators.thy Sail2_undefined_concurrency_interface.thy
 EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_prompt_monad_lemmas.thy \
   Sail2_operators_mwords_lemmas.thy Hoare.thy \
@@ -56,6 +56,9 @@ Sail2_prompt.thy: ../../src/gen_lib/sail2_prompt.lem Sail2_prompt_monad.thy Sail
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail2_undefined.thy: ../../src/gen_lib/sail2_undefined.lem Sail2_prompt.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail2_undefined_concurrency_interface.thy: ../../src/gen_lib/sail2_undefined_concurrency_interface.lem Sail2_concurrency_interface.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail2_state_monad.thy: ../../src/gen_lib/sail2_state_monad.lem Sail2_values.thy
