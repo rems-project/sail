@@ -210,6 +210,9 @@
   (%{workspace_root}/src/gen_lib/sail2_undefined.lem
    as
    src/gen_lib/sail2_undefined.lem)
+  (%{workspace_root}/src/gen_lib/sail2_undefined_concurrency_interface.lem
+   as
+   src/gen_lib/sail2_undefined_concurrency_interface.lem)
   (%{workspace_root}/src/gen_lib/sail2_values.lem
    as
    src/gen_lib/sail2_values.lem)))

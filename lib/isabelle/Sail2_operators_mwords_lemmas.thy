@@ -1,10 +1,12 @@
 theory Sail2_operators_mwords_lemmas
-  imports Sail2_operators_mwords
+  imports
+    Sail2_values_lemmas
+    Sail2_operators_mwords
 begin
 
-lemmas uint_simps[simp] = uint_maybe_def uint_fail_def uint_nondet_def
-lemmas sint_simps[simp] = sint_maybe_def sint_fail_def sint_nondet_def
-
+lemmas uint_simps[simp] = uint_maybe_def (*uint_fail_def uint_nondet_def*)
+lemmas sint_simps[simp] = sint_maybe_def (*sint_fail_def sint_nondet_def*)
+(*
 lemma bools_of_bits_nondet_just_list[simp]:
   assumes "just_list (map bool_of_bitU bus) = Some bs"
   shows "bools_of_bits_nondet RV bus = return bs"
@@ -28,15 +30,15 @@ lemma of_bits_mword_return_of_bl[simp]:
   shows "of_bits_nondet BC_mword RV bus = return (of_bl bs)"
     and "of_bits_fail BC_mword bus = return (of_bl bs)"
   by (auto simp: of_bits_nondet_def of_bits_fail_def maybe_fail_def assms BC_mword_defs)
-
+*)
 lemma vec_of_bits_of_bl[simp]:
   assumes "just_list (map bool_of_bitU bus) = Some bs"
   shows "vec_of_bits_maybe bus = Some (of_bl bs)"
-    and "vec_of_bits_fail bus = return (of_bl bs)"
-    and "vec_of_bits_nondet RV bus = return (of_bl bs)"
+    (*and "vec_of_bits_fail bus = return (of_bl bs)"
+    and "vec_of_bits_nondet RV bus = return (of_bl bs)"*)
     and "vec_of_bits_failwith bus = of_bl bs"
     and "vec_of_bits bus = of_bl bs"
-  unfolding vec_of_bits_maybe_def vec_of_bits_fail_def vec_of_bits_nondet_def
+  unfolding vec_of_bits_maybe_def (*vec_of_bits_fail_def vec_of_bits_nondet_def*)
             vec_of_bits_failwith_def vec_of_bits_def
   by (auto simp: assms)
 
@@ -48,7 +50,7 @@ lemma access_vec_inc_test_bit[simp]:
   shows "access_vec_inc w n = bitU_of_bool (bit w (LENGTH('a) - 1 - nat n))"
   using assms
   by (auto simp: access_vec_inc_def access_bv_inc_def access_list_def BC_mword_defs rev_nth test_bit_bl)
-
+(*
 lemma bool_of_bitU_monadic_simps[simp]:
   "bool_of_bitU_fail B0 = return False"
   "bool_of_bitU_fail B1 = return True"
@@ -58,20 +60,20 @@ lemma bool_of_bitU_monadic_simps[simp]:
   "bool_of_bitU_nondet RV BU = choose_bool RV ''bool_of_bitU''"
   unfolding bool_of_bitU_fail_def bool_of_bitU_nondet_def
   by auto
-
+*)
 lemma update_vec_dec_simps[simp]:
   "update_vec_dec_maybe w i B0 = Some (set_bit w (nat i) False)"
   "update_vec_dec_maybe w i B1 = Some (set_bit w (nat i) True)"
   "update_vec_dec_maybe w i BU = None"
-  "update_vec_dec_fail w i B0 = return (set_bit w (nat i) False)"
+(*  "update_vec_dec_fail w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_fail w i B1 = return (set_bit w (nat i) True)"
   "update_vec_dec_fail w i BU = Fail ''bool_of_bitU''"
   "update_vec_dec_nondet RV w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_nondet RV w i B1 = return (set_bit w (nat i) True)"
-  "update_vec_dec_nondet RV w i BU = choose_bool RV ''bool_of_bitU'' \<bind> (\<lambda>b. return (set_bit w (nat i) b))"
+  "update_vec_dec_nondet RV w i BU = choose_bool RV ''bool_of_bitU'' \<bind> (\<lambda>b. return (set_bit w (nat i) b))"*)
   "update_vec_dec w i B0 = set_bit w (nat i) False"
   "update_vec_dec w i B1 = set_bit w (nat i) True"
-  unfolding update_vec_dec_maybe_def update_vec_dec_fail_def update_vec_dec_nondet_def update_vec_dec_def
+  unfolding update_vec_dec_maybe_def (*update_vec_dec_fail_def update_vec_dec_nondet_def*) update_vec_dec_def
   by (auto simp: update_mword_dec_def update_mword_bool_dec_def maybe_failwith_def)
 
 lemma len_of_minus_One_minus_nonneg_lt_len_of[simp]:
