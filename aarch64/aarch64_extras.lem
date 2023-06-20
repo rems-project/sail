@@ -77,14 +77,14 @@ let undefined_nat () = return (0:ii)
 val write_ram : forall 'rv 'e.
   integer -> integer -> list bitU -> list bitU -> list bitU -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
-  write_mem_ea Write_plain address size >>
-  write_mem Write_plain address size value >>= fun _ ->
+  write_mem_ea Write_plain addrsize address size >>
+  write_mem Write_plain addrsize address size value >>= fun _ ->
   return ()
 
 val read_ram : forall 'rv 'e.
   integer -> integer -> list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let read_ram addrsize size hexRAM address =
-  read_mem Read_plain address size
+  read_mem Read_plain addrsize address size
 
 val elf_entry : unit -> integer
 let elf_entry () = 0
