@@ -71,7 +71,7 @@ let output_sail_options =
   [
     ( "-output_sail_dir",
       Arg.String (fun dir -> Frontend.opt_reformat := Some dir),
-      " set a directory to output pretty-printed Sail"
+      "<directory> set a directory to output pretty-printed Sail"
     );
   ]
 

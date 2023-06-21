@@ -78,11 +78,11 @@ let lem_options =
   [
     ( "-lem_output_dir",
       Arg.String (fun dir -> opt_lem_output_dir := Some dir),
-      " set a custom directory to output generated Lem"
+      "<directory> set a custom directory to output generated Lem"
     );
     ( "-isa_output_dir",
       Arg.String (fun dir -> opt_isa_output_dir := Some dir),
-      " set a custom directory to output generated Isabelle auxiliary theories"
+      "<directory> set a custom directory to output generated Isabelle auxiliary theories"
     );
     ( "-lem_lib",
       Arg.String (fun l -> opt_libs_lem := l :: !opt_libs_lem),
@@ -92,7 +92,7 @@ let lem_options =
     ("-lem_mwords", Arg.Set Monomorphise.opt_mwords, " use native machine word library for Lem output");
     ( "-lem_extern_type",
       Arg.String Pretty_print_lem.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
-      "<type name> do not generate a definition for the type"
+      "<typename> do not generate a definition for the type"
     );
   ]
 

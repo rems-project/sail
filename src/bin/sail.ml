@@ -162,7 +162,7 @@ let rec options =
       ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3 (default)");
       ( "-have_feature",
         Arg.String (fun symbol -> opt_have_feature := Some symbol),
-        " check if a feature symbol is set by default"
+        "<symbol> check if a feature symbol is set by default"
       );
       ("-no_color", Arg.Clear Util.opt_colors, " do not use terminal color codes in output");
       ( "-undefined_gen",
@@ -255,7 +255,7 @@ let rec options =
       );
       ( "-dmono_analysis",
         Arg.Set_int Rewrites.opt_dmono_analysis,
-        " (debug) dump information about monomorphisation analysis: 0 silent, 3 max"
+        "<verbosity> (debug) dump information about monomorphisation analysis: 0 silent, 3 max"
       );
       ("-dmono_continue", Arg.Set Rewrites.opt_dmono_continue, " (debug) continue despite monomorphisation errors");
       ("-dpattern_warning_no_literals", Arg.Set Pattern_completeness.opt_debug_no_literals, "");

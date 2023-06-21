@@ -78,7 +78,7 @@ let ocaml_options =
     );
     ( "-ocaml_build_dir",
       Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
-      " set a custom directory to build generated OCaml"
+      "<directory> set a custom directory to build generated OCaml"
     );
     ( "-ocaml_coverage",
       Arg.Set Ocaml_backend.opt_ocaml_coverage,
@@ -146,7 +146,7 @@ let tofrominterp_options =
     );
     ( "-tofrominterp_output_dir",
       Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
-      " set a custom directory to output embedding translation OCaml"
+      "<directory> set a custom directory to output embedding translation OCaml"
     );
   ]
 

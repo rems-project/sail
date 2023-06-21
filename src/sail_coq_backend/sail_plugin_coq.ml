@@ -76,7 +76,7 @@ let coq_options =
   [
     ( "-coq_output_dir",
       Arg.String (fun dir -> opt_coq_output_dir := Some dir),
-      " set a custom directory to output generated Coq"
+      "<directory> set a custom directory to output generated Coq"
     );
     ( "-coq_lib",
       Arg.String (fun l -> opt_libs_coq := l :: !opt_libs_coq),
