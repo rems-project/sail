@@ -91,6 +91,14 @@ let coq_options =
       "<filename> provide additional alternative modules to open only in main (non-_types) Coq output, and suppress \
        default definitions of MR and M monads"
     );
+    ( "-coq_extern_type",
+      Arg.String Pretty_print_coq.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
+      "<typename> do not generate a definition for the type"
+    );
+    ( "-coq_generate_extern_types",
+      Arg.Set Pretty_print_coq.opt_generate_extern_types,
+      " generate only extern types rather than suppressing them"
+    );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
       " (debug) generate axioms for functions that are declared but not defined"
