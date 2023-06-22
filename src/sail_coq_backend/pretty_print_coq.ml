@@ -93,6 +93,8 @@ let kbindings_filter_map f m =
 
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
+let opt_extern_types : string list ref = ref []
+let opt_generate_extern_types : bool ref = ref false
 
 let prefix_recordtype = true
 
@@ -3265,7 +3267,9 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
   | DEF_val v_spec -> doc_val_spec def_annot unimplemented avoid_target_names effect_info v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> doc_typdef types_mod avoid_target_names generic_eq_types t_def
+  | DEF_type t_def ->
+      if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
+      else doc_typdef types_mod avoid_target_names generic_eq_types t_def
   | DEF_register dec -> group (doc_dec avoid_target_names dec)
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef types_mod avoid_target_names effect_info fdef) ^/^ hardline
@@ -3344,68 +3348,77 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     in
     (print types_file)
       (concat
-         [
-           string "(*" ^^ string top_line ^^ string "*)";
-           hardline;
-           (separate_map hardline)
-             (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
-             types_modules;
-           hardline;
-           string "Import ListNotations.";
-           hardline;
-           string "Open Scope string.";
-           hardline;
-           string "Open Scope bool.";
-           hardline;
-           string "Open Scope Z.";
-           hardline;
-           hardline;
-           separate empty (List.map doc_def typdefs);
-           hardline;
-           hardline;
-           separate empty (List.map doc_def statedefs);
-           hardline;
-           hardline;
-           register_refs;
-           hardline;
-           ( if suppress_MR_M then empty
-             else
-               concat
-                 [
-                   string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ ".");
-                   hardline;
-                   string ("Definition M a := monad register_value a " ^ exc_typ ^ ".");
-                   hardline;
-                   string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ ".");
-                   hardline;
-                   string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
-                   hardline;
-                 ]
-           );
-         ]
+         ([
+            string "(*" ^^ string top_line ^^ string "*)";
+            hardline;
+            (separate_map hardline)
+              (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
+              types_modules;
+            hardline;
+            string "Import ListNotations.";
+            hardline;
+            string "Open Scope string.";
+            hardline;
+            string "Open Scope bool.";
+            hardline;
+            string "Open Scope Z.";
+            hardline;
+            hardline;
+            separate empty (List.map doc_def typdefs);
+            hardline;
+            hardline;
+          ]
+         @
+         if !opt_generate_extern_types then []
+         else
+           [
+             separate empty (List.map doc_def statedefs);
+             hardline;
+             hardline;
+             register_refs;
+             hardline;
+             ( if suppress_MR_M then empty
+               else
+                 concat
+                   [
+                     string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ ".");
+                     hardline;
+                     string ("Definition M a := monad register_value a " ^ exc_typ ^ ".");
+                     hardline;
+                     string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ ".");
+                     hardline;
+                     string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
+                     hardline;
+                   ]
+             );
+           ]
+         )
       );
-    (print defs_file)
-      (concat
-         [
-           string "(*" ^^ string top_line ^^ string "*)";
-           hardline;
-           (separate_map hardline) (fun lib -> separate space [string "Require Import"; string lib] ^^ dot) defs_modules;
-           hardline;
-           string "Import ListNotations.";
-           hardline;
-           string "Open Scope string.";
-           hardline;
-           string "Open Scope bool.";
-           hardline;
-           string "Open Scope Z.";
-           hardline;
-           hardline;
-           hardline;
-           separate empty (List.map doc_def defs);
-           hardline;
-           hardline;
-         ]
-      )
+    if not !opt_generate_extern_types then
+      (print defs_file)
+        (concat
+           [
+             string "(*" ^^ string top_line ^^ string "*)";
+             hardline;
+             (separate_map hardline)
+               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
+               defs_modules;
+             hardline;
+             string "Import ListNotations.";
+             hardline;
+             string "Open Scope string.";
+             hardline;
+             string "Open Scope bool.";
+             hardline;
+             string "Open Scope Z.";
+             hardline;
+             hardline;
+             hardline;
+             separate empty (List.map doc_def defs);
+             hardline;
+             hardline;
+           ]
+        )
   with Type_check.Type_error (env, l, err) ->
     let extra =
       "\nError during Coq printing\n"
