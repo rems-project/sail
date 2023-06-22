@@ -91,6 +91,8 @@ let rec list_contains cmp l1 = function
 let kbindings_filter_map f m =
   KBindings.fold (fun kid v m -> match f kid v with None -> m | Some v' -> KBindings.add kid v' m) m KBindings.empty
 
+let separate_in sep = function [] -> empty | l -> group (sep ^^ separate sep l)
+
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 let opt_extern_types : string list ref = ref []
@@ -956,9 +958,9 @@ let quant_item_constr_name ctx (QI_aux (qi, _)) =
 let doc_typquant_items ?(prop_vars = false) ctx env delimit (TypQ_aux (tq, _)) =
   match tq with
   | TypQ_tq qis ->
-      separate_opt space (doc_quant_item_id ~prop_vars ctx delimit) qis
-      ^^ separate_opt space (doc_quant_item_constr ~prop_vars ctx env delimit) qis
-  | TypQ_no_forall -> empty
+      List.filter_map (doc_quant_item_id ~prop_vars ctx delimit) qis
+      @ List.filter_map (doc_quant_item_constr ~prop_vars ctx env delimit) qis
+  | TypQ_no_forall -> []
 
 let doc_typquant_items_separate ctx env delimit (TypQ_aux (tq, _)) =
   match tq with
@@ -2328,13 +2330,10 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
       doc_op coloneq
         (separate space
-           [
-             string "Definition";
-             doc_id_type types_mod avoid_target_names None id;
-             doc_typquant_items bare_ctxt Env.empty parens typq;
-             colon;
-             string "Type";
-           ]
+           ([string "Definition"; doc_id_type types_mod avoid_target_names None id]
+           @ doc_typquant_items bare_ctxt Env.empty parens typq
+           @ [colon; string "Type"]
+           )
         )
         (doc_typschm bare_ctxt Env.empty false typschm)
       ^^ dot ^^ twice hardline
@@ -2342,7 +2341,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       let idpp = doc_id_type types_mod avoid_target_names None id in
       doc_op coloneq
         (separate space
-           [string "Definition"; idpp; doc_typquant_items bare_ctxt Env.empty parens typq; colon; string "Z"]
+           ([string "Definition"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "Z"])
         )
         (doc_nexp bare_ctxt nexp)
       ^^ dot ^^ hardline
@@ -2352,7 +2351,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       let idpp = doc_id_type types_mod avoid_target_names None id in
       doc_op coloneq
         (separate space
-           [string "Definition"; idpp; doc_typquant_items bare_ctxt Env.empty parens typq; colon; string "bool"]
+           ([string "Definition"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "bool"])
         )
         (doc_nc_exp bare_ctxt Env.empty nc)
       ^^ dot ^^ hardline
@@ -2378,7 +2377,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
             mk_typ (Typ_app (id, targs))
         | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id
       in
-      let fs_doc = group (separate_map (break 1) f_pp fs) in
+      let fs_doc = separate_map hardline f_pp fs in
       let type_id_pp = doc_id_type types_mod avoid_target_names None id in
       let match_parameters =
         match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l
@@ -2422,43 +2421,53 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       in
       let eq_pp =
         if IdSet.mem id generic_eq_types then
-          string "#[export] Instance Decidable_eq_"
-          ^^ type_id_pp ^^ space ^^ colon ^/^ string "forall (x y : " ^^ type_id_pp ^^ string "), Decidable (x = y)."
-          ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
-          ^^ separate hardline
-               (list_init numfields (fun n ->
-                    let ns = string_of_int n in
-                    string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ ".")
-                )
+          string "#[export]" ^^ hardline
+          ^^ group
+               (nest 2
+                  (string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^ string "forall (x y : "
+                 ^^ type_id_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
+                  ^^ separate hardline
+                       (list_init numfields (fun n ->
+                            let ns = string_of_int n in
+                            string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ ".")
+                        )
+                       )
+                  )
                )
           ^^ hardline
           ^^ string "refine (Build_Decidable _ true _). subst. split; reflexivity."
           ^^ hardline ^^ string "Defined." ^^ twice hardline
         else empty
       in
-      let typqs_pp = doc_typquant_items bare_ctxt Env.empty braces typq in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
       let inhabited_pp =
-        let reqs_pp = separate (break 1) (List.filter_map doc_inhabited_req (quant_items typq)) in
+        let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
         let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
         let field_pp (_, fid) = fname fid ^^ string " := inhabitant" in
-        group
-          (prefix 2 1
-             (group
-                (string "#[export] Instance dummy_" ^^ type_id_pp ^/^ typqs_pp ^/^ reqs_pp ^^ colon
-               ^/^ string "Inhabited (" ^^ type_id_pp ^^ space ^^ params_pp ^^ string ") := {"
+        string "#[export]" ^^ hardline
+        ^^ group
+             (prefix 2 1
+                (nest 2
+                   (flow (break 1)
+                      (((string "Instance dummy_" ^^ type_id_pp) :: typq_pps)
+                      @ req_pps
+                      @ [colon; string "Inhabited (" ^^ type_id_pp ^^ space ^^ params_pp ^^ string ") := {"]
+                      )
+                   )
                 )
+                (prefix 2 1 (string "inhabitant := {|") (separate_map (string ";" ^^ break 1) field_pp fs))
+             ^/^ string "|}" ^^ space ^^ rbrace ^^ dot
              )
-             (prefix 2 1 (string "inhabitant := {|") (separate_map (string ";" ^^ break 1) field_pp fs))
-          ^/^ string "|} }."
-          )
         ^^ hardline
       in
       let reset_implicits_pp = doc_reset_implicits type_id_pp typq in
-      doc_op coloneq
-        (separate space [string "Record"; type_id_pp; typqs_pp])
-        ((*doc_typquant typq*) braces (space ^^ align fs_doc ^^ space))
-      ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline ^^ inhabited_pp
-      ^^ twice hardline
+      prefix 2 1
+        (nest 2
+           (flow (break 1) ((string "Record" ^^ space ^^ type_id_pp) :: typq_pps) ^^ space ^^ coloneq ^^ space ^^ lbrace)
+        )
+        fs_doc
+      ^^ hardline ^^ rbrace ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline
+      ^^ inhabited_pp ^^ twice hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
       | Id_aux (Id "read_kind", _) -> empty
@@ -2474,9 +2483,11 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let id_pp = doc_id_type types_mod avoid_target_names None id in
-          let typ_nm = separate space [id_pp; doc_typquant_items bare_ctxt Env.empty braces typq] in
-          let ar_doc = group (separate_map (break 1) (fun x -> pipe ^^ space ^^ doc_type_union bare_ctxt id_pp x) ar) in
-          let typ_pp = (doc_op coloneq) (concat [string "Inductive"; space; typ_nm]) (*doc_typquant typq*) ar_doc in
+          let q_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
+          let ar_doc = separate_map hardline (fun x -> pipe ^^ space ^^ doc_type_union bare_ctxt id_pp x) ar in
+          let typ_pp =
+            string "Inductive" ^^ space ^^ id_pp ^^ separate_in space q_pps ^^ space ^^ coloneq ^^ hardline ^^ ar_doc
+          in
           let reset_implicits_pp = doc_reset_implicits id_pp typq in
           let doc_dec_eq_req = function
             | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
@@ -2494,10 +2505,18 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
           in
           let eq_pp =
             if IdSet.mem id generic_eq_types then (
-              let eq_reqs_pp = separate (break 1) (List.filter_map doc_dec_eq_req (quant_items typq)) in
-              string "#[export] Instance Decidable_eq_"
-              ^^ typ_nm ^^ space ^^ eq_reqs_pp ^^ colon ^/^ string "forall (x y : " ^^ typ_use_pp
-              ^^ string "), Decidable (x = y)." ^^ hardline
+              let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
+              string "#[export]" ^^ hardline
+              ^^ group
+                   (nest 2
+                      (flow (break 1)
+                         (((string "Instance Decidable_eq_" ^^ id_pp) :: q_pps)
+                         @ eq_req_pps
+                         @ [colon; string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)."]
+                         )
+                      )
+                   )
+              ^^ hardline
               ^^ string "refine (Decidable_eq_from_dec (fun x y => _))."
               ^^ hardline
               ^^ string "decide equality; refine (generic_dec _ _)."
@@ -2508,17 +2527,21 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
           let inhabited_pp =
             match ar with
             | Tu_aux (Tu_ty_id (typ, example_id), _) :: _ ->
-                let reqs_pp = separate (break 1) (List.filter_map doc_inhabited_req (quant_items typq)) in
-                group
-                  (prefix 2 1
-                     (group
-                        (string "#[export] Instance dummy_" ^^ typ_nm ^^ space ^^ reqs_pp ^^ colon
-                       ^/^ string "Inhabited (" ^^ typ_use_pp ^^ string ") := {"
+                let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
+                string "#[export]" ^^ hardline
+                ^^ group
+                     (prefix 2 1
+                        (nest 2
+                           (flow (break 1)
+                              (((string "Instance dummy_" ^^ id_pp) :: q_pps)
+                              @ req_pps
+                              @ [colon; string "Inhabited (" ^^ typ_use_pp ^^ string ") := {"]
+                              )
+                           )
                         )
+                        (prefix 2 1 (string "inhabitant :=") (doc_id_ctor bare_ctxt example_id ^^ string " inhabitant"))
+                     ^/^ rbrace ^^ dot
                      )
-                     (prefix 2 1 (string "inhabitant :=") (doc_id_ctor bare_ctxt example_id ^^ string " inhabitant"))
-                  ^/^ string "}."
-                  )
                 ^^ hardline
             | [] ->
                 Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
@@ -2542,26 +2565,39 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       | _ ->
           let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
           let id_pp = doc_id_type types_mod avoid_target_names None id in
-          let typ_pp = (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) enums_doc in
+          let typ_pp =
+            (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
+          in
           let eq1_pp = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
           let eq2_pp =
-            string "#[export] Instance Decidable_eq_"
-            ^^ id_pp ^^ space ^^ colon ^/^ string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :="
-            ^/^ string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec."
+            string "#[export]" ^^ hardline
+            ^^ group
+                 (nest 2
+                    (flow (break 1)
+                       [
+                         string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
+                         string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
+                         string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
+                       ]
+                    )
+                 )
           in
           let inhabited_pp =
             match enums with
             | example_id :: _ ->
-                group
-                  (prefix 2 1
-                     (group
-                        (string "#[export] Instance dummy_" ^^ id_pp ^^ space ^^ colon ^/^ string "Inhabited " ^^ id_pp
-                       ^^ string " := {"
+                string "#[export]" ^^ hardline
+                ^^ group
+                     (nest 2
+                        (flow (break 1)
+                           [
+                             string "Instance dummy_" ^^ id_pp ^^ space ^^ colon;
+                             string "Inhabited " ^^ id_pp ^^ string " := {";
+                           ]
+                        ^/^ string "inhabitant :="
+                        ^^ nest 2 (break 1 ^^ doc_id_ctor bare_ctxt example_id)
                         )
+                     ^/^ string "}."
                      )
-                     (string "inhabitant :=" ^/^ doc_id_ctor bare_ctxt example_id)
-                  ^/^ string "}."
-                  )
                 ^^ hardline
             | [] ->
                 Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
