@@ -91,7 +91,7 @@ let latex_options =
     );
   ]
 
-let latex_target _ out_file ast effect_info env =
+let latex_target _ _ out_file ast effect_info env =
   Reporting.opt_warnings := true;
   let latex_dir = match out_file with None -> "sail_latex" | Some s -> s in
   begin

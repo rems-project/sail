@@ -107,7 +107,7 @@ let output_docinfo doc_dir docinfo =
   output_char chan '\n';
   close_out chan
 
-let doc_target _ out_file ast _ _ =
+let doc_target _ _ out_file ast _ _ =
   Reporting.opt_warnings := true;
   let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
   begin

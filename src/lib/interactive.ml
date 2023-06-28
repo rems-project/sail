@@ -77,10 +77,17 @@ type istate = {
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   default_sail_dir : string;
+  config : Yojson.Basic.t option;
 }
 
-let initial_istate default_sail_dir =
-  { ast = empty_ast; effect_info = Effects.empty_side_effect_info; env = Type_check.initial_env; default_sail_dir }
+let initial_istate config default_sail_dir =
+  {
+    ast = empty_ast;
+    effect_info = Effects.empty_side_effect_info;
+    env = Type_check.initial_env;
+    default_sail_dir;
+    config;
+  }
 
 let arg str = "<" ^ str ^ ">" |> Util.yellow |> Util.clear
 

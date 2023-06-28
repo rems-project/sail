@@ -76,7 +76,7 @@ type target = {
   pre_parse_hook : unit -> unit;
   pre_rewrites_hook : tannot ast -> Effects.side_effect_info -> Env.t -> unit;
   rewrites : (string * Rewrites.rewriter_arg list) list;
-  action : string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+  action : Yojson.Basic.t option -> string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
   asserts_termination : bool;
 }
 
@@ -160,7 +160,9 @@ let () =
               ActionUnit
                 (fun istate ->
                   match get ~name with
-                  | Some tgt -> action tgt istate.default_sail_dir (Some out) istate.ast istate.effect_info istate.env
+                  | Some tgt ->
+                      action tgt istate.config istate.default_sail_dir (Some out) istate.ast istate.effect_info
+                        istate.env
                   | None -> print_endline ("No target " ^ name)
                 )
           )
