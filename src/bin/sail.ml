@@ -287,9 +287,9 @@ let rec options =
       ("--help", Arg.Unit (fun () -> help !options), "");
     ]
 
-let register_default_target () = Target.register ~name:"default" (fun _ _ _ _ _ -> ())
+let register_default_target () = Target.register ~name:"default" (fun _ _ _ _ _ _ -> ())
 
-let run_sail tgt =
+let run_sail (config : Yojson.Basic.t option) tgt =
   Target.run_pre_parse_hook tgt ();
   let ast, env, effect_info =
     Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments
@@ -303,7 +303,7 @@ let run_sail tgt =
   Target.run_pre_rewrites_hook tgt ast effect_info env;
   let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
 
-  Target.action tgt Manifest.dir !opt_file_out ast effect_info env;
+  Target.action tgt config Manifest.dir !opt_file_out ast effect_info env;
 
   (ast, env, effect_info)
 
@@ -443,8 +443,8 @@ let main () =
 
   let ast, env, effect_info =
     match Target.get_the_target () with
-    | Some target when not !opt_just_check -> run_sail target
-    | _ -> run_sail default_target
+    | Some target when not !opt_just_check -> run_sail config target
+    | _ -> run_sail config default_target
   in
 
   if !opt_memo_z3 then Constraint.save_digests ();
@@ -465,7 +465,8 @@ let main () =
           with End_of_file -> List.rev !lines
         )
     in
-    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~options:!options env effect_info ast
+    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~config ~options:!options env
+      effect_info ast
   )
 
 let () =

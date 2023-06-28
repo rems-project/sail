@@ -83,6 +83,7 @@ val start_repl :
   ?banner:bool ->
   ?commands:string list ->
   ?auto_rewrites:bool ->
+  config:Yojson.Basic.t option ->
   options:(Arg.key * Arg.spec * Arg.doc) list ->
   Env.t ->
   Effects.side_effect_info ->

@@ -79,9 +79,10 @@ type istate = {
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   default_sail_dir : string;
+  config : Yojson.Basic.t option;
 }
 
-val initial_istate : string -> istate
+val initial_istate : Yojson.Basic.t option -> string -> istate
 
 val arg : string -> string
 val command : string -> string

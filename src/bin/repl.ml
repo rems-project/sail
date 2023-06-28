@@ -74,9 +74,6 @@ open Interpreter
 open Pretty_print_sail
 
 module Callgraph_commands = Callgraph_commands
-(*
-module Gdbmi = Gdbmi
-*)
 
 type mode = Evaluation of frame | Normal
 
@@ -91,28 +88,42 @@ type istate = {
   clear : bool;
   state : Interpreter.lstate * Interpreter.gstate;
   default_sail_dir : string;
+  config : Yojson.Basic.t option;
 }
 
 let shrink_istate istate : Interactive.istate =
-  { ast = istate.ast; effect_info = istate.effect_info; env = istate.env; default_sail_dir = istate.default_sail_dir }
+  {
+    ast = istate.ast;
+    effect_info = istate.effect_info;
+    env = istate.env;
+    default_sail_dir = istate.default_sail_dir;
+    config = istate.config;
+  }
 
-let initial_istate options env effect_info ast =
+let initial_istate config options env effect_info ast =
   {
     ast;
     effect_info;
     env;
-    ref_state = ref (Interactive.initial_istate Manifest.dir);
+    ref_state = ref (Interactive.initial_istate config Manifest.dir);
     vs_ids = ref (val_spec_ids ast.defs);
     options;
     mode = Normal;
     clear = true;
     state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops;
     default_sail_dir = Manifest.dir;
+    config;
   }
 
 let setup_interpreter_state istate =
   istate.ref_state :=
-    { ast = istate.ast; effect_info = istate.effect_info; env = istate.env; default_sail_dir = istate.default_sail_dir };
+    {
+      ast = istate.ast;
+      effect_info = istate.effect_info;
+      env = istate.env;
+      default_sail_dir = istate.default_sail_dir;
+      config = istate.config;
+    };
   { istate with state = initial_state istate.ast istate.env !Value.primops }
 
 let prompt istate = match istate.mode with Normal -> "sail> " | Evaluation _ -> "eval> "
@@ -663,15 +674,16 @@ let handle_input istate input =
       print_endline (Printexc.to_string exn);
       istate
 
-let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~options env effect_info ast =
+let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options env
+    effect_info ast =
   let istate =
     if rewrites then (
       let ast, effect_info, env =
         Rewrites.rewrite effect_info env (Rewrites.instantiate_rewrites Rewrites.rewrites_interpreter) ast
       in
-      initial_istate options env effect_info ast
+      initial_istate config options env effect_info ast
     )
-    else initial_istate options env effect_info ast
+    else initial_istate config options env effect_info ast
   in
 
   LNoise.set_completion_callback (fun line_so_far ln_completions ->
