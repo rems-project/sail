@@ -2619,7 +2619,7 @@ let rec move_to_front p ys = function
   | x :: xs -> move_to_front p (x :: ys) xs
   | [] -> ys
 
-let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
+let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
   let mk_exp exp = mk_exp ~loc:l exp in
   match aux with
   | Nexp_var v ->
@@ -2649,39 +2649,39 @@ let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
         | Some (id, (_, typ)) -> mk_exp (E_app (mk_id "__size", [mk_exp (E_id id)]))
         | None -> raise No_simple_rewrite
       end
-  | Nexp_constant c -> mk_lit_exp (L_num c)
+  | Nexp_constant c -> mk_lit_exp ~loc:l (L_num c)
   | Nexp_neg nexp ->
-      let exp = rewrite_sizeof' env nexp in
+      let exp = rewrite_sizeof' l env nexp in
       mk_exp (E_app (mk_id "negate_atom", [exp]))
   | Nexp_sum (nexp1, nexp2) ->
-      let exp1 = rewrite_sizeof' env nexp1 in
-      let exp2 = rewrite_sizeof' env nexp2 in
+      let exp1 = rewrite_sizeof' l env nexp1 in
+      let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "add_atom", [exp1; exp2]))
   | Nexp_minus (nexp1, nexp2) ->
-      let exp1 = rewrite_sizeof' env nexp1 in
-      let exp2 = rewrite_sizeof' env nexp2 in
+      let exp1 = rewrite_sizeof' l env nexp1 in
+      let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "sub_atom", [exp1; exp2]))
   | Nexp_times (nexp1, nexp2) ->
-      let exp1 = rewrite_sizeof' env nexp1 in
-      let exp2 = rewrite_sizeof' env nexp2 in
+      let exp1 = rewrite_sizeof' l env nexp1 in
+      let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "mult_atom", [exp1; exp2]))
   | Nexp_exp nexp ->
-      let exp = rewrite_sizeof' env nexp in
+      let exp = rewrite_sizeof' l env nexp in
       mk_exp (E_app (mk_id "pow2", [exp]))
   (* SMT solver div/mod is euclidian, so we must use those versions of
      div and mod in lib/smt.sail *)
   | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "div" ->
-      let exp1 = rewrite_sizeof' env nexp1 in
-      let exp2 = rewrite_sizeof' env nexp2 in
+      let exp1 = rewrite_sizeof' l env nexp1 in
+      let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "ediv_int", [exp1; exp2]))
   | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "mod" ->
-      let exp1 = rewrite_sizeof' env nexp1 in
-      let exp2 = rewrite_sizeof' env nexp2 in
+      let exp1 = rewrite_sizeof' l env nexp1 in
+      let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "emod_int", [exp1; exp2]))
   | Nexp_app _ | Nexp_id _ -> typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
 
 let rewrite_sizeof l env nexp =
-  try rewrite_sizeof' env nexp
+  try rewrite_sizeof' l env nexp
   with No_simple_rewrite ->
     let locals = Env.get_locals env |> Bindings.bindings in
     let same_size (local, (_, Typ_aux (aux, _))) =

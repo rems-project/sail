@@ -148,7 +148,7 @@ val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
 val mk_mpexp : uannot mpexp_aux -> uannot mpexp
 val mk_lexp : uannot lexp_aux -> uannot lexp
 val mk_lit : lit_aux -> lit
-val mk_lit_exp : lit_aux -> uannot exp
+val mk_lit_exp : ?loc:l -> lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
 val mk_fundef : uannot funcl list -> uannot def

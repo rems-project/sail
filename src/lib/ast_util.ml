@@ -172,7 +172,7 @@ let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
-let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
+let mk_lit_exp ?loc:(l = Parse_ast.Unknown) lit_aux = mk_exp ~loc:l (E_lit (mk_lit lit_aux))
 
 let mk_funcl ?loc:(l = Parse_ast.Unknown) id pat body =
   FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l, empty_uannot))
