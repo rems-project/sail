@@ -65,12 +65,21 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Libsail
-
 open Ast
 open Ast_defs
 open Ast_util
 open Type_check
+
+type parameters = {
+  abort_type : typ;
+  barrier_type : typ;
+  cache_op_type : typ;
+  fault_type : typ;
+  pa_type : typ;
+  tlbi_type : typ;
+  translation_summary_type : typ;
+  arch_ak_type : typ;
+}
 
 let find_monad_parameters type_env =
   (* We treat the memory read function as an indication that we want the
@@ -113,6 +122,13 @@ let find_monad_parameters type_env =
       let fault_type = extract_arg_typ "sail_take_exception" in
       let tlbi_type = extract_arg_typ "sail_tlbi" in
       Some
-        [
-          abort_type; barrier_type; cache_op_type; fault_type; pa_type; tlbi_type; translation_summary_type; arch_ak_type;
-        ]
+        {
+          abort_type;
+          barrier_type;
+          cache_op_type;
+          fault_type;
+          pa_type;
+          tlbi_type;
+          translation_summary_type;
+          arch_ak_type;
+        }

@@ -197,7 +197,7 @@ let rec fix_id avoid remove_tick name =
   | "in" | "let" | "match" | "return" | "then" | "where" | "with" | "by" | "exists" | "exists2" | "using"
   (* other identifiers we shouldn't override *)
   | "assert" | "lsl" | "lsr" | "asr" | "type" | "function" | "raise" | "try" | "check" | "field" | "LT" | "GT" | "EQ"
-  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" ->
+  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "register_ref" ->
       name ^ "'"
   | _ ->
       if StringSet.mem name avoid then name ^ "'"
@@ -218,10 +218,14 @@ let string_id avoid (Id_aux (i, _)) =
 let doc_id ctxt id = string (string_id ctxt.avoid_target_names id)
 
 let doc_id_type types_mod avoid env (Id_aux (i, _) as id) =
+  (* If a type is shadowed by a definition, use the types module to disambiguate *)
   let is_shadowed () =
-    match env with
-    | None -> false
-    | Some env -> IdSet.mem id (Env.get_defined_val_specs env) || not (is_unbound (Env.lookup_id id env))
+    if types_mod = "" then false
+    else (
+      match env with
+      | None -> false
+      | Some env -> IdSet.mem id (Env.get_defined_val_specs env) || not (is_unbound (Env.lookup_id id env))
+    )
   in
   match i with
   | Id "int" -> string "Z"
@@ -3355,7 +3359,7 @@ let builtin_target_names defs =
   List.fold_left check_def StringSet.empty defs
 
 let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module effect_info type_env { defs; _ }
-    top_line suppress_MR_M =
+    concurrency_monad_params top_line suppress_MR_M =
   try
     (* let regtypes = find_regtypes d in *)
     let state_ids = State.generate_regstate_defs type_env defs |> val_spec_ids in
@@ -3373,6 +3377,60 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     let bare_doc_id = doc_id { empty_ctxt with avoid_target_names } in
     let register_refs = State.register_refs_coq bare_doc_id type_env (State.find_registers defs) in
     let generic_eq_types = types_used_with_generic_eq defs in
+    let interface_defs =
+      match concurrency_monad_params with
+      | None ->
+          if suppress_MR_M then empty
+          else
+            separate hardline
+              [
+                string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ ".");
+                string ("Definition M a := monad register_value a " ^ exc_typ ^ ".");
+                string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ ".");
+                string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
+              ]
+      | Some params ->
+          let pp_typ = doc_typ { empty_ctxt with avoid_target_names } type_env in
+          let open Monad_params in
+          let mr_m =
+            if suppress_MR_M then []
+            else
+              [
+                empty;
+                string "Definition M a := Defs.monad a exception.";
+                string "Definition MR a r := Defs.monad a (r + exception)%type.";
+                string "Definition returnM {A:Type} : A -> M A := Defs.returnm (E := exception).";
+                string "Definition returnR {A:Type} (R:Type) : A -> MR A R := Defs.returnm (E := R + exception)%type.";
+              ]
+          in
+          separate hardline
+            ([
+               string "Module Arch <: Arch.";
+               string "  Definition reg := string.";
+               (* string "  Definition reg_eq : EqDecision reg := _.";
+                  string "  Definition reg_countable : Countable reg := _.";*)
+               string "  Definition reg_type := register_value.";
+               string "  Definition va_size := 64%N.";
+               (* FIXME *)
+               string "  Definition pa := " ^^ pp_typ params.pa_type ^^ string ".";
+               (* string "  Definition pa_eq : EqDecision pa := _.";
+                  string "  Definition pa_countable : Countable pa := _.";*)
+               string "  Definition arch_ak := " ^^ pp_typ params.arch_ak_type ^^ string ".";
+               string "  Definition translation := " ^^ pp_typ params.translation_summary_type ^^ string ".";
+               string "  Definition abort := " ^^ pp_typ params.abort_type ^^ string ".";
+               string "  Definition barrier := " ^^ pp_typ params.barrier_type ^^ string ".";
+               string "  Definition cache_op := " ^^ pp_typ params.cache_op_type ^^ string ".";
+               string "  Definition tlb_op := " ^^ pp_typ params.tlbi_type ^^ string ".";
+               string "  Definition fault (deps : Type) := " ^^ pp_typ params.fault_type ^^ string ".";
+               string "  Definition footprint_system_registers : list reg := [].";
+               string "End Arch.";
+               empty;
+               string "Module Interface := Interface Arch.";
+               string "Module Defs := Defs Arch Interface.";
+             ]
+            @ mr_m
+            )
+    in
     let doc_def = doc_def type_defs_module unimplemented avoid_target_names generic_eq_types effect_info in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
@@ -3407,27 +3465,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
          @
          if !opt_generate_extern_types then []
          else
-           [
-             separate empty (List.map doc_def statedefs);
-             hardline;
-             hardline;
-             register_refs;
-             hardline;
-             ( if suppress_MR_M then empty
-               else
-                 concat
-                   [
-                     string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ ".");
-                     hardline;
-                     string ("Definition M a := monad register_value a " ^ exc_typ ^ ".");
-                     hardline;
-                     string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ ".");
-                     hardline;
-                     string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
-                     hardline;
-                   ]
-             );
-           ]
+           [separate empty (List.map doc_def statedefs); hardline; hardline; register_refs; hardline] @ [interface_defs]
          )
       );
     if not !opt_generate_extern_types then
@@ -3440,6 +3478,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
                defs_modules;
              hardline;
+             (if Option.is_some concurrency_monad_params then string "Import Defs." ^^ hardline else empty);
              string "Import ListNotations.";
              hardline;
              string "Open Scope string.";
