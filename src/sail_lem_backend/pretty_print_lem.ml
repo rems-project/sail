@@ -1855,8 +1855,23 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
   let extra_monad_params =
     match concurrency_monad_params with
     | None -> empty
-    | Some params -> space ^^ separate_map space (doc_typ_lem_brackets params_to_print type_env) params
+    | Some params ->
+        let open Monad_params in
+        space
+        ^^ separate_map space
+             (doc_typ_lem_brackets params_to_print type_env)
+             [
+               params.abort_type;
+               params.barrier_type;
+               params.cache_op_type;
+               params.fault_type;
+               params.pa_type;
+               params.tlbi_type;
+               params.translation_summary_type;
+               params.arch_ak_type;
+             ]
   in
+
   (print types_file)
     (concat
        [
