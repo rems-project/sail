@@ -2305,7 +2305,86 @@ let jib_of_ast env effect_info ast =
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
 
-let register_info_array env ctx cdefs =
+type gdb_feature = {
+    name: string;
+    registers: string list;
+    typed_registers: (string * string) list;
+}
+
+type gdb_info = {
+    architecture: string option;
+    features: gdb_feature list;
+}
+
+let extract_gdb_info ast =
+  let arch, features =
+    List.fold_left (fun (a,f) d ->
+        match d with
+        | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)) ->
+           let s = string_of_id id in
+           if s = "gdb_architecture" then (Some exp, f)
+           else if s = "gdb_features" then (a, Some exp)
+           else (a,f)
+        | _ -> (a,f)
+      ) (None, None) ast.defs
+  in
+  let architecture =
+    match arch with
+    | Some (E_aux (E_lit (L_aux (L_string s, _)), _)) -> Some s
+    | Some (E_aux (_, (l, _))) ->
+       Reporting.warn ~once_from:__POS__ "" l "GDB architecture should be a string literal";
+       None
+    | None -> None
+  in
+  let reg (E_aux (e, (l, _))) =
+    match e with
+    | E_lit (L_aux (L_string s, _)) -> Some s
+    | _ ->
+       Reporting.warn ~once_from:__POS__ "" l "GDB registers should be string literals";
+       None
+  in
+  let typed_reg (E_aux (e, (l, _))) =
+    match e with
+    | E_tuple [E_aux (E_lit (L_aux (L_string s1, _)), _); E_aux (E_lit (L_aux (L_string s2, _)), _)] -> Some (s1, s2)
+    | _ ->
+       Reporting.warn ~once_from:__POS__ "" l "GDB typed registers should be string literal pairs";
+       None
+  in
+  let feature (E_aux (e, (l, _))) =
+    match e with
+    | E_tuple [E_aux (E_lit (L_aux (L_string name, _)), _);
+               E_aux (E_list regs, _);
+               E_aux (E_list typ_regs, _)] ->
+       let registers = List.filter_map reg regs in
+       let typed_registers = List.filter_map typed_reg typ_regs in
+       Some { name; registers; typed_registers }
+    | _ ->
+       Reporting.warn ~once_from:__POS__ "" l "GDB features should be tuples of a string literal, a list of registers, and a list of typed registers";
+       None
+  in
+  let features =
+    match features with
+    | Some (E_aux (E_list exps, _)) -> List.filter_map feature exps
+    | Some (E_aux (_, (l, _)) as exp) ->
+       Reporting.warn ~once_from:__POS__ "" l ("GDB features should be a list: " ^ string_of_exp exp);
+       []
+    | None -> []
+  in
+  { architecture; features }
+
+module StringMap = Map.Make(String)
+
+let register_info_array env ctx gdb_info cdefs =
+  let register_feature_map =
+    List.fold_left (fun m feature ->
+        let m = List.fold_left (fun m reg ->
+                    StringMap.add reg (feature.name, None) m)
+                  m feature.registers
+        in List.fold_left (fun m (reg, ty) ->
+               StringMap.add reg (feature.name, Some ty) m)
+             m feature.typed_registers)
+      StringMap.empty gdb_info.features
+  in
   let encoders =
     let f id =
       let _, arg_ctyps, ret_ctyp = Bindings.find id ctx.valspecs in
@@ -2363,18 +2442,35 @@ Bindings.iter (fun id (fn_id, ctyp, size) -> Printf.eprintf "%s %s %s %d\n%!" (s
     | _ -> assert false
   in
   let qquotes = enclose (string "\\\"") (string "\\\"") in
+  let sizes_required = ref Util.IntSet.empty in
   let pp id bits_type n read_fn write_fn other_defs =
        let c_id = c_literal_of_id id in
-       Some (group (braces (dquotes c_id ^^ comma ^/^
-                              bits_type ^^ comma ^/^
-                                OCaml.int n ^^ comma ^/^
-                                  ampersand ^^ string (sgen_id id) ^^ comma ^/^
-                                    read_fn ^^ comma ^/^
-                                      write_fn
-                      ) ^^ comma),
-             group (angles (string "reg name=" ^^ qquotes c_id ^/^
-                              string "bitsize=" ^^ qquotes (OCaml.int n) ^^ string "/")),
-         other_defs)
+       let feature, ty =
+         try StringMap.find (string_of_id id) register_feature_map
+         with Not_found ->
+           "sail.registers",
+           if n = 8 || n = 16 || n = 32 || n = 64 then None
+           else begin
+             sizes_required := Util.IntSet.add n !sizes_required;
+             Some ("bits" ^ string_of_int n)
+             end
+       in
+       let ty_pp =
+         match ty with
+         | None -> empty
+         | Some ty -> space ^^ string "type=" ^^ qquotes (string ty)
+       in
+       Some ((feature,
+              group (braces (dquotes c_id ^^ comma ^/^
+                               bits_type ^^ comma ^/^
+                                 OCaml.int n ^^ comma ^/^
+                                   ampersand ^^ string (sgen_id id) ^^ comma ^/^
+                                     read_fn ^^ comma ^/^
+                                       write_fn
+                       ) ^^ comma),
+              group (angles (string "reg name=" ^^ qquotes c_id ^/^
+                               string "bitsize=" ^^ qquotes (OCaml.int n) ^^ ty_pp ^^ string "/"))),
+             other_defs)
   in
   let defs_generated = ref IdSet.empty in
   let check_def = function
@@ -2391,7 +2487,8 @@ Bindings.iter (fun id (fn_id, ctyp, size) -> Printf.eprintf "%s %s %s %d\n%!" (s
          | _ -> sail_typ
        in
        begin match destruct_bitvector env sail_typ with
-       | Some (Nexp_aux (Nexp_constant n, _), _) -> pp id (type_of ctyp) (Nat_big_num.to_int n) (string "0") (string "0") []
+       | Some (Nexp_aux (Nexp_constant n, _), _) ->
+          pp id (type_of ctyp) (Nat_big_num.to_int n) (string "0") (string "0") []
        | Some (nexp,_) ->
           (* TODO: report properly *)
           Printf.eprintf "Non-constant register size for %s: %s\n%!" (string_of_id id) (string_of_nexp nexp);
@@ -2446,31 +2543,53 @@ Bindings.iter (fun id (fn_id, ctyp, size) -> Printf.eprintf "%s %s %s %d\n%!" (s
          end
     | _ -> None
   in
-  let (registers, reg_xml, other_defs) = Util.split3 (List.filter_map check_def cdefs) in
+  let (feature_registers, other_defs) = List.split (List.filter_map check_def cdefs) in
   let prefix_pp =
     separate2 hardline hardline ([
           string "enum gdb_reg_type { gdb_sbits, gdb_fbits, gdb_lbits };";
           string "struct gdb_register_info { char *name; enum gdb_reg_type ty; int size; void *reg; void (*read_fn)(void *dst, void *reg); void (*write_fn)(void *src, void *reg); };";
           empty;
-          concat [string "int gdb_register_count = "; OCaml.int (List.length registers); string ";"]
+          concat [string "int gdb_register_count = "; OCaml.int (List.length feature_registers); string ";"]
       ] @ List.concat other_defs @ [
           string "struct gdb_register_info gdb_registers[] = {"
       ])
   in
+  let features =
+    List.fold_left (fun m (feature, reg, xml) ->
+        StringMap.update feature (function None -> Some ([reg], [xml]) | Some (t,t') -> Some (reg::t,xml::t')) m)
+      StringMap.empty feature_registers
+    |> StringMap.bindings
+  in
+  let registers = List.concat (List.map (fun (_, (r, _)) -> r) features) in
   let registers_pp = separate2 hardline hardline registers in
   let string_cont = string "\\n\\" ^^ hardline in
+  let arch_pp =
+    match gdb_info.architecture with
+    | None -> []
+    | Some name -> [string (Printf.sprintf "<architecture>%s</architecture>" name)];
+  in
   let mid_pp =
-    separate2 string_cont string_cont [
+    separate2 string_cont string_cont ([
         string "const char *gdb_xml = \"<?xml version=\\\"1.0\\\"?>";
         string "<!DOCTYPE feature SYSTEM \\\"gdb-target.dtd\\\">";
-        string "<target version=\\\"1.0\\\">";
-        string "<feature name=\\\"sail.registers\\\">\\n\\"
-      ]
+        string "<target version=\\\"1.0\\\">"
+      ] @ arch_pp)
   in
-  let reg_xml_pp = separate2 string_cont string_cont reg_xml in
-  let end_pp = string "</feature>\\n</target>\\n\";" in
+  let extra_types =
+    List.map (fun n ->
+        string ("<vector id=\\\"bits" ^ string_of_int n ^ "\\\" type=\\\"int8\\\" count=\\\"" ^ string_of_int (n/8) ^ "\\\"/>") ^^ string_cont)
+      (Util.IntSet.elements !sizes_required)
+  in
+  let pp_feature (name, (_, reg_xml)) =
+    let extra = if name = "sail.registers" then extra_types else [] in
+    hang 2 (string (Printf.sprintf "<feature name=\\\"%s\\\">\\n\\" name (* TODO: quote *)) ^^ string_cont ^^
+              separate2 string_cont string_cont (extra @ reg_xml))
+    ^^ string_cont ^^ string "</feature>" ^^ string_cont
+  in
+  let features_pp = concat (List.map pp_feature features) in
+  let end_pp = string "</target>\\n\";" in
   prefix 2 1 prefix_pp (group registers_pp) ^^ hardline ^^ string "};" ^^ hardline ^^
-    prefix 2 1 mid_pp reg_xml_pp ^^ string_cont ^^ end_pp ^^ hardline
+    mid_pp ^^ string_cont ^^ features_pp ^^ end_pp ^^ hardline
 
 let compile_ast env effect_info output_chan c_includes ast =
   try
@@ -2606,7 +2725,8 @@ let compile_ast env effect_info output_chan c_includes ast =
                                  ^^ model_main ^^ hardline)
     |> output_string output_chan;
     if !opt_gdb_stub then
-      register_info_array env ctx cdefs
+      let gdb_info = extract_gdb_info ast in
+      register_info_array env ctx gdb_info cdefs
       |> Pretty_print_sail.to_string
       |> output_string output_chan
   with
