@@ -1290,11 +1290,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
             )
         | CT_struct (_, ctors) when is_stack_ctyp ctyp ->
             let gs = ngensym () in
-            let fold (inits, prev) (id, ctyp) =
+            let fold (id, ctyp) (inits, prev) =
               let init, prev' = codegen_exn_return ctyp in
               (Printf.sprintf ".%s = %s" (sgen_id id) init :: inits, prev @ prev')
             in
-            let inits, prev = List.fold_left fold ([], []) ctors in
+            let inits, prev = List.fold_right fold ctors ([], []) in
             ( sgen_name gs,
               [
                 Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
