@@ -32,7 +32,7 @@
 
 module Big_int = Nat_big_num
 
-module StringSet = Set.Make(String)
+module StringSet = Set.Make (String)
 
 open Printf
 
@@ -49,9 +49,8 @@ let generated_primops = ref (StringSet.empty, [])
 
 let register_primop name def =
   let names, defs = !generated_primops in
-  if StringSet.mem name names then (
-    name
-  ) else (
+  if StringSet.mem name names then name
+  else (
     generated_primops := (StringSet.add name names, def () :: defs);
     name
   )
@@ -63,7 +62,7 @@ let sail_bits width =
     nf "typedef struct packed {";
     pf "    logic [%d:0] size;" (required_width (Big_int.of_int (width - 1)) - 1);
     pf "    logic [%d:0] bits;" (width - 1);
-    nf "} sail_bits;"
+    nf "} sail_bits;";
   ]
 
 let print_lbits width =
@@ -76,23 +75,26 @@ let print_lbits width =
           pf "        $display(\"%%s%s%%%s\", prefix, bv.bits[%d:0]);" prefix bin_or_hex n;
           nf "    end";
         ]
-      )
-    |> List.concat in
+    )
+    |> List.concat
+  in
   let footer = "endfunction" in
-  header :: body @ [footer]
+  (header :: body) @ [footer]
 
 let print_int width =
   [
     pf "function automatic sail_unit sail_print_int(string prefix, logic [%d:0] i);" (width - 1);
     nf "    $display(\"%s%0d\", prefix, i);";
-    nf "endfunction"
+    nf "endfunction";
   ]
 
 let output_primop buf lines =
-  List.iter (fun line ->
+  List.iter
+    (fun line ->
       Buffer.add_string buf line;
       Buffer.add_char buf '\n'
-    ) lines;
+    )
+    lines;
   Buffer.add_char buf '\n'
 
 let common_primops bv_width int_width =
@@ -113,20 +115,12 @@ let print_fbits width =
             "    string zeros;";
             "    bstr.hextoa(b);";
             pf "    zeros = \"%s\";" zeros;
-            pf "    $display(\"%%s0x%%s\", s, zeros.substr(0, %d - bstr.len()), bstr.toupper());" ((width / 4) - 1)
-          ]
-        ) else (
-          [
-            "    $display(\"%s0b%0B\", s, b);"
+            pf "    $display(\"%%s0x%%s\", s, zeros.substr(0, %d - bstr.len()), bstr.toupper());" ((width / 4) - 1);
           ]
         )
+        else ["    $display(\"%s0b%0B\", s, b);"]
       in
-      [
-        pf "function automatic sail_unit %s(string s, logic [%d:0] b);" name (width - 1);
-      ]
+      [pf "function automatic sail_unit %s(string s, logic [%d:0] b);" name (width - 1)]
       @ display
-      @ [
-        "    return SAIL_UNIT;";
-        "endfunction"
-      ]
-    )
+      @ ["    return SAIL_UNIT;"; "endfunction"]
+  )
