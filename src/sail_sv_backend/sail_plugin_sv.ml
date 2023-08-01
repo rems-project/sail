@@ -252,7 +252,7 @@ module Verilog_config : Jib_compile.Config = struct
   let specialize_calls = false
   let ignore_64 = true
   let struct_value = false
-  let tuple_value = true
+  let tuple_value = false
   let track_throw = true
   let branch_coverage = None
   let use_real = false
@@ -301,6 +301,7 @@ let sv_reserved_words =
     "checker";
     "class";
     "clocking";
+    "config";
     "const";
     "constraint";
     "context";
@@ -361,6 +362,7 @@ let sv_reserved_words =
     "randc";
     "randcase";
     "randsequence";
+    "reg";
     "reject_on";
     "ref";
     "restrict";
@@ -432,7 +434,7 @@ let sv_name = function
   | Return _ -> string "sail_return"
 
 let rec is_packed = function
-  | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ -> true
+  | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ -> true
   | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
   | ctyp -> failwith ("unpacked " ^ string_of_ctyp ctyp)
@@ -451,6 +453,9 @@ let rec sv_ctyp = function
   | CT_string -> string "string"
   | CT_unit -> string "sail_unit"
   | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> sv_id id
+  | CT_constant c ->
+      let width = required_width c in
+      ksprintf string "logic [%d:0]" (width - 1)
   | _ -> empty
 
 let sv_ctyp_default = function CT_bool -> string "0" | CT_bit -> string "1'bX" | _ -> string "DEFAULT"
@@ -470,6 +475,11 @@ let sv_type_def = function
            (lbrace ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) sv_field fields) ^^ semi ^^ hardline ^^ rbrace)
       ^^ space ^^ sv_id id ^^ semi
   | CTD_variant (id, ctors) ->
+      let exception_boilerplate =
+        if Id.compare id (mk_id "exception") = 0 then
+          twice hardline ^^ ksprintf string "%s sail_current_exception;" (sv_id_string id)
+        else empty
+      in
       let kind_id (id, _) = string_of_id id |> Util.zencode_string |> String.uppercase_ascii |> string in
       let sv_ctor (id, ctyp) = sv_ctyp ctyp ^^ space ^^ sv_id id in
       let tag_type = string ("sailtag_" ^ sv_id_string id) in
@@ -546,6 +556,7 @@ let sv_type_def = function
              ]
         ^^ twice hardline
         ^^ separate (twice hardline) constructors
+        ^^ exception_boilerplate
       )
       else empty
 
@@ -618,9 +629,10 @@ let rec sv_smt ?(need_parens = false) =
   | Fn ("not", [Fn ("=", [x; y])]) -> opt_parens (separate space [sv_smt_parens x; string "!="; sv_smt_parens y])
   | Fn ("not", [x]) -> opt_parens (char '!' ^^ sv_smt_parens x)
   | Fn ("=", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "=="; sv_smt_parens y])
-  | Fn ("and", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "||"; sv_smt_parens y])
-  | Fn ("or", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "||"; sv_smt_parens y])
+  | Fn ("and", xs) -> opt_parens (separate_map (space ^^ string "&&" ^^ space) sv_smt_parens xs)
+  | Fn ("or", xs) -> opt_parens (separate_map (space ^^ string "||" ^^ space) sv_smt_parens xs)
   | Fn ("bvnot", [x]) -> opt_parens (char '~' ^^ sv_smt_parens x)
+  | Fn ("bvneg", [x]) -> opt_parens (char '-' ^^ sv_smt_parens x)
   | Fn ("bvand", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '&'; sv_smt_parens y])
   | Fn ("bvnand", [x; y]) ->
       opt_parens (char '~' ^^ parens (separate space [sv_smt_parens x; char '&'; sv_smt_parens y]))
@@ -642,11 +654,17 @@ let rec sv_smt ?(need_parens = false) =
   | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [sv_smt x; string ">>"; sv_signed (sv_smt y)])
   | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt x; string ">>>"; sv_signed (sv_smt y)])
   | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
+  | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
   | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'(" len ^^ sv_smt x ^^ string ")))"
   | ZeroExtend (len, _, x) -> ksprintf string "%d'(" len ^^ sv_smt x ^^ string ")"
+  | Extract (n, m, Bitvec_lit bits) ->
+      sv_smt (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
+  | Extract (n, m, Var v) ->
+      if n = m then sv_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+      else sv_name v ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
   | Extract (n, m, x) ->
-      if n = m then sv_smt x ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
-      else sv_smt x ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
+      if n = m then braces (sv_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+      else braces (sv_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
   | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) sv_smt args)
   | Var v -> sv_name v
   | Tester (ctor, v) ->
@@ -673,11 +691,14 @@ let clexp_conversion clexp cval =
     match (ctyp_to, ctyp_from) with
     | CT_fint sz, CT_constant c ->
         let n = required_width c in
-        let extended = SignExtend (sz, sz - Big_int.to_int c, smt) in
+        let extended = SignExtend (sz, sz - n, smt) in
         return (separate space [sv_clexp clexp; equals; sv_smt extended])
     | CT_lint, CT_constant c ->
         let n = required_width c in
-        let extended = SignExtend (128, 128 - Big_int.to_int c, smt) in
+        let extended = SignExtend (128, 128 - n, smt) in
+        return (separate space [sv_clexp clexp; equals; sv_smt extended])
+    | CT_lint, CT_fint sz ->
+        let extended = SignExtend (128, 128 - sz, smt) in
         return (separate space [sv_clexp clexp; equals; sv_smt extended])
     | CT_fbits (sz, _), CT_lbits _ ->
         let extracted = Extract (sz - 1, 0, Fn ("contents", [smt])) in
@@ -709,65 +730,69 @@ let sv_update_fbits = function
     end
   | _ -> failwith "update_fbits 2"
 
+let cval_for_ctyp = function CT_unit -> V_lit (VL_unit, CT_unit)
+
 let rec sv_instr ctx (I_aux (aux, (_, l))) =
   match aux with
   | I_comment str -> return (concat_map string ["/* "; str; " */"])
-  | I_decl (ctyp, id) -> return (sv_ctyp ctyp ^^ space ^^ sv_name id)
+  | I_decl (ctyp, id) -> return (sv_ctyp ctyp ^^ space ^^ sv_name id ^^ semi)
   | I_init (ctyp, id, cval) ->
       let* value = sv_cval cval in
-      return (separate space [sv_ctyp ctyp; sv_name id; equals; value])
+      return (separate space [sv_ctyp ctyp; sv_name id; equals; value] ^^ semi)
   | I_return cval ->
       let* value = sv_cval cval in
-      return (string "return" ^^ space ^^ value)
-  | I_end id -> return (string "return" ^^ space ^^ sv_name id)
-  | I_exit _ -> return (string "$finish")
-  | I_copy (clexp, cval) -> clexp_conversion clexp cval
+      return (string "return" ^^ space ^^ value ^^ semi)
+  | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
+  | I_exit _ -> return (string "$finish" ^^ semi)
+  | I_copy (clexp, cval) ->
+      let* doc = clexp_conversion clexp cval in
+      return (doc ^^ semi)
   | I_funcall (clexp, _, (id, _), args) ->
       if Type_check.Env.is_extern id ctx.tc_env "c" then (
         let name = Type_check.Env.get_extern id ctx.tc_env "c" in
         let* value = Smt.builtin name args (clexp_ctyp clexp) in
-        return (separate space [sv_clexp clexp; equals; sv_smt value])
+        return (separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
       )
       else if Id.compare id (mk_id "update_fbits") = 0 then
         let* rhs = sv_update_fbits args in
-        return (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ rhs)
+        return (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ rhs ^^ semi)
       else
         let* args = mapM sv_cval args in
-        return (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ sv_id id ^^ parens (separate (comma ^^ space) args))
+        return
+          (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ sv_id id ^^ parens (separate (comma ^^ space) args) ^^ semi)
   | I_if (cond, [], else_instrs, _) ->
       let* cond = sv_cval (V_call (Bnot, [cond])) in
       return
         (string "if" ^^ space ^^ parens cond ^^ space ^^ string "begin"
-        ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) else_instrs)
-        ^^ semi ^^ hardline ^^ string "end"
+        ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) else_instrs)
+        ^^ hardline ^^ string "end" ^^ semi
         )
   | I_if (cond, then_instrs, [], _) ->
       let* cond = sv_cval cond in
       return
         (string "if" ^^ space ^^ parens cond ^^ space ^^ string "begin"
-        ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) then_instrs)
-        ^^ semi ^^ hardline ^^ string "end"
+        ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) then_instrs)
+        ^^ hardline ^^ string "end" ^^ semi
         )
   | I_if (cond, then_instrs, else_instrs, _) ->
       let* cond = sv_cval cond in
       return
         (string "if" ^^ space ^^ parens cond ^^ space ^^ string "begin"
-        ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) then_instrs)
-        ^^ semi ^^ hardline ^^ string "end" ^^ space ^^ string "else" ^^ space ^^ string "begin"
-        ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) else_instrs)
-        ^^ semi ^^ hardline ^^ string "end"
+        ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) then_instrs)
+        ^^ hardline ^^ string "end" ^^ space ^^ string "else" ^^ space ^^ string "begin"
+        ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) else_instrs)
+        ^^ hardline ^^ string "end" ^^ semi
         )
   | I_block instrs ->
       return
         (string "begin"
-        ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) instrs)
-        ^^ semi ^^ hardline ^^ string "end"
+        ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) instrs)
+        ^^ hardline ^^ string "end" ^^ semi
         )
-  (*
-  | I_undefined _ ->
-    string "undefined"
-    *)
-  | instr -> return (string "instr")
+  | I_undefined ctyp ->
+      let cval = cval_for_ctyp ctyp in
+      let* value = sv_cval cval in
+      return (string "return" ^^ space ^^ value ^^ semi)
 
 and sv_checked_instr ctx instr =
   let m = sv_instr ctx instr in
@@ -783,16 +808,31 @@ let sv_fundef ctx f params param_ctyps ret_ctyp body =
   ^^ semi
   ^^ nest 4
        (hardline ^^ sv_ctyp ret_ctyp ^^ space ^^ sv_name Jib_util.return ^^ semi ^^ hardline
-       ^^ separate_map (semi ^^ hardline) (sv_checked_instr ctx) body
+       ^^ separate_map hardline (sv_checked_instr ctx) body
        )
-  ^^ semi ^^ hardline ^^ string "endfunction"
+  ^^ hardline ^^ string "endfunction"
 
 let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 
-let sv_cdef ctx fn_ctyps = function
-  | CDEF_register (id, ctyp, init) -> (sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline, fn_ctyps)
-  | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps)
-  | CDEF_val (f, _, param_ctyps, ret_ctyp) -> (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+let sv_setup_function ctx name setup =
+  let setup =
+    Jib_optimize.(
+      setup |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
+      |> filter_clear
+    )
+  in
+  separate space [string "function"; string "automatic"; string "void"; string name]
+  ^^ string "()" ^^ semi
+  ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
+  ^^ hardline ^^ string "endfunction" ^^ twice hardline
+
+let sv_cdef ctx fn_ctyps setup_calls = function
+  | CDEF_register (id, ctyp, setup) ->
+      let binding_doc = sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline in
+      let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
+      (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls)
+  | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps, setup_calls)
+  | CDEF_val (f, _, param_ctyps, ret_ctyp) -> (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
   | CDEF_fundef (f, _, params, body) ->
       let body =
         Jib_optimize.(
@@ -802,10 +842,18 @@ let sv_cdef ctx fn_ctyps = function
       in
       begin
         match Bindings.find_opt f fn_ctyps with
-        | Some (param_ctyps, ret_ctyp) -> (sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline, fn_ctyps)
+        | Some (param_ctyps, ret_ctyp) ->
+            (sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline, fn_ctyps, setup_calls)
         | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
       end
-  | _ -> (empty, fn_ctyps)
+  | CDEF_let (n, bindings, setup) ->
+      let bindings_doc =
+        separate_map (semi ^^ hardline) (fun (id, ctyp) -> sv_ctyp ctyp ^^ space ^^ sv_id id) bindings
+        ^^ semi ^^ twice hardline
+      in
+      let name = sprintf "sail_setup_let_%d" n in
+      (bindings_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls)
+  | _ -> (empty, fn_ctyps, setup_calls)
 
 let register_types cdefs =
   List.fold_left
@@ -860,7 +908,15 @@ let make_genlib_file filename =
   output_string out_chan "`endif\n";
   Util.close_output_with_check file_info
 
-let verilog_target _ _ out_opt ast effect_info env =
+let checked_system cmd =
+  match Unix.system cmd with
+  | WEXITED 0 -> ()
+  | WEXITED n -> raise (Reporting.err_general Parse_ast.Unknown (sprintf "Command %s failed with exit code %d" cmd n))
+  | WSTOPPED n -> raise (Reporting.err_general Parse_ast.Unknown (sprintf "Command %s stopped with exit code %d" cmd n))
+
+let verilog_target _ default_sail_dir out_opt ast effect_info env =
+  let sail_dir = Reporting.get_sail_dir default_sail_dir in
+  let sail_sv_libdir = Filename.concat (Filename.concat sail_dir "lib") "sv" in
   let out = match out_opt with None -> "out" | Some name -> name in
 
   let cdefs, ctx = jib_of_ast env ast effect_info in
@@ -871,26 +927,38 @@ let verilog_target _ _ out_opt ast effect_info env =
     string "`include \"sail.sv\"" ^^ hardline ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out ^^ twice hardline
   in
 
+  let exception_vars =
+    string "bit sail_have_exception;" ^^ hardline ^^ string "string sail_throw_location;" ^^ twice hardline
+  in
+
+  let doc, _, setup_calls =
+    List.fold_left
+      (fun (doc, fn_ctyps, setup_calls) cdef ->
+        let cdef_doc, fn_ctyps, setup_calls = sv_cdef ctx fn_ctyps setup_calls cdef in
+        (doc ^^ cdef_doc, fn_ctyps, setup_calls)
+      )
+      (include_doc ^^ exception_vars, Bindings.empty, [])
+      cdefs
+  in
+
+  let setup_function =
+    string "function automatic void sail_setup();"
+    ^^ nest 4
+         (hardline ^^ separate_map (semi ^^ hardline) (fun call -> string call ^^ string "()") (List.rev setup_calls))
+    ^^ semi ^^ hardline ^^ string "endfunction" ^^ twice hardline
+  in
+
   let invoke_main =
     string "initial" ^^ space ^^ string "begin"
     ^^ nest 4
          (hardline ^^ string "sail_unit u;" ^^ hardline ^^ string "$display(\"TEST START\");" ^^ hardline
-        ^^ string "u = main(SAIL_UNIT);" ^^ hardline ^^ string "$display(\"TEST END\");" ^^ hardline
-        ^^ string "$finish;"
+        ^^ string "sail_setup();" ^^ hardline ^^ string "u = main(SAIL_UNIT);" ^^ hardline
+        ^^ string "$display(\"TEST END\");" ^^ hardline ^^ string "$finish;"
          )
     ^^ hardline ^^ string "end"
   in
 
-  let doc, _ =
-    List.fold_left
-      (fun (doc, fn_ctyps) cdef ->
-        let cdef_doc, fn_ctyps = sv_cdef ctx fn_ctyps cdef in
-        (doc ^^ cdef_doc, fn_ctyps)
-      )
-      (include_doc, Bindings.empty) cdefs
-  in
-
-  let sv_output = Pretty_print_sail.to_string (wrap_module out (doc ^^ invoke_main)) in
+  let sv_output = Pretty_print_sail.to_string (wrap_module ("sail_" ^ out) (doc ^^ setup_function ^^ invoke_main)) in
   make_genlib_file (sprintf "sail_genlib_%s.sv" out);
 
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None (out ^ ".sv") in
@@ -909,9 +977,9 @@ let verilog_target _ _ out_opt ast effect_info env =
           (verilator_cpp_wrapper out);
         Util.close_output_with_check file_info;
 
-        let _ = Unix.system (sprintf "verilator --cc --exe --build -j 0 sim_%s.cpp %s.sv" out out) in
+        checked_system (sprintf "verilator --cc --exe --build -j 0 -I%s sim_%s.cpp %s.sv" sail_sv_libdir out out);
         begin
-          match !opt_verilate with Verilator_run -> ignore (Unix.system (sprintf "obj_dir/V%s" out)) | _ -> ()
+          match !opt_verilate with Verilator_run -> checked_system (sprintf "obj_dir/V%s" out) | _ -> ()
         end
     | _ -> ()
   end

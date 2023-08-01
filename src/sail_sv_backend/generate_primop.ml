@@ -66,20 +66,36 @@ let sail_bits width =
   ]
 
 let print_lbits width =
-  let header = "function automatic sail_unit sail_print_bits(string prefix, sail_bits bv);" in
+  let zeros = String.make (width / 4) '0' in
+  let header =
+    [
+      nf "function automatic sail_unit sail_print_bits(string prefix, sail_bits bv);";
+      nf "    string bstr;";
+      nf "    string zeros;";
+      pf "    zeros = \"%s\";" zeros;
+    ]
+  in
   let body =
     List.init (width - 1) (fun n ->
-        let prefix, bin_or_hex = if (n + 1) mod 4 == 0 then ("0x", "h") else ("0b", "b") in
-        [
-          pf "    if (bv.size == %d) begin" (n + 1);
-          pf "        $display(\"%%s%s%%%s\", prefix, bv.bits[%d:0]);" prefix bin_or_hex n;
-          nf "    end";
-        ]
+        if (n + 1) mod 4 == 0 then
+          [
+            pf "    if (bv.size == %d) begin" (n + 1);
+            nf "        bstr.hextoa(bv.bits);";
+            pf "        $display(\"%%s0x%%s%%s\", prefix, zeros.substr(0, %d - bstr.len()), bstr.toupper());"
+              (((n + 1) / 4) - 1);
+            nf "    end";
+          ]
+        else
+          [
+            pf "    if (bv.size == %d) begin" (n + 1);
+            pf "        $display(\"%%s0b%%b\", prefix, bv.bits[%d:0]);" n;
+            nf "    end";
+          ]
     )
     |> List.concat
   in
   let footer = "endfunction" in
-  (header :: body) @ [footer]
+  header @ body @ [footer]
 
 let print_int width =
   [
@@ -118,7 +134,7 @@ let print_fbits width =
             pf "    $display(\"%%s0x%%s\", s, zeros.substr(0, %d - bstr.len()), bstr.toupper());" ((width / 4) - 1);
           ]
         )
-        else ["    $display(\"%s0b%0B\", s, b);"]
+        else ["    $display(\"%s0b%0b\", s, b);"]
       in
       [pf "function automatic sail_unit %s(string s, logic [%d:0] b);" name (width - 1)]
       @ display

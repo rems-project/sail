@@ -577,8 +577,8 @@ let builtin_eq_bits ctx v1 v2 =
   | CT_lbits _, CT_lbits _ ->
       let len1 = Fn ("len", [smt_cval ctx v1]) in
       let contents1 = Fn ("contents", [smt_cval ctx v1]) in
-      let len2 = Fn ("len", [smt_cval ctx v1]) in
-      let contents2 = Fn ("contents", [smt_cval ctx v1]) in
+      let len2 = Fn ("len", [smt_cval ctx v2]) in
+      let contents2 = Fn ("contents", [smt_cval ctx v2]) in
       Fn
         ( "and",
           [

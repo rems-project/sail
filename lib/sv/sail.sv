@@ -28,6 +28,10 @@ function automatic sail_unit sail_assert(bit b, string msg);
    if (!b) begin
       $display("%s", msg);
    end
+endfunction // sail_assert
+
+function automatic bit sail_eq_string(string s1, string s2);
+   return s1 == s2;
 endfunction
 
 bit [7:0] sail_memory [63:0];
