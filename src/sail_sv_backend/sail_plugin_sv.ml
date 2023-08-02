@@ -700,6 +700,8 @@ let clexp_conversion clexp cval =
     | CT_lint, CT_fint sz ->
         let extended = SignExtend (128, 128 - sz, smt) in
         return (separate space [sv_clexp clexp; equals; sv_smt extended])
+    | CT_constant c, _ ->
+        return (separate space [sv_clexp clexp; equals; sv_smt (Smt_builtins.bvint (required_width c) c)])
     | CT_fbits (sz, _), CT_lbits _ ->
         let extracted = Extract (sz - 1, 0, Fn ("contents", [smt])) in
         return (separate space [sv_clexp clexp; equals; sv_smt extracted])
@@ -793,6 +795,13 @@ let rec sv_instr ctx (I_aux (aux, (_, l))) =
       let cval = cval_for_ctyp ctyp in
       let* value = sv_cval cval in
       return (string "return" ^^ space ^^ value ^^ semi)
+  | I_raw s -> return (string s ^^ semi)
+  | I_jump _ | I_goto _ | I_label _ ->
+      Reporting.unreachable l __POS__ "Non-structured control flow should not reach SystemVerilog backend"
+  | I_throw _ | I_try_block _ ->
+      Reporting.unreachable l __POS__ "Exception handling should not reach SystemVerilog backend"
+  | I_clear _ | I_reset _ | I_reinit _ ->
+      Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
 and sv_checked_instr ctx instr =
   let m = sv_instr ctx instr in
@@ -908,12 +917,6 @@ let make_genlib_file filename =
   output_string out_chan "`endif\n";
   Util.close_output_with_check file_info
 
-let checked_system cmd =
-  match Unix.system cmd with
-  | WEXITED 0 -> ()
-  | WEXITED n -> raise (Reporting.err_general Parse_ast.Unknown (sprintf "Command %s failed with exit code %d" cmd n))
-  | WSTOPPED n -> raise (Reporting.err_general Parse_ast.Unknown (sprintf "Command %s stopped with exit code %d" cmd n))
-
 let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let sail_sv_libdir = Filename.concat (Filename.concat sail_dir "lib") "sv" in
@@ -977,9 +980,10 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
           (verilator_cpp_wrapper out);
         Util.close_output_with_check file_info;
 
-        checked_system (sprintf "verilator --cc --exe --build -j 0 -I%s sim_%s.cpp %s.sv" sail_sv_libdir out out);
+        Reporting.system_checked
+          (sprintf "verilator --cc --exe --build -j 0 -I%s sim_%s.cpp %s.sv" sail_sv_libdir out out);
         begin
-          match !opt_verilate with Verilator_run -> checked_system (sprintf "obj_dir/V%s" out) | _ -> ()
+          match !opt_verilate with Verilator_run -> Reporting.system_checked (sprintf "obj_dir/V%s" out) | _ -> ()
         end
     | _ -> ()
   end

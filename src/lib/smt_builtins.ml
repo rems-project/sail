@@ -630,7 +630,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
            *)
     | _ -> builtin_type_error "append" [v1; v2] (Some ret_ctyp)
 
-  let to_fbits ctyp bv = match ctyp with CT_fbits (n, _) -> (n, bv) | CT_lbits _ -> (lbits_size, Fn ("contents", [bv]))
+  let to_fbits ctyp bv =
+    match ctyp with
+    | CT_fbits (n, _) -> (n, bv)
+    | CT_lbits _ -> (lbits_size, Fn ("contents", [bv]))
+    | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          (Printf.sprintf "Type %s must be a bitvector in to_fbits" (string_of_ctyp ctyp))
 
   let fbits_mask mask_sz len = bvnot (bvshl (bvones mask_sz) len)
 
@@ -656,7 +662,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let len = bvadd (bvadd i' (bvneg j')) (bvint sz (Big_int.of_int 1)) in
         let extracted = bvand (bvlshr vec j') (fbits_mask sz len) in
         smt_conversion (CT_fbits (sz, false)) ret_ctyp extracted
-    | _ -> builtin_type_error "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
   let builtin_get_slice_int v1 v2 v3 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
@@ -679,6 +684,16 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let result = Fn ("Bits", [len; bvand (bvmask len) (bvlshr smt2 smt3)]) in
         smt_conversion (CT_lbits true) ret_ctyp result
     | _ -> builtin_type_error "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
+
+  let builtin_pow2 v ret_ctyp =
+    match (cval_ctyp v, ret_ctyp) with
+    | CT_constant n, _ when Big_int.greater_equal n Big_int.zero ->
+        return (bvint (int_size ret_ctyp) (Big_int.pow_int_positive 2 (Big_int.to_int n)))
+    | CT_lint, CT_lint ->
+        let* v = smt_cval v in
+        (* TODO: Check we haven't shifted too far *)
+        return (bvshl (bvone lbits_size) v)
+    | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
   let builtin name args ret_ctyp =
     match (name, args, ret_ctyp) with
@@ -712,7 +727,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   | "shl_mach_int", [v1; v2], _ -> builtin_shl_int v1 v2 ret_ctyp
   | "shr_mach_int", [v1; v2], _ -> builtin_shr_int v1 v2 ret_ctyp
   | "abs_int", [v], _ -> builtin_abs_int v ret_ctyp
-  | "pow2", [v], _ -> builtin_pow2 v ret_ctyp
+       *)
+    | "pow2", [v], _ -> builtin_pow2 v ret_ctyp
+    (*
   | "max_int", [v1; v2], _ -> builtin_max_int v1 v2 ret_ctyp
   | "min_int", [v1; v2], _ -> builtin_min_int v1 v2 ret_ctyp
   | "ediv_int", [v1; v2], _ -> builtin_tdiv_int v1 v2 ret_ctyp

@@ -159,3 +159,6 @@ val simple_warn : string -> unit
 val suppress_warnings_for_file : string -> unit
 
 val get_sail_dir : string -> string
+
+(** Run a command using Unix.system, but raise a Reporting exception if the command fails or is stopped/killed by a signal *)
+val system_checked : ?loc:Parse_ast.l -> string -> unit

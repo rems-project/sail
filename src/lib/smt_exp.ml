@@ -93,7 +93,6 @@ type smt_exp =
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
   | Unwrap of Ast.id * smt_exp
-  | Syntactic of smt_exp * smt_exp list
   | Struct of string * (string * smt_exp) list
   | Field of Ast.id * Ast.id * smt_exp
 
@@ -106,7 +105,6 @@ let rec fold_smt_exp f = function
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
   | Unwrap (ctor, exp) -> f (Unwrap (ctor, fold_smt_exp f exp))
-  | Syntactic (exp, exps) -> f (Syntactic (fold_smt_exp f exp, List.map (fold_smt_exp f) exps))
   | Field (struct_id, field_id, exp) -> f (Field (struct_id, field_id, fold_smt_exp f exp))
   | Struct (name, fields) -> f (Struct (name, List.map (fun (field, exp) -> (field, fold_smt_exp f exp)) fields))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _) as exp -> f exp
@@ -132,3 +130,7 @@ let bvult x y = Fn ("bvult", [x; y])
 let bvzero n = Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int n))
 
 let bvones n = Bitvec_lit (Sail2_operators_bitlists.ones (Big_int.of_int n))
+
+let bvone n =
+  if n > 0 then Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int (n - 1)) @ [Sail2_values.B1])
+  else Bitvec_lit []
