@@ -100,7 +100,7 @@ let print_lbits width =
 let print_int width =
   [
     pf "function automatic sail_unit sail_print_int(string prefix, logic [%d:0] i);" (width - 1);
-    nf "    $display(\"%s%0d\", prefix, i);";
+    nf "    $display(\"%s%0d\", prefix, signed'(i));";
     nf "endfunction";
   ]
 

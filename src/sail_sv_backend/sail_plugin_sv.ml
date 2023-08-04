@@ -83,6 +83,8 @@ type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
 
+let opt_line_directives = ref true
+
 let verilog_options =
   [
     ( "-sv_verilate",
@@ -437,7 +439,7 @@ let rec is_packed = function
   | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ -> true
   | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
-  | ctyp -> failwith ("unpacked " ^ string_of_ctyp ctyp)
+  | _ -> false
 
 let rec sv_ctyp = function
   | CT_bool -> string "bit"
@@ -558,13 +560,54 @@ let sv_type_def = function
         ^^ separate (twice hardline) constructors
         ^^ exception_boilerplate
       )
-      else empty
+      else (
+        let constructors =
+          List.map
+            (fun (ctor_id, ctyp) ->
+              separate space [string "function"; string "automatic"; sv_id id; sv_id ctor_id]
+              ^^ parens (sv_ctyp ctyp ^^ space ^^ char 'v')
+              ^^ semi
+              ^^ nest 4
+                   (hardline ^^ sv_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                   ^^ separate space
+                        [
+                          string "r.tag";
+                          equals;
+                          string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
+                        ]
+                   ^^ semi ^^ hardline
+                   ^^ separate space [char 'r' ^^ dot ^^ sv_id ctor_id; equals; char 'v']
+                   ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
+                   )
+              ^^ hardline ^^ string "endfunction"
+            )
+            ctors
+        in
+        separate space
+          [
+            string "typedef";
+            string "struct";
+            group
+              (lbrace
+              ^^ nest 4
+                   (hardline ^^ tag_type ^^ space ^^ string "tag" ^^ semi ^^ hardline
+                   ^^ separate_map (semi ^^ hardline) sv_ctor ctors
+                   )
+              ^^ semi ^^ hardline ^^ rbrace
+              );
+            sv_id id ^^ semi;
+          ]
+        ^^ twice hardline
+        ^^ separate (twice hardline) constructors
+        ^^ exception_boilerplate
+      )
 
 module Smt =
   Smt_builtins.Make
     (struct
       let max_unknown_integer_width = 128
       let max_unknown_bitvector_width = 128
+      let union_ctyp_classify = is_packed
     end)
     (struct
       let print_bits = function
@@ -642,6 +685,7 @@ let rec sv_smt ?(need_parens = false) =
   | Fn ("bvxnor", [x; y]) ->
       opt_parens (char '~' ^^ parens (separate space [sv_smt_parens x; char '^'; sv_smt_parens y]))
   | Fn ("bvadd", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '+'; sv_smt_parens y])
+  | Fn ("bvsub", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '-'; sv_smt_parens y])
   | Fn ("bvult", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '<'; sv_smt_parens y])
   | Fn ("bvule", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "<="; sv_smt_parens y])
   | Fn ("bvugt", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '>'; sv_smt_parens y])
@@ -655,8 +699,8 @@ let rec sv_smt ?(need_parens = false) =
   | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt x; string ">>>"; sv_signed (sv_smt y)])
   | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
   | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
-  | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'(" len ^^ sv_smt x ^^ string ")))"
-  | ZeroExtend (len, _, x) -> ksprintf string "%d'(" len ^^ sv_smt x ^^ string ")"
+  | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ sv_smt x ^^ string "})))"
+  | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ sv_smt x ^^ string "})"
   | Extract (n, m, Bitvec_lit bits) ->
       sv_smt (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
   | Extract (n, m, Var v) ->
@@ -669,8 +713,11 @@ let rec sv_smt ?(need_parens = false) =
   | Var v -> sv_name v
   | Tester (ctor, v) ->
       opt_parens (separate space [sv_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> String.uppercase_ascii)])
-  | Unwrap (ctor, v) -> sv_smt v ^^ dot ^^ string "value" ^^ dot ^^ sv_id ctor
+  | Unwrap (ctor, packed, v) ->
+      if packed then sv_smt v ^^ dot ^^ string "value" ^^ dot ^^ sv_id ctor else sv_smt v ^^ dot ^^ sv_id ctor
   | Field (_, field, v) -> sv_smt v ^^ dot ^^ sv_id field
+  | Ite (cond, then_exp, else_exp) ->
+      separate space [sv_smt_parens cond; char '?'; sv_smt_parens then_exp; char ':'; sv_smt_parens else_exp]
   | Enum e -> failwith "Unknown enum"
 
 let sv_cval cval =
@@ -700,6 +747,9 @@ let clexp_conversion clexp cval =
     | CT_lint, CT_fint sz ->
         let extended = SignExtend (128, 128 - sz, smt) in
         return (separate space [sv_clexp clexp; equals; sv_smt extended])
+    | CT_fint sz, CT_lint ->
+        let* adjusted = Smt_builtins.force_size sz 128 smt in
+        return (separate space [sv_clexp clexp; equals; sv_smt adjusted])
     | CT_constant c, _ ->
         return (separate space [sv_clexp clexp; equals; sv_smt (Smt_builtins.bvint (required_width c) c)])
     | CT_fbits (sz, _), CT_lbits _ ->
@@ -734,13 +784,19 @@ let sv_update_fbits = function
 
 let cval_for_ctyp = function CT_unit -> V_lit (VL_unit, CT_unit)
 
+let sv_line_directive l =
+  match Reporting.simp_loc l with
+  | Some (p1, _) when !opt_line_directives -> ksprintf string "`line %d \"%s\" 0" p1.pos_lnum p1.pos_fname ^^ hardline
+  | _ -> empty
+
 let rec sv_instr ctx (I_aux (aux, (_, l))) =
+  let ld = sv_line_directive l in
   match aux with
   | I_comment str -> return (concat_map string ["/* "; str; " */"])
-  | I_decl (ctyp, id) -> return (sv_ctyp ctyp ^^ space ^^ sv_name id ^^ semi)
+  | I_decl (ctyp, id) -> return (ld ^^ sv_ctyp ctyp ^^ space ^^ sv_name id ^^ semi)
   | I_init (ctyp, id, cval) ->
       let* value = sv_cval cval in
-      return (separate space [sv_ctyp ctyp; sv_name id; equals; value] ^^ semi)
+      return (ld ^^ separate space [sv_ctyp ctyp; sv_name id; equals; value] ^^ semi)
   | I_return cval ->
       let* value = sv_cval cval in
       return (string "return" ^^ space ^^ value ^^ semi)
@@ -748,20 +804,23 @@ let rec sv_instr ctx (I_aux (aux, (_, l))) =
   | I_exit _ -> return (string "$finish" ^^ semi)
   | I_copy (clexp, cval) ->
       let* doc = clexp_conversion clexp cval in
-      return (doc ^^ semi)
+      return (ld ^^ doc ^^ semi)
   | I_funcall (clexp, _, (id, _), args) ->
       if Type_check.Env.is_extern id ctx.tc_env "c" then (
         let name = Type_check.Env.get_extern id ctx.tc_env "c" in
         let* value = Smt.builtin name args (clexp_ctyp clexp) in
-        return (separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
+        return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
       )
       else if Id.compare id (mk_id "update_fbits") = 0 then
         let* rhs = sv_update_fbits args in
-        return (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ rhs ^^ semi)
+        return (ld ^^ sv_clexp clexp ^^ space ^^ equals ^^ space ^^ rhs ^^ semi)
       else
         let* args = mapM sv_cval args in
         return
-          (sv_clexp clexp ^^ space ^^ equals ^^ space ^^ sv_id id ^^ parens (separate (comma ^^ space) args) ^^ semi)
+          (ld ^^ sv_clexp clexp ^^ space ^^ equals ^^ space ^^ sv_id id
+          ^^ parens (separate (comma ^^ space) args)
+          ^^ semi
+          )
   | I_if (cond, [], else_instrs, _) ->
       let* cond = sv_cval (V_call (Bnot, [cond])) in
       return
@@ -794,7 +853,7 @@ let rec sv_instr ctx (I_aux (aux, (_, l))) =
   | I_undefined ctyp ->
       let cval = cval_for_ctyp ctyp in
       let* value = sv_cval cval in
-      return (string "return" ^^ space ^^ value ^^ semi)
+      return (ld ^^ string "return" ^^ space ^^ value ^^ semi)
   | I_raw s -> return (string s ^^ semi)
   | I_jump _ | I_goto _ | I_label _ ->
       Reporting.unreachable l __POS__ "Non-structured control flow should not reach SystemVerilog backend"

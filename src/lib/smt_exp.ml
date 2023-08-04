@@ -92,7 +92,7 @@ type smt_exp =
   | ZeroExtend of int * int * smt_exp
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
-  | Unwrap of Ast.id * smt_exp
+  | Unwrap of Ast.id * bool * smt_exp
   | Struct of string * (string * smt_exp) list
   | Field of Ast.id * Ast.id * smt_exp
 
@@ -104,7 +104,7 @@ let rec fold_smt_exp f = function
   | ZeroExtend (len, n, exp) -> f (ZeroExtend (len, n, fold_smt_exp f exp))
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
-  | Unwrap (ctor, exp) -> f (Unwrap (ctor, fold_smt_exp f exp))
+  | Unwrap (ctor, b, exp) -> f (Unwrap (ctor, b, fold_smt_exp f exp))
   | Field (struct_id, field_id, exp) -> f (Field (struct_id, field_id, fold_smt_exp f exp))
   | Struct (name, fields) -> f (Struct (name, List.map (fun (field, exp) -> (field, fold_smt_exp f exp)) fields))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _) as exp -> f exp
@@ -120,6 +120,7 @@ let bvand x y = Fn ("bvand", [x; y])
 let bvor x y = Fn ("bvor", [x; y])
 let bvneg x = Fn ("bvneg", [x])
 let bvadd x y = Fn ("bvadd", [x; y])
+let bvsub x y = Fn ("bvsub", [x; y])
 let bvmul x y = Fn ("bvmul", [x; y])
 let bvudiv x y = Fn ("bvudiv", [x; y])
 let bvurem x y = Fn ("bvurem", [x; y])
