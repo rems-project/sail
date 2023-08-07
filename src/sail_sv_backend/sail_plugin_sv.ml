@@ -85,6 +85,8 @@ let opt_verilate = ref Verilator_none
 
 let opt_line_directives = ref false
 
+let opt_comb = ref false
+
 let verilog_options =
   [
     ( "-sv_verilate",
@@ -103,6 +105,10 @@ let verilog_options =
     ( "-sv_lines",
       Arg.Set opt_line_directives,
       " output `line directives"
+    );
+    ( "-sv_comb",
+      Arg.Set opt_comb,
+      " output an always_comb block instead of initial block"
     );
   ]
 
@@ -1015,13 +1021,21 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
 
   let invoke_main =
-    string "initial" ^^ space ^^ string "begin"
-    ^^ nest 4
-         (hardline ^^ string "sail_unit u;" ^^ hardline ^^ string "$display(\"TEST START\");" ^^ hardline
-        ^^ string "sail_setup();" ^^ hardline ^^ string "u = main(SAIL_UNIT);" ^^ hardline
-        ^^ string "$display(\"TEST END\");" ^^ hardline ^^ string "$finish;"
-         )
-    ^^ hardline ^^ string "end"
+    if not !opt_comb then
+      string "initial" ^^ space ^^ string "begin"
+      ^^ nest 4
+          (hardline ^^ string "sail_unit u;" ^^ hardline ^^ string "$display(\"TEST START\");" ^^ hardline
+          ^^ string "sail_setup();" ^^ hardline ^^ string "u = main(SAIL_UNIT);" ^^ hardline
+          ^^ string "$display(\"TEST END\");" ^^ hardline ^^ string "$finish;"
+          )
+      ^^ hardline ^^ string "end"
+    else
+      string "always_comb" ^^ space ^^ string "begin"
+      ^^ nest 4
+          (hardline ^^ string "sail_unit u;" ^^ hardline
+          ^^ string "sail_setup();" ^^ hardline ^^ string "u = main(SAIL_UNIT);"
+          )
+      ^^ hardline ^^ string "end"
   in
 
   let sv_output = Pretty_print_sail.to_string (wrap_module ("sail_" ^ out) (doc ^^ setup_function ^^ invoke_main)) in
