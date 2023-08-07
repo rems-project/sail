@@ -904,13 +904,15 @@ let sv_setup_function ctx name setup =
   ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
   ^^ hardline ^^ string "endfunction" ^^ twice hardline
 
+type sv_cdef_loc = CDLOC_Out | CDLOC_In
+
 let sv_cdef ctx fn_ctyps setup_calls = function
   | CDEF_register (id, ctyp, setup) ->
       let binding_doc = sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline in
       let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
-      (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls)
-  | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps, setup_calls)
-  | CDEF_val (f, _, param_ctyps, ret_ctyp) -> (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
+      (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_In)
+  | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps, setup_calls, CDLOC_Out)
+  | CDEF_val (f, _, param_ctyps, ret_ctyp) -> (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls, CDLOC_In)
   | CDEF_fundef (f, _, params, body) ->
       let body =
         Jib_optimize.(
@@ -921,7 +923,7 @@ let sv_cdef ctx fn_ctyps setup_calls = function
       begin
         match Bindings.find_opt f fn_ctyps with
         | Some (param_ctyps, ret_ctyp) ->
-            (sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline, fn_ctyps, setup_calls)
+            (sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline, fn_ctyps, setup_calls, CDLOC_In)
         | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
       end
   | CDEF_let (n, bindings, setup) ->
@@ -930,8 +932,8 @@ let sv_cdef ctx fn_ctyps setup_calls = function
         ^^ semi ^^ twice hardline
       in
       let name = sprintf "sail_setup_let_%d" n in
-      (bindings_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls)
-  | _ -> (empty, fn_ctyps, setup_calls)
+      (bindings_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_In)
+  | _ -> (empty, fn_ctyps, setup_calls, CDLOC_In)
 
 let register_types cdefs =
   List.fold_left
@@ -945,8 +947,9 @@ let jib_of_ast env ast effect_info =
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
 
-let wrap_module mod_name doc =
-  string "module" ^^ space ^^ string mod_name ^^ semi
+let wrap_module pre mod_name doc =
+  pre ^^ hardline
+  ^^ string "module" ^^ space ^^ string mod_name ^^ semi
   ^^ nest 4 (hardline ^^ doc)
   ^^ hardline ^^ string "endmodule" ^^ hardline
 
@@ -1003,13 +1006,15 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     string "bit sail_have_exception;" ^^ hardline ^^ string "string sail_throw_location;" ^^ twice hardline
   in
 
-  let doc, _, setup_calls =
+  let in_doc, out_doc, _, setup_calls =
     List.fold_left
-      (fun (doc, fn_ctyps, setup_calls) cdef ->
-        let cdef_doc, fn_ctyps, setup_calls = sv_cdef ctx fn_ctyps setup_calls cdef in
-        (doc ^^ cdef_doc, fn_ctyps, setup_calls)
+      (fun (doc_in, doc_out, fn_ctyps, setup_calls) cdef ->
+        let cdef_doc, fn_ctyps, setup_calls, loc = sv_cdef ctx fn_ctyps setup_calls cdef in
+        match loc with
+        | CDLOC_In -> (doc_in ^^ cdef_doc, doc_out, fn_ctyps, setup_calls)
+        | CDLOC_Out -> (doc_in, doc_out ^^ cdef_doc, fn_ctyps, setup_calls)
       )
-      (include_doc ^^ exception_vars, Bindings.empty, [])
+      (include_doc ^^ exception_vars, empty, Bindings.empty, [])
       cdefs
   in
 
@@ -1038,7 +1043,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
       ^^ hardline ^^ string "end"
   in
 
-  let sv_output = Pretty_print_sail.to_string (wrap_module ("sail_" ^ out) (doc ^^ setup_function ^^ invoke_main)) in
+  let sv_output = Pretty_print_sail.to_string (wrap_module out_doc ("sail_" ^ out) (in_doc ^^ setup_function ^^ invoke_main)) in
   make_genlib_file (sprintf "sail_genlib_%s.sv" out);
 
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None (out ^ ".sv") in
