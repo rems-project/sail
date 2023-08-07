@@ -83,7 +83,7 @@ type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
 
-let opt_line_directives = ref true
+let opt_line_directives = ref false
 
 let verilog_options =
   [
@@ -99,6 +99,10 @@ let verilog_options =
               )
         ),
       "<compile|run> Invoke verilator on generated output"
+    );
+    ( "-sv_lines",
+      Arg.Set opt_line_directives,
+      " output `line directives"
     );
   ]
 
