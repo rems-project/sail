@@ -22,14 +22,12 @@ skip_tests = {
     'cheri_capreg', # replicate bits
     'empty_list',
     'eq_struct',
-    'extend_simple', # sign extend
     'fail_assert_mono_bug',
     'fail_issue203', # dec_str
     'for_shadow',
     'foreach_none',
     'gvector',
     'gvectorlit', # generic vectors
-    'implicits', # sign extend
     'int64_vector_literal',
     'issue136', # lists
     'issue202_1',

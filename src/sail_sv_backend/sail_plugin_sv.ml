@@ -696,6 +696,7 @@ let rec sv_smt ?(need_parens = false) =
       opt_parens (char '~' ^^ parens (separate space [sv_smt_parens x; char '^'; sv_smt_parens y]))
   | Fn ("bvadd", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '+'; sv_smt_parens y])
   | Fn ("bvsub", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '-'; sv_smt_parens y])
+  | Fn ("bvmul", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '*'; sv_smt_parens y])
   | Fn ("bvult", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '<'; sv_smt_parens y])
   | Fn ("bvule", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "<="; sv_smt_parens y])
   | Fn ("bvugt", [x; y]) -> opt_parens (separate space [sv_smt_parens x; char '>'; sv_smt_parens y])
@@ -758,7 +759,7 @@ let clexp_conversion clexp cval =
         let extended = SignExtend (128, 128 - sz, smt) in
         return (separate space [sv_clexp clexp; equals; sv_smt extended])
     | CT_fint sz, CT_lint ->
-        let* adjusted = Smt_builtins.force_size sz 128 smt in
+        let* adjusted = Smt_builtins.signed_size ~into:sz ~from:128 smt in
         return (separate space [sv_clexp clexp; equals; sv_smt adjusted])
     | CT_constant c, _ ->
         return (separate space [sv_clexp clexp; equals; sv_smt (Smt_builtins.bvint (required_width c) c)])
@@ -872,8 +873,8 @@ let rec sv_instr ctx (I_aux (aux, (_, l))) =
   | I_clear _ | I_reset _ | I_reinit _ ->
       Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
-and sv_checked_instr ctx instr =
-  let m = sv_instr ctx instr in
+and sv_checked_instr ctx (I_aux (_, (_, l)) as instr) =
+  let m = sv_instr ctx instr l in
   m.value
 
 let sv_fundef ctx f params param_ctyps ret_ctyp body =
