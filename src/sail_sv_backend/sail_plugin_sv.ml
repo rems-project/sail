@@ -991,7 +991,8 @@ let make_genlib_file filename =
   output_string out_chan "`endif\n";
   Util.close_output_with_check file_info
 
-let main_args main fn_ctyps = match main with
+let main_args main fn_ctyps =
+  match main with
   | Some (CDEF_fundef (f, _, params, body)) -> begin
       match Bindings.find_opt f fn_ctyps with
       | Some (param_ctyps, ret_ctyp) -> begin
@@ -1004,8 +1005,8 @@ let main_args main fn_ctyps = match main with
             List.filter_map
               (fun x -> x)
               (List.map2
-                (fun param param_ctyp -> match param_ctyp with CT_unit -> None | _ -> Some (param, param_ctyp))
-                params param_ctyps
+                 (fun param param_ctyp -> match param_ctyp with CT_unit -> None | _ -> Some (param, param_ctyp))
+                 params param_ctyps
               )
           in
           let module_main_in =
@@ -1104,8 +1105,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
 
   let invoke_main =
     if not !opt_comb then
-      string "initial" ^^ space ^^ string "begin" ^^ nest 4 invoke_main_body ^^ hardline ^^ string "$finish;" ^^ hardline
-      ^^ string "end"
+      string "initial" ^^ space ^^ string "begin" ^^ nest 4 invoke_main_body ^^ hardline ^^ string "$finish;"
+      ^^ hardline ^^ string "end"
     else string "always_comb" ^^ space ^^ string "begin" ^^ nest 4 invoke_main_body ^^ hardline ^^ string "end"
   in
 
