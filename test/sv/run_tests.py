@@ -71,8 +71,8 @@ skip_tests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
-def test_sv(name, skip_list):
-    banner('Testing {}'.format(name))
+def test_sv(name, opts, skip_list):
+    banner('Testing {} with options:{}'.format(name, opts))
     results = Results(name)
     for filenames in chunks(os.listdir('../c'), parallel()):
         tests = {}
@@ -83,7 +83,7 @@ def test_sv(name, skip_list):
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -sv ../c/{} -o {} -sv_verilate run > {}.out'.format(sail, filename, basename, basename))
+                step('{} -no_warn -sv ../c/{} -o {} -sv_verilate run{} > {}.out'.format(sail, filename, basename, opts, basename))
                 step('awk \'/TEST START/{{flag=1;next}}/TEST END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
                 step('diff ../c/{}.expect {}.result'.format(basename, basename))
                 print_ok(filename)
@@ -93,7 +93,8 @@ def test_sv(name, skip_list):
 
 xml = '<testsuites>\n'
 
-xml += test_sv('SystemVerilog', skip_tests)
+xml += test_sv('SystemVerilog', '', skip_tests)
+xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
 xml += '</testsuites>\n'
 

@@ -113,9 +113,10 @@ let bind m f l =
   let state' = f state.value l in
   { value = state'.value; checks = append_checks state.checks state'.checks }
 
-let fmap f m =
-  let value = f m.value in
-  { value; checks = m.checks }
+let fmap f m l =
+  let state = m l in
+  let value = f state.value in
+  { value; checks = state.checks }
 
 let ( let* ) = bind
 
@@ -222,7 +223,10 @@ module type CONFIG = sig
 end
 
 module type PRIMOP_GEN = sig
-  val print_bits : ctyp -> string
+  val print_bits : Parse_ast.l -> ctyp -> string
+  val dec_str : Parse_ast.l -> ctyp -> string
+  val hex_str : Parse_ast.l -> ctyp -> string
+  val hex_str_upper : Parse_ast.l -> ctyp -> string
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -237,7 +241,7 @@ let builtin_type_error fn cvals ret_ctyp_opt =
 module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let lint_size = Config.max_unknown_integer_width
   let lbits_size = Config.max_unknown_bitvector_width
-  let lbits_index = required_width (Big_int.of_int (lint_size - 1))
+  let lbits_index = required_width (Big_int.of_int (lbits_size - 1))
 
   let int_size = function
     | CT_constant n -> required_width n
@@ -523,9 +527,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_replicate_bits vbits vtimes ret_ctyp =
     match (cval_ctyp vbits, cval_ctyp vtimes, ret_ctyp) with
     | CT_fbits (n, _), _, CT_fbits (m, _) ->
-      let* bits = smt_cval vbits in
-      let times = m / n in
-      return (Fn ("concat", List.init times (fun _ -> bits)))
+        let* bits = smt_cval vbits in
+        let times = m / n in
+        return (Fn ("concat", List.init times (fun _ -> bits)))
         (*
     | CT_fbits (n, _), vlen_ctyp, CT_lbits _ ->
       let times = (lbits_size / n) + 1 in
@@ -535,17 +539,22 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
            *)
     | CT_lbits _, vtimes_ctyp, CT_lbits _ ->
-      let* bits = smt_cval vbits in
-      let* times = bind (smt_cval vtimes) (signed_size ~into:lbits_index ~from:(int_size vtimes_ctyp)) in
-      let new_len = bvmul (Fn ("len", [bits])) times in
-      (* This is extremely inefficient, but we don't have a good alternative if we find ourselves in this case. *)
-      let shifted = List.init (lbits_size - 1) (fun n ->
-          let amount = bvmul (bvpint lbits_size (Big_int.of_int (n + 1))) (ZeroExtend (lbits_size, lbits_index, Fn ("len", [bits]))) in
-          bvshl (Fn ("contents", [bits])) amount
-        )
-      in
-      let contents = List.fold_left bvor (Fn ("contents", [bits])) shifted in
-      return (Fn ("Bits", [new_len; Fn ("bvand", [bvmask new_len; contents])]))
+        let* bits = smt_cval vbits in
+        let* times = bind (smt_cval vtimes) (signed_size ~into:lbits_index ~from:(int_size vtimes_ctyp)) in
+        let new_len = bvmul (Fn ("len", [bits])) times in
+        (* This is extremely inefficient, but we don't have a good alternative if we find ourselves in this case. *)
+        let shifted =
+          List.init (lbits_size - 1) (fun n ->
+              let amount =
+                bvmul
+                  (bvpint lbits_size (Big_int.of_int (n + 1)))
+                  (ZeroExtend (lbits_size, lbits_index, Fn ("len", [bits])))
+              in
+              bvshl (Fn ("contents", [bits])) amount
+          )
+        in
+        let contents = List.fold_left bvor (Fn ("contents", [bits])) shifted in
+        return (Fn ("Bits", [new_len; Fn ("bvand", [bvmask new_len; contents])]))
     | _ -> builtin_type_error "replicate_bits" [vbits; vtimes] (Some ret_ctyp)
 
   let builtin_not_bits v ret_ctyp =
@@ -563,14 +572,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | _, _ -> builtin_type_error "not_bits" [v] (Some ret_ctyp)
 
   let builtin_length v ret_ctyp =
-    match cval_ctyp v, ret_ctyp with
-    | _, CT_constant len ->
-      return (bvpint (int_size ret_ctyp) len)
-    | CT_fbits (n, _), _ ->
-      return (bvpint (int_size ret_ctyp) (Big_int.of_int n))
+    match (cval_ctyp v, ret_ctyp) with
+    | _, CT_constant len -> return (bvpint (int_size ret_ctyp) len)
+    | CT_fbits (n, _), _ -> return (bvpint (int_size ret_ctyp) (Big_int.of_int n))
     | CT_lbits _, _ ->
-      let* bv = smt_cval v in
-      unsigned_size ~into:(int_size ret_ctyp) ~from:lbits_index (Fn ("len", [bv]))
+        let* bv = smt_cval v in
+        unsigned_size ~into:(int_size ret_ctyp) ~from:lbits_index (Fn ("len", [bv]))
     | _ -> builtin_type_error "length" [v] (Some ret_ctyp)
 
   let builtin_add_bits v1 v2 ret_ctyp =
@@ -820,95 +827,104 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_lint, CT_lint ->
         let* v = smt_cval v in
         (* TODO: Check we haven't shifted too far *)
-        return (bvshl (bvone lbits_size) v)
+        return (bvshl (bvone lint_size) v)
     | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
-  let builtin name args ret_ctyp =
-    match (name, args, ret_ctyp) with
-    | "eq_bit", [v1; v2], _ ->
-        let* smt1 = smt_cval v1 in
-        let* smt2 = smt_cval v2 in
-        return (Fn ("=", [smt1; smt2]))
-    | "eq_bool", [v1; v2], _ ->
-        let* smt1 = smt_cval v1 in
-        let* smt2 = smt_cval v2 in
-        return (Fn ("=", [smt1; smt2]))
-    | "eq_int", [v1; v2], _ -> builtin_eq_int v1 v2
-    | "not", [v], _ ->
-        let* v = smt_cval v in
-        return (Fn ("not", [v]))
-    | "lt", [v1; v2], _ -> builtin_lt v1 v2
-    | "lteq", [v1; v2], _ -> builtin_lteq v1 v2
-    | "gt", [v1; v2], _ -> builtin_gt v1 v2
-    | "gteq", [v1; v2], _ -> builtin_gteq v1 v2 (* arithmetic operations *)
-    | "add_int", [v1; v2], _ -> builtin_add_int v1 v2 ret_ctyp
-    | "sub_int", [v1; v2], _ ->
-        builtin_sub_int v1 v2 ret_ctyp
-        (*
-  | "sub_nat", [v1; v2], _ -> builtin_sub_nat v1 v2 ret_ctyp
-                                    *)
-    | "mult_int", [v1; v2], _ -> builtin_mult_int v1 v2 ret_ctyp
-    (*
-  | "neg_int", [v], _ -> builtin_negate_int v ret_ctyp
-  | "shl_int", [v1; v2], _ -> builtin_shl_int v1 v2 ret_ctyp
-  | "shr_int", [v1; v2], _ -> builtin_shr_int v1 v2 ret_ctyp
-  | "shl_mach_int", [v1; v2], _ -> builtin_shl_int v1 v2 ret_ctyp
-  | "shr_mach_int", [v1; v2], _ -> builtin_shr_int v1 v2 ret_ctyp
-  | "abs_int", [v], _ -> builtin_abs_int v ret_ctyp
-       *)
-    | "pow2", [v], _ -> builtin_pow2 v ret_ctyp
-    (*
-  | "max_int", [v1; v2], _ -> builtin_max_int v1 v2 ret_ctyp
-  | "min_int", [v1; v2], _ -> builtin_min_int v1 v2 ret_ctyp
-  | "ediv_int", [v1; v2], _ -> builtin_tdiv_int v1 v2 ret_ctyp
-                                    *)
-    (* bitvector operations *)
-    | "zeros", [v], _ -> builtin_zeros v ret_ctyp
-    | "ones", [v], _ -> builtin_ones v ret_ctyp
-    | "zero_extend", [v1; v2], _ -> builtin_zero_extend v1 v2 ret_ctyp
-    | "sign_extend", [v1; v2], _ -> builtin_sign_extend v1 v2 ret_ctyp
-    | "sail_signed", [v], _ -> builtin_signed v ret_ctyp
-    | "sail_unsigned", [v], _ -> builtin_unsigned v ret_ctyp
-    | "slice", [v1; v2; v3], _ -> builtin_slice v1 v2 v3 ret_ctyp
-    | "add_bits", [v1; v2], _ -> builtin_add_bits v1 v2 ret_ctyp
-    | "add_bits_int", [v1; v2], _ -> builtin_add_bits_int v1 v2 ret_ctyp
-    | "append", [v1; v2], _ -> builtin_append v1 v2 ret_ctyp
-    | "get_slice_int", [v1; v2; v3], _ -> builtin_get_slice_int v1 v2 v3 ret_ctyp
-    | "eq_bits", [v1; v2], _ -> builtin_eq_bits v1 v2
-    | "not_bits", [v], _ -> builtin_not_bits v ret_ctyp
-    | "vector_access", [v1; v2], ret_ctyp -> builtin_vector_access v1 v2 ret_ctyp
-    | "vector_subrange", [v1; v2; v3], ret_ctyp -> builtin_vector_subrange v1 v2 v3 ret_ctyp
-    | "vector_update", [v1; v2; v3], ret_ctyp -> builtin_vector_update v1 v2 v3 ret_ctyp
-    | "length", [v], ret_ctyp -> builtin_length v ret_ctyp
-    | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits v1 v2 ret_ctyp
-    | "print_endline", [v], _ ->
-        let* v = smt_cval v in
-        return (Fn ("sail_print_endline", [v]))
-    | "prerr_endline", [v], _ ->
-        let* v = smt_cval v in
-        return (Fn ("sail_prerr_endline", [v]))
-    | "print", [v], _ ->
-        let* v = smt_cval v in
-        return (Fn ("sail_print", [v]))
-    | "prerr", [v], _ ->
-        let* v = smt_cval v in
-        return (Fn ("sail_prerr", [v]))
-    | "print_bits", [str; bv], _ ->
-        let op = Primop_gen.print_bits (cval_ctyp bv) in
-        let* str = smt_cval str in
-        let* bv = smt_cval bv in
-        return (Fn (op, [str; bv]))
-    | "print_int", [str; i], _ ->
-        let* str = smt_cval str in
-        let* i = smt_cval i in
-        return (Fn ("sail_print_int", [str; i]))
-    | "sail_assert", [b; msg], _ ->
-        let* b = smt_cval b in
-        let* msg = smt_cval msg in
-        return (Fn ("sail_assert", [b; msg]))
-    | "eq_string", [s1; s2], _ ->
-        let* s1 = smt_cval s1 in
-        let* s2 = smt_cval s2 in
-        return (Fn ("sail_eq_string", [s1; s2]))
-    | name, _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("No implementation for " ^ name)
+  let arity_error =
+    let* l = current_location in
+    raise (Reporting.unreachable l __POS__ "Trying to generate primitive with incorrect number of arguments")
+
+  let unary_primop f = Some (fun args ret_ctyp -> match args with [v] -> f v ret_ctyp | _ -> arity_error)
+
+  let unary_primop_simple f = Some (fun args _ -> match args with [v] -> f v | _ -> arity_error)
+
+  let binary_primop f = Some (fun args ret_ctyp -> match args with [v1; v2] -> f v1 v2 ret_ctyp | _ -> arity_error)
+
+  let binary_primop_simple f = Some (fun args _ -> match args with [v1; v2] -> f v1 v2 | _ -> arity_error)
+
+  let ternary_primop f =
+    Some (fun args ret_ctyp -> match args with [v1; v2; v3] -> f v1 v2 v3 ret_ctyp | _ -> arity_error)
+
+  let builtin = function
+    | "eq_bit" ->
+        binary_primop_simple (fun v1 v2 ->
+            let* smt1 = smt_cval v1 in
+            let* smt2 = smt_cval v2 in
+            return (Fn ("=", [smt1; smt2]))
+        )
+    | "eq_bool" ->
+        binary_primop_simple (fun v1 v2 ->
+            let* smt1 = smt_cval v1 in
+            let* smt2 = smt_cval v2 in
+            return (Fn ("=", [smt1; smt2]))
+        )
+    | "eq_int" -> binary_primop_simple builtin_eq_int
+    | "not" ->
+        unary_primop_simple (fun v ->
+            let* v = smt_cval v in
+            return (Fn ("not", [v]))
+        )
+    | "lt" -> binary_primop_simple builtin_lt
+    | "lteq" -> binary_primop_simple builtin_lteq
+    | "gt" -> binary_primop_simple builtin_gt
+    | "gteq" -> binary_primop_simple builtin_gteq
+    | "add_int" -> binary_primop builtin_add_int
+    | "sub_int" -> binary_primop builtin_sub_int
+    | "mult_int" -> binary_primop builtin_mult_int
+    | "pow2" -> unary_primop builtin_pow2
+    | "zeros" -> unary_primop builtin_zeros
+    | "ones" -> unary_primop builtin_ones
+    | "zero_extend" -> binary_primop builtin_zero_extend
+    | "sign_extend" -> binary_primop builtin_sign_extend
+    | "sail_signed" -> unary_primop builtin_signed
+    | "sail_unsigned" -> unary_primop builtin_unsigned
+    | "slice" -> ternary_primop builtin_slice
+    | "add_bits" -> binary_primop builtin_add_bits
+    | "add_bits_int" -> binary_primop builtin_add_bits_int
+    | "append" -> binary_primop builtin_append
+    | "get_slice_int" -> ternary_primop builtin_get_slice_int
+    | "eq_bits" -> binary_primop_simple builtin_eq_bits
+    | "not_bits" -> unary_primop builtin_not_bits
+    | "vector_access" -> binary_primop builtin_vector_access
+    | "vector_subrange" -> ternary_primop builtin_vector_subrange
+    | "vector_update" -> ternary_primop builtin_vector_update
+    | "length" -> unary_primop builtin_length
+    | "replicate_bits" -> binary_primop builtin_replicate_bits
+    | "print_bits" ->
+        binary_primop_simple (fun str bv ->
+            let* l = current_location in
+            let op = Primop_gen.print_bits l (cval_ctyp bv) in
+            let* str = smt_cval str in
+            let* bv = smt_cval bv in
+            return (Fn (op, [str; bv]))
+        )
+    | "dec_str" ->
+        unary_primop_simple (fun bv ->
+            let* l = current_location in
+            let op = Primop_gen.dec_str l (cval_ctyp bv) in
+            let* bv = smt_cval bv in
+            return (Fn (op, [bv]))
+        )
+    | "hex_str" ->
+        unary_primop_simple (fun bv ->
+            let* l = current_location in
+            let op = Primop_gen.hex_str l (cval_ctyp bv) in
+            let* bv = smt_cval bv in
+            return (Fn (op, [bv]))
+        )
+    | "hex_str_upper" ->
+        unary_primop_simple (fun bv ->
+            let* l = current_location in
+            let op = Primop_gen.hex_str_upper l (cval_ctyp bv) in
+            let* bv = smt_cval bv in
+            return (Fn (op, [bv]))
+        )
+    | "sail_assert" ->
+        binary_primop_simple (fun b msg ->
+            let* l = current_location in
+            let* b = smt_cval b in
+            let* msg = smt_cval msg in
+            return (Fn ("sail_assert", [b; msg]))
+        )
+    | _ -> None
 end
