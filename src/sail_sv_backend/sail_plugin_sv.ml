@@ -324,7 +324,6 @@ let verilator_cpp_wrapper name =
   ]
 
 let make_genlib_file filename =
-  Printf.eprintf "%d" !opt_max_unknown_bitvector_width;
   let common_primops = Generate_primop.common_primops !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
   let defs = Generate_primop.get_generated_primops () in
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None filename in
@@ -368,17 +367,22 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     string "bit sail_have_exception;" ^^ hardline ^^ string "string sail_throw_location;" ^^ twice hardline
   in
 
-  let in_doc, out_doc, fn_ctyps, setup_calls =
+  let in_doc, out_doc, reg_doc, fn_ctyps, setup_calls =
     List.fold_left
-      (fun (doc_in, doc_out, fn_ctyps, setup_calls) cdef ->
+      (fun (doc_in, doc_out, doc_reg, fn_ctyps, setup_calls) cdef ->
         let cdef_doc, fn_ctyps, setup_calls, loc = sv_cdef ctx fn_ctyps setup_calls cdef in
         match loc with
-        | CDLOC_In -> (doc_in ^^ cdef_doc, doc_out, fn_ctyps, setup_calls)
-        | CDLOC_Out -> (doc_in, doc_out ^^ cdef_doc, fn_ctyps, setup_calls)
+        | CDLOC_In -> (doc_in ^^ cdef_doc, doc_out, doc_reg, fn_ctyps, setup_calls)
+        | CDLOC_Out -> (doc_in, doc_out ^^ cdef_doc, doc_reg, fn_ctyps, setup_calls)
+        | CDLOC_Reg -> (doc_in, doc_out, doc_reg ^^ cdef_doc, fn_ctyps, setup_calls)
       )
-      (exception_vars, include_doc, Bindings.empty, [])
+      (exception_vars, include_doc, empty, Bindings.empty, [])
       cdefs
   in
+
+  let reg_ref_enums, reg_ref_functions = sv_register_references cdefs in
+  let out_doc = out_doc ^^ reg_ref_enums in
+  let in_doc = reg_doc ^^ reg_ref_functions ^^ in_doc in
 
   let setup_function =
     string "function automatic void sail_setup();"

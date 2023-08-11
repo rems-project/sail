@@ -17,7 +17,7 @@ sail = get_sail()
 skip_tests = {
     'all_even_vector_length',
     'assign_rename_bug',
-    'bitvector',
+    'bitvector', # This requires -sv_bits_size >= 200
     'cheri128_hsb',
     'cheri_capreg', # replicate bits
     'empty_list',
@@ -30,9 +30,8 @@ skip_tests = {
     'gvectorlit', # generic vectors
     'int64_vector_literal',
     'issue136', # lists
-    'issue202_1',
-    'issue37',
-    'large_bitvector',
+    'issue202_1', # lists
+    'large_bitvector', # This requires -sv_bits_size >= 204
     'list_cons_cons',
     'list_let',
     'list_mut',
@@ -44,7 +43,6 @@ skip_tests = {
     'list_test', # lists
     'list_torture',
     'loop_exception',
-    'new_bitfields', # vector update subrange
     'pointer_assign',
     'poly_mapping', # length
     'poly_mapping2',
@@ -52,14 +50,11 @@ skip_tests = {
     'real',
     'real_prop', # reals
     'reg_32_64', # register references
-    'reg_init_let',
-    'reg_ref',
-    'return_register_ref',
     'split', # generic vectors
     'string_of_bits',
     'string_take',
     'tl_pat', # identifier and type identifier
-    'tuple_conversion',
+    'tuple_conversion', # verilator fails?
     'vector_example',
     'vector_subrange_pattern',
     'warl',
@@ -94,6 +89,10 @@ def test_sv(name, opts, skip_list):
 xml = '<testsuites>\n'
 
 xml += test_sv('SystemVerilog', '', skip_tests)
+
+skip_tests.remove('bitvector')
+skip_tests.remove('large_bitvector')
+
 xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
 xml += '</testsuites>\n'

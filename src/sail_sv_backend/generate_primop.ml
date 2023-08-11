@@ -97,6 +97,33 @@ let print_lbits width =
   let footer = "endfunction" in
   header @ body @ [footer]
 
+let dec_str width =
+  [
+    pf "function automatic string sail_dec_str(logic [%d:0] i);" (width - 1);
+    nf "    string s;";
+    nf "    s.itoa(i);";
+    nf "    return s;";
+    nf "endfunction";
+  ]
+
+let hex_str width =
+  [
+    pf "function automatic string sail_hex_str(logic [%d:0] i);" (width - 1);
+    nf "    string s;";
+    nf "    s.hextoa(i);";
+    nf "    return {\"0x\", s};";
+    nf "endfunction";
+  ]
+
+let hex_str_upper width =
+  [
+    pf "function automatic string sail_hex_str_upper(logic [%d:0] i);" (width - 1);
+    nf "    string s;";
+    nf "    s.hextoa(i);";
+    nf "    return {\"0x\", s.toupper()};";
+    nf "endfunction";
+  ]
+
 let print_int width =
   [
     pf "function automatic sail_unit sail_print_int(string prefix, logic [%d:0] i);" (width - 1);
@@ -118,6 +145,9 @@ let common_primops bv_width int_width =
   output_primop buf (sail_bits bv_width);
   output_primop buf (print_lbits bv_width);
   output_primop buf (print_int int_width);
+  output_primop buf (dec_str int_width);
+  output_primop buf (hex_str int_width);
+  output_primop buf (hex_str_upper int_width);
   Buffer.contents buf
 
 let print_fbits width =
@@ -139,4 +169,40 @@ let print_fbits width =
       [pf "function automatic sail_unit %s(string s, logic [%d:0] b);" name (width - 1)]
       @ display
       @ ["    return SAIL_UNIT;"; "endfunction"]
+  )
+
+let dec_str_fint width =
+  let name = pf "sail_dec_str_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic string %s(logic [%d:0] i);" name (width - 1);
+        nf "    string s;";
+        nf "    s.itoa(i);";
+        nf "    return s;";
+        nf "endfunction";
+      ]
+  )
+
+let hex_str_fint width =
+  let name = pf "sail_hex_str_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic string %s(logic [%d:0] i);" name (width - 1);
+        nf "    string s;";
+        nf "    s.hextoa(i);";
+        nf "    return {\"0x\", s};";
+        nf "endfunction";
+      ]
+  )
+
+let hex_str_upper_fint width =
+  let name = pf "sail_hex_str_upper_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic string %s(logic [%d:0] i);" name (width - 1);
+        nf "    string s;";
+        nf "    s.hextoa(i);";
+        nf "    return {\"0x\", s.toupper()};";
+        nf "endfunction";
+      ]
   )

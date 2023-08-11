@@ -106,12 +106,19 @@ module Make (Config : CONFIG) = struct
           | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
           | _ -> Reporting.unreachable l __POS__ "print_bits"
 
-        let dec_str l = function CT_lbits _ -> "sail_hex_str" | _ -> Reporting.unreachable l __POS__ "hex_str"
+        let dec_str l = function
+          | CT_lint _ -> "sail_dec_str"
+          | CT_fint sz -> Generate_primop.dec_str_fint sz
+          | _ -> Reporting.unreachable l __POS__ "dec_str"
 
-        let hex_str l = function CT_lbits _ -> "sail_hex_str" | _ -> Reporting.unreachable l __POS__ "hex_str"
+        let hex_str l = function
+          | CT_lint _ -> "sail_hex_str"
+          | CT_fint sz -> Generate_primop.hex_str_fint sz
+          | _ -> Reporting.unreachable l __POS__ "hex_str"
 
         let hex_str_upper l = function
-          | CT_lbits _ -> "sail_hex_str_upper"
+          | CT_lint _ -> "sail_hex_str_upper"
+          | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
       end)
 
@@ -289,9 +296,22 @@ module Make (Config : CONFIG) = struct
     | CT_constant c ->
         let width = required_width c in
         ksprintf string "logic [%d:0]" (width - 1)
+    | CT_ref ctyp -> ksprintf string "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
     | _ -> empty
 
-  let sv_ctyp_dummy = function CT_bool -> string "0" | CT_bit -> string "1'bX" | _ -> string "DEFAULT"
+  (*
+  let sv_ctyp_dummy = function
+    | CT_bool -> string "0"
+    | CT_fbits (width, _) ->
+      ksprintf string "%d'b%s" width (String.make width 'X')
+    | CT_lbits _ ->
+      let index = ksprintf string "%d'b%s" lbits_index_width (String.make lbits_index_width 'X') in
+      let sz = Config.max_unknown_bitvector_width in
+      let contents = ksprintf string "%d'b%s" sz (String.make sz 'X') in
+      squote ^^ lbrace ^^ index ^^ comma ^^ space ^^ ksprintf string ^^ rbrace
+    | CT_bit -> string "1'bX"
+    | _ -> string "DEFAULT"
+     *)
 
   let sv_type_def = function
     | CTD_enum (id, ids) ->
@@ -476,6 +496,7 @@ module Make (Config : CONFIG) = struct
     | Bool_lit false -> string "0"
     | String_lit s -> ksprintf string "\"%s\"" s
     | Enum "unit" -> string "SAIL_UNIT"
+    | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
     | Fn ("Bits", [size; bv]) -> squote ^^ lbrace ^^ sv_smt size ^^ comma ^^ space ^^ sv_smt bv ^^ rbrace
     | Fn ("concat", xs) -> lbrace ^^ separate_map (comma ^^ space) sv_smt xs ^^ rbrace
     | Fn ("not", [Fn ("not", [x])]) -> sv_smt ~need_parens x
@@ -624,12 +645,16 @@ module Make (Config : CONFIG) = struct
         return (string "return" ^^ space ^^ value ^^ semi)
     | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
     | I_exit _ -> return (string "$finish" ^^ semi)
+    | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) ->
+      let* value = sv_cval cval in
+      let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
+        return (ksprintf string "sail_reg_assign_%s" encoded ^^ parens (sv_name id ^^ comma ^^ space ^^ value) ^^ semi)
     | I_copy (clexp, cval) ->
         let* doc = clexp_conversion clexp cval in
         return (ld ^^ doc ^^ semi)
     | I_funcall (clexp, _, (id, _), args) ->
-        if Type_check.Env.is_extern id ctx.tc_env "c" then (
-          let name = Type_check.Env.get_extern id ctx.tc_env "c" in
+        if ctx_is_extern id ctx then (
+          let name = ctx_get_extern id ctx in
           match Smt.builtin name with
           | Some generator ->
               let* value = generator args (clexp_ctyp clexp) in
@@ -736,13 +761,91 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
 
-  type sv_cdef_loc = CDLOC_Out | CDLOC_In
+  type sv_cdef_loc = CDLOC_Out | CDLOC_In | CDLOC_Reg
+
+  let collect_registers cdefs =
+    List.fold_left
+      (fun rmap cdef ->
+        match cdef with
+        | CDEF_register (id, ctyp, _) ->
+            CTMap.update ctyp (function Some ids -> Some (id :: ids) | None -> Some [id]) rmap
+        | _ -> rmap
+      )
+      CTMap.empty cdefs
+
+  let sv_register_references cdefs =
+    let rmap = collect_registers cdefs in
+    let reg_ref id = "SAIL_REG_" ^ Util.zencode_upper_string (string_of_id id) in
+    let reg_ref_enums =
+      List.map
+        (fun (ctyp, regs) ->
+          separate space [string "typedef"; string "enum"; lbrace]
+          ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) (fun r -> string (reg_ref r)) regs)
+          ^^ hardline ^^ rbrace ^^ space
+          ^^ ksprintf string "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
+          ^^ semi
+        )
+        (CTMap.bindings rmap)
+      |> separate (twice hardline)
+    in
+    let reg_ref_functions =
+      List.map
+        (fun (ctyp, regs) ->
+          let encoded = Util.zencode_string (string_of_ctyp ctyp) in
+          separate space [string "function"; string "automatic"; sv_ctyp ctyp]
+          ^^ space
+          ^^ string ("sail_reg_deref_" ^ encoded)
+          ^^ parens (string ("sail_reg_" ^ encoded) ^^ space ^^ char 'r')
+          ^^ semi
+          ^^ nest 4
+               (hardline
+               ^^ separate_map hardline
+                    (fun reg ->
+                      separate space
+                        [
+                          string "if";
+                          parens (separate space [char 'r'; string "=="; string (reg_ref reg)]);
+                          string "begin";
+                        ]
+                      ^^ nest 4 (hardline ^^ string "return" ^^ space ^^ sv_id reg ^^ semi)
+                      ^^ hardline ^^ string "end" ^^ semi
+                    )
+                    regs
+               )
+          ^^ hardline ^^ string "endfunction"
+          ^^ twice hardline
+          ^^ separate space [string "function"; string "automatic"; string "void"]
+          ^^ space
+          ^^ string ("sail_reg_assign_" ^ encoded)
+          ^^ parens (separate space [string ("sail_reg_" ^ encoded); char 'r' ^^ comma; sv_ctyp ctyp; char 'v'])
+          ^^ semi
+          ^^ nest 4
+               (hardline
+               ^^ separate_map hardline
+                    (fun reg ->
+                      separate space
+                        [
+                          string "if";
+                          parens (separate space [char 'r'; string "=="; string (reg_ref reg)]);
+                          string "begin";
+                        ]
+                      ^^ nest 4 (hardline ^^ sv_id reg ^^ space ^^ equals ^^ space ^^ char 'v' ^^ semi)
+                      ^^ hardline ^^ string "end" ^^ semi
+                    )
+                    regs
+               )
+          ^^ hardline ^^ string "endfunction"
+        )
+        (CTMap.bindings rmap)
+      |> separate (twice hardline)
+    in
+    (reg_ref_enums ^^ twice hardline, reg_ref_functions ^^ twice hardline)
 
   let sv_cdef ctx fn_ctyps setup_calls = function
     | CDEF_register (id, ctyp, setup) ->
         let binding_doc = sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
-        (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_In)
+        (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_Reg)
     | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps, setup_calls, CDLOC_Out)
     | CDEF_val (f, _, param_ctyps, ret_ctyp) ->
         (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls, CDLOC_In)
