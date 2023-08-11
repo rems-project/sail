@@ -603,8 +603,7 @@ module Make (Config : CONFIG) = struct
             Fn
               ( "Bits",
                 [
-                  Smt_builtins.bvpint lbits_index_width (Big_int.of_int sz);
-                  ZeroExtend (lbits_size, lbits_size - sz, smt);
+                  Smt_builtins.bvint lbits_index_width (Big_int.of_int sz); ZeroExtend (lbits_size, lbits_size - sz, smt);
                 ]
               )
           in
@@ -725,8 +724,8 @@ module Make (Config : CONFIG) = struct
         Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
   and sv_checked_instr ctx (I_aux (_, (_, l)) as instr) =
-    let m = sv_instr ctx instr l in
-    m.value
+    let v, _ = Smt_builtins.run (sv_instr ctx instr) l in
+    v
 
   let sv_fundef ctx f params param_ctyps ret_ctyp body =
     let param_docs =

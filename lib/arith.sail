@@ -211,4 +211,10 @@ val abs_int_plain = pure {
 
 overload abs_int = {abs_int_plain}
 
+val max_int = pure "max_int" : forall 'x 'y.
+  (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}
+
+val min_int = pure "min_int" : forall 'x 'y.
+  (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}
+
 $endif
