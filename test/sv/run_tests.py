@@ -53,7 +53,6 @@ skip_tests = {
     'split', # generic vectors
     'string_of_bits',
     'string_take',
-    'tl_pat', # identifier and type identifier
     'tuple_conversion', # verilator fails?
     'vector_example',
     'vector_subrange_pattern',

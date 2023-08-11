@@ -208,9 +208,10 @@ module Make (Config : CONFIG) = struct
       "randc";
       "randcase";
       "randsequence";
+      "ref";
       "reg";
       "reject_on";
-      "ref";
+      "release";
       "restrict";
       "return";
       "s_always";
@@ -271,6 +272,10 @@ module Make (Config : CONFIG) = struct
 
   let sv_id id = string (sv_id_string id)
 
+  let sv_type_id_string id = "t_" ^ sv_id_string id
+
+  let sv_type_id id = string (sv_type_id_string id)
+
   let sv_name = function
     | Name (id, _) -> sv_id id
     | Global (id, _) -> sv_id id
@@ -292,7 +297,7 @@ module Make (Config : CONFIG) = struct
     | CT_lint -> ksprintf string "logic [%d:0]" (Config.max_unknown_integer_width - 1)
     | CT_string -> string "string"
     | CT_unit -> string "sail_unit"
-    | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> sv_id id
+    | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> sv_type_id id
     | CT_constant c ->
         let width = required_width c in
         ksprintf string "logic [%d:0]" (width - 1)
@@ -317,7 +322,7 @@ module Make (Config : CONFIG) = struct
     | CTD_enum (id, ids) ->
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) sv_id ids) ^^ hardline ^^ rbrace)
-        ^^ space ^^ sv_id id ^^ semi
+        ^^ space ^^ sv_type_id id ^^ semi
     | CTD_struct (id, fields) ->
         let sv_field (id, ctyp) = sv_ctyp ctyp ^^ space ^^ sv_id id in
         let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) fields in
@@ -329,11 +334,11 @@ module Make (Config : CONFIG) = struct
              ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) sv_field fields)
              ^^ semi ^^ hardline ^^ rbrace
              )
-        ^^ space ^^ sv_id id ^^ semi
+        ^^ space ^^ sv_type_id id ^^ semi
     | CTD_variant (id, ctors) ->
         let exception_boilerplate =
           if Id.compare id (mk_id "exception") = 0 then
-            twice hardline ^^ ksprintf string "%s sail_current_exception;" (sv_id_string id)
+            twice hardline ^^ ksprintf string "%s sail_current_exception;" (sv_type_id_string id)
           else empty
         in
         let kind_id (id, _) = string_of_id id |> Util.zencode_string |> String.uppercase_ascii |> string in
@@ -359,11 +364,11 @@ module Make (Config : CONFIG) = struct
           let constructors =
             List.map
               (fun (ctor_id, ctyp) ->
-                separate space [string "function"; string "automatic"; sv_id id; sv_id ctor_id]
+                separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
                 ^^ parens (sv_ctyp ctyp ^^ space ^^ char 'v')
                 ^^ semi
                 ^^ nest 4
-                     (hardline ^^ sv_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                     (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
                      ^^ string ("sailunion_" ^ sv_id_string id)
                      ^^ space ^^ string "u" ^^ semi ^^ hardline
                      ^^ separate space
@@ -408,7 +413,7 @@ module Make (Config : CONFIG) = struct
                         )
                    ^^ semi ^^ hardline ^^ rbrace
                    );
-                 sv_id id ^^ semi;
+                 sv_type_id id ^^ semi;
                ]
           ^^ twice hardline
           ^^ separate (twice hardline) constructors
@@ -418,11 +423,11 @@ module Make (Config : CONFIG) = struct
           let constructors =
             List.map
               (fun (ctor_id, ctyp) ->
-                separate space [string "function"; string "automatic"; sv_id id; sv_id ctor_id]
+                separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
                 ^^ parens (sv_ctyp ctyp ^^ space ^^ char 'v')
                 ^^ semi
                 ^^ nest 4
-                     (hardline ^^ sv_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                     (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
                      ^^ separate space
                           [
                             string "r.tag";
@@ -449,7 +454,7 @@ module Make (Config : CONFIG) = struct
                      )
                 ^^ semi ^^ hardline ^^ rbrace
                 );
-              sv_id id ^^ semi;
+              sv_type_id id ^^ semi;
             ]
           ^^ twice hardline
           ^^ separate (twice hardline) constructors
