@@ -157,7 +157,7 @@ let signed_size ?(checked = true) ~into:n ~from:m smt =
 (* [unsigned_size n m exp] is much like signed_size, but it assumes
    that the bitvector is unsigned, so it either zero extends or
    truncates as required. *)
-let unsigned_size ?(checked = true) ~into:n ~from:m smt =
+let unsigned_size ?max_value ?(checked = true) ~into:n ~from:m smt =
   if n = m then return smt
   else if n > m then return (Fn ("concat", [bvzero (n - m); smt]))
   else
@@ -227,6 +227,7 @@ module type PRIMOP_GEN = sig
   val dec_str : Parse_ast.l -> ctyp -> string
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string
+  val count_leading_zeros : Parse_ast.l -> int -> string
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -446,12 +447,19 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     match cval_ctyp vbits with
     | CT_fbits (n, _) ->
         let* bv = smt_cval vbits in
-        let* len = bvzeint n vshift in
-        return (Fn (shiftop, [bv; len]))
+        let* shift = bvzeint n vshift in
+        return (Fn (shiftop, [bv; shift]))
     | CT_lbits _ ->
         let* bv = smt_cval vbits in
         let* shift = bvzeint lbits_size vshift in
-        return (Fn ("Bits", [Fn ("len", [bv]); Fn (shiftop, [Fn ("contents", [bv]); shift])]))
+        let shifted =
+          if shiftop = "bvashr" then (
+            let mask = bvmask (Fn ("len", [bv])) in
+            bvand mask (Fn (shiftop, [bvor (bvnot mask) (Fn ("contents", [bv])); shift]))
+          )
+          else Fn (shiftop, [Fn ("contents", [bv]); shift])
+        in
+        return (Fn ("Bits", [Fn ("len", [bv]); shifted]))
     | _ -> builtin_type_error shiftop [vbits; vshift] (Some ret_ctyp)
 
   let builtin_slice v1 v2 v3 ret_ctyp =
@@ -731,6 +739,56 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         Reporting.unreachable Parse_ast.Unknown __POS__
           (Printf.sprintf "Type %s must be a bitvector in to_fbits" (string_of_ctyp ctyp))
 
+  let builtin_sail_truncate v1 v2 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
+    | v1_ctyp, CT_constant c, CT_fbits (m, _) ->
+        let* smt1 = smt_cval v1 in
+        let sz, bv = to_fbits v1_ctyp smt1 in
+        assert (Big_int.to_int c = m && m <= sz);
+        return (Extract (Big_int.to_int c - 1, 0, bv))
+    | v1_ctyp, _, CT_lbits _ ->
+        let* smt1 = smt_cval v1 in
+        let sz, bv = to_fbits v1_ctyp smt1 in
+        let* smt1 = unsigned_size ~into:lbits_size ~from:sz bv in
+        let* smt2 = bvzeint lbits_index v2 in
+        return (Fn ("Bits", [smt2; Fn ("bvand", [bvmask smt2; smt1])]))
+    | _ -> builtin_type_error "sail_truncate" [v1; v2] (Some ret_ctyp)
+
+  let builtin_sail_truncateLSB v1 v2 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
+    | v1_ctyp, CT_constant c, CT_fbits (m, _) ->
+        let* smt1 = smt_cval v1 in
+        let sz, bv = to_fbits v1_ctyp smt1 in
+        assert (Big_int.to_int c = m && m <= sz);
+        return (Extract (sz - 1, sz - Big_int.to_int c, bv))
+    | CT_fbits (sz, _), _, CT_lbits _ ->
+        let* smt1 = smt_cval v1 in
+        let* len = bvzeint lbits_index v2 in
+        let shift = bvsub (bvpint lbits_index (Big_int.of_int sz)) len in
+        let shifted = bvlshr smt1 (ZeroExtend (sz, lbits_index, shift)) in
+        let* shifted = unsigned_size ~checked:false ~into:lbits_size ~from:sz shifted in
+        return (Fn ("Bits", [len; shifted]))
+    | CT_lbits _, _, CT_lbits _ ->
+        let* smt1 = smt_cval v1 in
+        let* len = bvzeint lbits_index v2 in
+        let shift = bvsub (Fn ("len", [smt1])) len in
+        let shifted = bvlshr (Fn ("contents", [smt1])) (ZeroExtend (lbits_size, lbits_index, shift)) in
+        return (Fn ("Bits", [len; shifted]))
+    | _ -> builtin_type_error "sail_truncateLSB" [v1; v2] (Some ret_ctyp)
+
+  let builtin_bitwise fn v1 v2 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
+    | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+        assert (n = m && m = o);
+        let* smt1 = smt_cval v1 in
+        let* smt2 = smt_cval v2 in
+        return (Fn (fn, [smt1; smt2]))
+    | CT_lbits _, CT_lbits _, CT_lbits _ ->
+        let* smt1 = smt_cval v1 in
+        let* smt2 = smt_cval v2 in
+        return (Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])]))
+    | _ -> builtin_type_error fn [v1; v2] (Some ret_ctyp)
+
   let fbits_mask mask_sz len = bvnot (bvshl (bvones mask_sz) len)
 
   let builtin_vector_access vec i ret_ctyp =
@@ -895,6 +953,24 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         return (bvshl (bvone lint_size) v)
     | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
+  (* Technically, there's no bvclz in SMTLIB, but we can't generate
+     anything nice, so leave it in case a backend like SystemVerilog
+     can do better *)
+  let builtin_count_leading_zeros v ret_ctyp =
+    let* l = current_location in
+    match cval_ctyp v with
+    | CT_fbits (sz, _) ->
+        let bvclz = Primop_gen.count_leading_zeros l lbits_size in
+        let* bv = smt_cval v in
+        unsigned_size ~max_value:sz ~into:(int_size ret_ctyp) ~from:sz (Fn (bvclz, [bv]))
+    | CT_lbits _ ->
+        let bvclz = Primop_gen.count_leading_zeros l lbits_size in
+        let* bv = smt_cval v in
+        let contents_clz = Fn (bvclz, [Fn ("contents", [bv])]) in
+        let* len = unsigned_size ~into:lbits_size ~from:lbits_index (Fn ("len", [bv])) in
+        let lz = bvsub contents_clz (bvsub (bvpint lbits_size (Big_int.of_int lbits_size)) len) in
+        unsigned_size ~max_value:lbits_size ~into:(int_size ret_ctyp) ~from:lbits_size lz
+
   let arity_error =
     let* l = current_location in
     raise (Reporting.unreachable l __POS__ "Trying to generate primitive with incorrect number of arguments")
@@ -950,6 +1026,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "get_slice_int" -> ternary_primop builtin_get_slice_int
     | "eq_bits" -> binary_primop_simple builtin_eq_bits
     | "not_bits" -> unary_primop builtin_not_bits
+    | "sail_truncate" -> binary_primop builtin_sail_truncate
+    | "sail_truncateLSB" -> binary_primop builtin_sail_truncateLSB
+    | "shiftl" -> binary_primop (builtin_shift "bvshl")
+    | "shiftr" -> binary_primop (builtin_shift "bvlshr")
+    | "arith_shiftr" -> binary_primop (builtin_shift "bvashr")
+    | "and_bits" -> binary_primop (builtin_bitwise "bvand")
+    | "or_bits" -> binary_primop (builtin_bitwise "bvor")
+    | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
     | "vector_access" -> binary_primop builtin_vector_access
     | "vector_subrange" -> ternary_primop builtin_vector_subrange
     | "vector_update" -> ternary_primop builtin_vector_update
@@ -960,6 +1044,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           )
     | "length" -> unary_primop builtin_length
     | "replicate_bits" -> binary_primop builtin_replicate_bits
+    | "count_leading_zeros" -> unary_primop builtin_count_leading_zeros
     | "print_bits" ->
         binary_primop_simple (fun str bv ->
             let* l = current_location in

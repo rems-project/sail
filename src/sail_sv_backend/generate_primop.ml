@@ -48,10 +48,12 @@ let pf fmt = sprintf fmt
 let generated_primops = ref (StringSet.empty, [])
 
 let register_primop name def =
-  let names, defs = !generated_primops in
+  let names, _ = !generated_primops in
   if StringSet.mem name names then name
   else (
-    generated_primops := (StringSet.add name names, def () :: defs);
+    let source = def () in
+    let names, defs = !generated_primops in
+    generated_primops := (StringSet.add name names, source :: defs);
     name
   )
 
@@ -203,6 +205,47 @@ let hex_str_upper_fint width =
         nf "    string s;";
         nf "    s.hextoa(i);";
         nf "    return {\"0x\", s.toupper()};";
+        nf "endfunction";
+      ]
+  )
+
+let rec count_leading_zeros width =
+  let name = pf "sail_clz_%d" width in
+  register_primop name (fun () ->
+      if width == 1 then
+        [
+          pf "function automatic logic [%d:0] %s(logic [%d:0] bv);" (width - 1) name (width - 1);
+          nf "    return ~bv[0];";
+          nf "endfunction";
+        ]
+      else (
+        let lower_width = width / 2 in
+        let upper_width = lower_width + (width mod 2) in
+        let upper = pf "bv[%d:%d]" (width - 1) (width - upper_width) in
+        let lower = pf "bv[%d:0]" (lower_width - 1) in
+        let clz_upper = count_leading_zeros upper_width in
+        let clz_lower = count_leading_zeros lower_width in
+        [
+          pf "function automatic logic [%d:0] %s(logic [%d:0] bv);" (width - 1) name (width - 1);
+          pf "    if (%s == 0) begin" upper;
+          pf "        return %d + %d'(%s(%s));" upper_width width clz_lower lower;
+          nf "    end else begin";
+          pf "        return %d'(%s(%s));" width clz_upper upper;
+          nf "    end;";
+          nf "endfunction";
+        ]
+      )
+  )
+
+let popcount width =
+  (* Cound maybe use $countones? *)
+  let name = pf "sail_popcount_%d" width in
+  register_primop name (fun () ->
+      let bits = List.init (width - 1) (fun n -> pf "%d'(bv[%d])" width (n + 1)) in
+      let sum = List.fold_left (fun sum bit -> pf "%s + %s" sum bit) (pf "%d'(bv[0])" width) bits in
+      [
+        pf "function automatic logic [%d:0] %s(logic [%d:0] bv);" (width - 1) name (width - 1);
+        pf "    return %s;" sum;
         nf "endfunction";
       ]
   )

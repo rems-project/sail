@@ -107,19 +107,21 @@ module Make (Config : CONFIG) = struct
           | _ -> Reporting.unreachable l __POS__ "print_bits"
 
         let dec_str l = function
-          | CT_lint _ -> "sail_dec_str"
+          | CT_lint -> "sail_dec_str"
           | CT_fint sz -> Generate_primop.dec_str_fint sz
           | _ -> Reporting.unreachable l __POS__ "dec_str"
 
         let hex_str l = function
-          | CT_lint _ -> "sail_hex_str"
+          | CT_lint -> "sail_hex_str"
           | CT_fint sz -> Generate_primop.hex_str_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str"
 
         let hex_str_upper l = function
-          | CT_lint _ -> "sail_hex_str_upper"
+          | CT_lint -> "sail_hex_str_upper"
           | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
+
+        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
       end)
 
   let ( let* ) = Smt_builtins.bind
@@ -532,9 +534,9 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvsle", [x; y]) -> opt_parens (separate space [sv_signed (sv_smt x); string "<="; sv_signed (sv_smt y)])
     | Fn ("bvsgt", [x; y]) -> opt_parens (separate space [sv_signed (sv_smt x); char '>'; sv_signed (sv_smt y)])
     | Fn ("bvsge", [x; y]) -> opt_parens (separate space [sv_signed (sv_smt x); string ">="; sv_signed (sv_smt y)])
-    | Fn ("bvshl", [x; y]) -> opt_parens (separate space [sv_smt x; string "<<"; sv_signed (sv_smt y)])
-    | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [sv_smt x; string ">>"; sv_signed (sv_smt y)])
-    | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt x; string ">>>"; sv_signed (sv_smt y)])
+    | Fn ("bvshl", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "<<"; sv_signed (sv_smt y)])
+    | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>"; sv_signed (sv_smt y)])
+    | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>>"; sv_signed (sv_smt y)])
     | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
     | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ sv_smt x ^^ string "})))"
