@@ -624,7 +624,11 @@ module Make (Config : CONFIG) = struct
       end
     | _ -> failwith "update_fbits 2"
 
-  let cval_for_ctyp = function CT_unit -> V_lit (VL_unit, CT_unit)
+  let cval_for_ctyp = function
+    | CT_unit -> return (V_lit (VL_unit, CT_unit))
+    | ctyp ->
+        let* l = Smt_builtins.current_location in
+        Reporting.unreachable l __POS__ ("Cannot create undefined value of type " ^ string_of_ctyp ctyp)
 
   let sv_line_directive l =
     match Reporting.simp_loc l with
@@ -646,8 +650,8 @@ module Make (Config : CONFIG) = struct
     | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
     | I_exit _ -> return (string "$finish" ^^ semi)
     | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) ->
-      let* value = sv_cval cval in
-      let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
+        let* value = sv_cval cval in
+        let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
         return (ksprintf string "sail_reg_assign_%s" encoded ^^ parens (sv_name id ^^ comma ^^ space ^^ value) ^^ semi)
     | I_copy (clexp, cval) ->
         let* doc = clexp_conversion clexp cval in
@@ -703,11 +707,9 @@ module Make (Config : CONFIG) = struct
           ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) instrs)
           ^^ hardline ^^ string "end" ^^ semi
           )
-    | I_undefined ctyp ->
-        let cval = cval_for_ctyp ctyp in
-        let* value = sv_cval cval in
-        return (ld ^^ string "return" ^^ space ^^ value ^^ semi)
     | I_raw s -> return (string s ^^ semi)
+    | I_undefined ctyp ->
+        Reporting.unreachable l __POS__ "Unreachable instruction should not reach SystemVerilog backend"
     | I_jump _ | I_goto _ | I_label _ ->
         Reporting.unreachable l __POS__ "Non-structured control flow should not reach SystemVerilog backend"
     | I_throw _ | I_try_block _ ->
@@ -753,15 +755,13 @@ module Make (Config : CONFIG) = struct
     let setup =
       Jib_optimize.(
         setup |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
-        |> filter_clear
+        |> remove_undefined |> filter_clear
       )
     in
     separate space [string "function"; string "automatic"; string "void"; string name]
     ^^ string "()" ^^ semi
     ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
-
-  type sv_cdef_loc = CDLOC_Out | CDLOC_In | CDLOC_Reg
 
   let collect_registers cdefs =
     List.fold_left
@@ -812,8 +812,7 @@ module Make (Config : CONFIG) = struct
                     )
                     regs
                )
-          ^^ hardline ^^ string "endfunction"
-          ^^ twice hardline
+          ^^ hardline ^^ string "endfunction" ^^ twice hardline
           ^^ separate space [string "function"; string "automatic"; string "void"]
           ^^ space
           ^^ string ("sail_reg_assign_" ^ encoded)
@@ -841,25 +840,38 @@ module Make (Config : CONFIG) = struct
     in
     (reg_ref_enums ^^ twice hardline, reg_ref_functions ^^ twice hardline)
 
+  type cdef_doc = { outside_module : document; inside_module_prefix : document; inside_module : document }
+
+  let empty_cdef_doc = { outside_module = empty; inside_module_prefix = empty; inside_module = empty }
+
   let sv_cdef ctx fn_ctyps setup_calls = function
     | CDEF_register (id, ctyp, setup) ->
         let binding_doc = sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
-        (binding_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_Reg)
-    | CDEF_type td -> (sv_type_def td ^^ twice hardline, fn_ctyps, setup_calls, CDLOC_Out)
+        ( { empty_cdef_doc with inside_module_prefix = binding_doc; inside_module = sv_setup_function ctx name setup },
+          fn_ctyps,
+          name :: setup_calls
+        )
+    | CDEF_type td -> ({ empty_cdef_doc with outside_module = sv_type_def td ^^ twice hardline }, fn_ctyps, setup_calls)
     | CDEF_val (f, _, param_ctyps, ret_ctyp) ->
-        (empty, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls, CDLOC_In)
+        (empty_cdef_doc, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
     | CDEF_fundef (f, _, params, body) ->
         let body =
           Jib_optimize.(
             body |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
-            |> filter_clear
+            |> remove_undefined |> filter_clear
           )
         in
         begin
           match Bindings.find_opt f fn_ctyps with
           | Some (param_ctyps, ret_ctyp) ->
-              (sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline, fn_ctyps, setup_calls, CDLOC_In)
+              ( {
+                  empty_cdef_doc with
+                  inside_module = sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline;
+                },
+                fn_ctyps,
+                setup_calls
+              )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         end
     | CDEF_let (n, bindings, setup) ->
@@ -868,8 +880,11 @@ module Make (Config : CONFIG) = struct
           ^^ semi ^^ twice hardline
         in
         let name = sprintf "sail_setup_let_%d" n in
-        (bindings_doc ^^ sv_setup_function ctx name setup, fn_ctyps, name :: setup_calls, CDLOC_In)
-    | _ -> (empty, fn_ctyps, setup_calls, CDLOC_In)
+        ( { empty_cdef_doc with inside_module = bindings_doc ^^ sv_setup_function ctx name setup },
+          fn_ctyps,
+          name :: setup_calls
+        )
+    | _ -> (empty_cdef_doc, fn_ctyps, setup_calls)
 
   let main_args main fn_ctyps =
     match main with

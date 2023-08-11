@@ -84,6 +84,8 @@ val unique_per_function_ids : cdef list -> cdef list
 
 val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
 
+val remove_undefined : instr list -> instr list
+
 val remove_clear : instr list -> instr list
 
 (** Remove gotos immediately followed by the label it jumps to *)

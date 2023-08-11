@@ -370,11 +370,13 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let in_doc, out_doc, reg_doc, fn_ctyps, setup_calls =
     List.fold_left
       (fun (doc_in, doc_out, doc_reg, fn_ctyps, setup_calls) cdef ->
-        let cdef_doc, fn_ctyps, setup_calls, loc = sv_cdef ctx fn_ctyps setup_calls cdef in
-        match loc with
-        | CDLOC_In -> (doc_in ^^ cdef_doc, doc_out, doc_reg, fn_ctyps, setup_calls)
-        | CDLOC_Out -> (doc_in, doc_out ^^ cdef_doc, doc_reg, fn_ctyps, setup_calls)
-        | CDLOC_Reg -> (doc_in, doc_out, doc_reg ^^ cdef_doc, fn_ctyps, setup_calls)
+        let cdef_doc, fn_ctyps, setup_calls = sv_cdef ctx fn_ctyps setup_calls cdef in
+        ( doc_in ^^ cdef_doc.inside_module,
+          doc_out ^^ cdef_doc.outside_module,
+          doc_reg ^^ cdef_doc.inside_module_prefix,
+          fn_ctyps,
+          setup_calls
+        )
       )
       (exception_vars, include_doc, empty, Bindings.empty, [])
       cdefs

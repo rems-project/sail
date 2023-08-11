@@ -91,7 +91,6 @@ xml = '<testsuites>\n'
 xml += test_sv('SystemVerilog', '', skip_tests)
 
 skip_tests.remove('bitvector')
-skip_tests.remove('large_bitvector')
 
 xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
