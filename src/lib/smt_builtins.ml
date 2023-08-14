@@ -1148,5 +1148,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 let* l = current_location in
                 Reporting.unreachable l __POS__ "reg_deref given non register reference"
         )
+    | "eq_anything" ->
+        binary_primop_simple (fun a b ->
+            let* a = smt_cval a in
+            let* b = smt_cval b in
+            return (Fn ("=", [a; b]))
+        )
     | _ -> None
 end
