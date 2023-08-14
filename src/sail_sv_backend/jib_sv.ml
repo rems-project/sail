@@ -82,6 +82,7 @@ module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val line_directives : bool
+  val nostrings : bool
 end
 
 module Make (Config : CONFIG) = struct
@@ -297,7 +298,7 @@ module Make (Config : CONFIG) = struct
     | CT_lbits _ -> string "sail_bits"
     | CT_fint width -> ksprintf string "logic [%d:0]" (width - 1)
     | CT_lint -> ksprintf string "logic [%d:0]" (Config.max_unknown_integer_width - 1)
-    | CT_string -> string "string"
+    | CT_string -> if Config.nostrings then string "sail_unit" else string "string"
     | CT_unit -> string "sail_unit"
     | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> sv_type_id id
     | CT_constant c ->
@@ -501,7 +502,7 @@ module Make (Config : CONFIG) = struct
         else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
     | Bool_lit true -> string "1"
     | Bool_lit false -> string "0"
-    | String_lit s -> ksprintf string "\"%s\"" s
+    | String_lit s -> if Config.nostrings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
     | Enum "unit" -> string "SAIL_UNIT"
     | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
     | Fn ("Bits", [size; bv]) -> squote ^^ lbrace ^^ sv_smt size ^^ comma ^^ space ^^ sv_smt bv ^^ rbrace
