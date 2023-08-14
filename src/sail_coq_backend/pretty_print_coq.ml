@@ -3270,10 +3270,10 @@ let doc_val avoid_target_names pat exp =
           (Reporting.err_todo (pat_loc pat) "Top-level value definition with complex pattern not supported for Coq yet")
   in
   let typpp =
-    match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ empty_ctxt Env.empty typ
+    match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ bare_ctxt Env.empty typ
   in
   let env = env_of exp in
-  let ctxt = { empty_ctxt with debug = List.mem (string_of_id id) !opt_debug_on } in
+  let ctxt = { bare_ctxt with debug = List.mem (string_of_id id) !opt_debug_on } in
   let () =
     debug ctxt (lazy ("Checking definition " ^ string_of_id id));
     debug_depth := 1
