@@ -374,11 +374,16 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let registers = register_types cdefs in
 
   let include_doc =
-    string "`include \"sail.sv\"" ^^ hardline ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out ^^ twice hardline
+    (if !opt_nostrings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
+    ^^ string "`include \"sail.sv\"" ^^ hardline
+    ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
+    ^^ twice hardline
   in
 
   let exception_vars =
-    string "bit sail_have_exception;" ^^ hardline ^^ string "string sail_throw_location;" ^^ twice hardline
+    string "bit sail_have_exception;" ^^ hardline
+    ^^ (if !opt_nostrings then string "sail_unit" else string "string")
+    ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
 
   let in_doc, out_doc, reg_doc, fn_ctyps, setup_calls =

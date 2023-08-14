@@ -7,6 +7,38 @@ typedef enum logic [0:0] {SAIL_UNIT=0} sail_unit;
 // The Sail zero-width bitvector.
 typedef enum logic [0:0] {SAIL_ZWBV=0} sail_zwbv;
 
+`ifdef SAIL_NOSTRINGS
+
+function automatic sail_unit sail_print_endline(sail_unit s);
+   return SAIL_UNIT;
+endfunction // sail_print_endline
+
+function automatic sail_unit sail_prerr_endline(sail_unit s);
+   return SAIL_UNIT;
+endfunction // sail_prerr_endline
+
+function automatic sail_unit sail_print(sail_unit s);
+   return SAIL_UNIT;
+endfunction // sail_print
+
+function automatic sail_unit sail_prerr(sail_unit s);
+   return SAIL_UNIT;
+endfunction // sail_prerr
+
+function automatic sail_unit sail_assert(bit b, sail_unit msg);
+   return SAIL_UNIT;
+endfunction // sail_assert
+
+function automatic bit sail_eq_string(sail_unit s1, sail_unit s2);
+   return 0;
+endfunction
+
+function automatic sail_unit sail_concat_str(sail_unit s1, sail_unit s2);
+   return SAIL_UNIT;
+endfunction
+
+`else
+
 function automatic sail_unit sail_print_endline(string s);
    $display(s);
    return SAIL_UNIT;
@@ -41,6 +73,8 @@ endfunction
 function automatic string sail_concat_str(string s1, string s2);
    return {s1, s2};
 endfunction
+
+`endif
 
 bit [7:0] sail_memory [63:0];
 
