@@ -136,6 +136,8 @@ val string_of_uid : id * ctyp list -> string
 val string_of_value : Value2.vl -> string
 val string_of_cval : cval -> string
 
+val string_of_instr : instr -> string
+
 (** {1. Functions and modules for working with ctyps} *)
 
 val map_ctyp : (ctyp -> ctyp) -> ctyp -> ctyp
