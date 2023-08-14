@@ -83,13 +83,15 @@ module type CONFIG = sig
   val max_unknown_bitvector_width : int
   val line_directives : bool
   val nostrings : bool
+  val nopacked : bool
 end
 
 module Make (Config : CONFIG) = struct
   let lbits_index_width = required_width (Big_int.of_int (Config.max_unknown_bitvector_width - 1))
 
   let rec is_packed = function
-    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ -> true
+    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ ->
+        not Config.nopacked
     | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
     | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
     | _ -> false
