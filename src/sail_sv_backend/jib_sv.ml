@@ -571,7 +571,7 @@ module Make (Config : CONFIG) = struct
   let rec sv_clexp = function
     | CL_id (id, _) -> sv_name id
     | CL_field (clexp, field) -> sv_clexp clexp ^^ dot ^^ sv_id field
-    | _ -> string "CLEXP"
+    | _ -> string "// CLEXP unknown"
 
   let clexp_conversion clexp cval =
     let ctyp_to = clexp_ctyp clexp in
