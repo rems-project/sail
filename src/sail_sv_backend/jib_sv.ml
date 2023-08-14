@@ -670,7 +670,7 @@ module Make (Config : CONFIG) = struct
           let name = ctx_get_extern id ctx in
           match Smt.builtin name with
           | Some generator ->
-              let* value = generator args (clexp_ctyp clexp) in
+              let* value = Smt_builtins.fmap Smt_exp.simp (generator args (clexp_ctyp clexp)) in
               return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
           | None ->
               let* args = mapM Smt.smt_cval args in

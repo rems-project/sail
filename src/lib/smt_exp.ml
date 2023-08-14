@@ -135,3 +135,66 @@ let bvones n = Bitvec_lit (Sail2_operators_bitlists.ones (Big_int.of_int n))
 let bvone n =
   if n > 0 then Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int (n - 1)) @ [Sail2_values.B1])
   else Bitvec_lit []
+
+let rec simp exp =
+  let open Sail2_operators_bitlists in
+  match exp with
+  | Fn (f, args) ->
+      let args = List.map simp args in
+      begin
+        match (f, args) with
+        | "contents", [Fn ("Bits", [_; bv])] -> bv
+        | "len", [Fn ("Bits", [len; _])] -> len
+        | "concat", _ ->
+            let chunks, bv =
+              List.fold_left
+                (fun (chunks, current_literal) arg ->
+                  match (current_literal, arg) with
+                  | Some bv1, Bitvec_lit bv2 -> (chunks, Some (bv1 @ bv2))
+                  | None, Bitvec_lit bv -> (chunks, Some bv)
+                  | Some bv, exp -> (exp :: Bitvec_lit bv :: chunks, None)
+                  | None, exp -> (exp :: chunks, None)
+                )
+                ([], None) args
+            in
+            begin
+              match (chunks, bv) with
+              | [], Some bv -> Bitvec_lit bv
+              | chunks, Some bv -> Fn ("concat", List.rev (Bitvec_lit bv :: chunks))
+              | chunks, None -> Fn ("concat", List.rev chunks)
+            end
+        | "bvnot", [Bitvec_lit bv] -> Bitvec_lit (not_vec bv)
+        | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (and_vec lhs rhs)
+        | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (or_vec lhs rhs)
+        | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (xor_vec lhs rhs)
+        | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftl lhs shift) | None -> Fn (f, args)
+          end
+        | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
+          end
+        | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
+          end
+        | f, args -> Fn (f, args)
+      end
+  | ZeroExtend (to_len, from_len, arg) ->
+      let arg = simp arg in
+      begin
+        match arg with
+        | Bitvec_lit bv -> Bitvec_lit (zero_extend bv (Big_int.of_int to_len))
+        | _ -> ZeroExtend (to_len, from_len, arg)
+      end
+  | SignExtend (to_len, from_len, arg) ->
+      let arg = simp arg in
+      begin
+        match arg with
+        | Bitvec_lit bv -> Bitvec_lit (sign_extend bv (Big_int.of_int to_len))
+        | _ -> SignExtend (to_len, from_len, arg)
+      end
+  | Extract (n, m, arg) -> begin
+      match simp arg with
+      | Bitvec_lit bv -> Bitvec_lit (subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m))
+      | exp -> Extract (n, m, exp)
+    end
+  | exp -> exp

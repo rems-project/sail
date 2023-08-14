@@ -985,9 +985,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let len = Extract (lbits_index - 1, 0, v1) in
         let* contents = bind (smt_cval v2) (unsigned_size ~into:lbits_size ~from:lint_size) in
         return (Fn ("Bits", [len; bvand (bvmask len) contents]))
-    | CT_lint, ctyp2, ctyp3, ret_ctyp ->
+    | ctyp1, ctyp2, ctyp3, ret_ctyp ->
         let* smt1 = smt_cval v1 in
-        let len = Extract (lbits_index - 1, 0, smt1) in
+        let* len = signed_size ~into:lbits_index ~from:(int_size ctyp1) smt1 in
         let* smt2 = bind (smt_cval v2) (signed_size ~into:lbits_size ~from:(int_size ctyp2)) in
         let* smt3 = bind (smt_cval v3) (signed_size ~into:lbits_size ~from:(int_size ctyp3)) in
         let result = Fn ("Bits", [len; bvand (bvmask len) (bvlshr smt2 smt3)]) in

@@ -88,6 +88,7 @@ def test_sv(name, opts, skip_list):
 xml = '<testsuites>\n'
 
 xml += test_sv('SystemVerilog', '', skip_tests)
+xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests)
 
 skip_tests.remove('bitvector')
 
