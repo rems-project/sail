@@ -605,7 +605,7 @@ let lt_real (x, y) = Rational.lt x y
 let gt_real (x, y) = Rational.gt x y
 let lteq_real (x, y) = Rational.leq x y
 let gteq_real (x, y) = Rational.geq x y
-let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
+let to_real x = Rational.of_big_int x
 let negate_real x = Rational.neg x
 let neg_real x = Rational.neg x
 
@@ -630,14 +630,17 @@ let abs_real x = Rational.abs x
 
 let sqrt_real x =
   let precision = 30 in
-  let s = Big_int.sqrt (Rational.num x) in
-  if Big_int.equal (Rational.den x) (Big_int.of_int 1) && Big_int.equal (Big_int.mul s s) (Rational.num x) then
-    to_real s
+  let s = (Rational.div (Rational.of_big_int (Big_int.sqrt (Rational.num x)))
+     (Rational.of_big_int (Big_int.sqrt (Rational.den x)))) in
+  if Rational.equal (Rational.mul s s) x then
+    s
   else (
-    let p = ref (to_real (Big_int.sqrt (Big_int.div (Rational.num x) (Rational.den x)))) in
+    let p = ref s in
     let n = ref (Rational.of_int 0) in
+    let num_convergence = if (Rational.gt x (Rational.of_int 1)) then (Rational.of_int 1) else x in
     let convergence =
-      ref (Rational.div (Rational.of_int 1) (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
+      ref (Rational.div num_convergence
+        (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
     in
     let quit_loop = ref false in
     while not !quit_loop do
@@ -670,10 +673,10 @@ let rec pow x = function 0 -> 1 | n -> x * pow x (n - 1)
 let real_of_string str =
   match Util.split_on_char '.' str with
   | [whole; frac] ->
-      let whole = Rational.of_int (int_of_string whole) in
-      let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (pow 10 (String.length frac))) in
+      let whole = Rational.of_big_int (Big_int.of_string whole) in
+      let frac = Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (pow 10 (String.length frac))) in
       Rational.add whole frac
-  | [_] -> Rational.of_int (int_of_string str)
+  | [_] -> Rational.of_big_int (Big_int.of_string str)
   | _ -> failwith "invalid real literal"
 
 let print str = Stdlib.print_string str

@@ -1327,44 +1327,55 @@ void div_real(real *rop, const real op1, const real op2)
 #define SQRT_PRECISION 30
 
 /*
- * sqrt_real first checks if op has the form n/1 - in which case, if n
- * is a perfect square (i.e. it's square root is an integer), then it
- * will return the exact square root using mpz_sqrt. If that's not the
- * case we use the Babylonian method to calculate the square root to
- * SQRT_PRECISION decimal places.
+ * sqrt_real first checks whether the numerator and denominator are both
+ * perfect squares (i.e. their square roots are integers), then it
+ * will return the exact square root. If that's not the case we use the
+ * Babylonian method to calculate the square root to SQRT_PRECISION decimal
+ * places.
  */
-void sqrt_real(real *rop, const real op)
+void sqrt_real(mpq_t *rop, const mpq_t op)
 {
-  /* First check if op is a perfect square and use mpz_sqrt if so */
-  if (mpz_cmp_ui(mpq_denref(op), 1) == 0 && mpz_perfect_square_p(mpq_numref(op))) {
-    mpz_sqrt(mpq_numref(*rop), mpq_numref(op));
-    mpz_set_ui(mpq_denref(*rop), 1);
-    return;
-  }
-
   mpq_t tmp;
   mpz_t tmp_z;
   mpq_t p; /* previous estimate, p */
   mpq_t n; /* next estimate, n */
-  /* convergence is the precision (in decimal places) we want to reach as a fraction 1/(10^precision) */
-  mpq_t convergence;
 
   mpq_init(tmp);
   mpz_init(tmp_z);
   mpq_init(p);
   mpq_init(n);
-  mpq_init(convergence);
 
   /* calculate an initial guess using mpz_sqrt */
-  mpz_cdiv_q(tmp_z, mpq_numref(op), mpq_denref(op));
-  mpz_sqrt(tmp_z, tmp_z);
-  mpq_set_z(p, tmp_z);
+  mpz_sqrt(tmp_z, mpq_numref(op));
+  mpq_set_num(p, tmp_z);
+  mpz_sqrt(tmp_z, mpq_denref(op));
+  mpq_set_den(p, tmp_z);
+
+  /* Check if op is a square */
+  mpq_mul(tmp, p, p);
+  if (mpq_cmp(tmp, op) == 0) {
+    mpq_set(*rop, p);
+
+    mpq_clear(tmp);
+    mpz_clear(tmp_z);
+    mpq_clear(p);
+    mpq_clear(n);
+    return;
+  }
+
 
   /* initialise convergence based on SQRT_PRECISION */
+  /* convergence is the precision (in decimal places) we want to reach as a fraction 1/(10^precision) */
+  mpq_t convergence;
+  mpq_init(convergence);
   mpz_set_ui(tmp_z, 10);
   mpz_pow_ui(tmp_z, tmp_z, SQRT_PRECISION);
   mpz_set_ui(mpq_numref(convergence), 1);
   mpq_set_den(convergence, tmp_z);
+  /* if op < 1 then we switch to checking relative precision for convergence */
+  if (mpq_cmp_ui(op, 1, 1) < 0) {
+      mpq_mul(convergence, op, convergence);
+  }
 
   while (true) {
     // n = (p + op / p) / 2
