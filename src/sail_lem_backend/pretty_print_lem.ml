@@ -115,7 +115,7 @@ let rec fix_id remove_tick name =
   match name with
   | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try" | "match" | "with" | "check"
   | "field" | "LT" | "lt" | "lteq" | "GT" | "gt" | "gteq" | "EQ" | "eq" | "neq" | "integer" | "union" | "inter"
-  | "subset" ->
+  | "subset" | "zero_extend" | "sign_extend" | "zeros" ->
       name ^ "'"
   | _ ->
       if String.contains name '#' then fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
