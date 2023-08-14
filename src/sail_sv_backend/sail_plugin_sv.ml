@@ -97,6 +97,7 @@ let opt_max_unknown_integer_width = ref 128
 let opt_max_unknown_bitvector_width = ref 128
 
 let opt_nostrings = ref false
+let opt_nopacked = ref false
 
 let verilog_options =
   [
@@ -125,10 +126,8 @@ let verilog_options =
       Arg.Int (fun i -> opt_max_unknown_bitvector_width := i),
       "<n> set the maximum width for bitvectors with unknown width"
     );
-    ( "-sv_nostrings",
-      Arg.Set opt_nostrings,
-      " don't emit any strings, instead emit units"
-    );
+    ("-sv_nostrings", Arg.Set opt_nostrings, " don't emit any strings, instead emit units");
+    ("-sv_nopacked", Arg.Set opt_nopacked, " don't emit packed datastructures");
   ]
 
 let verilog_rewrites =
@@ -363,6 +362,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width
     let line_directives = !opt_line_directives
     let nostrings = !opt_nostrings
+    let nopacked = !opt_nopacked
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
