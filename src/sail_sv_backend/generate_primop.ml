@@ -166,7 +166,7 @@ let print_fbits width =
             pf "    $display(\"%%s0x%%s\", s, zeros.substr(0, %d - bstr.len()), bstr.toupper());" ((width / 4) - 1);
           ]
         )
-        else ["    $display(\"%s0b%0b\", s, b);"]
+        else ["    $display(\"%s0b%b\", s, b);"]
       in
       [pf "function automatic sail_unit %s(string s, logic [%d:0] b);" name (width - 1)]
       @ display

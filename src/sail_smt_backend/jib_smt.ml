@@ -1372,7 +1372,7 @@ let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
 module SMT_config (Opts : sig
   val unroll_limit : int
-end) : Jib_compile.Config = struct
+end) : Jib_compile.CONFIG = struct
   open Jib_compile
 
   (** Convert a sail type into a C-type. This function can be quite
@@ -1558,7 +1558,7 @@ end) : Jib_compile.Config = struct
 
   let optimize_anf ctx aexp = aexp |> c_literals ctx |> fold_aexp (unroll_static_foreach ctx)
 
-  let specialize_calls = true
+  let make_call_precise _ _ = false
   let ignore_64 = true
   let unroll_loops = Some Opts.unroll_limit
   let struct_value = true

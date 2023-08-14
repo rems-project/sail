@@ -121,7 +121,7 @@ val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
    Sail into Jib.  We have to provide a conversion function from Sail
    types into Jib types, as well as a function that optimizes ANF
    expressions (which can just be the identity function) *)
-module type Config = sig
+module type CONFIG = sig
   val convert_typ : ctx -> typ -> ctyp
 
   val optimize_anf : ctx -> typ aexp -> typ aexp
@@ -130,9 +130,10 @@ module type Config = sig
        generation. *)
   val unroll_loops : int option
 
-  (** If false, function arguments must match the function
-       type exactly. If true, they can be more specific. *)
-  val specialize_calls : bool
+  (** A call is precise if the function arguments match the function
+      type exactly. Leaving functions imprecise can allow later passes
+      to specialize implementations. *)
+  val make_call_precise : ctx -> id -> bool
 
   (** If false, will ensure that fixed size bitvectors are
        specifically less that 64-bits. If true this restriction will
@@ -163,7 +164,7 @@ end
 
 val callgraph : cdef list -> IdGraph.graph
 
-module Make (C : Config) : sig
+module Make (C : CONFIG) : sig
   (** Compile a Sail definition into a Jib definition. The first two
        arguments are is the current definition number and the total
        number of definitions, and can be used to drive a progress bar

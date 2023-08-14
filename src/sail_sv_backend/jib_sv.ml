@@ -926,4 +926,11 @@ module Make (Config : CONFIG) = struct
         | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
       end
     | _ -> ([], None, [])
+
+  let make_call_precise ctx id =
+    if ctx_is_extern id ctx then (
+      let name = ctx_get_extern id ctx in
+      Option.is_none (Smt.builtin name)
+    )
+    else true
 end

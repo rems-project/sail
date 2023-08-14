@@ -186,7 +186,7 @@ let literal_to_fragment (L_aux (l_aux, _)) =
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
-end) : Config = struct
+end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
      types and attempts to fit them into the smallest possible C
@@ -520,7 +520,7 @@ end) : Config = struct
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
   let unroll_loops = None
-  let specialize_calls = false
+  let make_call_precise _ _ = true
   let ignore_64 = false
   let struct_value = false
   let tuple_value = false

@@ -155,7 +155,11 @@ let verilog_rewrites =
     ("constant_fold", [String_arg "c"]);
   ]
 
-module Verilog_config : Jib_compile.Config = struct
+module type JIB_CONFIG = sig
+  val make_call_precise : Jib_compile.ctx -> id -> bool
+end
+
+module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   open Type_check
   open Jib_compile
 
@@ -275,6 +279,7 @@ module Verilog_config : Jib_compile.Config = struct
 
   let unroll_loops = None
   let specialize_calls = false
+  let make_call_precise = C.make_call_precise
   let ignore_64 = true
   let struct_value = false
   let tuple_value = false
@@ -294,9 +299,11 @@ let register_types cdefs =
     (fun acc cdef -> match cdef with CDEF_register (id, ctyp, _) -> Bindings.add id ctyp acc | _ -> acc)
     Bindings.empty cdefs
 
-let jib_of_ast env ast effect_info =
+let jib_of_ast make_call_precise env ast effect_info =
   let open Jib_compile in
-  let module Jibc = Make (Verilog_config) in
+  let module Jibc = Make (Verilog_config (struct
+    let make_call_precise = make_call_precise
+  end)) in
   let env, effect_info = add_special_functions env effect_info in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
@@ -355,7 +362,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let sail_sv_libdir = Filename.concat (Filename.concat sail_dir "lib") "sv" in
   let out = match out_opt with None -> "out" | Some name -> name in
 
-  let cdefs, ctx = jib_of_ast env ast effect_info in
+  let cdefs, ctx = jib_of_ast SV.make_call_precise env ast effect_info in
   let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in
   let registers = register_types cdefs in
 
