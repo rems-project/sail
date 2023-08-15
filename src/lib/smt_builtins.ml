@@ -420,6 +420,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let smt_conversion from_ctyp to_ctyp x =
     match (from_ctyp, to_ctyp) with
     | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
+    | _, CT_constant c -> return (bvint (required_width c) c)
     | CT_constant c, CT_fint sz -> return (bvint sz c)
     | CT_constant c, CT_lint -> return (bvint lint_size c)
     | CT_fint sz, CT_lint -> signed_size ~into:lint_size ~from:sz x
@@ -853,9 +854,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         (* checked:false should be fine here, as the Sail type system has already checked the bounds *)
         let* shift = signed_size ~checked:false ~into:sz ~from:(int_size i_ctyp) i in
         return (Extract (0, 0, Fn ("bvlshr", [bv; shift])))
-    | CT_fvector (len, _, _), CT_constant i, _ ->
+    | CT_fvector (len, _, _), i_ctyp, _ ->
         let* vec = smt_cval vec in
-        return (Fn ("select", [vec; bvint (required_width (Big_int.of_int (len - 1)) - 1) i]))
+        let* i =
+          bind (smt_cval i)
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
+        in
+        return (Fn ("select", [vec; i]))
         (*
     | CT_vector _, CT_constant i, _ -> Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
     | CT_vector _, index_ctyp, _ ->

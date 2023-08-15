@@ -24,10 +24,10 @@ skip_tests = {
     'eq_struct',
     'fail_assert_mono_bug',
     'fail_issue203', # dec_str
+    'flow_restrict', # contains very large integer literal
     'for_shadow',
     'foreach_none',
     'gvector',
-    'gvectorlit', # generic vectors
     'int64_vector_literal',
     'issue136', # lists
     'issue202_1', # lists
@@ -49,7 +49,6 @@ skip_tests = {
     'read_write_ram',
     'real',
     'real_prop', # reals
-    'reg_32_64', # register references
     'split', # generic vectors
     'string_of_bits',
     'string_take',

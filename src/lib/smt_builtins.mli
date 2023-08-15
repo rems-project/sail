@@ -152,6 +152,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   (** Convert a Jib IR cval into an SMT expression *)
   val smt_cval : cval -> Smt_exp.smt_exp check_writer
 
+  val int_size : ctyp -> int
+
+  val smt_conversion : ctyp -> ctyp -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
+
   (** Compile a call to a Sail builtin function into an SMT expression
       implementing that call. Returns None if that builtin is
       unsupported by this module. *)

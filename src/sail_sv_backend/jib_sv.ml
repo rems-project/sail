@@ -601,51 +601,7 @@ module Make (Config : CONFIG) = struct
   let rec sv_clexp = function
     | CL_id (id, _) -> sv_name id
     | CL_field (clexp, field) -> sv_clexp clexp ^^ dot ^^ sv_id field
-    | _ -> string "// CLEXP unknown"
-
-  let clexp_conversion clexp cval =
-    let ctyp_to = clexp_ctyp clexp in
-    let ctyp_from = cval_ctyp cval in
-    let* smt = Smt.smt_cval cval in
-    if ctyp_equal ctyp_to ctyp_from then return (separate space [sv_clexp clexp; equals; sv_smt smt])
-    else (
-      let lint_size = Config.max_unknown_integer_width in
-      let lbits_size = Config.max_unknown_bitvector_width in
-      match (ctyp_to, ctyp_from) with
-      | CT_fint sz, CT_constant c ->
-          let n = required_width c in
-          let extended = SignExtend (sz, sz - n, smt) in
-          return (separate space [sv_clexp clexp; equals; sv_smt extended])
-      | CT_lint, CT_constant c ->
-          let n = required_width c in
-          let extended = SignExtend (lint_size, lint_size - n, smt) in
-          return (separate space [sv_clexp clexp; equals; sv_smt extended])
-      | CT_lint, CT_fint sz ->
-          let extended = SignExtend (lint_size, lint_size - sz, smt) in
-          return (separate space [sv_clexp clexp; equals; sv_smt extended])
-      | CT_fint sz, CT_lint ->
-          let* adjusted = Smt_builtins.signed_size ~into:sz ~from:lint_size smt in
-          return (separate space [sv_clexp clexp; equals; sv_smt adjusted])
-      | CT_constant c, _ ->
-          return (separate space [sv_clexp clexp; equals; sv_smt (Smt_builtins.bvint (required_width c) c)])
-      | CT_fbits (sz, _), CT_lbits _ ->
-          let extracted = Extract (sz - 1, 0, Fn ("contents", [smt])) in
-          return (separate space [sv_clexp clexp; equals; sv_smt extracted])
-      | CT_lbits _, CT_fbits (sz, _) when sz <= lbits_size ->
-          let variable_width =
-            Fn
-              ( "Bits",
-                [
-                  Smt_builtins.bvint lbits_index_width (Big_int.of_int sz); ZeroExtend (lbits_size, lbits_size - sz, smt);
-                ]
-              )
-          in
-          return (separate space [sv_clexp clexp; equals; sv_smt variable_width])
-      | _, _ ->
-          let* l = Smt_builtins.current_location in
-          Reporting.unreachable l __POS__
-            ("Unknown conversion from " ^ string_of_ctyp ctyp_from ^ " to " ^ string_of_ctyp ctyp_to)
-    )
+    | clexp -> string ("// CLEXP " ^ Jib_util.string_of_clexp clexp)
 
   let sv_update_fbits = function
     | [bv; index; bit] -> begin
@@ -678,6 +634,13 @@ module Make (Config : CONFIG) = struct
         ksprintf string "`line %d \"%s\" 0" p1.pos_lnum p1.pos_fname ^^ hardline
     | _ -> empty
 
+  let sv_assign clexp value =
+    match clexp with
+    | CL_addr (CL_id (id, CT_ref reg_ctyp)) ->
+        let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
+        ksprintf string "sail_reg_assign_%s" encoded ^^ parens (sv_name id ^^ comma ^^ space ^^ value) ^^ semi
+    | _ -> sv_clexp clexp ^^ space ^^ equals ^^ space ^^ value ^^ semi
+
   let rec sv_instr ctx (I_aux (aux, (_, l))) =
     let ld = sv_line_directive l in
     match aux with
@@ -691,13 +654,9 @@ module Make (Config : CONFIG) = struct
         return (string "return" ^^ space ^^ value ^^ semi)
     | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
     | I_exit _ -> return (string "$finish" ^^ semi)
-    | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) ->
-        let* value = sv_cval cval in
-        let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
-        return (ksprintf string "sail_reg_assign_%s" encoded ^^ parens (sv_name id ^^ comma ^^ space ^^ value) ^^ semi)
     | I_copy (clexp, cval) ->
-        let* doc = clexp_conversion clexp cval in
-        return (ld ^^ doc ^^ semi)
+        let* value = Smt_builtins.bind (Smt.smt_cval cval) (Smt.smt_conversion (cval_ctyp cval) (clexp_ctyp clexp)) in
+        return (sv_assign clexp (sv_smt value))
     | I_funcall (clexp, _, (id, _), args) ->
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
@@ -713,23 +672,40 @@ module Make (Config : CONFIG) = struct
                       ^^ separate space [sv_clexp clexp ^^ lbracket ^^ sv_smt i ^^ rbracket; equals; sv_smt x]
                       ^^ semi
                       )
-                | _, _ -> return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
+                | _, _ -> return (ld ^^ sv_assign clexp (sv_smt value))
               end
           | None ->
               let* args = mapM Smt.smt_cval args in
               let value = Fn ("sail_" ^ name, args) in
-              return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
+              return (ld ^^ sv_assign clexp (sv_smt value))
         )
         else if Id.compare id (mk_id "update_fbits") = 0 then
           let* rhs = sv_update_fbits args in
           return (ld ^^ sv_clexp clexp ^^ space ^^ equals ^^ space ^^ rhs ^^ semi)
+        else if Id.compare id (mk_id "internal_vector_init") = 0 then return empty
+        else if Id.compare id (mk_id "internal_vector_update") = 0 then (
+          match args with
+          | [arr; i; x] -> begin
+              match cval_ctyp arr with
+              | CT_fvector (len, _, _) ->
+                  let* i =
+                    Smt_builtins.bind (Smt.smt_cval i)
+                      (Smt_builtins.unsigned_size ~checked:false
+                         ~into:(required_width (Big_int.of_int (len - 1)) - 1)
+                         ~from:(Smt.int_size (cval_ctyp i))
+                      )
+                  in
+                  let* x = Smt.smt_cval x in
+                  return
+                    (sv_clexp clexp ^^ lbracket ^^ sv_smt i ^^ rbracket ^^ space ^^ equals ^^ space ^^ sv_smt x ^^ semi)
+              | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
+            end
+          | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
+        )
         else
           let* args = mapM sv_cval args in
-          return
-            (ld ^^ sv_clexp clexp ^^ space ^^ equals ^^ space ^^ sv_id id
-            ^^ parens (separate (comma ^^ space) args)
-            ^^ semi
-            )
+          let call = sv_id id ^^ parens (separate (comma ^^ space) args) in
+          return (ld ^^ sv_assign clexp call)
     | I_if (cond, [], else_instrs, _) ->
         let* cond = sv_cval (V_call (Bnot, [cond])) in
         return

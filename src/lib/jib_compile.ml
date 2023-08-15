@@ -513,7 +513,7 @@ module Make (C : CONFIG) = struct
           | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
         in
         let elem_ctyp = ctyp_of_typ ctx typ in
-        let vector_ctyp = CT_vector (direction, elem_ctyp) in
+        let vector_ctyp = CT_fvector (len, direction, elem_ctyp) in
         let gs = ngensym () in
         let aval_set i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
