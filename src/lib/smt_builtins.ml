@@ -562,10 +562,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits (n, _), _, CT_fbits (m, _) ->
         let* bv = smt_cval vbits in
         return (Fn ("concat", [bvzero (m - n); bv]))
+    | CT_fbits (n, _), CT_fint m, CT_lbits _ ->
+        let* bv = smt_cval vbits in
+        return (Fn ("concat", [bvzero (m - n); bv]))
+    | CT_lbits _, _, CT_fbits (m, _) ->
+        let* bv = smt_cval vbits in
+        return (Extract (m - 1, 0, Fn ("contents", [bv])))
         (*
-    | CT_lbits _, CT_fbits (m, _) ->
-      assert (lbits_size ctx >= m);
-      Extract (m - 1, 0, Fn ("contents", [smt_cval ctx vbits]))
     | CT_fbits (n, _), CT_lbits _ ->
       assert (lbits_size ctx >= n);
       let vbits =

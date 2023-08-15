@@ -99,12 +99,26 @@ let print_lbits width =
   let footer = "endfunction" in
   header @ body @ [footer]
 
+let print_lbits_stub width =
+  [
+    nf "function automatic sail_unit sail_print_bits(sail_unit prefix, sail_bits bv);";
+    nf "    return SAIL_UNIT;";
+    nf "endfunction"
+  ]
+
 let dec_str width =
   [
     pf "function automatic string sail_dec_str(logic [%d:0] i);" (width - 1);
     nf "    string s;";
     nf "    s.itoa(i);";
     nf "    return s;";
+    nf "endfunction";
+  ]
+
+let dec_str_stub width =
+  [
+    pf "function automatic sail_unit sail_dec_str(logic [%d:0] i);" (width - 1);
+    nf "    return SAIL_UNIT;";
     nf "endfunction";
   ]
 
@@ -117,6 +131,13 @@ let hex_str width =
     nf "endfunction";
   ]
 
+let hex_str_stub width =
+  [
+    pf "function automatic sail_unit sail_hex_str(logic [%d:0] i);" (width - 1);
+    nf "    return SAIL_UNIT;";
+    nf "endfunction";
+  ]
+
 let hex_str_upper width =
   [
     pf "function automatic string sail_hex_str_upper(logic [%d:0] i);" (width - 1);
@@ -126,10 +147,24 @@ let hex_str_upper width =
     nf "endfunction";
   ]
 
+let hex_str_upper_stub width =
+  [
+    pf "function automatic sail_unit sail_hex_str_upper(logic [%d:0] i);" (width - 1);
+    nf "    return SAIL_UNIT;";
+    nf "endfunction";
+  ]
+
 let print_int width =
   [
     pf "function automatic sail_unit sail_print_int(string prefix, logic [%d:0] i);" (width - 1);
     nf "    $display(\"%s%0d\", prefix, signed'(i));";
+    nf "endfunction";
+  ]
+
+let print_int_stub width =
+  [
+    pf "function automatic sail_unit sail_print_int(sail_unit prefix, logic [%d:0] i);" (width - 1);
+    nf "    return SAIL_UNIT;";
     nf "endfunction";
   ]
 
@@ -152,6 +187,17 @@ let common_primops bv_width int_width =
   output_primop buf (hex_str_upper int_width);
   Buffer.contents buf
 
+let common_primops_stubs bv_width int_width =
+  let buf = Buffer.create 4096 in
+  output_primop buf (sail_bits bv_width);
+  output_primop buf (print_lbits_stub bv_width);
+  output_primop buf (print_int_stub int_width);
+  output_primop buf (dec_str_stub int_width);
+  output_primop buf (hex_str_stub int_width);
+  output_primop buf (hex_str_upper_stub int_width);
+  Buffer.contents buf
+  
+
 let print_fbits width =
   let name = pf "sail_print_fixed_bits_%d" width in
   register_primop name (fun () ->
@@ -173,6 +219,16 @@ let print_fbits width =
       @ ["    return SAIL_UNIT;"; "endfunction"]
   )
 
+let print_fbits_stub width =
+  let name = pf "sail_print_fixed_bits_%d" width in
+  register_primop name (fun () ->
+    [
+      pf "function automatic sail_unit %s(sail_unit prefix, logic [%d:0] i);" name (width - 1);
+      nf "    return SAIL_UNIT;";
+      nf "endfunction";
+    ]
+  )
+
 let dec_str_fint width =
   let name = pf "sail_dec_str_%d" width in
   register_primop name (fun () ->
@@ -181,6 +237,16 @@ let dec_str_fint width =
         nf "    string s;";
         nf "    s.itoa(i);";
         nf "    return s;";
+        nf "endfunction";
+      ]
+  )
+
+let dec_str_fint_stub width =
+  let name = pf "sail_dec_str_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic sail_unit %s(logic [%d:0] i);" name (width - 1);
+        nf "    return SAIL_UNIT;";
         nf "endfunction";
       ]
   )
@@ -197,6 +263,16 @@ let hex_str_fint width =
       ]
   )
 
+let hex_str_fint_stub width =
+  let name = pf "sail_hex_str_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic sail_unit %s(logic [%d:0] i);" name (width - 1);
+        nf "    return SAIL_UNIT;";
+        nf "endfunction";
+      ]
+  )
+
 let hex_str_upper_fint width =
   let name = pf "sail_hex_str_upper_%d" width in
   register_primop name (fun () ->
@@ -205,6 +281,16 @@ let hex_str_upper_fint width =
         nf "    string s;";
         nf "    s.hextoa(i);";
         nf "    return {\"0x\", s.toupper()};";
+        nf "endfunction";
+      ]
+  )
+
+let hex_str_upper_fint_stub width =
+  let name = pf "sail_hex_str_upper_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic sail_unit %s(logic [%d:0] i);" name (width - 1);
+        nf "    return SAIL_UNIT;";
         nf "endfunction";
       ]
   )
