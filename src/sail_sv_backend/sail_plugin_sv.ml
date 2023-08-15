@@ -336,9 +336,11 @@ let verilator_cpp_wrapper name =
   ]
 
 let make_genlib_file filename =
-  let common_primops = if !opt_nostrings
-    then Generate_primop.common_primops_stubs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width
-    else Generate_primop.common_primops !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
+  let common_primops =
+    if !opt_nostrings then
+      Generate_primop.common_primops_stubs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width
+    else Generate_primop.common_primops !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width
+  in
   let defs = Generate_primop.get_generated_primops () in
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None filename in
   output_string out_chan "`ifndef SAIL_LIBRARY_GENERATED\n";
