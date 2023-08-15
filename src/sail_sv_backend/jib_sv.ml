@@ -296,21 +296,25 @@ module Make (Config : CONFIG) = struct
       (struct
         let print_bits l = function
           | CT_lbits _ -> "sail_print_bits"
+          | CT_fbits (sz, _) when Config.nostrings -> Generate_primop.print_fbits_stub sz
           | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
           | _ -> Reporting.unreachable l __POS__ "print_bits"
 
         let dec_str l = function
           | CT_lint -> "sail_dec_str"
+          | CT_fint sz when Config.nostrings -> Generate_primop.dec_str_fint_stub sz
           | CT_fint sz -> Generate_primop.dec_str_fint sz
           | _ -> Reporting.unreachable l __POS__ "dec_str"
 
         let hex_str l = function
           | CT_lint -> "sail_hex_str"
+          | CT_fint sz when Config.nostrings -> Generate_primop.hex_str_fint_stub sz
           | CT_fint sz -> Generate_primop.hex_str_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str"
 
         let hex_str_upper l = function
           | CT_lint -> "sail_hex_str_upper"
+          | CT_fint sz when Config.nostrings -> Generate_primop.hex_str_upper_fint_stub sz
           | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
 
