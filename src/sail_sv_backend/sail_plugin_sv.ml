@@ -464,8 +464,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_register (id, ctyp, _) ->
-              Some (string "input" ^^ space ^^ sv_ctyp ctyp ^^ space ^^ sv_id id ^^ string "_in")
+          | CDEF_register (id, ctyp, _) -> Some (string "input" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_in"))
           | _ -> None
           )
         cdefs
@@ -476,8 +475,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_register (id, ctyp, _) ->
-              Some (string "output" ^^ space ^^ sv_ctyp ctyp ^^ space ^^ sv_id id ^^ string "_out")
+          | CDEF_register (id, ctyp, _) -> Some (string "output" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_out"))
           | _ -> None
           )
         cdefs

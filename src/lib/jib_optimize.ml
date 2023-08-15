@@ -595,9 +595,9 @@ let structure_control_flow_block instrs =
   in
 
   let iguard l guarded = function
-    | [] -> icomment "nop"
+    | [] -> []
     | instrs -> (
-        match guard_condition guarded with None -> iblock instrs | Some cond -> iif l cond instrs [] CT_unit
+        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs [] CT_unit]
       )
   in
 
@@ -605,18 +605,18 @@ let structure_control_flow_block instrs =
     | [] -> []
     | (I_aux ((I_decl _ | I_init _), (_, l)) as instr) :: instrs ->
         let after_decl, rest = split_after_jump instrs in
-        instr :: iguard l guarded after_decl :: fix_block guarded rest
+        instr :: (iguard l guarded after_decl @ fix_block guarded rest)
     | I_aux (I_goto label, (_, l)) :: instrs ->
         let v = label_var label in
         let set_goto = iguard l guarded [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))] in
         let guarded = NameSet.add v guarded in
         let after_jump, rest = split_after_jump instrs in
-        set_goto :: iguard l guarded after_jump :: fix_block guarded rest
+        set_goto @ iguard l guarded after_jump @ fix_block guarded rest
     | I_aux (I_label label, (_, l)) :: instrs ->
         let v = label_var label in
         let guarded = NameSet.remove v guarded in
         let after_label, rest = split_after_jump instrs in
-        icomment label :: iguard l guarded after_label :: fix_block guarded rest
+        icomment label :: (iguard l guarded after_label @ fix_block guarded rest)
     | I_aux (I_jump (cond, label), (_, l)) :: instrs ->
         let v = label_var label in
         let set_goto =
@@ -630,7 +630,7 @@ let structure_control_flow_block instrs =
         in
         let guarded = NameSet.add v guarded in
         let after_jump, rest = split_after_jump instrs in
-        set_goto :: iguard l guarded after_jump :: fix_block guarded rest
+        set_goto @ iguard l guarded after_jump @ fix_block guarded rest
     | instr :: instrs -> instr :: fix_block guarded instrs
   in
 

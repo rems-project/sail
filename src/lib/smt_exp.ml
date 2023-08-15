@@ -76,14 +76,14 @@ type smt_typ =
   | Tuple of smt_typ list
   | Array of smt_typ * smt_typ
 
+type smt_array_info = Fixed of int
+
 type smt_exp =
   | Bool_lit of bool
   | Bitvec_lit of Sail2_values.bitU list
   | Real_lit of string
   | String_lit of string
   | Var of Jib.name
-  | Shared of string
-  | Read_res of string
   | Enum of string
   | Fn of string * smt_exp list
   | Ctor of string * smt_exp list
@@ -95,6 +95,7 @@ type smt_exp =
   | Unwrap of Ast.id * bool * smt_exp
   | Struct of string * (string * smt_exp) list
   | Field of Ast.id * Ast.id * smt_exp
+  | Store of smt_array_info * string * smt_exp * smt_exp * smt_exp
 
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
@@ -107,7 +108,9 @@ let rec fold_smt_exp f = function
   | Unwrap (ctor, b, exp) -> f (Unwrap (ctor, b, fold_smt_exp f exp))
   | Field (struct_id, field_id, exp) -> f (Field (struct_id, field_id, fold_smt_exp f exp))
   | Struct (name, fields) -> f (Struct (name, List.map (fun (field, exp) -> (field, fold_smt_exp f exp)) fields))
-  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _) as exp -> f exp
+  | Store (info, store_fn, arr, index, x) ->
+      f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
+  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _) as exp -> f exp
 
 let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
 
@@ -197,4 +200,5 @@ let rec simp exp =
       | Bitvec_lit bv -> Bitvec_lit (subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m))
       | exp -> Extract (n, m, exp)
     end
+  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp arr, simp i, simp x)
   | exp -> exp

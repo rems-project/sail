@@ -249,3 +249,27 @@ let popcount width =
         nf "endfunction";
       ]
   )
+
+let wrap_type (ty, ix_opt) str = match ix_opt with None -> ty ^ " " ^ str | Some ix -> ty ^ " " ^ str ^ " " ^ ix
+
+let array_type (ty, ix_opt) ix = match ix_opt with None -> (ty, Some ix) | Some inner_ix -> (ty, Some (inner_ix ^ ix))
+
+let fvector_store len elem_ty key =
+  let name = pf "sail_array_store_%d_%s" len key in
+  register_primop name (fun () ->
+      let ret_ty_name = pf "t_array_store_%d_%s" len key in
+      let outer_ix = pf "[%d:0]" (len - 1) in
+      let ix_ty = pf "logic [%d:0]" (required_width (Big_int.of_int (len - 1)) - 2) in
+      [
+        pf "typedef %s%s;" (wrap_type elem_ty ret_ty_name) outer_ix;
+        "";
+        pf "function automatic %s %s(%s, %s i, %s);" ret_ty_name name
+          (wrap_type (array_type elem_ty outer_ix) "arr")
+          ix_ty (wrap_type elem_ty "x");
+        pf "    %s r;" ret_ty_name;
+        nf "    r = arr;";
+        nf "    r[i] = x;";
+        nf "    return r;";
+        nf "endfunction";
+      ]
+  )

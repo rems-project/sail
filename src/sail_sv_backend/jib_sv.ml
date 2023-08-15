@@ -89,48 +89,6 @@ end
 module Make (Config : CONFIG) = struct
   let lbits_index_width = required_width (Big_int.of_int (Config.max_unknown_bitvector_width - 1))
 
-  let rec is_packed = function
-    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ ->
-        not Config.nopacked
-    | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
-    | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
-    | _ -> false
-
-  module Smt =
-    Smt_builtins.Make
-      (struct
-        let max_unknown_integer_width = Config.max_unknown_integer_width
-        let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
-        let union_ctyp_classify = is_packed
-      end)
-      (struct
-        let print_bits l = function
-          | CT_lbits _ -> "sail_print_bits"
-          | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
-          | _ -> Reporting.unreachable l __POS__ "print_bits"
-
-        let dec_str l = function
-          | CT_lint -> "sail_dec_str"
-          | CT_fint sz -> Generate_primop.dec_str_fint sz
-          | _ -> Reporting.unreachable l __POS__ "dec_str"
-
-        let hex_str l = function
-          | CT_lint -> "sail_hex_str"
-          | CT_fint sz -> Generate_primop.hex_str_fint sz
-          | _ -> Reporting.unreachable l __POS__ "hex_str"
-
-        let hex_str_upper l = function
-          | CT_lint -> "sail_hex_str_upper"
-          | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
-          | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
-
-        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
-      end)
-
-  let ( let* ) = Smt_builtins.bind
-  let return = Smt_builtins.return
-  let mapM = Smt_builtins.mapM
-
   let sv_reserved_words =
     [
       "accept_on";
@@ -281,6 +239,91 @@ module Make (Config : CONFIG) = struct
 
   let sv_type_id id = string (sv_type_id_string id)
 
+  let rec is_packed = function
+    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ ->
+        not Config.nopacked
+    | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
+    | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
+    | _ -> false
+
+  let simple_type str = (str, None)
+
+  let rec sv_ctyp = function
+    | CT_bool -> simple_type "bit"
+    | CT_bit -> simple_type "logic"
+    | CT_fbits (width, is_dec) ->
+        if is_dec then ksprintf simple_type "logic [%d:0]" (width - 1)
+        else ksprintf simple_type "logic [0:%d]" (width - 1)
+    | CT_sbits (max_width, is_dec) ->
+        let logic = if is_dec then sprintf "logic [%d:0]" (max_width - 1) else sprintf "logic [0:%d]" (max_width - 1) in
+        ksprintf simple_type "struct packed { logic [7:0] size; %s bits; }" logic
+    | CT_lbits _ -> simple_type "sail_bits"
+    | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
+    | CT_lint -> ksprintf simple_type "logic [%d:0]" (Config.max_unknown_integer_width - 1)
+    | CT_string -> simple_type (if Config.nostrings then "sail_unit" else "string")
+    | CT_unit -> simple_type "sail_unit"
+    | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> simple_type (sv_type_id_string id)
+    | CT_constant c ->
+        let width = required_width c in
+        ksprintf simple_type "logic [%d:0]" (width - 1)
+    | CT_ref ctyp -> ksprintf simple_type "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
+    | CT_fvector (len, is_dec, ctyp) ->
+        let outer_index = if is_dec then sprintf "[%d:0]" (len - 1) else sprintf "[0:%d]" (len - 1) in
+        begin
+          match sv_ctyp ctyp with
+          | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
+          | ty, None -> (ty, Some outer_index)
+        end
+    | CT_list ctyp -> begin
+        match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[$]")) | ty, None -> (ty, Some "[$]")
+      end
+    | CT_vector (_, ctyp) -> begin
+        match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[]")) | ty, None -> (ty, Some "[]")
+      end
+    | CT_real -> simple_type "sail_real"
+    | CT_rounding_mode -> simple_type "sail_rounding_mode"
+    | CT_float width -> ksprintf simple_type "sail_float%d" width
+    | CT_tup _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple type should not reach SV backend"
+    | CT_poly _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Polymorphic type should not reach SV backend"
+
+  module Smt =
+    Smt_builtins.Make
+      (struct
+        let max_unknown_integer_width = Config.max_unknown_integer_width
+        let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
+        let union_ctyp_classify = is_packed
+      end)
+      (struct
+        let print_bits l = function
+          | CT_lbits _ -> "sail_print_bits"
+          | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
+          | _ -> Reporting.unreachable l __POS__ "print_bits"
+
+        let dec_str l = function
+          | CT_lint -> "sail_dec_str"
+          | CT_fint sz -> Generate_primop.dec_str_fint sz
+          | _ -> Reporting.unreachable l __POS__ "dec_str"
+
+        let hex_str l = function
+          | CT_lint -> "sail_hex_str"
+          | CT_fint sz -> Generate_primop.hex_str_fint sz
+          | _ -> Reporting.unreachable l __POS__ "hex_str"
+
+        let hex_str_upper l = function
+          | CT_lint -> "sail_hex_str_upper"
+          | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
+          | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
+
+        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
+
+        let fvector_store _l len ctyp =
+          Generate_primop.fvector_store len (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+      end)
+
+  let ( let* ) = Smt_builtins.bind
+  let return = Smt_builtins.return
+  let mapM = Smt_builtins.mapM
+
   let sv_name = function
     | Name (id, _) -> sv_id id
     | Global (id, _) -> sv_id id
@@ -289,25 +332,10 @@ module Make (Config : CONFIG) = struct
     | Throw_location _ -> string "sail_throw_location"
     | Return _ -> string "sail_return"
 
-  let rec sv_ctyp = function
-    | CT_bool -> string "bit"
-    | CT_bit -> string "logic"
-    | CT_fbits (width, is_dec) ->
-        if is_dec then ksprintf string "logic [%d:0]" (width - 1) else ksprintf string "logic [0:%d]" (width - 1)
-    | CT_sbits (max_width, is_dec) ->
-        let logic = if is_dec then sprintf "logic [%d:0]" (max_width - 1) else sprintf "logic [0:%d]" (max_width - 1) in
-        ksprintf string "struct packed { logic [7:0] size; %s bits; }" logic
-    | CT_lbits _ -> string "sail_bits"
-    | CT_fint width -> ksprintf string "logic [%d:0]" (width - 1)
-    | CT_lint -> ksprintf string "logic [%d:0]" (Config.max_unknown_integer_width - 1)
-    | CT_string -> if Config.nostrings then string "sail_unit" else string "string"
-    | CT_unit -> string "sail_unit"
-    | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> sv_type_id id
-    | CT_constant c ->
-        let width = required_width c in
-        ksprintf string "logic [%d:0]" (width - 1)
-    | CT_ref ctyp -> ksprintf string "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
-    | _ -> empty
+  let wrap_type ctyp doc =
+    match sv_ctyp ctyp with
+    | ty, None -> string ty ^^ space ^^ doc
+    | ty, Some index -> string ty ^^ space ^^ doc ^^ space ^^ string index
 
   (*
   let sv_ctyp_dummy = function
@@ -329,7 +357,7 @@ module Make (Config : CONFIG) = struct
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) sv_id ids) ^^ hardline ^^ rbrace)
         ^^ space ^^ sv_type_id id ^^ semi
     | CTD_struct (id, fields) ->
-        let sv_field (id, ctyp) = sv_ctyp ctyp ^^ space ^^ sv_id id in
+        let sv_field (id, ctyp) = wrap_type ctyp (sv_id id) in
         let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) fields in
         string "typedef" ^^ space ^^ string "struct"
         ^^ (if can_be_packed then space ^^ string "packed" else empty)
@@ -347,7 +375,7 @@ module Make (Config : CONFIG) = struct
           else empty
         in
         let kind_id (id, _) = string_of_id id |> Util.zencode_string |> String.uppercase_ascii |> string in
-        let sv_ctor (id, ctyp) = sv_ctyp ctyp ^^ space ^^ sv_id id in
+        let sv_ctor (id, ctyp) = wrap_type ctyp (sv_id id) in
         let tag_type = string ("sailtag_" ^ sv_id_string id) in
         let value_type = string ("sailunion_" ^ sv_id_string id) in
         let kind_enum =
@@ -370,7 +398,7 @@ module Make (Config : CONFIG) = struct
             List.map
               (fun (ctor_id, ctyp) ->
                 separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
-                ^^ parens (sv_ctyp ctyp ^^ space ^^ char 'v')
+                ^^ parens (wrap_type ctyp (char 'v'))
                 ^^ semi
                 ^^ nest 4
                      (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
@@ -429,7 +457,7 @@ module Make (Config : CONFIG) = struct
             List.map
               (fun (ctor_id, ctyp) ->
                 separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
-                ^^ parens (sv_ctyp ctyp ^^ space ^^ char 'v')
+                ^^ parens (wrap_type ctyp (char 'v'))
                 ^^ semi
                 ^^ nest 4
                      (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
@@ -540,8 +568,11 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvshl", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string "<<"; sv_signed (sv_smt y)])
     | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>"; sv_signed (sv_smt y)])
     | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>>"; sv_signed (sv_smt y)])
+    | Fn ("select", [x; i]) -> sv_smt_parens x ^^ lbracket ^^ sv_smt i ^^ rbracket
     | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
     | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
+    | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) sv_smt args)
+    | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) sv_smt [arr; i; x])
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ sv_smt x ^^ string "})))"
     | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ sv_smt x ^^ string "})"
     | Extract (n, m, Bitvec_lit bits) ->
@@ -552,7 +583,6 @@ module Make (Config : CONFIG) = struct
     | Extract (n, m, x) ->
         if n = m then braces (sv_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
         else braces (sv_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
-    | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) sv_smt args)
     | Var v -> sv_name v
     | Tester (ctor, v) ->
         opt_parens
@@ -611,7 +641,10 @@ module Make (Config : CONFIG) = struct
               )
           in
           return (separate space [sv_clexp clexp; equals; sv_smt variable_width])
-      | _, _ -> failwith ("Unknown conversion from " ^ string_of_ctyp ctyp_from ^ " to " ^ string_of_ctyp ctyp_to)
+      | _, _ ->
+          let* l = Smt_builtins.current_location in
+          Reporting.unreachable l __POS__
+            ("Unknown conversion from " ^ string_of_ctyp ctyp_from ^ " to " ^ string_of_ctyp ctyp_to)
     )
 
   let sv_update_fbits = function
@@ -649,10 +682,10 @@ module Make (Config : CONFIG) = struct
     let ld = sv_line_directive l in
     match aux with
     | I_comment str -> return (concat_map string ["/* "; str; " */"])
-    | I_decl (ctyp, id) -> return (ld ^^ sv_ctyp ctyp ^^ space ^^ sv_name id ^^ semi)
+    | I_decl (ctyp, id) -> return (ld ^^ wrap_type ctyp (sv_name id) ^^ semi)
     | I_init (ctyp, id, cval) ->
         let* value = sv_cval cval in
-        return (ld ^^ separate space [sv_ctyp ctyp; sv_name id; equals; value] ^^ semi)
+        return (ld ^^ separate space [wrap_type ctyp (sv_name id); equals; value] ^^ semi)
     | I_return cval ->
         let* value = sv_cval cval in
         return (string "return" ^^ space ^^ value ^^ semi)
@@ -671,7 +704,17 @@ module Make (Config : CONFIG) = struct
           match Smt.builtin name with
           | Some generator ->
               let* value = Smt_builtins.fmap Smt_exp.simp (generator args (clexp_ctyp clexp)) in
-              return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
+              begin
+                (* We can optimize R = store(R, i x) into R[i] = x *)
+                match (clexp, value) with
+                | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
+                    return
+                      (ld
+                      ^^ separate space [sv_clexp clexp ^^ lbracket ^^ sv_smt i ^^ rbracket; equals; sv_smt x]
+                      ^^ semi
+                      )
+                | _, _ -> return (ld ^^ separate space [sv_clexp clexp; equals; sv_smt value] ^^ semi)
+              end
           | None ->
               let* args = mapM Smt.smt_cval args in
               let value = Fn ("sail_" ^ name, args) in
@@ -732,14 +775,16 @@ module Make (Config : CONFIG) = struct
 
   let sv_fundef ctx f params param_ctyps ret_ctyp body =
     let param_docs =
-      try List.map2 (fun param ctyp -> sv_ctyp ctyp ^^ space ^^ sv_id param) params param_ctyps
+      try List.map2 (fun param ctyp -> wrap_type ctyp (sv_id param)) params param_ctyps
       with Invalid_argument _ -> Reporting.unreachable (id_loc f) __POS__ "Function arity mismatch"
     in
-    separate space [string "function"; string "automatic"; sv_ctyp ret_ctyp; sv_id f]
+    separate space [string "function"; string "automatic"; wrap_type ret_ctyp (sv_id f)]
     ^^ parens (separate (comma ^^ space) param_docs)
     ^^ semi
     ^^ nest 4
-         (hardline ^^ sv_ctyp ret_ctyp ^^ space ^^ sv_name Jib_util.return ^^ semi ^^ hardline
+         (hardline
+         ^^ wrap_type ret_ctyp (sv_name Jib_util.return)
+         ^^ semi ^^ hardline
          ^^ separate_map hardline (sv_checked_instr ctx) body
          )
     ^^ hardline ^^ string "endfunction"
@@ -801,7 +846,16 @@ module Make (Config : CONFIG) = struct
       List.map
         (fun (ctyp, regs) ->
           let encoded = Util.zencode_string (string_of_ctyp ctyp) in
-          separate space [string "function"; string "automatic"; sv_ctyp ctyp]
+          let sv_ty, index_ty = sv_ctyp ctyp in
+          let sv_ty, typedef =
+            match index_ty with
+            | Some index ->
+                let new_ty = string ("t_reg_deref_" ^ encoded) in
+                (new_ty, separate space [string "typedef"; string sv_ty; new_ty; string index] ^^ semi ^^ twice hardline)
+            | None -> (string sv_ty, empty)
+          in
+          typedef
+          ^^ separate space [string "function"; string "automatic"; sv_ty]
           ^^ space
           ^^ string ("sail_reg_deref_" ^ encoded)
           ^^ parens (string ("sail_reg_" ^ encoded) ^^ space ^^ char 'r')
@@ -825,7 +879,7 @@ module Make (Config : CONFIG) = struct
           ^^ separate space [string "function"; string "automatic"; string "void"]
           ^^ space
           ^^ string ("sail_reg_assign_" ^ encoded)
-          ^^ parens (separate space [string ("sail_reg_" ^ encoded); char 'r' ^^ comma; sv_ctyp ctyp; char 'v'])
+          ^^ parens (separate space [string ("sail_reg_" ^ encoded); char 'r' ^^ comma; wrap_type ctyp (char 'v')])
           ^^ semi
           ^^ nest 4
                (hardline
@@ -855,7 +909,7 @@ module Make (Config : CONFIG) = struct
 
   let sv_cdef ctx fn_ctyps setup_calls = function
     | CDEF_register (id, ctyp, setup) ->
-        let binding_doc = sv_ctyp ctyp ^^ space ^^ sv_id id ^^ semi ^^ twice hardline in
+        let binding_doc = wrap_type ctyp (sv_id id) ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
         ( { empty_cdef_doc with inside_module_prefix = binding_doc; inside_module = sv_setup_function ctx name setup },
           fn_ctyps,
@@ -885,7 +939,7 @@ module Make (Config : CONFIG) = struct
         end
     | CDEF_let (n, bindings, setup) ->
         let bindings_doc =
-          separate_map (semi ^^ hardline) (fun (id, ctyp) -> sv_ctyp ctyp ^^ space ^^ sv_id id) bindings
+          separate_map (semi ^^ hardline) (fun (id, ctyp) -> wrap_type ctyp (sv_id id)) bindings
           ^^ semi ^^ twice hardline
         in
         let name = sprintf "sail_setup_let_%d" n in
@@ -915,7 +969,7 @@ module Make (Config : CONFIG) = struct
             in
             let module_main_in =
               List.map
-                (fun (param, param_ctyp) -> string "input" ^^ space ^^ sv_ctyp param_ctyp ^^ space ^^ sv_id param)
+                (fun (param, param_ctyp) -> string "input" ^^ space ^^ wrap_type param_ctyp (sv_id param))
                 non_unit
             in
             match ret_ctyp with
@@ -923,7 +977,7 @@ module Make (Config : CONFIG) = struct
             | _ ->
                 ( main_args,
                   Some (string "main_result"),
-                  (string "output" ^^ space ^^ sv_ctyp ret_ctyp ^^ space ^^ string "main_result") :: module_main_in
+                  (string "output" ^^ space ^^ wrap_type ret_ctyp (string "main_result")) :: module_main_in
                 )
           end
         | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)

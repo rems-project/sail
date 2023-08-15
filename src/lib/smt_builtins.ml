@@ -236,6 +236,7 @@ module type PRIMOP_GEN = sig
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string
   val count_leading_zeros : Parse_ast.l -> int -> string
+  val fvector_store : Parse_ast.l -> int -> ctyp -> string
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -852,6 +853,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         (* checked:false should be fine here, as the Sail type system has already checked the bounds *)
         let* shift = signed_size ~checked:false ~into:sz ~from:(int_size i_ctyp) i in
         return (Extract (0, 0, Fn ("bvlshr", [bv; shift])))
+    | CT_fvector (len, _, _), CT_constant i, _ ->
+        let* vec = smt_cval vec in
+        return (Fn ("select", [vec; bvint (required_width (Big_int.of_int (len - 1)) - 1) i]))
         (*
     | CT_vector _, CT_constant i, _ -> Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
     | CT_vector _, index_ctyp, _ ->
@@ -911,6 +915,17 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let shifted_bit = bvshl (ZeroExtend (lbits_size, lbits_size - 1, bit)) shift in
         let contents = bvor (bvand mask (Fn ("contents", [bv]))) shifted_bit in
         return (Fn ("Bits", [Fn ("len", [bv]); contents]))
+    | CT_fvector (len, _, ctyp), i_ctyp, _, CT_fvector (len_out, _, _) ->
+        assert (len = len_out);
+        let* l = current_location in
+        let store_fn = Primop_gen.fvector_store l len ctyp in
+        let* vec = smt_cval vec in
+        let* x = smt_cval x in
+        let* i =
+          bind (smt_cval i)
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
+        in
+        return (Store (Fixed len, store_fn, vec, i, x))
     (*
        | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
          Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
@@ -992,7 +1007,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* smt3 = bind (smt_cval v3) (signed_size ~into:lbits_size ~from:(int_size ctyp3)) in
         let result = Fn ("Bits", [len; bvand (bvmask len) (bvlshr smt2 smt3)]) in
         smt_conversion (CT_lbits true) ret_ctyp result
-    | _ -> builtin_type_error "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
   let builtin_pow2 v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
@@ -1021,6 +1035,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* len = unsigned_size ~into:lbits_size ~from:lbits_index (Fn ("len", [bv])) in
         let lz = bvsub contents_clz (bvsub (bvpint lbits_size (Big_int.of_int lbits_size)) len) in
         unsigned_size ~max_value:lbits_size ~into:(int_size ret_ctyp) ~from:lbits_size lz
+    | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
   let arity_error =
     let* l = current_location in
