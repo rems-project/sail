@@ -103,7 +103,7 @@ let print_lbits_stub width =
   [
     nf "function automatic sail_unit sail_print_bits(sail_unit prefix, sail_bits bv);";
     nf "    return SAIL_UNIT;";
-    nf "endfunction"
+    nf "endfunction";
   ]
 
 let dec_str width =
@@ -196,7 +196,6 @@ let common_primops_stubs bv_width int_width =
   output_primop buf (hex_str_stub int_width);
   output_primop buf (hex_str_upper_stub int_width);
   Buffer.contents buf
-  
 
 let print_fbits width =
   let name = pf "sail_print_fixed_bits_%d" width in
@@ -222,11 +221,11 @@ let print_fbits width =
 let print_fbits_stub width =
   let name = pf "sail_print_fixed_bits_%d" width in
   register_primop name (fun () ->
-    [
-      pf "function automatic sail_unit %s(sail_unit prefix, logic [%d:0] i);" name (width - 1);
-      nf "    return SAIL_UNIT;";
-      nf "endfunction";
-    ]
+      [
+        pf "function automatic sail_unit %s(sail_unit prefix, logic [%d:0] i);" name (width - 1);
+        nf "    return SAIL_UNIT;";
+        nf "endfunction";
+      ]
   )
 
 let dec_str_fint width =
