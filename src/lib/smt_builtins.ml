@@ -725,6 +725,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         return (Fn ("=", [smt1; smt2]))
     | _ -> builtin_type_error "eq_bits" [v1; v2] None
 
+  let builtin_neq_bits v1 v2 =
+    let* t = builtin_eq_bits v1 v2 in
+    return (Fn ("not", [t]))
+
   let builtin_append v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
     | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
@@ -1105,6 +1109,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "append" -> binary_primop builtin_append
     | "get_slice_int" -> ternary_primop builtin_get_slice_int
     | "eq_bits" -> binary_primop_simple builtin_eq_bits
+    | "neq_bits" -> binary_primop_simple builtin_neq_bits
     | "not_bits" -> unary_primop builtin_not_bits
     | "sail_truncate" -> binary_primop builtin_sail_truncate
     | "sail_truncateLSB" -> binary_primop builtin_sail_truncateLSB
