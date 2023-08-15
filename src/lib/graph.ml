@@ -114,7 +114,13 @@ module type S = sig
         components. *)
   val scc : ?original_order:node list -> graph -> node list list
 
-  val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
+  val make_dot :
+    node_color:(node -> string) ->
+    edge_color:(node -> node -> string) ->
+    string_of_node:(node -> string) ->
+    out_channel ->
+    graph ->
+    unit
 end
 
 module Make (Ord : OrderedType) = struct
@@ -285,7 +291,7 @@ module Make (Ord : OrderedType) = struct
     List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
     List.rev !components
 
-  let make_dot node_color edge_color string_of_node out_chan graph =
+  let make_dot ~node_color ~edge_color ~string_of_node out_chan graph =
     Util.opt_colors := false;
     let to_string node = String.escaped (string_of_node node) in
     output_string out_chan "digraph DEPS {\n";
