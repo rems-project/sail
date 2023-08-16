@@ -419,7 +419,10 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let setup_function =
     string "function automatic void sail_setup();"
     ^^ nest 4
-         (hardline ^^ separate_map (semi ^^ hardline) (fun call -> string call ^^ string "()") (List.rev setup_calls))
+         (hardline ^^ string "sail_reached_unreachable = 0;" ^^ hardline ^^ string "sail_have_exception = 0;"
+        ^^ hardline
+         ^^ separate_map (semi ^^ hardline) (fun call -> string call ^^ string "()") (List.rev setup_calls)
+         )
     ^^ semi ^^ hardline ^^ string "endfunction" ^^ twice hardline
   in
 
