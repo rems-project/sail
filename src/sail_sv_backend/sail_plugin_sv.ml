@@ -99,6 +99,8 @@ let opt_max_unknown_bitvector_width = ref 128
 let opt_nostrings = ref false
 let opt_nopacked = ref false
 
+let opt_unreachable = ref []
+
 let verilog_options =
   [
     ( "-sv_verilate",
@@ -128,6 +130,10 @@ let verilog_options =
     );
     ("-sv_nostrings", Arg.Set opt_nostrings, " don't emit any strings, instead emit units");
     ("-sv_nopacked", Arg.Set opt_nopacked, " don't emit packed datastructures");
+    ( "-sv_unreachable",
+      Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
+      "<functionname> Mark function as unreachable."
+    );
   ]
 
 let verilog_rewrites =
@@ -367,6 +373,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     let line_directives = !opt_line_directives
     let nostrings = !opt_nostrings
     let nopacked = !opt_nopacked
+    let unreachable = !opt_unreachable
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
@@ -385,7 +392,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
 
   let exception_vars =
-    string "bit sail_have_exception;" ^^ hardline
+    string "bit sail_reached_unreachable;" ^^ hardline ^^ string "bit sail_have_exception;" ^^ hardline
     ^^ (if !opt_nostrings then string "sail_unit" else string "string")
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in

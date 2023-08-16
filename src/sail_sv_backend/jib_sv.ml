@@ -84,6 +84,7 @@ module type CONFIG = sig
   val line_directives : bool
   val nostrings : bool
   val nopacked : bool
+  val unreachable : string list
 end
 
 module Make (Config : CONFIG) = struct
@@ -758,15 +759,17 @@ module Make (Config : CONFIG) = struct
       try List.map2 (fun param ctyp -> wrap_type ctyp (sv_id param)) params param_ctyps
       with Invalid_argument _ -> Reporting.unreachable (id_loc f) __POS__ "Function arity mismatch"
     in
+    let fun_body =
+      if List.exists (fun unrf -> unrf = string_of_id f) Config.unreachable then string "sail_reached_unreachable = 1;"
+      else
+        wrap_type ret_ctyp (sv_name Jib_util.return)
+        ^^ semi ^^ hardline
+        ^^ separate_map hardline (sv_checked_instr ctx) body
+    in
     separate space [string "function"; string "automatic"; wrap_type ret_ctyp (sv_id f)]
     ^^ parens (separate (comma ^^ space) param_docs)
     ^^ semi
-    ^^ nest 4
-         (hardline
-         ^^ wrap_type ret_ctyp (sv_name Jib_util.return)
-         ^^ semi ^^ hardline
-         ^^ separate_map hardline (sv_checked_instr ctx) body
-         )
+    ^^ nest 4 (hardline ^^ fun_body)
     ^^ hardline ^^ string "endfunction"
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
