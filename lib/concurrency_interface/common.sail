@@ -85,20 +85,33 @@ $include <result.sail>
 
 $include <concurrency_interface/emulator_memory.sail>
 
+$ifdef SYMBOLIC
+val sail_instr_announce
+  = monadic "instr_announce"
+  : forall 'n, 'n > 0.
+  bits('n) -> unit
+$else
 /*! Each cycle (see [sail_end_cycle]) the model must announce the
   current opcode being executed. This is so each event within a cycle
   can be associated with an instruction. */
-val sail_instr_announce
-  = monadic { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
-  : forall 'n, 'n > 0.
-  bits('n) -> unit
+val sail_instr_announce : forall 'n, 'n > 0. bits('n) -> unit
 
-/*! For keeping track of control dependencies, when we take a branch
-  we announce the address we are branching to. */
+function sail_instr_announce _ = ()
+$endif
+
+$ifdef SYMBOLIC
 val sail_branch_announce
-  = monadic { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  = monadic "branch_announce"
   : forall 'addrsize, 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
+$else
+/*! For keeping track of control dependencies, when we take a branch
+  we announce the address we are branching to. */
+val sail_branch_announce : forall 'addrsize, 'addrsize in {32, 64}.
+  (int('addrsize), bits('addrsize)) -> unit
+
+function sail_branch_announce(_, _) = ()
+$endif
 
 /*! Each fetch-decode-execute cycle, the Sail model is expected to
   call [sail_end_cycle], to increment the cycle count and indicate the
@@ -126,7 +139,7 @@ $else
     sail_reset_registers(); // registers can be set using -R/--register here
     ...
   ```
-  
+
   This allows us to set the values of registers that would otherwise
   be initialised to some sensible default by the `initialize_model`
   function (overwriting a value set by `-I` at the beginning of execution). */

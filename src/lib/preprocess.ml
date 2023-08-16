@@ -84,6 +84,17 @@ let clear_symbols () = symbols := default_symbols
 
 let add_symbol str = symbols := StringSet.add str !symbols
 
+let () =
+  let open Interactive in
+  ArgString ("symbol", fun symbol -> ActionUnit (fun _ -> add_symbol symbol))
+  |> register_command ~name:"define_symbol" ~help:"Define preprocessor symbol";
+
+  ArgString ("symbol", fun symbol -> ActionUnit (fun _ -> symbols := StringSet.remove symbol !symbols))
+  |> register_command ~name:"undef_symbol" ~help:"Undefine preprocessor symbol";
+
+  ActionUnit (fun _ -> List.iter print_endline (StringSet.elements !symbols))
+  |> register_command ~name:"symbols" ~help:"Print defined preprocessor symbols"
+
 let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in

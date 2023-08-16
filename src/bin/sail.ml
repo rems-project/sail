@@ -116,6 +116,7 @@ let rec options =
         Arg.Tuple
           [
             Arg.Set Interactive.opt_interactive;
+            Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
             Arg.Set Initial_check.opt_undefined_gen;
           ],
@@ -125,6 +126,7 @@ let rec options =
         Arg.Tuple
           [
             Arg.Set Interactive.opt_interactive;
+            Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
             Arg.Set Initial_check.opt_undefined_gen;
             Arg.String (fun s -> opt_interactive_script := Some s);
