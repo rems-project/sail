@@ -90,137 +90,16 @@ end
 module Make (Config : CONFIG) = struct
   let lbits_index_width = required_width (Big_int.of_int (Config.max_unknown_bitvector_width - 1))
 
-  let sv_reserved_words =
-    [
-      "accept_on";
-      "alias";
-      "always_comb";
-      "always_if";
-      "always_latch";
-      "assert";
-      "assume";
-      "automatic";
-      "before";
-      "bind";
-      "bins";
-      "binsof";
-      "bit";
-      "break";
-      "byte";
-      "chandle";
-      "checker";
-      "class";
-      "clocking";
-      "config";
-      "const";
-      "constraint";
-      "context";
-      "continue";
-      "cover";
-      "covergroup";
-      "cross";
-      "dist";
-      "do";
-      "endchecker";
-      "endclass";
-      "endclocking";
-      "endfunction";
-      "endinterface";
-      "endpackage";
-      "endprogram";
-      "endproperty";
-      "endsequence";
-      "enum";
-      "eventually";
-      "expect";
-      "export";
-      "extends";
-      "extern";
-      "final";
-      "first_match";
-      "foreach";
-      "forkjoin";
-      "global";
-      "iff";
-      "ignore_bins";
-      "illegal_bins";
-      "implies";
-      "import";
-      "inside";
-      "int";
-      "interface";
-      "intersect";
-      "join_any";
-      "join_none";
-      "let";
-      "local";
-      "logic";
-      "longint";
-      "matches";
-      "modport";
-      "new";
-      "nexttime";
-      "null";
-      "package";
-      "packed";
-      "priority";
-      "program";
-      "property";
-      "protected";
-      "pure";
-      "rand";
-      "randc";
-      "randcase";
-      "randsequence";
-      "ref";
-      "reg";
-      "reject_on";
-      "release";
-      "restrict";
-      "return";
-      "s_always";
-      "s_eventually";
-      "s_nexttime";
-      "s_until";
-      "s_until_with";
-      "sequence";
-      "shortint";
-      "solve";
-      "static";
-      "string";
-      "strong";
-      "struct";
-      "super";
-      "sync_accept_on";
-      "sync_reject_on";
-      "tagged";
-      "this";
-      "throughout";
-      "timeprecision";
-      "timeunit";
-      "type";
-      "typedef";
-      "union";
-      "unique";
-      "unique0";
-      "until";
-      "until_with";
-      "untyped";
-      "var";
-      "virtual";
-      "void";
-      "wait_order";
-      "weak";
-      "wildcard";
-      "with";
-      "within";
-    ]
-    |> StringSet.of_list
-
   let valid_sv_identifier_regexp : Str.regexp option ref = ref None
+
+  let has_prefix prefix s =
+    if String.length s < String.length prefix then false else String.sub s 0 (String.length prefix) = prefix
+
+  let has_bad_prefix s = has_prefix "sail_" s || has_prefix "t_" s || has_prefix "ret_" s
 
   let valid_sv_identifier s =
     let regexp =
+      (* Cache the regexp to avoid compiling it every time *)
       match !valid_sv_identifier_regexp with
       | Some regexp -> regexp
       | None ->
@@ -232,7 +111,8 @@ module Make (Config : CONFIG) = struct
 
   let sv_id_string id =
     let s = string_of_id id in
-    if valid_sv_identifier s && not (StringSet.mem s sv_reserved_words) then s else Util.zencode_string s
+    if valid_sv_identifier s && (not (has_bad_prefix s)) && not (StringSet.mem s Keywords.sv_reserved_words) then s
+    else Util.zencode_string s
 
   let sv_id id = string (sv_id_string id)
 

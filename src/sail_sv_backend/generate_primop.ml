@@ -342,7 +342,7 @@ let array_type (ty, ix_opt) ix = match ix_opt with None -> (ty, Some ix) | Some 
 let fvector_store len elem_ty key =
   let name = pf "sail_array_store_%d_%s" len key in
   register_primop name (fun () ->
-      let ret_ty_name = pf "t_array_store_%d_%s" len key in
+      let ret_ty_name = pf "ret_array_store_%d_%s" len key in
       let outer_ix = pf "[%d:0]" (len - 1) in
       let ix_ty = pf "logic [%d:0]" (required_width (Big_int.of_int (len - 1)) - 2) in
       [
@@ -372,7 +372,7 @@ let is_empty elem_ty key =
 let hd elem_ty key =
   let name = pf "sail_hd_%s" key in
   register_primop name (fun () ->
-      let ret_ty_name = pf "t_hd_%s" key in
+      let ret_ty_name = pf "ret_hd_%s" key in
       [
         pf "typedef %s;" (wrap_type elem_ty ret_ty_name);
         "";
@@ -387,7 +387,7 @@ let hd elem_ty key =
 let tl elem_ty key =
   let name = pf "sail_tl_%s" key in
   register_primop name (fun () ->
-      let ret_ty_name = pf "t_tl_%s" key in
+      let ret_ty_name = pf "ret_tl_%s" key in
       [
         pf "typedef %s[$];" (wrap_type elem_ty ret_ty_name);
         "";
