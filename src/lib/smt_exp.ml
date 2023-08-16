@@ -96,6 +96,9 @@ type smt_exp =
   | Struct of string * (string * smt_exp) list
   | Field of Ast.id * Ast.id * smt_exp
   | Store of smt_array_info * string * smt_exp * smt_exp * smt_exp
+  | Empty_list
+  | Hd of string * smt_exp
+  | Tl of string * smt_exp
 
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
@@ -110,7 +113,9 @@ let rec fold_smt_exp f = function
   | Struct (name, fields) -> f (Struct (name, List.map (fun (field, exp) -> (field, fold_smt_exp f exp)) fields))
   | Store (info, store_fn, arr, index, x) ->
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
-  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _) as exp -> f exp
+  | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
+  | Tl (hd_op, xs) -> f (Tl (hd_op, fold_smt_exp f xs))
+  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _ | Empty_list) as exp -> f exp
 
 let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
 

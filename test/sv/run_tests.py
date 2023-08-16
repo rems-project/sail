@@ -19,28 +19,18 @@ skip_tests = {
     'assign_rename_bug',
     'bitvector', # This requires -sv_bits_size >= 200
     'cheri128_hsb',
-    'cheri_capreg', # replicate bits
-    'empty_list',
+    'cheri_capreg', # behavior?
+    'empty_list', # recursion
     'eq_struct',
-    'fail_assert_mono_bug',
-    'fail_issue203', # dec_str
     'flow_restrict', # contains very large integer literal
     'for_shadow',
     'foreach_none',
     'gvector',
     'int64_vector_literal',
-    'issue136', # lists
-    'issue202_1', # lists
+    'issue136', # recursion
     'large_bitvector', # This requires -sv_bits_size >= 204
-    'list_cons_cons',
-    'list_let',
-    'list_mut',
     'list_rec_functions1', # lists
     'list_rec_functions2',
-    'list_scope',
-    'list_scope2',
-    'list_scope3',
-    'list_test', # lists
     'list_torture',
     'loop_exception',
     'pointer_assign',
@@ -76,9 +66,12 @@ def test_sv(name, opts, skip_list):
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -sv ../c/{} -o {} -sv_verilate run{} > {}.out'.format(sail, filename, basename, opts, basename))
-                step('awk \'/TEST START/{{flag=1;next}}/TEST END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
-                step('diff ../c/{}.expect {}.result'.format(basename, basename))
+                if basename.startswith('fail'):
+                    step('{} -no_warn -sv ../c/{} -o {} -sv_verilate compile{} > {}.out'.format(sail, filename, basename, opts, basename))
+                else:
+                    step('{} -no_warn -sv ../c/{} -o {} -sv_verilate run{} > {}.out'.format(sail, filename, basename, opts, basename))
+                    step('awk \'/TEST START/{{flag=1;next}}/TEST END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
+                    step('diff ../c/{}.expect {}.result'.format(basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)

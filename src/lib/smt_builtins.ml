@@ -237,6 +237,9 @@ module type PRIMOP_GEN = sig
   val hex_str_upper : Parse_ast.l -> ctyp -> string
   val count_leading_zeros : Parse_ast.l -> int -> string
   val fvector_store : Parse_ast.l -> int -> ctyp -> string
+  val is_empty : Parse_ast.l -> ctyp -> string
+  val hd : Parse_ast.l -> ctyp -> string
+  val tl : Parse_ast.l -> ctyp -> string
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -290,7 +293,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* _ = real_used in
         return (if str.[0] = '-' then Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))]) else Real_lit str)
     | VL_ref str, _ -> return (Fn ("reg_ref", [String_lit str]))
-    | _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl ^ " : " ^ string_of_ctyp ctyp)
+    | _ ->
+        let* l = current_location in
+        Reporting.unreachable l __POS__
+          ("Cannot translate literal to SMT: " ^ string_of_value vl ^ " : " ^ string_of_ctyp ctyp)
 
   let smt_cval_call op args =
     match (op, args) with
@@ -320,6 +326,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | Sslice _, _ -> failwith "sslice"
     | Set_slice, _ -> failwith "set_slice"
     | Replicate _, _ -> failwith "replicate"
+    | List_hd, [arg] -> Fn ("hd", [arg])
+    | op, _ -> failwith (string_of_op op)
 
   let rec smt_cval cval =
     match cval_ctyp cval with
@@ -328,6 +336,21 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         match cval with
         | V_lit (vl, ctyp) -> literal vl ctyp
         | V_id (id, _) -> return (Var id)
+        | V_call (List_hd, [arg]) ->
+            let* l = current_location in
+            let op = Primop_gen.hd l (cval_ctyp arg) in
+            let* arg = smt_cval arg in
+            return (Hd (op, arg))
+        | V_call (List_tl, [arg]) ->
+            let* l = current_location in
+            let op = Primop_gen.tl l (cval_ctyp arg) in
+            let* arg = smt_cval arg in
+            return (Tl (op, arg))
+        | V_call (List_is_empty, [arg]) ->
+            let* l = current_location in
+            let op = Primop_gen.is_empty l (cval_ctyp arg) in
+            let* arg = smt_cval arg in
+            return (Fn (op, [arg]))
         | V_call (op, args) ->
             let* args = mapM smt_cval args in
             return (smt_cval_call op args)
@@ -1175,6 +1198,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             | _ ->
                 let* l = current_location in
                 Reporting.unreachable l __POS__ "reg_deref given non register reference"
+        )
+    | "sail_cons" ->
+        binary_primop_simple (fun x xs ->
+            let* x = smt_cval x in
+            let* xs = smt_cval xs in
+            return (Fn ("cons", [x; xs]))
         )
     | "eq_anything" ->
         binary_primop_simple (fun a b ->

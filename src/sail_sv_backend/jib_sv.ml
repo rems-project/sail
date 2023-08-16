@@ -319,10 +319,22 @@ module Make (Config : CONFIG) = struct
           | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
 
-        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
+        let count_leading_zeros _l sz = Generate_primop.count_leading_zeros sz
 
         let fvector_store _l len ctyp =
           Generate_primop.fvector_store len (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+
+        let is_empty l = function
+          | CT_list ctyp -> Generate_primop.is_empty (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+          | _ -> Reporting.unreachable l __POS__ "is_empty"
+
+        let hd l = function
+          | CT_list ctyp -> Generate_primop.hd (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+          | _ -> Reporting.unreachable l __POS__ "hd"
+
+        let tl l = function
+          | CT_list ctyp -> Generate_primop.tl (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+          | _ -> Reporting.unreachable l __POS__ "tl"
       end)
 
   let ( let* ) = Smt_builtins.bind
@@ -526,6 +538,11 @@ module Make (Config : CONFIG) = struct
     | B1 :: B1 :: B1 :: B1 :: rest -> "F" ^ hex_bitvector rest
     | _ -> ""
 
+  let rec tails = function
+    | Var v -> Some (0, v)
+    | Tl (_, arg) -> Option.map (fun (n, v) -> (n + 1, v)) (tails arg)
+    | _ -> None
+
   (* Convert a SMTLIB expression into SystemVerilog *)
   let rec sv_smt ?(need_parens = false) =
     let sv_smt_parens exp = sv_smt ~need_parens:true exp in
@@ -576,6 +593,7 @@ module Make (Config : CONFIG) = struct
     | Fn ("select", [x; i]) -> sv_smt_parens x ^^ lbracket ^^ sv_smt i ^^ rbracket
     | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
     | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
+    | Fn ("cons", [x; xs]) -> lbrace ^^ sv_smt x ^^ comma ^^ space ^^ sv_smt xs ^^ rbrace
     | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) sv_smt args)
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) sv_smt [arr; i; x])
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ sv_smt x ^^ string "})))"
@@ -598,6 +616,13 @@ module Make (Config : CONFIG) = struct
     | Ite (cond, then_exp, else_exp) ->
         separate space [sv_smt_parens cond; char '?'; sv_smt_parens then_exp; char ':'; sv_smt_parens else_exp]
     | Enum e -> failwith "Unknown enum"
+    | Empty_list -> string "{}"
+    | Hd (op, arg) -> begin
+        match tails arg with
+        | Some (index, v) -> sv_name v ^^ brackets (string (string_of_int index))
+        | None -> string op ^^ parens (sv_smt arg)
+      end
+    | Tl (op, arg) -> string op ^^ parens (sv_smt arg)
 
   let sv_cval cval =
     let* smt = Smt.smt_cval cval in
@@ -755,6 +780,15 @@ module Make (Config : CONFIG) = struct
     v
 
   let sv_fundef ctx f params param_ctyps ret_ctyp body =
+    let sv_ret_ty, index_ty = sv_ctyp ret_ctyp in
+    let sv_ret_ty, typedef =
+      match index_ty with
+      | Some index ->
+          let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
+          let new_ty = string ("t_" ^ sv_id_string f ^ "_" ^ encoded) in
+          (new_ty, separate space [string "typedef"; string sv_ret_ty; new_ty; string index] ^^ semi ^^ twice hardline)
+      | None -> (string sv_ret_ty, empty)
+    in
     let param_docs =
       try List.map2 (fun param ctyp -> wrap_type ctyp (sv_id param)) params param_ctyps
       with Invalid_argument _ -> Reporting.unreachable (id_loc f) __POS__ "Function arity mismatch"
@@ -766,7 +800,8 @@ module Make (Config : CONFIG) = struct
         ^^ semi ^^ hardline
         ^^ separate_map hardline (sv_checked_instr ctx) body
     in
-    separate space [string "function"; string "automatic"; wrap_type ret_ctyp (sv_id f)]
+    typedef
+    ^^ separate space [string "function"; string "automatic"; sv_ret_ty; sv_id f]
     ^^ parens (separate (comma ^^ space) param_docs)
     ^^ semi
     ^^ nest 4 (hardline ^^ fun_body)

@@ -358,3 +358,44 @@ let fvector_store len elem_ty key =
         nf "endfunction";
       ]
   )
+
+let is_empty elem_ty key =
+  let name = pf "sail_is_empty_%s" key in
+  register_primop name (fun () ->
+      [
+        pf "function automatic bit %s(%s[$]);" name (wrap_type elem_ty "xs");
+        nf "    return xs.size() == 0;";
+        nf "endfunction";
+      ]
+  )
+
+let hd elem_ty key =
+  let name = pf "sail_hd_%s" key in
+  register_primop name (fun () ->
+      let ret_ty_name = pf "t_hd_%s" key in
+      [
+        pf "typedef %s;" (wrap_type elem_ty ret_ty_name);
+        "";
+        pf "function automatic %s %s(%s[$]);" ret_ty_name name (wrap_type elem_ty "xs");
+        pf "    %s;" (wrap_type elem_ty "r");
+        nf "    r = xs[0];";
+        nf "    return r;";
+        nf "endfunction";
+      ]
+  )
+
+let tl elem_ty key =
+  let name = pf "sail_tl_%s" key in
+  register_primop name (fun () ->
+      let ret_ty_name = pf "t_tl_%s" key in
+      [
+        pf "typedef %s[$];" (wrap_type elem_ty ret_ty_name);
+        "";
+        pf "function automatic %s %s(%s[$]);" ret_ty_name name (wrap_type elem_ty "xs");
+        pf "    %s r;" ret_ty_name;
+        nf "    r = xs;";
+        nf "    r.pop_front();";
+        nf "    return r;";
+        nf "endfunction";
+      ]
+  )

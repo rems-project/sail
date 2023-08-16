@@ -705,14 +705,14 @@ module Make (C : CONFIG) = struct
         | CT_list ctyp ->
             let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
             let tl_pre, tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-            ( [ijump l (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_pre @ tl_pre,
+            ( [ijump l (V_call (List_is_empty, [cval])) case_label] @ hd_pre @ tl_pre,
               hd_setup @ tl_setup,
               tl_cleanup @ hd_cleanup,
               ctx
             )
         | _ -> raise (Reporting.err_general l "Tried to pattern match cons on non list type")
       end
-    | AP_nil _ -> ([ijump l (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], [], ctx)
+    | AP_nil _ -> ([ijump l (V_call (Bnot, [V_call (List_is_empty, [cval])])) case_label], [], [], ctx)
 
   let unit_cval = V_lit (VL_unit, CT_unit)
 

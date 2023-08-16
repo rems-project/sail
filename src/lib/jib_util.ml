@@ -268,6 +268,7 @@ let string_of_op = function
   | Bor -> "@or"
   | List_hd -> "@hd"
   | List_tl -> "@tl"
+  | List_is_empty -> "@is_empty"
   | Eq -> "@eq"
   | Neq -> "@neq"
   | Bvnot -> "@bvnot"
@@ -367,7 +368,6 @@ let string_of_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
   | VL_undefined -> "undefined"
@@ -971,6 +971,11 @@ let rec infer_call op vs =
       match cval_ctyp v with
       | CT_list ctyp -> CT_list ctyp
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to tl"
+    end
+  | List_is_empty, [v] -> begin
+      match cval_ctyp v with
+      | CT_list ctyp -> CT_list ctyp
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to is_empty"
     end
   | (Eq | Neq), _ -> CT_bool
   | Bvnot, [v] -> cval_ctyp v

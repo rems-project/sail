@@ -906,7 +906,6 @@ let sgen_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
   | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
@@ -932,6 +931,7 @@ and sgen_call op cvals =
   | Bor, vs -> "(" ^ Util.string_of_list " || " sgen_cval vs ^ ")"
   | List_hd, [v] -> sprintf "(%s).hd" ("*" ^ sgen_cval v)
   | List_tl, [v] -> sprintf "(%s).tl" ("*" ^ sgen_cval v)
+  | List_is_empty, [v] -> sprintf "(%s == NULL)" (sgen_cval v)
   | Eq, [v1; v2] -> begin
       match cval_ctyp v1 with
       | CT_sbits _ -> sprintf "eq_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
@@ -1091,7 +1091,8 @@ let rec codegen_conversion l clexp cval =
       if is_stack_ctyp ctyp_to then ksprintf string "  %s = %s;" (sgen_clexp_pure l clexp) (sgen_cval cval)
       else ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval)
   | CT_ref _, _ -> codegen_conversion l (CL_addr clexp) cval
-  | (CT_vector (_, ctyp_elem_to) | CT_fvector (_, _, ctyp_elem_to)), (CT_vector (_, ctyp_elem_from) | CT_fvector (_, _, ctyp_elem_from)) ->
+  | ( (CT_vector (_, ctyp_elem_to) | CT_fvector (_, _, ctyp_elem_to)),
+      (CT_vector (_, ctyp_elem_from) | CT_fvector (_, _, ctyp_elem_from)) ) ->
       let i = ngensym () in
       let from = ngensym () in
       let into = ngensym () in

@@ -74,6 +74,7 @@ op :: '' ::=
   | and               :: :: band
   | hd                :: :: list_hd
   | tl                :: :: list_tl
+  | is_empty          :: :: list_is_empty
   | eq                :: :: eq
   | neq               :: :: neq
 % Integer ops
