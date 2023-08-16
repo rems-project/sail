@@ -83,7 +83,7 @@ $iftarget ocaml
 $define _EMULATOR_MEMORY_PRIMOPS
 $endif
 
-$iftarget interpreter
+$ifdef INTERACTIVE
 $define _EMULATOR_MEMORY_PRIMOPS
 $endif
 
@@ -167,8 +167,8 @@ function write_mem_exclusive#(_, addrsize, addr, n, value) = __write_mem_exclusi
 $endif
 $endif
 
-val read_tag# = monadic "read_tag_bool"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
+val read_tag# = monadic "emulator_read_tag"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
 
-val write_tag# = monadic "write_tag_bool" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
+val write_tag# = monadic "emulator_write_tag" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
 
 $endif
