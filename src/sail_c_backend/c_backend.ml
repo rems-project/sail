@@ -1091,7 +1091,7 @@ let rec codegen_conversion l clexp cval =
       if is_stack_ctyp ctyp_to then ksprintf string "  %s = %s;" (sgen_clexp_pure l clexp) (sgen_cval cval)
       else ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval)
   | CT_ref _, _ -> codegen_conversion l (CL_addr clexp) cval
-  | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
+  | (CT_vector (_, ctyp_elem_to) | CT_fvector (_, _, ctyp_elem_to)), (CT_vector (_, ctyp_elem_from) | CT_fvector (_, _, ctyp_elem_from)) ->
       let i = ngensym () in
       let from = ngensym () in
       let into = ngensym () in

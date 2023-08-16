@@ -587,7 +587,7 @@ let rec ctyp_suprema = function
   | CT_struct (id, ctors) -> CT_struct (id, ctors)
   | CT_variant (id, ctors) -> CT_variant (id, ctors)
   | CT_vector (d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
-  | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, ctyp_suprema ctyp)
+  | CT_fvector (_, d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly kid -> CT_poly kid
