@@ -82,6 +82,10 @@ open Generate_primop
 
 module R = Jib_sv
 
+let opt_output_dir = ref None
+
+let opt_includes = ref []
+
 type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
@@ -103,6 +107,14 @@ let opt_unreachable = ref []
 
 let verilog_options =
   [
+    ( "-sv_output_dir",
+      Arg.String (fun s -> opt_output_dir := Some s),
+      "<path> set the output directory for generated SystemVerilog files"
+    );
+    ( "-sv_include",
+      Arg.String (fun s -> opt_includes := s :: !opt_includes),
+      "<file> add include directive to generated SystemVerilog file"
+    );
     ( "-sv_verilate",
       Arg.String
         (fun opt ->
@@ -160,6 +172,7 @@ let verilog_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_struct_assignments", []);
+    ("split", [String_arg "execute"]);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("recheck_defs", []);
@@ -348,7 +361,7 @@ let make_genlib_file filename =
     else Generate_primop.common_primops !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width
   in
   let defs = Generate_primop.get_generated_primops () in
-  let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None filename in
+  let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir filename in
   output_string out_chan "`ifndef SAIL_LIBRARY_GENERATED\n";
   output_string out_chan "`define SAIL_LIBRARY_GENERATED\n\n";
   output_string out_chan common_primops;
@@ -388,6 +401,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     (if !opt_nostrings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
     ^^ string "`include \"sail.sv\"" ^^ hardline
     ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
+    ^^ hardline
+    ^^ separate_map hardline (fun file -> ksprintf string "`include \"%s\"" file) !opt_includes
     ^^ twice hardline
   in
 
@@ -505,14 +520,16 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
   make_genlib_file (sprintf "sail_genlib_%s.sv" out);
 
-  let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None (out ^ ".sv") in
+  let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir (out ^ ".sv") in
   output_string out_chan sv_output;
   Util.close_output_with_check file_info;
 
   begin
     match !opt_verilate with
     | Verilator_compile | Verilator_run ->
-        let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None ("sim_" ^ out ^ ".cpp") in
+        let ((out_chan, _, _, _) as file_info) =
+          Util.open_output_with_check_unformatted !opt_output_dir ("sim_" ^ out ^ ".cpp")
+        in
         List.iter
           (fun line ->
             output_string out_chan line;

@@ -60,12 +60,18 @@ let register_primop name def =
 let get_generated_primops () = List.rev (snd !generated_primops)
 
 let sail_bits width =
+  let index_top = required_width (Big_int.of_int (width - 1)) - 1 in
   [
     nf "typedef struct packed {";
-    pf "    logic [%d:0] size;" (required_width (Big_int.of_int (width - 1)) - 1);
+    pf "    logic [%d:0] size;" index_top;
     pf "    logic [%d:0] bits;" (width - 1);
     nf "} sail_bits;";
+    "";
+    pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.size; endfunction" index_top;
+    pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.bits; endfunction" (width - 1);
   ]
+
+let sail_int width = [pf "typedef logic [%d:0] sail_int;" (width - 1)]
 
 let print_lbits width =
   let zeros = String.make (width / 4) '0' in
@@ -168,6 +174,21 @@ let print_int_stub width =
     nf "endfunction";
   ]
 
+let get_cycle_count width =
+  [
+    pf "function automatic logic [%d:0] sail_get_cycle_count(sail_unit u);" (width - 1);
+    nf "    return sail_cycle_count_var;";
+    nf "endfunction";
+  ]
+
+let cycle_count () =
+  [
+    "function automatic sail_unit sail_cycle_count(sail_unit u);";
+    "    sail_cycle_count_var = sail_cycle_count_var + 1;";
+    "    return SAIL_UNIT;";
+    "endfunction";
+  ]
+
 let output_primop buf lines =
   List.iter
     (fun line ->
@@ -180,21 +201,29 @@ let output_primop buf lines =
 let common_primops bv_width int_width =
   let buf = Buffer.create 4096 in
   output_primop buf (sail_bits bv_width);
+  output_primop buf (sail_int int_width);
   output_primop buf (print_lbits bv_width);
   output_primop buf (print_int int_width);
   output_primop buf (dec_str int_width);
   output_primop buf (hex_str int_width);
   output_primop buf (hex_str_upper int_width);
+  Buffer.add_string buf (pf "logic [%d:0] sail_cycle_count_var;\n\n" (int_width - 1));
+  output_primop buf (get_cycle_count int_width);
+  output_primop buf (cycle_count ());
   Buffer.contents buf
 
 let common_primops_stubs bv_width int_width =
   let buf = Buffer.create 4096 in
   output_primop buf (sail_bits bv_width);
+  output_primop buf (sail_int int_width);
   output_primop buf (print_lbits_stub bv_width);
   output_primop buf (print_int_stub int_width);
   output_primop buf (dec_str_stub int_width);
   output_primop buf (hex_str_stub int_width);
   output_primop buf (hex_str_upper_stub int_width);
+  Buffer.add_string buf (pf "logic [%d:0] sail_cycle_count_var;\n\n" (int_width - 1));
+  output_primop buf (get_cycle_count int_width);
+  output_primop buf (cycle_count ());
   Buffer.contents buf
 
 let print_fbits width =

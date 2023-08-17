@@ -86,7 +86,6 @@ type smt_exp =
   | Var of Jib.name
   | Enum of string
   | Fn of string * smt_exp list
-  | Ctor of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
   | SignExtend of int * int * smt_exp
   | ZeroExtend of int * int * smt_exp
@@ -102,7 +101,6 @@ type smt_exp =
 
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
-  | Ctor (name, args) -> f (Ctor (name, List.map (fold_smt_exp f) args))
   | Ite (cond, t, e) -> f (Ite (fold_smt_exp f cond, fold_smt_exp f t, fold_smt_exp f e))
   | SignExtend (len, n, exp) -> f (SignExtend (len, n, fold_smt_exp f exp))
   | ZeroExtend (len, n, exp) -> f (ZeroExtend (len, n, fold_smt_exp f exp))

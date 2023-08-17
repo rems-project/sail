@@ -461,7 +461,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* x = unsigned_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
     | _, _ ->
-        failwith
+        let* l = current_location in
+        Reporting.unreachable l __POS__
           (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
   let int_comparison fn big_int_fn v1 v2 =
@@ -941,6 +942,15 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let top = Extract (n - 1, 1, bv) in
         return (Fn ("concat", [top; x]))
     | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval x
+    | CT_fbits (n, _), i_ctyp, CT_bit, CT_fbits (m, _) ->
+        assert (n = m);
+        let* bv = smt_cval vec in
+        let* bit = smt_cval x in
+        (* Sail type system won't allow us to index out of range *)
+        let* shift = bind (smt_cval i) (unsigned_size ~checked:false ~into:n ~from:(int_size i_ctyp)) in
+        let mask = bvnot (bvshl (ZeroExtend (n, n - 1, bvone 1)) shift) in
+        let shifted_bit = bvshl (ZeroExtend (n, n - 1, bit)) shift in
+        return (bvor (bvand mask bv) shifted_bit)
     | CT_lbits _, i_ctyp, CT_bit, CT_lbits _ ->
         let* bv = smt_cval vec in
         let* bit = smt_cval x in

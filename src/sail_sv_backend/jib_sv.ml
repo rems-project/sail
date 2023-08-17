@@ -471,8 +471,10 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>"; sv_signed (sv_smt y)])
     | Fn ("bvashr", [x; y]) -> opt_parens (separate space [sv_smt_parens x; string ">>>"; sv_signed (sv_smt y)])
     | Fn ("select", [x; i]) -> sv_smt_parens x ^^ lbracket ^^ sv_smt i ^^ rbracket
-    | Fn ("contents", [x]) -> sv_smt_parens x ^^ dot ^^ string "bits"
-    | Fn ("len", [x]) -> sv_smt_parens x ^^ dot ^^ string "size"
+    | Fn ("contents", [Var v]) -> sv_name v ^^ dot ^^ string "bits"
+    | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (sv_smt x)
+    | Fn ("len", [Var v]) -> sv_name v ^^ dot ^^ string "size"
+    | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (sv_smt x)
     | Fn ("cons", [x; xs]) -> lbrace ^^ sv_smt x ^^ comma ^^ space ^^ sv_smt xs ^^ rbrace
     | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) sv_smt args)
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) sv_smt [arr; i; x])
@@ -503,6 +505,7 @@ module Make (Config : CONFIG) = struct
         | None -> string op ^^ parens (sv_smt arg)
       end
     | Tl (op, arg) -> string op ^^ parens (sv_smt arg)
+    | Struct _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct literals not allowed in SV backend"
 
   let sv_cval cval =
     let* smt = Smt.smt_cval cval in
@@ -516,6 +519,7 @@ module Make (Config : CONFIG) = struct
   let sv_update_fbits = function
     | [bv; index; bit] -> begin
         match (cval_ctyp bv, cval_ctyp index) with
+        | CT_fbits (1, _), _ -> Smt_builtins.fmap sv_smt (Smt.smt_cval bit)
         | CT_fbits (sz, _), CT_constant c ->
             let c = Big_int.to_int c in
             let* bv_smt = Smt.smt_cval bv in
