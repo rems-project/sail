@@ -342,7 +342,7 @@ let rec count_leading_zeros width =
         [
           pf "function automatic logic [%d:0] %s(logic [%d:0] bv);" (width - 1) name (width - 1);
           pf "    if (%s == 0) begin" upper;
-          pf "        return %d + %d'(%s(%s));" upper_width width clz_lower lower;
+          pf "        return %d'd%d + %d'(%s(%s));" width upper_width width clz_lower lower;
           nf "    end else begin";
           pf "        return %d'(%s(%s));" width clz_upper upper;
           nf "    end;";
