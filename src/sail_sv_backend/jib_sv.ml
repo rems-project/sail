@@ -85,6 +85,7 @@ module type CONFIG = sig
   val nostrings : bool
   val nopacked : bool
   val unreachable : string list
+  val comb : bool
 end
 
 module Make (Config : CONFIG) = struct
@@ -432,8 +433,8 @@ module Make (Config : CONFIG) = struct
         let len = List.length bits in
         if len mod 4 = 0 && not (has_undefined_bit bits) then ksprintf string "%d'h%s" len (hex_bitvector bits)
         else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
-    | Bool_lit true -> string "1"
-    | Bool_lit false -> string "0"
+    | Bool_lit true -> string "1'h1"
+    | Bool_lit false -> string "1'h0"
     | String_lit s -> if Config.nostrings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
     | Enum "unit" -> string "SAIL_UNIT"
     | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
@@ -567,7 +568,7 @@ module Make (Config : CONFIG) = struct
         let* value = sv_cval cval in
         return (string "return" ^^ space ^^ value ^^ semi)
     | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
-    | I_exit _ -> return (string "$finish" ^^ semi)
+    | I_exit _ -> return (if Config.comb then string "sail_reached_unreachable = 1;" else string "$finish" ^^ semi)
     | I_copy (clexp, cval) ->
         let* value = Smt_builtins.bind (Smt.smt_cval cval) (Smt.smt_conversion (cval_ctyp cval) (clexp_ctyp clexp)) in
         return (sv_assign clexp (sv_smt value))

@@ -387,6 +387,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     let nostrings = !opt_nostrings
     let nopacked = !opt_nopacked
     let unreachable = !opt_unreachable
+    let comb = !opt_comb
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
