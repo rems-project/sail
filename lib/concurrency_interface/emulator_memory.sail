@@ -83,6 +83,10 @@ $iftarget ocaml
 $define _EMULATOR_MEMORY_PRIMOPS
 $endif
 
+$iftarget systemverilog
+$define _EMULATOR_MEMORY_PRIMOPS
+$endif
+
 $ifdef INTERACTIVE
 $define _EMULATOR_MEMORY_PRIMOPS
 $endif

@@ -76,8 +76,6 @@ endfunction
 
 `endif
 
-bit [7:0] sail_memory [63:0];
-
 typedef enum logic [0:0] {SAIL_REAL} sail_real;
 
 `endif //  `ifndef SAIL_LIBRARY

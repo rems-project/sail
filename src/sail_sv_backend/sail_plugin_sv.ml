@@ -403,6 +403,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     ^^ string "`include \"sail.sv\"" ^^ hardline
     ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
     ^^ hardline
+    ^^ string "`include \"sail_memory.sv\""
+    ^^ hardline
     ^^ separate_map hardline (fun file -> ksprintf string "`include \"%s\"" file) !opt_includes
     ^^ twice hardline
   in
@@ -547,4 +549,4 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     | _ -> ()
   end
 
-let _ = Target.register ~name:"verilog" ~flag:"sv" ~options:verilog_options ~rewrites:verilog_rewrites verilog_target
+let _ = Target.register ~name:"systemverilog" ~flag:"sv" ~options:verilog_options ~rewrites:verilog_rewrites verilog_target

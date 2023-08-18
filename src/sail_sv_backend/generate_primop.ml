@@ -67,6 +67,9 @@ let sail_bits width =
     pf "    logic [%d:0] bits;" (width - 1);
     nf "} sail_bits;";
     "";
+    pf "localparam SAIL_BITS_WIDTH = %d;" width;
+    pf "localparam SAIL_INDEX_WIDTH = %d;" (index_top + 1);
+    "";
     pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.size; endfunction" index_top;
     pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.bits; endfunction" (width - 1);
   ]
