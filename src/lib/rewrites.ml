@@ -1913,13 +1913,20 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
       ast.defs ([], effect_info)
   in
 
-  let optimize_split_call (id, args) =
+  (* If we have a call to execute(Clause(...)) we can directly
+     transform that to execute_Clause(...). This removes recursion
+     from when one execute clause is implemented in terms of another,
+     like RISC-V compressed instructions. *)
+  let optimize_split_call (f, args) =
     match args with
-    | [E_aux (E_app (ctor_id, [E_aux (E_tuple ctor_args, _)]), _)] when string_of_id id = fun_name ->
-        E_app (prepend_id (fun_name ^ "_") ctor_id, ctor_args)
-    | [E_aux (E_app (ctor_id, [ctor_arg]), _)] when string_of_id id = fun_name ->
-        E_app (prepend_id (fun_name ^ "_") ctor_id, [ctor_arg])
-    | args -> E_app (id, args)
+    | [E_aux (E_app (ctor_id, ctor_args), annot)]
+      when string_of_id f = fun_name && Env.is_union_constructor ctor_id (env_of_annot annot) -> begin
+        match ctor_args with
+        | [E_aux (E_tuple ctor_args, _)] -> E_app (prepend_id (fun_name ^ "_") ctor_id, ctor_args)
+        | [ctor_arg] -> E_app (prepend_id (fun_name ^ "_") ctor_id, [ctor_arg])
+        | _ -> Reporting.unreachable (fst annot) __POS__ "Constructor with more than 1 argument found in split rewrite"
+      end
+    | _ -> E_app (f, args)
   in
   let optimize_exp = fold_exp { id_exp_alg with e_app = optimize_split_call } in
 

@@ -1228,10 +1228,9 @@ end = struct
     end
 
   let get_union_id id env =
-    try
-      let bind = Bindings.find id env.union_ids in
-      List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
-    with Not_found -> typ_error env (id_loc id) ("No union constructor found for " ^ string_of_id id)
+    match Bindings.find_opt id env.union_ids with
+    | Some bind -> List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+    | None -> typ_error env (id_loc id) ("No union constructor found for " ^ string_of_id id)
 
   let rec valid_implicits env start = function
     | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), l) :: rest ->
