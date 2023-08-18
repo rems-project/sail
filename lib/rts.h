@@ -132,6 +132,9 @@ sbits fast_read_ram(const int64_t data_size,
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 
+unit emulator_write_tag(const uint64_t addr_size, const sbits addr, const bool tag);
+bool emulator_read_tag(const uint64_t addr_size, const sbits addr);
+
 void platform_read_mem(lbits *data,
                        const int read_kind,
                        const uint64_t addr_size,
@@ -149,7 +152,32 @@ bool platform_write_mem(const int write_kind,
 bool platform_excl_res(const unit unit);
 unit platform_barrier();
 
+/* ***** New concurrency interface primitives ***** */
 
+void emulator_read_mem(lbits *data,
+                       const uint64_t addr_size,
+                       const sbits addr,
+                       const mpz_t n);
+
+void emulator_read_mem_ifetch(lbits *data,
+                              const uint64_t addr_size,
+                              const sbits addr,
+                              const mpz_t n);
+
+void emulator_read_mem_exclusive(lbits *data,
+                                 const uint64_t addr_size,
+                                 const sbits addr,
+                                 const mpz_t n);
+
+bool emulator_write_mem(const uint64_t addr_size,
+                        const sbits addr,
+                        const mpz_t n,
+                        const lbits data);
+
+bool emulator_write_mem_exclusive(const uint64_t addr_size,
+                                  const sbits addr,
+                                  const mpz_t n,
+                                  const lbits data);
 
 unit load_raw(fbits addr, const_sail_string file);
 

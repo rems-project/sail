@@ -223,6 +223,12 @@ unit write_tag_bool(const uint64_t address, const bool tag)
   return UNIT;
 }
 
+unit emulator_write_tag(const uint64_t addr_size, const sbits addr, const bool tag)
+{
+  write_tag_bool(addr.bits, tag);
+  return UNIT;
+}
+
 bool read_tag_bool(const uint64_t address)
 {
   uint64_t mask = address & ~MASK;
@@ -239,6 +245,11 @@ bool read_tag_bool(const uint64_t address)
   }
 
   return false;
+}
+
+bool emulator_read_tag(const uint64_t addr_size, const sbits addr)
+{
+  return read_tag_bool(addr.bits);
 }
 
 void kill_mem()
@@ -294,7 +305,7 @@ sbits fast_read_ram(const int64_t data_size,
 		    const uint64_t addr)
 {
   uint64_t r = 0;
-  
+
   uint64_t byte;
   for(uint64_t i = (uint64_t) data_size; i > 0; --i) {
     byte = read_mem(addr + (i - 1));
@@ -389,6 +400,45 @@ unit platform_barrier()
     return UNIT;
 }
 
+void emulator_read_mem(lbits *data,
+                       const uint64_t addr_size,
+                       const sbits addr,
+                       const mpz_t n)
+{
+  platform_read_mem(data, 0, addr_size, addr, n);
+}
+
+void emulator_read_mem_ifetch(lbits *data,
+                              const uint64_t addr_size,
+                              const sbits addr,
+                              const mpz_t n)
+{
+  platform_read_mem(data, 0, addr_size, addr, n);
+}
+
+void emulator_read_mem_exclusive(lbits *data,
+                                 const uint64_t addr_size,
+                                 const sbits addr,
+                                 const mpz_t n)
+{
+  platform_read_mem(data, 0, addr_size, addr, n);
+}
+
+bool emulator_write_mem(const uint64_t addr_size,
+                        const sbits addr,
+                        const mpz_t n,
+                        const lbits data)
+{
+  return platform_write_mem(0, addr_size, addr, n, data);
+}
+
+bool emulator_write_mem_exclusive(const uint64_t addr_size,
+                                  const sbits addr,
+                                  const mpz_t n,
+                                  const lbits data)
+{
+  return platform_write_mem(0, addr_size, addr, n, data);
+}
 
 unit load_raw(fbits addr, const_sail_string file)
 {

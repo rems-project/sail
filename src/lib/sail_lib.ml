@@ -85,11 +85,15 @@ let trace_depth = ref 0
 let random = ref false
 
 let opt_cycle_limit = ref 0
-let cycle_count = ref 0
+let cycle_count_var = ref 0
+
+let get_cycle_count () = Big_int.of_int !cycle_count_var
+
+let cycle_count () = incr cycle_count_var
 
 let cycle_limit_reached () =
-  cycle_count := !cycle_count + 1;
-  !opt_cycle_limit != 0 && !cycle_count >= !opt_cycle_limit
+  incr cycle_count_var;
+  !opt_cycle_limit != 0 && !cycle_count_var >= !opt_cycle_limit
 
 let sail_call (type t) (f : _ -> t) =
   let module M = struct
@@ -1116,9 +1120,6 @@ let load_raw (paddr, file) =
     done
   with End_of_file -> ()
 
-(* XXX this could count cycles and exit after given limit *)
-let cycle_count () = ()
-
 (* TODO range, atom, register(?), int, nat, bool, real(!), list, string, itself(?) *)
 let rand_zvector (g : 'generators) (size : int) (_order : bool) (elem_gen : 'generators -> 'a) : 'a list =
   Util.list_init size (fun _ -> elem_gen g)
@@ -1135,3 +1136,21 @@ let rand_zunit (_ : 'generators) : unit = ()
 let rand_choice l =
   let n = List.length l in
   List.nth l (Random.int n)
+
+let emulator_read_mem (_addrsize, addr, len) = fast_read_ram (len, addr)
+
+let emulator_read_mem_ifetch (_addrsize, addr, len) = fast_read_ram (len, addr)
+
+let emulator_read_mem_exclusive (_addrsize, addr, len) = fast_read_ram (len, addr)
+
+let emulator_write_mem (_addrsize, addr, len, value) =
+  write_ram' (len, uint addr, value);
+  true
+
+let emulator_write_mem_exclusive (_addrsize, addr, len, value) =
+  write_ram' (len, uint addr, value);
+  true
+
+let emulator_read_tag (_addrsize, addr) = read_tag_bool addr
+
+let emulator_write_tag (_addrsize, addr, tag) = write_tag_bool (addr, tag)

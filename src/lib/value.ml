@@ -605,6 +605,43 @@ let value_parse_hex_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.parse_hex_bits (coerce_int v1, coerce_string v2))
   | _ -> failwith "value parse_hex_bits"
 
+let value_emulator_read_mem = function
+  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | _ -> failwith "value emulator_read_mem"
+
+let value_emulator_read_mem_ifetch = function
+  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem_ifetch (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | _ -> failwith "value emulator_read_mem_ifetch"
+
+let value_emulator_read_mem_exclusive = function
+  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem_exclusive (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | _ -> failwith "value emulator_read_mem_exclusive"
+
+let value_emulator_write_mem = function
+  | [v1; v2; v3; v4] -> V_bool (Sail_lib.emulator_write_mem (coerce_int v1, coerce_bv v2, coerce_int v3, coerce_bv v4))
+  | _ -> failwith "value emulator_write_mem"
+
+let value_emulator_write_mem_exclusive = function
+  | [v1; v2; v3; v4] ->
+      V_bool (Sail_lib.emulator_write_mem_exclusive (coerce_int v1, coerce_bv v2, coerce_int v3, coerce_bv v4))
+  | _ -> failwith "value emulator_write_mem_exclusive"
+
+let value_emulator_read_tag = function
+  | [v1; v2] -> V_bool (Sail_lib.emulator_read_tag (coerce_int v1, coerce_bv v2))
+  | _ -> failwith "value emulator_read_tag"
+
+let value_emulator_write_tag = function
+  | [v1; v2; v3] ->
+      Sail_lib.emulator_write_tag (coerce_int v1, coerce_bv v2, coerce_bool v3);
+      V_unit
+  | _ -> failwith "value emulator_write_tag"
+
+let value_cycle_count _ =
+  Sail_lib.cycle_count ();
+  V_unit
+
+let value_get_cycle_count _ = V_int (Sail_lib.get_cycle_count ())
+
 let primops =
   ref
     (List.fold_left
@@ -705,6 +742,15 @@ let primops =
          ("vector_truncateLSB", value_vector_truncateLSB);
          ("read_ram", value_read_ram);
          ("write_ram", value_write_ram);
+         ("emulator_read_mem", value_emulator_read_mem);
+         ("emulator_read_mem_ifetch", value_emulator_read_mem);
+         ("emulator_read_mem_exclusive", value_emulator_read_mem);
+         ("emulator_write_mem", value_emulator_write_mem);
+         ("emulator_write_mem_exclusive", value_emulator_write_mem);
+         ("emulator_read_tag", value_emulator_read_tag);
+         ("emulator_write_tag", value_emulator_write_tag);
+         ("cycle_count", value_cycle_count);
+         ("get_cycle_count", value_get_cycle_count);
          ("trace_memory_read", fun _ -> V_unit);
          ("trace_memory_write", fun _ -> V_unit);
          ("get_time_ns", fun _ -> V_int (Sail_lib.get_time_ns ()));
