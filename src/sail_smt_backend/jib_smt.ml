@@ -209,7 +209,7 @@ let rec smt_ctyp ctx = function
   | CT_tup ctyps ->
       ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
       Tuple (List.map (smt_ctyp ctx) ctyps)
-  | CT_vector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
+  | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
   | CT_string ->
       ctx.use_string := true;
       String
@@ -223,7 +223,6 @@ let rec smt_ctyp ctx = function
     end
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
   | CT_float _ | CT_rounding_mode -> Reporting.unreachable ctx.pragma_l __POS__ "Floating point in SMT property"
-  | CT_fvector _ -> Reporting.unreachable ctx.pragma_l __POS__ "Found CT_fvector in SMT property"
   | CT_poly _ -> Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
 (* We often need to create a SMT bitvector of a length sz with integer
@@ -311,6 +310,8 @@ let smt_conversion ctx from_ctyp to_ctyp x =
   | CT_fbits (n, _), CT_fbits (m, _) -> unsigned_size ctx m n x
   | CT_fbits (n, _), CT_lbits _ ->
       Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); unsigned_size ctx (lbits_size ctx) n x])
+  | CT_fvector _, CT_vector _ -> x
+  | CT_vector _, CT_fvector _ -> x
   | _, _ ->
       failwith
         (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))

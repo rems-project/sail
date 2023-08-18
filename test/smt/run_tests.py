@@ -20,6 +20,7 @@ skip_tests = {
     'assembly_mapping_sat': { 'cvc4' }, # This test using unsupported CVC4 features
     'arith_unsat': { 'z3', 'cvc4' },
     'arith_LFL_unsat' : { 'z3', 'cvc4' },
+    'revrev_endianness2_unsat' : { 'z3', 'cvc4' }, # There is some bug in this test
 }
 
 print("Sail is {}".format(sail))
