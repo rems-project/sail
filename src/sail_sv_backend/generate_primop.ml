@@ -105,12 +105,47 @@ let print_lbits width =
   let footer = "endfunction" in
   header @ body @ [footer]
 
+let string_of_bits width =
+  let zeros = String.make (width - 1) '0' in
+  let header =
+    [
+      nf "function automatic string sail_string_of_bits(sail_bits bv);";
+      nf "    string bstr;";
+      nf "    string zeros;";
+      pf "    zeros = \"%s\";" zeros;
+    ]
+  in
+  let body =
+    List.init (width - 1) (fun n ->
+        if (n + 1) mod 4 == 0 then
+          [
+            pf "    if (bv.size == %d) begin" (n + 1);
+            nf "        bstr.hextoa(bv.bits);";
+            pf "        return {\"0x\", zeros.substr(0, %d - bstr.len()), bstr.toupper()};" (((n + 1) / 4) - 1);
+            nf "    end";
+          ]
+        else
+          [
+            pf "    if (bv.size == %d) begin" (n + 1);
+            nf "        bstr.bintoa(bv.bits);";
+            pf "        return {\"0b\", zeros.substr(0, %d - bstr.len()), bstr};" n;
+            nf "    end";
+          ]
+    )
+    |> List.concat
+  in
+  let footer = "endfunction" in
+  header @ body @ [footer]
+
 let print_lbits_stub width =
   [
     nf "function automatic sail_unit sail_print_bits(sail_unit prefix, sail_bits bv);";
     nf "    return SAIL_UNIT;";
     nf "endfunction";
   ]
+
+let string_of_bits_stub width =
+  [nf "function automatic sail_unit sail_string_of_bits(sail_bits bv);"; nf "    return SAIL_UNIT;"; nf "endfunction"]
 
 let dec_str width =
   [
@@ -203,6 +238,7 @@ let common_primops bv_width int_width =
   output_primop buf (sail_bits bv_width);
   output_primop buf (sail_int int_width);
   output_primop buf (print_lbits bv_width);
+  output_primop buf (string_of_bits bv_width);
   output_primop buf (print_int int_width);
   output_primop buf (dec_str int_width);
   output_primop buf (hex_str int_width);
@@ -217,6 +253,7 @@ let common_primops_stubs bv_width int_width =
   output_primop buf (sail_bits bv_width);
   output_primop buf (sail_int int_width);
   output_primop buf (print_lbits_stub bv_width);
+  output_primop buf (string_of_bits_stub bv_width);
   output_primop buf (print_int_stub int_width);
   output_primop buf (dec_str_stub int_width);
   output_primop buf (hex_str_stub int_width);
@@ -233,9 +270,9 @@ let print_fbits width =
         if width mod 4 = 0 then (
           let zeros = String.make (width / 4) '0' in
           [
-            "    string bstr;";
-            "    string zeros;";
-            "    bstr.hextoa(b);";
+            nf "    string bstr;";
+            nf "    string zeros;";
+            nf "    bstr.hextoa(b);";
             pf "    zeros = \"%s\";" zeros;
             pf "    $display(\"%%s0x%%s\", s, zeros.substr(0, %d - bstr.len()), bstr.toupper());" ((width / 4) - 1);
           ]
@@ -247,11 +284,46 @@ let print_fbits width =
       @ ["    return SAIL_UNIT;"; "endfunction"]
   )
 
+let string_of_fbits width =
+  let name = pf "sail_string_of_bits_%d" width in
+  register_primop name (fun () ->
+      let header = ["    string bstr;"; "    string zeros;"] in
+      let display =
+        if width mod 4 = 0 then (
+          let zeros = String.make (width / 4) '0' in
+          [
+            nf "    bstr.hextoa(b);";
+            pf "    zeros = \"%s\";" zeros;
+            pf "    return {\"0x\", zeros.substr(0, %d - bstr.len()), bstr.toupper()};" ((width / 4) - 1);
+          ]
+        )
+        else (
+          let zeros = String.make (width - 1) '0' in
+          [
+            nf "    bstr.bintoa(b);";
+            pf "    zeros = \"%s\";" zeros;
+            pf "    return {\"0b\", zeros.substr(0, %d - bstr.len()), bstr};" (width - 1);
+          ]
+        )
+      in
+      [pf "function automatic string %s(logic [%d:0] b);" name (width - 1)] @ header @ display @ ["endfunction"]
+  )
+
 let print_fbits_stub width =
   let name = pf "sail_print_fixed_bits_%d" width in
   register_primop name (fun () ->
       [
-        pf "function automatic sail_unit %s(sail_unit prefix, logic [%d:0] i);" name (width - 1);
+        pf "function automatic sail_unit %s(sail_unit prefix, logic [%d:0] bv);" name (width - 1);
+        nf "    return SAIL_UNIT;";
+        nf "endfunction";
+      ]
+  )
+
+let string_of_fbits_stub width =
+  let name = pf "sail_string_of_bits_%d" width in
+  register_primop name (fun () ->
+      [
+        pf "function automatic sail_unit %s(logic [%d:0] bv);" name (width - 1);
         nf "    return SAIL_UNIT;";
         nf "endfunction";
       ]

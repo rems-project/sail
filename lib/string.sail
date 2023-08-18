@@ -96,4 +96,8 @@ val print_endline = pure "print_endline" : string -> unit
 
 val prerr_endline = pure "prerr_endline" : string -> unit
 
+val print = pure "print" : string -> unit
+
+val prerr = pure "prerr" : string -> unit
+
 $endif

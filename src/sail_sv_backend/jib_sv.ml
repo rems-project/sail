@@ -182,6 +182,12 @@ module Make (Config : CONFIG) = struct
           | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
           | _ -> Reporting.unreachable l __POS__ "print_bits"
 
+        let string_of_bits l = function
+          | CT_lbits _ -> "sail_string_of_bits"
+          | CT_fbits (sz, _) when Config.nostrings -> Generate_primop.string_of_fbits_stub sz
+          | CT_fbits (sz, _) -> Generate_primop.string_of_fbits sz
+          | _ -> Reporting.unreachable l __POS__ "string_of_bits"
+
         let dec_str l = function
           | CT_lint -> "sail_dec_str"
           | CT_fint sz when Config.nostrings -> Generate_primop.dec_str_fint_stub sz

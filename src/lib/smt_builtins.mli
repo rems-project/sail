@@ -141,6 +141,7 @@ end
     implementations for these primitives. *)
 module type PRIMOP_GEN = sig
   val print_bits : Parse_ast.l -> ctyp -> string
+  val string_of_bits : Parse_ast.l -> ctyp -> string
   val dec_str : Parse_ast.l -> ctyp -> string
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string

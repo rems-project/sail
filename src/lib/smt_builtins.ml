@@ -232,6 +232,7 @@ end
 
 module type PRIMOP_GEN = sig
   val print_bits : Parse_ast.l -> ctyp -> string
+  val string_of_bits : Parse_ast.l -> ctyp -> string
   val dec_str : Parse_ast.l -> ctyp -> string
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string
@@ -1170,6 +1171,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let* str = smt_cval str in
             let* bv = smt_cval bv in
             return (Fn (op, [str; bv]))
+        )
+    | "string_of_bits" ->
+        unary_primop_simple (fun bv ->
+            let* l = current_location in
+            let op = Primop_gen.string_of_bits l (cval_ctyp bv) in
+            let* bv = smt_cval bv in
+            return (Fn (op, [bv]))
         )
     | "dec_str" ->
         unary_primop_simple (fun bv ->
