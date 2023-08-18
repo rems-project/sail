@@ -1912,61 +1912,16 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
       )
       ast.defs ([], effect_info)
   in
-  let rec optimise_exp (E_aux (exp, annot)) = E_aux (optimise_exp_aux exp, annot)
-  and optimise_exp_aux = function
-    | E_app (id, [E_aux (E_app (ctor_id, [E_aux (E_tuple args, _)]), _)]) when string_of_id id = fun_name ->
-        E_app (prepend_id (fun_name ^ "_") ctor_id, List.map optimise_exp args)
-    | E_app (id, [E_aux (E_app (ctor_id, [arg]), _)]) when string_of_id id = fun_name ->
-        E_app (prepend_id (fun_name ^ "_") ctor_id, [arg])
-    | E_block xs -> E_block (List.map optimise_exp xs)
-    | E_id id -> E_id id
-    | E_ref id -> E_ref id
-    | E_lit lit -> E_lit lit
-    | E_typ (typ, exp) -> E_typ (typ, optimise_exp exp)
-    | E_app (id, xs) -> E_app (id, List.map optimise_exp xs)
-    | E_app_infix (x, op, y) -> E_app_infix (optimise_exp x, op, optimise_exp y)
-    | E_tuple xs -> E_tuple (List.map optimise_exp xs)
-    | E_if (cond, t, e) -> E_if (optimise_exp cond, optimise_exp t, optimise_exp e)
-    | E_for (v, e1, e2, e3, o, e4) -> E_for (v, optimise_exp e1, optimise_exp e2, optimise_exp e3, o, optimise_exp e4)
-    | E_loop (loop_type, measure, e1, e2) ->
-        E_loop (loop_type, optimise_measure measure, optimise_exp e1, optimise_exp e2)
-    | E_vector exps -> E_vector (List.map optimise_exp exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (optimise_exp exp1, optimise_exp exp2)
-    | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (optimise_exp exp1, optimise_exp exp2, optimise_exp exp3)
-    | E_vector_update (exp1, exp2, exp3) -> E_vector_update (optimise_exp exp1, optimise_exp exp2, optimise_exp exp3)
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        E_vector_update_subrange (optimise_exp exp1, optimise_exp exp2, optimise_exp exp3, optimise_exp exp4)
-    | E_vector_append (exp1, exp2) -> E_vector_append (optimise_exp exp1, optimise_exp exp2)
-    | E_list xs -> E_list (List.map optimise_exp xs)
-    | E_cons (exp1, exp2) -> E_cons (optimise_exp exp1, optimise_exp exp2)
-    | E_struct fexps -> E_struct (List.map optimise_fexp fexps)
-    | E_struct_update (exp, fexps) -> E_struct_update (optimise_exp exp, List.map optimise_fexp fexps)
-    | E_field (exp, id) -> E_field (optimise_exp exp, id)
-    | E_match (exp, cases) -> E_match (optimise_exp exp, List.map optimise_pexp cases)
-    | E_try (exp, cases) -> E_try (optimise_exp exp, List.map optimise_pexp cases)
-    | E_let (letbind, exp) -> E_let (letbind, optimise_exp exp)
-    | E_assign (lexp, exp) -> E_assign (lexp, optimise_exp exp)
-    | E_sizeof nexp -> E_sizeof nexp
-    | E_constraint nc -> E_constraint nc
-    | E_exit exp -> E_exit (optimise_exp exp)
-    | E_throw exp -> E_throw (optimise_exp exp)
-    | E_return exp -> E_return (optimise_exp exp)
-    | E_assert (test, msg) -> E_assert (optimise_exp test, optimise_exp msg)
-    | E_internal_value v -> E_internal_value v
-    | E_var (lexp, exp1, exp2) -> E_var (lexp, optimise_exp exp1, optimise_exp exp2)
-    | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (pat, optimise_exp exp1, optimise_exp exp2)
-    | E_internal_return exp -> E_internal_return (optimise_exp exp)
-    | E_internal_assume (nc, exp) -> E_internal_assume (nc, optimise_exp exp)
-  and optimise_measure (Measure_aux (m, l)) = Measure_aux (optimise_measure_aux m, l)
-  and optimise_measure_aux = function
-    | Measure_none -> Measure_none
-    | Measure_some exp -> Measure_some (optimise_exp exp)
-  and optimise_fexp (FE_aux (FE_fexp (id, exp), annot)) = FE_aux (FE_fexp (id, optimise_exp exp), annot)
-  and optimise_pexp (Pat_aux (pexp, annot)) = Pat_aux (optimise_pexp_aux pexp, annot)
-  and optimise_pexp_aux = function
-    | Pat_exp (pat, exp) -> Pat_exp (pat, optimise_exp exp)
-    | Pat_when (pat, guard, exp) -> Pat_when (pat, optimise_exp guard, optimise_exp exp)
+
+  let optimize_split_call (id, args) =
+    match args with
+    | [E_aux (E_app (ctor_id, [E_aux (E_tuple ctor_args, _)]), _)] when string_of_id id = fun_name ->
+        E_app (prepend_id (fun_name ^ "_") ctor_id, ctor_args)
+    | [E_aux (E_app (ctor_id, [ctor_arg]), _)] when string_of_id id = fun_name ->
+        E_app (prepend_id (fun_name ^ "_") ctor_id, [ctor_arg])
+    | args -> E_app (id, args)
   in
+  let optimize_exp = fold_exp { id_exp_alg with e_app = optimize_split_call } in
 
   let defs =
     List.map
@@ -1983,11 +1938,11 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
                              (fun (FCL_aux (FCL_funcl (id, Pat_aux (pexp, pann)), fannot)) ->
                                match pexp with
                                | Pat_exp (pat, exp) ->
-                                   FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, optimise_exp exp), pann)), fannot)
+                                   FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, optimize_exp exp), pann)), fannot)
                                | Pat_when (pat, guard, exp) ->
                                    FCL_aux
                                      ( FCL_funcl
-                                         (id, Pat_aux (Pat_when (pat, optimise_exp guard, optimise_exp exp), pann)),
+                                         (id, Pat_aux (Pat_when (pat, optimize_exp guard, optimize_exp exp), pann)),
                                        fannot
                                      )
                              )
