@@ -102,6 +102,7 @@ let opt_max_unknown_bitvector_width = ref 128
 
 let opt_nostrings = ref false
 let opt_nopacked = ref false
+let opt_nomem = ref false
 
 let opt_unreachable = ref []
 
@@ -146,6 +147,7 @@ let verilog_options =
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "<functionname> Mark function as unreachable."
     );
+    ("-sv_nomem", Arg.Set opt_nopacked, " don't emit a dynamic memory implementation");
   ]
 
 let verilog_rewrites =
@@ -402,8 +404,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     (if !opt_nostrings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
     ^^ string "`include \"sail.sv\"" ^^ hardline
     ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
-    ^^ hardline
-    ^^ string "`include \"sail_memory.sv\""
+    ^^ (if !opt_nomem then hardline ^^ string "`include \"sail_memory.sv\"" else empty)
     ^^ hardline
     ^^ separate_map hardline (fun file -> ksprintf string "`include \"%s\"" file) !opt_includes
     ^^ twice hardline
@@ -549,4 +550,5 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     | _ -> ()
   end
 
-let _ = Target.register ~name:"systemverilog" ~flag:"sv" ~options:verilog_options ~rewrites:verilog_rewrites verilog_target
+let _ =
+  Target.register ~name:"systemverilog" ~flag:"sv" ~options:verilog_options ~rewrites:verilog_rewrites verilog_target
