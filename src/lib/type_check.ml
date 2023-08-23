@@ -722,12 +722,14 @@ end = struct
     || Bindings.mem id env.enums || Bindings.mem id builtin_typs
 
   let get_binding_loc env id =
-    let has_key id' = Id.compare id id' = 0 in
+    let find map =
+      Bindings.bindings map |> List.find (fun (id', _) -> Id.compare id id' = 0) |> fun (id', _) -> Some (id_loc id')
+    in
     if Bindings.mem id builtin_typs then None
-    else if Bindings.mem id env.variants then Some (id_loc (fst (Bindings.find_first has_key env.variants)))
-    else if Bindings.mem id env.records then Some (id_loc (fst (Bindings.find_first has_key env.records)))
-    else if Bindings.mem id env.enums then Some (id_loc (fst (Bindings.find_first has_key env.enums)))
-    else if Bindings.mem id env.typ_synonyms then Some (id_loc (fst (Bindings.find_first has_key env.typ_synonyms)))
+    else if Bindings.mem id env.variants then find env.variants
+    else if Bindings.mem id env.records then find env.records
+    else if Bindings.mem id env.enums then find env.enums
+    else if Bindings.mem id env.typ_synonyms then find env.typ_synonyms
     else None
 
   let already_bound str id env =
