@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/duplicate_type_id6.sail[0m:8.6-7:
+8[96m |[0munion a = { A : unit }
+ [91m |[0m      [91m^[0m
+ [91m |[0m Cannot create union type a, name is already bound
+ [91m |[0m 
+ [91m |[0m [96mfail/duplicate_type_id6.sail[0m:1.6-7:
+ [91m |[0m 1[96m |[0munion a = { A : unit }
+ [91m |[0m  [91m |[0m      [91m^[0m [91mprevious binding[0m
