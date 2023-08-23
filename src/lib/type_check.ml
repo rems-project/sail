@@ -751,6 +751,33 @@ end = struct
 
   let bound_ctor_fn env id = Bindings.mem id env.top_val_specs || Bindings.mem id env.union_ids
 
+  let get_ctor_fn_binding_loc env id =
+    let find map =
+      Bindings.bindings map |> List.find (fun (id', _) -> Id.compare id id' = 0) |> fun (id', _) -> Some (id_loc id')
+    in
+    if Bindings.mem id env.top_val_specs then find env.top_val_specs
+    else if Bindings.mem id env.union_ids then find env.union_ids
+    else None
+
+  let already_bound_ctor_fn str id env =
+    match get_ctor_fn_binding_loc env id with
+    | Some l ->
+        typ_raise env (id_loc id)
+          (Err_inner
+             ( Err_other
+                 ("Cannot create " ^ str ^ " " ^ string_of_id id
+                ^ ", name is already bound to a union constructor or function"
+                 ),
+               l,
+               "",
+               Some "previous binding",
+               Err_other ""
+             )
+          )
+    | None ->
+        Reporting.unreachable (id_loc id) __POS__
+          ("Could not find original binding for duplicate " ^ str ^ " called " ^ string_of_id id)
+
   let get_overloads id env = try Bindings.find id env.overloads with Not_found -> []
 
   let add_overloads id ids env =
@@ -1222,8 +1249,7 @@ end = struct
   let get_val_specs env = env.top_val_specs
 
   let add_union_id id bind env =
-    if bound_ctor_fn env id then
-      typ_error env (id_loc id) ("A union constructor or function already exists with name " ^ string_of_id id)
+    if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env
     else begin
       typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
       { env with union_ids = Bindings.add id bind env.union_ids }
