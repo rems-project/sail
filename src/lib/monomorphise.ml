@@ -3308,12 +3308,13 @@ module MonoRewrites = struct
       (* subrange == ones *)
       | [E_aux (E_app (subrange1, [vector1; start1; end1]), _); E_aux (E_app (ones2, [_]), _)]
         when is_id env (Id "vector_subrange") subrange1
+             && is_ones ones2
              && is_bitvector_typ (typ_of vector1)
              && not (is_constant_range (start1, end1)) ->
           E_app (mk_id "is_ones_subrange", [vector1; start1; end1])
       (* slice == ones *)
       | [E_aux (E_app (slice1, [vector1; start1; len1]), _); E_aux (E_app (ones2, [_]), _)]
-        when is_slice slice1 && (not (is_constant len1)) && is_bitvector_typ (typ_of vector1) ->
+        when is_slice slice1 && is_ones ones2 && (not (is_constant len1)) && is_bitvector_typ (typ_of vector1) ->
           E_app (mk_id "is_ones_slice", [vector1; start1; len1])
       (* Arm specs sometimes check for overflows on values that can be either 32 or 64 bits
          by converting to unbounded integers and asking for the top slice. *)
