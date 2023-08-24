@@ -1620,12 +1620,12 @@ module AtomToItself = struct
             (* TODO rewrite tannopt? *)
             DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
         | DEF_let lb -> DEF_let (rewrite_letbind lb)
-        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern, cast), (l, annot))) ->
+        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
             let typschm =
               match typschm with
               | TypSchm_aux (TypSchm_ts (tq, typ), l) -> TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
             in
-            DEF_val (VS_aux (VS_val_spec (typschm, id, extern, cast), (l, annot)))
+            DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
         | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
             DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
         | _ -> aux
@@ -4228,9 +4228,7 @@ module BitvectorSizeCasts = struct
       let kid = mk_kid "n" in
       let bitsn = bitvector_typ (nvar kid) dec_ord in
       let ts = mk_typschm (mk_typquant [mk_qi_id K_int kid]) (function_typ [bitsn] bitsn) in
-      let mkfn name =
-        mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] }, false))
-      in
+      let mkfn name = mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] })) in
       let defs = List.map mkfn (IdSet.elements !specs_required) in
       check_defs initial_env defs
     in
@@ -4350,7 +4348,7 @@ module ToplevelNexpRewrites = struct
         else rewrite_typ_in_spec env nexp_map typ'
 
   let rewrite_toplevel_nexps ({ defs; _ } as ast) =
-    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt, is_cast), ann)) =
+    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann)) =
       match tqs with
       | TypQ_aux (TypQ_no_forall, _) -> None
       | TypQ_aux (TypQ_tq qs, tq_l) -> (
@@ -4367,7 +4365,7 @@ module ToplevelNexpRewrites = struct
                 List.map (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map
               in
               let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints), tq_l) in
-              let vs = VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt, is_cast), ann) in
+              let vs = VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann) in
               Some (id, nexp_map, vs)
         )
     in
@@ -4548,12 +4546,12 @@ module ToplevelNexpRewrites = struct
         pat_alg = rw_pat;
       }
     in
-    let rw_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), annot)) =
+    let rw_spec (VS_aux (VS_val_spec (typschm, id, ext), annot)) =
       match typschm with
       | TypSchm_aux (TypSchm_ts (typq, typ), annot') ->
           (* TODO: capture hazard *)
           let typschm' = TypSchm_aux (TypSchm_ts (typq, expand_type typ), annot') in
-          VS_aux (VS_val_spec (typschm', id, ext, is_cast), annot)
+          VS_aux (VS_val_spec (typschm', id, ext), annot)
     in
     let rw_typedef (TD_aux (td, annot)) =
       let rw_union (Tu_aux (Tu_ty_id (typ, id), annot)) = Tu_aux (Tu_ty_id (expand_type typ, id), annot) in

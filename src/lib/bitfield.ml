@@ -95,7 +95,7 @@ let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left 
 (* Generate a constructor function for a bitfield type *)
 let constructor name order size =
   let typschm = fun_typschm [bitvec_typ size order] (mk_id_typ name) in
-  let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None, false)) in
+  let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None)) in
   let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" (string_of_id name) in
   constructor_val :: defs_of_string __POS__ constructor_fun
 
@@ -160,7 +160,7 @@ let field_getter typ_name field order range =
   let size = range_width range in
   let typschm = fun_typschm [mk_id_typ typ_name] (bitvec_typ size order) in
   let fun_id = (field_accessor_ids typ_name field).get in
-  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let body = get_field_exp range (get_bits_field (mk_exp (E_id (mk_id "v")))) in
   let funcl = mk_funcl fun_id (mk_pat (P_id (mk_id "v"))) body in
   [spec; mk_fundef [funcl]]
@@ -170,7 +170,7 @@ let field_updater typ_name field order range =
   let typ = mk_id_typ typ_name in
   let typschm = fun_typschm [typ; bitvec_typ size order] typ in
   let fun_id = (field_accessor_ids typ_name field).update in
-  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let orig_var = mk_id "v" in
   let new_val_var = mk_id "x" in
   let bits_exp = get_bits_field (mk_id_exp orig_var) in

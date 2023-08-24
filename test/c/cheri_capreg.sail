@@ -1,19 +1,17 @@
-$option -dallow_cast
-
 default Order dec
 
 /* this is here because if we don't have it before including vector_dec
    we get infinite loops caused by interaction with bool/bit casts */
-val eq_bit2 = "eq_bit" : (bit, bit) -> bool
+val eq_bit2 = pure "eq_bit" : (bit, bit) -> bool
 overload operator == = {eq_bit2}
 
 $include <vector_dec.sail>
 
-val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+val "reg_deref" : forall ('a : Type). register('a) -> 'a
 /* sneaky deref with no effect necessary for bitfield writes */
-val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
+val _reg_deref = monadic "reg_deref" : forall ('a : Type). register('a) -> 'a
 
-val zeros_0 = "zeros" : forall 'n. int('n) -> bits('n)
+val zeros_0 = pure "zeros" : forall 'n. int('n) -> bits('n)
 
 val zeros : forall 'n. (implicit('n), unit) -> bits('n)
 function zeros(n, _) = zeros_0(n)
@@ -21,16 +19,14 @@ function zeros(n, _) = zeros_0(n)
 val ones : forall 'n, 'n >= 0. (implicit('n), unit) -> bits('n)
 function ones(n, _) = replicate_bits(0b1, n)
 
-val xor_vec = {c: "xor_bits" , _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
-val int_power = {ocaml: "int_power", lem: "pow", coq: "Z.pow"} : (int, int) -> int
+val int_power = pure {ocaml: "int_power", lem: "pow", coq: "Z.pow"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power}
 
-val cast bool_to_bits : bool -> bits(1)
+val bool_to_bits : bool -> bits(1)
 function bool_to_bits x = if x then 0b1 else 0b0
 
-val cast bit_to_bool : bit -> bool
+val bit_to_bool : bit -> bool
 function bit_to_bool b = match b {
   bitone => true,
   bitzero => false
@@ -115,23 +111,23 @@ let 'cap_size = 32
 
 function capRegToCapStruct(capReg) : CapReg -> CapStruct =
   struct {
-    tag                        = capReg[256],
+    tag                        = bit_to_bool(capReg[256]),
     padding                    = capReg[255..248],
     otype                      = capReg[247..224],
     uperms                     = capReg[223..208],
     perm_reserved11_14         = capReg[207..204],
-    access_system_regs         = capReg[203],
-    permit_unseal              = capReg[202],
-    permit_ccall               = capReg[201],
-    permit_seal                = capReg[200],
-    permit_store_local_cap     = capReg[199],
-    permit_store_cap           = capReg[198],
-    permit_load_cap            = capReg[197],
-    permit_store               = capReg[196],
-    permit_load                = capReg[195],
-    permit_execute             = capReg[194],
-    global                     = capReg[193],
-    sealed                     = capReg[192],
+    access_system_regs         = bit_to_bool(capReg[203]),
+    permit_unseal              = bit_to_bool(capReg[202]),
+    permit_ccall               = bit_to_bool(capReg[201]),
+    permit_seal                = bit_to_bool(capReg[200]),
+    permit_store_local_cap     = bit_to_bool(capReg[199]),
+    permit_store_cap           = bit_to_bool(capReg[198]),
+    permit_load_cap            = bit_to_bool(capReg[197]),
+    permit_store               = bit_to_bool(capReg[196]),
+    permit_load                = bit_to_bool(capReg[195]),
+    permit_execute             = bit_to_bool(capReg[194]),
+    global                     = bit_to_bool(capReg[193]),
+    sealed                     = bit_to_bool(capReg[192]),
     address                    = capReg[191..128],
     base                       = capReg[127..64],
     length                     = capReg[63..0]
@@ -141,17 +137,17 @@ function getCapPerms(cap) : CapStruct -> bits(31) =
   (
     cap.uperms
       @ cap.perm_reserved11_14
-      @ cap.access_system_regs
-      @ cap.permit_unseal
-      @ cap.permit_ccall
-      @ cap.permit_seal
-      @ cap.permit_store_local_cap
-      @ cap.permit_store_cap
-      @ cap.permit_load_cap
-      @ cap.permit_store
-      @ cap.permit_load
-      @ cap.permit_execute
-      @ cap.global
+      @ bool_to_bits(cap.access_system_regs)
+      @ bool_to_bits(cap.permit_unseal)
+      @ bool_to_bits(cap.permit_ccall)
+      @ bool_to_bits(cap.permit_seal)
+      @ bool_to_bits(cap.permit_store_local_cap)
+      @ bool_to_bits(cap.permit_store_cap)
+      @ bool_to_bits(cap.permit_load_cap)
+      @ bool_to_bits(cap.permit_store)
+      @ bool_to_bits(cap.permit_load)
+      @ bool_to_bits(cap.permit_execute)
+      @ bool_to_bits(cap.global)
   )
 
 
@@ -161,7 +157,7 @@ function capStructToMemBits256(cap) : CapStruct -> bits(256) =
         cap.padding
       @ cap.otype
       @ getCapPerms(cap)
-      @ cap.sealed
+      @ bool_to_bits(cap.sealed)
       @ cap.address
       @ cap.base
       @ cap.length
@@ -178,9 +174,9 @@ function capStructToMemBits(cap) : CapStruct -> bits(256)=
   capStructToMemBits256(cap) ^ null_cap_bits
 
 function memBitsToCapBits(tag, b) : (bool, bits(256)) -> bits(257)  =
-  tag @ (b ^ null_cap_bits)
+  bool_to_bits(tag) @ (b ^ null_cap_bits)
 
-function capStructToCapReg(cap) : CapStruct -> CapReg = cap.tag @ capStructToMemBits256(cap)
+function capStructToCapReg(cap) : CapStruct -> CapReg = bool_to_bits(cap.tag) @ capStructToMemBits256(cap)
 
 register DDC : CapReg
 register C01 : CapReg
@@ -195,7 +191,7 @@ let CapRegs : vector(4, dec, register(CapReg)) =
     ref DDC
   ]
 
-val readCapReg : bits(2) -> CapStruct effect {rreg}
+val readCapReg : bits(2) -> CapStruct
 function readCapReg(n) =
   if (n == 0b00) then
     default_cap
@@ -208,11 +204,9 @@ function writeCapReg(n, cap) : (bits(2), CapStruct) -> unit =
     ()
   else
     let i = unsigned(n) in
-    (*CapRegs[i]) = capStructToCapReg(cap) 
+    (*CapRegs[i]) = capStructToCapReg(cap)
 
-val "print_bits" : forall 'n. (string, bits('n)) -> unit
-
-val main : unit -> unit effect {rreg, wreg}
+val main : unit -> unit
 
 function main() = {
   print_bits("default_cap = ", capStructToCapReg(default_cap));

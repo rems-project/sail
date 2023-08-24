@@ -807,7 +807,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   | TD_bitfield _ -> Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
 let get_externs defs =
-  let extern_id (VS_aux (VS_val_spec (typschm, id, exts, _), _)) =
+  let extern_id (VS_aux (VS_val_spec (typschm, id, exts), _)) =
     match Ast_util.extern_assoc "ocaml" exts with None -> [] | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
@@ -834,8 +834,7 @@ let ocaml_def ctx (DEF_aux (aux, _)) =
 let val_spec_typs defs =
   let typs = ref Bindings.empty in
   let val_spec_typ (VS_aux (vs_aux, _)) =
-    match vs_aux with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _, _) -> typs := Bindings.add id typ !typs
+    match vs_aux with VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
     | DEF_aux (DEF_val vs, _) :: defs ->

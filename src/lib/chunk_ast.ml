@@ -108,7 +108,7 @@ type chunk =
       return_typ_opt : chunks option;
       funcls : pexp_chunks list;
     }
-  | Val of { is_cast : bool; id : id; extern_opt : extern option; typq_opt : chunks option; typ : chunks }
+  | Val of { id : id; extern_opt : extern option; typq_opt : chunks option; typ : chunks }
   | Enum of { id : id; enum_functions : chunks list option; members : chunks list }
   | Function_typ of { mapping : bool; lhs : chunks; rhs : chunks }
   | Exists of { vars : chunks; constr : chunks; typ : chunks }
@@ -223,9 +223,7 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body
         )
         fn.funcls
-  | Val vs ->
-      Printf.eprintf "%sVal:%s is_cast=%b has_extern=%b\n" indent (string_of_id vs.id) vs.is_cast
-        (Option.is_some vs.extern_opt)
+  | Val vs -> Printf.eprintf "%sVal:%s has_extern=%b\n" indent (string_of_id vs.id) (Option.is_some vs.extern_opt)
   | Enum e ->
       Printf.eprintf "%sEnum:%s\n" indent (string_of_id e.id);
       begin
@@ -1083,7 +1081,7 @@ let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, f
   let funcls = List.map (chunk_funcl comments) funcls in
   Function { id = fn_id; clause = false; rec_opt = None; typq_opt; return_typ_opt; funcls } |> add_chunk chunks
 
-let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt, is_cast), l)) =
+let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt), l)) =
   pop_comments comments chunks l;
   let typq_chunks_opt, typ =
     match typschm with
@@ -1095,7 +1093,7 @@ let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt
   in
   let typ_chunks = Queue.create () in
   chunk_atyp comments typ_chunks typ;
-  add_chunk chunks (Val { is_cast; id; extern_opt; typq_opt = typq_chunks_opt; typ = typ_chunks });
+  add_chunk chunks (Val { id; extern_opt; typq_opt = typq_chunks_opt; typ = typ_chunks });
   if not (pop_trailing_comment ~space:1 comments chunks (ending_line_num l)) then Queue.push (Spacer (true, 1)) chunks
 
 let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =

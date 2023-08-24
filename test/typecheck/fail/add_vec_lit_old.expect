@@ -4,14 +4,6 @@
  [91m |[0m 
 Cast annotations are deprecated. They will be removed in a future version of the language.
 
-[93mWarning[0m: Potentially unsafe cast involving range(0, (2 ^ 'n - 1)) [96mfail/add_vec_lit_old.sail[0m:9.0-10.44:
-9 [96m |[0mval cast unsigned : forall ('n : Int).
-  [91m |[0m[91m^-------------------------------------[0m
-10[96m |[0m  bitvector('n, inc) -> range(0, 2 ^ 'n - 1)
-  [91m |[0m[91m-------------------------------------------^[0m
-  [91m |[0m 
-
-
 [93mType error[0m:
 [96mfail/add_vec_lit_old.sail[0m:14.23-32:
 14[96m |[0mlet x : range(0, 30) = 0xF + 0x2

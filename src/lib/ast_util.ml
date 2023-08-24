@@ -1128,7 +1128,7 @@ let id_of_type_def_aux = function
       id
 let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
-let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
+let id_of_val_spec (VS_aux (VS_val_spec (_, id, _), _)) = id
 
 let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
@@ -1160,7 +1160,7 @@ let ids_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map ids_of_d
 let ids_of_ast ast = ids_of_defs ast.defs
 
 let val_spec_ids defs =
-  let val_spec_id (VS_aux (vs_aux, _)) = match vs_aux with VS_val_spec (_, id, _, _) -> id in
+  let val_spec_id (VS_aux (vs_aux, _)) = match vs_aux with VS_val_spec (_, id, _) -> id in
   let rec vs_ids = function
     | DEF_aux (DEF_val vs, _) :: defs -> val_spec_id vs :: vs_ids defs
     | _ :: defs -> vs_ids defs
@@ -1548,7 +1548,7 @@ let construct_mpexp (mpat, guard, ann) =
   match guard with None -> MPat_aux (MPat_pat mpat, ann) | Some guard -> MPat_aux (MPat_when (mpat, guard), ann)
 
 let is_valspec id = function
-  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id', _, _), _)), _) when Id.compare id id' = 0 -> true
+  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id', _), _)), _) when Id.compare id id' = 0 -> true
   | _ -> false
 
 let is_fundef id = function
@@ -1557,8 +1557,8 @@ let is_fundef id = function
       true
   | _ -> false
 
-let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) =
-  VS_aux (VS_val_spec (typschm, id, externs, is_cast), annot)
+let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs), annot)) =
+  VS_aux (VS_val_spec (typschm, id, externs), annot)
 
 let rename_funcl id (FCL_aux (FCL_funcl (_, pexp), annot)) = FCL_aux (FCL_funcl (id, pexp), annot)
 

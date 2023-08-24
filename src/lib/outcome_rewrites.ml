@@ -154,7 +154,7 @@ let instantiate target ast =
           DEF_aux
             ( DEF_val
                 (VS_aux
-                   ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern, false),
+                   ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern),
                      (l, empty_uannot)
                    )
                 ),

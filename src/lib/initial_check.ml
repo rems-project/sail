@@ -78,7 +78,6 @@ module P = Parse_ast
 let opt_undefined_gen = ref false
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
-let opt_enum_casts = ref false
 
 type ctx = {
   kinds : kind_aux KBindings.t;
@@ -631,10 +630,10 @@ let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
   match vs with
   | P.VS_aux (vs, l) -> (
       match vs with
-      | P.VS_val_spec (ts, id, ext, is_cast) ->
+      | P.VS_val_spec (ts, id, ext) ->
           let typschm, _ = to_ast_typschm ctx ts in
           let ext = Option.map to_ast_extern ext in
-          (VS_aux (VS_val_spec (typschm, to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx)
+          (VS_aux (VS_val_spec (typschm, to_ast_id ctx id, ext), (l, empty_uannot)), ctx)
     )
 
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
@@ -757,7 +756,7 @@ let generate_enum_functions l ctx enum_id fns exps =
                  )
               );
           ];
-        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ), name, None, false));
+        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ), name, None));
       ]
     )
     fns
@@ -1157,9 +1156,9 @@ let constraint_of_string str =
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let extern_of_string ?(pure = false) id str =
-  VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }, false) |> mk_val_spec
+  VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }) |> mk_val_spec
 
-let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None, false))
+let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None))
 
 let quant_item_param = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
@@ -1269,7 +1268,7 @@ let generate_undefineds vs_ids defs =
           letbinds
       )
     in
-    ( mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false)),
+    ( mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None)),
       mk_fundef [mk_funcl (prepend_id "undefined_" id) pat body]
     )
   in
@@ -1277,7 +1276,7 @@ let generate_undefineds vs_ids defs =
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
         let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
         [
-          mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None, false));
+          mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None));
           mk_fundef
             [
               mk_funcl (prepend_id "undefined_" id)
@@ -1293,7 +1292,7 @@ let generate_undefineds vs_ids defs =
           p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
         in
         [
-          mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
+          mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
           mk_fundef
             [
               mk_funcl (prepend_id "undefined_" id) pat
@@ -1358,7 +1357,7 @@ let generate_enum_functions vs_ids defs =
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->
             let enum_val_spec name quants typ =
-              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
+              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None))
             in
             let range_constraint kid =
               nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))

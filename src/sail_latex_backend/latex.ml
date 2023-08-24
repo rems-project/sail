@@ -389,7 +389,7 @@ let latex_loc no_loc l =
     end
   | None -> docstring l ^^ no_loc
 
-let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
+let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
   Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ~simple:true ts
 
 let latex_command cat id no_loc l =
@@ -510,7 +510,7 @@ let defs { defs; _ } =
         overload_counters := Bindings.update id (function None -> Some 0 | Some n -> Some (n + 1)) !overload_counters;
         let count = Bindings.find id !overload_counters in
         Some (latex_command (Overload count) id doc (id_loc id))
-    | DEF_val (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) ->
+    | DEF_val (VS_aux (VS_val_spec (_, id, _), annot) as vs) ->
         valspecs := Bindings.add id id !valspecs;
         if !opt_simple_val then Some (latex_command Val id (doc_spec_simple vs) (fst annot))
         else Some (latex_command Val id (Pretty_print_sail.doc_spec vs) (fst annot))
