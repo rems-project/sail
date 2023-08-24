@@ -113,7 +113,7 @@ val is_ones_subrange : forall 'n, 'n >= 0.
   (bits('n), int, int) -> bool effect pure
 
 function is_ones_subrange (xs, i, j) = {
-  let m : bits('n) = slice_mask(j,j-i+1) in
+  let m : bits('n) = slice_mask(j,i-j+1) in
   (xs & m) == m
 }
 
