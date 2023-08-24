@@ -738,10 +738,8 @@ let doc_spec (VS_aux (v, annot)) =
     | None -> empty
   in
   match v with
-  | VS_val_spec (ts, id, ext, is_cast) ->
-      string "val" ^^ space
-      ^^ (if is_cast then string "cast" ^^ space else empty)
-      ^^ doc_id id ^^ space ^^ doc_extern ext ^^ colon ^^ space ^^ doc_typschm ts
+  | VS_val_spec (ts, id, ext) ->
+      string "val" ^^ space ^^ doc_id id ^^ space ^^ doc_extern ext ^^ colon ^^ space ^^ doc_typschm ts
 
 let doc_prec = function Infix -> string "infix" | InfixL -> string "infixl" | InfixR -> string "infixr"
 

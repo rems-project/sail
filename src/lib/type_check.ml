@@ -140,8 +140,6 @@ type env = {
   records : (typquant * (typ * id) list) Bindings.t;
   accessors : (typquant * typ) Bindings.t;
   externs : extern Bindings.t;
-  casts : id list;
-  allow_casts : bool;
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
   default_order : order option;
@@ -557,10 +555,6 @@ module Env : sig
   val get_enum : id -> t -> id list
   val get_enums : t -> IdSet.t Bindings.t
   val is_enum : id -> t -> bool
-  val get_casts : t -> id list
-  val allow_casts : t -> bool
-  val no_casts : t -> t
-  val add_cast : id -> t -> t
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
   val lookup_id : id -> t -> typ lvar
@@ -614,9 +608,7 @@ end = struct
       records = Bindings.empty;
       accessors = Bindings.empty;
       externs = Bindings.empty;
-      casts = [];
       allow_bindings = true;
-      allow_casts = true;
       constraints = [];
       default_order = None;
       ret_typ = None;
@@ -1574,8 +1566,6 @@ end = struct
       | None -> typ_error env (id_loc id) ("No extern binding found for " ^ string_of_id id)
     with Not_found -> typ_error env (id_loc id) ("No extern binding found for " ^ string_of_id id)
 
-  let get_casts env = env.casts
-
   let add_register id typ env =
     wf_typ env typ;
     if Bindings.mem id env.registers then typ_error env (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
@@ -1606,15 +1596,7 @@ end = struct
 
   let add_ret_typ typ env = { env with ret_typ = Some typ }
 
-  let allow_casts env = env.allow_casts
-
-  let no_casts env = { env with allow_casts = false }
-
   let no_bindings env = { env with allow_bindings = false }
-
-  let add_cast cast env =
-    typ_print (lazy (adding ^ "cast " ^ string_of_id cast));
-    { env with casts = cast :: env.casts }
 
   let get_default_order env =
     match env.default_order with
@@ -3027,57 +3009,6 @@ let check_function_instantiation l id env bind1 bind2 =
     with Type_error (err_env, l2, err2) -> typ_raise err_env l2 (Err_inner (err2, l1, "Also tried", None, err1))
   )
 
-(* When doing implicit type coercion, for performance reasons we want
-   to filter out the possible casts to only those that could
-   reasonably apply. We don't mind if we try some coercions that are
-   impossible, but we should be careful to never rule out a possible
-   cast - match_typ and filter_casts implement this logic. It must be
-   the case that if two types unify, then they match. *)
-let rec match_typ env typ1 typ2 =
-  let (Typ_aux (typ1_aux, _)) = Env.expand_synonyms env typ1 in
-  let (Typ_aux (typ2_aux, _)) = Env.expand_synonyms env typ2 in
-  match (typ1_aux, typ2_aux) with
-  | Typ_exist (_, _, typ1), _ -> match_typ env typ1 typ2
-  | _, Typ_exist (_, _, typ2) -> match_typ env typ1 typ2
-  | _, Typ_var kid2 -> true
-  | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
-  | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true
-  | Typ_tuple typs1, Typ_tuple typs2 -> List.for_all2 (match_typ env) typs1 typs2
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "atom" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "int" && string_of_id f = "atom" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "range" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "int" && string_of_id f = "range" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "bool" && string_of_id f = "atom_bool" -> true
-  | Typ_app (f, _), Typ_id v when string_of_id v = "bool" && string_of_id f = "atom_bool" -> true
-  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "range" && string_of_id f2 = "atom" -> true
-  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "atom" && string_of_id f2 = "range" -> true
-  | Typ_app (f1, _), Typ_app (f2, _) when Id.compare f1 f2 = 0 -> true
-  | Typ_id v1, Typ_app (f2, _) when Id.compare v1 f2 = 0 -> true
-  | Typ_app (f1, _), Typ_id v2 when Id.compare f1 v2 = 0 -> true
-  | _, _ -> false
-
-let rec filter_casts env from_typ to_typ casts =
-  match casts with
-  | cast :: casts -> begin
-      let quant, cast_typ = Env.get_val_spec cast env in
-      match cast_typ with
-      (* A cast should be a function A -> B and have only a single argument type. *)
-      | Typ_aux (Typ_fn (arg_typs, cast_to_typ), _) -> begin
-          match List.filter is_not_implicit arg_typs with
-          | [cast_from_typ] when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
-              typ_print
-                ( lazy
-                  ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to "
-                 ^ string_of_typ to_typ
-                  )
-                  );
-              cast :: filter_casts env from_typ to_typ casts
-          | _ -> filter_casts env from_typ to_typ casts
-        end
-      | _ -> filter_casts env from_typ to_typ casts
-    end
-  | [] -> []
-
 type pattern_duplicate = Pattern_singleton of l | Pattern_duplicate of l * l
 
 let is_enum_member id env = match Env.lookup_id id env with Enum _ -> true | _ -> false
@@ -3514,17 +3445,17 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       match destruct_exist (typ_of (irule infer_exp env y)) with
       | None | Some (_, NC_aux (NC_true, _), _) ->
           let inferred_exp = infer_funapp l env f [x; y] (Some typ) in
-          type_coercion env inferred_exp typ
+          expect_subtype env inferred_exp typ
       | Some _ ->
           let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] (Some typ) in
-          type_coercion env inferred_exp typ
+          expect_subtype env inferred_exp typ
       | exception Type_error _ ->
           let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] (Some typ) in
-          type_coercion env inferred_exp typ
+          expect_subtype env inferred_exp typ
     end
   | E_app (f, xs), _ ->
       let inferred_exp = infer_funapp l env f xs (Some typ) in
-      type_coercion env inferred_exp typ
+      expect_subtype env inferred_exp typ
   | E_return exp, _ ->
       let checked_exp =
         match Env.get_ret_typ env with
@@ -3549,7 +3480,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
             in
             annot_exp (E_if (cond', then_branch', else_branch')) typ
         | _ ->
-            let cond' = type_coercion env cond' bool_typ in
+            let cond' = expect_subtype env cond' bool_typ in
             let then_branch' =
               crule check_exp
                 (add_opt_constraint l "then branch" (assert_constraint env true cond') env)
@@ -3637,7 +3568,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       annot_exp (E_internal_assume (nc, exp')) typ
   | _, _ ->
       let inferred_exp = irule infer_exp env exp in
-      type_coercion env inferred_exp typ
+      expect_subtype env inferred_exp typ
 
 and check_block l env exps ret_typ =
   let final env exp = match ret_typ with Some typ -> crule check_exp env exp typ | None -> irule infer_exp env exp in
@@ -3766,82 +3697,27 @@ and check_mpexp other_env env mpexp typ =
       in
       construct_mpexp (checked_mpat, checked_guard, (l, empty_tannot))
 
-(* type_coercion env exp typ takes a fully annoted (i.e. already type
-   checked) expression exp, and attempts to cast (coerce) it to the
-   type typ by inserting a coercion function that transforms the
-   annotated expression into the correct type. Returns an annoted
-   expression consisting of a type coercion function applied to exp,
-   or throws a type error if the coercion cannot be performed. *)
-and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
-  let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, empty_tannot))) in
-  let annot_exp exp typ' = E_aux (exp, (l, mk_expected_tannot env typ' (Some typ))) in
-  let switch_exp_typ exp =
+(* expect_subtype env exp typ takes a fully annoted (i.e. already type
+   checked) expression exp, and checks that the annotated type is a
+   subtype of the provided type, updating the type annotation to
+   reflect this. *)
+and expect_subtype env (E_aux (_, (l, _)) as annotated_exp) typ =
+  let add_expected exp =
     match exp with
     | E_aux (exp, (l, (Some tannot, uannot))) -> E_aux (exp, (l, (Some { tannot with expected = Some typ }, uannot)))
-    | _ -> failwith "Cannot switch type for unannotated function"
+    | _ -> Reporting.unreachable l __POS__ "Cannot switch type for unannotated expression"
   in
-  let rec try_casts trigger errs = function
-    | [] -> typ_raise env l (Err_no_casts (strip_exp annotated_exp, typ_of annotated_exp, typ, trigger, errs))
-    | cast :: casts -> begin
-        typ_print
-          ( lazy
-            ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " to "
-           ^ string_of_typ typ
-            )
-            );
-        try
-          let checked_cast = crule check_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) typ in
-          annot_exp (E_typ (typ, checked_cast)) typ
-        with Type_error (_, _, err) -> try_casts trigger (err :: errs) casts
-      end
-  in
-  begin
-    try
-      typ_debug
-        (lazy ("Performing type coercion: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
-      subtyp l env (typ_of annotated_exp) typ;
-      switch_exp_typ annotated_exp
-    with
-    | Type_error (_, _, trigger) when Env.allow_casts env ->
-        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
-        try_casts trigger [] casts
-    | Type_error (env, l, err) -> typ_raise env l err
-  end
+  typ_debug (lazy ("Expect subtype: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
+  subtyp l env (typ_of annotated_exp) typ;
+  add_expected annotated_exp
 
-(* type_coercion_unify env exp typ attempts to coerce exp to a type
-   exp_typ in the same way as type_coercion, except it is only
-   required that exp_typ unifies with typ. Returns the annotated
-   coercion as with type_coercion and also a set of unifiers, or
-   throws a unification error *)
-and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
-  let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, empty_tannot))) in
-  let rec try_casts = function
-    | [] -> unify_error l "No valid casts resulted in unification"
-    | cast :: casts -> begin
-        typ_print
-          ( lazy
-            ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " for unification")
-            );
-        try
-          let inferred_cast = irule infer_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) in
-          let ityp, env = bind_existential l None (typ_of inferred_cast) env in
-          (inferred_cast, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ ityp, env)
-        with
-        | Type_error _ -> try_casts casts
-        | Unification_error _ -> try_casts casts
-      end
-  in
-  begin
-    try
-      typ_debug
-        (lazy ("Coercing unification: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
-      let atyp, env = bind_existential l None (typ_of annotated_exp) env in
-      let atyp, env = bind_tuple_existentials l None atyp env in
-      (annotated_exp, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ atyp, env)
-    with Unification_error (_, _) when Env.allow_casts env ->
-      let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
-      try_casts casts
-  end
+(* can_unify_with env goals exp typ takes an annotated expression, and
+   checks that its annotated type can unify with the provided type. *)
+and can_unify_with env goals (E_aux (_, (l, _)) as annotated_exp) typ =
+  typ_debug (lazy ("Can unify with: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
+  let atyp, env = bind_existential l None (typ_of annotated_exp) env in
+  let atyp, env = bind_tuple_existentials l None atyp env in
+  (annotated_exp, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ atyp, env)
 
 and bind_pat_no_guard env (P_aux (_, (l, _)) as pat) typ =
   match bind_pat env pat typ with
@@ -4630,9 +4506,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Accessing a field of a record *)
       | Typ_aux (Typ_id rectyp, _) when Env.is_record rectyp env -> begin
           let inferred_acc =
-            infer_funapp' l (Env.no_casts env) field (Env.get_accessor_fn rectyp field env)
-              [strip_exp inferred_exp]
-              None
+            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None
           in
           match inferred_acc with
           | E_aux (E_app (field, [inferred_exp]), _) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
@@ -4641,9 +4515,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Not sure if we need to do anything different with args here. *)
       | Typ_aux (Typ_app (rectyp, _), _) when Env.is_record rectyp env -> begin
           let inferred_acc =
-            infer_funapp' l (Env.no_casts env) field (Env.get_accessor_fn rectyp field env)
-              [strip_exp inferred_exp]
-              None
+            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None
           in
           match inferred_acc with
           | E_aux (E_app (field, [inferred_exp]), _) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
@@ -4939,8 +4811,7 @@ and instantiation_of (E_aux (_, (l, tannot)) as exp) =
 and instantiation_of_without_type (E_aux (exp_aux, (l, _)) as exp) =
   let env = env_of exp in
   match exp_aux with
-  | E_app (f, xs) ->
-      instantiation_of (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) None)
+  | E_app (f, xs) -> instantiation_of (infer_funapp' l env f (Env.get_val_spec f env) (List.map strip_exp xs) None)
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
 and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
@@ -5040,7 +4911,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
       typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
       let inferred_arg = irule infer_exp env arg in
       let inferred_arg, unifiers, env =
-        try type_coercion_unify env goals inferred_arg typ with Unification_error (l, m) -> typ_error env l m
+        try can_unify_with env goals inferred_arg typ with Unification_error (l, m) -> typ_error env l m
       in
       record_unifiers unifiers;
       let unifiers = KBindings.bindings unifiers in
@@ -5573,7 +5444,7 @@ let synthesize_val_spec env typq typ id =
   mk_def
     (DEF_val
        (VS_aux
-          ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None, false),
+          ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None),
             (Parse_ast.Unknown, mk_tannot env typ)
           )
        )
@@ -5720,22 +5591,6 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
   let env = Env.define_val_spec id env in
   (vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, empty_tannot))), def_annot)], env)
 
-let rec warn_if_unsafe_cast l env = function
-  | Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
-      List.iter (warn_if_unsafe_cast l env) arg_typs;
-      warn_if_unsafe_cast l env ret_typ
-  | Typ_aux (Typ_id id, _) when string_of_id id = "bool" -> ()
-  | Typ_aux (Typ_id id, _) when Env.is_enum id env -> ()
-  | Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
-      Reporting.warn "Unsafe string cast" l
-        "A cast X -> string is unsafe, as it can cause 'x : X == y : X' to be checked as 'eq_string(cast(x), cast(y))'"
-  (* If we have a cast to an existential, it's probably done on
-     purpose and we want to avoid false positives for warnings. *)
-  | Typ_aux (Typ_exist _, _) -> ()
-  | typ when is_bitvector_typ typ -> ()
-  | typ when is_bit_typ typ -> ()
-  | typ -> Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
-
 (* Checking a val spec simply adds the type as a binding in the context. *)
 let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
   let annotate vs typq typ =
@@ -5743,24 +5598,17 @@ let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
   in
   let vs, id, typq, typ, env =
     match vs with
-    | VS_val_spec ((TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm), id, exts, is_cast) ->
+    | VS_val_spec ((TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm), id, exts) ->
         typ_print
           (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
         wf_typschm env typschm;
         let env = match exts with Some exts -> Env.add_extern id exts env | None -> env in
-        let env =
-          if is_cast then (
-            warn_if_unsafe_cast l env (Env.expand_synonyms env typ);
-            Env.add_cast id env
-          )
-          else env
-        in
         let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
         (* !opt_expand_valspec controls whether the actual valspec in
            the AST is expanded, the val_spec type stored in the
            environment is always expanded and uses typq' and typ' *)
         let typq, typ = if !opt_expand_valspec then (typq', typ') else (typq, typ) in
-        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts, is_cast) in
+        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts) in
         (vs, id, typq', typ', env)
   in
   ([annotate vs typq typ], Env.add_val_spec id (typq, typ) env)
@@ -5932,7 +5780,7 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
         let defs, local_env = check_defs local_env defs in
         let vals =
           List.filter_map
-            (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _, _), _)), _) -> Some id | _ -> None)
+            (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) -> Some id | _ -> None)
             defs
         in
         decr depth;

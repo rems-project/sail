@@ -120,7 +120,6 @@ let ocaml_rewrites =
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
     ("simple_types", []);
-    ("overload_cast", []);
   ]
 
 let ocaml_target _ default_sail_dir out_file ast effect_info env =

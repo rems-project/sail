@@ -209,7 +209,7 @@ let infer_def_direct_effects asserts_termination def =
 
   begin
     match def with
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)), _) ->
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }), _)), _) ->
         effects := EffectSet.add External !effects
     | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) -> begin
         match funcls_info funcls with

@@ -1709,13 +1709,13 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) = match reg with DEC_reg (typ
 
 let doc_spec_lem effect_info params_to_print env (VS_aux (valspec, annot)) =
   match valspec with
-  | VS_val_spec (typschm, id, exts, _) when Ast_util.extern_assoc "lem" exts = None ->
+  | VS_val_spec (typschm, id, exts) when Ast_util.extern_assoc "lem" exts = None ->
       let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
       (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
          if contains_t_pp_var typ then empty else *)
       separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad params_to_print env true typschm]
       ^/^ hardline
-  (* | VS_val_spec (_,_,Some _,_) -> empty *)
+  (* | VS_val_spec (_,_,Some _) -> empty *)
   | _ -> empty
 
 let is_field_accessor regtypes fdef =

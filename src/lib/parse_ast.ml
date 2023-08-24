@@ -390,7 +390,7 @@ type type_def_aux =
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type val_spec_aux = (* Value type specification *)
-  | VS_val_spec of typschm * id * extern option * bool
+  | VS_val_spec of typschm * id * extern option
 
 type dec_spec_aux = (* Register declarations *)
   | DEC_reg of atyp * id * exp option

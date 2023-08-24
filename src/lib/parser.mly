@@ -1508,16 +1508,16 @@ externs:
 val_spec_def:
   | Val String Colon typschm
     { let typschm = $4 in
-      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] }, false)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] })) $startpos $endpos }
   | Val id externs Colon typschm
     { let typschm = $5 in
       let externs, need_fix = $3 in
-      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs), false)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
   | Val Cast id externs Colon typschm
     { cast_deprecated (loc $startpos($2) $endpos($2));
       let typschm = $6 in
       let externs, need_fix = $4 in
-      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs), true)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

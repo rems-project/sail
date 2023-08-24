@@ -140,7 +140,7 @@ let fix_instantiation spec instantiation =
    return all Int-polymorphic functions. *)
 let rec polymorphic_functions ctx defs =
   match defs with
-  | DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, externs, _), _)), _) :: defs ->
+  | DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, externs), _)), _) :: defs ->
       let is_polymorphic = List.exists ctx.is_polymorphic (quant_kopts typq) in
       if is_polymorphic && not (ctx.extern_filter externs) then IdSet.add id (polymorphic_functions ctx defs)
       else polymorphic_functions ctx defs
@@ -396,10 +396,10 @@ let specialize_id_valspec spec instantiations id ast effect_info =
   match split_defs (is_valspec id) ast.defs with
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_defs, vs, post_defs) ->
-      let typschm, externs, is_cast, annot, def_annot =
+      let typschm, externs, annot, def_annot =
         match vs with
-        | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)), def_annot) ->
-            (typschm, externs, is_cast, annot, def_annot)
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, _, externs), annot)), def_annot) ->
+            (typschm, externs, annot, def_annot)
         | _ -> Reporting.unreachable (id_loc id) __POS__ "val-spec is not actually a val-spec"
       in
       let (TypSchm_aux (TypSchm_ts (typq, typ), _)) = typschm in
@@ -464,7 +464,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
         if IdSet.mem spec_id !spec_ids then []
         else begin
           spec_ids := IdSet.add spec_id !spec_ids;
-          [DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, spec_id, externs, is_cast), annot)), def_annot)]
+          [DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, spec_id, externs), annot)), def_annot)]
         end
       in
 

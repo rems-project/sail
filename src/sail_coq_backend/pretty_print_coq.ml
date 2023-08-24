@@ -3237,8 +3237,8 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       string "forall" ^/^ separate space tyvars_pp ^/^ arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs, typ), l))
 
-let doc_val_spec def_annot unimplemented avoid_target_names effect_info
-    (VS_aux (VS_val_spec (_, id, _, _), (l, ann)) as vs) =
+let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec (_, id, _), (l, ann)) as vs)
+    =
   let bare_ctxt = { empty_ctxt with avoid_target_names } in
   if !opt_undef_axioms && IdSet.mem id unimplemented then (
     let typ_env = env_of_annot (l, ann) in
@@ -3340,7 +3340,7 @@ let find_unimplemented defs =
     match funcls with [] -> unimplemented | FCL_aux (FCL_funcl (id, _), _) :: _ -> IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, exts, _), _)), _) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, exts), _)), _) -> begin
         match Ast_util.extern_assoc "coq" exts with Some _ -> unimplemented | None -> IdSet.add id unimplemented
       end
     | DEF_aux (DEF_internal_mutrec fds, _) -> List.fold_left adjust_fundef unimplemented fds
@@ -3351,7 +3351,7 @@ let find_unimplemented defs =
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, exts, _), _)), _) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, exts), _)), _) -> begin
         match Ast_util.extern_assoc "coq" exts with Some name -> StringSet.add name names | None -> names
       end
     | _ -> names

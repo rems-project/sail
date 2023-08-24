@@ -175,10 +175,8 @@ let rec options =
         Arg.Set State.opt_type_grouped_regstate,
         " group registers with same type together in generated register state record"
       );
-      ( "-enum_casts",
-        Arg.Set Initial_check.opt_enum_casts,
-        " allow enumerations to be automatically casted to numeric range types"
-      );
+      (* Casts have been removed, preserved for backwards compatibility *)
+      ("-enum_casts", Arg.Unit (fun () -> ()), "");
       ("-non_lexical_flow", Arg.Set Nl_flow.opt_nl_flow, " allow non-lexical flow typing");
       ( "-no_lexp_bounds_check",
         Arg.Set Type_check.opt_no_lexp_bounds_check,
@@ -234,15 +232,9 @@ let rec options =
         Arg.Set Profile.opt_profile,
         " (debug) provide basic profiling information for rewriting passes within Sail"
       );
-      ("-dno_cast", Arg.Set Frontend.opt_dno_cast, " (debug) typecheck without any implicit casting");
-      ( "-dallow_cast",
-        Arg.Tuple
-          [
-            Arg.Unit (fun () -> Reporting.simple_warn "-dallow_cast option is deprecated");
-            Arg.Clear Frontend.opt_dno_cast;
-          ],
-        " (debug) typecheck allowing implicit casting (deprecated)"
-      );
+      ("-dno_cast", Arg.Unit (fun () -> ()), "");
+      (* No longer does anything, preserved for backwards compatibility only *)
+      ("-dallow_cast", Arg.Unit (fun () -> ()), "");
       ( "-ddump_rewrite_ast",
         Arg.String
           (fun l ->

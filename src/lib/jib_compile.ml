@@ -1539,7 +1539,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
         let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
         let instrs = unique_names instrs in
         ([CDEF_register (id, ctyp_of_typ ctx typ, instrs)], ctx)
-    | DEF_val (VS_aux (VS_val_spec (_, id, ext, _), _)) ->
+    | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
         let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
         let extern = if Env.is_extern id ctx.tc_env "c" then Some (Env.get_extern id ctx.tc_env "c") else None in
         let arg_typs, ret_typ =
