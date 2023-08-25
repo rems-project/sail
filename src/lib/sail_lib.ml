@@ -630,17 +630,18 @@ let abs_real x = Rational.abs x
 
 let sqrt_real x =
   let precision = 30 in
-  let s = (Rational.div (Rational.of_big_int (Big_int.sqrt (Rational.num x)))
-     (Rational.of_big_int (Big_int.sqrt (Rational.den x)))) in
-  if Rational.equal (Rational.mul s s) x then
-    s
+  let s =
+    Rational.div
+      (Rational.of_big_int (Big_int.sqrt (Rational.num x)))
+      (Rational.of_big_int (Big_int.sqrt (Rational.den x)))
+  in
+  if Rational.equal (Rational.mul s s) x then s
   else (
     let p = ref s in
     let n = ref (Rational.of_int 0) in
-    let num_convergence = if (Rational.gt x (Rational.of_int 1)) then (Rational.of_int 1) else x in
+    let num_convergence = if Rational.gt x (Rational.of_int 1) then Rational.of_int 1 else x in
     let convergence =
-      ref (Rational.div num_convergence
-        (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
+      ref (Rational.div num_convergence (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
     in
     let quit_loop = ref false in
     while not !quit_loop do
@@ -674,7 +675,9 @@ let real_of_string str =
   match Util.split_on_char '.' str with
   | [whole; frac] ->
       let whole = Rational.of_big_int (Big_int.of_string whole) in
-      let frac = Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (pow 10 (String.length frac))) in
+      let frac =
+        Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (pow 10 (String.length frac)))
+      in
       Rational.add whole frac
   | [_] -> Rational.of_big_int (Big_int.of_string str)
   | _ -> failwith "invalid real literal"

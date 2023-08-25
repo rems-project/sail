@@ -102,7 +102,9 @@ let value_of_lit (L_aux (l_aux, _)) =
       | [whole; frac] ->
           let whole = Rational.of_big_int (Big_int.of_string whole) in
           let frac =
-            Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (Util.power 10 (String.length frac)))
+            Rational.div
+              (Rational.of_big_int (Big_int.of_string frac))
+              (Rational.of_int (Util.power 10 (String.length frac)))
           in
           V_real (Rational.add whole frac)
       | _ -> failwith "could not parse real literal"
