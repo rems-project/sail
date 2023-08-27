@@ -238,12 +238,7 @@ and strip_typ_arg = function A_aux (typ_arg_aux, _) -> A_aux (strip_typ_arg_aux 
 and strip_typ_arg_aux = function
   | A_nexp nexp -> A_nexp (strip_nexp nexp)
   | A_typ typ -> A_typ (strip_typ typ)
-  | A_order ord -> A_order (strip_order ord)
   | A_bool nc -> A_bool (strip_n_constraint nc)
-
-and strip_order = function Ord_aux (ord_aux, _) -> Ord_aux (strip_order_aux ord_aux, Parse_ast.Unknown)
-
-and strip_order_aux = function Ord_var kid -> Ord_var (strip_kid kid) | Ord_inc -> Ord_inc | Ord_dec -> Ord_dec
 
 and strip_typ_aux : typ_aux -> typ_aux = function
   | Typ_internal_unknown -> Typ_internal_unknown
@@ -283,13 +278,13 @@ let rec typ_constraints (Typ_aux (typ_aux, _)) =
   | Typ_id _ -> []
   | Typ_var _ -> []
   | Typ_tuple typs -> List.concat (List.map typ_constraints typs)
-  | Typ_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_app (_, args) -> List.concat (List.map typ_arg_constraints args)
   | Typ_exist (_, _, typ) -> typ_constraints typ
   | Typ_fn (arg_typs, ret_typ) -> List.concat (List.map typ_constraints arg_typs) @ typ_constraints ret_typ
   | Typ_bidir (typ1, typ2) -> typ_constraints typ1 @ typ_constraints typ2
 
-and typ_arg_nexps (A_aux (typ_arg_aux, _)) =
-  match typ_arg_aux with A_nexp _ -> [] | A_typ typ -> typ_constraints typ | A_bool nc -> [nc] | A_order _ -> []
+and typ_arg_constraints (A_aux (typ_arg_aux, _)) =
+  match typ_arg_aux with A_nexp _ -> [] | A_typ typ -> typ_constraints typ | A_bool nc -> [nc]
 
 let rec typ_nexps (Typ_aux (typ_aux, _)) =
   match typ_aux with
@@ -303,11 +298,7 @@ let rec typ_nexps (Typ_aux (typ_aux, _)) =
   | Typ_bidir (typ1, typ2) -> typ_nexps typ1 @ typ_nexps typ2
 
 and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> [n]
-  | A_typ typ -> typ_nexps typ
-  | A_bool nc -> constraint_nexps nc
-  | A_order ord -> []
+  match typ_arg_aux with A_nexp n -> [n] | A_typ typ -> typ_nexps typ | A_bool nc -> constraint_nexps nc
 
 and constraint_nexps (NC_aux (nc_aux, l)) =
   match nc_aux with
@@ -338,7 +329,6 @@ and replace_nexp_typ_arg nexp nexp' (A_aux (typ_arg_aux, l) as arg) =
   | A_nexp n -> if Nexp.compare n nexp == 0 then A_aux (A_nexp nexp', l) else arg
   | A_typ typ -> A_aux (A_typ (replace_nexp_typ nexp nexp' typ), l)
   | A_bool nc -> A_aux (A_bool (replace_nexp_nc nexp nexp' nc), l)
-  | A_order _ -> arg
 
 and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
   let rep_nc = replace_nexp_nc nexp nexp' in
@@ -371,7 +361,6 @@ and replace_nc_typ_arg nc nc' (A_aux (typ_arg_aux, l) as arg) =
   | A_nexp _ -> arg
   | A_typ typ -> A_aux (A_typ (replace_nc_typ nc nc' typ), l)
   | A_bool nc'' -> if NC.compare nc nc'' == 0 then A_aux (A_bool nc', l) else arg
-  | A_order _ -> arg
 
 (* Return a KidSet containing all the type variables appearing in
    nexp, where nexp occurs underneath a Nexp_exp, i.e. 2^nexp *)
@@ -689,8 +678,8 @@ end = struct
         ("range", [K_int; K_int]);
         ("atom", [K_int]);
         ("implicit", [K_int]);
-        ("vector", [K_int; K_order; K_type]);
-        ("bitvector", [K_int; K_order]);
+        ("vector", [K_int; K_type]);
+        ("bitvector", [K_int]);
         ("register", [K_type]);
         ("bit", []);
         ("unit", []);
@@ -793,7 +782,6 @@ end = struct
       | kopt :: kopts, (A_aux (A_nexp _, _) as arg) :: args when is_int_kopt kopt ->
           List.map (constraint_subst (kopt_kid kopt) arg) (subst_args kopts args)
       | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt -> subst_args kopts args
-      | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt -> subst_args kopts args
       | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt -> subst_args kopts args
       | [], [] -> ncs
       | _, A_aux (_, l) :: _ ->
@@ -834,9 +822,6 @@ end = struct
       | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
           let typ_arg, ncs = subst_args env l kopts args in
           (typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg, ncs)
-      | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt ->
-          let typ_arg, ncs = subst_args env l kopts args in
-          (typ_arg_subst (kopt_kid kopt) (arg_order arg) typ_arg, ncs)
       | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
           let typ_arg, ncs = subst_args env l kopts args in
           (typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs)
@@ -913,7 +898,6 @@ end = struct
     match typ_arg_aux with
     | A_nexp nexp -> wf_nexp ~exs env nexp
     | A_typ typ -> wf_typ' ~exs env typ
-    | A_order ord -> wf_order env ord
     | A_bool nc -> wf_constraint ~exs env nc
 
   and wf_nexp ?(exs = KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
@@ -943,19 +927,6 @@ end = struct
         wf_nexp ~exs env nexp2
     | Nexp_exp nexp -> wf_nexp ~exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
     | Nexp_neg nexp -> wf_nexp ~exs env nexp
-
-  and wf_order env (Ord_aux (ord_aux, l)) =
-    match ord_aux with
-    | Ord_var kid -> begin
-        match get_typ_var kid env with
-        | K_order -> ()
-        | kind ->
-            typ_error env l
-              ("Order is badly formed, " ^ string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind
-             ^ " but should have kind Order"
-              )
-      end
-    | Ord_inc | Ord_dec -> ()
 
   and wf_constraint ?(exs = KidSet.empty) env (NC_aux (nc_aux, l) as nc) =
     wf_debug "constraint" string_of_n_constraint nc exs;
@@ -1123,7 +1094,6 @@ end = struct
     | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
     | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
     | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
-    | arg -> A_aux (arg, l)
 
   and add_constraint ?reason constr env =
     let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
@@ -1443,8 +1413,6 @@ end = struct
             mk_typ_arg (A_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
         | QI_aux (QI_id kopt, _) :: qis when is_typ_kopt kopt ->
             mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
-        | QI_aux (QI_id kopt, _) :: qis when is_order_kopt kopt ->
-            mk_typ_arg (A_order (mk_ord (Ord_var (kopt_kid kopt)))) :: record_typ_args qis
         | _ :: qis -> record_typ_args qis
       in
       let rectyp =
@@ -1607,7 +1575,6 @@ end = struct
 
   let set_default_order o env =
     match o with
-    | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
     | Ord_aux (_, l) -> (
         match env.default_order with
         | None -> { env with default_order = Some o }
@@ -1657,8 +1624,8 @@ let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) = wf_binding l env 
 let default_order_error_string =
   "No default Order (if you have set a default Order, move it earlier in the specification)"
 
-let dvector_typ env n typ = vector_typ n (Env.get_default_order env) typ
-let bits_typ env n = bitvector_typ n (Env.get_default_order env)
+let dvector_typ env n typ = vector_typ n typ
+let bits_typ env n = bitvector_typ n
 
 let add_existential l kopts nc env =
   let env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts in
@@ -1744,20 +1711,24 @@ let destruct_range env typ =
 
 let destruct_vector env typ =
   let destruct_vector' = function
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _); A_aux (A_typ vtyp, _)]), _)
-      when string_of_id id = "vector" ->
-        Some (nexp_simp n1, o, vtyp)
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_typ vtyp, _)]), _) when string_of_id id = "vector" ->
+        Some (nexp_simp n1, vtyp)
     | _ -> None
   in
   destruct_vector' (Env.expand_synonyms env typ)
 
 let destruct_bitvector env typ =
   let destruct_bitvector' = function
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _)]), _) when string_of_id id = "bitvector" ->
-        Some (nexp_simp n1, o)
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _)]), _) when string_of_id id = "bitvector" -> Some (nexp_simp n1)
     | _ -> None
   in
   destruct_bitvector' (Env.expand_synonyms env typ)
+
+let vector_start_index env typ =
+  let len, _ = vector_typ_args_of typ in
+  match Env.get_default_order env with
+  | Ord_aux (Ord_inc, _) -> nint 0
+  | Ord_aux (Ord_dec, _) -> nexp_simp (nminus len (nint 1))
 
 let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   match typ with
@@ -1770,12 +1741,7 @@ let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and is_typ_arg_monomorphic (A_aux (arg, _)) =
-  match arg with
-  | A_nexp _ -> true
-  | A_typ typ -> is_typ_monomorphic typ
-  | A_bool _ -> true
-  | A_order (Ord_aux (Ord_dec, _)) | A_order (Ord_aux (Ord_inc, _)) -> true
-  | A_order (Ord_aux (Ord_var _, _)) -> false
+  match arg with A_nexp _ -> true | A_typ typ -> is_typ_monomorphic typ | A_bool _ -> true
 
 (**************************************************************************)
 (* 2. Subtyping and constraint solving                                    *)
@@ -1936,13 +1902,6 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
       Id.compare f1 f2 = 0 && List.for_all2 nexp_identical args1 args2
   | _, _ -> false
 
-let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
-  match (ord1, ord2) with
-  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Ord_inc, Ord_inc -> true
-  | Ord_dec, Ord_dec -> true
-  | _, _ -> false
-
 let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   match (nc1, nc2) with
   | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
@@ -1966,7 +1925,6 @@ and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
   match (arg1, arg2) with
   | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
   | A_typ typ1, A_typ typ2 -> typ_identical typ1 typ2
-  | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
   | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
   | _, _ -> false
 
@@ -2060,7 +2018,6 @@ and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as 
   match (aux1, aux2) with
   | A_typ typ1, A_typ typ2 -> unify_typ l env goals typ1 typ2
   | A_nexp nexp1, A_nexp nexp2 -> unify_nexp l env goals nexp1 nexp2
-  | A_order ord1, A_order ord2 -> unify_order l goals ord1 ord2
   | A_bool nc1, A_bool nc2 -> unify_constraint l env goals nc1 nc2
   | _, _ ->
       unify_error l
@@ -2104,14 +2061,6 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
   | NC_false, NC_false -> KBindings.empty
   | _, _ ->
       unify_error l ("Could not unify constraints " ^ string_of_n_constraint nc1 ^ " and " ^ string_of_n_constraint nc2)
-
-and unify_order l goals (Ord_aux (aux1, _) as ord1) (Ord_aux (aux2, _) as ord2) =
-  typ_print (lazy (Util.("Unify order " |> magenta |> clear) ^ string_of_order ord1 ^ " and " ^ string_of_order ord2));
-  match (aux1, aux2) with
-  | Ord_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_order ord2)
-  | Ord_inc, Ord_inc -> KBindings.empty
-  | Ord_dec, Ord_dec -> KBindings.empty
-  | _, _ -> unify_error l ("Could not unify " ^ string_of_order ord1 ^ " and " ^ string_of_order ord2)
 
 and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_aux2, _) as nexp2) =
   typ_debug
@@ -2285,9 +2234,9 @@ let ambiguous_vars typ =
 let rec is_typ_inhabited env (Typ_aux (aux, l) as typ) =
   match aux with
   | Typ_tuple typs -> List.for_all (is_typ_inhabited env) typs
-  | Typ_app (id, [A_aux (A_nexp len, _); _]) when Id.compare id (mk_id "bitvector") = 0 ->
+  | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
       prove __POS__ env (nc_gteq len (nint 0))
-  | Typ_app (id, [A_aux (A_nexp len, _); _; A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
+  | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
       prove __POS__ env (nc_gteq len (nint 0))
   | Typ_app (id, _) when Id.compare id (mk_id "list") = 0 -> true
   | Typ_app (id, args) when Env.is_variant id env ->
@@ -2390,7 +2339,6 @@ and kid_order_arg kind_map (A_aux (aux, l)) =
   | A_typ typ -> kid_order kind_map typ
   | A_nexp nexp -> kid_order_nexp kind_map nexp
   | A_bool nc -> kid_order_constraint kind_map nc
-  | A_order _ -> ([], kind_map)
 
 and kid_order_constraint kind_map (NC_aux (aux, l)) =
   match aux with
@@ -2454,7 +2402,7 @@ let alpha_equivalent env typ1 typ2 =
     Typ_aux (relabelled_aux, l)
   and relabel_arg (A_aux (aux, l) as arg) =
     (* FIXME relabel constraint *)
-    match aux with A_nexp _ | A_order _ | A_bool _ -> arg | A_typ typ -> A_aux (A_typ (relabel typ), l)
+    match aux with A_nexp _ | A_bool _ -> arg | A_typ typ -> A_aux (A_typ (relabel typ), l)
   in
 
   let typ1 = relabel (Env.expand_synonyms env typ1) in
@@ -2602,7 +2550,6 @@ and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
       let check = nc_eq n1 n2 in
       if not (prove __POS__ env check) then raise_failed_constraint check
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
-  | A_order ord1, A_order ord2 when ord_identical ord1 ord2 -> ()
   | A_bool nc1, A_bool nc2 ->
       let check = nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1) in
       if not (prove __POS__ env check) then raise_failed_constraint check
@@ -2650,7 +2597,7 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
           when string_of_id id = "atom" && Kid.compare v v' = 0 ->
             true
         | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "atom" -> prove __POS__ env (nc_eq (nvar v) n)
-        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _); _]) when string_of_id id = "bitvector" ->
+        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]) when string_of_id id = "bitvector" ->
             Kid.compare v v' = 0
         | _ -> false
       in
@@ -2805,16 +2752,8 @@ let infer_lit env (L_aux (lit_aux, l)) =
   | L_false -> atom_bool_typ nc_false
   | L_string _ -> string_typ
   | L_real _ -> real_typ
-  | L_bin str -> begin
-      match Env.get_default_order env with
-      | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) -> bits_typ env (nint (String.length str))
-      | Ord_aux (Ord_var _, _) -> typ_error env l default_order_error_string
-    end
-  | L_hex str -> begin
-      match Env.get_default_order env with
-      | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) -> bits_typ env (nint (String.length str * 4))
-      | Ord_aux (Ord_var _, _) -> typ_error env l default_order_error_string
-    end
+  | L_bin str -> bits_typ env (nint (String.length str))
+  | L_hex str -> bits_typ env (nint (String.length str * 4))
   | L_undef -> typ_error env l "Cannot infer the type of undefined"
 
 let instantiate_simple_equations =
@@ -2841,32 +2780,28 @@ let instantiate_simple_equations =
   in
   inst_from_eq
 
-type destructed_vector = Destruct_vector of nexp * order * typ | Destruct_bitvector of nexp * order
+type destructed_vector = Destruct_vector of nexp * typ | Destruct_bitvector of nexp
 
 let destruct_any_vector_typ ?(allow_unknown = false) l env typ =
   let destruct_any_vector_typ' l = function
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _)]), _) when string_of_id id = "bitvector" ->
-        Destruct_bitvector (n1, o)
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _); A_aux (A_typ vtyp, _)]), _)
-      when string_of_id id = "vector" ->
-        Destruct_vector (n1, o, vtyp)
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _)]), _) when string_of_id id = "bitvector" -> Destruct_bitvector n1
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_typ vtyp, _)]), _) when string_of_id id = "vector" ->
+        Destruct_vector (n1, vtyp)
     | typ -> typ_error env l ("Expected vector or bitvector type, got " ^ string_of_typ typ)
   in
   destruct_any_vector_typ' l (Env.expand_synonyms env typ)
 
 let destruct_vector_typ l env typ =
   let destruct_vector_typ' l = function
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _); A_aux (A_typ vtyp, _)]), _)
-      when string_of_id id = "vector" ->
-        (n1, o, vtyp)
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_typ vtyp, _)]), _) when string_of_id id = "vector" ->
+        (n1, vtyp)
     | typ -> typ_error env l ("Expected vector type, got " ^ string_of_typ typ)
   in
   destruct_vector_typ' l (Env.expand_synonyms env typ)
 
 let destruct_bitvector_typ l env typ =
   let destruct_bitvector_typ' l = function
-    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _); A_aux (A_order o, _)]), _) when string_of_id id = "bitvector" ->
-        (n1, o)
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _)]), _) when string_of_id id = "bitvector" -> n1
     | typ -> typ_error env l ("Expected bitvector type, got " ^ string_of_typ typ)
   in
   destruct_bitvector_typ' l (Env.expand_synonyms env typ)
@@ -3084,25 +3019,24 @@ let same_bindings env lhs rhs =
     )
 
 let bitvector_typ_from_range l env n m =
-  let len, order =
+  let len =
     match Env.get_default_order env with
     | Ord_aux (Ord_dec, _) ->
-        if Big_int.greater_equal n m then (Big_int.sub (Big_int.succ n) m, dec_ord)
+        if Big_int.greater_equal n m then Big_int.sub (Big_int.succ n) m
         else
           typ_error env l
             (Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
                (Big_int.to_string n) (Big_int.to_string m)
             )
     | Ord_aux (Ord_inc, _) ->
-        if Big_int.less_equal n m then (Big_int.sub (Big_int.succ m) n, inc_ord)
+        if Big_int.less_equal n m then Big_int.sub (Big_int.succ m) n
         else
           typ_error env l
             (Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
                (Big_int.to_string n) (Big_int.to_string m)
             )
-    | _ -> typ_error env l default_order_error_string
   in
-  bitvector_typ (nconstant len) order
+  bitvector_typ (nconstant len)
 
 let bind_pattern_vector_subranges (P_aux (_, (l, _)) as pat) env =
   let id_ranges = pattern_vector_subranges pat in
@@ -3547,14 +3481,14 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       let checked_body = crule check_exp env body typ in
       annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
   | E_vector vec, _ ->
-      let len, ord, vtyp =
+      let len, vtyp =
         match destruct_any_vector_typ l env typ with
-        | Destruct_vector (len, ord, vtyp) -> (len, ord, vtyp)
-        | Destruct_bitvector (len, ord) -> (len, ord, bit_typ)
+        | Destruct_vector (len, vtyp) -> (len, vtyp)
+        | Destruct_bitvector len -> (len, bit_typ)
       in
       let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
       if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
-      else typ_error env l "List length didn't match" (* FIXME: improve error message *)
+      else typ_error env l "Vector literal with incorrect length" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
       if is_typ_monomorphic typ || Env.polymorphic_undefineds env then
         if is_typ_inhabited env (Env.expand_synonyms env typ) || Env.polymorphic_undefineds env then
@@ -4043,9 +3977,8 @@ and bind_vector_concat_generic :
   let typ_opt =
     Option.bind typ_opt (fun typ ->
         match destruct_any_vector_typ l env typ with
-        | Destruct_vector (len, order, elem_typ) ->
-            Option.map (fun l -> (l, order, Some elem_typ)) (solve_unique env len)
-        | Destruct_bitvector (len, order) -> Option.map (fun l -> (l, order, None)) (solve_unique env len)
+        | Destruct_vector (len, elem_typ) -> Option.map (fun l -> (l, Some elem_typ)) (solve_unique env len)
+        | Destruct_bitvector len -> Option.map (fun l -> (l, None)) (solve_unique env len)
     )
   in
 
@@ -4074,12 +4007,12 @@ and bind_vector_concat_generic :
     (* Will be none if the subpatterns are bitvectors *)
     let elem_typ =
       match typ_opt with
-      | Some (_, _, elem_typ) -> elem_typ
+      | Some (_, elem_typ) -> elem_typ
       | None -> (
           match List.find_opt Result.is_ok inferred_pats with
           | Some (Ok pat) -> begin
               match destruct_any_vector_typ l env (funcs.typ_of pat) with
-              | Destruct_vector (_, _, t) -> Some t
+              | Destruct_vector (_, t) -> Some t
               | Destruct_bitvector _ -> None
             end
           | _ -> typ_error env l "Could not infer type of subpatterns in vector concatenation pattern"
@@ -4109,7 +4042,7 @@ and bind_vector_concat_generic :
           end;
           begin
             match typ_opt with
-            | Some (total_len, order, _) -> (Some (total_len, order, first_uninferred), List.map Result.get_ok rest)
+            | Some (total_len, _) -> (Some (total_len, first_uninferred), List.map Result.get_ok rest)
             | None -> raise exn
           end
       | _ -> (None, [])
@@ -4126,7 +4059,7 @@ and bind_vector_concat_generic :
     | Some elem_typ ->
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
-          let len', _, elem_typ' = destruct_vector_typ l env (funcs.typ_of pat) in
+          let len', elem_typ' = destruct_vector_typ l env (funcs.typ_of pat) in
           let len' = check_constant_len l len' in
           typ_equality l env elem_typ elem_typ';
           nsum len len'
@@ -4136,13 +4069,11 @@ and bind_vector_concat_generic :
         let inferred_len = nexp_simp (nsum before_len after_len) in
         begin
           match uninferred with
-          | Some (total_len, order, uninferred_pat) ->
+          | Some (total_len, uninferred_pat) ->
               let total_len = nconstant total_len in
               let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let checked_pat, env, guards' =
-                funcs.bind env uninferred_pat (vector_typ uninferred_len order elem_typ)
-              in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len order elem_typ),
+              let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
+              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
                 env,
                 guards' @ guards
               )
@@ -4151,7 +4082,7 @@ and bind_vector_concat_generic :
     | None ->
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
-          let len', _ = destruct_bitvector_typ l env (funcs.typ_of pat) in
+          let len' = destruct_bitvector_typ l env (funcs.typ_of pat) in
           let len' = check_constant_len l len' in
           nsum len len'
         in
@@ -4160,11 +4091,11 @@ and bind_vector_concat_generic :
         let inferred_len = nexp_simp (nsum before_len after_len) in
         begin
           match uninferred with
-          | Some (total_len, order, uninferred_pat) ->
+          | Some (total_len, uninferred_pat) ->
               let total_len = nconstant total_len in
               let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len order) in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len order),
+              let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
+              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
                 env,
                 guards' @ guards
               )
@@ -4219,7 +4150,7 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
            ^ string_of_kid kid
             )
     end
-  | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0 ->
+  | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0 && List.compare_lengths tpats typs = 0 ->
       let env, args =
         List.fold_right2
           (fun tp arg (env, args) ->
@@ -4241,7 +4172,6 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   | _, A_typ typ ->
       let env, typ' = bind_typ_pat env typ_pat typ in
       (env, A_aux (A_typ typ', l_arg))
-  | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ ->
       typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
 
@@ -4350,13 +4280,13 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
       let inferred_v_lexp = infer_lexp env v_lexp in
       let (Typ_aux (v_typ_aux, _)) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
       match v_typ_aux with
-      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
+      | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp1 = infer_exp env exp1 in
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
           let slice_len, check =
-            match ord with
+            match Env.get_default_order env with
             | Ord_aux (Ord_inc, _) ->
                 ( nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
                   nc_and (nc_and (nc_lteq (nint 0) nexp1) (nc_lteq nexp1 nexp2)) (nc_lt nexp2 len)
@@ -4365,11 +4295,9 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
                 ( nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
                   nc_and (nc_and (nc_lteq (nint 0) nexp2) (nc_lteq nexp2 nexp1)) (nc_lt nexp1 len)
                 )
-            | Ord_aux (Ord_var _, _) ->
-                typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
-            annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
+            annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len)
           else typ_raise env l (Err_failed_constraint (check, Env.get_locals env, Env.get_constraints env))
       | _ -> typ_error env l "Cannot assign slice of non vector type"
     end
@@ -4377,15 +4305,14 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
       let inferred_v_lexp = infer_lexp env v_lexp in
       let (Typ_aux (v_typ_aux, _)) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
       match v_typ_aux with
-      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order _, _); A_aux (A_typ elem_typ, _)])
-        when Id.compare id (mk_id "vector") = 0 ->
+      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LE_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else typ_raise env l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
-      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order _, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
+      | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
@@ -4410,19 +4337,16 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
     end
   | LE_vector_concat [] -> typ_error env l "Cannot have empty vector concatenation l-expression"
   | LE_vector_concat (v_lexp :: v_lexps) -> begin
-      let sum_vector_lengths first_ord first_elem_typ acc (Typ_aux (v_typ_aux, _)) =
+      let sum_vector_lengths first_elem_typ acc (Typ_aux (v_typ_aux, _)) =
         match v_typ_aux with
-        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
-          when Id.compare id (mk_id "vector") = 0 && ord_identical ord first_ord ->
+        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
             typ_equality l env elem_typ first_elem_typ;
             nsum acc len
         | _ -> typ_error env l "Vector concatentation l-expression must only contain vector types of the same order"
       in
-      let sum_bitvector_lengths first_ord acc (Typ_aux (v_typ_aux, _)) =
+      let sum_bitvector_lengths acc (Typ_aux (v_typ_aux, _)) =
         match v_typ_aux with
-        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
-          when Id.compare id (mk_id "bitvector") = 0 && ord_identical ord first_ord ->
-            nsum acc len
+        | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 -> nsum acc len
         | _ ->
             typ_error env l "Bitvector concatentation l-expression must only contain bitvector types of the same order"
       in
@@ -4431,13 +4355,12 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
       let (Typ_aux (v_typ_aux, _) as v_typ) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
       let v_typs = List.map (fun lexp -> Env.expand_synonyms env (lexp_typ_of lexp)) inferred_v_lexps in
       match v_typ_aux with
-      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
-        when Id.compare id (mk_id "vector") = 0 ->
-          let len = List.fold_left (sum_vector_lengths ord elem_typ) len v_typs in
-          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (vector_typ (nexp_simp len) ord elem_typ)
-      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
-          let len = List.fold_left (sum_bitvector_lengths ord) len v_typs in
-          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len) ord)
+      | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
+          let len = List.fold_left (sum_vector_lengths elem_typ) len v_typs in
+          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (vector_typ (nexp_simp len) elem_typ)
+      | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
+          let len = List.fold_left sum_bitvector_lengths len v_typs in
+          annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len))
       | _ ->
           typ_error env l
             ("Vector concatentation l-expression must only contain bitvector or vector types, found "
@@ -4624,8 +4547,6 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
         match ord with
         | Ord_aux (Ord_inc, _) -> (f, t, false)
         | Ord_aux (Ord_dec, _) -> (t, f, true (* reverse direction to typechecking downto as upto loop *))
-        | Ord_aux (Ord_var _, _) ->
-            typ_error env l "Cannot check a loop with variable direction!" (* This should never happen *)
       in
       let inferred_f = irule infer_exp env f in
       let inferred_t = irule infer_exp env t in
@@ -5207,19 +5128,18 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
       | Enum enum -> (annot_mpat (MP_id v) enum, env, [])
     end
   | MP_vector_subrange (id, n, m) ->
-      let len, order =
+      let len =
         match Env.get_default_order env with
         | Ord_aux (Ord_dec, _) ->
-            if Big_int.greater_equal n m then (Big_int.sub (Big_int.succ n) m, dec_ord)
+            if Big_int.greater_equal n m then Big_int.sub (Big_int.succ n) m
             else
               typ_error env l
                 (Printf.sprintf "%s must be greater than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
         | Ord_aux (Ord_inc, _) ->
-            if Big_int.less_equal n m then (Big_int.sub (Big_int.succ m) n, inc_ord)
+            if Big_int.less_equal n m then Big_int.sub (Big_int.succ m) n
             else
               typ_error env l
                 (Printf.sprintf "%s must be less than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
-        | _ -> typ_error env l default_order_error_string
       in
       begin
         match Env.lookup_id id env with
@@ -5227,16 +5147,14 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
             match Env.lookup_id id other_env with
             | Unbound _ ->
                 if allow_unknown then
-                  (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, [])
+                  (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len)), env, [])
                 else typ_error env l "Cannot infer identifier type in vector subrange pattern"
             | Local (Immutable, other_typ) ->
-                let id_len, id_order = destruct_bitvector_typ l env other_typ in
-                if is_order_inc id_order <> is_order_inc order then
-                  typ_error env l "Mismatching bitvector ordering in vector subrange pattern %b %b";
+                let id_len = destruct_bitvector_typ l env other_typ in
                 begin
                   match id_len with
                   | Nexp_aux (Nexp_constant id_len, _) when Big_int.greater_equal id_len len ->
-                      (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len) order), env, [])
+                      (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len)), env, [])
                   | _ ->
                       typ_error env l
                         (Printf.sprintf "%s must have a constant length greater than or equal to %s" (string_of_id id)
@@ -5620,9 +5538,6 @@ let kinded_id_arg kind_id =
   let typ_arg l arg = A_aux (arg, l) in
   match kind_id with
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> typ_arg (kid_loc kid) (A_nexp (nvar kid))
-  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) ->
-      let l = kid_loc kid in
-      typ_arg l (A_order (Ord_aux (Ord_var kid, l)))
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) -> typ_arg (kid_loc kid) (A_typ (mk_typ (Typ_var kid)))
   | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) -> typ_arg (kid_loc kid) (A_bool (nc_var kid))
 
@@ -5683,7 +5598,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       begin
         match typ with
         (* The type of a bitfield must be a constant-width bitvector *)
-        | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _); A_aux (A_order order, _)]), _)
+        | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _)]), _)
           when string_of_id v = "bitvector" ->
             let rec expand_range_synonyms = function
               | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
@@ -5698,18 +5613,10 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             let ranges =
               List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
             in
-            let def_annot =
-              (* Remember that the record definition came from a bitfield for later rewrites
-                 (although only if we are using a bitvector type of default order,
-                 so that we can store only the width in the attribute) *)
-              match Env.get_default_order_option env with
-              | Some order' when order_compare order order' = 0 ->
-                  add_def_attribute l "bitfield" (Big_int.to_string size) def_annot
-              | _ -> def_annot
-            in
+            let def_annot = add_def_attribute l "bitfield" (Big_int.to_string size) def_annot in
             let defs =
               DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
-              :: Bitfield.macro id size order ranges
+              :: Bitfield.macro id size (Env.get_default_order env) ranges
             in
             let defs =
               if !Initial_check.opt_undefined_gen then Initial_check.generate_undefineds IdSet.empty defs else defs

@@ -151,11 +151,7 @@ and typ_ids' (Typ_aux (aux, _)) =
   | Typ_exist (_, _, typ) -> typ_ids' typ
 
 and typ_arg_ids' (A_aux (aux, _)) =
-  match aux with
-  | A_typ typ -> typ_ids' typ
-  | A_nexp nexp -> nexp_ids' nexp
-  | A_bool nc -> constraint_ids' nc
-  | A_order _ -> IdSet.empty
+  match aux with A_typ typ -> typ_ids' typ | A_nexp nexp -> nexp_ids' nexp | A_bool nc -> constraint_ids' nc
 
 let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
 

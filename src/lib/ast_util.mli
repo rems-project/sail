@@ -132,13 +132,15 @@ val is_unbound : 'a lvar -> bool
 (** Note: Partial function -- fails for {!Unbound} lvars *)
 val lvar_typ : ?loc:l -> 'a lvar -> 'a
 
+val is_order_inc : order -> bool
+val is_order_dec : order -> bool
+
 (** {1 Functions for building and destructuring untyped AST elements} *)
 
 (** {2 Functions for building untyped AST elements} *)
 
 val mk_id : string -> id
 val mk_kid : string -> kid
-val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
@@ -166,16 +168,11 @@ val mk_def : ?loc:l -> 'a def_aux -> 'a def
 (** Mapping patterns are a subset of patterns, so we can always convert one to the other *)
 val pat_of_mpat : 'a mpat -> 'a pat
 
-val inc_ord : order
-val dec_ord : order
-val order_compare : order -> order -> int
-
 (** {2 Unwrap aux constructors} *)
 
 val unaux_exp : 'a exp -> 'a exp_aux
 val unaux_pat : 'a pat -> 'a pat_aux
 val unaux_nexp : nexp -> nexp_aux
-val unaux_order : order -> order_aux
 val unaux_typ : typ -> typ_aux
 val unaux_kind : kind -> kind_aux
 val unaux_constraint : n_constraint -> n_constraint_aux
@@ -195,7 +192,6 @@ val kopt_kid : kinded_id -> kid
 val kopt_kind : kinded_id -> kind
 
 val is_int_kopt : kinded_id -> bool
-val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool
 
@@ -207,7 +203,6 @@ val mk_id_typ : id -> typ
 
 val is_typ_arg_nexp : typ_arg -> bool
 val is_typ_arg_typ : typ_arg -> bool
-val is_typ_arg_order : typ_arg -> bool
 val is_typ_arg_bool : typ_arg -> bool
 
 (** {2 Sail built-in types} *)
@@ -226,8 +221,8 @@ val register_typ : typ -> typ
 val unit_typ : typ
 val string_typ : typ
 val real_typ : typ
-val vector_typ : nexp -> order -> typ -> typ
-val bitvector_typ : nexp -> order -> typ
+val vector_typ : nexp -> typ -> typ
+val bitvector_typ : nexp -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ
@@ -300,7 +295,6 @@ val nc_var : kid -> n_constraint
 (** {2 Functions for building type arguments}*)
 
 val arg_nexp : ?loc:l -> nexp -> typ_arg
-val arg_order : ?loc:l -> order -> typ_arg
 val arg_typ : ?loc:l -> typ -> typ_arg
 val arg_bool : ?loc:l -> n_constraint -> typ_arg
 val arg_kopt : kinded_id -> typ_arg
@@ -437,7 +431,6 @@ val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_kind_aux : kind_aux -> string
 val string_of_kind : kind -> string
-val string_of_order : order -> string
 val string_of_nexp : nexp -> string
 val string_of_typ : typ -> string
 val string_of_typ_arg : typ_arg -> string
@@ -483,12 +476,8 @@ val int_of_nexp_opt : nexp -> Big_int.num option
 val lexp_to_exp : 'a lexp -> 'a exp
 
 val typ_app_args_of : typ -> string * typ_arg_aux list * Ast.l
-val vector_typ_args_of : typ -> nexp * order * typ
-val vector_start_index : typ -> nexp
+val vector_typ_args_of : typ -> nexp * typ
 
-val is_order_inc : order -> bool
-
-val kopts_of_order : order -> KOptSet.t
 val kopts_of_nexp : nexp -> KOptSet.t
 val kopts_of_typ : typ -> KOptSet.t
 val kopts_of_typ_arg : typ_arg -> KOptSet.t
@@ -583,7 +572,6 @@ val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a ast -> (As
 
 val nexp_subst : kid -> typ_arg -> nexp -> nexp
 val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
-val order_subst : kid -> typ_arg -> order -> order
 val typ_subst : kid -> typ_arg -> typ -> typ
 val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
 

@@ -591,7 +591,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                   )
             | _ -> assert false
           end
-        | Ord_aux (Ord_var _, _) -> fail "Polymorphic order in foreach"
       end
   | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
       step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
@@ -684,10 +683,10 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
       in
       begin
         match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
-        | Some (Nexp_aux (Nexp_constant n, _), _, _) -> vector_concat_match n
+        | Some (Nexp_aux (Nexp_constant n, _), _) -> vector_concat_match n
         | None -> begin
             match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
-            | Some (Nexp_aux (Nexp_constant n, _), _) -> vector_concat_match n
+            | Some (Nexp_aux (Nexp_constant n, _)) -> vector_concat_match n
             | _ ->
                 failwith
                   ("Bad bitvector annotation for bitvector concatenation pattern "

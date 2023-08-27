@@ -432,11 +432,10 @@ module Make (C : Config) = struct
     | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) -> begin
         let bitstring = List.map value_of_aval_bit avals in
         let len = List.length avals in
-        match destruct_bitvector ctx.tc_env typ with
-        | Some (_, Ord_aux (Ord_inc, _)) -> ([], V_lit (VL_bits (bitstring, false), CT_fbits (len, false)), [])
-        | Some (_, Ord_aux (Ord_dec, _)) -> ([], V_lit (VL_bits (bitstring, true), CT_fbits (len, true)), [])
-        | Some _ -> raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
-        | None -> raise (Reporting.err_general l "Encountered vector literal without vector type")
+        match (destruct_bitvector ctx.tc_env typ, Env.get_default_order ctx.tc_env) with
+        | Some _, Ord_aux (Ord_inc, _) -> ([], V_lit (VL_bits (bitstring, false), CT_fbits (len, false)), [])
+        | Some _, Ord_aux (Ord_dec, _) -> ([], V_lit (VL_bits (bitstring, true), CT_fbits (len, true)), [])
+        | None, _ -> raise (Reporting.err_general l "Encountered vector literal without vector type")
       end
     (* Convert a bitvector literal that is larger than 64-bits to a
        variable size bitvector, converting it in 64-bit chunks. *)
@@ -459,15 +458,10 @@ module Make (C : Config) = struct
           [iclear (CT_lbits true) gs]
         )
     (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
-    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _)]), _))
-      when string_of_id id = "bitvector" && List.length avals <= 64 ->
+    | AV_vector (avals, Typ_aux (Typ_app (id, _), _)) when string_of_id id = "bitvector" && List.length avals <= 64 ->
+        let ord = Env.get_default_order ctx.tc_env in
         let len = List.length avals in
-        let direction =
-          match ord with
-          | Ord_aux (Ord_inc, _) -> false
-          | Ord_aux (Ord_dec, _) -> true
-          | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
-        in
+        let direction = match ord with Ord_aux (Ord_inc, _) -> false | Ord_aux (Ord_dec, _) -> true in
         let gs = ngensym () in
         let ctyp = CT_fbits (len, direction) in
         let mask i =
@@ -503,15 +497,10 @@ module Make (C : Config) = struct
           []
         )
     (* Compiling a vector literal that isn't a bitvector *)
-    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _); A_aux (A_typ typ, _)]), _))
-      when string_of_id id = "vector" ->
+    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_typ typ, _)]), _)) when string_of_id id = "vector" ->
+        let ord = Env.get_default_order ctx.tc_env in
         let len = List.length avals in
-        let direction =
-          match ord with
-          | Ord_aux (Ord_inc, _) -> false
-          | Ord_aux (Ord_dec, _) -> true
-          | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
-        in
+        let direction = match ord with Ord_aux (Ord_inc, _) -> false | Ord_aux (Ord_dec, _) -> true in
         let elem_ctyp = ctyp_of_typ ctx typ in
         let vector_ctyp = CT_vector (direction, elem_ctyp) in
         let gs = ngensym () in
@@ -1095,12 +1084,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
         (* We assume that all loop indices are safe to put in a CT_fint. *)
         let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
 
-        let is_inc =
-          match ord with
-          | Ord_inc -> true
-          | Ord_dec -> false
-          | Ord_var _ -> raise (Reporting.err_general l "Polymorphic loop direction in C backend")
-        in
+        let is_inc = match ord with Ord_inc -> true | Ord_dec -> false in
 
         (* Loop variables *)
         let from_setup, from_call, from_cleanup = compile_aexp ctx loop_from in
