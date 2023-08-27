@@ -70,7 +70,7 @@ $define _VECTOR_DEC
 
 $include <flow.sail>
 
-type bits ('n : Int) = bitvector('n, dec)
+type bits('n : Int) = bitvector('n, dec)
 
 val eq_bits = pure {
   ocaml: "eq_list",

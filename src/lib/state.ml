@@ -116,8 +116,6 @@ let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
         match targ with
         | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
         | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
-        | A_order (Ord_aux (Ord_inc, _)) -> "inc"
-        | A_order (Ord_aux (Ord_dec, _)) -> "dec"
         | _ -> raise (Reporting.err_typ l "Unsupported register type")
       in
       if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
@@ -171,7 +169,7 @@ let generate_initial_regstate env defs =
         | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
         | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "atom" -> string_of_nexp nexp
         | Typ_app (id, [A_aux (A_nexp nexp, _); _]) when string_of_id id = "range" -> string_of_nexp nexp
-        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _]) when string_of_id id = "bitvector" ->
+        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _)]) when string_of_id id = "bitvector" ->
             (* Output a literal binary zero value if this is a bitvector
                and the environment has a default indexing order (required
                by the typechecker for binary and hex literals) *)
@@ -181,7 +179,7 @@ let generate_initial_regstate env defs =
               if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
             in
             if literal_bitvec then "0b" ^ String.concat "" (elems len) else "[" ^ String.concat ", " (elems len) ^ "]"
-        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _; A_aux (A_typ etyp, _)])
+        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); A_aux (A_typ etyp, _)])
           when string_of_id id = "vector" ->
             (* Output a list of initial values of the vector elements. *)
             let init_elem = lookup_init_val vals etyp in
@@ -358,7 +356,7 @@ let add_regval_conv env id typ defs =
 let rec regval_convs wrap_fun (Typ_aux (t, _) as typ) =
   match t with
   | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (is_bitvector_typ typ) ->
-      let size, ord, etyp = vector_typ_args_of typ in
+      let size, etyp = vector_typ_args_of typ in
       let etyp_of, of_etyp = regval_convs wrap_fun etyp in
       ("vector_of_regval " ^ wrap_fun etyp_of, "regval_of_vector " ^ wrap_fun of_etyp)
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "list" ->
@@ -683,7 +681,7 @@ let generate_isa_lemmas env defs =
 let rec regval_convs_coq env (Typ_aux (t, _) as typ) =
   match t with
   | Typ_app _ when is_vector_typ typ && not (is_bitvector_typ typ) ->
-      let size, ord, etyp = vector_typ_args_of typ in
+      let size, etyp = vector_typ_args_of typ in
       let size = string_of_nexp (nexp_simp size) in
       let etyp_of, of_etyp = regval_convs_coq env etyp in
       ("(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)", "(fun v => regval_of_vector " ^ of_etyp ^ " v)")

@@ -1419,21 +1419,16 @@ end) : Jib_compile.Config = struct
       end
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> CT_list (convert_typ ctx typ)
     (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)]) when string_of_id id = "bitvector" ->
-        let direction =
-          match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false
-        in
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" ->
+        let direction = true in
         begin
           match nexp_simp n with
           | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
           | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
           | _ -> CT_lbits direction
         end
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector"
-      ->
-        let direction =
-          match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false
-        in
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
+        let direction = true in
         CT_vector (direction, convert_typ ctx typ)
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records ->

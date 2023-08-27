@@ -300,11 +300,10 @@ let rec lem_nexps_of_typ params_to_print (Typ_aux (t, l)) =
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1, t2) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
   | Typ_tuple ts -> List.fold_left (fun s t -> NexpSet.union s (trec t)) NexpSet.empty ts
-  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
       let m = nexp_simp m in
       if !Monomorphise.opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else trec bit_typ
-  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
-      trec elem_typ
+  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) -> trec elem_typ
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->
       NexpSet.empty
@@ -326,7 +325,6 @@ and lem_nexps_of_typ_arg params_to_print (A_aux (ta, _)) =
       let nexp = nexp_simp (orig_nexp nexp) in
       if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
   | A_typ typ -> lem_nexps_of_typ params_to_print typ
-  | A_order _ -> NexpSet.empty
   | A_bool _ -> NexpSet.empty
 
 let lem_tyvars_of_typ params_to_print typ =
@@ -357,10 +355,10 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     | _ -> app_typ params_to_print atyp_needed ty
   and app_typ params_to_print atyp_needed (Typ_aux (t, l) as ty) =
     match t with
-    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
+    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
         let tpp = string "list" ^^ space ^^ typ params_to_print true elem_typ in
         if atyp_needed then parens tpp else tpp
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         let tpp =
           if !Monomorphise.opt_mwords then string "mword " ^^ doc_nexp_lem (nexp_simp m)
           else string "list" ^^ space ^^ typ params_to_print true bit_typ
@@ -425,7 +423,6 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     match t with
     | A_typ t -> app_typ params_to_print true t
     | A_nexp n -> doc_nexp_lem (nexp_simp n)
-    | A_order o -> empty
     | A_bool _ -> empty
   in
   let top atyp_needed params_to_print env ty =
@@ -492,7 +489,7 @@ and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
   | A_typ typ -> begin
       match replace_typ_size ctxt env typ with Some typ' -> Some (rewrap (A_typ typ')) | None -> None
     end
-  | A_order _ | A_bool _ -> Some targ
+  | A_bool _ -> Some targ
 
 let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ then (try replace_typ_size ctxt env (Env.expand_synonyms env typ) with _ -> None)
@@ -1057,28 +1054,10 @@ let doc_exp_lem, doc_let_lem =
           (space ^^ doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps) ^^ space)
     | E_vector exps ->
         let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-        let start, (len, order, etyp) =
-          if is_vector_typ t || is_bitvector_typ t then (vector_start_index t, vector_typ_args_of t)
+        let _, etyp =
+          if is_vector_typ t || is_bitvector_typ t then vector_typ_args_of t
           else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
         in
-        let dir, dir_out = if is_order_inc order then (true, "true") else (false, "false") in
-        let start =
-          match nexp_simp start with
-          | Nexp_aux (Nexp_constant i, _) -> Big_int.to_string i
-          | _ -> if dir then "0" else string_of_int (List.length exps)
-        in
-        (* let expspp =
-           match exps with
-           | [] -> empty
-           | e :: es ->
-              let (expspp,_) =
-                List.fold_left
-                  (fun (pp,count) e ->
-                    (pp ^^ semi ^^ (if count = 20 then break 0 else empty) ^^
-                       expN e),
-                    if count = 20 then 0 else count + 1)
-                  (expN e,0) es in
-              align (group expspp) in *)
         let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
         let epp = brackets expspp in
         let epp, aexp_needed =
@@ -1234,7 +1213,7 @@ let doc_typquant_sorts idpp (TypQ_aux (typq, _)) =
         match qi with
         | QI_id (KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _)) -> Some (string "`len`")
         | QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)) -> Some underscore
-        | QI_id (KOpt_aux (KOpt_kind (K_aux ((K_order | K_bool), _), kid), _)) -> None
+        | QI_id (KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _)) -> None
         | QI_constraint _ -> None
       in
       if
@@ -1760,10 +1739,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
             )
     in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
-    (* TODO Assumes normalised, decreasing bitvector slices; however, since
-       start indices or indexing order do not appear in Lem type annotations,
-       this does not matter. *)
-    let ftyp = bitvector_typ (nconstant fsize) dec_ord in
+    let ftyp = bitvector_typ (nconstant fsize) in
     let reftyp =
       mk_typ
         (Typ_app

@@ -231,9 +231,8 @@ end) : Config = struct
        - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
        - If the length is less than 64, then use a small bits type, sbits.
        - If the length may be larger than 64, use a large bits type lbits. *)
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order _, _)]) when string_of_id id = "bitvector" ->
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" ->
         let direction = true in
-        (* match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
         begin
           match nexp_simp n with
           | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) ->
@@ -241,9 +240,8 @@ end) : Config = struct
           | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits (64, direction)
           | _ -> CT_lbits direction
         end
-    | Typ_app (id, [A_aux (A_nexp _, _); A_aux (A_order _, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
+    | Typ_app (id, [A_aux (A_nexp _, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
         let direction = true in
-        (* let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
         CT_vector (direction, convert_typ ctx typ)
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records ->
@@ -431,7 +429,7 @@ end) : Config = struct
     | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
     | "zeros", [_] -> begin
         match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
             let n = Big_int.to_int n in
             AE_val
@@ -440,14 +438,14 @@ end) : Config = struct
       end
     | "zero_extend", [AV_cval (v, _); _] -> begin
         match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
             AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
         | _ -> no_change
       end
     | "sign_extend", [AV_cval (v, _); _] -> begin
         match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
             AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
         | _ -> no_change
@@ -501,7 +499,7 @@ end) : Config = struct
       end
     | "replicate_bits", [AV_cval (vec, vtyp); _] -> begin
         match (destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp) with
-        | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
+        | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _)
           when Big_int.less_equal n (Big_int.of_int 64) ->
             let times = Big_int.div n m in
             if Big_int.equal (Big_int.mul m times) n then

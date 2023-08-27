@@ -76,8 +76,8 @@ val opt_ddump_spec_ast : (string * int) option ref
 
 type specialization
 
-(** Only specialize Type- and Ord- kinded polymorphism. *)
-val typ_ord_specialization : specialization
+(** Only specialize Type- kinded polymorphism. *)
+val typ_specialization : specialization
 
 (** (experimental) specialise Int-kinded definitions *)
 val int_specialization : specialization

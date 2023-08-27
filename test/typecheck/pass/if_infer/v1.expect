@@ -7,7 +7,7 @@
   [91m |[0m    Could not resolve quantifiers for bitvector_access
   [91m |[0m    [94m*[0m (0 <= 'ex233# & 'ex233# < 3)
   [91m |[0m [94m*[0m plain_vector_access
-  [91m |[0m    Could not unify vector('n, dec, 'a) and bitvector(3, dec)
+  [91m |[0m    Could not unify vector('n, 'a) and bitvector(3)
   [91m |[0m 
   [91m |[0m [93mCaused by [0m[96mpass/if_infer/v1.sail[0m:10.10-37:
   [91m |[0m 10[96m |[0m  let _ = 0b100[if R then 0 else f()];

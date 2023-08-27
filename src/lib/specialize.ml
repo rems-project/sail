@@ -72,7 +72,7 @@ open Rewriter
 
 let opt_ddump_spec_ast = ref None
 
-let is_typ_ord_arg = function A_aux (A_typ _, _) -> true | A_aux (A_order _, _) -> true | _ -> false
+let is_typ_arg = function A_aux (A_typ _, _) -> true | _ -> false
 
 type specialization = {
   is_polymorphic : kinded_id -> bool;
@@ -80,10 +80,10 @@ type specialization = {
   extern_filter : extern option -> bool;
 }
 
-let typ_ord_specialization =
+let typ_specialization =
   {
-    is_polymorphic = (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt);
-    instantiation_filter = (fun _ -> is_typ_ord_arg);
+    is_polymorphic = (fun kopt -> is_typ_kopt kopt);
+    instantiation_filter = (fun _ -> is_typ_arg);
     extern_filter = (fun _ -> false);
   }
 
@@ -122,7 +122,6 @@ and nexp_simp_typ_arg (A_aux (typ_arg_aux, l)) =
     match typ_arg_aux with
     | A_nexp n -> A_nexp (nexp_simp n)
     | A_typ typ -> A_typ (nexp_simp_typ typ)
-    | A_order ord -> A_order ord
     | A_bool nc -> A_bool (constraint_simp nc)
   in
   A_aux (typ_arg_aux, l)
@@ -196,7 +195,6 @@ let string_of_instantiation instantiation =
   and string_of_typ_arg_aux = function
     | A_nexp n -> string_of_nexp n
     | A_typ typ -> string_of_typ typ
-    | A_order o -> string_of_order o
     | A_bool nc -> string_of_n_constraint nc
   and string_of_n_constraint = function
     | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
@@ -315,11 +313,7 @@ let rec typ_frees ?(exs = KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and typ_arg_frees ?(exs = KidSet.empty) (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> KidSet.empty
-  | A_typ typ -> typ_frees ~exs typ
-  | A_order ord -> KidSet.empty
-  | A_bool _ -> KidSet.empty
+  match typ_arg_aux with A_nexp n -> KidSet.empty | A_typ typ -> typ_frees ~exs typ | A_bool _ -> KidSet.empty
 
 let rec typ_int_frees ?(exs = KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -337,7 +331,6 @@ and typ_arg_int_frees ?(exs = KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.diff (tyvars_of_nexp n) exs
   | A_typ typ -> typ_int_frees ~exs typ
-  | A_order ord -> KidSet.empty
   | A_bool _ -> KidSet.empty
 
 (* Implicit arguments have restrictions that won't hold
@@ -362,7 +355,6 @@ let kopt_arg = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> arg_nexp (nvar kid)
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) -> arg_typ (mk_typ (Typ_var kid))
   | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) -> arg_bool (nc_var kid)
-  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) -> arg_order (mk_ord (Ord_var kid))
 
 (* For numeric type arguments we have to be careful not to run into a
    situation where we have an instantiation like
@@ -668,7 +660,7 @@ let () =
   let open Interactive in
   Action
     (fun istate ->
-      let ast', env', effect_info' = specialize typ_ord_specialization istate.env istate.ast istate.effect_info in
+      let ast', env', effect_info' = specialize typ_specialization istate.env istate.ast istate.effect_info in
       { istate with ast = ast'; env = env'; effect_info = effect_info' }
     )
-  |> register_command ~name:"specialize" ~help:"Specialize Type and Order type variables in the AST"
+  |> register_command ~name:"specialize" ~help:"Specialize type variables in the AST"

@@ -124,7 +124,7 @@ let smt_target _ _ out_file ast effect_info env =
   let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
   Specialize.add_initial_calls prop_ids;
-  let ast_smt, env, effect_info = Specialize.(specialize typ_ord_specialization env ast effect_info) in
+  let ast_smt, env, effect_info = Specialize.(specialize typ_specialization env ast effect_info) in
   let ast_smt, env, effect_info =
     Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info)
   in

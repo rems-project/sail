@@ -346,7 +346,7 @@ let rewrite_ast ast =
         let typ = typ_of_annot annot in
         begin
           match typ with
-          | Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _); _]), _)
+          | Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)]), _)
             when string_of_id f = "bitvector" ->
               P_aux (P_typ (typ, P_aux (P_app (mapping, pats), annot)), annot)
           | _ -> P_aux (P_app (mapping, pats), annot)

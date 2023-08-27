@@ -153,6 +153,8 @@ module Env : sig
 
   val add_local : id -> mut * typ -> t -> t
 
+  val get_default_order : t -> order
+
   val get_default_order_option : t -> order option
 
   val add_scattered_variant : id -> typquant -> t -> t
@@ -471,8 +473,10 @@ val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) opt
 
 val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
 
-val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
-val destruct_bitvector : Env.t -> typ -> (nexp * order) option
+val destruct_vector : Env.t -> typ -> (nexp * typ) option
+val destruct_bitvector : Env.t -> typ -> nexp option
+
+val vector_start_index : Env.t -> typ -> nexp
 
 (** Construct an existential type with a guaranteed fresh
    identifier. *)

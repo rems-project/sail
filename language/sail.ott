@@ -184,7 +184,7 @@ id :: '' ::=
   | ( operator x ) :: D :: operator {{ com remove infix status }}
 
 kid :: '' ::=
-  {{ com kinded IDs: Type, Int, and Order variables }}
+  {{ com kinded IDs: Type, Int, and Bool variables }}
   {{ aux _ l }}
   | ' x :: :: var
 
@@ -199,7 +199,6 @@ kind :: 'K_' ::=
   {{ aux _ l }}
   | Type  :: :: type  {{ com kind of types  }}
   | Int   :: :: int   {{ com kind of natural number size expressions  }}
-  | Order :: :: order {{ com kind of vector order specifications  }}
   | Bool  :: :: bool  {{ com kind of constraints }}
 
 nexp :: 'Nexp_' ::=
@@ -219,7 +218,6 @@ nexp :: 'Nexp_' ::=
 order :: 'Ord_' ::=
   {{ com vector order specifications, of kind Order }}
   {{ aux _ l }}
-  | kid                                 :: :: var {{ com variable }} 
   | inc                                 :: :: inc {{ com increasing }}
   | dec                                 :: :: dec {{ com decreasing }}
   | ( order )                           :: S :: paren {{ ichlo [[order]] }}
@@ -243,7 +241,6 @@ typ_arg :: 'A_' ::=
   {{ aux _ l }}
   | nexp         :: :: nexp
   | typ          :: :: typ
-  | order        :: :: order
   | n_constraint :: :: bool
 
 n_constraint :: 'NC_' ::=
@@ -686,7 +683,6 @@ val_spec_aux :: 'VS_' ::=
     {{ ocaml  (VS_val_spec [[typschm]] [[id]] [ ( "_" , [[string]] ) ]) }} {{ lem }} {{ isa }}
   | val id = { string1 = string'1 , ... , stringn = string'n } : typschm :: S :: extern_rename_some
     {{ ichlo }}
-
 
 default_spec :: 'DT_' ::=
   {{ com default kinding or typing assumption }}

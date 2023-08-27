@@ -215,7 +215,6 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
     match targ with
     | A_nexp nexp -> A_aux (A_nexp (rewrite_nexp_ids env nexp), l)
     | A_typ typ -> A_aux (A_typ (rewrite_typ env typ), l)
-    | A_order ord -> A_aux (A_order ord, l)
     | A_bool nc -> A_aux (A_bool nc, l)
   in
 
@@ -444,9 +443,10 @@ let remove_vector_concat_pat pat =
     let p_aux = function
       | (P_as (P_aux (P_vector_concat pats, rannot'), rootid), decls), rannot ->
           let rtyp = Env.base_typ_of (env_of_annot rannot') (typ_of_annot rannot') in
+          let ord = Env.get_default_order (env_of_annot rannot) in
           let start, last_idx =
-            match (vector_start_index rtyp, vector_typ_args_of rtyp) with
-            | Nexp_aux (Nexp_constant start, _), (Nexp_aux (Nexp_constant length, _), ord, _) ->
+            match (vector_start_index (env_of_annot rannot) rtyp, vector_typ_args_of rtyp) with
+            | Nexp_aux (Nexp_constant start, _), (Nexp_aux (Nexp_constant length, _), _) ->
                 ( start,
                   if is_order_inc ord then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
                   else Big_int.add (Big_int.sub start length) (Big_int.of_int 1)
@@ -457,7 +457,7 @@ let remove_vector_concat_pat pat =
           in
           let rec aux typ_opt (pos, pat_acc, decl_acc) (P_aux (p, cannot), is_last) =
             let ctyp = Env.base_typ_of (env_of_annot cannot) (typ_of_annot cannot) in
-            let length, ord, _ = vector_typ_args_of ctyp in
+            let length, _ = vector_typ_args_of ctyp in
             let pos', index_j =
               match Type_check.solve_unique (env_of_annot cannot) length with
               | Some i ->
@@ -607,7 +607,7 @@ let remove_vector_concat_pat pat =
         if is_vector_typ typ || is_bitvector_typ typ then (
           match (p, vector_typ_args_of typ) with
           | P_vector ps, _ -> acc @ ps
-          | _, (nexp, _, _) -> begin
+          | _, (nexp, _) -> begin
               match Type_check.solve_unique env nexp with
               | Some length -> acc @ List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1)))
               | None -> acc @ [wild Big_int.zero]
@@ -1115,8 +1115,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   in
 
   let test_subvec_exp rootid l typ i j lits =
-    let start = vector_start_index typ in
-    let length, ord, _ = vector_typ_args_of typ in
+    let start = vector_start_index env typ in
+    let length, _ = vector_typ_args_of typ in
     let subvec_exp =
       match (start, length) with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
@@ -1148,8 +1148,9 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   (* Collect guards and let bindings *)
   let guard_bitvector_pat =
     let collect_guards_decls ps rootid t =
-      let start = vector_start_index t in
-      let _, ord, _ = vector_typ_args_of t in
+      let start = vector_start_index env t in
+      let ord = Env.get_default_order env in
+      let _, _ = vector_typ_args_of t in
       let start_idx =
         match start with
         | Nexp_aux (Nexp_constant s, _) -> s
@@ -1950,9 +1951,9 @@ let rec simple_typ (Typ_aux (typ_aux, l)) = Typ_aux (simple_typ_aux l typ_aux, l
 
 and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
-  | Typ_app (id, [_; _; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
+  | Typ_app (id, [_; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
-  | Typ_app (id, [_; _]) when Id.compare id (mk_id "bitvector") = 0 ->
+  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
@@ -1968,10 +1969,7 @@ and simple_typ_arg (A_aux (typ_arg_aux, l)) =
 
 (* This pass aims to remove all the Num quantifiers from the specification. *)
 let rewrite_simple_types env ast =
-  let is_simple = function
-    | QI_aux (QI_id kopt, annot) when is_typ_kopt kopt || is_order_kopt kopt -> true
-    | _ -> false
-  in
+  let is_simple = function QI_aux (QI_id kopt, annot) when is_typ_kopt kopt -> true | _ -> false in
   let simple_typquant (TypQ_aux (tq_aux, annot)) =
     match tq_aux with
     | TypQ_no_forall -> TypQ_aux (TypQ_no_forall, annot)
@@ -2044,12 +2042,12 @@ let rewrite_vector_concat_assignments env defs =
         let typ = Env.base_typ_of env (typ_of exp) in
         if is_vector_typ typ || is_bitvector_typ typ then (
           (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
-          let start = vector_start_index typ in
-          let _, ord, etyp = vector_typ_args_of typ in
+          let start = vector_start_index env typ in
+          let ord = Env.get_default_order env in
           let len (LE_aux (le, lannot)) =
             let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
             if is_vector_typ ltyp || is_bitvector_typ ltyp then (
-              let len, _, _ = vector_typ_args_of ltyp in
+              let len, _ = vector_typ_args_of ltyp in
               match Type_check.solve_unique (env_of_annot lannot) len with
               | Some len -> mk_exp (E_lit (mk_lit (L_num len)))
               | None -> mk_exp (E_sizeof (nexp_simp len))

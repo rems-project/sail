@@ -120,7 +120,6 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     match a_aux with
     | A_typ typ -> parens (string "fun v -> " ^^ parens (fromValueTyp typ "v"))
     | A_nexp nexp -> fromValueNexp nexp
-    | A_order order -> string ("Order_" ^ string_of_order order)
     | A_bool _ -> parens (string "boolFromInterpValue")
   and fromValueTyp (Typ_aux (typ_aux, l) as typ) arg_name =
     match typ_aux with
@@ -129,11 +128,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     (* special case bit vectors for lem *)
     | Typ_app
         ( Id_aux (Id "vector", _),
-          [
-            A_aux (A_nexp len_nexp, _);
-            A_aux (A_order (Ord_aux (Ord_dec, _)), _);
-            A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _);
-          ]
+          [A_aux (A_nexp len_nexp, _); A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _)]
         )
       when !lem_mode ->
         parens (separate space [string (maybe_zencode "bitsFromInterpValue"); string arg_name])
@@ -371,7 +366,6 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     match a_aux with
     | A_typ typ -> parens (string "fun v -> " ^^ parens (toValueTyp typ "v"))
     | A_nexp nexp -> toValueNexp nexp
-    | A_order order -> string ("Order_" ^ string_of_order order)
     | A_bool _ -> parens (string "boolToInterpValue")
   and toValueTyp (Typ_aux (typ_aux, l) as typ) arg_name =
     match typ_aux with
@@ -380,11 +374,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     (* special case bit vectors for lem *)
     | Typ_app
         ( Id_aux (Id "vector", _),
-          [
-            A_aux (A_nexp len_nexp, _);
-            A_aux (A_order (Ord_aux (Ord_dec, _)), _);
-            A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _);
-          ]
+          [A_aux (A_nexp len_nexp, _); A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _)]
         )
       when !lem_mode ->
         parens (separate space [string (maybe_zencode "bitsToInterpValue"); string arg_name])

@@ -120,7 +120,7 @@ let wavedrom_elem (label, (P_aux (_, (_, tannot)) as pat)) =
   | None -> raise Invalid_wavedrom
   | Some (env, typ) -> (
       match Type_check.destruct_bitvector env typ with
-      | Some (Nexp_aux (Nexp_constant size, _), _) ->
+      | Some (Nexp_aux (Nexp_constant size, _)) ->
           let size = Big_int.to_int size in
           wavedrom_elem_string size label pat
       | _ -> raise Invalid_wavedrom

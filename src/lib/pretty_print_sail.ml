@@ -87,7 +87,6 @@ let doc_attr attr arg =
 let doc_kopt_no_parens = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
-  | kopt when is_order_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Order"]
   | kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Bool"]
 
 let doc_kopt = function
@@ -96,7 +95,7 @@ let doc_kopt = function
 
 let doc_int n = string (Big_int.to_string n)
 
-let doc_ord (Ord_aux (o, _)) = match o with Ord_var v -> doc_kid v | Ord_inc -> string "inc" | Ord_dec -> string "dec"
+let doc_ord (Ord_aux (o, _)) = match o with Ord_inc -> string "inc" | Ord_dec -> string "dec"
 
 let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   match tpat_aux with
@@ -204,11 +203,7 @@ and doc_typ ?(simple = false) (Typ_aux (typ_aux, l)) =
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 and doc_typ_arg (A_aux (ta_aux, _)) =
-  match ta_aux with
-  | A_typ typ -> doc_typ typ
-  | A_nexp nexp -> doc_nexp nexp
-  | A_order o -> doc_ord o
-  | A_bool nc -> doc_nc nc
+  match ta_aux with A_typ typ -> doc_typ typ | A_nexp nexp -> doc_nexp nexp | A_bool nc -> doc_nc nc
 
 and doc_arg_typs = function [typ] -> doc_typ typ | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
@@ -217,8 +212,7 @@ let doc_subst (IS_aux (subst_aux, _)) =
   | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ typ
   | IS_id (id1, id2) -> doc_id id1 ^^ space ^^ equals ^^ space ^^ doc_id id2
 
-let doc_kind (K_aux (k, _)) =
-  string (match k with K_int -> "Int" | K_type -> "Type" | K_bool -> "Bool" | K_order -> "Order")
+let doc_kind (K_aux (k, _)) = string (match k with K_int -> "Int" | K_type -> "Type" | K_bool -> "Bool")
 
 let doc_kopts = separate_map space doc_kopt
 
@@ -241,8 +235,7 @@ let doc_param_quants quants =
     match qi_aux with
     | QI_id kopt when is_int_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
-    | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
-    | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
+    | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_constraint _ -> []
   in
   let qi_nc (QI_aux (qi_aux, _)) = match qi_aux with QI_constraint nc -> [nc] | _ -> [] in
@@ -667,7 +660,6 @@ let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
   | A_nexp _ -> space ^^ string sep ^^ space ^^ string "Int"
   | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
-  | A_order _ -> space ^^ string sep ^^ space ^^ string "Order"
   | A_typ _ -> empty
 
 let doc_typdef (TD_aux (td, _)) =
