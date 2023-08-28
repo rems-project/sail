@@ -1994,12 +1994,10 @@ let doc_exp, doc_let =
           enclose_record_update (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
         let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-        let order = Env.get_default_order (env_of full_exp) in
-        let start, (len, etyp) =
-          if is_vector_typ t || is_bitvector_typ t then (vector_start_index (env_of full_exp) t, vector_typ_args_of t)
+        let _, etyp =
+          if is_vector_typ t || is_bitvector_typ t then vector_typ_args_of t
           else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
         in
-        let dir, dir_out = if is_order_inc order then (true, "true") else (false, "false") in
         let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
         let epp = brackets expspp in
         let epp, aexp_needed =
