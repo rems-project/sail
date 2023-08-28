@@ -619,7 +619,7 @@ let value_of_sexpr sexpr =
   let open Jib in
   let open Value in
   function
-  | CT_fbits (n, _) -> begin
+  | CT_fbits n -> begin
       match sexpr with
       | List [Atom "_"; Atom v; Atom m] when int_of_string m = n && String.length v > 2 && String.sub v 0 2 = "bv" ->
           let v = String.sub v 2 (String.length v - 2) in

@@ -300,9 +300,9 @@ let rec string_of_ctyp = function
   | CT_fint n -> "%i" ^ string_of_int n
   | CT_float n -> "%f" ^ string_of_int n
   | CT_rounding_mode -> "%rounding_mode"
-  | CT_lbits _ -> "%bv"
-  | CT_sbits (n, _) -> "%sbv" ^ string_of_int n
-  | CT_fbits (n, _) -> "%bv" ^ string_of_int n
+  | CT_lbits -> "%bv"
+  | CT_sbits n -> "%sbv" ^ string_of_int n
+  | CT_fbits n -> "%bv" ^ string_of_int n
   | CT_constant n -> Big_int.to_string n
   | CT_bit -> "%bit"
   | CT_unit -> "%unit"
@@ -325,8 +325,8 @@ let rec string_of_ctyp = function
      ^ Util.string_of_list ", " (fun ((id, _), ctyp) -> Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp) ctors
      ^ "}"
      *)
-  | CT_vector (_, ctyp) -> "%vec(" ^ string_of_ctyp ctyp ^ ")"
-  | CT_fvector (n, _, ctyp) -> "%fvec(" ^ string_of_int n ^ ", " ^ string_of_ctyp ctyp ^ ")"
+  | CT_vector ctyp -> "%vec(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_fvector (n, ctyp) -> "%fvec(" ^ string_of_int n ^ ", " ^ string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "%list(" ^ string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "&(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly kid -> string_of_kid kid
@@ -348,16 +348,15 @@ and full_string_of_ctyp = function
       "union " ^ string_of_id id ^ "{"
       ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
       ^ "}"
-  | CT_vector (true, ctyp) -> "vector(dec, " ^ full_string_of_ctyp ctyp ^ ")"
-  | CT_vector (false, ctyp) -> "vector(inc, " ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_vector ctyp -> "vector(" ^ full_string_of_ctyp ctyp ^ ")"
+  | CT_fvector (n, ctyp) -> "fvector(" ^ string_of_int n ^ ", " ^ full_string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "list(" ^ full_string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "ref(" ^ full_string_of_ctyp ctyp ^ ")"
   | ctyp -> string_of_ctyp ctyp
 
 let string_of_value = function
-  | VL_bits ([], _) -> "UINT64_C(0)"
-  | VL_bits (bs, true) -> Sail2_values.show_bitlist bs
-  | VL_bits (bs, false) -> Sail2_values.show_bitlist (List.rev bs)
+  | VL_bits [] -> "UINT64_C(0)"
+  | VL_bits bs -> Sail2_values.show_bitlist bs
   | VL_int i -> Big_int.to_string i
   | VL_bool true -> "true"
   | VL_bool false -> "false"
@@ -395,13 +394,13 @@ let rec string_of_cval = function
   | V_tuple (members, _) -> "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
 
 let rec map_ctyp f = function
-  | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode
-    | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ ) as ctyp ->
+  | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
+    | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ ) as ctyp ->
       f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
-  | CT_vector (direction, ctyp) -> f (CT_vector (direction, map_ctyp f ctyp))
-  | CT_fvector (n, direction, ctyp) -> f (CT_fvector (n, direction, map_ctyp f ctyp))
+  | CT_vector ctyp -> f (CT_vector (map_ctyp f ctyp))
+  | CT_fvector (n, ctyp) -> f (CT_fvector (n, map_ctyp f ctyp))
   | CT_list ctyp -> f (CT_list (map_ctyp f ctyp))
   | CT_struct (id, fields) -> f (CT_struct (id, List.map (fun (id, ctyp) -> (id, map_ctyp f ctyp)) fields))
   | CT_variant (id, ctors) -> f (CT_variant (id, List.map (fun (id, ctyp) -> (id, map_ctyp f ctyp)) ctors))
@@ -409,9 +408,9 @@ let rec map_ctyp f = function
 let rec ctyp_equal ctyp1 ctyp2 =
   match (ctyp1, ctyp2) with
   | CT_lint, CT_lint -> true
-  | CT_lbits d1, CT_lbits d2 -> d1 = d2
-  | CT_sbits (m1, d1), CT_sbits (m2, d2) -> m1 = m2 && d1 = d2
-  | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
+  | CT_lbits, CT_lbits -> true
+  | CT_sbits m1, CT_sbits m2 -> m1 = m2
+  | CT_fbits m1, CT_fbits m2 -> m1 = m2
   | CT_bit, CT_bit -> true
   | CT_fint n, CT_fint m -> n = m
   | CT_float n, CT_float m -> n = m
@@ -425,8 +424,8 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 -> List.for_all2 ctyp_equal ctyps1 ctyps2
   | CT_string, CT_string -> true
   | CT_real, CT_real -> true
-  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
-  | CT_fvector (n1, d1, ctyp1), CT_fvector (n2, d2, ctyp2) -> n1 = n2 && d1 = d2 && ctyp_equal ctyp1 ctyp2
+  | CT_vector ctyp1, CT_vector ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> n1 = n2 && ctyp_equal ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_poly kid1, CT_poly kid2 -> Kid.compare kid1 kid2 = 0
@@ -444,15 +443,15 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_constant n, CT_constant m -> Big_int.compare n m
   | CT_constant _, _ -> 1
   | _, CT_constant _ -> -1
-  | CT_fbits (n, ord1), CT_fbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_fbits n, CT_fbits m -> compare n m
   | CT_fbits _, _ -> 1
   | _, CT_fbits _ -> -1
-  | CT_sbits (n, ord1), CT_sbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_sbits n, CT_sbits m -> compare n m
   | CT_sbits _, _ -> 1
   | _, CT_sbits _ -> -1
-  | CT_lbits ord1, CT_lbits ord2 -> compare ord1 ord2
-  | CT_lbits _, _ -> 1
-  | _, CT_lbits _ -> -1
+  | CT_lbits, CT_lbits -> 0
+  | CT_lbits, _ -> 1
+  | _, CT_lbits -> -1
   | CT_bit, CT_bit -> 0
   | CT_bit, _ -> 1
   | _, CT_bit -> -1
@@ -480,11 +479,10 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_compare ctyp1 ctyp2
   | CT_list _, _ -> 1
   | _, CT_list _ -> -1
-  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2)
+  | CT_vector ctyp1, CT_vector ctyp2 -> ctyp_compare ctyp1 ctyp2
   | CT_vector _, _ -> 1
   | _, CT_vector _ -> -1
-  | CT_fvector (n1, d1, ctyp1), CT_fvector (n2, d2, ctyp2) ->
-      lex_ord (compare n1 n2) (lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2))
+  | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> lex_ord (compare n1 n2) (ctyp_compare ctyp1 ctyp2)
   | CT_fvector _, _ -> 1
   | _, CT_fvector _ -> -1
   | ctyp1, ctyp2 -> String.compare (full_string_of_ctyp ctyp1) (full_string_of_ctyp ctyp2)
@@ -505,7 +503,7 @@ module CTListSet = Set.Make (CTList)
 
 let rec ctyp_vars = function
   | CT_poly kid -> KidSet.singleton kid
-  | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp -> ctyp_vars ctyp
+  | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> ctyp_vars ctyp
   | CT_tup ctyps -> List.fold_left KidSet.union KidSet.empty (List.map ctyp_vars ctyps)
   | CT_variant (_, ctors) -> List.fold_left KidSet.union KidSet.empty (List.map (fun (_, ctyp) -> ctyp_vars ctyp) ctors)
   | CT_struct (_, fields) -> List.fold_left KidSet.union KidSet.empty (List.map (fun (_, ctyp) -> ctyp_vars ctyp) fields)
@@ -513,9 +511,9 @@ let rec ctyp_vars = function
 
 let rec ctyp_suprema = function
   | CT_lint -> CT_lint
-  | CT_lbits d -> CT_lbits d
-  | CT_fbits (_, d) -> CT_lbits d
-  | CT_sbits (_, d) -> CT_lbits d
+  | CT_lbits -> CT_lbits
+  | CT_fbits _ -> CT_lbits
+  | CT_sbits _ -> CT_lbits
   | CT_fint _ -> CT_lint
   | CT_constant _ -> CT_lint
   | CT_unit -> CT_unit
@@ -533,8 +531,8 @@ let rec ctyp_suprema = function
      for nested variants... *)
   | CT_struct (id, ctors) -> CT_struct (id, ctors)
   | CT_variant (id, ctors) -> CT_variant (id, ctors)
-  | CT_vector (d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
-  | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, ctyp_suprema ctyp)
+  | CT_vector ctyp -> CT_vector (ctyp_suprema ctyp)
+  | CT_fvector (n, ctyp) -> CT_fvector (n, ctyp_suprema ctyp)
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly kid -> CT_poly kid
@@ -550,10 +548,10 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   match (ctyp1, ctyp2) with
   | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
       List.fold_left (KBindings.union merge_unifiers) KBindings.empty (List.map2 (ctyp_unify l) ctyps1 ctyps2)
-  | CT_vector (b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 -> ctyp_unify l ctyp1 ctyp2
-  | CT_vector (b1, ctyp1), CT_fvector (_, b2, ctyp2) when b1 = b2 -> ctyp_unify l ctyp1 ctyp2
-  | CT_fvector (_, b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 -> ctyp_unify l ctyp1 ctyp2
-  | CT_fvector (n1, b1, ctyp1), CT_fvector (n2, b2, ctyp2) when b1 = b2 -> ctyp_unify l ctyp1 ctyp2
+  | CT_vector ctyp1, CT_vector ctyp2 -> ctyp_unify l ctyp1 ctyp2
+  | CT_vector ctyp1, CT_fvector (_, ctyp2) -> ctyp_unify l ctyp1 ctyp2
+  | CT_fvector (_, ctyp1), CT_vector ctyp2 -> ctyp_unify l ctyp1 ctyp2
+  | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) when n1 = n2 -> ctyp_unify l ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify l ctyp1 ctyp2
   | CT_struct (id1, fields1), CT_struct (id2, fields2) when List.length fields1 == List.length fields2 ->
       List.fold_left (KBindings.union merge_unifiers) KBindings.empty
@@ -564,12 +562,12 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify l ctyp1 ctyp2
   | CT_poly kid, _ -> KBindings.singleton kid ctyp2
   | _, _ when ctyp_equal ctyp1 ctyp2 -> KBindings.empty
-  | CT_lbits _, CT_fbits _ -> KBindings.empty
-  | CT_lbits _, CT_sbits _ -> KBindings.empty
-  | CT_sbits (n, _), CT_fbits (m, _) when m <= n -> KBindings.empty
-  | CT_fbits _, CT_lbits _ -> KBindings.empty
-  | CT_sbits _, CT_lbits _ -> KBindings.empty
-  | CT_fbits (n, _), CT_sbits (m, _) when n <= m -> KBindings.empty
+  | CT_lbits, CT_fbits _ -> KBindings.empty
+  | CT_lbits, CT_sbits _ -> KBindings.empty
+  | CT_sbits n, CT_fbits m when m <= n -> KBindings.empty
+  | CT_fbits _, CT_lbits -> KBindings.empty
+  | CT_sbits _, CT_lbits -> KBindings.empty
+  | CT_fbits n, CT_sbits m when n <= m -> KBindings.empty
   | CT_lint, CT_fint _ -> KBindings.empty
   | CT_fint _, CT_lint -> KBindings.empty
   | CT_lint, CT_constant _ -> KBindings.empty
@@ -585,8 +583,8 @@ let rec ctyp_ids = function
   | CT_struct (id, ctors) | CT_variant (id, ctors) ->
       IdSet.add id (List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors)
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
-  | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
-  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit
+  | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
+  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit
   | CT_string | CT_poly _ | CT_float _ | CT_rounding_mode ->
       IdSet.empty
 
@@ -594,23 +592,23 @@ let rec subst_poly substs = function
   | CT_poly kid -> begin match KBindings.find_opt kid substs with Some ctyp -> ctyp | None -> CT_poly kid end
   | CT_tup ctyps -> CT_tup (List.map (subst_poly substs) ctyps)
   | CT_list ctyp -> CT_list (subst_poly substs ctyp)
-  | CT_vector (direction, ctyp) -> CT_vector (direction, subst_poly substs ctyp)
-  | CT_fvector (n, direction, ctyp) -> CT_fvector (n, direction, subst_poly substs ctyp)
+  | CT_vector ctyp -> CT_vector (subst_poly substs ctyp)
+  | CT_fvector (n, ctyp) -> CT_fvector (n, subst_poly substs ctyp)
   | CT_ref ctyp -> CT_ref (subst_poly substs ctyp)
   | CT_variant (id, ctors) -> CT_variant (id, List.map (fun (ctor_id, ctyp) -> (ctor_id, subst_poly substs ctyp)) ctors)
   | CT_struct (id, fields) -> CT_struct (id, List.map (fun (ctor_id, ctyp) -> (ctor_id, subst_poly substs ctyp)) fields)
-  | ( CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real | CT_lbits _ | CT_fbits _
+  | ( CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real | CT_lbits | CT_fbits _
     | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode ) as ctyp ->
       ctyp
 
 let rec is_polymorphic = function
-  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real
+  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real
   | CT_string | CT_float _ | CT_rounding_mode ->
       false
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors
-  | CT_fvector (_, _, ctyp) | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
+  | CT_fvector (_, ctyp) | CT_vector ctyp | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
   | CT_poly _ -> true
 
 let rec cval_deps = function
@@ -928,31 +926,31 @@ let rec infer_call op vs =
   | (Unsigned n | Signed n), _ -> CT_fint n
   | (Zero_extend n | Sign_extend n), [v] -> begin
       match cval_ctyp v with
-      | CT_fbits (_, ord) | CT_sbits (_, ord) -> CT_fbits (n, ord)
+      | CT_fbits _ | CT_sbits _ -> CT_fbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
     end
   | Slice n, [vec; _] -> begin
       match cval_ctyp vec with
-      | CT_fbits (_, ord) | CT_sbits (_, ord) -> CT_fbits (n, ord)
+      | CT_fbits _ | CT_sbits _ -> CT_fbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
     end
   | Sslice n, [vec; _; _] -> begin
       match cval_ctyp vec with
-      | CT_fbits (_, ord) | CT_sbits (_, ord) -> CT_sbits (n, ord)
+      | CT_fbits _ | CT_sbits _ -> CT_sbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
     end
   | Set_slice, [vec; _; _] -> cval_ctyp vec
   | Replicate n, [vec] -> begin
       match cval_ctyp vec with
-      | CT_fbits (m, ord) -> CT_fbits (n * m, ord)
+      | CT_fbits m -> CT_fbits (n * m)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for replicate argument"
     end
   | Concat, [v1; v2] -> begin
       match (cval_ctyp v1, cval_ctyp v2) with
-      | CT_fbits (n, ord), CT_fbits (m, _) -> CT_fbits (n + m, ord)
-      | CT_fbits (n, ord), CT_sbits (m, _) -> CT_sbits (m, ord)
-      | CT_sbits (n, ord), CT_fbits (m, _) -> CT_sbits (n, ord)
-      | CT_sbits (n, ord), CT_sbits (m, _) -> CT_sbits (max n m, ord)
+      | CT_fbits n, CT_fbits m -> CT_fbits (n + m)
+      | CT_fbits n, CT_sbits m -> CT_sbits m
+      | CT_sbits n, CT_fbits m -> CT_sbits n
+      | CT_sbits n, CT_sbits m -> CT_sbits (max n m)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
     end
   | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
