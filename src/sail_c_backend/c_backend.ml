@@ -132,8 +132,8 @@ let rec is_stack_ctyp ctyp =
   | CT_fint n -> n <= 64
   | CT_lint when !optimize_fixed_int -> true
   | CT_lint -> false
-  | CT_lbits _ when !optimize_fixed_bits -> true
-  | CT_lbits _ -> false
+  | CT_lbits when !optimize_fixed_bits -> true
+  | CT_lbits -> false
   | CT_real | CT_string | CT_list _ | CT_vector _ | CT_fvector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, _) ->
@@ -147,7 +147,7 @@ let rec is_stack_ctyp ctyp =
   | CT_rounding_mode -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
-let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
+let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1)), CT_fbits i)
 
 let hex_char =
   let open Sail2_values in
@@ -178,7 +178,7 @@ let literal_to_fragment (L_aux (l_aux, _)) =
       let padding = 16 - String.length str in
       let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
       let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-      Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
+      Some (V_lit (VL_bits (padding @ content), CT_fbits (String.length str * 4)))
   | L_unit -> Some (V_lit (VL_unit, CT_unit))
   | L_true -> Some (V_lit (VL_bool true, CT_bool))
   | L_false -> Some (V_lit (VL_bool false, CT_bool))
@@ -231,18 +231,14 @@ end) : Config = struct
        - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
        - If the length is less than 64, then use a small bits type, sbits.
        - If the length may be larger than 64, use a large bits type lbits. *)
-    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" ->
-        let direction = true in
-        begin
-          match nexp_simp n with
-          | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) ->
-              CT_fbits (Big_int.to_int n, direction)
-          | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits (64, direction)
-          | _ -> CT_lbits direction
-        end
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> begin
+        match nexp_simp n with
+        | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n)
+        | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits 64
+        | _ -> CT_lbits
+      end
     | Typ_app (id, [A_aux (A_nexp _, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
-        let direction = true in
-        CT_vector (direction, convert_typ ctx typ)
+        CT_vector (convert_typ ctx typ)
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records ->
         CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
@@ -318,7 +314,7 @@ end) : Config = struct
   (** Used to make sure the -Ofixed_int and -Ofixed_bits don't
      interfere with assumptions made about optimizations in the common
      case. *)
-  let never_optimize = function CT_lbits _ | CT_lint -> true | _ -> false
+  let never_optimize = function CT_lbits | CT_lint -> true | _ -> false
 
   let rec c_aval ctx = function
     | AV_lit (lit, typ) as v -> begin
@@ -351,8 +347,8 @@ end) : Config = struct
         | _ -> v
       end
     | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-        let bitstring = VL_bits (List.map value_of_aval_bit v, true) in
-        AV_cval (V_lit (bitstring, CT_fbits (List.length v, true)), typ)
+        let bitstring = VL_bits (List.map value_of_aval_bit v) in
+        AV_cval (V_lit (bitstring, CT_fbits (List.length v)), typ)
     | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
     | aval -> aval
 
@@ -432,8 +428,7 @@ end) : Config = struct
         | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
             let n = Big_int.to_int n in
-            AE_val
-              (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0), true), CT_fbits (n, true)), typ))
+            AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0)), CT_fbits n), typ))
         | _ -> no_change
       end
     | "zero_extend", [AV_cval (v, _); _] -> begin
@@ -472,13 +467,13 @@ end) : Config = struct
         AE_val (AV_cval (V_call (Bvxor, [v1; v2]), typ))
     | "vector_subrange", [AV_cval (vec, _); AV_cval (_, _); AV_cval (t, _)] -> begin
         match convert_typ ctx typ with
-        | CT_fbits (n, true) -> AE_val (AV_cval (V_call (Slice n, [vec; t]), typ))
+        | CT_fbits n -> AE_val (AV_cval (V_call (Slice n, [vec; t]), typ))
         | _ -> no_change
       end
     | "slice", [AV_cval (vec, _); AV_cval (start, _); AV_cval (len, _)] -> begin
         match convert_typ ctx typ with
-        | CT_fbits (n, _) -> AE_val (AV_cval (V_call (Slice n, [vec; start]), typ))
-        | CT_sbits (64, _) -> AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
+        | CT_fbits n -> AE_val (AV_cval (V_call (Slice n, [vec; start]), typ))
+        | CT_sbits 64 -> AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
         | _ -> no_change
       end
     | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] -> AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
@@ -625,7 +620,7 @@ let add_local_labels instrs =
 (* 5. Optimizations                                                       *)
 (**************************************************************************)
 
-let hoist_ctyp = function CT_lint | CT_lbits _ | CT_struct _ -> true | _ -> false
+let hoist_ctyp = function CT_lint | CT_lbits | CT_struct _ -> true | _ -> false
 
 let hoist_counter = ref 0
 let hoist_id () =
@@ -841,14 +836,14 @@ let rec sgen_ctyp = function
   | CT_fint _ -> "int64_t"
   | CT_constant _ -> "int64_t"
   | CT_lint -> "sail_int"
-  | CT_lbits _ -> "lbits"
+  | CT_lbits -> "lbits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> "struct " ^ sgen_id id
   | CT_enum (id, _) -> "enum " ^ sgen_id id
   | CT_variant (id, _) -> "struct " ^ sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
-  | CT_fvector (_, ord, typ) -> sgen_ctyp (CT_vector (ord, typ))
+  | CT_fvector (_, typ) -> sgen_ctyp (CT_vector typ)
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
@@ -867,14 +862,14 @@ let rec sgen_ctyp_name = function
   | CT_fint _ -> "mach_int"
   | CT_constant _ -> "mach_int"
   | CT_lint -> "sail_int"
-  | CT_lbits _ -> "lbits"
+  | CT_lbits -> "lbits"
   | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> sgen_id id
   | CT_enum (id, _) -> sgen_id id
   | CT_variant (id, _) -> sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
-  | CT_fvector (_, ord, typ) -> sgen_ctyp_name (CT_vector (ord, typ))
+  | CT_fvector (_, typ) -> sgen_ctyp_name (CT_vector typ)
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
@@ -892,9 +887,8 @@ let sgen_mask n =
   else failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
 let sgen_value = function
-  | VL_bits ([], _) -> "UINT64_C(0)"
-  | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
-  | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
+  | VL_bits [] -> "UINT64_C(0)"
+  | VL_bits bs -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | VL_int i -> if Big_int.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Big_int.to_string i ^ ")"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
@@ -948,7 +942,7 @@ and sgen_call op cvals =
   | Isub, [v1; v2] -> sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
   | Unsigned 64, [vec] -> sprintf "((mach_int) %s)" (sgen_cval vec)
   | Signed 64, [vec] -> begin
-      match cval_ctyp vec with CT_fbits (n, _) -> sprintf "fast_signed(%s, %d)" (sgen_cval vec) n | _ -> assert false
+      match cval_ctyp vec with CT_fbits n -> sprintf "fast_signed(%s, %d)" (sgen_cval vec) n | _ -> assert false
     end
   | Bvand, [v1; v2] -> begin
       match cval_ctyp v1 with
@@ -958,7 +952,7 @@ and sgen_call op cvals =
     end
   | Bvnot, [v] -> begin
       match cval_ctyp v with
-      | CT_fbits (n, _) -> sprintf "(~(%s) & %s)" (sgen_cval v) (sgen_cval (v_mask_lower n))
+      | CT_fbits n -> sprintf "(~(%s) & %s)" (sgen_cval v) (sgen_cval (v_mask_lower n))
       | CT_sbits _ -> sprintf "not_sbits(%s)" (sgen_cval v)
       | _ -> assert false
     end
@@ -976,13 +970,13 @@ and sgen_call op cvals =
     end
   | Bvadd, [v1; v2] -> begin
       match cval_ctyp v1 with
-      | CT_fbits (n, _) -> sprintf "((%s + %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
+      | CT_fbits n -> sprintf "((%s + %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
       | CT_sbits _ -> sprintf "add_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
       | _ -> assert false
     end
   | Bvsub, [v1; v2] -> begin
       match cval_ctyp v1 with
-      | CT_fbits (n, _) -> sprintf "((%s - %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
+      | CT_fbits n -> sprintf "((%s - %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
       | CT_sbits _ -> sprintf "sub_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
       | _ -> assert false
     end
@@ -1007,7 +1001,7 @@ and sgen_call op cvals =
     end
   | Set_slice, [vec; start; slice] -> begin
       match (cval_ctyp vec, cval_ctyp slice) with
-      | CT_fbits (_, _), CT_fbits (m, _) ->
+      | CT_fbits _, CT_fbits m ->
           sprintf "((%s & ~(%s << %s)) | (%s << %s))" (sgen_cval vec) (sgen_mask m) (sgen_cval start) (sgen_cval slice)
             (sgen_cval start)
       | _ -> assert false
@@ -1020,33 +1014,33 @@ and sgen_call op cvals =
     end
   | Sign_extend n, [v] -> begin
       match cval_ctyp v with
-      | CT_fbits (m, _) -> sprintf "fast_sign_extend(%s, %d, %d)" (sgen_cval v) m n
+      | CT_fbits m -> sprintf "fast_sign_extend(%s, %d, %d)" (sgen_cval v) m n
       | CT_sbits _ -> sprintf "fast_sign_extend2(%s, %d)" (sgen_cval v) n
       | _ -> assert false
     end
   | Replicate n, [v] -> begin
       match cval_ctyp v with
-      | CT_fbits (m, _) -> sprintf "fast_replicate_bits(UINT64_C(%d), %s, %d)" m (sgen_cval v) n
+      | CT_fbits m -> sprintf "fast_replicate_bits(UINT64_C(%d), %s, %d)" m (sgen_cval v) n
       | _ -> assert false
     end
   | Concat, [v1; v2] -> begin
       (* Optimized routines for all combinations of fixed and small bits
          appends, where the result is guaranteed to be smaller than 64. *)
       match (cval_ctyp v1, cval_ctyp v2) with
-      | CT_fbits (0, _), CT_fbits (_, _) -> sgen_cval v2
-      | CT_fbits (_, _), CT_fbits (n2, _) -> sprintf "(%s << %d) | %s" (sgen_cval v1) n2 (sgen_cval v2)
-      | CT_sbits (64, _), CT_fbits (n2, _) -> sprintf "append_sf(%s, %s, %d)" (sgen_cval v1) (sgen_cval v2) n2
-      | CT_fbits (n1, _), CT_sbits (64, _) -> sprintf "append_fs(%s, %d, %s)" (sgen_cval v1) n1 (sgen_cval v2)
-      | CT_sbits (64, _), CT_sbits (64, _) -> sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+      | CT_fbits 0, CT_fbits _ -> sgen_cval v2
+      | CT_fbits _, CT_fbits n2 -> sprintf "(%s << %d) | %s" (sgen_cval v1) n2 (sgen_cval v2)
+      | CT_sbits 64, CT_fbits n2 -> sprintf "append_sf(%s, %s, %d)" (sgen_cval v1) (sgen_cval v2) n2
+      | CT_fbits n1, CT_sbits 64 -> sprintf "append_fs(%s, %d, %s)" (sgen_cval v1) n1 (sgen_cval v2)
+      | CT_sbits 64, CT_sbits 64 -> sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
       | _ -> assert false
     end
   | _, _ -> failwith "Could not generate cval primop"
 
 let sgen_cval_param cval =
   match cval_ctyp cval with
-  | CT_lbits direction -> sgen_cval cval ^ ", " ^ string_of_bool direction
-  | CT_sbits (_, direction) -> sgen_cval cval ^ ", " ^ string_of_bool direction
-  | CT_fbits (len, direction) -> sgen_cval cval ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
+  | CT_lbits -> sgen_cval cval ^ ", " ^ string_of_bool true
+  | CT_sbits _ -> sgen_cval cval ^ ", " ^ string_of_bool true
+  | CT_fbits len -> sgen_cval cval ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool true
   | _ -> sgen_cval cval
 
 let rec sgen_clexp l = function
@@ -1089,7 +1083,7 @@ let rec codegen_conversion l clexp cval =
       if is_stack_ctyp ctyp_to then ksprintf string "  %s = %s;" (sgen_clexp_pure l clexp) (sgen_cval cval)
       else ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval)
   | CT_ref _, _ -> codegen_conversion l (CL_addr clexp) cval
-  | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
+  | CT_vector ctyp_elem_to, CT_vector ctyp_elem_from ->
       let i = ngensym () in
       let from = ngensym () in
       let into = ngensym () in
@@ -1220,24 +1214,24 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
         | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
         | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
         | "vector_update", CT_fbits _ -> "update_fbits"
-        | "vector_update", CT_lbits _ -> "update_lbits"
+        | "vector_update", CT_lbits -> "update_lbits"
         | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
         | "string_of_bits", _ -> begin
             match cval_ctyp (List.nth args 0) with
             | CT_fbits _ -> "string_of_fbits"
-            | CT_lbits _ -> "string_of_lbits"
+            | CT_lbits -> "string_of_lbits"
             | _ -> assert false
           end
         | "decimal_string_of_bits", _ -> begin
             match cval_ctyp (List.nth args 0) with
             | CT_fbits _ -> "decimal_string_of_fbits"
-            | CT_lbits _ -> "decimal_string_of_lbits"
+            | CT_lbits -> "decimal_string_of_lbits"
             | _ -> assert false
           end
         | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
         | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
         | "undefined_bitvector", CT_fbits _ -> "UNDEFINED(fbits)"
-        | "undefined_bitvector", CT_lbits _ -> "UNDEFINED(lbits)"
+        | "undefined_bitvector", CT_lbits -> "UNDEFINED(lbits)"
         | "undefined_bit", _ -> "UNDEFINED(fbits)"
         | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
         | "undefined_list", _ -> Printf.sprintf "UNDEFINED(%s)" (sgen_ctyp_name ctyp)
@@ -1268,7 +1262,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
         | CT_lint when !optimize_fixed_int -> ("((sail_int) 0xdeadc0de)", [])
         | CT_fbits _ -> ("UINT64_C(0xdeadc0de)", [])
         | CT_sbits _ -> ("undefined_sbits()", [])
-        | CT_lbits _ when !optimize_fixed_bits -> ("undefined_lbits(false)", [])
+        | CT_lbits when !optimize_fixed_bits -> ("undefined_lbits(false)", [])
         | CT_bool -> ("false", [])
         | CT_enum (_, ctor :: _) -> (sgen_id ctor, [])
         | CT_tup ctyps when is_stack_ctyp ctyp ->
@@ -1653,8 +1647,8 @@ let codegen_list ctyp =
   end
 
 (* Generate functions for working with non-bit vectors of some specific type. *)
-let codegen_vector (direction, ctyp) =
-  let id = mk_id (string_of_ctyp (CT_vector (direction, ctyp))) in
+let codegen_vector ctyp =
+  let id = mk_id (string_of_ctyp (CT_vector ctyp)) in
   if IdSet.mem id !generated then empty
   else (
     let vector_typedef =
@@ -1908,22 +1902,21 @@ let codegen_def' ctx = function
    repeated in ctyp_dependencies so it's up to the code-generator not
    to repeat definitions pointlessly (using the !generated variable)
    *)
-type c_gen_typ = CTG_tup of ctyp list | CTG_list of ctyp | CTG_vector of bool * ctyp
+type c_gen_typ = CTG_tup of ctyp list | CTG_list of ctyp | CTG_vector of ctyp
 
 let rec ctyp_dependencies = function
   | CT_tup ctyps -> List.concat (List.map ctyp_dependencies ctyps) @ [CTG_tup ctyps]
   | CT_list ctyp -> ctyp_dependencies ctyp @ [CTG_list ctyp]
-  | CT_vector (direction, ctyp) | CT_fvector (_, direction, ctyp) ->
-      ctyp_dependencies ctyp @ [CTG_vector (direction, ctyp)]
+  | CT_vector ctyp | CT_fvector (_, ctyp) -> ctyp_dependencies ctyp @ [CTG_vector ctyp]
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
+  | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
   | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode ->
       []
 
 let codegen_ctg = function
-  | CTG_vector (direction, ctyp) -> codegen_vector (direction, ctyp)
+  | CTG_vector ctyp -> codegen_vector ctyp
   | CTG_tup ctyps -> codegen_tup ctyps
   | CTG_list ctyp -> codegen_list ctyp
 
