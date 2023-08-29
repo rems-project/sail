@@ -166,6 +166,7 @@
   (%{workspace_root}/lib/smt.sail as lib/smt.sail)
   (%{workspace_root}/lib/string.sail as lib/string.sail)
   (%{workspace_root}/lib/trace.sail as lib/trace.sail)
+  (%{workspace_root}/lib/vector.sail as lib/vector.sail)
   (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
   (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
   (%{workspace_root}/src/gen_lib/sail2_concurrency_interface.lem

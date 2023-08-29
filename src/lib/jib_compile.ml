@@ -432,10 +432,7 @@ module Make (C : Config) = struct
     | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) -> begin
         let bitstring = List.map value_of_aval_bit avals in
         let len = List.length avals in
-        match (destruct_bitvector ctx.tc_env typ, Env.get_default_order ctx.tc_env) with
-        | Some _, Ord_aux (Ord_inc, _) -> ([], V_lit (VL_bits (List.rev bitstring), CT_fbits len), [])
-        | Some _, Ord_aux (Ord_dec, _) -> ([], V_lit (VL_bits bitstring, CT_fbits len), [])
-        | None, _ -> raise (Reporting.err_general l "Encountered vector literal without vector type")
+        ([], V_lit (VL_bits bitstring, CT_fbits len), [])
       end
     (* Convert a bitvector literal that is larger than 64-bits to a
        variable size bitvector, converting it in 64-bit chunks. *)

@@ -536,7 +536,7 @@ module Env : sig
   val add_extern : id -> extern -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
-  val get_default_order_option : t -> order option
+  val get_default_order_opt : t -> order option
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val add_scattered_enum : id -> t -> t
@@ -1571,7 +1571,7 @@ end = struct
     | None -> typ_error env Parse_ast.Unknown "No default order has been set"
     | Some ord -> ord
 
-  let get_default_order_option env = env.default_order
+  let get_default_order_opt env = env.default_order
 
   let set_default_order o env =
     match o with

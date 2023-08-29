@@ -846,6 +846,19 @@ bool neq_bits(const lbits op1, const lbits op2)
 }
 
 void vector_subrange_lbits(lbits *rop,
+                           const lbits op,
+                           const sail_int n_mpz,
+                           const sail_int m_mpz)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  rop->len = n - (m - 1ul);
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
+  normalize_lbits(rop);
+}
+
+void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz)
@@ -853,8 +866,8 @@ void vector_subrange_lbits(lbits *rop,
   uint64_t n = mpz_get_ui(n_mpz);
   uint64_t m = mpz_get_ui(m_mpz);
 
-  rop->len = n - (m - 1ul);
-  mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
+  rop->len = m - (n - 1ul);
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, (op.len - 1) - m);
   normalize_lbits(rop);
 }
 
@@ -880,6 +893,12 @@ fbits bitvector_access(const lbits op, const sail_int n_mpz)
 {
   uint64_t n = mpz_get_ui(n_mpz);
   return (fbits) mpz_tstbit(*op.bits, n);
+}
+
+fbits bitvector_access_inc(const lbits op, const sail_int n_mpz)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  return (fbits) mpz_tstbit(*op.bits, (op.len - 1) - n);
 }
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit)
@@ -1045,6 +1064,20 @@ void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64
   }
 }
 
+void update_lbits_inc(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  if (bit == UINT64_C(0)) {
+    mpz_clrbit(*rop->bits, (op.len - 1) - n);
+  } else {
+    mpz_setbit(*rop->bits, (op.len - 1) - n);
+  }
+}
+
 void vector_update_subrange_lbits(lbits *rop,
 				 const lbits op,
 				 const sail_int n_mpz,
@@ -1062,6 +1095,28 @@ void vector_update_subrange_lbits(lbits *rop,
       mpz_setbit(*rop->bits, i + m);
     } else {
       mpz_clrbit(*rop->bits, i + m);
+    }
+  }
+}
+
+void vector_update_subrange_inc_lbits(lbits *rop,
+                                      const lbits op,
+                                      const sail_int n_mpz,
+                                      const sail_int m_mpz,
+                                      const lbits slice)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  for (uint64_t i = 0; i < m - (n - 1ul); i++) {
+    uint64_t out_bit = ((op.len - 1) - m) + i;
+    if (mpz_tstbit(*slice.bits, (slice.len - 1) - i)) {
+      mpz_setbit(*rop->bits, out_bit);
+    } else {
+      mpz_clrbit(*rop->bits, out_bit);
     }
   }
 }
@@ -1094,6 +1149,20 @@ void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int 
 
   for (uint64_t i = 0; i < len; i++) {
     if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
+  }
+}
+
+void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
+{
+  assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
+  uint64_t start = mpz_get_ui(start_mpz);
+  uint64_t len = mpz_get_ui(len_mpz);
+
+  mpz_set_ui(*rop->bits, 0);
+  rop->len = len;
+
+  for (uint64_t i = 0; i < len; i++) {
+    if (mpz_tstbit(*op.bits, ((op.len - 1) - start) - i)) mpz_setbit(*rop->bits, (rop->len - 1) - i);
   }
 }
 

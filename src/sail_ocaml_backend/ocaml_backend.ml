@@ -280,8 +280,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           | xs -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
         end
     end
-  | E_vector_subrange (exp1, exp2, exp3) ->
-      string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
+  | E_vector_subrange (exp1, exp2, exp3) -> begin
+      match Env.get_default_order_opt (env_of exp) with
+      | Some (Ord_aux (Ord_inc, _)) ->
+          string "subrange_inc" ^^ space
+          ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
+      | _ ->
+          string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
+    end
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_typ (_, exp) -> ocaml_exp ctx exp

@@ -364,14 +364,20 @@ bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2);
 bool neq_bits(const lbits op1, const lbits op2);
 
 void vector_subrange_lbits(lbits *rop,
+                           const lbits op,
+                           const sail_int n_mpz,
+                           const sail_int m_mpz);
+
+void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
-
+                     
 void sail_truncate(lbits *rop, const lbits op, const sail_int len);
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
 fbits bitvector_access(const lbits op, const sail_int n_mpz);
+fbits bitvector_access_inc(const lbits op, const sail_int n_mpz);
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
 
@@ -399,8 +405,15 @@ void set_slice_int(sail_int *rop,
 		   const lbits slice);
 
 void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
+void update_lbits_inc(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
 
 void vector_update_subrange_lbits(lbits *rop,
+                                  const lbits op,
+                                  const sail_int n_mpz,
+                                  const sail_int m_mpz,
+                                  const lbits slice);
+
+void vector_update_subrange_inc_lbits(lbits *rop,
 				      const lbits op,
 				      const sail_int n_mpz,
 				      const sail_int m_mpz,
@@ -412,6 +425,7 @@ fbits fast_update_subrange(const fbits op,
 			   const fbits slice);
 
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
+void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 
 sbits sslice(const fbits op, const mach_int start, const mach_int len);
 
