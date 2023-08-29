@@ -40,7 +40,7 @@ depends: [
   "conf-gmp"
   "conf-zlib"
   "yojson" {>= "1.6.0"}
-  "pprint"
+  "pprint" {>= "20220103"}
   "odoc" {with-doc}
 ]
 build: [
