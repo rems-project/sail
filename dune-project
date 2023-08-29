@@ -57,7 +57,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     conf-gmp
     conf-zlib
     (yojson (>= 1.6.0))
-    pprint))
+    (pprint (>= 20220103))))
 
 (package
   (name sail_ocaml_backend)
