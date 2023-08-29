@@ -1206,16 +1206,21 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
             | _ -> c_error "length function with bad arity."
           end
         | "vector_access", CT_bit -> "bitvector_access"
+        | "vector_access_inc", CT_bit -> "bitvector_access_inc"
         | "vector_access", _ -> begin
             match args with
             | cval :: _ -> Printf.sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
             | _ -> c_error "vector access function with bad arity."
           end
         | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
+        | "vector_update_subrange_inc", _ -> Printf.sprintf "vector_update_subrange_inc_%s" (sgen_ctyp_name ctyp)
         | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
+        | "vector_subrange_inc", _ -> Printf.sprintf "vector_subrange_inc_%s" (sgen_ctyp_name ctyp)
         | "vector_update", CT_fbits _ -> "update_fbits"
         | "vector_update", CT_lbits -> "update_lbits"
         | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
+        | "vector_update_inc", CT_fbits _ -> "update_fbits_inc"
+        | "vector_update_inc", CT_lbits -> "update_lbits_inc"
         | "string_of_bits", _ -> begin
             match cval_ctyp (List.nth args 0) with
             | CT_fbits _ -> "string_of_fbits"

@@ -200,14 +200,26 @@ let subrange (list, n, m) =
   let m = Big_int.to_int m in
   List.rev (take (n - (m - 1)) (drop m (List.rev list)))
 
+let subrange_inc (list, n, m) =
+  let n = Big_int.to_int n in
+  let m = Big_int.to_int m in
+  take (m - (n - 1)) (drop n list)
+
 let slice (list, n, m) =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   List.rev (take m (drop n (List.rev list)))
 
-let eq_list (xs, ys) = List.for_all2 (fun x y -> x = y) xs ys
+let slice_inc (list, n, m) =
+  let n = Big_int.to_int n in
+  let m = Big_int.to_int m in
+  take m (drop n list)
+
+let eq_list (xs, ys) = if List.compare_lengths xs ys = 0 then List.for_all2 (fun x y -> x = y) xs ys else false
 
 let access (xs, n) = List.nth (List.rev xs) (Big_int.to_int n)
+
+let access_inc (xs, n) = List.nth xs (Big_int.to_int n)
 
 let append (xs, ys) = xs @ ys
 
@@ -215,8 +227,19 @@ let update (xs, n, x) =
   let n = List.length xs - Big_int.to_int n - 1 in
   take n xs @ [x] @ drop (n + 1) xs
 
+let update_inc (xs, n, x) =
+  let n = Big_int.to_int n in
+  take n xs @ [x] @ drop (n + 1) xs
+
 let update_subrange (xs, n, _, ys) =
   let rec aux xs o = function [] -> xs | y :: ys -> aux (update (xs, o, y)) (Big_int.sub o (Big_int.of_int 1)) ys in
+  aux xs n ys
+
+let update_subrange_inc (xs, n, _, ys) =
+  let rec aux xs o = function
+    | [] -> xs
+    | y :: ys -> aux (update_inc (xs, o, y)) (Big_int.add o (Big_int.of_int 1)) ys
+  in
   aux xs n ys
 
 let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))

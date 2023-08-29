@@ -155,7 +155,7 @@ module Env : sig
 
   val get_default_order : t -> order
 
-  val get_default_order_option : t -> order option
+  val get_default_order_opt : t -> order option
 
   val add_scattered_variant : id -> typquant -> t -> t
 
