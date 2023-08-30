@@ -263,6 +263,7 @@ and exp_aux =
   | E_attribute of string * string * exp
   | E_internal_plet of pat * exp * exp
   | E_internal_return of exp
+  | E_internal_assume of atyp * exp
 
 and exp = E_aux of exp_aux * l
 

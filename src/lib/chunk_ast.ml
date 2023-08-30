@@ -976,6 +976,11 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
               { repeat_until = true; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
             |> add_chunk chunks
       end
+  | E_internal_assume (nc, exp) ->
+      let nc_chunks = Queue.create () in
+      chunk_atyp comments nc_chunks nc;
+      let exp_chunks = rec_chunk_exp exp in
+      Queue.add (App (Id_aux (Id "internal_assume", l), [nc_chunks; exp_chunks])) chunks
 
 and chunk_vector_update comments (E_aux (aux, l) as exp) =
   let rec_chunk_exp exp =

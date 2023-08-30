@@ -570,6 +570,9 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
         | P.E_internal_return exp ->
             if !opt_magic_hash then E_internal_return (to_ast_exp ctx exp)
             else raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
+        | P.E_internal_assume (nc, exp) ->
+            if !opt_magic_hash then E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp)
+            else raise (Reporting.err_general l "Internal assume construct found without -dmagic_hash")
         | P.E_deref exp -> E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
       in
       E_aux (aux, (l, empty_uannot))
