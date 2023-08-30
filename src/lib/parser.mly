@@ -226,7 +226,7 @@ let warn_extern_effect l =
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
-%token InternalPLet InternalReturn
+%token InternalPLet InternalReturn InternalAssume
 %token Forwards Backwards
 
 %nonassoc Then
@@ -899,6 +899,8 @@ exp:
     { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
   | InternalReturn exp
     { mk_exp (E_internal_return($2)) $startpos $endpos }
+  | InternalAssume typ In exp
+    { mk_exp (E_internal_assume($2,$4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */
