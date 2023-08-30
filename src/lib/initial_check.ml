@@ -79,14 +79,58 @@ let opt_undefined_gen = ref false
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
 
+module StringSet = Set.Make (String)
+module StringMap = Map.Make (String)
+
+(* These are types that are defined in Sail, but we rely on them
+   having specific definitions, so we only allow them to be defined in
+   $sail_internal marked files in the prelude. *)
+let reserved_type_ids = IdSet.of_list [mk_id "result"; mk_id "option"]
+
+type type_constructor = kind_aux option list
+
 type ctx = {
   kinds : kind_aux KBindings.t;
-  type_constructors : kind_aux option list Bindings.t;
+  type_constructors : type_constructor Bindings.t;
   scattereds : ctx Bindings.t;
-  reserved_type_ids : id list;
-  internal_files : string list;
-  target_sets : (string * string list) list;
+  internal_files : StringSet.t;
+  target_sets : string list StringMap.t;
 }
+
+let rec equal_ctx ctx1 ctx2 =
+  KBindings.equal ( = ) ctx1.kinds ctx2.kinds
+  && Bindings.equal ( = ) ctx1.type_constructors ctx2.type_constructors
+  && Bindings.equal equal_ctx ctx1.scattereds ctx2.scattereds
+  && StringSet.equal ctx1.internal_files ctx2.internal_files
+  && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
+
+let merge_ctx l ctx1 ctx2 =
+  let compatible equal err k x y =
+    match (x, y) with
+    | None, None -> None
+    | Some x, None -> Some x
+    | None, Some y -> Some y
+    | Some x, Some y -> if equal x y then Some x else raise (Reporting.err_general l (err k))
+  in
+  {
+    kinds =
+      KBindings.merge
+        (compatible ( = ) (fun v -> "Mismatching kinds for type variable " ^ string_of_kid v))
+        ctx1.kinds ctx2.kinds;
+    type_constructors =
+      Bindings.merge
+        (compatible ( = ) (fun id -> "Different definitions for type constructor " ^ string_of_id id ^ " found"))
+        ctx1.type_constructors ctx2.type_constructors;
+    scattereds =
+      Bindings.merge
+        (compatible equal_ctx (fun id -> "Scattered definition " ^ string_of_id id ^ " found with mismatching context"))
+        ctx1.scattereds ctx2.scattereds;
+    internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
+    target_sets =
+      StringMap.merge
+        (compatible ( = ) (fun s -> "Mismatching target set " ^ s ^ " found"))
+        ctx1.target_sets ctx2.target_sets;
+  }
 
 let string_of_parse_id_aux = function P.Id v -> v | P.Operator v -> v
 
@@ -111,8 +155,7 @@ let to_ast_id ctx (P.Id_aux (id, l)) =
   let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
   if string_contains (string_of_parse_id_aux id) '#' then begin
     match Reporting.loc_file l with
-    | Some file when !opt_magic_hash || List.exists (fun internal_file -> file = internal_file) ctx.internal_files ->
-        to_ast_id' id
+    | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> to_ast_id' id
     | None -> to_ast_id' id
     | _ -> raise (Reporting.err_general l "Identifier contains hash character and -dmagic_hash is unset")
   end
@@ -777,9 +820,9 @@ let generate_enum_functions l ctx enum_id fns exps =
 (* When desugaring a type definition, we check that the type does not have a reserved name *)
 let to_ast_reserved_type_id ctx id =
   let id = to_ast_id ctx id in
-  if List.exists (fun reserved -> Id.compare reserved id = 0) ctx.reserved_type_ids then begin
+  if IdSet.mem id reserved_type_ids then begin
     match Reporting.loc_file (id_loc id) with
-    | Some file when !opt_magic_hash || List.exists (fun internal_file -> file = internal_file) ctx.internal_files -> id
+    | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> id
     | None -> id
     | Some file -> raise (Reporting.err_general (id_loc id) (sprintf "The type name %s is reserved" (string_of_id id)))
   end
@@ -878,7 +921,7 @@ let to_ast_funcl ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
   | P.FCL_funcl (id, pexp) -> (
-      match List.assoc_opt (string_of_parse_id id) ctx.target_sets with
+      match StringMap.find_opt (string_of_parse_id id) ctx.target_sets with
       | Some targets ->
           List.map
             (fun target ->
@@ -1056,7 +1099,7 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
       match Reporting.loc_file l with
       | Some file ->
           ( [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)],
-            { ctx with internal_files = file :: ctx.internal_files }
+            { ctx with internal_files = StringSet.add file ctx.internal_files }
           )
       | None -> ([DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx)
     end
@@ -1066,7 +1109,7 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
         match args with
         | set :: targets ->
             ( [DEF_aux (DEF_pragma ("target_set", arg, l), annot)],
-              { ctx with target_sets = (set, targets) :: ctx.target_sets }
+              { ctx with target_sets = StringMap.add set targets ctx.target_sets }
             )
         | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
       end
@@ -1140,9 +1183,8 @@ let initial_ctx =
         ];
     kinds = KBindings.empty;
     scattereds = Bindings.empty;
-    reserved_type_ids = [mk_id "result"; mk_id "option"];
-    internal_files = [];
-    target_sets = [];
+    internal_files = StringSet.empty;
+    target_sets = StringMap.empty;
   }
 
 let exp_of_string str =
