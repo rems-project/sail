@@ -71,6 +71,10 @@ open Ast
 open Ast_defs
 open Ast_util
 
+type ctx
+
+val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
+
 (** {2 Options} *)
 
 (** Generate undefined_T functions for every type T. False by
