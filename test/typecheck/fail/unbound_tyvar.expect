@@ -1,0 +1,7 @@
+[93mType error[0m:
+Well-formedness check failed for type
+
+[93mCaused by [0m[96mfail/unbound_tyvar.sail[0m:5.23-44:
+5[96m |[0mfunction foo() -> bits(definitelydoesntexist) = {
+ [91m |[0m                       [91m^-------------------^[0m
+ [91m |[0m Undefined type synonym definitelydoesntexist

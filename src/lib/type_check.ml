@@ -5352,6 +5352,7 @@ let infer_funtyp l env tannotopt funcls =
             match typ_from_pat pat with Typ_aux (Typ_tuple arg_typs, _) -> arg_typs | arg_typ -> [arg_typ]
           in
           let fn_typ = mk_typ (Typ_fn (arg_typs, ret_typ)) in
+          wf_binding l env (quant, fn_typ);
           (quant, fn_typ)
       | _ -> typ_error env l "Cannot infer function type for function with multiple clauses"
     end
