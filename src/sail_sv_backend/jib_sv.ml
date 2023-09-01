@@ -513,6 +513,7 @@ module Make (Config : CONFIG) = struct
       end
     | Tl (op, arg) -> string op ^^ parens (sv_smt arg)
     | Struct _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct literals not allowed in SV backend"
+    | _ -> empty
 
   let sv_cval cval =
     let* smt = Smt.smt_cval cval in
@@ -670,20 +671,28 @@ module Make (Config : CONFIG) = struct
     let v, _ = Smt_builtins.run (sv_instr ctx instr) l in
     v
 
-  let sv_fundef ctx f params param_ctyps ret_ctyp body =
+  let sv_fundef_with ctx f params param_ctyps ret_ctyp fun_body =
     let sv_ret_ty, index_ty = sv_ctyp ret_ctyp in
     let sv_ret_ty, typedef =
       match index_ty with
       | Some index ->
           let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
-          let new_ty = string ("t_" ^ sv_id_string f ^ "_" ^ encoded) in
+          let new_ty = string ("t_" ^ f ^ "_" ^ encoded) in
           (new_ty, separate space [string "typedef"; string sv_ret_ty; new_ty; string index] ^^ semi ^^ twice hardline)
       | None -> (string sv_ret_ty, empty)
     in
     let param_docs =
       try List.map2 (fun param ctyp -> wrap_type ctyp (sv_id param)) params param_ctyps
-      with Invalid_argument _ -> Reporting.unreachable (id_loc f) __POS__ "Function arity mismatch"
+      with Invalid_argument _ -> Reporting.unreachable Unknown __POS__ "Function arity mismatch"
     in
+    typedef
+    ^^ separate space [string "function"; string "automatic"; sv_ret_ty; string f]
+    ^^ parens (separate (comma ^^ space) param_docs)
+    ^^ semi
+    ^^ nest 4 (hardline ^^ fun_body)
+    ^^ hardline ^^ string "endfunction"
+
+  let sv_fundef ctx f params param_ctyps ret_ctyp body =
     let fun_body =
       if List.exists (fun unrf -> unrf = string_of_id f) Config.unreachable then string "sail_reached_unreachable = 1;"
       else
@@ -691,12 +700,7 @@ module Make (Config : CONFIG) = struct
         ^^ semi ^^ hardline
         ^^ separate_map hardline (sv_checked_instr ctx) body
     in
-    typedef
-    ^^ separate space [string "function"; string "automatic"; sv_ret_ty; sv_id f]
-    ^^ parens (separate (comma ^^ space) param_docs)
-    ^^ semi
-    ^^ nest 4 (hardline ^^ fun_body)
-    ^^ hardline ^^ string "endfunction"
+    sv_fundef_with ctx (sv_id_string f) params param_ctyps ret_ctyp fun_body
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 
