@@ -4141,7 +4141,9 @@ module BitvectorSizeCasts = struct
                             | exception _ -> insts
                           )
                         in
-                        let insts = KidSet.fold check_inst (tyvars_of_constraint nc) KBindings.empty in
+                        let is_Int kid = match Env.get_typ_var kid env with K_int -> true | _ -> false in
+                        let kids_to_check = KidSet.filter is_Int (tyvars_of_constraint nc) in
+                        let insts = KidSet.fold check_inst kids_to_check KBindings.empty in
                         if KBindings.is_empty insts then h :: aux t
                         else begin
                           (* Propagate new instantiations and insert casts *)
