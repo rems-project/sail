@@ -105,6 +105,7 @@ let opt_nopacked = ref false
 let opt_nomem = ref false
 
 let opt_unreachable = ref []
+let opt_fun2wires = ref []
 
 let verilog_options =
   [
@@ -148,6 +149,10 @@ let verilog_options =
       "<functionname> Mark function as unreachable."
     );
     ("-sv_nomem", Arg.Set opt_nopacked, " don't emit a dynamic memory implementation");
+    ( "-sv_fun2wires",
+      Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
+      "<functionname> Use input/output ports instead of emitting a function call"
+    );
   ]
 
 let verilog_rewrites =
@@ -435,11 +440,48 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let out_doc = out_doc ^^ reg_ref_enums in
   let in_doc = reg_doc ^^ reg_ref_functions ^^ in_doc in
 
+  let mk_wire_fun nm =
+    let id = mk_id nm in
+    match Bindings.find_opt id fn_ctyps with
+    | None -> (empty, [], [])
+    | Some (arg_typs, ret_ty) ->
+        let arg_nms = List.mapi (fun i _ -> mk_id ("a" ^ string_of_int i)) arg_typs in
+        let real_name = if ctx_is_extern id ctx then "sail_" ^ ctx_get_extern id ctx else string_of_id id in
+        let invoke_flag = string (nm ^ "_sail_invoke") in
+        let result = string (nm ^ "_sail_invoke_ret") in
+        let arg_out i = string (nm ^ "_sail_invoke_arg_" ^ string_of_int i) in
+        let fun_body =
+          string "if (" ^^ invoke_flag
+          ^^ string ") sail_reached_unreachable = 1;"
+          ^^ hardline ^^ invoke_flag ^^ string " = 1;" ^^ hardline
+          ^^ (arg_nms
+             |> List.mapi (fun i arg -> arg_out i ^^ string " = " ^^ string (string_of_id arg) ^^ semi ^^ hardline)
+             |> separate empty
+             )
+          ^^ string "return " ^^ result ^^ string ";"
+        in
+        ( sv_fundef_with ctx real_name arg_nms arg_typs ret_ty fun_body ^^ twice hardline,
+          separate space [string "output"; string "bit"; invoke_flag]
+          :: separate space [string "input"; string (fst (sv_ctyp ret_ty)); result]
+          :: List.mapi (fun i typ -> separate space [string "output"; string (fst (sv_ctyp typ)); arg_out i]) arg_typs,
+          [invoke_flag ^^ string " = 0;"]
+        )
+  in
+
+  let wire_funs, wire_fun_ports, wire_invoke_inits =
+    List.fold_right
+      (fun nm (code, ports, inits) ->
+        let new_code, new_ports, new_inits = mk_wire_fun nm in
+        (new_code ^^ code, new_ports @ ports, new_inits @ inits)
+      )
+      !opt_fun2wires (empty, [], [])
+  in
+
   let setup_function =
     string "function automatic void sail_setup();"
     ^^ nest 4
          (hardline ^^ string "sail_reached_unreachable = 0;" ^^ hardline ^^ string "sail_have_exception = 0;"
-        ^^ hardline
+        ^^ hardline ^^ separate hardline wire_invoke_inits ^^ hardline
          ^^ separate_map (semi ^^ hardline) (fun call -> string call ^^ string "()") (List.rev setup_calls)
          )
     ^^ semi ^^ hardline ^^ string "endfunction" ^^ twice hardline
@@ -518,8 +560,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let sv_output =
     Pretty_print_sail.to_string
       (wrap_module out_doc ("sail_" ^ out)
-         (inputs @ outputs @ module_main_in_out)
-         (in_doc ^^ setup_function ^^ invoke_main)
+         (inputs @ outputs @ wire_fun_ports @ module_main_in_out)
+         (in_doc ^^ wire_funs ^^ setup_function ^^ invoke_main)
       )
   in
   make_genlib_file (sprintf "sail_genlib_%s.sv" out);
