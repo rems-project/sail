@@ -530,7 +530,7 @@ module Env : sig
   val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
   val bound_typ_id : t -> id -> bool
-  val add_overloads : id -> id list -> t -> t
+  val add_overloads : l -> id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
   val add_extern : id -> extern -> t -> t
@@ -760,8 +760,16 @@ end = struct
 
   let get_overloads id env = try Bindings.find id env.overloads with Not_found -> []
 
-  let add_overloads id ids env =
+  let add_overloads l id ids env =
     typ_print (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"));
+    List.iter
+      (fun overload ->
+        if not (bound_ctor_fn env overload || Bindings.mem overload env.overloads) then
+          typ_error env
+            (Hint ("unbound identifier", id_loc overload, l))
+            ("Cannot create or extend overload " ^ string_of_id id ^ ", " ^ string_of_id overload ^ " is not bound")
+      )
+      ids;
     let existing = try Bindings.find id env.overloads with Not_found -> [] in
     { env with overloads = Bindings.add id (existing @ ids) env.overloads }
 
@@ -5816,7 +5824,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
       ([DEF_aux (DEF_outcome (outcome, defs), def_annot)], env)
   | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
   | DEF_default default -> check_default env def_annot default
-  | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads id ids env)
+  | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, _))) ->
       let env = Env.add_register id typ env in
       ( [
