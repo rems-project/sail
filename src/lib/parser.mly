@@ -899,7 +899,7 @@ exp:
     { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
   | InternalReturn exp
     { mk_exp (E_internal_return($2)) $startpos $endpos }
-  | InternalAssume typ In exp
+  | InternalAssume atomic_typ In exp
     { mk_exp (E_internal_assume($2,$4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for

@@ -454,7 +454,7 @@ let rec doc_exp (E_aux (e_aux, (_, uannot)) as exp) =
   | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
       separate space [string "2"; string "^"; doc_atomic_exp exp]
-  | E_internal_assume (nc, exp) -> doc_let_style_general "internal_assume" (doc_nc nc) None exp
+  | E_internal_assume (nc, exp) -> doc_let_style_general "internal_assume" (parens (doc_nc nc)) None exp
   | _ -> doc_atomic_exp exp
 
 and doc_let_style keyword lhs rhs body = doc_let_style_general keyword lhs (Some rhs) body
