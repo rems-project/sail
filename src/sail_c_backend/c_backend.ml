@@ -851,7 +851,7 @@ let rec sgen_ctyp = function
   | CT_rounding_mode -> "uint_fast8_t"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
-let rec sgen_const_ctyp = function CT_string -> "const_sail_string" | ty -> sgen_ctyp ty
+let sgen_const_ctyp = function CT_string -> "const_sail_string" | ty -> sgen_ctyp ty
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"

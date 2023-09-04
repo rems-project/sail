@@ -4227,7 +4227,7 @@ module BitvectorSizeCasts = struct
 end
 
 module ToplevelNexpRewrites = struct
-  let replace_nexp_in_typ env typ orig new_nexp =
+  let _replace_nexp_in_typ env typ orig new_nexp =
     let rec aux (Typ_aux (t, l) as typ) =
       match t with
       | Typ_id _ | Typ_var _ -> (false, typ)
