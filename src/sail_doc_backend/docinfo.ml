@@ -600,9 +600,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
          specified via -doc_file, we push true to skip it. If no
          -doc_file flags are passed, include everything. *)
       | DEF_pragma (("file_start" | "include_start"), path, _) -> (docinfo, skip_file path :: skips)
-      | DEF_pragma (("file_end" | "include_end"), _, _) -> (
-          (docinfo, match skips with _ :: skips -> skips | [] -> [])
-        )
+      | DEF_pragma (("file_end" | "include_end"), _, _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
           let id = id_of_fundef fdef in

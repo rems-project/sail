@@ -34,7 +34,7 @@ jobs:
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         eval $(opam env)
-        opam install "ocamlformat=0.25.1" --yes
+        opam install "ocamlformat=0.26.0" --yes
 
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

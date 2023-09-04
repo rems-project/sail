@@ -145,9 +145,6 @@ let rec is_gen_loc = function
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range (p1, p2) -> false
 
-let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
-let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
-
 let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
 
 let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
@@ -469,8 +466,6 @@ let mk_kopt ?loc:(l = Parse_ast.Unknown) kind_aux v =
   let l = match l with Parse_ast.Unknown -> kid_loc v | l -> l in
   KOpt_aux (KOpt_kind (K_aux (kind_aux, l), v), l)
 
-let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
-
 let unknown_typ = mk_typ Typ_internal_unknown
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
@@ -580,7 +575,6 @@ let is_quant_kopt = function QI_aux (QI_id _, _) -> true | _ -> false
 let is_quant_constraint = function QI_aux (QI_constraint _, _) -> true | _ -> false
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
-let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
@@ -1681,8 +1675,6 @@ let locate_kind f (K_aux (kind, l)) = K_aux (kind, f l)
 let locate_kinded_id f (KOpt_aux (KOpt_kind (k, kid), l)) = KOpt_aux (KOpt_kind (locate_kind f k, locate_kid f kid), f l)
 
 let locate_lit f (L_aux (lit, l)) = L_aux (lit, f l)
-
-let locate_order f (Ord_aux (ord_aux, l)) = Ord_aux (ord_aux, f l)
 
 let rec locate_nexp f (Nexp_aux (nexp_aux, l)) =
   let nexp_aux =

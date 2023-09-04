@@ -69,7 +69,7 @@ open Parse_ast
 
 let string_of_id_aux = function Id v -> v | Operator v -> v
 
-let string_of_id (Id_aux (id, l)) = string_of_id_aux id
+let string_of_id (Id_aux (id, _)) = string_of_id_aux id
 
 let id_loc (Id_aux (_, l)) = l
 
@@ -79,11 +79,6 @@ let starting_column_num l =
   match Reporting.simp_loc l with Some (s, _) -> Some (s.pos_cnum - s.pos_bol) | None -> None
 
 let ending_line_num l = match Reporting.simp_loc l with Some (_, e) -> Some e.pos_lnum | None -> None
-
-let merge_loc l1 l2 =
-  match (Reporting.simp_loc l1, Reporting.simp_loc l2) with
-  | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
-  | _, _ -> Parse_ast.Unknown
 
 type binder = Var_binder | Let_binder | Internal_plet_binder
 
@@ -374,7 +369,7 @@ let rec prerr_chunk indent = function
       Queue.iter (prerr_chunk (indent ^ "    ")) exp;
       Printf.eprintf "%s  with:" indent;
       List.iter (fun exp -> Queue.iter (prerr_chunk (indent ^ "    ")) exp) exps
-  | Vector_updates (exp, updates) -> Printf.eprintf "%sVector_updates:\n" indent
+  | Vector_updates (_exp, _updates) -> Printf.eprintf "%sVector_updates:\n" indent
   | Index (exp, ix) ->
       Printf.eprintf "%sIndex:\n" indent;
       List.iter
@@ -492,7 +487,7 @@ let have_linebreak line_num1 line_num2 = match (line_num1, line_num2) with Some 
 let have_blank_linebreak line_num1 line_num2 =
   match (line_num1, line_num2) with Some p1, Some p2 -> p1 + 1 < p2 | _, _ -> false
 
-let chunk_delimit ?delim ~get_loc ~chunk comments chunks xs =
+let chunk_delimit ?delim ~get_loc ~chunk comments xs =
   map_peek
     (fun next x ->
       let l = get_loc x in
@@ -577,19 +572,13 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
       let rhs_chunks = rec_chunk_atyp rhs in
       Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
   | ATyp_app (id, ([_] as args)) when string_of_id id = "atom" ->
-      let args =
-        chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args
-      in
+      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments args in
       Queue.add (App (Id_aux (Id "int", id_loc id), args)) chunks
   | ATyp_app (id, args) ->
-      let args =
-        chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args
-      in
+      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments args in
       Queue.add (App (id, args)) chunks
   | ATyp_tuple args ->
-      let args =
-        chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments chunks args
-      in
+      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments args in
       Queue.add (Tuple ("(", ")", 0, args)) chunks
   | ATyp_wild -> Queue.add (Atom "_") chunks
   | ATyp_exist (vars, constr, typ) ->
@@ -613,22 +602,22 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
   | P_lit lit -> Queue.add (chunk_of_lit lit) chunks
   | P_app (id, [P_aux (P_lit (L_aux (L_unit, _)), _)]) -> Queue.add (App (id, [])) chunks
   | P_app (id, pats) ->
-      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (App (id, pats)) chunks
   | P_tuple pats ->
-      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (Tuple ("(", ")", 0, pats)) chunks
   | P_vector pats ->
-      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (Tuple ("[", "]", 0, pats)) chunks
   | P_list pats ->
-      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~delim:"," ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (Tuple ("[|", "|]", 0, pats)) chunks
   | P_string_append pats ->
-      let pats = chunk_delimit ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (Intersperse ("^", pats)) chunks
   | P_vector_concat pats ->
-      let pats = chunk_delimit ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments chunks pats in
+      let pats = chunk_delimit ~get_loc:(fun (P_aux (_, l)) -> l) ~chunk:chunk_pat comments pats in
       Queue.add (Intersperse ("@", pats)) chunks
   | P_vector_subrange (id, n, m) ->
       let id_chunks = Queue.create () in
@@ -671,9 +660,7 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
             Queue.add (Binary (field_chunks, "=", pat_chunks)) chunks
         | FP_wild -> Queue.add (Atom "_") chunks
       in
-      let fpats =
-        chunk_delimit ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments chunks fpats
-      in
+      let fpats = chunk_delimit ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments fpats in
       Queue.add (Tuple ("struct {", "}", 1, fpats)) chunks
   | P_attribute (attr, arg, pat) ->
       Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
@@ -747,7 +734,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       chunk_exp comments chunks exp
   | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> Queue.add (App (id, [])) chunks
   | E_app (id, args) ->
-      let args = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks args in
+      let args = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments args in
       Queue.add (App (id, args)) chunks
   | (E_sizeof atyp | E_constraint atyp) as typ_app ->
       let name =
@@ -788,22 +775,22 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       chunk_atyp comments typ_chunks typ;
       Queue.add (Binary (exp_chunks, ":", typ_chunks)) chunks
   | E_tuple exps ->
-      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks exps in
+      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments exps in
       Queue.add (Tuple ("(", ")", 0, exps)) chunks
   | E_vector [] -> Queue.add (Atom "[]") chunks
   | E_vector exps ->
-      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks exps in
+      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments exps in
       Queue.add (Tuple ("[", "]", 0, exps)) chunks
   | E_list [] -> Queue.add (Atom "[||]") chunks
   | E_list exps ->
-      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks exps in
+      let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments exps in
       Queue.add (Tuple ("[|", "|]", 0, exps)) chunks
   | E_struct fexps ->
-      let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks fexps in
+      let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments fexps in
       Queue.add (Tuple ("struct {", "}", 1, fexps)) chunks
   | E_struct_update (exp, fexps) ->
       let exp = rec_chunk_exp exp in
-      let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments chunks fexps in
+      let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments fexps in
       Queue.add (Struct_update (exp, fexps)) chunks
   | E_block exps ->
       let block_exps = flatten_block exps in
@@ -1190,18 +1177,16 @@ let chunk_type_def comments chunks (TD_aux (aux, l)) =
   match aux with
   | TD_enum (id, [], members, _) ->
       let members =
-        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments chunks members
+        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments members
       in
       Queue.add (Enum { id; enum_functions = None; members }) chunks;
       Queue.add (Spacer (true, 1)) chunks
   | TD_enum (id, enum_functions, members, _) ->
       let enum_functions =
-        chunk_delimit ~delim:","
-          ~get_loc:(fun x -> id_loc (fst x))
-          ~chunk:chunk_enum_function comments chunks enum_functions
+        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_function comments enum_functions
       in
       let members =
-        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments chunks members
+        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments members
       in
       Queue.add (Enum { id; enum_functions = Some enum_functions; members }) chunks;
       Queue.add (Spacer (true, 1)) chunks

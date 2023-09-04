@@ -3269,13 +3269,12 @@ let doc_val avoid_target_names pat exp =
         let typ = expand_range_type (Env.expand_synonyms env typ) in
         match destruct_exist_plain typ with
         | None -> (typpp, exp)
-        | Some _ -> (
+        | Some _ ->
             ( empty,
               match exp with
               | E_aux (E_typ (typ', _), _) when alpha_equivalent env typ typ' -> exp
               | _ -> E_aux (E_typ (typ, exp), (Parse_ast.Unknown, mk_tannot env typ))
             )
-          )
       )
   in
   let idpp = doc_id bare_ctxt id in

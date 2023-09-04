@@ -543,7 +543,6 @@ module Env : sig
   val add_enum_clause : id -> id -> t -> t
   val get_enum : id -> t -> id list
   val get_enums : t -> IdSet.t Bindings.t
-  val is_enum : id -> t -> bool
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
   val lookup_id : id -> t -> typ lvar
@@ -1394,8 +1393,6 @@ end = struct
 
   let get_enums env = Bindings.map snd env.enums
 
-  let is_enum id env = Bindings.mem id env.enums
-
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -1618,11 +1615,6 @@ let wf_binding l env (typq, typ) =
   Env.wf_typ env typ
 
 let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) = wf_binding l env (typq, typ)
-
-(* Create vectors with the default order from the environment *)
-
-let default_order_error_string =
-  "No default Order (if you have set a default Order, move it earlier in the specification)"
 
 let dvector_typ env n typ = vector_typ n typ
 let bits_typ env n = bitvector_typ n
@@ -5644,7 +5636,7 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def l
       ( [DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot))), def_annot)],
         Env.add_scattered_variant id typq env
       )
-  | SD_unioncl (id, tu) -> (
+  | SD_unioncl (id, tu) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot))), def_annot)],
         let env = Env.add_variant_clause id tu env in
         let typq, _ = Env.get_variant id env in
@@ -5657,7 +5649,6 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def l
           in
           raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg)))
       )
-    )
   | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
       let typq, typ = Env.get_val_spec id env in
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in

@@ -1115,7 +1115,7 @@ let is_hex_char ch =
   || (Char.code 'a' <= c && c <= Char.code 'f')
   || (Char.code 'A' <= c && c <= Char.code 'F')
 
-let valid_hex_bits (n, s) =
+let valid_hex_bits (_, s) =
   let len = String.length s in
   (* We must have at least the 0x prefix, then one character *)
   if len < 3 || String.sub s 0 2 <> "0x" then false

@@ -426,7 +426,7 @@ let doc_exp, doc_let =
         ( l,
           ( Id_aux
               (Id ("*" | "/" | "div" | "quot" | "rem" | "mod" | "quot_s" | "mod_s" | "*_s" | "*_si" | "*_u" | "*_ui"), _)
-          as op
+            as op
           ),
           r
         ) ->
