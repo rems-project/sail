@@ -1,6 +1,6 @@
 [93mType error[0m:
-[96mpass/global_type_var/v3.sail[0m:15.23-27:
-15[96m |[0m    let y : atom(64) = size in
+[96mpass/global_type_var/v3.sail[0m:13.23-27:
+13[96m |[0m    let y : atom(64) = size in
   [91m |[0m                       [91m^--^[0m
   [91m |[0m int('size) is not a subtype of int(64)
   [91m |[0m as 'size == 64 could not be proven
