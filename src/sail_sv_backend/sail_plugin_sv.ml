@@ -148,7 +148,7 @@ let verilog_options =
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "<functionname> Mark function as unreachable."
     );
-    ("-sv_nomem", Arg.Set opt_nopacked, " don't emit a dynamic memory implementation");
+    ("-sv_nomem", Arg.Set opt_nomem, " don't emit a dynamic memory implementation");
     ( "-sv_fun2wires",
       Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
       "<functionname> Use input/output ports instead of emitting a function call"
@@ -401,7 +401,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     (if !opt_nostrings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
     ^^ string "`include \"sail.sv\"" ^^ hardline
     ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
-    ^^ (if !opt_nomem then hardline ^^ string "`include \"sail_memory.sv\"" else empty)
+    ^^ (if !opt_nomem then empty else hardline ^^ string "`include \"sail_memory.sv\"")
     ^^ hardline
     ^^ separate_map hardline (fun file -> ksprintf string "`include \"%s\"" file) !opt_includes
     ^^ twice hardline
