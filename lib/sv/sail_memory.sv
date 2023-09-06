@@ -17,7 +17,7 @@ function automatic sail_bits sail_emulator_read_mem(logic [63:0] addrsize, sail_
       buffer[7:0] = sail_memory[paddr + (i[63:0] - 1)];
    end
 
-   return '{n[SAIL_INDEX_WIDTH-1:0], buffer};
+   return '{n[SAIL_INDEX_WIDTH-1:0] * 8, buffer};
 endfunction
 
 function automatic sail_bits sail_emulator_read_mem_ifetch(logic [63:0] addrsize, sail_bits addr, sail_int n);

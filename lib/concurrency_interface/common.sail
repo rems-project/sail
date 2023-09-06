@@ -67,8 +67,8 @@
 
 $sail_internal
 
-$target_set emulator_or_isla isla c ocaml interpreter sv
-$target_set emulator c ocaml interpreter sv
+$target_set emulator_or_isla isla c ocaml interpreter systemverilog
+$target_set emulator c ocaml interpreter systemverilog
 $target_set prover lem coq
 
 $ifndef _CONCURRENCY_INTERFACE_COMMON
