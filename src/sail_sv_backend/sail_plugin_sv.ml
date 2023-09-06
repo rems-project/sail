@@ -243,22 +243,14 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
        - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
        - If the length is less than 64, then use a small bits type, sbits.
        - If the length may be larger than 64, use a large bits type lbits. *)
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order _, _)]) when string_of_id id = "bitvector" ->
-        let direction = true in
-        (* match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
-        begin
-          match solve_unique ctx.local_env n with
-          | Some n -> CT_fbits (Big_int.to_int n, direction)
-          | _ -> CT_lbits direction
-        end
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order _, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
-        let direction = true in
-        (* let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
-        begin
-          match nexp_simp n with
-          | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, direction, convert_typ ctx typ)
-          | _ -> CT_vector (direction, convert_typ ctx typ)
-        end
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> begin
+        match solve_unique ctx.local_env n with Some n -> CT_fbits (Big_int.to_int n) | _ -> CT_lbits
+      end
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> begin
+        match nexp_simp n with
+        | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, convert_typ ctx typ)
+        | _ -> CT_vector (convert_typ ctx typ)
+      end
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records ->
         CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)

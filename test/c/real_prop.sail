@@ -59,12 +59,16 @@ function main() = {
        assert(abs_real(x) == x, "abs_id")
     };
 
+    assert(sqrt(x * x) - abs_real(x) == 0.0, "sqrt_square_is_abs");
+
+    let a = abs_real(x);
+    let s = sqrt(a);
+    assert(floor(abs_real(s * s - a)) == 0, "sqrt_floor_zero");
+    assert(ceil(abs_real(s * s - a)) == 1, "sqrt_ceil_one");
+    assert(abs_real((s * s) - a) <= 0.000000001, "sqrt_close");
+    assert(abs_real((s * s) / a - 1.0) <= 0.000000001, "sqrt_close_relative");
     if x > 1.0 then {
-      let s = sqrt(x);
       assert(s < x, "sqrt_lt");
-      assert(floor(abs_real(s * s - x)) == 0, "sqrt_floor_zero");
-      assert(ceil(abs_real(s * s - x)) == 1, "sqrt_ceil_one");
-      assert(abs_real((s * s) - x) <= 0.000000001, "sqrt_close")
     };
 
     assert(to_real(floor(x)) <= x, "floor_lteq");

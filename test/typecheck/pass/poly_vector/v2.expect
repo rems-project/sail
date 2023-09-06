@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mpass/poly_vector/v2.sail[0m:5.5-14:
-5[96m |[0mtype bitvector('n, 'ord: Order) = vector('n, 'ord, bit)
- [91m |[0m     [91m^-------^[0m
- [91m |[0m Cannot define type synonym bitvector, as a type or synonym with that name already exists
+[96mpass/poly_vector/v2.sail[0m:7.30-48:
+7[96m |[0mval "to_generic" : forall 'n. bitvector('n, dec) -> vector('n, dec, bit)
+ [91m |[0m                              [91m^----------------^[0m
+ [91m |[0m bitvector : Int -> Type expected 1 arguments, given 2

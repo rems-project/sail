@@ -4,7 +4,7 @@
 (using dune_site 0.1)
 
 (name sail)
-(version 0.15)
+(version 0.16)
 
 (generate_opam_files true)
 
@@ -57,7 +57,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     conf-gmp
     conf-zlib
     (yojson (>= 1.6.0))
-    pprint))
+    (pprint (>= 20220103))))
 
 (package
   (name sail_ocaml_backend)

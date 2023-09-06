@@ -1,10 +1,10 @@
 (env
  (dev
   (flags
-   (:standard -w -33 -w -27 -w -32 -w -26 -w -37)))
+   (:standard -w -27)))
  (release
   (flags
-   (:standard -w -33 -w -27 -w -32 -w -26 -w -37))))
+   (:standard -w -27))))
 
 (executable
  (name sail_plugin_lem)

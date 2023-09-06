@@ -138,9 +138,9 @@ ctyp :: 'CT_' ::=
 % lbits is a large (l) arbitrary precision bitvector
 % sbits is a small (s) bitvector, such that sbits(n, _) is guaranteed to have a length of at most n.
 % fbits is a fixed (f) bitvector, such that fbits(n, _) has a length of exactly n bits
-  | lbits ( bool )            :: :: lbits
-  | sbits ( nat , bool )      :: :: sbits
-  | fbits ( nat , bool )      :: :: fbits
+  | lbits                     :: :: lbits
+  | sbits ( nat )             :: :: sbits
+  | fbits ( nat )             :: :: fbits
 
 % Other Sail types
   | unit                      :: :: unit
@@ -167,8 +167,8 @@ ctyp :: 'CT_' ::=
   | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
-  | fvector ( nat , bool , ctyp )  :: :: fvector
-  | vector ( bool , ctyp )         :: :: vector
+  | fvector ( nat , ctyp )  :: :: fvector
+  | vector ( ctyp )         :: :: vector
   | list ( ctyp )                  :: :: list
 
   | ref ( ctyp )                   :: :: ref

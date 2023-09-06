@@ -412,7 +412,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       )
       def_annot.doc_comment
 
-  let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _, _), vs_annot) as vs) =
+  let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _), vs_annot) as vs) =
     {
       source = doc_loc (fst vs_annot) Type_check.strip_val_spec Pretty_print_sail.doc_spec vs;
       type_source = doc_loc ts_l (fun ts -> ts) Pretty_print_sail.doc_typschm ts;
@@ -600,9 +600,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
          specified via -doc_file, we push true to skip it. If no
          -doc_file flags are passed, include everything. *)
       | DEF_pragma (("file_start" | "include_start"), path, _) -> (docinfo, skip_file path :: skips)
-      | DEF_pragma (("file_end" | "include_end"), _, _) -> (
-          (docinfo, match skips with _ :: skips -> skips | [] -> [])
-        )
+      | DEF_pragma (("file_end" | "include_end"), _, _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
           let id = id_of_fundef fdef in

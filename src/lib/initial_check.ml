@@ -78,16 +78,59 @@ module P = Parse_ast
 let opt_undefined_gen = ref false
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
-let opt_enum_casts = ref false
+
+module StringSet = Set.Make (String)
+module StringMap = Map.Make (String)
+
+(* These are types that are defined in Sail, but we rely on them
+   having specific definitions, so we only allow them to be defined in
+   $sail_internal marked files in the prelude. *)
+let reserved_type_ids = IdSet.of_list [mk_id "result"; mk_id "option"]
+
+type type_constructor = kind_aux option list
 
 type ctx = {
   kinds : kind_aux KBindings.t;
-  type_constructors : kind_aux list Bindings.t;
+  type_constructors : type_constructor Bindings.t;
   scattereds : ctx Bindings.t;
-  reserved_type_ids : id list;
-  internal_files : string list;
-  target_sets : (string * string list) list;
+  internal_files : StringSet.t;
+  target_sets : string list StringMap.t;
 }
+
+let rec equal_ctx ctx1 ctx2 =
+  KBindings.equal ( = ) ctx1.kinds ctx2.kinds
+  && Bindings.equal ( = ) ctx1.type_constructors ctx2.type_constructors
+  && Bindings.equal equal_ctx ctx1.scattereds ctx2.scattereds
+  && StringSet.equal ctx1.internal_files ctx2.internal_files
+  && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
+
+let merge_ctx l ctx1 ctx2 =
+  let compatible equal err k x y =
+    match (x, y) with
+    | None, None -> None
+    | Some x, None -> Some x
+    | None, Some y -> Some y
+    | Some x, Some y -> if equal x y then Some x else raise (Reporting.err_general l (err k))
+  in
+  {
+    kinds =
+      KBindings.merge
+        (compatible ( = ) (fun v -> "Mismatching kinds for type variable " ^ string_of_kid v))
+        ctx1.kinds ctx2.kinds;
+    type_constructors =
+      Bindings.merge
+        (compatible ( = ) (fun id -> "Different definitions for type constructor " ^ string_of_id id ^ " found"))
+        ctx1.type_constructors ctx2.type_constructors;
+    scattereds =
+      Bindings.merge
+        (compatible equal_ctx (fun id -> "Scattered definition " ^ string_of_id id ^ " found with mismatching context"))
+        ctx1.scattereds ctx2.scattereds;
+    internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
+    target_sets =
+      StringMap.merge
+        (compatible ( = ) (fun s -> "Mismatching target set " ^ s ^ " found"))
+        ctx1.target_sets ctx2.target_sets;
+  }
 
 let string_of_parse_id_aux = function P.Id v -> v | P.Operator v -> v
 
@@ -103,17 +146,16 @@ let string_contains str char =
 
 let to_ast_kind (P.K_aux (k, l)) =
   match k with
-  | P.K_type -> K_aux (K_type, l)
-  | P.K_int -> K_aux (K_int, l)
-  | P.K_order -> K_aux (K_order, l)
-  | P.K_bool -> K_aux (K_bool, l)
+  | P.K_type -> Some (K_aux (K_type, l))
+  | P.K_int -> Some (K_aux (K_int, l))
+  | P.K_order -> None
+  | P.K_bool -> Some (K_aux (K_bool, l))
 
 let to_ast_id ctx (P.Id_aux (id, l)) =
   let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
   if string_contains (string_of_parse_id_aux id) '#' then begin
     match Reporting.loc_file l with
-    | Some file when !opt_magic_hash || List.exists (fun internal_file -> file = internal_file) ctx.internal_files ->
-        to_ast_id' id
+    | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> to_ast_id' id
     | None -> to_ast_id' id
     | _ -> raise (Reporting.err_general l "Identifier contains hash character and -dmagic_hash is unset")
   end
@@ -129,16 +171,16 @@ let format_kind_aux_list = function
 let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
   let mk_kopt v k =
     let v = to_ast_var v in
-    let k = to_ast_kind k in
-    (KOpt_aux (KOpt_kind (k, v), l), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds })
+    Option.map
+      (fun k -> (KOpt_aux (KOpt_kind (k, v), l), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }))
+      (to_ast_kind k)
   in
   match aux with
   | P.KOpt_kind (attr, vs, None) ->
       let k = P.K_aux (P.K_int, gen_loc l) in
       ( List.fold_left
           (fun (kopts, ctx) v ->
-            let kopt, ctx = mk_kopt v k in
-            (kopt :: kopts, ctx)
+            match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
           )
           ([], ctx) vs,
         attr
@@ -146,8 +188,7 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
   | P.KOpt_kind (attr, vs, Some k) ->
       ( List.fold_left
           (fun (kopts, ctx) v ->
-            let kopt, ctx = mk_kopt v k in
-            (kopt :: kopts, ctx)
+            match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
           )
           ([], ctx) vs,
         attr
@@ -175,14 +216,23 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
       begin
         match Bindings.find_opt id ctx.type_constructors with
         | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-        | Some kinds when List.length args <> List.length kinds ->
-            raise
-              (Reporting.err_typ l
-                 (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
-                    (format_kind_aux_list kinds) (List.length kinds) (List.length args)
-                 )
-              )
-        | Some kinds -> Typ_aux (Typ_app (id, List.map2 (to_ast_typ_arg ctx) args kinds), l)
+        | Some kinds ->
+            let non_order_kinds = Util.option_these kinds in
+            let args_len = List.length args in
+            if args_len = List.length non_order_kinds then
+              Typ_aux (Typ_app (id, List.map2 (to_ast_typ_arg ctx) args non_order_kinds), l)
+            else if args_len = List.length kinds then
+              Typ_aux
+                ( Typ_app (id, Util.option_these (List.map2 (fun arg -> Option.map (to_ast_typ_arg ctx arg)) args kinds)),
+                  l
+                )
+            else
+              raise
+                (Reporting.err_typ l
+                   (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
+                      (format_kind_aux_list non_order_kinds) (List.length kinds) (List.length args)
+                   )
+                )
       end
   | P.ATyp_exist (kopts, nc, atyp) ->
       let kopts, ctx =
@@ -203,7 +253,6 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
 and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_type -> A_aux (A_typ (to_ast_typ ctx atyp), l)
   | K_int -> A_aux (A_nexp (to_ast_nexp ctx atyp), l)
-  | K_order -> A_aux (A_order (to_ast_order ctx atyp), l)
   | K_bool -> A_aux (A_bool (to_ast_constraint ctx atyp), l)
 
 and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
@@ -237,7 +286,6 @@ and to_ast_bitfield_index_nexp ctx (P.ATyp_aux (aux, l)) =
 
 and to_ast_order ctx (P.ATyp_aux (aux, l)) =
   match aux with
-  | P.ATyp_var v -> Ord_aux (Ord_var (to_ast_var v), l)
   | P.ATyp_inc -> Ord_aux (Ord_inc, l)
   | P.ATyp_dec -> Ord_aux (Ord_dec, l)
   | P.ATyp_parens atyp -> to_ast_order ctx atyp
@@ -263,14 +311,17 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l)) =
                 let id = to_ast_id ctx id in
                 match Bindings.find_opt id ctx.type_constructors with
                 | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-                | Some kinds when List.length kinds <> 2 ->
-                    raise
-                      (Reporting.err_typ l
-                         (sprintf "%s : %s -> Bool expected %d arguments, given 2" (string_of_id id)
-                            (format_kind_aux_list kinds) (List.length kinds)
-                         )
-                      )
-                | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) [t1; t2] kinds)
+                | Some kinds ->
+                    let non_order_kinds = Util.option_these kinds in
+                    if List.length non_order_kinds = 2 then
+                      NC_app (id, List.map2 (to_ast_typ_arg ctx) [t1; t2] non_order_kinds)
+                    else
+                      raise
+                        (Reporting.err_typ l
+                           (sprintf "%s : %s -> Bool expected %d arguments, given 2" (string_of_id id)
+                              (format_kind_aux_list non_order_kinds) (List.length non_order_kinds)
+                           )
+                        )
               )
           end
         | P.ATyp_app (id, args) ->
@@ -278,14 +329,17 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l)) =
             begin
               match Bindings.find_opt id ctx.type_constructors with
               | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-              | Some kinds when List.length args <> List.length kinds ->
-                  raise
-                    (Reporting.err_typ l
-                       (sprintf "%s : %s -> Bool expected %d arguments, given %d" (string_of_id id)
-                          (format_kind_aux_list kinds) (List.length kinds) (List.length args)
-                       )
-                    )
-              | Some kinds -> NC_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
+              | Some kinds ->
+                  let non_order_kinds = Util.option_these kinds in
+                  if List.length args = List.length non_order_kinds then
+                    NC_app (id, List.map2 (to_ast_typ_arg ctx) args non_order_kinds)
+                  else
+                    raise
+                      (Reporting.err_typ l
+                         (sprintf "%s : %s -> Bool expected %d arguments, given %d" (string_of_id id)
+                            (format_kind_aux_list non_order_kinds) (List.length non_order_kinds) (List.length args)
+                         )
+                      )
             end
         | P.ATyp_var v -> NC_var (to_ast_var v)
         | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
@@ -516,6 +570,9 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
         | P.E_internal_return exp ->
             if !opt_magic_hash then E_internal_return (to_ast_exp ctx exp)
             else raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
+        | P.E_internal_assume (nc, exp) ->
+            if !opt_magic_hash then E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp)
+            else raise (Reporting.err_general l "Internal assume construct found without -dmagic_hash")
         | P.E_deref exp -> E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
       in
       E_aux (aux, (l, empty_uannot))
@@ -613,17 +670,17 @@ type 'a ctx_out = 'a * ctx
 
 let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out =
   match default with
-  | P.DT_aux (P.DT_order (k, o), l) -> (
-      let k = to_ast_kind k in
-      match (k, o) with
-      | K_aux (K_order, _), P.ATyp_aux (P.ATyp_inc, lo) ->
+  | P.DT_aux (P.DT_order (P.K_aux (P.K_order, _), o), l) -> (
+      match o with
+      | P.ATyp_aux (P.ATyp_inc, lo) ->
           let default_order = Ord_aux (Ord_inc, lo) in
           (DT_aux (DT_order default_order, l), ctx)
-      | K_aux (K_order, _), P.ATyp_aux (P.ATyp_dec, lo) ->
+      | P.ATyp_aux (P.ATyp_dec, lo) ->
           let default_order = Ord_aux (Ord_dec, lo) in
           (DT_aux (DT_order default_order, l), ctx)
-      | _ -> raise (Reporting.err_typ l "Inc and Dec must have kind Order")
+      | _ -> raise (Reporting.err_typ l "default Order must be inc or dec")
     )
+  | P.DT_aux (_, l) -> raise (Reporting.err_typ l "default must specify Order")
 
 let to_ast_extern (ext : P.extern) : extern = { pure = ext.pure; bindings = ext.bindings }
 
@@ -631,10 +688,10 @@ let to_ast_spec ctx (vs : P.val_spec) : uannot val_spec ctx_out =
   match vs with
   | P.VS_aux (vs, l) -> (
       match vs with
-      | P.VS_val_spec (ts, id, ext, is_cast) ->
+      | P.VS_val_spec (ts, id, ext) ->
           let typschm, _ = to_ast_typschm ctx ts in
           let ext = Option.map to_ast_extern ext in
-          (VS_aux (VS_val_spec (typschm, to_ast_id ctx id, ext, is_cast), (l, empty_uannot)), ctx)
+          (VS_aux (VS_val_spec (typschm, to_ast_id ctx id, ext), (l, empty_uannot)), ctx)
     )
 
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
@@ -670,7 +727,7 @@ let to_ast_type_union ctx = function
       raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
 let add_constructor id typq ctx =
-  let kinds = List.map (fun kopt -> unaux_kind (kopt_kind kopt)) (quant_kopts typq) in
+  let kinds = List.map (fun kopt -> Some (unaux_kind (kopt_kind kopt))) (quant_kopts typq) in
   { ctx with type_constructors = Bindings.add id kinds ctx.type_constructors }
 
 let anon_rec_constructor_typ record_id = function
@@ -757,7 +814,7 @@ let generate_enum_functions l ctx enum_id fns exps =
                  )
               );
           ];
-        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ), name, None, false));
+        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ), name, None));
       ]
     )
     fns
@@ -766,9 +823,9 @@ let generate_enum_functions l ctx enum_id fns exps =
 (* When desugaring a type definition, we check that the type does not have a reserved name *)
 let to_ast_reserved_type_id ctx id =
   let id = to_ast_id ctx id in
-  if List.exists (fun reserved -> Id.compare reserved id = 0) ctx.reserved_type_ids then begin
+  if IdSet.mem id reserved_type_ids then begin
     match Reporting.loc_file (id_loc id) with
-    | Some file when !opt_magic_hash || List.exists (fun internal_file -> file = internal_file) ctx.internal_files -> id
+    | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> id
     | None -> id
     | Some file -> raise (Reporting.err_general (id_loc id) (sprintf "The type name %s is reserved" (string_of_id id)))
   end
@@ -779,11 +836,15 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
       let id = to_ast_reserved_type_id ctx id in
       let typq, typq_ctx = to_ast_typquant ctx typq in
-      let kind = to_ast_kind kind in
-      let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
-      ( [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
-        add_constructor id typq ctx
-      )
+      begin
+        match to_ast_kind kind with
+        | Some kind ->
+            let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
+            ( [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
+              add_constructor id typq ctx
+            )
+        | None -> ([], ctx)
+      end
   | P.TD_record (id, typq, fields, _) ->
       let id = to_ast_reserved_type_id ctx id in
       let typq, typq_ctx = to_ast_typquant ctx typq in
@@ -863,7 +924,7 @@ let to_ast_funcl ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
   | P.FCL_funcl (id, pexp) -> (
-      match List.assoc_opt (string_of_parse_id id) ctx.target_sets with
+      match StringMap.find_opt (string_of_parse_id id) ctx.target_sets with
       | Some targets ->
           List.map
             (fun target ->
@@ -1041,7 +1102,7 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
       match Reporting.loc_file l with
       | Some file ->
           ( [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)],
-            { ctx with internal_files = file :: ctx.internal_files }
+            { ctx with internal_files = StringSet.add file ctx.internal_files }
           )
       | None -> ([DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx)
     end
@@ -1051,7 +1112,7 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
         match args with
         | set :: targets ->
             ( [DEF_aux (DEF_pragma ("target_set", arg, l), annot)],
-              { ctx with target_sets = (set, targets) :: ctx.target_sets }
+              { ctx with target_sets = StringMap.add set targets ctx.target_sets }
             )
         | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
       end
@@ -1113,21 +1174,20 @@ let initial_ctx =
           ("bit", []);
           ("string", []);
           ("real", []);
-          ("list", [K_type]);
-          ("register", [K_type]);
-          ("range", [K_int; K_int]);
-          ("bitvector", [K_int; K_order]);
-          ("vector", [K_int; K_order; K_type]);
-          ("atom", [K_int]);
-          ("implicit", [K_int]);
-          ("itself", [K_int]);
-          ("not", [K_bool]);
+          ("list", [Some K_type]);
+          ("register", [Some K_type]);
+          ("range", [Some K_int; Some K_int]);
+          ("bitvector", [Some K_int; None]);
+          ("vector", [Some K_int; None; Some K_type]);
+          ("atom", [Some K_int]);
+          ("implicit", [Some K_int]);
+          ("itself", [Some K_int]);
+          ("not", [Some K_bool]);
         ];
     kinds = KBindings.empty;
     scattereds = Bindings.empty;
-    reserved_type_ids = [mk_id "result"; mk_id "option"];
-    internal_files = [];
-    target_sets = [];
+    internal_files = StringSet.empty;
+    target_sets = StringMap.empty;
   }
 
 let exp_of_string str =
@@ -1157,9 +1217,9 @@ let constraint_of_string str =
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let extern_of_string ?(pure = false) id str =
-  VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }, false) |> mk_val_spec
+  VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }) |> mk_val_spec
 
-let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None, false))
+let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None))
 
 let quant_item_param = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
@@ -1197,7 +1257,7 @@ let undefined_builtin_val_specs =
     extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m)";
     extern_of_string (mk_id "undefined_vector")
       "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a)";
-    extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n, dec)";
+    extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n)";
     extern_of_string (mk_id "undefined_unit") "unit -> unit";
   ]
 
@@ -1269,7 +1329,7 @@ let generate_undefineds vs_ids defs =
           letbinds
       )
     in
-    ( mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false)),
+    ( mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None)),
       mk_fundef [mk_funcl (prepend_id "undefined_" id) pat body]
     )
   in
@@ -1277,7 +1337,7 @@ let generate_undefineds vs_ids defs =
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
         let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
         [
-          mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None, false));
+          mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None));
           mk_fundef
             [
               mk_funcl (prepend_id "undefined_" id)
@@ -1293,7 +1353,7 @@ let generate_undefineds vs_ids defs =
           p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
         in
         [
-          mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
+          mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
           mk_fundef
             [
               mk_funcl (prepend_id "undefined_" id) pat
@@ -1358,7 +1418,7 @@ let generate_enum_functions vs_ids defs =
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->
             let enum_val_spec name quants typ =
-              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
+              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None))
             in
             let range_constraint kid =
               nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))

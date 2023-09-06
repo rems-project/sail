@@ -264,15 +264,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Argument to int_size must be an integer type"
 
   let bv_size = function
-    | CT_fbits (sz, _) -> sz
-    | CT_sbits (sz, _) -> sz
-    | CT_lbits _ -> lbits_size
+    | CT_fbits sz | CT_sbits sz -> sz
+    | CT_lbits -> lbits_size
     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Argument to bv_size must be a bitvector type"
 
   let to_fbits ctyp bv =
     match ctyp with
-    | CT_fbits (n, _) -> (n, bv)
-    | CT_lbits _ -> (lbits_size, Fn ("contents", [bv]))
+    | CT_fbits n -> (n, bv)
+    | CT_lbits -> (lbits_size, Fn ("contents", [bv]))
     | _ ->
         Reporting.unreachable Parse_ast.Unknown __POS__
           (Printf.sprintf "Type %s must be a bitvector in to_fbits" (string_of_ctyp ctyp))
@@ -280,7 +279,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let literal vl ctyp =
     let open Value2 in
     match (vl, ctyp) with
-    | VL_bits (bv, true), CT_fbits (n, _) -> unsigned_size ~into:n ~from:(List.length bv) (Bitvec_lit bv)
+    | VL_bits bv, CT_fbits n -> unsigned_size ~into:n ~from:(List.length bv) (Bitvec_lit bv)
     | VL_bool b, _ -> return (Bool_lit b)
     | VL_int n, CT_constant m -> return (bvint (required_width n) n)
     | VL_int n, CT_fint sz -> return (bvint sz n)
@@ -449,16 +448,16 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_constant c, CT_lint -> return (bvint lint_size c)
     | CT_fint sz, CT_lint -> signed_size ~into:lint_size ~from:sz x
     | CT_lint, CT_fint sz -> signed_size ~into:sz ~from:lint_size x
-    | CT_lint, CT_fbits (n, _) -> signed_size ~into:n ~from:lint_size x
-    | CT_lint, CT_lbits _ ->
+    | CT_lint, CT_fbits n -> signed_size ~into:n ~from:lint_size x
+    | CT_lint, CT_lbits ->
         let* x = signed_size ~into:lbits_size ~from:lint_size x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int lint_size); x]))
-    | CT_fint n, CT_lbits _ ->
+    | CT_fint n, CT_lbits ->
         let* x = signed_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
-    | CT_lbits _, CT_fbits (n, _) -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [x]))
-    | CT_fbits (n, _), CT_fbits (m, _) -> unsigned_size ~into:m ~from:n x
-    | CT_fbits (n, _), CT_lbits _ ->
+    | CT_lbits, CT_fbits n -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [x]))
+    | CT_fbits n, CT_fbits m -> unsigned_size ~into:m ~from:n x
+    | CT_fbits n, CT_lbits ->
         let* x = unsigned_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
     | _, _ ->
@@ -496,9 +495,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_signed v ret_ctyp =
     let* sv = smt_cval v in
     match (cval_ctyp v, ret_ctyp) with
-    | CT_fbits (n, _), CT_fint m when m >= n -> return (SignExtend (m, m - n, sv))
-    | CT_fbits (n, _), CT_lint -> return (SignExtend (lint_size, lint_size - n, sv))
-    | CT_lbits _, CT_lint ->
+    | CT_fbits n, CT_fint m when m >= n -> return (SignExtend (m, m - n, sv))
+    | CT_fbits n, CT_lint -> return (SignExtend (lint_size, lint_size - n, sv))
+    | CT_lbits, CT_lint ->
         let contents = Fn ("contents", [sv]) in
         let top_bit_shift = ZeroExtend (lbits_size, lbits_index, bvsub (Fn ("len", [sv])) (bvone lbits_index)) in
         let top_bit = Extract (0, 0, bvlshr contents top_bit_shift) in
@@ -512,10 +511,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_unsigned v ret_ctyp =
     let* sv = smt_cval v in
     match (cval_ctyp v, ret_ctyp) with
-    | CT_fbits (n, _), CT_fint m when m > n -> return (Fn ("concat", [bvzero (m - n); sv]))
-    | CT_fbits (n, _), CT_lint -> return (Fn ("concat", [bvzero (lint_size - n); sv]))
-    | CT_lbits _, CT_lint -> signed_size ~into:lint_size ~from:lbits_size (Fn ("contents", [sv]))
-    | CT_lbits _, CT_fint m -> signed_size ~into:m ~from:lbits_size (Fn ("contents", [sv]))
+    | CT_fbits n, CT_fint m when m > n -> return (Fn ("concat", [bvzero (m - n); sv]))
+    | CT_fbits n, CT_lint -> return (Fn ("concat", [bvzero (lint_size - n); sv]))
+    | CT_lbits, CT_lint -> signed_size ~into:lint_size ~from:lbits_size (Fn ("contents", [sv]))
+    | CT_lbits, CT_fint m -> signed_size ~into:m ~from:lbits_size (Fn ("contents", [sv]))
     | _, _ -> builtin_type_error "unsigned" [v] (Some ret_ctyp)
 
   let bvmask len =
@@ -525,11 +524,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_shift shiftop vbits vshift ret_ctyp =
     match cval_ctyp vbits with
-    | CT_fbits (n, _) ->
+    | CT_fbits n ->
         let* bv = smt_cval vbits in
         let* shift = bvzeint n vshift in
         return (Fn (shiftop, [bv; shift]))
-    | CT_lbits _ ->
+    | CT_lbits ->
         let* bv = smt_cval vbits in
         let* shift = bvzeint lbits_size vshift in
         let shifted =
@@ -544,18 +543,18 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_slice v1 v2 v3 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
-    | CT_lbits _, CT_constant start, CT_constant len, CT_fbits (_, _) ->
+    | CT_lbits, CT_constant start, CT_constant len, CT_fbits _ ->
         let top = Big_int.pred (Big_int.add start len) in
         let* v1 = smt_cval v1 in
         return (Extract (Big_int.to_int top, Big_int.to_int start, Fn ("contents", [v1])))
-    | CT_fbits (_, _), CT_constant start, CT_constant len, CT_fbits (_, _) ->
+    | CT_fbits _, CT_constant start, CT_constant len, CT_fbits _ ->
         let top = Big_int.pred (Big_int.add start len) in
         let* v1 = smt_cval v1 in
         return (Extract (Big_int.to_int top, Big_int.to_int start, v1))
-    | CT_fbits (_, ord), CT_fint _, CT_constant len, CT_fbits (_, _) ->
+    | CT_fbits _, CT_fint _, CT_constant len, CT_fbits _ ->
         let* shifted = builtin_shift "bvlshr" v1 v2 (cval_ctyp v1) in
         return (Extract (Big_int.to_int (Big_int.pred len), 0, shifted))
-    | ctyp1, ctyp2, _, CT_lbits _ ->
+    | ctyp1, ctyp2, _, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let sz, smt1 = to_fbits ctyp1 smt1 in
         let* smt1 = unsigned_size ~into:lbits_size ~from:sz smt1 in
@@ -566,16 +565,16 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_zeros v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
-    | _, CT_fbits (n, _) -> return (bvzero n)
-    | CT_constant c, CT_lbits _ -> return (Fn ("Bits", [bvint lbits_index c; bvzero lbits_size]))
-    | ctyp, CT_lbits _ when int_size ctyp >= lbits_index ->
+    | _, CT_fbits n -> return (bvzero n)
+    | CT_constant c, CT_lbits -> return (Fn ("Bits", [bvint lbits_index c; bvzero lbits_size]))
+    | ctyp, CT_lbits when int_size ctyp >= lbits_index ->
         let* v = smt_cval v in
         return (Fn ("Bits", [extract (lbits_index - 1) 0 v; bvzero lbits_size]))
     | _ -> builtin_type_error "zeros" [v] (Some ret_ctyp)
 
   let builtin_ones cval = function
-    | CT_fbits (n, _) -> return (bvones n)
-    | CT_lbits _ ->
+    | CT_fbits n -> return (bvones n)
+    | CT_lbits ->
         let* v = smt_cval cval in
         let len = extract (lbits_index - 1) 0 v in
         return (Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvones lbits_size])]))
@@ -583,18 +582,18 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_zero_extend vbits vlen ret_ctyp =
     match (cval_ctyp vbits, cval_ctyp vlen, ret_ctyp) with
-    | CT_fbits (n, _), _, CT_fbits (m, _) when n = m -> smt_cval vbits
-    | CT_fbits (n, _), _, CT_fbits (m, _) ->
+    | CT_fbits n, _, CT_fbits m when n = m -> smt_cval vbits
+    | CT_fbits n, _, CT_fbits m ->
         let* bv = smt_cval vbits in
         return (Fn ("concat", [bvzero (m - n); bv]))
-    | CT_fbits (n, _), CT_fint m, CT_lbits _ ->
+    | CT_fbits n, CT_fint m, CT_lbits ->
         let* bv = smt_cval vbits in
         return (Fn ("concat", [bvzero (m - n); bv]))
-    | CT_lbits _, _, CT_fbits (m, _) ->
+    | CT_lbits, _, CT_fbits m ->
         let* bv = smt_cval vbits in
         return (Extract (m - 1, 0, Fn ("contents", [bv])))
         (*
-    | CT_fbits (n, _), CT_lbits _ ->
+    | CT_fbits n, CT_lbits ->
       assert (lbits_size ctx >= n);
       let vbits =
         if lbits_size ctx = n then smt_cval ctx vbits
@@ -603,7 +602,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
       in
       Fn ("Bits", [bvzeint ctx ctx.lbits_index vlen; vbits])
            *)
-    | CT_lbits _, CT_lint, CT_lbits _ ->
+    | CT_lbits, CT_lint, CT_lbits ->
         let* len = smt_cval vlen in
         let* bv = smt_cval vbits in
         return (Fn ("Bits", [extract (lbits_index - 1) 0 len; Fn ("contents", [bv])]))
@@ -612,11 +611,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_sign_extend vbits vlen ret_ctyp =
     let* bv = smt_cval vbits in
     match (cval_ctyp vbits, cval_ctyp vlen, ret_ctyp) with
-    | CT_fbits (n, _), _, CT_fbits (m, _) when n = m -> smt_cval vbits
-    | CT_fbits (n, _), _, CT_fbits (m, _) ->
+    | CT_fbits n, _, CT_fbits m when n = m -> smt_cval vbits
+    | CT_fbits n, _, CT_fbits m ->
         let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); bvone 1]) in
         return (Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv])))
-    | CT_lbits _, i_ctyp, CT_lbits _ ->
+    | CT_lbits, i_ctyp, CT_lbits ->
         let* len = smt_cval vlen in
         let contents = Fn ("contents", [bv]) in
         let top_bit_shift = ZeroExtend (lbits_size, lbits_index, bvsub (Fn ("len", [bv])) (bvone lbits_index)) in
@@ -632,18 +631,18 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_replicate_bits vbits vtimes ret_ctyp =
     match (cval_ctyp vbits, cval_ctyp vtimes, ret_ctyp) with
-    | CT_fbits (n, _), _, CT_fbits (m, _) ->
+    | CT_fbits n, _, CT_fbits m ->
         let* bits = smt_cval vbits in
         let times = m / n in
         return (Fn ("concat", List.init times (fun _ -> bits)))
-    | CT_fbits (n, _), vtimes_ctyp, CT_lbits _ ->
+    | CT_fbits n, vtimes_ctyp, CT_lbits ->
         let max_times = (lbits_size / n) + 1 in
         let* times = bind (smt_cval vtimes) (signed_size ~into:lbits_index ~from:(int_size vtimes_ctyp)) in
         let len = bvmul (bvpint lbits_index (Big_int.of_int n)) times in
         let* bits = smt_cval vbits in
         let contents = Extract (lbits_size - 1, 0, Fn ("concat", List.init max_times (fun _ -> bits))) in
         return (Fn ("Bits", [len; Fn ("bvand", [bvmask len; contents])]))
-    | CT_lbits _, vtimes_ctyp, CT_lbits _ ->
+    | CT_lbits, vtimes_ctyp, CT_lbits ->
         let* bits = smt_cval vbits in
         let* times = bind (smt_cval vtimes) (signed_size ~into:lbits_index ~from:(int_size vtimes_ctyp)) in
         let new_len = bvmul (Fn ("len", [bits])) times in
@@ -664,14 +663,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_not_bits v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
-    | CT_lbits _, CT_fbits (n, _) ->
+    | CT_lbits, CT_fbits n ->
         let* bv = smt_cval v in
         return (bvnot (Extract (n - 1, 0, Fn ("contents", [bv]))))
-    | CT_lbits _, CT_lbits _ ->
+    | CT_lbits, CT_lbits ->
         let* bv = smt_cval v in
         let len = Fn ("len", [bv]) in
         return (Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvnot (Fn ("contents", [bv]))])]))
-    | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
+    | CT_fbits n, CT_fbits m when n = m ->
         let* bv = smt_cval v in
         return (bvnot bv)
     | _, _ -> builtin_type_error "not_bits" [v] (Some ret_ctyp)
@@ -679,8 +678,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_length v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
     | _, CT_constant len -> return (bvpint (int_size ret_ctyp) len)
-    | CT_fbits (n, _), _ -> return (bvpint (int_size ret_ctyp) (Big_int.of_int n))
-    | CT_lbits _, _ ->
+    | CT_fbits n, _ -> return (bvpint (int_size ret_ctyp) (Big_int.of_int n))
+    | CT_lbits, _ ->
         let* bv = smt_cval v in
         unsigned_size ~into:(int_size ret_ctyp) ~from:lbits_index (Fn ("len", [bv]))
     | _ -> builtin_type_error "length" [v] (Some ret_ctyp)
@@ -689,11 +688,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     let* smt1 = smt_cval v1 in
     let* smt2 = smt_cval v2 in
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+    | CT_fbits n, CT_fbits m, CT_fbits o ->
         (* The Sail type system should guarantee this *)
         assert (n = m && m = o);
         return (Fn (op, [smt1; smt2]))
-    | CT_lbits _, CT_lbits _, CT_lbits _ ->
+    | CT_lbits, CT_lbits, CT_lbits ->
         return (Fn ("Bits", [Fn ("len", [smt1]); Fn (op, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])]))
     | _ -> builtin_type_error ("arith_bits " ^ op) [v1; v2] (Some ret_ctyp)
 
@@ -701,30 +700,30 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     let* smt1 = smt_cval v1 in
     let* smt2 = smt_cval v2 in
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | CT_fbits (n, _), CT_constant c, CT_fbits (o, _) ->
+    | CT_fbits n, CT_constant c, CT_fbits o ->
         assert (n = o);
         return (Fn (op, [smt1; bvint o c]))
-    | CT_fbits (n, _), CT_fint m, CT_fbits (o, _) ->
+    | CT_fbits n, CT_fint m, CT_fbits o ->
         assert (n = o);
         let* smt2 = signed_size ~into:o ~from:m smt2 in
         return (Fn (op, [smt1; smt2]))
-    | CT_fbits (n, _), CT_lint, CT_fbits (o, _) ->
+    | CT_fbits n, CT_lint, CT_fbits o ->
         assert (n = o);
         let* smt2 = signed_size ~into:o ~from:lint_size smt2 in
         return (Fn (op, [smt1; smt2]))
-    | CT_lbits _, v2_ctyp, CT_lbits _ ->
+    | CT_lbits, v2_ctyp, CT_lbits ->
         let* smt2 = signed_size ~into:lbits_size ~from:(int_size v2_ctyp) smt2 in
         return (Fn ("Bits", [Fn ("len", [smt1]); Fn (op, [Fn ("contents", [smt1]); smt2])]))
     | _ -> builtin_type_error ("arith_bits_int " ^ op) [v1; v2] (Some ret_ctyp)
 
   let builtin_eq_bits v1 v2 =
     match (cval_ctyp v1, cval_ctyp v2) with
-    | CT_fbits (n, _), CT_fbits (m, _) ->
+    | CT_fbits n, CT_fbits m ->
         let o = max n m in
         let* smt1 = bind (smt_cval v1) (unsigned_size ~into:o ~from:n) in
         let* smt2 = bind (smt_cval v2) (unsigned_size ~into:o ~from:n) in
         return (Fn ("=", [smt1; smt2]))
-    | CT_lbits _, CT_lbits _ ->
+    | CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         let len1 = Fn ("len", [smt1]) in
@@ -740,11 +739,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                ]
              )
           )
-    | CT_lbits _, CT_fbits (n, _) ->
+    | CT_lbits, CT_fbits n ->
         let* smt1 = bind (smt_cval v1) (fun bv -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [bv]))) in
         let* smt2 = smt_cval v2 in
         return (Fn ("=", [smt1; smt2]))
-    | CT_fbits (n, _), CT_lbits _ ->
+    | CT_fbits n, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = bind (smt_cval v2) (fun bv -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [bv]))) in
         return (Fn ("=", [smt1; smt2]))
@@ -756,12 +755,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_append v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+    | CT_fbits n, CT_fbits m, CT_fbits o ->
         assert (n + m = o);
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         return (Fn ("concat", [smt1; smt2]))
-    | CT_fbits (n, _), CT_lbits _, CT_lbits _ ->
+    | CT_fbits n, CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         let x = Fn ("concat", [bvzero (lbits_size - n); smt1]) in
@@ -775,12 +774,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                ]
              )
           )
-    | CT_lbits _, CT_fbits (n, _), CT_fbits (m, _) ->
+    | CT_lbits, CT_fbits n, CT_fbits m ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         return (Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2])))
         (*
-    | CT_lbits _, CT_fbits (n, _), CT_lbits _ ->
+    | CT_lbits, CT_fbits n, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn
@@ -790,7 +789,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             Extract (lbits_size ctx - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]));
           ]
         )
-    | CT_fbits (n, _), CT_fbits (m, _), CT_lbits _ ->
+    | CT_fbits n, CT_fbits m, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn
@@ -801,7 +800,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           ]
         )
            *)
-    | CT_lbits _, CT_lbits _, CT_lbits _ ->
+    | CT_lbits, CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         let x = Fn ("contents", [smt1]) in
@@ -810,7 +809,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           (Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
           )
         (*
-    | CT_lbits _, CT_lbits _, CT_fbits (n, _) ->
+    | CT_lbits, CT_lbits, CT_fbits n ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       let x = Fn ("contents", [smt1]) in
@@ -821,12 +820,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_sail_truncate v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | v1_ctyp, CT_constant c, CT_fbits (m, _) ->
+    | v1_ctyp, CT_constant c, CT_fbits m ->
         let* smt1 = smt_cval v1 in
         let sz, bv = to_fbits v1_ctyp smt1 in
         assert (Big_int.to_int c = m && m <= sz);
         return (Extract (Big_int.to_int c - 1, 0, bv))
-    | v1_ctyp, _, CT_lbits _ ->
+    | v1_ctyp, _, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let sz, bv = to_fbits v1_ctyp smt1 in
         let* smt1 = unsigned_size ~into:lbits_size ~from:sz bv in
@@ -836,19 +835,19 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_sail_truncateLSB v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | v1_ctyp, CT_constant c, CT_fbits (m, _) ->
+    | v1_ctyp, CT_constant c, CT_fbits m ->
         let* smt1 = smt_cval v1 in
         let sz, bv = to_fbits v1_ctyp smt1 in
         assert (Big_int.to_int c = m && m <= sz);
         return (Extract (sz - 1, sz - Big_int.to_int c, bv))
-    | CT_fbits (sz, _), _, CT_lbits _ ->
+    | CT_fbits sz, _, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* len = bvzeint lbits_index v2 in
         let shift = bvsub (bvpint lbits_index (Big_int.of_int sz)) len in
         let shifted = bvlshr smt1 (ZeroExtend (sz, lbits_index, shift)) in
         let* shifted = unsigned_size ~checked:false ~into:lbits_size ~from:sz shifted in
         return (Fn ("Bits", [len; shifted]))
-    | CT_lbits _, _, CT_lbits _ ->
+    | CT_lbits, _, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* len = bvzeint lbits_index v2 in
         let shift = bvsub (Fn ("len", [smt1])) len in
@@ -858,12 +857,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_bitwise fn v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-    | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+    | CT_fbits n, CT_fbits m, CT_fbits o ->
         assert (n = m && m = o);
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         return (Fn (fn, [smt1; smt2]))
-    | CT_lbits _, CT_lbits _, CT_lbits _ ->
+    | CT_lbits, CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         return (Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])]))
@@ -873,20 +872,20 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_vector_access vec i ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, ret_ctyp) with
-    | CT_fbits (n, _), CT_constant i, CT_bit ->
+    | CT_fbits n, CT_constant i, CT_bit ->
         let* bv = smt_cval vec in
         return (Extract (Big_int.to_int i, Big_int.to_int i, bv))
-    | CT_lbits _, CT_constant i, CT_bit ->
+    | CT_lbits, CT_constant i, CT_bit ->
         let* bv = smt_cval vec in
         return (Extract (Big_int.to_int i, Big_int.to_int i, Fn ("contents", [bv])))
-    | ((CT_lbits _ | CT_fbits _) as bv_ctyp), i_ctyp, CT_bit ->
+    | ((CT_lbits | CT_fbits _) as bv_ctyp), i_ctyp, CT_bit ->
         let* bv = smt_cval vec in
         let sz, bv = to_fbits bv_ctyp bv in
         let* i = smt_cval i in
         (* checked:false should be fine here, as the Sail type system has already checked the bounds *)
         let* shift = signed_size ~checked:false ~into:sz ~from:(int_size i_ctyp) i in
         return (Extract (0, 0, Fn ("bvlshr", [bv; shift])))
-    | CT_fvector (len, _, _), i_ctyp, _ ->
+    | CT_fvector (len, _), i_ctyp, _ ->
         let* vec = smt_cval vec in
         let* i =
           bind (smt_cval i)
@@ -902,14 +901,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_vector_subrange vec i j ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp) with
-    | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits _ ->
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits _ ->
         let* vec = smt_cval vec in
         return (Extract (Big_int.to_int i, Big_int.to_int j, vec))
-    | CT_lbits _, CT_constant i, CT_constant j, CT_fbits _ ->
+    | CT_lbits, CT_constant i, CT_constant j, CT_fbits _ ->
         let* vec = smt_cval vec in
         return (Extract (Big_int.to_int i, Big_int.to_int j, Fn ("contents", [vec])))
         (*
-    | CT_fbits (n, _), i_ctyp, CT_constant j, CT_lbits _ when Big_int.equal j Big_int.zero ->
+    | CT_fbits n, i_ctyp, CT_constant j, CT_lbits when Big_int.equal j Big_int.zero ->
       let i' = signed_size ~checked:false ctx ctx.lbits_index (int_size ctx i_ctyp) (smt_cval ctx i) in
       let len = bvadd i' (bvint ctx.lbits_index (Big_int.of_int 1)) in
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; unsigned_size ctx (lbits_size ctx) n (smt_cval ctx vec)])])
@@ -921,29 +920,29 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* j' = bind (smt_cval j) (signed_size ~into:sz ~from:(int_size j_ctyp)) in
         let len = bvadd (bvadd i' (bvneg j')) (bvint sz (Big_int.of_int 1)) in
         let extracted = bvand (bvlshr vec j') (fbits_mask sz len) in
-        smt_conversion (CT_fbits (sz, false)) ret_ctyp extracted
+        smt_conversion (CT_fbits sz) ret_ctyp extracted
 
   let builtin_vector_update vec i x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
-    | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
         assert (n = m);
         let* bv = smt_cval vec in
         let* x = smt_cval x in
         let top = Extract (n - 1, Big_int.to_int i + 1, bv) in
         let bot = Extract (Big_int.to_int i - 1, 0, bv) in
         return (Fn ("concat", [top; Fn ("concat", [x; bot])]))
-    | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
         let* bv = smt_cval vec in
         let* x = smt_cval x in
         let bot = Extract (Big_int.to_int i - 1, 0, bv) in
         return (Fn ("concat", [x; bot]))
-    | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
         let* bv = smt_cval vec in
         let* x = smt_cval x in
         let top = Extract (n - 1, 1, bv) in
         return (Fn ("concat", [top; x]))
-    | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval x
-    | CT_fbits (n, _), i_ctyp, CT_bit, CT_fbits (m, _) ->
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval x
+    | CT_fbits n, i_ctyp, CT_bit, CT_fbits m ->
         assert (n = m);
         let* bv = smt_cval vec in
         let* bit = smt_cval x in
@@ -952,7 +951,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let mask = bvnot (bvshl (ZeroExtend (n, n - 1, bvone 1)) shift) in
         let shifted_bit = bvshl (ZeroExtend (n, n - 1, bit)) shift in
         return (bvor (bvand mask bv) shifted_bit)
-    | CT_lbits _, i_ctyp, CT_bit, CT_lbits _ ->
+    | CT_lbits, i_ctyp, CT_bit, CT_lbits ->
         let* bv = smt_cval vec in
         let* bit = smt_cval x in
         (* Sail type system won't allow us to index out of range *)
@@ -961,7 +960,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let shifted_bit = bvshl (ZeroExtend (lbits_size, lbits_size - 1, bit)) shift in
         let contents = bvor (bvand mask (Fn ("contents", [bv]))) shifted_bit in
         return (Fn ("Bits", [Fn ("len", [bv]); contents]))
-    | CT_fvector (len, _, ctyp), i_ctyp, _, CT_fvector (len_out, _, _) ->
+    | CT_fvector (len, ctyp), i_ctyp, _, CT_fvector (len_out, _) ->
         assert (len = len_out);
         let* l = current_location in
         let store_fn = Primop_gen.fvector_store l len ctyp in
@@ -985,7 +984,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_vector_update_subrange vec i j x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp) with
-    | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
       when n - 1 > Big_int.to_int i && Big_int.to_int j > 0 ->
         assert (n = m);
         let* vec = smt_cval vec in
@@ -993,37 +992,37 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let top = Extract (n - 1, Big_int.to_int i + 1, vec) in
         let bot = Extract (Big_int.to_int j - 1, 0, vec) in
         return (Fn ("concat", [top; Fn ("concat", [x; bot])]))
-    | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
       when n - 1 = Big_int.to_int i && Big_int.to_int j > 0 ->
         assert (n = m);
         let* vec = smt_cval vec in
         let* x = smt_cval x in
         let bot = Extract (Big_int.to_int j - 1, 0, vec) in
         return (Fn ("concat", [x; bot]))
-    | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
       when n - 1 > Big_int.to_int i && Big_int.to_int j = 0 ->
         assert (n = m);
         let* vec = smt_cval vec in
         let* x = smt_cval x in
         let top = Extract (n - 1, Big_int.to_int i + 1, vec) in
         return (Fn ("concat", [top; x]))
-    | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
       when n - 1 = Big_int.to_int i && Big_int.to_int j = 0 ->
         smt_cval x
-    | CT_fbits (n, b), ctyp_i, ctyp_j, ctyp_x, CT_fbits (m, _) ->
+    | CT_fbits n, ctyp_i, ctyp_j, ctyp_x, CT_fbits m ->
         assert (n = m);
         let* vec = smt_cval vec in
         let* i' = bind (smt_cval i) (signed_size ~into:n ~from:(int_size ctyp_i)) in
         let* j' = bind (smt_cval j) (signed_size ~into:n ~from:(int_size ctyp_j)) in
-        let* x' = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits (n, b))) in
+        let* x' = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits n)) in
         let len = bvadd (bvadd i' (bvneg j')) (bvint n (Big_int.of_int 1)) in
         let mask = bvshl (fbits_mask n len) j' in
         return (bvor (bvand vec (bvnot mask)) (bvand (bvshl x' j') mask))
-    | bv_ctyp, ctyp_i, ctyp_j, ctyp_x, CT_lbits _ ->
+    | bv_ctyp, ctyp_i, ctyp_j, ctyp_x, CT_lbits ->
         let* sz, bv = fmap (to_fbits bv_ctyp) (smt_cval vec) in
         let* i = bind (smt_cval i) (signed_size ~into:sz ~from:(int_size ctyp_i)) in
         let* j = bind (smt_cval j) (signed_size ~into:sz ~from:(int_size ctyp_j)) in
-        let* x = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits (sz, true))) in
+        let* x = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits sz)) in
         let len = bvadd (bvadd i (bvneg j)) (bvpint sz (Big_int.of_int 1)) in
         let mask = bvshl (fbits_mask sz len) j in
         let contents = bvor (bvand bv (bvnot mask)) (bvand (bvshl x j) mask) in
@@ -1033,7 +1032,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_get_slice_int v1 v2 v3 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
-    | CT_constant len, ctyp, CT_constant start, CT_fbits (ret_sz, _) ->
+    | CT_constant len, ctyp, CT_constant start, CT_fbits ret_sz ->
         let len = Big_int.to_int len in
         let start = Big_int.to_int start in
         let in_sz = int_size ctyp in
@@ -1041,7 +1040,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           if in_sz < len + start then bind (smt_cval v2) (signed_size ~into:(len + start) ~from:in_sz) else smt_cval v2
         in
         return (Extract (start + len - 1, start, smt))
-    | CT_lint, CT_lint, CT_constant start, CT_lbits _ when Big_int.equal start Big_int.zero ->
+    | CT_lint, CT_lint, CT_constant start, CT_lbits when Big_int.equal start Big_int.zero ->
         let* v1 = smt_cval v1 in
         let len = Extract (lbits_index - 1, 0, v1) in
         let* contents = bind (smt_cval v2) (unsigned_size ~into:lbits_size ~from:lint_size) in
@@ -1052,7 +1051,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* smt2 = bind (smt_cval v2) (signed_size ~into:lbits_size ~from:(int_size ctyp2)) in
         let* smt3 = bind (smt_cval v3) (signed_size ~into:lbits_size ~from:(int_size ctyp3)) in
         let result = Fn ("Bits", [len; bvand (bvmask len) (bvlshr smt2 smt3)]) in
-        smt_conversion (CT_lbits true) ret_ctyp result
+        smt_conversion CT_lbits ret_ctyp result
 
   let builtin_pow2 v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
@@ -1070,11 +1069,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_count_leading_zeros v ret_ctyp =
     let* l = current_location in
     match cval_ctyp v with
-    | CT_fbits (sz, _) ->
+    | CT_fbits sz ->
         let bvclz = Primop_gen.count_leading_zeros l sz in
         let* bv = smt_cval v in
         unsigned_size ~max_value:sz ~into:(int_size ret_ctyp) ~from:sz (Fn (bvclz, [bv]))
-    | CT_lbits _ ->
+    | CT_lbits ->
         let bvclz = Primop_gen.count_leading_zeros l lbits_size in
         let* bv = smt_cval v in
         let contents_clz = Fn (bvclz, [Fn ("contents", [bv])]) in

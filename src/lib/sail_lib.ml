@@ -200,14 +200,26 @@ let subrange (list, n, m) =
   let m = Big_int.to_int m in
   List.rev (take (n - (m - 1)) (drop m (List.rev list)))
 
+let subrange_inc (list, n, m) =
+  let n = Big_int.to_int n in
+  let m = Big_int.to_int m in
+  take (m - (n - 1)) (drop n list)
+
 let slice (list, n, m) =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   List.rev (take m (drop n (List.rev list)))
 
-let eq_list (xs, ys) = List.for_all2 (fun x y -> x = y) xs ys
+let slice_inc (list, n, m) =
+  let n = Big_int.to_int n in
+  let m = Big_int.to_int m in
+  take m (drop n list)
+
+let eq_list (xs, ys) = if List.compare_lengths xs ys = 0 then List.for_all2 (fun x y -> x = y) xs ys else false
 
 let access (xs, n) = List.nth (List.rev xs) (Big_int.to_int n)
+
+let access_inc (xs, n) = List.nth xs (Big_int.to_int n)
 
 let append (xs, ys) = xs @ ys
 
@@ -215,8 +227,19 @@ let update (xs, n, x) =
   let n = List.length xs - Big_int.to_int n - 1 in
   take n xs @ [x] @ drop (n + 1) xs
 
+let update_inc (xs, n, x) =
+  let n = Big_int.to_int n in
+  take n xs @ [x] @ drop (n + 1) xs
+
 let update_subrange (xs, n, _, ys) =
   let rec aux xs o = function [] -> xs | y :: ys -> aux (update (xs, o, y)) (Big_int.sub o (Big_int.of_int 1)) ys in
+  aux xs n ys
+
+let update_subrange_inc (xs, n, _, ys) =
+  let rec aux xs o = function
+    | [] -> xs
+    | y :: ys -> aux (update_inc (xs, o, y)) (Big_int.add o (Big_int.of_int 1)) ys
+  in
   aux xs n ys
 
 let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
@@ -609,7 +632,7 @@ let lt_real (x, y) = Rational.lt x y
 let gt_real (x, y) = Rational.gt x y
 let lteq_real (x, y) = Rational.leq x y
 let gteq_real (x, y) = Rational.geq x y
-let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
+let to_real x = Rational.of_big_int x
 let negate_real x = Rational.neg x
 let neg_real x = Rational.neg x
 
@@ -634,14 +657,18 @@ let abs_real x = Rational.abs x
 
 let sqrt_real x =
   let precision = 30 in
-  let s = Big_int.sqrt (Rational.num x) in
-  if Big_int.equal (Rational.den x) (Big_int.of_int 1) && Big_int.equal (Big_int.mul s s) (Rational.num x) then
-    to_real s
+  let s =
+    Rational.div
+      (Rational.of_big_int (Big_int.sqrt (Rational.num x)))
+      (Rational.of_big_int (Big_int.sqrt (Rational.den x)))
+  in
+  if Rational.equal (Rational.mul s s) x then s
   else (
-    let p = ref (to_real (Big_int.sqrt (Big_int.div (Rational.num x) (Rational.den x)))) in
+    let p = ref s in
     let n = ref (Rational.of_int 0) in
+    let num_convergence = if Rational.gt x (Rational.of_int 1) then Rational.of_int 1 else x in
     let convergence =
-      ref (Rational.div (Rational.of_int 1) (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
+      ref (Rational.div num_convergence (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
     in
     let quit_loop = ref false in
     while not !quit_loop do
@@ -674,10 +701,12 @@ let rec pow x = function 0 -> 1 | n -> x * pow x (n - 1)
 let real_of_string str =
   match Util.split_on_char '.' str with
   | [whole; frac] ->
-      let whole = Rational.of_int (int_of_string whole) in
-      let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (pow 10 (String.length frac))) in
+      let whole = Rational.of_big_int (Big_int.of_string whole) in
+      let frac =
+        Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (pow 10 (String.length frac)))
+      in
       Rational.add whole frac
-  | [_] -> Rational.of_int (int_of_string str)
+  | [_] -> Rational.of_big_int (Big_int.of_string str)
   | _ -> failwith "invalid real literal"
 
 let print str = Stdlib.print_string str
@@ -1086,7 +1115,7 @@ let is_hex_char ch =
   || (Char.code 'a' <= c && c <= Char.code 'f')
   || (Char.code 'A' <= c && c <= Char.code 'F')
 
-let valid_hex_bits (n, s) =
+let valid_hex_bits (_, s) =
   let len = String.length s in
   (* We must have at least the 0x prefix, then one character *)
   if len < 3 || String.sub s 0 2 <> "0x" then false

@@ -90,7 +90,7 @@ let add_property_guards props ast =
     | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs ->
       begin
         match Bindings.find_opt (id_of_fundef fdef) props with
-        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, _), _), _, _, _), _)) -> begin
+        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, _), _), _, _), _)) -> begin
             match quant_split quant with
             | _, [] -> add_property_guards' (def :: acc) defs
             | _, constraints ->

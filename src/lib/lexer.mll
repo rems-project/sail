@@ -207,6 +207,7 @@ let kw_table =
      ("backwards",               (fun _ -> Backwards));
      ("internal_plet",           (fun _ -> InternalPLet));
      ("internal_return",         (fun _ -> InternalReturn));
+     ("internal_assume",         (fun _ -> InternalAssume));
    ]
 
 type comment_type = Comment_block | Comment_line

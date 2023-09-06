@@ -1,17 +1,42 @@
 Changelog
 =========
 
-Sail 0.15.1
------------
+Sail 0.16
+---------
 
-This is a bugfix release for the following issues:
+##### New documentation backend
+
+A new documentation backend for integrating with Asciidoctor has been
+added.
+
+##### Automatic formatting (EXPERIMENTAL)
+
+The `sail -fmt` option can be used to automatically format Sail
+source. This currently misses some features and can produce ugly
+output in some known cases, so is not ready for serious usage yet.
+
+##### Fixes
+
+Various bugfixes including:
 
 * Issue 203: https://github.com/rems-project/sail/issues/203
 * Issue 202: https://github.com/rems-project/sail/issues/202
 * Issue 188: https://github.com/rems-project/sail/issues/188
 * Issue 187: https://github.com/rems-project/sail/issues/187
+* Issue 277: https://github.com/rems-project/sail/issues/277
+
+Various mapping issues such as:
+
+* Issue 244: https://github.com/rems-project/sail/issues/244
 
 As well as other minor issues
+
+The `val cast` syntax and support for implict casts is now entirely
+removed, as mentioned in the previous release changes. The flags are
+still allowed (to avoid breaking Makefiles) but no longer do anything.
+
+The pattern completeness checker has been improved and is now context
+sensitive in some cases.
 
 Sail 0.15
 ---------

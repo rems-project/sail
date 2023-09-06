@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/bind_typ_var/v1.sail[0m:9.11-29:
+9[96m |[0m  let v as vector('len, _, _) = mk_vector ();
+ [91m |[0m           [91m^----------------^[0m
+ [91m |[0m Couldn't bind type vector('_v, bit) with vector('len, _, _)

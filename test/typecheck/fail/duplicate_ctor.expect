@@ -2,4 +2,8 @@
 [96mfail/duplicate_ctor.sail[0m:3.15-19:
 3[96m |[0munion foo2 = { Bar1 : int }
  [91m |[0m               [91m^--^[0m
- [91m |[0m A union constructor or function already exists with name Bar1
+ [91m |[0m Cannot create union constructor Bar1, name is already bound to a union constructor or function
+ [91m |[0m 
+ [91m |[0m [96mfail/duplicate_ctor.sail[0m:1.15-19:
+ [91m |[0m 1[96m |[0munion foo1 = { Bar1 : int }
+ [91m |[0m  [91m |[0m               [91m^--^[0m [91mprevious binding[0m

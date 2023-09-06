@@ -226,7 +226,7 @@ let warn_extern_effect l =
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
-%token InternalPLet InternalReturn
+%token InternalPLet InternalReturn InternalAssume
 %token Forwards Backwards
 
 %nonassoc Then
@@ -899,6 +899,8 @@ exp:
     { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
   | InternalReturn exp
     { mk_exp (E_internal_return($2)) $startpos $endpos }
+  | InternalAssume atomic_typ In exp
+    { mk_exp (E_internal_assume($2,$4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */
@@ -1508,16 +1510,16 @@ externs:
 val_spec_def:
   | Val String Colon typschm
     { let typschm = $4 in
-      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] }, false)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] })) $startpos $endpos }
   | Val id externs Colon typschm
     { let typschm = $5 in
       let externs, need_fix = $3 in
-      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs), false)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
   | Val Cast id externs Colon typschm
     { cast_deprecated (loc $startpos($2) $endpos($2));
       let typschm = $6 in
       let externs, need_fix = $4 in
-      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs), true)) $startpos $endpos }
+      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

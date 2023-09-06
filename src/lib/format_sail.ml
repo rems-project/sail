@@ -529,9 +529,7 @@ module Make (Config : CONFIG) = struct
         let doc_binding (target, name) =
           string target ^^ char ':' ^^ space ^^ char '"' ^^ utf8string name ^^ char '"'
         in
-        string "val" ^^ space
-        ^^ (if vs.is_cast then string "cast" ^^ space else empty)
-        ^^ doc_id vs.id
+        string "val" ^^ space ^^ doc_id vs.id
         ^^ group
              ( match vs.extern_opt with
              | Some extern ->

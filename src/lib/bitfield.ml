@@ -72,7 +72,7 @@ open Ast
 open Ast_defs
 open Ast_util
 
-let bitvec_typ size order = bitvector_typ (nconstant size) order
+let constant_bitvector_typ size = bitvector_typ (nconstant size)
 let fun_typschm arg_typs ret_typ = mk_typschm (mk_typquant []) (function_typ arg_typs ret_typ)
 
 let index_of_nexp nexp =
@@ -93,9 +93,9 @@ let slice_width (i, j) = Big_int.succ (Big_int.abs (Big_int.sub i j))
 let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left Big_int.add Big_int.zero
 
 (* Generate a constructor function for a bitfield type *)
-let constructor name order size =
-  let typschm = fun_typschm [bitvec_typ size order] (mk_id_typ name) in
-  let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None, false)) in
+let constructor name size =
+  let typschm = fun_typschm [constant_bitvector_typ size] (mk_id_typ name) in
+  let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None)) in
   let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" (string_of_id name) in
   constructor_val :: defs_of_string __POS__ constructor_fun
 
@@ -158,9 +158,9 @@ let field_accessor_ids type_name field =
 
 let field_getter typ_name field order range =
   let size = range_width range in
-  let typschm = fun_typschm [mk_id_typ typ_name] (bitvec_typ size order) in
+  let typschm = fun_typschm [mk_id_typ typ_name] (constant_bitvector_typ size) in
   let fun_id = (field_accessor_ids typ_name field).get in
-  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let body = get_field_exp range (get_bits_field (mk_exp (E_id (mk_id "v")))) in
   let funcl = mk_funcl fun_id (mk_pat (P_id (mk_id "v"))) body in
   [spec; mk_fundef [funcl]]
@@ -168,9 +168,9 @@ let field_getter typ_name field order range =
 let field_updater typ_name field order range =
   let size = range_width range in
   let typ = mk_id_typ typ_name in
-  let typschm = fun_typschm [typ; bitvec_typ size order] typ in
+  let typschm = fun_typschm [typ; constant_bitvector_typ size] typ in
   let fun_id = (field_accessor_ids typ_name field).update in
-  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None, false)) in
+  let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let orig_var = mk_id "v" in
   let new_val_var = mk_id "x" in
   let bits_exp = get_bits_field (mk_id_exp orig_var) in
@@ -187,7 +187,7 @@ let register_field_setter typ_name field order range =
   let fun_id = string_of_id (field_accessor_ids typ_name field).set in
   let update_fun_id = string_of_id (field_accessor_ids typ_name field).update in
   let typ_name = string_of_id typ_name in
-  let field_typ = string_of_typ (bitvec_typ size order) in
+  let field_typ = string_of_typ (constant_bitvector_typ size) in
   let rfs_val = Printf.sprintf "val %s : (register(%s), %s) -> unit" fun_id typ_name field_typ in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let rfs_function =
@@ -221,4 +221,4 @@ let macro id size order ranges =
   let full_range = BF_aux (BF_range (nconstant (Big_int.pred size), nconstant Big_int.zero), Parse_ast.Unknown) in
   let ranges = (mk_id "bits", full_range) :: Bindings.bindings ranges in
   let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
-  List.concat ([constructor id order size] @ accessors)
+  List.concat ([constructor id size] @ accessors)

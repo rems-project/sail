@@ -413,8 +413,8 @@ let remove_tuples cdefs ctx =
     | CT_tup ctyps as ctyp -> CTSet.add ctyp (List.fold_left CTSet.union CTSet.empty (List.map all_tuples ctyps))
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
         List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp -> all_tuples ctyp
-    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
+    | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> all_tuples ctyp
+    | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
     | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode ->
         CTSet.empty
   in
@@ -422,8 +422,8 @@ let remove_tuples cdefs ctx =
     | CT_tup ctyps -> 1 + List.fold_left (fun d ctyp -> max d (tuple_depth ctyp)) 0 ctyps
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
         List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp -> tuple_depth ctyp
-    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool | CT_real | CT_bit
+    | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> tuple_depth ctyp
+    | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool | CT_real | CT_bit
     | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode ->
         0
   in
@@ -435,10 +435,10 @@ let remove_tuples cdefs ctx =
     | CT_struct (id, id_ctyps) -> CT_struct (id, List.map (fun (id, ctyp) -> (id, fix_tuples ctyp)) id_ctyps)
     | CT_variant (id, id_ctyps) -> CT_variant (id, List.map (fun (id, ctyp) -> (id, fix_tuples ctyp)) id_ctyps)
     | CT_list ctyp -> CT_list (fix_tuples ctyp)
-    | CT_vector (d, ctyp) -> CT_vector (d, fix_tuples ctyp)
-    | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
+    | CT_vector ctyp -> CT_vector (fix_tuples ctyp)
+    | CT_fvector (n, ctyp) -> CT_fvector (n, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
-    | ( CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
+    | ( CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
       | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode ) as ctyp ->
         ctyp
   and fix_cval = function

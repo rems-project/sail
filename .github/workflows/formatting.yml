@@ -12,6 +12,7 @@ jobs:
       matrix:
         version: [5.0.0]
         os: [ubuntu-latest]
+        fmt: [0.26.0]
 
     runs-on: ${{ matrix.os }}
 
@@ -27,14 +28,14 @@ jobs:
       uses: actions/cache/restore@v3
       with:
         path: ~/.opam
-        key: ${{ matrix.os }}-${{ matrix.version }}-fmt
+        key: ${{ matrix.os }}-${{ matrix.version }}-${{ matrix.fmt }}-fmt
 
     - name: Setup opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
         eval $(opam env)
-        opam install "ocamlformat=0.25.1" --yes
+        opam install "ocamlformat=${{ matrix.fmt }}" --yes
 
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

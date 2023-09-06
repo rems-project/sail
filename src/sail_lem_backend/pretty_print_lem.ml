@@ -300,11 +300,10 @@ let rec lem_nexps_of_typ params_to_print (Typ_aux (t, l)) =
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1, t2) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
   | Typ_tuple ts -> List.fold_left (fun s t -> NexpSet.union s (trec t)) NexpSet.empty ts
-  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
       let m = nexp_simp m in
       if !Monomorphise.opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else trec bit_typ
-  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
-      trec elem_typ
+  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) -> trec elem_typ
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->
       NexpSet.empty
@@ -326,7 +325,6 @@ and lem_nexps_of_typ_arg params_to_print (A_aux (ta, _)) =
       let nexp = nexp_simp (orig_nexp nexp) in
       if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
   | A_typ typ -> lem_nexps_of_typ params_to_print typ
-  | A_order _ -> NexpSet.empty
   | A_bool _ -> NexpSet.empty
 
 let lem_tyvars_of_typ params_to_print typ =
@@ -357,10 +355,10 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     | _ -> app_typ params_to_print atyp_needed ty
   and app_typ params_to_print atyp_needed (Typ_aux (t, l) as ty) =
     match t with
-    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
+    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
         let tpp = string "list" ^^ space ^^ typ params_to_print true elem_typ in
         if atyp_needed then parens tpp else tpp
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         let tpp =
           if !Monomorphise.opt_mwords then string "mword " ^^ doc_nexp_lem (nexp_simp m)
           else string "list" ^^ space ^^ typ params_to_print true bit_typ
@@ -425,7 +423,6 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     match t with
     | A_typ t -> app_typ params_to_print true t
     | A_nexp n -> doc_nexp_lem (nexp_simp n)
-    | A_order o -> empty
     | A_bool _ -> empty
   in
   let top atyp_needed params_to_print env ty =
@@ -492,7 +489,7 @@ and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
   | A_typ typ -> begin
       match replace_typ_size ctxt env typ with Some typ' -> Some (rewrap (A_typ typ')) | None -> None
     end
-  | A_order _ | A_bool _ -> Some targ
+  | A_bool _ -> Some targ
 
 let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ then (try replace_typ_size ctxt env (Env.expand_synonyms env typ) with _ -> None)
@@ -662,7 +659,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p, (l, annot)) as pa) =
   | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 
-let rec typ_needs_printed params_to_print (Typ_aux (t, _) as typ) =
+let rec typ_needs_printed params_to_print (Typ_aux (t, _)) =
   let typ_needs_printed = typ_needs_printed params_to_print in
   match t with
   | Typ_tuple ts -> List.exists typ_needs_printed ts
@@ -738,7 +735,6 @@ let doc_exp_lem, doc_let_lem =
     match e with
     | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
         (* can only be register writes *)
-        let t = typ_of_annot tannot in
         match le_act (*, t, tag*) with
         | LE_vector_range (le, e2, e3) -> (
             match le with
@@ -940,15 +936,9 @@ let doc_exp_lem, doc_let_lem =
         | _ -> begin
             match destruct_tannot annot with
             | Some (env, typ) when Env.is_union_constructor f env ->
-                let unwrap opt =
-                  match opt with
-                  | Some x -> x
-                  | None ->
-                      Reporting.unreachable l __POS__ ("Failed to get information about constructor " ^ string_of_id f)
-                in
-                let _, _, union_id, _ = Env.union_constructor_info f env |> unwrap in
-                let typq, _ = Env.get_variants env |> Bindings.find_opt union_id |> unwrap in
                 (* If the union has type variables, we may need an annotation for Lem to typecheck it *)
+                (* let _, _, union_id, _ = Env.union_constructor_info f env |> unwrap in
+                   let typq, _ = Env.get_variants env |> Bindings.find_opt union_id |> unwrap in *)
                 let annotation_needed = false (* List.length (quant_items typq) > 0 *) in
                 let wrap_union doc = if aexp_needed || annotation_needed then parens doc else doc in
                 let epp =
@@ -987,7 +977,6 @@ let doc_exp_lem, doc_let_lem =
     | E_vector_subrange (v, e1, e2) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field ((E_aux (_, (l, fannot)) as fexp), id) -> (
-        let ft = typ_of_annot (l, fannot) in
         match destruct_tannot fannot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
           ->
@@ -1004,7 +993,6 @@ let doc_exp_lem, doc_let_lem =
     | E_id id | E_ref id ->
         let env = env_of full_exp in
         let typ = typ_of full_exp in
-        let eff = effect_of full_exp in
         let base_typ = Env.base_typ_of env typ in
         if Env.is_register id env && match e with E_id _ -> true | _ -> false then (
           let epp = separate space [string "read_reg"; doc_id_lem (append_id id "_ref")] in
@@ -1057,28 +1045,10 @@ let doc_exp_lem, doc_let_lem =
           (space ^^ doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps) ^^ space)
     | E_vector exps ->
         let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-        let start, (len, order, etyp) =
-          if is_vector_typ t || is_bitvector_typ t then (vector_start_index t, vector_typ_args_of t)
+        let _, etyp =
+          if is_vector_typ t || is_bitvector_typ t then vector_typ_args_of t
           else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
         in
-        let dir, dir_out = if is_order_inc order then (true, "true") else (false, "false") in
-        let start =
-          match nexp_simp start with
-          | Nexp_aux (Nexp_constant i, _) -> Big_int.to_string i
-          | _ -> if dir then "0" else string_of_int (List.length exps)
-        in
-        (* let expspp =
-           match exps with
-           | [] -> empty
-           | e :: es ->
-              let (expspp,_) =
-                List.fold_left
-                  (fun (pp,count) e ->
-                    (pp ^^ semi ^^ (if count = 20 then break 0 else empty) ^^
-                       expN e),
-                    if count = 20 then 0 else count + 1)
-                  (expN e,0) es in
-              align (group expspp) in *)
         let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
         let epp = brackets expspp in
         let epp, aexp_needed =
@@ -1205,7 +1175,7 @@ let doc_exp_lem, doc_let_lem =
           (Reporting.err_unreachable l __POS__
              "guarded pattern expression should have been rewritten before pretty-printing"
           )
-  and doc_lexp_deref_lem ctxt (LE_aux (lexp, (l, annot)) as le) =
+  and doc_lexp_deref_lem ctxt (LE_aux (lexp, (l, annot))) =
     match lexp with
     | LE_field (le, id) -> parens (separate empty [doc_lexp_deref_lem ctxt le; dot; doc_id_lem id])
     | LE_id id -> doc_id_lem (append_id id "_ref")
@@ -1234,7 +1204,7 @@ let doc_typquant_sorts idpp (TypQ_aux (typq, _)) =
         match qi with
         | QI_id (KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _)) -> Some (string "`len`")
         | QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)) -> Some underscore
-        | QI_id (KOpt_aux (KOpt_kind (K_aux ((K_order | K_bool), _), kid), _)) -> None
+        | QI_id (KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _)) -> None
         | QI_constraint _ -> None
       in
       if
@@ -1286,56 +1256,14 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
         else doc_id_lem_type fid
       in
       let f_pp (typ, fid) = concat [fname fid; space; colon; space; doc_typ_lem params_to_print env typ; semi] in
-      let rectyp =
-        match typq with
-        | TypQ_aux (TypQ_tq qs, _) ->
-            let quant_item = function
-              | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) -> [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
-              | _ -> []
-            in
-            let targs = List.concat (List.map quant_item qs) in
-            mk_typ (Typ_app (id, targs))
-        | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id
-      in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
-      (* let doc_field (ftyp, fid) =
-         let reftyp =
-           mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
-             [mk_typ_arg (A_typ rectyp);
-              mk_typ_arg (A_typ ftyp)])) in
-         let rfannot = doc_tannot_lem empty_ctxt env false reftyp in
-         let get, set =
-           string "rec_val" ^^ dot ^^ fname fid,
-           anglebars (space ^^ string "rec_val with " ^^
-             (doc_op equals (fname fid) (string "v")) ^^ space) in
-         let base_ftyp = match annot with
-           | Some (env, _, _) -> Env.base_typ_of env ftyp
-           | _ -> ftyp in
-         let (start, is_inc) =
-           try
-             let start, (_, ord, _) = vector_start_index base_ftyp, vector_typ_args_of base_ftyp in
-             match nexp_simp start with
-             | Nexp_aux (Nexp_constant i, _) -> (i, is_order_inc ord)
-             | _ ->
-               raise (Reporting.err_unreachable Parse_ast.Unknown __POS__
-                ("register " ^ string_of_id id ^ " has non-constant start index " ^ string_of_nexp start))
-           with
-           | _ -> (Big_int.zero, true) in
-         doc_op equals
-           (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
-           (anglebars (concat [space;
-             doc_op equals (string "field_name") (string_lit (doc_id_lem fid)); semi_sp;
-             doc_op equals (string "field_start") (string (Big_int.to_string start)); semi_sp;
-             doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
-             doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
-             doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
       let typq_to_print = typq_to_print params_to_print id typq in
       let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq_to_print in
       doc_op equals
         (separate space
            [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print)]
         )
-        ((*doc_typquant_lem typq*) anglebars (space ^^ align fs_doc ^^ space))
+        (anglebars (space ^^ align fs_doc ^^ space))
       ^^ hardline ^^ sorts_pp
       (* if !opt_sequential && string_of_id id = "regstate" then empty
          else separate_map hardline doc_field fs *)
@@ -1348,9 +1276,6 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
       | Id_aux (Id "barrier_kind", _) -> empty
       | Id_aux (Id "trans_kind", _) -> empty
       | Id_aux (Id "instruction_kind", _) -> empty
-      (* | Id_aux ((Id "regfp"),_) -> empty
-         | Id_aux ((Id "niafp"),_) -> empty
-         | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let env = Env.add_typquant l typq env in
@@ -1367,7 +1292,7 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
                    doc_typquant_items_lem (kid_nexps_of_typquant typq_to_print);
                  ]
               )
-              (*doc_typquant_lem typq*) ar_doc
+              ar_doc
           in
           let make_id pat id =
             separate space
@@ -1607,7 +1532,7 @@ let doc_fun_body_lem ctxt exp =
   else if ctxt.early_ret then align (string "pure_early_return" ^//^ parens doc_exp)
   else doc_exp
 
-let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp), ((def_annot, _) as annot))) =
+let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) =
   let l = def_annot.loc in
   let tq, typ =
     try Env.get_val_spec_orig id type_env
@@ -1652,7 +1577,7 @@ module StringSet = Set.Make (String)
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)
-let doc_fundef_rhs_lem monadic params_to_print env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
+let doc_fundef_rhs_lem monadic params_to_print env (FD_aux (FD_function (r, typa, funcls), fannot)) =
   separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic params_to_print env) funcls
 
 let doc_mutrec_lem effect_info params_to_print env = function
@@ -1684,38 +1609,17 @@ let doc_fundef_lem effect_info params_to_print env (FD_aux (FD_function (r, typa
       separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic params_to_print env fd])
   | _ -> empty
 
-let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) = match reg with DEC_reg (typ, id, _) -> empty
-(* if !opt_sequential then empty
-   else
-     let env = env_of_annot annot in
-     let rt = Env.base_typ_of env typ in
-     if is_vector_typ rt then
-       let start, (size, order, etyp) = vector_start_index rt, vector_typ_args_of rt in
-       if is_bit_typ etyp && is_nexp_constant start && is_nexp_constant size then
-         let o = if is_order_inc order then "true" else "false" in
-         (doc_op equals)
-           (string "let" ^^ space ^^ doc_id_lem id)
-           (string "Register" ^^ space ^^
-              align (separate space [string_lit(doc_id_lem id);
-                                     doc_nexp (size);
-                                     doc_nexp (start);
-                                     string o;
-                                     string "[]"]))
-         ^/^ hardline
-       else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
-     else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-(*| DEC_reg (typ, id, Some exp) ->
-   separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline*)
+let doc_dec_lem (DEC_aux (reg, (l, _))) = match reg with DEC_reg (typ, id, _) -> empty
 
 let doc_spec_lem effect_info params_to_print env (VS_aux (valspec, annot)) =
   match valspec with
-  | VS_val_spec (typschm, id, exts, _) when Ast_util.extern_assoc "lem" exts = None ->
+  | VS_val_spec (typschm, id, exts) when Ast_util.extern_assoc "lem" exts = None ->
       let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
       (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
          if contains_t_pp_var typ then empty else *)
       separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad params_to_print env true typschm]
       ^/^ hardline
-  (* | VS_val_spec (_,_,Some _,_) -> empty *)
+  (* | VS_val_spec (_,_,Some _) -> empty *)
   | _ -> empty
 
 let is_field_accessor regtypes fdef =
@@ -1760,10 +1664,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
             )
     in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
-    (* TODO Assumes normalised, decreasing bitvector slices; however, since
-       start indices or indexing order do not appear in Lem type annotations,
-       this does not matter. *)
-    let ftyp = bitvector_typ (nconstant fsize) dec_ord in
+    let ftyp = bitvector_typ (nconstant fsize) in
     let reftyp =
       mk_typ
         (Typ_app

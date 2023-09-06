@@ -324,7 +324,7 @@ and orig_typ_arg (A_aux (arg, l)) =
   match arg with
   | A_nexp nexp -> rewrap (A_nexp (orig_nexp nexp))
   | A_bool nc -> rewrap (A_bool (orig_nc nc))
-  | A_order _ | A_typ _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+  | A_typ _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
 
 (* Returns the set of type variables that will appear in the Coq output,
    which may be smaller than those in the Sail type.  May need to be
@@ -351,7 +351,6 @@ and coq_nvars_of_typ_arg (A_aux (ta, _)) =
   match ta with
   | A_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
   | A_typ typ -> coq_nvars_of_typ typ
-  | A_order _ -> KidSet.empty
   | A_bool nc -> tyvars_of_constraint (orig_nc nc)
 
 let maybe_expand_range_type (Typ_aux (typ, l) as full_typ) =
@@ -408,10 +407,7 @@ let rec count_nexp_vars (Nexp_aux (nexp, _)) =
 
 let rec count_nc_vars (NC_aux (nc, _)) =
   let count_arg (A_aux (arg, _)) =
-    match arg with
-    | A_bool nc -> count_nc_vars nc
-    | A_nexp nexp -> count_nexp_vars nexp
-    | A_typ _ | A_order _ -> KBindings.empty
+    match arg with A_bool nc -> count_nc_vars nc | A_nexp nexp -> count_nexp_vars nexp | A_typ _ -> KBindings.empty
   in
   match nc with
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> merge_kid_count (count_nc_vars nc1) (count_nc_vars nc2)
@@ -574,11 +570,11 @@ let rec doc_typ_fns ctx env =
     | _ -> app_typ atyp_needed ty
   and app_typ atyp_needed (Typ_aux (t, l) as ty) =
     match t with
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         (* TODO: remove duplication with exists, below *)
         let tpp = string "mword " ^^ doc_nexp ctx m in
         if atyp_needed then parens tpp else tpp
-    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
+    | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
         (* TODO: remove duplication with exists, below *)
         let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx m in
         if atyp_needed then parens tpp else tpp
@@ -743,11 +739,7 @@ let rec doc_typ_fns ctx env =
     | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and doc_typ_arg ?(prop_vars = false) (A_aux (t, _)) =
-    match t with
-    | A_typ t -> app_typ true t
-    | A_nexp n -> doc_nexp ctx n
-    | A_order o -> empty
-    | A_bool nc -> parens (doc_nc_exp ctx env nc)
+    match t with A_typ t -> app_typ true t | A_nexp n -> doc_nexp ctx n | A_bool nc -> parens (doc_nc_exp ctx env nc)
   in
   (typ', atomic_typ, doc_typ_arg)
 
@@ -836,8 +828,7 @@ and doc_nc_exp ctx env nc =
     match arg with
     | A_nexp nexp -> doc_nexp ctx nexp
     | A_bool nc -> newnc l0 nc
-    | A_order _ | A_typ _ ->
-        raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+    | A_typ _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type kind to SMT function")
   in
   newnc l70 nc
 
@@ -930,7 +921,6 @@ let doc_quant_item_id ?(prop_vars = false) ctx delimit (QI_aux (qi, _)) =
                 Some (parens (separate space [doc_var ctx kid; colon; string "Z :="; string (Big_int.to_string value)]))
             | None -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
           end
-        | K_order -> None
         | K_bool ->
             Some (delimit (separate space [doc_var ctx kid; colon; string (if prop_vars then "Prop" else "bool")]))
       )
@@ -945,7 +935,6 @@ let quant_item_id_name ctx (QI_aux (qi, _)) =
         match kind with
         | K_type -> Some (doc_var ctx kid)
         | K_int -> Some (doc_var ctx kid)
-        | K_order -> None
         | K_bool -> Some (doc_var ctx kid)
       )
     end
@@ -2005,11 +1994,10 @@ let doc_exp, doc_let =
           enclose_record_update (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
     | E_vector exps ->
         let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-        let start, (len, order, etyp) =
-          if is_vector_typ t || is_bitvector_typ t then (vector_start_index t, vector_typ_args_of t)
+        let _, etyp =
+          if is_vector_typ t || is_bitvector_typ t then vector_typ_args_of t
           else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
         in
-        let dir, dir_out = if is_order_inc order then (true, "true") else (false, "false") in
         let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
         let epp = brackets expspp in
         let epp, aexp_needed =
@@ -2361,7 +2349,6 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       ^^ dot ^^ hardline
       ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
       ^^ twice hardline
-  | TD_abbrev _ -> empty (* TODO? *)
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record (id, typq, fs, _) ->
       let fname fid =
@@ -3124,10 +3111,7 @@ let doc_regtype_fields avoid_target_names (tname, (n1, n2, fields)) =
             )
     in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
-    (* TODO Assumes normalised, decreasing bitvector slices; however, since
-       start indices or indexing order do not appear in Lem type annotations,
-       this does not matter. *)
-    let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
+    let ftyp = vector_typ (nconstant fsize) bit_typ in
     let reftyp =
       mk_typ
         (Typ_app
@@ -3237,8 +3221,8 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       string "forall" ^/^ separate space tyvars_pp ^/^ arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs, typ), l))
 
-let doc_val_spec def_annot unimplemented avoid_target_names effect_info
-    (VS_aux (VS_val_spec (_, id, _, _), (l, ann)) as vs) =
+let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec (_, id, _), (l, ann)) as vs)
+    =
   let bare_ctxt = { empty_ctxt with avoid_target_names } in
   if !opt_undef_axioms && IdSet.mem id unimplemented then (
     let typ_env = env_of_annot (l, ann) in
@@ -3285,13 +3269,12 @@ let doc_val avoid_target_names pat exp =
         let typ = expand_range_type (Env.expand_synonyms env typ) in
         match destruct_exist_plain typ with
         | None -> (typpp, exp)
-        | Some _ -> (
+        | Some _ ->
             ( empty,
               match exp with
               | E_aux (E_typ (typ', _), _) when alpha_equivalent env typ typ' -> exp
               | _ -> E_aux (E_typ (typ, exp), (Parse_ast.Unknown, mk_tannot env typ))
             )
-          )
       )
   in
   let idpp = doc_id bare_ctxt id in
@@ -3340,7 +3323,7 @@ let find_unimplemented defs =
     match funcls with [] -> unimplemented | FCL_aux (FCL_funcl (id, _), _) :: _ -> IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, exts, _), _)), _) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, exts), _)), _) -> begin
         match Ast_util.extern_assoc "coq" exts with Some _ -> unimplemented | None -> IdSet.add id unimplemented
       end
     | DEF_aux (DEF_internal_mutrec fds, _) -> List.fold_left adjust_fundef unimplemented fds
@@ -3351,7 +3334,7 @@ let find_unimplemented defs =
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, exts, _), _)), _) -> begin
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, exts), _)), _) -> begin
         match Ast_util.extern_assoc "coq" exts with Some name -> StringSet.add name names | None -> names
       end
     | _ -> names

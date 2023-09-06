@@ -387,7 +387,7 @@ module Make (C : Config) = struct
               match acc with
               | None -> None
               | Some lengths -> (
-                  let nexp, _, _ = vector_typ_args_of typ in
+                  let nexp, _ = vector_typ_args_of typ in
                   match int_of_nexp_opt nexp with Some n -> Some (Big_int.to_int n :: lengths) | None -> None
                 )
             )

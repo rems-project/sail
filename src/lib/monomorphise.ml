@@ -94,11 +94,10 @@ let rec lem_nexps_of_typ (Typ_aux (t, l)) =
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1, t2) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
   | Typ_tuple ts -> List.fold_left (fun s t -> NexpSet.union s (trec t)) NexpSet.empty ts
-  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _)]) ->
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
       let m = nexp_simp m in
       if !opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else trec bit_typ
-  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)]) ->
-      trec elem_typ
+  | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) -> trec elem_typ
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->
       NexpSet.empty
@@ -113,7 +112,6 @@ and lem_nexps_of_typ_arg (A_aux (ta, _)) =
       let nexp = nexp_simp (orig_nexp nexp) in
       if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
   | A_typ typ -> lem_nexps_of_typ typ
-  | A_order _ -> NexpSet.empty
   | A_bool _ -> NexpSet.empty
 
 let rec typeclass_nexps (Typ_aux (t, l)) =
@@ -122,7 +120,7 @@ let rec typeclass_nexps (Typ_aux (t, l)) =
     | Typ_id _ | Typ_var _ -> NexpSet.empty
     | Typ_fn (ts, t) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _); _])
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _)])
     | Typ_app (Id_aux (Id "itself", _), [A_aux (A_nexp size_nexp, _)]) ->
         let size_nexp = nexp_simp size_nexp in
         if is_nexp_constant size_nexp then NexpSet.empty else NexpSet.singleton (orig_nexp size_nexp)
@@ -173,12 +171,6 @@ let tabulate f n =
   if Big_int.equal n Big_int.zero then [] else aux [] (Big_int.sub n (Big_int.of_int 1))
 
 let make_vectors sz = tabulate (make_vector_lit sz) (Big_int.shift_left (Big_int.of_int 1) sz)
-
-let is_inc_vec typ =
-  try
-    let _, ord, _ = vector_typ_args_of typ in
-    is_order_inc ord
-  with _ -> false
 
 let rec cross' = function
   | [] -> [[]]
@@ -277,7 +269,7 @@ let rec contains_exist (Typ_aux (ty, l)) =
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and contains_exist_arg (A_aux (arg, _)) =
-  match arg with A_nexp _ | A_order _ | A_bool _ -> false | A_typ typ -> contains_exist typ
+  match arg with A_nexp _ | A_bool _ -> false | A_typ typ -> contains_exist typ
 
 let is_number typ = match destruct_numeric typ with Some _ -> true | None -> false
 
@@ -322,8 +314,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
             (cross' tys)
         in
         (kidset_bigunion vars, insttys)
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp sz, _); _]) ->
-        (KidSet.of_list (size_nvars_nexp sz), [([], typ)])
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp sz, _)]) -> (KidSet.of_list (size_nvars_nexp sz), [([], typ)])
     | Typ_app (_, tas) ->
         (KidSet.empty, [([], typ)])
         (* We only support sizes for bitvectors mentioned explicitly, not any buried
@@ -770,7 +761,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
           | _ -> cannot ("don't know about type " ^ string_of_id id)
         )
       )
-    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp len, _); _]) -> (
+    | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp len, _)]) -> (
         match len with
         | Nexp_aux (Nexp_constant sz, _) when Big_int.greater_equal sz Big_int.zero ->
             let sz = Big_int.to_int sz in
@@ -1457,7 +1448,7 @@ module AtomToItself = struct
           match destruct_tannot tannot with
           | Some (env, typ) -> begin
               match Env.base_typ_of env typ with
-              | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size, _); _]), _)
+              | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size, _)]), _)
                 when not (is_nexp_constant size) ->
                   parameters_for_nexp env size
               | _ -> IntSet.empty
@@ -1620,12 +1611,12 @@ module AtomToItself = struct
             (* TODO rewrite tannopt? *)
             DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
         | DEF_let lb -> DEF_let (rewrite_letbind lb)
-        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern, cast), (l, annot))) ->
+        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
             let typschm =
               match typschm with
               | TypSchm_aux (TypSchm_ts (tq, typ), l) -> TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
             in
-            DEF_val (VS_aux (VS_val_spec (typschm, id, extern, cast), (l, annot)))
+            DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
         | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
             DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
         | _ -> aux
@@ -2022,14 +2013,13 @@ module Analysis = struct
     | A_nexp (Nexp_aux (Nexp_var kid, _)) when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
         parents_call_dep (CallerKidSet.singleton (fn_id, kid))
     | A_nexp nexp -> in_fun_call_dep (deps_of_nexp l env.kid_deps arg_deps nexp)
-    | A_order _ -> in_fun_call_dep dempty
     | A_typ typ -> in_fun_call_dep (deps_of_typ l env.kid_deps arg_deps typ)
     | A_bool nc -> in_fun_call_dep (deps_of_nc env.kid_deps nc)
 
   let mk_subrange_pattern vannot vstart vend =
-    let len, ord, typ = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
+    let ord = Env.get_default_order (env_of_annot vannot) in
+    let len, typ = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
     match ord with
-    | Ord_aux (Ord_var _, _) -> None
     | Ord_aux (ord', _) -> (
         let vstart, vend = if ord' = Ord_inc then (vstart, vend) else (vend, vstart) in
         let dummyl = Generated Unknown in
@@ -2046,7 +2036,7 @@ module Analysis = struct
                     [
                       pat;
                       P_aux
-                        ( P_typ (bitvector_typ (nconstant end_len) ord, P_aux (P_wild, (dummyl, empty_tannot))),
+                        ( P_typ (bitvector_typ (nconstant end_len), P_aux (P_wild, (dummyl, empty_tannot))),
                           (dummyl, empty_tannot)
                         );
                     ]
@@ -2055,7 +2045,7 @@ module Analysis = struct
                 let pats =
                   if Big_int.greater vstart Big_int.zero then
                     P_aux
-                      ( P_typ (bitvector_typ (nconstant vstart) ord, P_aux (P_wild, (dummyl, empty_tannot))),
+                      ( P_typ (bitvector_typ (nconstant vstart), P_aux (P_wild, (dummyl, empty_tannot))),
                         (dummyl, empty_tannot)
                       )
                     :: pats
@@ -2468,7 +2458,7 @@ module Analysis = struct
           in
           let rec check_typ typ =
             if is_bitvector_typ typ then (
-              let size, _, _ = vector_typ_args_of typ in
+              let size, _ = vector_typ_args_of typ in
               let (Nexp_aux (size, _) as size_nexp) = simplify_size_nexp env tenv size in
               let is_tyvar_parameter v = List.exists (fun k -> Kid.compare k v == 0) env.top_kids in
               match size with
@@ -2959,7 +2949,7 @@ module MonoRewrites = struct
   let get_constant_vec_len ?(solve = false) env typ =
     let typ = Env.base_typ_of env typ in
     match destruct_bitvector env typ with
-    | Some (size, _) -> begin
+    | Some size -> begin
         match nexp_simp size with
         | Nexp_aux (Nexp_constant i, _) -> Some i
         | nexp when solve -> solve_unique env nexp
@@ -3013,12 +3003,12 @@ module MonoRewrites = struct
         )
     in
     let try_cast_to_typ (E_aux (e, (l, _)) as exp) =
-      let size, order, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
+      let size, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
       (* vector_typ_args_of might simplify size, so rebuild the type even if it's constant *)
       match size with
-      | Nexp_aux (Nexp_constant c, _) -> E_typ (bitvector_typ (nconstant c) order, exp)
+      | Nexp_aux (Nexp_constant c, _) -> E_typ (bitvector_typ (nconstant c), exp)
       | _ -> (
-          match solve_unique env size with Some c -> E_typ (bitvector_typ (nconstant c) order, exp) | None -> e
+          match solve_unique env size with Some c -> E_typ (bitvector_typ (nconstant c), exp) | None -> e
         )
     in
     let rewrap e = E_aux (e, (Unknown, empty_tannot)) in
@@ -3034,13 +3024,13 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector1)
              && is_bitvector_typ (typ_of vector2)
              && not (is_constant_vec_typ env (typ_of sub1) || is_constant_vec_typ env (typ_of sub2)) ->
-          let size, order, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
-          let size1, _, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+          let size, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
+          let size1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
           let midsize = nminus size size1 in
           begin
             match solve_unique env midsize with
             | Some c ->
-                let midtyp = bitvector_typ (nconstant c) order in
+                let midtyp = bitvector_typ (nconstant c) in
                 E_app
                   ( append,
                     [
@@ -3079,13 +3069,13 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector1)
              && is_bitvector_typ (typ_of vector2)
              && not (is_constant length1 || is_constant length2) ->
-          let size, order, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
-          let size1, _, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+          let size, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
+          let size1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
           let midsize = nminus size size1 in
           begin
             match solve_unique env midsize with
             | Some c ->
-                let midtyp = bitvector_typ (nconstant c) order in
+                let midtyp = bitvector_typ (nconstant c) in
                 E_app
                   ( append,
                     [
@@ -3207,13 +3197,13 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector1)
              && not (is_constant_vec_typ env (typ_of slice1) || is_constant length2) ->
           let op' = mk_id (if is_subrange op then "subrange_zeros_concat" else "slice_zeros_concat") in
-          let size, order, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
-          let size1, _, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+          let size, bittyp = vector_typ_args_of (Env.base_typ_of env typ) in
+          let size1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
           let midsize = nminus size size1 in
           begin
             match solve_unique env midsize with
             | Some c ->
-                let midtyp = bitvector_typ (nconstant c) order in
+                let midtyp = bitvector_typ (nconstant c) in
                 try_cast_to_typ
                   (E_aux
                      ( E_app
@@ -3249,10 +3239,10 @@ module MonoRewrites = struct
              && is_constant_vec_typ env (typ_of e1)
              && is_constant_vec_typ env (typ_of e2)
              && not (is_constant_vec_typ env (typ_of e3)) ->
-          let size1, order, bittyp = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
-          let size2, _, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e2)) in
+          let size1, bittyp = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+          let size2, _ = vector_typ_args_of (Env.base_typ_of env (typ_of e2)) in
           let size12 = nexp_simp (nsum size1 size2) in
-          let tannot12 = mk_tannot env (bitvector_typ size12 order) in
+          let tannot12 = mk_tannot env (bitvector_typ size12) in
           E_app (id, [E_aux (E_app (append1, [e1; e2]), (Unknown, tannot12)); e3])
       | _ -> E_app (id, args)
     )
@@ -3308,12 +3298,13 @@ module MonoRewrites = struct
       (* subrange == ones *)
       | [E_aux (E_app (subrange1, [vector1; start1; end1]), _); E_aux (E_app (ones2, [_]), _)]
         when is_id env (Id "vector_subrange") subrange1
+             && is_ones ones2
              && is_bitvector_typ (typ_of vector1)
              && not (is_constant_range (start1, end1)) ->
           E_app (mk_id "is_ones_subrange", [vector1; start1; end1])
       (* slice == ones *)
       | [E_aux (E_app (slice1, [vector1; start1; len1]), _); E_aux (E_app (ones2, [_]), _)]
-        when is_slice slice1 && (not (is_constant len1)) && is_bitvector_typ (typ_of vector1) ->
+        when is_slice slice1 && is_ones ones2 && (not (is_constant len1)) && is_bitvector_typ (typ_of vector1) ->
           E_app (mk_id "is_ones_slice", [vector1; start1; len1])
       (* Arm specs sometimes check for overflows on values that can be either 32 or 64 bits
          by converting to unbounded integers and asking for the top slice. *)
@@ -3380,7 +3371,7 @@ module MonoRewrites = struct
                 match vector1 with
                 | E_aux (E_app (slice1, [vector1; start1; length1]), _) -> (vector1, start1, length1)
                 | _ ->
-                    let length1, _, _ = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
+                    let length1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
                     (vector1, mk_exp (E_lit (mk_lit (L_num Big_int.zero))), mk_exp (E_sizeof length1))
               in
               try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; zlen])))
@@ -3529,10 +3520,10 @@ module MonoRewrites = struct
       match (get_constant_vec_len ~solve:true env typ, args) with
       | Some i, [vector1; start1; end1]
         when is_bitvector_typ (typ_of vector1) && not (is_constant start1 && is_constant end1) ->
-          let inc = is_inc_vec (typ_of vector1) in
+          let inc = is_order_inc (Env.get_default_order (env_of vector1)) in
           let low = if inc then start1 else end1 in
           let exp' = rewrap (E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])) in
-          E_typ (bitvector_typ (nconstant i) (if inc then inc_ord else dec_ord), exp')
+          E_typ (bitvector_typ (nconstant i), exp')
       | _, _ ->
           E_app (id, args)
           (* Rewrite (v[x .. y] + i) to (v + (i << y))[x .. y], which is more amenable to further rewriting *)
@@ -3541,7 +3532,7 @@ module MonoRewrites = struct
       match args with
       | [(E_aux (E_app (subrange1, [vec1; start1; end1]), a) as exp1); exp2]
         when is_subrange subrange1 && is_bitvector_typ (typ_of vec1) && not (is_constant_vec_typ env (typ_of exp1)) ->
-          let low = if is_inc_vec (typ_of vec1) then start1 else end1 in
+          let low = if is_order_inc (Env.get_default_order (env_of vec1)) then start1 else end1 in
           let exp2' = mk_exp (E_app (mk_id "shl_int", [exp2; low])) in
           let vec1' = E_aux (E_app (id, [vec1; exp2']), a) in
           E_app (subrange1, [vec1'; start1; end1])
@@ -3722,12 +3713,12 @@ module BitvectorSizeCasts = struct
           ( P_aux (P_typ (src_typ, P_aux (P_tuple ps, (Generated src_l, src_ann))), (Generated src_l, src_ann)),
             E_aux (E_tuple es, (Generated tar_l, tar_ann))
           )
-      | ( Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size, _); _]),
-          Typ_app ((Id_aux (Id "bitvector", _) as t_id), [A_aux (A_nexp size', l_size'); t_ord]) ) -> begin
+      | ( Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size, _)]),
+          Typ_app ((Id_aux (Id "bitvector", _) as t_id), [A_aux (A_nexp size', l_size')]) ) -> begin
           match (simplify_size_nexp env quant_kids size, simplify_size_nexp top_env quant_kids size') with
           | Some size, Some size' when Nexp.compare size size' <> 0 ->
               let var = fresh () in
-              let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size', l_size'); t_ord]), tar_l) in
+              let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size', l_size')]), tar_l) in
               let () = at_least_one := Some tar_typ' in
               ( P_aux (P_id var, (Generated src_l, src_ann)),
                 E_aux
@@ -3951,7 +3942,7 @@ module BitvectorSizeCasts = struct
       KidSet.fold
         (fun kid subst ->
           match Env.get_typ_var kid env with
-          | K_type | K_order | K_bool -> subst
+          | K_type | K_bool -> subst
           | K_int -> (
               match solve_unique env (nvar kid) with None -> subst | Some n -> KBindings.add kid (nconstant n) subst
             )
@@ -4150,7 +4141,9 @@ module BitvectorSizeCasts = struct
                             | exception _ -> insts
                           )
                         in
-                        let insts = KidSet.fold check_inst (tyvars_of_constraint nc) KBindings.empty in
+                        let is_Int kid = match Env.get_typ_var kid env with K_int -> true | _ -> false in
+                        let kids_to_check = KidSet.filter is_Int (tyvars_of_constraint nc) in
+                        let insts = KidSet.fold check_inst kids_to_check KBindings.empty in
                         if KBindings.is_empty insts then h :: aux t
                         else begin
                           (* Propagate new instantiations and insert casts *)
@@ -4223,13 +4216,10 @@ module BitvectorSizeCasts = struct
     let defs = List.mapi rewrite_def defs in
     let _ = Util.progress "Adding casts " "done" (List.length defs) (List.length defs) in
     let cast_specs, _ =
-      (* TODO: use default/relevant order *)
       let kid = mk_kid "n" in
-      let bitsn = bitvector_typ (nvar kid) dec_ord in
+      let bitsn = bitvector_typ (nvar kid) in
       let ts = mk_typschm (mk_typquant [mk_qi_id K_int kid]) (function_typ [bitsn] bitsn) in
-      let mkfn name =
-        mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] }, false))
-      in
+      let mkfn name = mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] })) in
       let defs = List.map mkfn (IdSet.elements !specs_required) in
       check_defs initial_env defs
     in
@@ -4237,7 +4227,7 @@ module BitvectorSizeCasts = struct
 end
 
 module ToplevelNexpRewrites = struct
-  let replace_nexp_in_typ env typ orig new_nexp =
+  let _replace_nexp_in_typ env typ orig new_nexp =
     let rec aux (Typ_aux (t, l) as typ) =
       match t with
       | Typ_id _ | Typ_var _ -> (false, typ)
@@ -4268,7 +4258,7 @@ module ToplevelNexpRewrites = struct
       | A_typ typ ->
           let f, typ = aux typ in
           (f, A_aux (A_typ typ, l))
-      | A_order _ | A_bool _ -> (false, typ_arg)
+      | A_bool _ -> (false, typ_arg)
     in
     aux typ
 
@@ -4333,7 +4323,7 @@ module ToplevelNexpRewrites = struct
                     in
                     let new_nexp = nvar kid in
                     (nexp_map, A_aux (A_nexp new_nexp, l))
-                | A_bool _ | A_order _ -> (nexp_map, arg_full)
+                | A_bool _ -> (nexp_map, arg_full)
               in
               let nexp_map, args =
                 List.fold_right
@@ -4349,7 +4339,7 @@ module ToplevelNexpRewrites = struct
         else rewrite_typ_in_spec env nexp_map typ'
 
   let rewrite_toplevel_nexps ({ defs; _ } as ast) =
-    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt, is_cast), ann)) =
+    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann)) =
       match tqs with
       | TypQ_aux (TypQ_no_forall, _) -> None
       | TypQ_aux (TypQ_tq qs, tq_l) -> (
@@ -4366,7 +4356,7 @@ module ToplevelNexpRewrites = struct
                 List.map (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map
               in
               let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints), tq_l) in
-              let vs = VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt, is_cast), ann) in
+              let vs = VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann) in
               Some (id, nexp_map, vs)
         )
     in
@@ -4381,10 +4371,9 @@ module ToplevelNexpRewrites = struct
             Typ_aux (Typ_exist (kids, (* TODO? *) nc, aux typ'), l)
         | Typ_app (id, targs) -> Typ_aux (Typ_app (id, List.map aux_targ targs), l)
         | _ -> typ_full
-      and aux_targ (A_aux (ta, l) as ta_full) =
+      and aux_targ (A_aux (ta, l)) =
         match ta with
         | A_typ typ -> A_aux (A_typ (aux typ), l)
-        | A_order _ -> ta_full
         | A_nexp nexp -> A_aux (A_nexp (aux_nexp nexp), l)
         | A_bool nc -> A_aux (A_bool (aux_nconstraint nc), l)
       and aux_nexp nexp = match find_nexp env nexp_map nexp with kid, _ -> nvar kid | exception Not_found -> nexp
@@ -4547,12 +4536,12 @@ module ToplevelNexpRewrites = struct
         pat_alg = rw_pat;
       }
     in
-    let rw_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), annot)) =
+    let rw_spec (VS_aux (VS_val_spec (typschm, id, ext), annot)) =
       match typschm with
       | TypSchm_aux (TypSchm_ts (typq, typ), annot') ->
           (* TODO: capture hazard *)
           let typschm' = TypSchm_aux (TypSchm_ts (typq, expand_type typ), annot') in
-          VS_aux (VS_val_spec (typschm', id, ext, is_cast), annot)
+          VS_aux (VS_val_spec (typschm', id, ext), annot)
     in
     let rw_typedef (TD_aux (td, annot)) =
       let rw_union (Tu_aux (Tu_ty_id (typ, id), annot)) = Tu_aux (Tu_ty_id (expand_type typ, id), annot) in

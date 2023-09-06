@@ -71,6 +71,10 @@ open Ast
 open Ast_defs
 open Ast_util
 
+type ctx
+
+val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
+
 (** {2 Options} *)
 
 (** Generate undefined_T functions for every type T. False by
@@ -90,11 +94,6 @@ val opt_fast_undefined : bool ref
 (** Allow # in identifiers when set, much like the GHC option of the same
    name *)
 val opt_magic_hash : bool ref
-
-(** When true enums can be automatically casted to range types and
-   back.  Otherwise generated T_of_num and num_of_T functions must be
-   manually used for each enum T *)
-val opt_enum_casts : bool ref
 
 (** This is a bit of a hack right now - it ensures that the undefiend
    builtins (undefined_vector etc), only get added to the AST

@@ -2,4 +2,4 @@
 [96mpass/negative_bits_list/v1.sail[0m:10.30-39:
 10[96m |[0m    let z: list(bits(-1)) = [|undefined|];
   [91m |[0m                              [91m^-------^[0m
-  [91m |[0m Type bitvector(-1, dec) is empty
+  [91m |[0m Type bitvector(-1) is empty

@@ -215,7 +215,6 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
     match targ with
     | A_nexp nexp -> A_aux (A_nexp (rewrite_nexp_ids env nexp), l)
     | A_typ typ -> A_aux (A_typ (rewrite_typ env typ), l)
-    | A_order ord -> A_aux (A_order ord, l)
     | A_bool nc -> A_aux (A_bool nc, l)
   in
 
@@ -230,10 +229,10 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
   in
 
   let rewrite_def env rewriters = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, exts, b), a)), def_annot) ->
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, exts), a)), def_annot) ->
         let typschm = rewrite_typschm env typschm in
         let a = rewrite_annot a in
-        DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, exts, b), a)), def_annot)
+        DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, exts), a)), def_annot)
     | DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)), def_annot) ->
         DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a)), def_annot)
     | DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, b), a)), def_annot) ->
@@ -444,9 +443,10 @@ let remove_vector_concat_pat pat =
     let p_aux = function
       | (P_as (P_aux (P_vector_concat pats, rannot'), rootid), decls), rannot ->
           let rtyp = Env.base_typ_of (env_of_annot rannot') (typ_of_annot rannot') in
+          let ord = Env.get_default_order (env_of_annot rannot) in
           let start, last_idx =
-            match (vector_start_index rtyp, vector_typ_args_of rtyp) with
-            | Nexp_aux (Nexp_constant start, _), (Nexp_aux (Nexp_constant length, _), ord, _) ->
+            match (vector_start_index (env_of_annot rannot) rtyp, vector_typ_args_of rtyp) with
+            | Nexp_aux (Nexp_constant start, _), (Nexp_aux (Nexp_constant length, _), _) ->
                 ( start,
                   if is_order_inc ord then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
                   else Big_int.add (Big_int.sub start length) (Big_int.of_int 1)
@@ -457,7 +457,7 @@ let remove_vector_concat_pat pat =
           in
           let rec aux typ_opt (pos, pat_acc, decl_acc) (P_aux (p, cannot), is_last) =
             let ctyp = Env.base_typ_of (env_of_annot cannot) (typ_of_annot cannot) in
-            let length, ord, _ = vector_typ_args_of ctyp in
+            let length, _ = vector_typ_args_of ctyp in
             let pos', index_j =
               match Type_check.solve_unique (env_of_annot cannot) length with
               | Some i ->
@@ -607,7 +607,7 @@ let remove_vector_concat_pat pat =
         if is_vector_typ typ || is_bitvector_typ typ then (
           match (p, vector_typ_args_of typ) with
           | P_vector ps, _ -> acc @ ps
-          | _, (nexp, _, _) -> begin
+          | _, (nexp, _) -> begin
               match Type_check.solve_unique env nexp with
               | Some length -> acc @ List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1)))
               | None -> acc @ [wild Big_int.zero]
@@ -1106,7 +1106,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let mk_num_exp i = mk_lit_exp (L_num i) in
   let check_eq_exp l r =
     let exp = mk_exp (E_app_infix (l, Id_aux (Operator "==", Parse_ast.Unknown), r)) in
-    check_exp (Env.no_casts env) exp bool_typ
+    check_exp env exp bool_typ
   in
 
   let access_bit_exp rootid l typ idx =
@@ -1115,8 +1115,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   in
 
   let test_subvec_exp rootid l typ i j lits =
-    let start = vector_start_index typ in
-    let length, ord, _ = vector_typ_args_of typ in
+    let start = vector_start_index env typ in
+    let length, _ = vector_typ_args_of typ in
     let subvec_exp =
       match (start, length) with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
@@ -1148,8 +1148,9 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   (* Collect guards and let bindings *)
   let guard_bitvector_pat =
     let collect_guards_decls ps rootid t =
-      let start = vector_start_index t in
-      let _, ord, _ = vector_typ_args_of t in
+      let start = vector_start_index env t in
+      let ord = Env.get_default_order env in
+      let _, _ = vector_typ_args_of t in
       let start_idx =
         match start with
         | Nexp_aux (Nexp_constant s, _) -> s
@@ -1877,8 +1878,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
         | _ -> function_typ [args_typ] ret_typ
       in
       let val_spec =
-        VS_aux
-          (VS_val_spec (mk_typschm (mk_typquant quants) fun_typ, id, None, false), (Parse_ast.Unknown, empty_tannot))
+        VS_aux (VS_val_spec (mk_typschm (mk_typquant quants) fun_typ, id, None), (Parse_ast.Unknown, empty_tannot))
       in
       let fundef = FD_aux (FD_function (r_o, t_o, funcls), fdannot) in
       let def_annot = mk_def_annot (gen_loc def_annot.loc) in
@@ -1894,7 +1894,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
     List.fold_left
       (fun tq def ->
         match def with
-        | DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, _), _), id, _, _), _)), _)
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, _), _), id, _), _)), _)
           when string_of_id id = fun_name ->
             tq
         | _ -> tq
@@ -1984,20 +1984,6 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
 let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
   match ds with DEC_reg (typ, id, opt_exp) -> DEC_aux (DEC_reg (rw_typ typ, id, opt_exp), annot)
 
-(* Remove overload definitions and cast val specs from the
-   specification because the interpreter doesn't know about them.*)
-let rewrite_overload_cast env ast =
-  let remove_cast_vs (VS_aux (vs_aux, annot)) =
-    match vs_aux with VS_val_spec (typschm, id, ext, _) -> VS_aux (VS_val_spec (typschm, id, ext, false), annot)
-  in
-  let simple_def = function
-    | DEF_aux (DEF_val vs, def_annot) -> DEF_aux (DEF_val (remove_cast_vs vs), def_annot)
-    | def -> def
-  in
-  let is_overload = function DEF_aux (DEF_overload _, _) -> true | _ -> false in
-  let defs = List.map simple_def ast.defs in
-  { ast with defs = List.filter (fun def -> not (is_overload def)) defs }
-
 let rewrite_undefined mwords env =
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
@@ -2018,9 +2004,9 @@ let rec simple_typ (Typ_aux (typ_aux, l)) = Typ_aux (simple_typ_aux l typ_aux, l
 
 and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
-  | Typ_app (id, [_; _; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
+  | Typ_app (id, [_; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
-  | Typ_app (id, [_; _]) when Id.compare id (mk_id "bitvector") = 0 ->
+  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
@@ -2036,10 +2022,7 @@ and simple_typ_arg (A_aux (typ_arg_aux, l)) =
 
 (* This pass aims to remove all the Num quantifiers from the specification. *)
 let rewrite_simple_types env ast =
-  let is_simple = function
-    | QI_aux (QI_id kopt, annot) when is_typ_kopt kopt || is_order_kopt kopt -> true
-    | _ -> false
-  in
+  let is_simple = function QI_aux (QI_id kopt, annot) when is_typ_kopt kopt -> true | _ -> false in
   let simple_typquant (TypQ_aux (tq_aux, annot)) =
     match tq_aux with
     | TypQ_no_forall -> TypQ_aux (TypQ_no_forall, annot)
@@ -2049,8 +2032,7 @@ let rewrite_simple_types env ast =
     TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
   in
   let simple_vs (VS_aux (vs_aux, annot)) =
-    match vs_aux with
-    | VS_val_spec (typschm, id, ext, is_cast) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext, is_cast), annot)
+    match vs_aux with VS_val_spec (typschm, id, ext) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext), annot)
   in
   let simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with
@@ -2113,12 +2095,12 @@ let rewrite_vector_concat_assignments env defs =
         let typ = Env.base_typ_of env (typ_of exp) in
         if is_vector_typ typ || is_bitvector_typ typ then (
           (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
-          let start = vector_start_index typ in
-          let _, ord, etyp = vector_typ_args_of typ in
+          let start = vector_start_index env typ in
+          let ord = Env.get_default_order env in
           let len (LE_aux (le, lannot)) =
             let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
             if is_vector_typ ltyp || is_bitvector_typ ltyp then (
-              let len, _, _ = vector_typ_args_of ltyp in
+              let len, _ = vector_typ_args_of ltyp in
               match Type_check.solve_unique (env_of_annot lannot) len with
               | Some len -> mk_exp (E_lit (mk_lit (L_num len)))
               | None -> mk_exp (E_sizeof (nexp_simp len))
@@ -2667,9 +2649,7 @@ let construct_toplevel_string_append_func effect_info env f_id pat =
       ]
   in
   let fun_typ = mk_typ (Typ_fn ([string_typ], option_typ)) in
-  let new_val_spec =
-    VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, None, false), no_annot)
-  in
+  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, None), no_annot) in
   let new_val_spec, env = Type_check.check_val_spec env (mk_def_annot Parse_ast.Unknown) new_val_spec in
   let non_rec = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
   let no_tannot = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
@@ -3897,7 +3877,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
   in
   let realize_val_spec def_annot = function
     | VS_aux
-        ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2), l)), _), id, _, _),
+        ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2), l)), _), id, _),
           ((_, (tannot : tannot)) as annot)
         ) ->
         let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -3915,15 +3895,13 @@ let rewrite_ast_realize_mappings effect_info env ast =
         let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1), l) in
         let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), l) in
 
-        let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, None, false), no_annot) in
-        let backwards_spec =
-          VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, None, false), no_annot)
-        in
+        let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, None), no_annot) in
+        let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, None), no_annot) in
         let forwards_matches_spec =
-          VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, None, false), no_annot)
+          VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, None), no_annot)
         in
         let backwards_matches_spec =
-          VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, None, false), no_annot)
+          VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, None), no_annot)
         in
 
         let forwards_spec, env = Type_check.check_val_spec env def_annot forwards_spec in
@@ -3944,7 +3922,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
                   )
               in
               let forwards_prefix_spec =
-                VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None, false), no_annot)
+                VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None), no_annot)
               in
               let forwards_prefix_spec, env = Type_check.check_val_spec env def_annot forwards_prefix_spec in
               forwards_prefix_spec
@@ -3959,7 +3937,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
                   )
               in
               let backwards_prefix_spec =
-                VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None, false), no_annot)
+                VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None), no_annot)
               in
               let backwards_prefix_spec, env = Type_check.check_val_spec env def_annot backwards_prefix_spec in
               backwards_prefix_spec
@@ -4605,7 +4583,7 @@ let rewrite_explicit_measure effect_info env ast =
   let rec_id = function Id_aux (Id id, l) | Id_aux (Operator id, l) -> Id_aux (Id ("#rec#" ^ id), Generated l) in
   let limit = mk_id "#reclimit" in
   (* Add helper function with extra argument to spec *)
-  let rewrite_spec (VS_aux (VS_val_spec (typsch, id, extern, flag), ann) as vs) =
+  let rewrite_spec (VS_aux (VS_val_spec (typsch, id, extern), ann) as vs) =
     match Bindings.find id measures with
     | _ -> begin
         match typsch with
@@ -4615,15 +4593,12 @@ let rewrite_explicit_measure effect_info env ast =
                 ( VS_val_spec
                     ( TypSchm_aux (TypSchm_ts (tq, Typ_aux (Typ_fn (args @ [int_typ], res), typl)), tsl),
                       rec_id id,
-                      extern,
-                      flag
+                      extern
                     ),
                   ann
                 );
               VS_aux
-                ( VS_val_spec (TypSchm_aux (TypSchm_ts (tq, Typ_aux (Typ_fn (args, res), typl)), tsl), id, extern, flag),
-                  ann
-                );
+                (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, Typ_aux (Typ_fn (args, res), typl)), tsl), id, extern), ann);
             ]
         | _ -> [vs]
         (* TODO warn *)
@@ -4798,7 +4773,7 @@ let remove_duplicate_valspecs env ast =
     List.fold_left
       (fun last_externs def ->
         match def with
-        | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, externs, _), _)), _) -> Bindings.add id externs last_externs
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, externs), _)), _) -> Bindings.add id externs last_externs
         | _ -> last_externs
       )
       Bindings.empty ast.defs
@@ -4807,11 +4782,11 @@ let remove_duplicate_valspecs env ast =
     List.fold_left
       (fun (set, defs) def ->
         match def with
-        | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, _, cast), l)), def_annot) ->
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, id, _), l)), def_annot) ->
             if IdSet.mem id set then (set, defs)
             else (
               let externs = Bindings.find id last_externs in
-              let vs = VS_aux (VS_val_spec (typschm, id, externs, cast), l) in
+              let vs = VS_aux (VS_val_spec (typschm, id, externs), l) in
               (IdSet.add id set, DEF_aux (DEF_val vs, def_annot) :: defs)
             )
         | _ -> (set, def :: defs)
@@ -5066,7 +5041,6 @@ let all_rewriters =
     ("rewrite_explicit_measure", Base_rewriter rewrite_explicit_measure);
     ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", basic_rewriter rewrite_simple_types);
-    ("overload_cast", basic_rewriter rewrite_overload_cast);
     ( "instantiate_outcomes",
       String_rewriter (fun target -> basic_rewriter (fun _ -> Outcome_rewrites.instantiate target))
     );

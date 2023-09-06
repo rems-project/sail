@@ -1,0 +1,6 @@
+[93mType error[0m:
+[96mfail/issue277.sail[0m:12.8-20:
+12[96m |[0m    foo(sizeof(xlen))
+  [91m |[0m        [91m^----------^[0m
+  [91m |[0m int(64) is not a subtype of int(32)
+  [91m |[0m as 64 == 32 could not be proven

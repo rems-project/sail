@@ -1,5 +1,5 @@
 profile = default
-version = 0.25.1
+version = 0.26.0
 margin = 120
 exp-grouping = preserve
 parens-ite = true

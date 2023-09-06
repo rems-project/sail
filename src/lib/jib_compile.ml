@@ -189,9 +189,9 @@ let initial_ctx env effect_info =
 let rec mangle_string_of_ctyp ctx = function
   | CT_lint -> "i"
   | CT_fint n -> "I" ^ string_of_int n
-  | CT_lbits _ -> "b"
-  | CT_sbits (n, _) -> "S" ^ string_of_int n
-  | CT_fbits (n, _) -> "B" ^ string_of_int n
+  | CT_lbits -> "b"
+  | CT_sbits n -> "S" ^ string_of_int n
+  | CT_fbits n -> "B" ^ string_of_int n
   | CT_constant n -> "C" ^ Big_int.to_string n
   | CT_bit -> "t"
   | CT_unit -> "u"
@@ -226,8 +226,8 @@ let rec mangle_string_of_ctyp ctx = function
       ^ "<"
       ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) unifiers
       ^ ">"
-  | CT_vector (_, ctyp) -> "V" ^ mangle_string_of_ctyp ctx ctyp
-  | CT_fvector (n, _, ctyp) -> "F" ^ string_of_int n ^ mangle_string_of_ctyp ctx ctyp
+  | CT_vector ctyp -> "V" ^ mangle_string_of_ctyp ctx ctyp
+  | CT_fvector (n, ctyp) -> "F" ^ string_of_int n ^ mangle_string_of_ctyp ctx ctyp
   | CT_list ctyp -> "L" ^ mangle_string_of_ctyp ctx ctyp
   | CT_poly kid -> "P" ^ string_of_kid kid
 
@@ -414,7 +414,7 @@ module Make (C : CONFIG) = struct
         let vector_ctyp = ctyp_of_typ ctx typ in
         begin
           match ctyp_of_typ ctx typ with
-          | CT_fbits (0, ord) -> ([], V_lit (VL_bits ([], ord), vector_ctyp), [])
+          | CT_fbits 0 -> ([], V_lit (VL_bits [], vector_ctyp), [])
           | _ ->
               let gs = ngensym () in
               ( [
@@ -432,50 +432,38 @@ module Make (C : CONFIG) = struct
     | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) -> begin
         let bitstring = List.map value_of_aval_bit avals in
         let len = List.length avals in
-        match destruct_bitvector ctx.tc_env typ with
-        | Some (_, Ord_aux (Ord_inc, _)) -> ([], V_lit (VL_bits (bitstring, false), CT_fbits (len, false)), [])
-        | Some (_, Ord_aux (Ord_dec, _)) -> ([], V_lit (VL_bits (bitstring, true), CT_fbits (len, true)), [])
-        | Some _ -> raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
-        | None -> raise (Reporting.err_general l "Encountered vector literal without vector type")
+        ([], V_lit (VL_bits bitstring, CT_fbits len), [])
       end
     (* Convert a bitvector literal that is larger than 64-bits to a
        variable size bitvector, converting it in 64-bit chunks. *)
     | AV_vector (avals, typ) when is_bitvector avals ->
         let len = List.length avals in
-        let bitstring avals = VL_bits (List.map value_of_aval_bit avals, true) in
+        let bitstring avals = VL_bits (List.map value_of_aval_bit avals) in
         let first_chunk = bitstring (Util.take (len mod 64) avals) in
         let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
         let gs = ngensym () in
-        ( [iinit l (CT_lbits true) gs (V_lit (first_chunk, CT_fbits (len mod 64, true)))]
+        ( [iinit l CT_lbits gs (V_lit (first_chunk, CT_fbits (len mod 64)))]
           @ List.map
               (fun chunk ->
                 ifuncall l
-                  (CL_id (gs, CT_lbits true))
+                  (CL_id (gs, CT_lbits))
                   (mk_id "append_64", [])
-                  [V_id (gs, CT_lbits true); V_lit (chunk, CT_fbits (64, true))]
+                  [V_id (gs, CT_lbits); V_lit (chunk, CT_fbits 64)]
               )
               chunks,
-          V_id (gs, CT_lbits true),
-          [iclear (CT_lbits true) gs]
+          V_id (gs, CT_lbits),
+          [iclear CT_lbits gs]
         )
     (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
-    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _)]), _))
-      when string_of_id id = "bitvector" && List.length avals <= 64 ->
+    | AV_vector (avals, Typ_aux (Typ_app (id, _), _)) when string_of_id id = "bitvector" && List.length avals <= 64 ->
         let len = List.length avals in
-        let direction =
-          match ord with
-          | Ord_aux (Ord_inc, _) -> false
-          | Ord_aux (Ord_dec, _) -> true
-          | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
-        in
         let gs = ngensym () in
-        let ctyp = CT_fbits (len, direction) in
+        let ctyp = CT_fbits len in
         let mask i =
           VL_bits
-            ( Util.list_init (63 - i) (fun _ -> Sail2_values.B0)
-              @ [Sail2_values.B1]
-              @ Util.list_init i (fun _ -> Sail2_values.B0),
-              direction
+            (Util.list_init (63 - i) (fun _ -> Sail2_values.B0)
+            @ [Sail2_values.B1]
+            @ Util.list_init i (fun _ -> Sail2_values.B0)
             )
         in
         let aval_mask i aval =
@@ -496,24 +484,19 @@ module Make (C : CONFIG) = struct
         in
         ( [
             idecl l ctyp gs;
-            icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0), direction), ctyp));
+            icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0)), ctyp));
           ]
           @ List.concat (List.mapi aval_mask (List.rev avals)),
           V_id (gs, ctyp),
           []
         )
     (* Compiling a vector literal that isn't a bitvector *)
-    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _); A_aux (A_typ typ, _)]), _))
-      when string_of_id id = "vector" ->
+    | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_typ typ, _)]), _)) when string_of_id id = "vector" ->
+        let ord = Env.get_default_order ctx.tc_env in
         let len = List.length avals in
-        let direction =
-          match ord with
-          | Ord_aux (Ord_inc, _) -> false
-          | Ord_aux (Ord_dec, _) -> true
-          | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
-        in
+        let direction = match ord with Ord_aux (Ord_inc, _) -> false | Ord_aux (Ord_dec, _) -> true in
         let elem_ctyp = ctyp_of_typ ctx typ in
-        let vector_ctyp = CT_fvector (len, direction, elem_ctyp) in
+        let vector_ctyp = CT_fvector (len, elem_ctyp) in
         let gs = ngensym () in
         let aval_set i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
@@ -1045,12 +1028,7 @@ module Make (C : CONFIG) = struct
         (* We assume that all loop indices are safe to put in a CT_fint. *)
         let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
 
-        let is_inc =
-          match ord with
-          | Ord_inc -> true
-          | Ord_dec -> false
-          | Ord_var _ -> raise (Reporting.err_general l "Polymorphic loop direction in C backend")
-        in
+        let is_inc = match ord with Ord_inc -> true | Ord_dec -> false in
 
         (* Loop variables *)
         let from_setup, from_call, from_cleanup = compile_aexp ctx loop_from in
@@ -1489,7 +1467,7 @@ module Make (C : CONFIG) = struct
         let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
         let instrs = unique_names instrs in
         ([CDEF_register (id, ctyp_of_typ ctx typ, instrs)], ctx)
-    | DEF_val (VS_aux (VS_val_spec (_, id, ext, _), _)) ->
+    | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
         let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
         let extern = if Env.is_extern id ctx.tc_env "c" then Some (Env.get_extern id ctx.tc_env "c") else None in
         let arg_typs, ret_typ =
@@ -1697,13 +1675,13 @@ module Make (C : CONFIG) = struct
     else specialize_functions ~specialized_calls ctx cdefs
 
   let map_structs_and_variants f = function
-    | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool
-      | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_float _ | CT_rounding_mode ) as ctyp ->
+    | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real
+      | CT_string | CT_poly _ | CT_enum _ | CT_float _ | CT_rounding_mode ) as ctyp ->
         ctyp
     | CT_tup ctyps -> CT_tup (List.map (map_ctyp f) ctyps)
     | CT_ref ctyp -> CT_ref (map_ctyp f ctyp)
-    | CT_vector (direction, ctyp) -> CT_vector (direction, map_ctyp f ctyp)
-    | CT_fvector (n, direction, ctyp) -> CT_fvector (n, direction, map_ctyp f ctyp)
+    | CT_vector ctyp -> CT_vector (map_ctyp f ctyp)
+    | CT_fvector (n, ctyp) -> CT_fvector (n, map_ctyp f ctyp)
     | CT_list ctyp -> CT_list (map_ctyp f ctyp)
     | CT_struct (id, fields) -> begin
         match f (CT_struct (id, fields)) with

@@ -197,9 +197,9 @@ let rec smt_ctyp ctx = function
   | CT_lint -> Bitvec ctx.lint_size
   | CT_unit -> smt_unit
   | CT_bit -> Bitvec 1
-  | CT_fbits (n, _) -> Bitvec n
-  | CT_sbits (n, _) -> smt_lbits ctx
-  | CT_lbits _ -> smt_lbits ctx
+  | CT_fbits n -> Bitvec n
+  | CT_sbits n -> smt_lbits ctx
+  | CT_lbits -> smt_lbits ctx
   | CT_bool -> Bool
   | CT_enum (id, elems) -> mk_enum (zencode_upper_id id) (List.map zencode_id elems)
   | CT_struct (id, fields) ->
@@ -209,7 +209,7 @@ let rec smt_ctyp ctx = function
   | CT_tup ctyps ->
       ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
       Tuple (List.map (smt_ctyp ctx) ctyps)
-  | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
+  | CT_vector ctyp | CT_fvector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
   | CT_string ->
       ctx.use_string := true;
       String
@@ -301,14 +301,14 @@ let smt_conversion ctx from_ctyp to_ctyp x =
   | CT_constant c, CT_lint -> bvint ctx.lint_size c
   | CT_fint sz, CT_lint -> force_size ctx ctx.lint_size sz x
   | CT_lint, CT_fint sz -> force_size ctx sz ctx.lint_size x
-  | CT_lint, CT_fbits (n, _) -> force_size ctx n ctx.lint_size x
-  | CT_lint, CT_lbits _ ->
+  | CT_lint, CT_fbits n -> force_size ctx n ctx.lint_size x
+  | CT_lint, CT_lbits ->
       Fn
         ("Bits", [bvint ctx.lbits_index (Big_int.of_int ctx.lint_size); force_size ctx (lbits_size ctx) ctx.lint_size x])
-  | CT_fint n, CT_lbits _ -> Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); force_size ctx (lbits_size ctx) n x])
-  | CT_lbits _, CT_fbits (n, _) -> unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
-  | CT_fbits (n, _), CT_fbits (m, _) -> unsigned_size ctx m n x
-  | CT_fbits (n, _), CT_lbits _ ->
+  | CT_fint n, CT_lbits -> Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); force_size ctx (lbits_size ctx) n x])
+  | CT_lbits, CT_fbits n -> unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
+  | CT_fbits n, CT_fbits m -> unsigned_size ctx m n x
+  | CT_fbits n, CT_lbits ->
       Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); unsigned_size ctx (lbits_size ctx) n x])
   | CT_fvector _, CT_vector _ -> x
   | CT_vector _, CT_fvector _ -> x
@@ -320,8 +320,8 @@ let smt_conversion ctx from_ctyp to_ctyp x =
 let smt_value ctx vl ctyp =
   let open Value2 in
   match (vl, ctyp) with
-  | VL_bits (bv, true), CT_fbits (n, _) -> unsigned_size ctx n (List.length bv) (Bitvec_lit bv)
-  | VL_bits (bv, true), CT_lbits _ ->
+  | VL_bits bv, CT_fbits n -> unsigned_size ctx n (List.length bv) (Bitvec_lit bv)
+  | VL_bits bv, CT_lbits ->
       let sz = List.length bv in
       Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int sz); unsigned_size ctx (lbits_size ctx) sz (Bitvec_lit bv)])
   | VL_bool b, _ -> Bool_lit b
@@ -570,12 +570,12 @@ let fbits_mask ctx n len = bvnot (bvshl (bvones n) len)
 
 let builtin_eq_bits ctx v1 v2 =
   match (cval_ctyp v1, cval_ctyp v2) with
-  | CT_fbits (n, _), CT_fbits (m, _) ->
+  | CT_fbits n, CT_fbits m ->
       let o = max n m in
       let smt1 = unsigned_size ctx o n (smt_cval ctx v1) in
       let smt2 = unsigned_size ctx o n (smt_cval ctx v2) in
       Fn ("=", [smt1; smt2])
-  | CT_lbits _, CT_lbits _ ->
+  | CT_lbits, CT_lbits ->
       let len1 = Fn ("len", [smt_cval ctx v1]) in
       let contents1 = Fn ("contents", [smt_cval ctx v1]) in
       let len2 = Fn ("len", [smt_cval ctx v2]) in
@@ -587,25 +587,25 @@ let builtin_eq_bits ctx v1 v2 =
             Fn ("=", [Fn ("bvand", [bvmask ctx len1; contents1]); Fn ("bvand", [bvmask ctx len2; contents2])]);
           ]
         )
-  | CT_lbits _, CT_fbits (n, _) ->
+  | CT_lbits, CT_fbits n ->
       let smt1 = unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [smt_cval ctx v1])) in
       Fn ("=", [smt1; smt_cval ctx v2])
-  | CT_fbits (n, _), CT_lbits _ ->
+  | CT_fbits n, CT_lbits ->
       let smt2 = unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [smt_cval ctx v2])) in
       Fn ("=", [smt_cval ctx v1; smt2])
   | _ -> builtin_type_error ctx "eq_bits" [v1; v2] None
 
 let builtin_zeros ctx v ret_ctyp =
   match (cval_ctyp v, ret_ctyp) with
-  | _, CT_fbits (n, _) -> bvzero n
-  | CT_constant c, CT_lbits _ -> Fn ("Bits", [bvint ctx.lbits_index c; bvzero (lbits_size ctx)])
-  | ctyp, CT_lbits _ when int_size ctx ctyp >= ctx.lbits_index ->
+  | _, CT_fbits n -> bvzero n
+  | CT_constant c, CT_lbits -> Fn ("Bits", [bvint ctx.lbits_index c; bvzero (lbits_size ctx)])
+  | ctyp, CT_lbits when int_size ctx ctyp >= ctx.lbits_index ->
       Fn ("Bits", [extract (ctx.lbits_index - 1) 0 (smt_cval ctx v); bvzero (lbits_size ctx)])
   | _ -> builtin_type_error ctx "zeros" [v] (Some ret_ctyp)
 
 let builtin_ones ctx cval = function
-  | CT_fbits (n, _) -> bvones n
-  | CT_lbits _ ->
+  | CT_fbits n -> bvones n
+  | CT_lbits ->
       let len = extract (ctx.lbits_index - 1) 0 (smt_cval ctx cval) in
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; bvones (lbits_size ctx)])])
   | ret_ctyp -> builtin_type_error ctx "ones" [cval] (Some ret_ctyp)
@@ -624,14 +624,14 @@ let bvzeint ctx esz cval =
 
 let builtin_zero_extend ctx vbits vlen ret_ctyp =
   match (cval_ctyp vbits, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m -> smt_cval ctx vbits
-  | CT_fbits (n, _), CT_fbits (m, _) ->
+  | CT_fbits n, CT_fbits m when n = m -> smt_cval ctx vbits
+  | CT_fbits n, CT_fbits m ->
       let bv = smt_cval ctx vbits in
       Fn ("concat", [bvzero (m - n); bv])
-  | CT_lbits _, CT_fbits (m, _) ->
+  | CT_lbits, CT_fbits m ->
       assert (lbits_size ctx >= m);
       Extract (m - 1, 0, Fn ("contents", [smt_cval ctx vbits]))
-  | CT_fbits (n, _), CT_lbits _ ->
+  | CT_fbits n, CT_lbits ->
       assert (lbits_size ctx >= n);
       let vbits =
         if lbits_size ctx = n then smt_cval ctx vbits
@@ -643,8 +643,8 @@ let builtin_zero_extend ctx vbits vlen ret_ctyp =
 
 let builtin_sign_extend ctx vbits vlen ret_ctyp =
   match (cval_ctyp vbits, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m -> smt_cval ctx vbits
-  | CT_fbits (n, _), CT_fbits (m, _) ->
+  | CT_fbits n, CT_fbits m when n = m -> smt_cval ctx vbits
+  | CT_fbits n, CT_fbits m ->
       let bv = smt_cval ctx vbits in
       let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bitvec_lit [Sail2_values.B1]]) in
       Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
@@ -652,11 +652,11 @@ let builtin_sign_extend ctx vbits vlen ret_ctyp =
 
 let builtin_shift shiftop ctx vbits vshift ret_ctyp =
   match cval_ctyp vbits with
-  | CT_fbits (n, _) ->
+  | CT_fbits n ->
       let bv = smt_cval ctx vbits in
       let len = bvzeint ctx n vshift in
       Fn (shiftop, [bv; len])
-  | CT_lbits _ ->
+  | CT_lbits ->
       let bv = smt_cval ctx vbits in
       let shift = bvzeint ctx (lbits_size ctx) vshift in
       Fn ("Bits", [Fn ("len", [bv]); Fn (shiftop, [Fn ("contents", [bv]); shift])])
@@ -664,22 +664,22 @@ let builtin_shift shiftop ctx vbits vshift ret_ctyp =
 
 let builtin_not_bits ctx v ret_ctyp =
   match (cval_ctyp v, ret_ctyp) with
-  | CT_lbits _, CT_fbits (n, _) -> bvnot (Extract (n - 1, 0, Fn ("contents", [smt_cval ctx v])))
-  | CT_lbits _, CT_lbits _ ->
+  | CT_lbits, CT_fbits n -> bvnot (Extract (n - 1, 0, Fn ("contents", [smt_cval ctx v])))
+  | CT_lbits, CT_lbits ->
       let bv = smt_cval ctx v in
       let len = Fn ("len", [bv]) in
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; bvnot (Fn ("contents", [bv]))])])
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m -> bvnot (smt_cval ctx v)
+  | CT_fbits n, CT_fbits m when n = m -> bvnot (smt_cval ctx v)
   | _, _ -> builtin_type_error ctx "not_bits" [v] (Some ret_ctyp)
 
 let builtin_bitwise fn ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+  | CT_fbits n, CT_fbits m, CT_fbits o ->
       assert (n = m && m = o);
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn (fn, [smt1; smt2])
-  | CT_lbits _, CT_lbits _, CT_lbits _ ->
+  | CT_lbits, CT_lbits, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
@@ -691,12 +691,12 @@ let builtin_xor_bits = builtin_bitwise "bvxor"
 
 let builtin_append ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+  | CT_fbits n, CT_fbits m, CT_fbits o ->
       assert (n + m = o);
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn ("concat", [smt1; smt2])
-  | CT_fbits (n, _), CT_lbits _, CT_lbits _ ->
+  | CT_fbits n, CT_lbits, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       let x = Fn ("concat", [bvzero (lbits_size ctx - n); smt1]) in
@@ -708,11 +708,11 @@ let builtin_append ctx v1 v2 ret_ctyp =
             bvor (bvshl x shift) (Fn ("contents", [smt2]));
           ]
         )
-  | CT_lbits _, CT_fbits (n, _), CT_fbits (m, _) ->
+  | CT_lbits, CT_fbits n, CT_fbits m ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))
-  | CT_lbits _, CT_fbits (n, _), CT_lbits _ ->
+  | CT_lbits, CT_fbits n, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn
@@ -722,7 +722,7 @@ let builtin_append ctx v1 v2 ret_ctyp =
             Extract (lbits_size ctx - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]));
           ]
         )
-  | CT_fbits (n, _), CT_fbits (m, _), CT_lbits _ ->
+  | CT_fbits n, CT_fbits m, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn
@@ -732,13 +732,13 @@ let builtin_append ctx v1 v2 ret_ctyp =
             unsigned_size ctx (lbits_size ctx) (n + m) (Fn ("concat", [smt1; smt2]));
           ]
         )
-  | CT_lbits _, CT_lbits _, CT_lbits _ ->
+  | CT_lbits, CT_lbits, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       let x = Fn ("contents", [smt1]) in
       let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
       Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
-  | CT_lbits _, CT_lbits _, CT_fbits (n, _) ->
+  | CT_lbits, CT_lbits, CT_fbits n ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       let x = Fn ("contents", [smt1]) in
@@ -748,8 +748,8 @@ let builtin_append ctx v1 v2 ret_ctyp =
 
 let builtin_length ctx v ret_ctyp =
   match (cval_ctyp v, ret_ctyp) with
-  | CT_fbits (n, _), (CT_constant _ | CT_fint _ | CT_lint) -> bvint (int_size ctx ret_ctyp) (Big_int.of_int n)
-  | CT_lbits _, (CT_constant _ | CT_fint _ | CT_lint) ->
+  | CT_fbits n, (CT_constant _ | CT_fint _ | CT_lint) -> bvint (int_size ctx ret_ctyp) (Big_int.of_int n)
+  | CT_lbits, (CT_constant _ | CT_fint _ | CT_lint) ->
       let sz = ctx.lbits_index in
       let m = int_size ctx ret_ctyp in
       let len = Fn ("len", [smt_cval ctx v]) in
@@ -758,28 +758,27 @@ let builtin_length ctx v ret_ctyp =
 
 let builtin_vector_subrange ctx vec i j ret_ctyp =
   match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits _ ->
+  | CT_fbits n, CT_constant i, CT_constant j, CT_fbits _ ->
       Extract (Big_int.to_int i, Big_int.to_int j, smt_cval ctx vec)
-  | CT_lbits _, CT_constant i, CT_constant j, CT_fbits _ ->
+  | CT_lbits, CT_constant i, CT_constant j, CT_fbits _ ->
       Extract (Big_int.to_int i, Big_int.to_int j, Fn ("contents", [smt_cval ctx vec]))
-  | CT_fbits (n, _), i_ctyp, CT_constant j, CT_lbits _ when Big_int.equal j Big_int.zero ->
+  | CT_fbits n, i_ctyp, CT_constant j, CT_lbits when Big_int.equal j Big_int.zero ->
       let i' = force_size ~checked:false ctx ctx.lbits_index (int_size ctx i_ctyp) (smt_cval ctx i) in
       let len = bvadd i' (bvint ctx.lbits_index (Big_int.of_int 1)) in
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; unsigned_size ctx (lbits_size ctx) n (smt_cval ctx vec)])])
-  | CT_fbits (n, b), i_ctyp, j_ctyp, ret_ctyp ->
+  | CT_fbits n, i_ctyp, j_ctyp, ret_ctyp ->
       let i' = force_size ctx n (int_size ctx i_ctyp) (smt_cval ctx i) in
       let j' = force_size ctx n (int_size ctx j_ctyp) (smt_cval ctx j) in
       let len = bvadd (bvadd i' (bvneg j')) (bvint n (Big_int.of_int 1)) in
       let vec' = bvand (bvlshr (smt_cval ctx vec) j') (fbits_mask ctx n len) in
-      smt_conversion ctx (CT_fbits (n, b)) ret_ctyp vec'
+      smt_conversion ctx (CT_fbits n) ret_ctyp vec'
   | _ -> builtin_type_error ctx "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
 let builtin_vector_access ctx vec i ret_ctyp =
   match (cval_ctyp vec, cval_ctyp i, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant i, CT_bit -> Extract (Big_int.to_int i, Big_int.to_int i, smt_cval ctx vec)
-  | CT_lbits _, CT_constant i, CT_bit ->
-      Extract (Big_int.to_int i, Big_int.to_int i, Fn ("contents", [smt_cval ctx vec]))
-  | CT_lbits _, i_ctyp, CT_bit ->
+  | CT_fbits n, CT_constant i, CT_bit -> Extract (Big_int.to_int i, Big_int.to_int i, smt_cval ctx vec)
+  | CT_lbits, CT_constant i, CT_bit -> Extract (Big_int.to_int i, Big_int.to_int i, Fn ("contents", [smt_cval ctx vec]))
+  | CT_lbits, i_ctyp, CT_bit ->
       let shift = force_size ~checked:false ctx (lbits_size ctx) (int_size ctx i_ctyp) (smt_cval ctx i) in
       Extract (0, 0, Fn ("bvlshr", [Fn ("contents", [smt_cval ctx vec]); shift]))
   | CT_vector _, CT_constant i, _ -> Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
@@ -789,18 +788,18 @@ let builtin_vector_access ctx vec i ret_ctyp =
 
 let builtin_vector_update ctx vec i x ret_ctyp =
   match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
+  | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
       assert (n = m);
       let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
       let bot = Extract (Big_int.to_int i - 1, 0, smt_cval ctx vec) in
       Fn ("concat", [top; Fn ("concat", [smt_cval ctx x; bot])])
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
+  | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
       let bot = Extract (Big_int.to_int i - 1, 0, smt_cval ctx vec) in
       Fn ("concat", [smt_cval ctx x; bot])
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
+  | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
       let top = Extract (n - 1, 1, smt_cval ctx vec) in
       Fn ("concat", [top; smt_cval ctx x])
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval ctx x
+  | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval ctx x
   | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
       Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
   | CT_vector _, index_ctyp, _, CT_vector _ ->
@@ -812,30 +811,30 @@ let builtin_vector_update ctx vec i x ret_ctyp =
 
 let builtin_vector_update_subrange ctx vec i j x ret_ctyp =
   match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+  | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
     when n - 1 > Big_int.to_int i && Big_int.to_int j > 0 ->
       assert (n = m);
       let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
       let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
       Fn ("concat", [top; Fn ("concat", [smt_cval ctx x; bot])])
-  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+  | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
     when n - 1 = Big_int.to_int i && Big_int.to_int j > 0 ->
       assert (n = m);
       let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
       Fn ("concat", [smt_cval ctx x; bot])
-  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+  | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
     when n - 1 > Big_int.to_int i && Big_int.to_int j = 0 ->
       assert (n = m);
       let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
       Fn ("concat", [top; smt_cval ctx x])
-  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _)
+  | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
     when n - 1 = Big_int.to_int i && Big_int.to_int j = 0 ->
       smt_cval ctx x
-  | CT_fbits (n, b), ctyp_i, ctyp_j, ctyp_x, CT_fbits (m, _) ->
+  | CT_fbits n, ctyp_i, ctyp_j, ctyp_x, CT_fbits m ->
       assert (n = m);
       let i' = force_size ctx n (int_size ctx ctyp_i) (smt_cval ctx i) in
       let j' = force_size ctx n (int_size ctx ctyp_j) (smt_cval ctx j) in
-      let x' = smt_conversion ctx ctyp_x (CT_fbits (n, b)) (smt_cval ctx x) in
+      let x' = smt_conversion ctx ctyp_x (CT_fbits n) (smt_cval ctx x) in
       let len = bvadd (bvadd i' (bvneg j')) (bvint n (Big_int.of_int 1)) in
       let mask = bvshl (fbits_mask ctx n len) j' in
       bvor (bvand (smt_cval ctx vec) (bvnot mask)) (bvand (bvshl x' j') mask)
@@ -843,34 +842,34 @@ let builtin_vector_update_subrange ctx vec i j x ret_ctyp =
 
 let builtin_unsigned ctx v ret_ctyp =
   match (cval_ctyp v, ret_ctyp) with
-  | CT_fbits (n, _), CT_fint m when m > n ->
+  | CT_fbits n, CT_fint m when m > n ->
       let smt = smt_cval ctx v in
       Fn ("concat", [bvzero (m - n); smt])
-  | CT_fbits (n, _), CT_lint ->
+  | CT_fbits n, CT_lint ->
       if n >= ctx.lint_size then failwith "Overflow detected"
       else (
         let smt = smt_cval ctx v in
         Fn ("concat", [bvzero (ctx.lint_size - n); smt])
       )
-  | CT_lbits _, CT_lint -> Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
-  | CT_lbits _, CT_fint m ->
+  | CT_lbits, CT_lint -> Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
+  | CT_lbits, CT_fint m ->
       let smt = Fn ("contents", [smt_cval ctx v]) in
       force_size ctx m (lbits_size ctx) smt
   | ctyp, _ -> builtin_type_error ctx "unsigned" [v] (Some ret_ctyp)
 
 let builtin_signed ctx v ret_ctyp =
   match (cval_ctyp v, ret_ctyp) with
-  | CT_fbits (n, _), CT_fint m when m >= n -> SignExtend (m - n, smt_cval ctx v)
-  | CT_fbits (n, _), CT_lint -> SignExtend (ctx.lint_size - n, smt_cval ctx v)
-  | CT_lbits _, CT_lint -> Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
+  | CT_fbits n, CT_fint m when m >= n -> SignExtend (m - n, smt_cval ctx v)
+  | CT_fbits n, CT_lint -> SignExtend (ctx.lint_size - n, smt_cval ctx v)
+  | CT_lbits, CT_lint -> Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+  | CT_fbits n, CT_fbits m, CT_fbits o ->
       assert (n = m && m = o);
       Fn ("bvadd", [smt_cval ctx v1; smt_cval ctx v2])
-  | CT_lbits _, CT_lbits _, CT_lbits _ ->
+  | CT_lbits, CT_lbits, CT_lbits ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = smt_cval ctx v2 in
       Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
@@ -878,19 +877,18 @@ let builtin_add_bits ctx v1 v2 ret_ctyp =
 
 let builtin_sub_bits ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+  | CT_fbits n, CT_fbits m, CT_fbits o ->
       assert (n = m && m = o);
       Fn ("bvadd", [smt_cval ctx v1; Fn ("bvneg", [smt_cval ctx v2])])
   | _ -> failwith "Cannot compile sub_bits"
 
 let builtin_add_bits_int ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant c, CT_fbits (o, _) when n = o -> Fn ("bvadd", [smt_cval ctx v1; bvint o c])
-  | CT_fbits (n, _), CT_fint m, CT_fbits (o, _) when n = o ->
-      Fn ("bvadd", [smt_cval ctx v1; force_size ctx o m (smt_cval ctx v2)])
-  | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
+  | CT_fbits n, CT_constant c, CT_fbits o when n = o -> Fn ("bvadd", [smt_cval ctx v1; bvint o c])
+  | CT_fbits n, CT_fint m, CT_fbits o when n = o -> Fn ("bvadd", [smt_cval ctx v1; force_size ctx o m (smt_cval ctx v2)])
+  | CT_fbits n, CT_lint, CT_fbits o when n = o ->
       Fn ("bvadd", [smt_cval ctx v1; force_size ctx o ctx.lint_size (smt_cval ctx v2)])
-  | CT_lbits _, CT_fint n, CT_lbits _ when n < lbits_size ctx ->
+  | CT_lbits, CT_fint n, CT_lbits when n < lbits_size ctx ->
       let smt1 = smt_cval ctx v1 in
       let smt2 = force_size ctx (lbits_size ctx) n (smt_cval ctx v2) in
       Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); smt2])])
@@ -898,25 +896,23 @@ let builtin_add_bits_int ctx v1 v2 ret_ctyp =
 
 let builtin_sub_bits_int ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant c, CT_fbits (o, _) when n = o ->
-      Fn ("bvadd", [smt_cval ctx v1; bvint o (Big_int.negate c)])
-  | CT_fbits (n, _), CT_fint m, CT_fbits (o, _) when n = o ->
-      Fn ("bvsub", [smt_cval ctx v1; force_size ctx o m (smt_cval ctx v2)])
-  | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
+  | CT_fbits n, CT_constant c, CT_fbits o when n = o -> Fn ("bvadd", [smt_cval ctx v1; bvint o (Big_int.negate c)])
+  | CT_fbits n, CT_fint m, CT_fbits o when n = o -> Fn ("bvsub", [smt_cval ctx v1; force_size ctx o m (smt_cval ctx v2)])
+  | CT_fbits n, CT_lint, CT_fbits o when n = o ->
       Fn ("bvsub", [smt_cval ctx v1; force_size ctx o ctx.lint_size (smt_cval ctx v2)])
   | _ -> builtin_type_error ctx "sub_bits_int" [v1; v2] (Some ret_ctyp)
 
 let builtin_replicate_bits ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant c, CT_fbits (m, _) ->
+  | CT_fbits n, CT_constant c, CT_fbits m ->
       assert (n * Big_int.to_int c = m);
       let smt = smt_cval ctx v1 in
       Fn ("concat", List.init (Big_int.to_int c) (fun _ -> smt))
-  | CT_fbits (n, _), _, CT_fbits (m, _) ->
+  | CT_fbits n, _, CT_fbits m ->
       let smt = smt_cval ctx v1 in
       let c = m / n in
       Fn ("concat", List.init c (fun _ -> smt))
-  | CT_fbits (n, _), v2_ctyp, CT_lbits _ ->
+  | CT_fbits n, v2_ctyp, CT_lbits ->
       let times = (lbits_size ctx / n) + 1 in
       let len = force_size ~checked:false ctx ctx.lbits_index (int_size ctx v2_ctyp) (smt_cval ctx v2) in
       let smt1 = smt_cval ctx v1 in
@@ -926,13 +922,13 @@ let builtin_replicate_bits ctx v1 v2 ret_ctyp =
 
 let builtin_sail_truncate ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant c, CT_fbits (m, _) ->
+  | CT_fbits n, CT_constant c, CT_fbits m ->
       assert (Big_int.to_int c = m);
       Extract (Big_int.to_int c - 1, 0, smt_cval ctx v1)
-  | CT_lbits _, CT_constant c, CT_fbits (m, _) ->
+  | CT_lbits, CT_constant c, CT_fbits m ->
       assert (Big_int.to_int c = m && m < lbits_size ctx);
       Extract (Big_int.to_int c - 1, 0, Fn ("contents", [smt_cval ctx v1]))
-  | CT_fbits (n, _), _, CT_lbits _ ->
+  | CT_fbits n, _, CT_lbits ->
       let smt1 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v1) in
       let smt2 = bvzeint ctx ctx.lbits_index v2 in
       Fn ("Bits", [smt2; Fn ("bvand", [bvmask ctx smt2; smt1])])
@@ -940,22 +936,22 @@ let builtin_sail_truncate ctx v1 v2 ret_ctyp =
 
 let builtin_sail_truncateLSB ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
-  | CT_fbits (n, _), CT_constant c, CT_fbits (m, _) ->
+  | CT_fbits n, CT_constant c, CT_fbits m ->
       assert (Big_int.to_int c = m);
       Extract (n - 1, n - Big_int.to_int c, smt_cval ctx v1)
   | _ -> builtin_type_error ctx "sail_truncateLSB" [v1; v2] (Some ret_ctyp)
 
 let builtin_slice ctx v1 v2 v3 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
-  | CT_lbits _, CT_constant start, CT_constant len, CT_fbits (_, _) ->
+  | CT_lbits, CT_constant start, CT_constant len, CT_fbits _ ->
       let top = Big_int.pred (Big_int.add start len) in
       Extract (Big_int.to_int top, Big_int.to_int start, Fn ("contents", [smt_cval ctx v1]))
-  | CT_fbits (_, _), CT_constant start, CT_constant len, CT_fbits (_, _) ->
+  | CT_fbits _, CT_constant start, CT_constant len, CT_fbits _ ->
       let top = Big_int.pred (Big_int.add start len) in
       Extract (Big_int.to_int top, Big_int.to_int start, smt_cval ctx v1)
-  | CT_fbits (_, ord), CT_fint _, CT_constant len, CT_fbits (_, _) ->
+  | CT_fbits _, CT_fint _, CT_constant len, CT_fbits _ ->
       Extract (Big_int.to_int (Big_int.pred len), 0, builtin_shift "bvlshr" ctx v1 v2 (cval_ctyp v1))
-  | CT_fbits (n, ord), ctyp2, _, CT_lbits _ ->
+  | CT_fbits n, ctyp2, _, CT_lbits ->
       let smt1 = force_size ctx (lbits_size ctx) n (smt_cval ctx v1) in
       let smt2 = force_size ctx (lbits_size ctx) (int_size ctx ctyp2) (smt_cval ctx v2) in
       let smt3 = bvzeint ctx ctx.lbits_index v3 in
@@ -964,13 +960,13 @@ let builtin_slice ctx v1 v2 v3 ret_ctyp =
 
 let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
-  | CT_constant len, ctyp, CT_constant start, CT_fbits (ret_sz, _) ->
+  | CT_constant len, ctyp, CT_constant start, CT_fbits ret_sz ->
       let len = Big_int.to_int len in
       let start = Big_int.to_int start in
       let in_sz = int_size ctx ctyp in
       let smt = if in_sz < len + start then force_size ctx (len + start) in_sz (smt_cval ctx v2) else smt_cval ctx v2 in
       Extract (start + len - 1, start, smt)
-  | CT_lint, CT_lint, CT_constant start, CT_lbits _ when Big_int.equal start Big_int.zero ->
+  | CT_lint, CT_lint, CT_constant start, CT_lbits when Big_int.equal start Big_int.zero ->
       let len = Extract (ctx.lbits_index - 1, 0, smt_cval ctx v1) in
       let contents = unsigned_size ~checked:false ctx (lbits_size ctx) ctx.lint_size (smt_cval ctx v2) in
       Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
@@ -1010,15 +1006,15 @@ let builtin_count_leading_zeros ctx v ret_ctyp =
     !m
   in
   match cval_ctyp v with
-  | CT_fbits (sz, _) when sz land (sz - 1) = 0 -> lzcnt sz (smt_cval ctx v)
-  | CT_fbits (sz, _) ->
+  | CT_fbits sz when sz land (sz - 1) = 0 -> lzcnt sz (smt_cval ctx v)
+  | CT_fbits sz ->
       let padded_sz = smallest_greater_power_of_two sz in
       let padding = bvzero (padded_sz - sz) in
       Fn
         ( "bvsub",
           [lzcnt padded_sz (Fn ("concat", [padding; smt_cval ctx v])); bvint ret_sz (Big_int.of_int (padded_sz - sz))]
         )
-  | CT_lbits _ ->
+  | CT_lbits ->
       let smt = smt_cval ctx v in
       Fn
         ( "bvsub",
@@ -1037,7 +1033,7 @@ let builtin_count_leading_zeros ctx v ret_ctyp =
 
 let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, cval_ctyp v4, cval_ctyp v5, ret_ctyp) with
-  | CT_constant n', CT_constant m', CT_fbits (n, _), CT_constant pos, CT_fbits (m, _), CT_fbits (n'', _)
+  | CT_constant n', CT_constant m', CT_fbits n, CT_constant pos, CT_fbits m, CT_fbits n''
     when Big_int.to_int m' = m && Big_int.to_int n' = n && n'' = n && Big_int.less_equal (Big_int.add pos m') n' ->
       let pos = Big_int.to_int pos in
       if pos = 0 then (
@@ -1058,7 +1054,7 @@ let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
   (* set_slice_bits(len, slen, x, pos, y) =
        let mask = slice_mask(len, pos, slen) in
        (x AND NOT(mask)) OR ((unsigned_size(len, y) << pos) AND mask) *)
-  | CT_constant n', _, CT_fbits (n, _), _, CT_lbits _, CT_fbits (n'', _) when Big_int.to_int n' = n && n'' = n ->
+  | CT_constant n', _, CT_fbits n, _, CT_lbits, CT_fbits n'' when Big_int.to_int n' = n && n'' = n ->
       let pos = bvzeint ctx (lbits_size ctx) v4 in
       let slen = bvzeint ctx ctx.lbits_index v2 in
       let mask = Fn ("bvshl", [bvmask ctx slen; pos]) in
@@ -1071,7 +1067,7 @@ let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
 
 let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
   match (cval_ctyp v1, cval_ctyp v2) with
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m -> Fn (fn, [smt_cval ctx v1; smt_cval ctx v2])
+  | CT_fbits n, CT_fbits m when n = m -> Fn (fn, [smt_cval ctx v1; smt_cval ctx v2])
   | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
 (* ***** String operations: lib/real.sail ***** *)
@@ -1079,7 +1075,7 @@ let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
 let builtin_decimal_string_of_bits ctx v =
   begin
     match cval_ctyp v with
-    | CT_fbits (n, _) -> Fn ("int.to.str", [Fn ("bv2nat", [smt_cval ctx v])])
+    | CT_fbits n -> Fn ("int.to.str", [Fn ("bv2nat", [smt_cval ctx v])])
     | _ -> builtin_type_error ctx "decimal_string_of_bits" [v] None
   end
 
@@ -1420,22 +1416,14 @@ end) : Jib_compile.CONFIG = struct
       end
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> CT_list (convert_typ ctx typ)
     (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)]) when string_of_id id = "bitvector" ->
-        let direction =
-          match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false
-        in
-        begin
-          match nexp_simp n with
-          | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
-          | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
-          | _ -> CT_lbits direction
-        end
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector"
-      ->
-        let direction =
-          match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false
-        in
-        CT_vector (direction, convert_typ ctx typ)
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> begin
+        match nexp_simp n with
+        | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits
+        | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n)
+        | _ -> CT_lbits
+      end
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
+        CT_vector (convert_typ ctx typ)
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records ->
         CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
@@ -1509,7 +1497,7 @@ end) : Jib_compile.CONFIG = struct
     | L_num n -> Some (V_lit (VL_int n, CT_constant n))
     | L_hex str when String.length str <= 16 ->
         let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-        Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
+        Some (V_lit (VL_bits content, CT_fbits (String.length str * 4)))
     | L_unit -> Some (V_lit (VL_unit, CT_unit))
     | L_true -> Some (V_lit (VL_bool true, CT_bool))
     | L_false -> Some (V_lit (VL_bool false, CT_bool))

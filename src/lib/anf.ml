@@ -432,10 +432,7 @@ let pp_lvar lvar doc =
 
 let pp_annot typ doc = string "[" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
 
-let pp_order = function
-  | Ord_aux (Ord_inc, _) -> string "inc"
-  | Ord_aux (Ord_dec, _) -> string "dec"
-  | _ -> assert false (* Order types have been specialised, so no polymorphism in C backend. *)
+let pp_order = function Ord_aux (Ord_inc, _) -> string "inc" | Ord_aux (Ord_dec, _) -> string "dec"
 
 let pp_id id = string (string_of_id id)
 

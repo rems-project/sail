@@ -122,7 +122,7 @@ module Make (Config : CONFIG) = struct
   let sv_type_id id = string (sv_type_id_string id)
 
   let rec is_packed = function
-    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits _ | CT_lint | CT_enum _ | CT_constant _ ->
+    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits | CT_lint | CT_enum _ | CT_constant _ ->
         not Config.nopacked
     | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
     | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
@@ -133,13 +133,11 @@ module Make (Config : CONFIG) = struct
   let rec sv_ctyp = function
     | CT_bool -> simple_type "bit"
     | CT_bit -> simple_type "logic"
-    | CT_fbits (width, is_dec) ->
-        if is_dec then ksprintf simple_type "logic [%d:0]" (width - 1)
-        else ksprintf simple_type "logic [0:%d]" (width - 1)
-    | CT_sbits (max_width, is_dec) ->
-        let logic = if is_dec then sprintf "logic [%d:0]" (max_width - 1) else sprintf "logic [0:%d]" (max_width - 1) in
+    | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
+    | CT_sbits max_width ->
+        let logic = sprintf "logic [%d:0]" (max_width - 1) in
         ksprintf simple_type "struct packed { logic [7:0] size; %s bits; }" logic
-    | CT_lbits _ -> simple_type "sail_bits"
+    | CT_lbits -> simple_type "sail_bits"
     | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_lint -> ksprintf simple_type "logic [%d:0]" (Config.max_unknown_integer_width - 1)
     | CT_string -> simple_type (if Config.nostrings then "sail_unit" else "string")
@@ -149,8 +147,8 @@ module Make (Config : CONFIG) = struct
         let width = required_width c in
         ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_ref ctyp -> ksprintf simple_type "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
-    | CT_fvector (len, is_dec, ctyp) ->
-        let outer_index = if is_dec then sprintf "[%d:0]" (len - 1) else sprintf "[0:%d]" (len - 1) in
+    | CT_fvector (len, ctyp) ->
+        let outer_index = sprintf "[%d:0]" (len - 1) in
         begin
           match sv_ctyp ctyp with
           | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
@@ -159,7 +157,7 @@ module Make (Config : CONFIG) = struct
     | CT_list ctyp -> begin
         match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[$]")) | ty, None -> (ty, Some "[$]")
       end
-    | CT_vector (_, ctyp) -> begin
+    | CT_vector ctyp -> begin
         match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[]")) | ty, None -> (ty, Some "[]")
       end
     | CT_real -> simple_type "sail_real"
@@ -177,15 +175,15 @@ module Make (Config : CONFIG) = struct
       end)
       (struct
         let print_bits l = function
-          | CT_lbits _ -> "sail_print_bits"
-          | CT_fbits (sz, _) when Config.nostrings -> Generate_primop.print_fbits_stub sz
-          | CT_fbits (sz, _) -> Generate_primop.print_fbits sz
+          | CT_lbits -> "sail_print_bits"
+          | CT_fbits sz when Config.nostrings -> Generate_primop.print_fbits_stub sz
+          | CT_fbits sz -> Generate_primop.print_fbits sz
           | _ -> Reporting.unreachable l __POS__ "print_bits"
 
         let string_of_bits l = function
-          | CT_lbits _ -> "sail_string_of_bits"
-          | CT_fbits (sz, _) when Config.nostrings -> Generate_primop.string_of_fbits_stub sz
-          | CT_fbits (sz, _) -> Generate_primop.string_of_fbits sz
+          | CT_lbits -> "sail_string_of_bits"
+          | CT_fbits sz when Config.nostrings -> Generate_primop.string_of_fbits_stub sz
+          | CT_fbits sz -> Generate_primop.string_of_fbits sz
           | _ -> Reporting.unreachable l __POS__ "string_of_bits"
 
         let dec_str l = function
@@ -244,9 +242,9 @@ module Make (Config : CONFIG) = struct
   (*
   let sv_ctyp_dummy = function
     | CT_bool -> string "0"
-    | CT_fbits (width, _) ->
+    | CT_fbits width ->
       ksprintf string "%d'b%s" width (String.make width 'X')
-    | CT_lbits _ ->
+    | CT_lbits ->
       let index = ksprintf string "%d'b%s" lbits_index_width (String.make lbits_index_width 'X') in
       let sz = Config.max_unknown_bitvector_width in
       let contents = ksprintf string "%d'b%s" sz (String.make sz 'X') in
@@ -527,8 +525,8 @@ module Make (Config : CONFIG) = struct
   let sv_update_fbits = function
     | [bv; index; bit] -> begin
         match (cval_ctyp bv, cval_ctyp index) with
-        | CT_fbits (1, _), _ -> Smt_builtins.fmap sv_smt (Smt.smt_cval bit)
-        | CT_fbits (sz, _), CT_constant c ->
+        | CT_fbits 1, _ -> Smt_builtins.fmap sv_smt (Smt.smt_cval bit)
+        | CT_fbits sz, CT_constant c ->
             let c = Big_int.to_int c in
             let* bv_smt = Smt.smt_cval bv in
             let bv_smt_1 = Extract (sz - 1, c + 1, bv_smt) in
@@ -609,7 +607,7 @@ module Make (Config : CONFIG) = struct
           match args with
           | [arr; i; x] -> begin
               match cval_ctyp arr with
-              | CT_fvector (len, _, _) ->
+              | CT_fvector (len, _) ->
                   let* i =
                     Smt_builtins.bind (Smt.smt_cval i)
                       (Smt_builtins.unsigned_size ~checked:false
