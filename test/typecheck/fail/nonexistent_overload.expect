@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/nonexistent_overload.sail[0m:5.14-33:
+5[96m |[0moverload f = {not_a_real_function}
+ [92m |[0m              [92m^-----------------^[0m [92munbound identifier[0m
+[96mfail/nonexistent_overload.sail[0m:5.0-34:
+5[96m |[0moverload f = {not_a_real_function}
+ [91m |[0m[91m^--------------------------------^[0m
+ [91m |[0m Cannot create or extend overload f, not_a_real_function is not bound

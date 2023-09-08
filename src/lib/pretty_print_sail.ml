@@ -590,7 +590,7 @@ let doc_rec (Rec_aux (r, _)) =
   | Rec_nonrec | Rec_rec -> empty
   | Rec_measure (pat, exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
 
-let doc_fundef (FD_aux (FD_function (r, _, funcls), annot)) =
+let doc_fundef (FD_aux (FD_function (r, _, funcls), _)) =
   match funcls with
   | [] -> failwith "Empty function list"
   | _ ->
@@ -716,7 +716,7 @@ let doc_typdef (TD_aux (td, _)) =
         (separate space [string "bitfield"; doc_id id; colon; doc_typ typ])
         (surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace)
 
-let doc_spec (VS_aux (v, annot)) =
+let doc_spec =
   let doc_extern ext =
     match ext with
     | Some ext ->
@@ -729,8 +729,8 @@ let doc_spec (VS_aux (v, annot)) =
         equals ^^ space ^^ purity ^^ braces (separate (comma ^^ space) docs)
     | None -> empty
   in
-  match v with
-  | VS_val_spec (ts, id, ext) ->
+  function
+  | VS_aux (VS_val_spec (ts, id, ext), _) ->
       string "val" ^^ space ^^ doc_id id ^^ space ^^ doc_extern ext ^^ colon ^^ space ^^ doc_typschm ts
 
 let doc_prec = function Infix -> string "infix" | InfixL -> string "infixl" | InfixR -> string "infixr"
@@ -812,7 +812,7 @@ let rec doc_def_no_hardline ?(comment = false) (DEF_aux (aux, def_annot)) =
   | DEF_fixity (prec, n, id) ->
       fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
       separate space [doc_prec prec; doc_int n; doc_id id]
-  | DEF_overload ((Id_aux (_, l) as id), ids) ->
+  | DEF_overload (id, ids) ->
       separate space
         [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
 

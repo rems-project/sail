@@ -342,17 +342,17 @@ val strip_typedef : tannot type_def -> uannot type_def
 val strip_def : tannot def -> uannot def
 val strip_ast : tannot ast -> uannot ast
 
-(** Strip location information from types for comparison purposes *)
-val strip_typ : typ -> typ
+(** Remove location information from types for comparison purposes *)
+val unloc_typ : typ -> typ
 
-val strip_typq : typquant -> typquant
-val strip_id : id -> id
-val strip_kid : kid -> kid
-val strip_nexp_aux : nexp_aux -> nexp_aux
-val strip_nexp : nexp -> nexp
-val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
-val strip_n_constraint : n_constraint -> n_constraint
-val strip_typ_aux : typ_aux -> typ_aux
+val unloc_typq : typquant -> typquant
+val unloc_id : id -> id
+val unloc_kid : kid -> kid
+val unloc_nexp_aux : nexp_aux -> nexp_aux
+val unloc_nexp : nexp -> nexp
+val unloc_n_constraint_aux : n_constraint_aux -> n_constraint_aux
+val unloc_n_constraint : n_constraint -> n_constraint
+val unloc_typ_aux : typ_aux -> typ_aux
 
 (** {2 Checking expressions and patterns} *)
 

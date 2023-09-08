@@ -80,7 +80,7 @@ let add_attribute l attr arg (annot : uannot) = { attrs = (l, attr, arg) :: anno
 let remove_attribute attr1 (annot : uannot) = { attrs = List.filter (fun (_, attr2, _) -> attr1 <> attr2) annot.attrs }
 
 let get_attribute attr annot =
-  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
+  List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 let get_attributes annot = annot.attrs
 
@@ -98,7 +98,7 @@ let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc }
 let add_def_attribute l attr arg (annot : def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
 
 let get_def_attribute attr (annot : def_annot) =
-  List.find_opt (fun (l, attr', arg) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
+  List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 type mut = Immutable | Mutable
 
@@ -141,9 +141,9 @@ let gen_loc = function Parse_ast.Generated l -> Parse_ast.Generated l | l -> Par
 let rec is_gen_loc = function
   | Parse_ast.Unknown -> false
   | Parse_ast.Unique (_, l) -> is_gen_loc l
-  | Parse_ast.Generated l -> true
+  | Parse_ast.Generated _ -> true
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
-  | Parse_ast.Range (p1, p2) -> false
+  | Parse_ast.Range _ -> false
 
 let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
 
@@ -529,7 +529,7 @@ let arg_nexp ?loc:(l = Parse_ast.Unknown) n = A_aux (A_nexp n, l)
 let arg_typ ?loc:(l = Parse_ast.Unknown) typ = A_aux (A_typ typ, l)
 let arg_bool ?loc:(l = Parse_ast.Unknown) nc = A_aux (A_bool nc, l)
 
-let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), l)) =
+let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) =
   match k with K_int -> arg_nexp (nvar v) | K_bool -> arg_bool (nc_var v) | K_type -> arg_typ (mk_typ (Typ_var v))
 
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
@@ -590,7 +590,7 @@ let rec insert_subrange ms (n1, n2) =
 
 let insert_subranges ns ms = List.fold_left insert_subrange ns ms
 
-let rec pattern_vector_subranges (P_aux (aux, (l, _))) =
+let rec pattern_vector_subranges (P_aux (aux, _)) =
   match aux with
   | P_vector_subrange (id, n, m) when Big_int.greater n m -> Bindings.singleton id [(n, m)]
   | P_vector_subrange (id, n, m) -> Bindings.singleton id [(m, n)]
