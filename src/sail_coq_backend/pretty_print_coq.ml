@@ -984,7 +984,7 @@ let rec typeclass_nexps (Typ_aux (t, l)) =
   | Typ_id _ | Typ_var _ -> NexpSet.empty
   | Typ_fn (t1, t2) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _); _])
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _)])
   | Typ_app (Id_aux (Id "itself", _), [A_aux (A_nexp size_nexp, _)]) ->
       let size_nexp = nexp_simp size_nexp in
       if is_nexp_constant size_nexp then NexpSet.empty else NexpSet.singleton (orig_nexp size_nexp)
@@ -1342,8 +1342,8 @@ let doc_exp, doc_let =
       let autocast =
         (* Avoid using helper functions which simplify the nexps *)
         match (exp_typ, ann_typ) with
-        | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-            Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+        | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+            Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
             not (similar_nexps ctxt env n1 n2)
         | _ -> false
       in
@@ -1761,8 +1761,8 @@ let doc_exp, doc_let =
                 let autocast =
                   (* Avoid using helper functions which simplify the nexps *)
                   match (in_typ, out_typ) with
-                  | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-                      Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+                  | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+                      Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
                       not (similar_nexps ctxt env n1 n2)
                   | _ -> false
                 in
@@ -1918,8 +1918,8 @@ let doc_exp, doc_let =
         let autocast_out =
           (* Avoid using helper functions which simplify the nexps *)
           match (outer_typ', cast_typ') with
-          | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-              Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+          | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+              Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
               not (similar_nexps ctxt env n1 n2)
           | _ -> false
         in
