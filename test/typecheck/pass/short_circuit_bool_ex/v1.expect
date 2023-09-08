@@ -8,4 +8,4 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [96mpass/short_circuit_bool_ex/v1.sail[0m:25.36-40:
 25[96m |[0m  if (true | assertive(n) > 0) then true else true
   [91m |[0m                                    [91m^--^[0m
-  [91m |[0m Failed to prove constraint: ((not(true) | 0 == 1) & (not(0 == 1) | true))
+  [91m |[0m Failed to prove constraint: 0 == 1

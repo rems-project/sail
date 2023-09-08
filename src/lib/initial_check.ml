@@ -405,6 +405,8 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_var kid -> TP_aux (TP_var (to_ast_var kid), l)
   | P.ATyp_app (P.Id_aux (P.Id "int", il), typs) ->
       TP_aux (TP_app (Id_aux (Id "atom", il), List.map (to_ast_typ_pat ctx) typs), l)
+  | P.ATyp_app (P.Id_aux (P.Id "bool", il), typs) ->
+      TP_aux (TP_app (Id_aux (Id "atom_bool", il), List.map (to_ast_typ_pat ctx) typs), l)
   | P.ATyp_app (f, typs) -> TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 

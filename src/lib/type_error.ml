@@ -249,7 +249,8 @@ let message_of_type_error =
             Line ("Could not resolve quantifiers for " ^ string_of_id id);
             Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
           ]
-    | Err_failed_constraint (check, locals, ncs) -> Line ("Failed to prove constraint: " ^ string_of_n_constraint check)
+    | Err_failed_constraint (check, locals, ncs) ->
+        Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check))
     | Err_subtype (typ1, typ2, nc, all_constraints, all_vars) ->
         let nc = Option.map constraint_simp nc in
         let typ1, typ2 = (simp_typ typ1, simp_typ typ2) in
