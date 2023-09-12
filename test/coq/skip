@@ -38,3 +38,10 @@ XXXXX Existential that should produce a pair
 exist_tlb.sail
 XXXXX A use of an existential type that's not supported yet
 ast_with_dep_tuple.sail
+XXXXX Essential use of an equality constraint in the context
+equation_arguments.sail
+multiple_unifiers.sail
+type_div.sail
+XXXXX Need to be built against stdpp version of Sail (for now)
+concurrency_interface_dec.sail
+concurrency_interface_inc.sail
