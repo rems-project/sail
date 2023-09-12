@@ -268,7 +268,8 @@ let doc_nexp ctx ?(skip_vars = KidSet.empty) nexp =
     | _ -> mul nexp
   and mul (Nexp_aux (n, l) as nexp) =
     match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
-  and uneg (Nexp_aux (n, l) as nexp) = match n with Nexp_neg n -> separate space [minus; uneg n] | _ -> exp nexp
+  and uneg (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
   and exp (Nexp_aux (n, l) as nexp) =
     match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
@@ -279,7 +280,9 @@ let doc_nexp ctx ?(skip_vars = KidSet.empty) nexp =
     | _ -> atomic nexp
   and atomic (Nexp_aux (n, l) as nexp) =
     match n with
-    | Nexp_constant i -> string (Big_int.to_string i)
+    | Nexp_constant i ->
+        let d = string (Big_int.to_string i) in
+        if Big_int.less i Big_int.zero then parens d else d
     | Nexp_var v when KidSet.mem v skip_vars -> string "_"
     | Nexp_var v -> doc_var ctx v
     | Nexp_id id -> doc_id ctx id
