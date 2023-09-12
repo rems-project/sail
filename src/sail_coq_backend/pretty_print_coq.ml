@@ -2620,6 +2620,9 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | P_tuple [], _ ->
       let annot = (l, mk_tannot Env.empty unit_typ) in
       ([(P_aux (P_lit (mk_lit L_unit), annot), unit_typ)], identity)
+  (* The type checker currently has a special case for a single arg type; if
+     that is removed, then remove the next case. *)
+  | P_tuple pats, [typ] -> ([(pat, typ)], identity)
   | P_tuple pats, _ -> (List.combine pats typs, identity)
   | P_wild, _ ->
       let wild typ = (P_aux (P_wild, (l, mk_tannot env typ)), typ) in
