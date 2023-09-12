@@ -104,6 +104,7 @@ type ctx = {
   effect_info : Effects.side_effect_info;
   locals : (mut * ctyp) Bindings.t;
   letbinds : int list;
+  letbind_ids : IdSet.t;
   no_raw : bool;
 }
 
