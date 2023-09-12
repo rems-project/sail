@@ -9,14 +9,25 @@ EXTRATESTSDIR="$DIR/pass"
 
 printf "\$SAIL is $SAIL\n"
 
+if opam config var coq-sail:share >/dev/null 2>/dev/null; then
+  COQOPTS=""
+else
+  if [ -z "$COQSAIL" ]; then
+    COQSAIL="$DIR/../../../coq-sail/src"
+  fi
+  COQOPTS="-Q $COQSAIL Sail"
+fi
+
 if opam config var coq-bbv:share >/dev/null 2>/dev/null; then
-  COQOPTS="-Q $SAILDIR/lib/coq Sail"
+  :
 else
   if [ -z "$BBVDIR" ]; then
     BBVDIR="$DIR/../../../bbv/src/bbv"
   fi
-  COQOPTS="-Q $SAILDIR/lib/coq Sail -Q $BBVDIR bbv"
+  COQOPTS+=" -Q $BBVDIR bbv"
 fi
+
+printf "Coq options are: $COQOPTS\n"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
