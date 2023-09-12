@@ -2858,7 +2858,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
     {
       ctxt0 with
       early_ret = (if contains_early_return exp then Some ret_typ else None);
-      ret_typ_pp = doc_typ ctxt0 Env.empty ret_typ;
+      ret_typ_pp = doc_typ ctxt0 env ret_typ;
     }
   in
   let () =
@@ -2894,32 +2894,26 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
       debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
     in
-    (* TODO: probably should provide partial environments to doc_typ *)
     match pat_is_plain_binder env pat with
     | Some id -> begin
         let id_pp = match id with Some id -> doc_id ctxt id | None -> underscore in
         match is_fixed_by_eqn env exp_typ with
         | Some constant ->
             parens
-              (separate space
-                 [id_pp; colon; doc_typ ctxt Env.empty typ; string ":="; string (Big_int.to_string constant)]
-              )
+              (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Big_int.to_string constant)])
         | None -> (
             match classify_ex_type ctxt env ?binding:id exp_typ with
-            | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ'])
+            | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt env typ'])
           )
       end
     | None ->
         let typ = match classify_ex_type ctxt env ~binding:id exp_typ with _, _, typ' -> typ' in
         used_a_pattern := true;
-        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt Env.empty typ])
+        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt env typ])
   in
   let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = List.filter_map (atom_constraint ctxt) pats in
-  let retpp =
-    (* TODO: again, probably should provide proper environment *)
-    if is_monadic then string "M" ^^ space ^^ parens ctxt.ret_typ_pp else doc_typ ctxt Env.empty ret_typ
-  in
+  let retpp = if is_monadic then string "M" ^^ space ^^ parens ctxt.ret_typ_pp else doc_typ ctxt env ret_typ in
   let idpp = doc_id ctxt id in
   let intropp, accpp, measurepp, fixupspp =
     match rec_opt with
