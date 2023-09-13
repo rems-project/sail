@@ -86,6 +86,7 @@ module type CONFIG = sig
   val nopacked : bool
   val unreachable : string list
   val comb : bool
+  val ignore : string list
 end
 
 module Make (Config : CONFIG) = struct
@@ -830,24 +831,27 @@ module Make (Config : CONFIG) = struct
     | CDEF_val (f, _, param_ctyps, ret_ctyp) ->
         (empty_cdef_doc, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
     | CDEF_fundef (f, _, params, body) ->
-        let body =
-          Jib_optimize.(
-            body |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
-            |> remove_undefined |> filter_clear
-          )
-        in
-        begin
-          match Bindings.find_opt f fn_ctyps with
-          | Some (param_ctyps, ret_ctyp) ->
-              ( {
-                  empty_cdef_doc with
-                  inside_module = sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline;
-                },
-                fn_ctyps,
-                setup_calls
-              )
-          | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
-        end
+        if List.mem (string_of_id f) Config.ignore then (empty_cdef_doc, fn_ctyps, setup_calls)
+        else (
+          let body =
+            Jib_optimize.(
+              body |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
+              |> remove_undefined |> filter_clear
+            )
+          in
+          begin
+            match Bindings.find_opt f fn_ctyps with
+            | Some (param_ctyps, ret_ctyp) ->
+                ( {
+                    empty_cdef_doc with
+                    inside_module = sv_fundef ctx f params param_ctyps ret_ctyp body ^^ twice hardline;
+                  },
+                  fn_ctyps,
+                  setup_calls
+                )
+            | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
+          end
+        )
     | CDEF_let (n, bindings, setup) ->
         let bindings_doc =
           separate_map (semi ^^ hardline) (fun (id, ctyp) -> wrap_type ctyp (sv_id id)) bindings
