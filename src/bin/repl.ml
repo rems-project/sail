@@ -450,8 +450,7 @@ let handle_input' istate input =
             let nc = Initial_check.constraint_of_string arg in
             { istate with env = Type_check.Env.add_constraint nc istate.env }
         | ":v" | ":verbose" ->
-            Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
-            print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug);
+            Type_check.set_tc_debug (int_of_string arg);
             istate
         | ":clear" ->
             if arg = "on" || arg = "true" then { istate with clear = true }
@@ -664,7 +663,7 @@ let handle_input istate input =
   | Failure str ->
       print_endline ("Error: " ^ str);
       istate
-  | Type_check.Type_error (_, err) ->
+  | Type_error.Type_error (_, err) ->
       print_endline (Type_error.string_of_type_error err);
       istate
   | Reporting.Fatal_error err ->

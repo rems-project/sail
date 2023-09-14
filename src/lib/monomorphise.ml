@@ -77,6 +77,7 @@ open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 open Type_check
+open Type_error
 
 let opt_mwords = ref false
 
@@ -3884,7 +3885,9 @@ module BitvectorSizeCasts = struct
             let arg_typ' = subst_unifiers unifiers arg_typ in
             arg_typ'
           end
-        | _ -> typ_error l ("Malformed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+        | _ ->
+            raise
+              (Reporting.err_typ l ("Malformed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ))
       in
 
       (* Push the cast down, including through constructors *)

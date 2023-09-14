@@ -71,6 +71,8 @@ open Ast_defs
 open Ast_util
 open Type_check
 
+include Type_internal
+
 let opt_explain_all_variables = ref false
 let opt_explain_constraints = ref false
 

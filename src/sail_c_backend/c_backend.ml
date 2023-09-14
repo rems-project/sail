@@ -2107,7 +2107,7 @@ let compile_ast env effect_info output_chan c_includes ast =
       ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
       )
     |> output_string output_chan
-  with Type_error (l, err) ->
+  with Type_error.Type_error (l, err) ->
     c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
 
 let compile_ast_clib env effect_info ast codegen =

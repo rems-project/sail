@@ -459,6 +459,8 @@ val id_of_dec_spec : 'a dec_spec -> id
 
 (** {2 Functions for manipulating identifiers} *)
 
+val deinfix : id -> id
+
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 

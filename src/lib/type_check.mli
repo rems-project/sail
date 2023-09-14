@@ -72,11 +72,11 @@ open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 
-(** [opt_tc_debug] controls the verbosity of the type checker. 0 is
+(** [set_tc_debug] controls the verbosity of the type checker. 0 is
    silent, 1 prints a tree of the type derivation and 2 is like 1 but
    with much more debugging information. 3 is the highest level, and
    is even more verbose still. *)
-val opt_tc_debug : int ref
+val set_tc_debug : int -> unit
 
 (** [opt_no_lexp_bounds_check] turns off the bounds checking in vector
    assignments in l-expressions. *)
@@ -87,35 +87,12 @@ val opt_no_lexp_bounds_check : bool ref
    otherwise a good idea. *)
 val opt_expand_valspec : bool ref
 
-(** Linearize cases involving power where we would otherwise require
-   the SMT solver to use non-linear arithmetic. *)
-val opt_smt_linearize : bool ref
-
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 
-(** {2 Type errors} *)
-
-type constraint_reason = (Ast.l * string) option
-
-type type_error =
-  | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
-  | Err_no_overloading of id * (id * type_error) list
-  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
-  | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
-  | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * Ast.l KBindings.t
-  | Err_no_num_ident of id
-  | Err_other of string
-  | Err_inner of type_error * Ast.l * string * string option * type_error
+(** {2 Environments} *)
 
 type env
-
-exception Type_error of l * type_error
-
-val typ_debug : ?level:int -> string Lazy.t -> unit
-val typ_print : string Lazy.t -> unit
-
-(** {2 Environments} *)
 
 (** The env module defines the internal type checking environment, and
    contains functions that operate on that state. *)
@@ -198,7 +175,7 @@ module Env : sig
 
   val get_variants : t -> (typquant * type_union list) Bindings.t
 
-  (** Return type is: quantifier, argument type, return type, effect *)
+  (** Return type is: quantifier, argument type, return type *)
   val get_accessor : id -> id -> t -> typquant * typ * typ
 
   (** If the environment is checking a function, then this will get
@@ -342,18 +319,6 @@ val strip_typedef : tannot type_def -> uannot type_def
 val strip_def : tannot def -> uannot def
 val strip_ast : tannot ast -> uannot ast
 
-(** Remove location information from types for comparison purposes *)
-val unloc_typ : typ -> typ
-
-val unloc_typq : typquant -> typquant
-val unloc_id : id -> id
-val unloc_kid : kid -> kid
-val unloc_nexp_aux : nexp_aux -> nexp_aux
-val unloc_nexp : nexp -> nexp
-val unloc_n_constraint_aux : n_constraint_aux -> n_constraint_aux
-val unloc_n_constraint : n_constraint -> n_constraint
-val unloc_typ_aux : typ_aux -> typ_aux
-
 (** {2 Checking expressions and patterns} *)
 
 (** Check an expression has some type. Returns a fully annotated
@@ -413,8 +378,6 @@ val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp
    but raises a type error instead.  This should always be safe to use
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
-
-val typ_error : Ast.l -> string -> 'a
 
 val tc_assume : n_constraint -> tannot exp -> tannot exp
 

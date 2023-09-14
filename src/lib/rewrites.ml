@@ -2131,7 +2131,7 @@ let rewrite_vector_concat_assignments env defs =
           in
           begin
             try check_exp env full_exp unit_typ
-            with Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+            with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
           end
         )
         else E_aux (e_aux, annot)
@@ -2158,7 +2158,7 @@ let rewrite_tuple_assignments env defs =
         let let_exp = mk_exp (E_let (mk_letbind pat (strip_exp exp'), block)) in
         begin
           try check_exp env let_exp unit_typ
-          with Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+          with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
         end
     | _ -> E_aux (e_aux, annot)
   in
@@ -2930,7 +2930,7 @@ let rewrite_ast_pat_string_append env =
         let mapping_inner_typ =
           match Env.get_val_spec (mk_id mapping_prefix_func) env with
           | _, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _)), _) -> typ
-          | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
+          | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "mapping prefix func without correct function type?"
         in
 
         let s_id = fresh_stringappend_id () in
@@ -4032,30 +4032,6 @@ let rewrite_ast_realize_mappings effect_info env ast =
         )
     in
 
-    typ_debug
-      ( lazy
-        (Printf.sprintf "forwards for mapping %s: %s\n%!" (string_of_id id)
-           (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string)
-        )
-        );
-    typ_debug
-      ( lazy
-        (Printf.sprintf "backwards for mapping %s: %s\n%!" (string_of_id id)
-           (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string)
-        )
-        );
-    typ_debug
-      ( lazy
-        (Printf.sprintf "forwards matches for mapping %s: %s\n%!" (string_of_id id)
-           (Pretty_print_sail.doc_fundef forwards_matches_fun |> Pretty_print_sail.to_string)
-        )
-        );
-    typ_debug
-      ( lazy
-        (Printf.sprintf "backwards matches for mapping %s: %s\n%!" (string_of_id id)
-           (Pretty_print_sail.doc_fundef backwards_matches_fun |> Pretty_print_sail.to_string)
-        )
-        );
     let forwards_fun, _ = Type_check.check_fundef env def_annot forwards_fun in
     let backwards_fun, _ = Type_check.check_fundef env def_annot backwards_fun in
     let forwards_matches_fun, _ = Type_check.check_fundef env def_annot forwards_matches_fun in
@@ -4084,12 +4060,6 @@ let rewrite_ast_realize_mappings effect_info env ast =
             FD_aux
               (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, empty_uannot))
           in
-          typ_debug
-            ( lazy
-              (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id)
-                 (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)
-              )
-              );
           let forwards_prefix_fun, _ = Type_check.check_fundef env def_annot forwards_prefix_fun in
           forwards_prefix_fun
         end
@@ -4110,12 +4080,6 @@ let rewrite_ast_realize_mappings effect_info env ast =
             FD_aux
               (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, empty_uannot))
           in
-          typ_debug
-            ( lazy
-              (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id)
-                 (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)
-              )
-              );
           let backwards_prefix_fun, _ = Type_check.check_fundef env def_annot backwards_prefix_fun in
           backwards_prefix_fun
         end
@@ -5141,7 +5105,7 @@ let rewrite effect_info env rewriters ast =
          (1, (ast, effect_info, env))
          rewriters
       )
-  with Type_check.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let () =
   let open Interactive in
