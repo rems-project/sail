@@ -2355,4 +2355,4 @@ let generate_smt props name_file env effect_info ast =
   try
     let cdefs, _, ctx = compile env effect_info ast in
     smt_cdefs props [] name_file ctx cdefs cdefs
-  with Type_check.Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  with Type_check.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))

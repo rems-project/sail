@@ -2078,7 +2078,7 @@ let rewrite_vector_concat_assignments env defs =
           in
           begin
             try check_exp env full_exp unit_typ
-            with Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+            with Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
           end
         )
         else E_aux (e_aux, annot)
@@ -2105,7 +2105,7 @@ let rewrite_tuple_assignments env defs =
         let let_exp = mk_exp (E_let (mk_letbind pat (strip_exp exp'), block)) in
         begin
           try check_exp env let_exp unit_typ
-          with Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+          with Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
         end
     | _ -> E_aux (e_aux, annot)
   in
@@ -2877,7 +2877,7 @@ let rewrite_ast_pat_string_append env =
         let mapping_inner_typ =
           match Env.get_val_spec (mk_id mapping_prefix_func) env with
           | _, Typ_aux (Typ_fn (_, Typ_aux (Typ_app (_, [A_aux (A_typ typ, _)]), _)), _) -> typ
-          | _ -> typ_error env Parse_ast.Unknown "mapping prefix func without correct function type?"
+          | _ -> typ_error Parse_ast.Unknown "mapping prefix func without correct function type?"
         in
 
         let s_id = fresh_stringappend_id () in
@@ -5068,7 +5068,7 @@ let rewrite effect_info env rewriters ast =
          (1, (ast, effect_info, env))
          rewriters
       )
-  with Type_check.Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  with Type_check.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let () =
   let open Interactive in

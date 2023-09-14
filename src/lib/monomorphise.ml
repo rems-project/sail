@@ -3884,7 +3884,7 @@ module BitvectorSizeCasts = struct
             let arg_typ' = subst_unifiers unifiers arg_typ in
             arg_typ'
           end
-        | _ -> typ_error env l ("Malformed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+        | _ -> typ_error l ("Malformed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
       in
 
       (* Push the cast down, including through constructors *)
