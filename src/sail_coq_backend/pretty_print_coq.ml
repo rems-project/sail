@@ -3477,7 +3477,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
              hardline;
            ]
         )
-  with Type_check.Type_error (env, l, err) ->
+  with Type_check.Type_error (l, err) ->
     let extra =
       "\nError during Coq printing\n"
       ^ if Printexc.backtrace_status () then "\n" ^ Printexc.get_backtrace () else "(backtracing unavailable)"

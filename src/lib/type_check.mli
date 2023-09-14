@@ -110,7 +110,7 @@ type type_error =
 
 type env
 
-exception Type_error of env * l * type_error
+exception Type_error of l * type_error
 
 val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
@@ -414,7 +414,7 @@ val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
 
-val typ_error : Env.t -> Ast.l -> string -> 'a
+val typ_error : Ast.l -> string -> 'a
 
 val tc_assume : n_constraint -> tannot exp -> tannot exp
 
