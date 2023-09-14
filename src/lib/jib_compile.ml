@@ -560,7 +560,7 @@ module Make (C : CONFIG) = struct
       (* If we can't find a function in local_env, fall back to the
          global env - this happens when representing assertions, exit,
          etc as functions in the IR. *)
-      try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
+      try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
     in
     let arg_typs, ret_typ = match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false in
     let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
@@ -1363,7 +1363,7 @@ module Make (C : CONFIG) = struct
   let compile_funcl ctx id pat guard exp =
     (* Find the function's type. *)
     let quant, Typ_aux (fn_typ, _) =
-      try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
+      try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
     in
     let arg_typs, ret_typ = match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false in
 

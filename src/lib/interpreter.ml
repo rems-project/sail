@@ -122,12 +122,13 @@ let value_of_exp = function E_aux (E_internal_value v, _) -> v | _ -> failwith "
 
 let fallthrough =
   let open Type_check in
+  let open Type_error in
   try
     let env = initial_env |> Env.add_scattered_variant (mk_id "exception") (mk_typquant []) in
     check_case env exc_typ
       (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn")))))))
       unit_typ
-  with Type_error (l, err) -> Reporting.unreachable l __POS__ (Type_error.string_of_type_error err)
+  with Type_error (l, err) -> Reporting.unreachable l __POS__ (string_of_type_error err)
 
 (**************************************************************************)
 (* 1. Interpreter Monad                                                   *)
@@ -864,7 +865,7 @@ let rec eval_frame' = function
 
 let eval_frame frame =
   try eval_frame' frame
-  with Type_check.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let default_effect_interp state eff =
   let lstate, gstate = state in

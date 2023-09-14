@@ -86,6 +86,7 @@ let find_properties { defs; _ } =
 
 let add_property_guards props ast =
   let open Type_check in
+  let open Type_error in
   let rec add_property_guards' acc = function
     | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs ->
       begin

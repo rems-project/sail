@@ -204,7 +204,7 @@ let rec options =
         "<solver> choose SMT solver. Supported solvers are z3 (default), alt-ergo, cvc4, mathsat, vampire and yices."
       );
       ( "-smt_linearize",
-        Arg.Set Type_check.opt_smt_linearize,
+        Arg.Set Type_env.opt_smt_linearize,
         "(experimental) force linearization for constraints involving exponentials"
       );
       ("-Oconstant_fold", Arg.Set Constant_fold.optimize_constant_fold, " apply constant folding optimizations");
@@ -222,10 +222,7 @@ let rec options =
       );
       ("-ddump_initial_ast", Arg.Set Frontend.opt_ddump_initial_ast, " (debug) dump the initial ast to stdout");
       ("-ddump_tc_ast", Arg.Set Frontend.opt_ddump_tc_ast, " (debug) dump the typechecked ast to stdout");
-      ( "-dtc_verbose",
-        Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
-        "<verbosity> (debug) verbose typechecker output: 0 is silent"
-      );
+      ("-dtc_verbose", Arg.Int Type_check.set_tc_debug, "<verbosity> (debug) verbose typechecker output: 0 is silent");
       ("-dsmt_verbose", Arg.Set Constraint.opt_smt_verbose, " (debug) print SMTLIB constraints sent to SMT solver");
       ("-dmagic_hash", Arg.Set Initial_check.opt_magic_hash, " (debug) allow special character # in identifiers");
       ( "-dprofile",
