@@ -682,7 +682,7 @@ module Make (C : Config) = struct
          (rows_to_list matrix)
       )
 
-  let split_matrix_ctor ctx c ctor ctor_rows matrix =
+  let split_matrix_ctor ctx c ctor_rows matrix =
     let row_indices = List.fold_left (fun set (r, _) -> IntSet.add r set) IntSet.empty ctor_rows in
     let flatten = function
       | GP_app (_, _, gpats) -> GP_tuple gpats
@@ -844,7 +844,7 @@ module Make (C : Config) = struct
                 | Incomplete unmatcheds -> Incomplete unmatcheds
                 | Completeness_unknown -> Completeness_unknown
                 | Complete cinfo ->
-                    let ctor_matrix = split_matrix_ctor ctx i ctor ctor_rows matrix in
+                    let ctor_matrix = split_matrix_ctor ctx i ctor_rows matrix in
                     if row_matrix_empty ctor_matrix then (
                       let width = row_matrix_width l matrix in
                       Incomplete (undefs_except 0 i (mk_exp (E_app (ctor, [mk_lit_exp L_undef]))) width)
@@ -942,7 +942,7 @@ module Make (C : Config) = struct
             | Completeness_unknown -> None
           end
     with (* For now, if any error occurs just report the pattern match is incomplete *)
-    | exn -> None
+    | _ -> None
 
   let is_complete_funcls_wildcarded ?(keyword = "match") l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in

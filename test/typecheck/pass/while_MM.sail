@@ -5,7 +5,7 @@ val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
 val add_vec_int : forall ('n : Int) ('ord : Order).
   (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
-overload operator + = {add_vec_int, add_range, add_int}
+overload operator + = {add_vec_int, add_int}
 
 val bool_not = pure {ocaml: "not", lem: "not"}: bool -> bool
 

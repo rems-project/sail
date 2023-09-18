@@ -1,7 +1,5 @@
 $include <flow.sail>
 
-overload operator == = {eq_atom}
-
 let (size as 'size) : {|32, 64|} = 32
 
 val zeros : forall 'n. atom('n) -> vector ('n, dec, bit)

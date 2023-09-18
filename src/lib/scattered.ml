@@ -133,7 +133,7 @@ let rec descatter' accumulator funcls mapcls = function
         :: accumulator
       in
       descatter' accumulator funcls mapcls defs
-  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, _))), def_annot) :: defs ->
+  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), def_annot) :: defs ->
       let id = funcl_id funcl in
       let funcl = patch_funcl_loc def_annot funcl in
       begin

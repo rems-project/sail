@@ -249,7 +249,8 @@ let message_of_type_error =
             Line ("Could not resolve quantifiers for " ^ string_of_id id);
             Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
           ]
-    | Err_failed_constraint (check, locals, ncs) -> Line ("Failed to prove constraint: " ^ string_of_n_constraint check)
+    | Err_failed_constraint (check, locals, ncs) ->
+        Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check))
     | Err_subtype (typ1, typ2, nc, all_constraints, all_vars) ->
         let nc = Option.map constraint_simp nc in
         let typ1, typ2 = (simp_typ typ1, simp_typ typ2) in
@@ -386,9 +387,8 @@ let rec collapse_errors = function
 
 let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
  fun env defs ->
-  try Type_check.check_defs env defs
-  with Type_error (env, l, err) -> raise (Reporting.err_typ l (string_of_type_error err))
+  try Type_check.check_defs env defs with Type_error (l, err) -> raise (Reporting.err_typ l (string_of_type_error err))
 
 let check : Env.t -> uannot ast -> tannot ast * Env.t =
  fun env defs ->
-  try Type_check.check env defs with Type_error (env, l, err) -> raise (Reporting.err_typ l (string_of_type_error err))
+  try Type_check.check env defs with Type_error (l, err) -> raise (Reporting.err_typ l (string_of_type_error err))

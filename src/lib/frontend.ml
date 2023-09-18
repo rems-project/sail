@@ -127,7 +127,7 @@ let rewrite_ast_initial effect_info env =
     [("initial", fun effect_info env ast -> (Rewriter.rewrite_ast ast, effect_info, env))]
 
 let initial_rewrite effect_info type_envs ast =
-  let ast, _, type_envs = rewrite_ast_initial effect_info type_envs ast in
+  let ast, _, _ = rewrite_ast_initial effect_info type_envs ast in
   (* Recheck after descattering so that the internal type environments
      always have complete variant types *)
   Type_error.check Type_check.initial_env (Type_check.strip_ast ast)

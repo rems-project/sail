@@ -110,7 +110,7 @@ type type_error =
 
 type env
 
-exception Type_error of env * l * type_error
+exception Type_error of l * type_error
 
 val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
@@ -342,17 +342,17 @@ val strip_typedef : tannot type_def -> uannot type_def
 val strip_def : tannot def -> uannot def
 val strip_ast : tannot ast -> uannot ast
 
-(** Strip location information from types for comparison purposes *)
-val strip_typ : typ -> typ
+(** Remove location information from types for comparison purposes *)
+val unloc_typ : typ -> typ
 
-val strip_typq : typquant -> typquant
-val strip_id : id -> id
-val strip_kid : kid -> kid
-val strip_nexp_aux : nexp_aux -> nexp_aux
-val strip_nexp : nexp -> nexp
-val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
-val strip_n_constraint : n_constraint -> n_constraint
-val strip_typ_aux : typ_aux -> typ_aux
+val unloc_typq : typquant -> typquant
+val unloc_id : id -> id
+val unloc_kid : kid -> kid
+val unloc_nexp_aux : nexp_aux -> nexp_aux
+val unloc_nexp : nexp -> nexp
+val unloc_n_constraint_aux : n_constraint_aux -> n_constraint_aux
+val unloc_n_constraint : n_constraint -> n_constraint
+val unloc_typ_aux : typ_aux -> typ_aux
 
 (** {2 Checking expressions and patterns} *)
 
@@ -414,7 +414,7 @@ val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
 
-val typ_error : Env.t -> Ast.l -> string -> 'a
+val typ_error : Ast.l -> string -> 'a
 
 val tc_assume : n_constraint -> tannot exp -> tannot exp
 

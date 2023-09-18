@@ -2,7 +2,7 @@ default Order dec
 
 val add_int = pure {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
-overload operator + = {add_vec_int, add_range, add_int}
+overload operator + = {add_int}
 
 val bool_not = pure {ocaml: "not", lem: "not"}: bool -> bool
 

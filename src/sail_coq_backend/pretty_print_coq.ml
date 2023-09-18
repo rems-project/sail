@@ -268,7 +268,8 @@ let doc_nexp ctx ?(skip_vars = KidSet.empty) nexp =
     | _ -> mul nexp
   and mul (Nexp_aux (n, l) as nexp) =
     match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
-  and uneg (Nexp_aux (n, l) as nexp) = match n with Nexp_neg n -> separate space [minus; uneg n] | _ -> exp nexp
+  and uneg (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
   and exp (Nexp_aux (n, l) as nexp) =
     match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
@@ -279,7 +280,9 @@ let doc_nexp ctx ?(skip_vars = KidSet.empty) nexp =
     | _ -> atomic nexp
   and atomic (Nexp_aux (n, l) as nexp) =
     match n with
-    | Nexp_constant i -> string (Big_int.to_string i)
+    | Nexp_constant i ->
+        let d = string (Big_int.to_string i) in
+        if Big_int.less i Big_int.zero then parens d else d
     | Nexp_var v when KidSet.mem v skip_vars -> string "_"
     | Nexp_var v -> doc_var ctx v
     | Nexp_id id -> doc_id ctx id
@@ -984,7 +987,7 @@ let rec typeclass_nexps (Typ_aux (t, l)) =
   | Typ_id _ | Typ_var _ -> NexpSet.empty
   | Typ_fn (t1, t2) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _); _])
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp size_nexp, _)])
   | Typ_app (Id_aux (Id "itself", _), [A_aux (A_nexp size_nexp, _)]) ->
       let size_nexp = nexp_simp size_nexp in
       if is_nexp_constant size_nexp then NexpSet.empty else NexpSet.singleton (orig_nexp size_nexp)
@@ -1342,8 +1345,8 @@ let doc_exp, doc_let =
       let autocast =
         (* Avoid using helper functions which simplify the nexps *)
         match (exp_typ, ann_typ) with
-        | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-            Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+        | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+            Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
             not (similar_nexps ctxt env n1 n2)
         | _ -> false
       in
@@ -1761,8 +1764,8 @@ let doc_exp, doc_let =
                 let autocast =
                   (* Avoid using helper functions which simplify the nexps *)
                   match (in_typ, out_typ) with
-                  | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-                      Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+                  | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+                      Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
                       not (similar_nexps ctxt env n1 n2)
                   | _ -> false
                 in
@@ -1918,8 +1921,8 @@ let doc_exp, doc_let =
         let autocast_out =
           (* Avoid using helper functions which simplify the nexps *)
           match (outer_typ', cast_typ') with
-          | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _); _]), _),
-              Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _); _]), _) ) ->
+          | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
+              Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
               not (similar_nexps ctxt env n1 n2)
           | _ -> false
         in
@@ -2617,6 +2620,9 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | P_tuple [], _ ->
       let annot = (l, mk_tannot Env.empty unit_typ) in
       ([(P_aux (P_lit (mk_lit L_unit), annot), unit_typ)], identity)
+  (* The type checker currently has a special case for a single arg type; if
+     that is removed, then remove the next case. *)
+  | P_tuple pats, [typ] -> ([(pat, typ)], identity)
   | P_tuple pats, _ -> (List.combine pats typs, identity)
   | P_wild, _ ->
       let wild typ = (P_aux (P_wild, (l, mk_tannot env typ)), typ) in
@@ -2858,7 +2864,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
     {
       ctxt0 with
       early_ret = (if contains_early_return exp then Some ret_typ else None);
-      ret_typ_pp = doc_typ ctxt0 Env.empty ret_typ;
+      ret_typ_pp = doc_typ ctxt0 env ret_typ;
     }
   in
   let () =
@@ -2894,32 +2900,26 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
       debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
     in
-    (* TODO: probably should provide partial environments to doc_typ *)
     match pat_is_plain_binder env pat with
     | Some id -> begin
         let id_pp = match id with Some id -> doc_id ctxt id | None -> underscore in
         match is_fixed_by_eqn env exp_typ with
         | Some constant ->
             parens
-              (separate space
-                 [id_pp; colon; doc_typ ctxt Env.empty typ; string ":="; string (Big_int.to_string constant)]
-              )
+              (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Big_int.to_string constant)])
         | None -> (
             match classify_ex_type ctxt env ?binding:id exp_typ with
-            | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ'])
+            | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt env typ'])
           )
       end
     | None ->
         let typ = match classify_ex_type ctxt env ~binding:id exp_typ with _, _, typ' -> typ' in
         used_a_pattern := true;
-        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt Env.empty typ])
+        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt env typ])
   in
   let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = List.filter_map (atom_constraint ctxt) pats in
-  let retpp =
-    (* TODO: again, probably should provide proper environment *)
-    if is_monadic then string "M" ^^ space ^^ parens ctxt.ret_typ_pp else doc_typ ctxt Env.empty ret_typ
-  in
+  let retpp = if is_monadic then string "M" ^^ space ^^ parens ctxt.ret_typ_pp else doc_typ ctxt env ret_typ in
   let idpp = doc_id ctxt id in
   let intropp, accpp, measurepp, fixupspp =
     match rec_opt with
@@ -3477,7 +3477,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
              hardline;
            ]
         )
-  with Type_check.Type_error (env, l, err) ->
+  with Type_check.Type_error (l, err) ->
     let extra =
       "\nError during Coq printing\n"
       ^ if Printexc.backtrace_status () then "\n" ^ Printexc.get_backtrace () else "(backtracing unavailable)"

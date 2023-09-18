@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/bool_typ_pat/v1.sail[0m:9.23-28:
+9[96m |[0m    let y : bool('b) = false;
+ [91m |[0m                       [91m^---^[0m
+ [91m |[0m Failed to prove constraint: not('b)

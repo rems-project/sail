@@ -112,7 +112,7 @@ let add_property_guards props ast =
                         )
                     in
                     try Type_check.check_exp (env_of exp) exp' (typ_of exp)
-                    with Type_error (_, l, err) ->
+                    with Type_error (l, err) ->
                       let msg =
                         "\n\
                          Type error when generating guard for a property.\n\

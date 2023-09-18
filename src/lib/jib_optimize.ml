@@ -83,7 +83,7 @@ let optimize_unit instrs =
       end
     | instr -> instr
   in
-  let non_pointless_copy (I_aux (aux, annot)) =
+  let non_pointless_copy (I_aux (aux, _)) =
     match aux with I_decl (CT_unit, _) -> false | I_copy (CL_void, _) -> false | _ -> true
   in
   filter_instrs non_pointless_copy (map_instr_list unit_instr instrs)
@@ -92,17 +92,17 @@ let flat_counter = ref 0
 
 let reset_flat_counter () = flat_counter := 0
 
-let flat_id orig_id =
+let flat_id () =
   let id = mk_id ("$" ^ string_of_int !flat_counter) in
   incr flat_counter;
   name id
 
 let rec flatten_instrs = function
   | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
-      let fid = flat_id decl_id in
+      let fid = flat_id () in
       I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
   | I_aux (I_init (ctyp, decl_id, cval), aux) :: instrs ->
-      let fid = flat_id decl_id in
+      let fid = flat_id () in
       I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
   | I_aux ((I_block block | I_try_block block), _) :: instrs -> flatten_instrs block @ flatten_instrs instrs
   | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
