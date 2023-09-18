@@ -440,7 +440,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_max_int = builtin_choose_int "bvsgt" max
   let builtin_min_int = builtin_choose_int "bvslt" min
 
-  let smt_conversion from_ctyp to_ctyp x =
+  let smt_conversion ~into:to_ctyp ~from:from_ctyp x =
     match (from_ctyp, to_ctyp) with
     | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
     | _, CT_constant c -> return (bvint (required_width c) c)
@@ -920,7 +920,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* j' = bind (smt_cval j) (signed_size ~into:sz ~from:(int_size j_ctyp)) in
         let len = bvadd (bvadd i' (bvneg j')) (bvint sz (Big_int.of_int 1)) in
         let extracted = bvand (bvlshr vec j') (fbits_mask sz len) in
-        smt_conversion (CT_fbits sz) ret_ctyp extracted
+        smt_conversion ~into:ret_ctyp ~from:(CT_fbits sz) extracted
 
   let builtin_vector_update vec i x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
@@ -1014,7 +1014,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* vec = smt_cval vec in
         let* i' = bind (smt_cval i) (signed_size ~into:n ~from:(int_size ctyp_i)) in
         let* j' = bind (smt_cval j) (signed_size ~into:n ~from:(int_size ctyp_j)) in
-        let* x' = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits n)) in
+        let* x' = bind (smt_cval x) (smt_conversion ~into:(CT_fbits n) ~from:ctyp_x) in
         let len = bvadd (bvadd i' (bvneg j')) (bvint n (Big_int.of_int 1)) in
         let mask = bvshl (fbits_mask n len) j' in
         return (bvor (bvand vec (bvnot mask)) (bvand (bvshl x' j') mask))
@@ -1022,7 +1022,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* sz, bv = fmap (to_fbits bv_ctyp) (smt_cval vec) in
         let* i = bind (smt_cval i) (signed_size ~into:sz ~from:(int_size ctyp_i)) in
         let* j = bind (smt_cval j) (signed_size ~into:sz ~from:(int_size ctyp_j)) in
-        let* x = bind (smt_cval x) (smt_conversion ctyp_x (CT_fbits sz)) in
+        let* x = bind (smt_cval x) (smt_conversion ~into:(CT_fbits sz) ~from:ctyp_x) in
         let len = bvadd (bvadd i (bvneg j)) (bvpint sz (Big_int.of_int 1)) in
         let mask = bvshl (fbits_mask sz len) j in
         let contents = bvor (bvand bv (bvnot mask)) (bvand (bvshl x j) mask) in
@@ -1051,7 +1051,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* smt2 = bind (smt_cval v2) (signed_size ~into:lbits_size ~from:(int_size ctyp2)) in
         let* smt3 = bind (smt_cval v3) (signed_size ~into:lbits_size ~from:(int_size ctyp3)) in
         let result = Fn ("Bits", [len; bvand (bvmask len) (bvlshr smt2 smt3)]) in
-        smt_conversion CT_lbits ret_ctyp result
+        smt_conversion ~into:ret_ctyp ~from:CT_lbits result
 
   let builtin_pow2 v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with

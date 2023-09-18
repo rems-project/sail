@@ -107,6 +107,8 @@ let opt_nomem = ref false
 let opt_unreachable = ref []
 let opt_fun2wires = ref []
 
+let opt_int_specialize = ref None
+
 let verilog_options =
   [
     ( "-sv_output_dir",
@@ -152,6 +154,10 @@ let verilog_options =
     ( "-sv_fun2wires",
       Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
       "<functionname> Use input/output ports instead of emitting a function call"
+    );
+    ( "-sv_specialize",
+      Arg.Int (fun i -> opt_int_specialize := Some i),
+      "<n> Run n specialization passes on Sail Int-kinded type variables"
     );
   ]
 
@@ -393,6 +399,13 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let sail_sv_libdir = Filename.concat (Filename.concat sail_dir "lib") "sv" in
   let out = match out_opt with None -> "out" | Some name -> name in
+
+  let ast, env, effect_info =
+    let open Specialize in
+    match !opt_int_specialize with
+    | Some num_passes -> specialize_passes num_passes int_specialization env ast effect_info
+    | None -> (ast, env, effect_info)
+  in
 
   let cdefs, ctx = jib_of_ast SV.make_call_precise env ast effect_info in
   let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in

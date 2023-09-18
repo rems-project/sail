@@ -73,8 +73,13 @@ type smt_typ =
   | String
   | Real
   | Datatype of string * (string * (string * smt_typ) list) list
-  | Tuple of smt_typ list
   | Array of smt_typ * smt_typ
+
+let mk_enum name elems = Datatype (name, List.map (fun elem -> (elem, [])) elems)
+
+let mk_record name fields = Datatype (name, [(name, fields)])
+
+let mk_variant name ctors = Datatype (name, List.map (fun (ctor, ty) -> (ctor, [("un" ^ ctor, ty)])) ctors)
 
 type smt_array_info = Fixed of int
 
@@ -92,7 +97,6 @@ type smt_exp =
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
   | Unwrap of Ast.id * bool * smt_exp
-  | Struct of string * (string * smt_exp) list
   | Field of Ast.id * Ast.id * smt_exp
   | Store of smt_array_info * string * smt_exp * smt_exp * smt_exp
   | Empty_list
@@ -108,7 +112,6 @@ let rec fold_smt_exp f = function
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
   | Unwrap (ctor, b, exp) -> f (Unwrap (ctor, b, fold_smt_exp f exp))
   | Field (struct_id, field_id, exp) -> f (Field (struct_id, field_id, fold_smt_exp f exp))
-  | Struct (name, fields) -> f (Struct (name, List.map (fun (field, exp) -> (field, fold_smt_exp f exp)) fields))
   | Store (info, store_fn, arr, index, x) ->
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
   | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
@@ -205,3 +208,13 @@ let rec simp exp =
     end
   | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp arr, simp i, simp x)
   | exp -> exp
+
+type smt_def =
+  | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
+  | Declare_fun of string * smt_typ list * smt_typ
+  | Declare_const of string * smt_typ
+  | Define_const of string * smt_typ * smt_exp
+  | Declare_datatypes of string * (string * (string * smt_typ) list) list
+  | Assert of smt_exp
+
+let declare_datatypes = function Datatype (name, ctors) -> Declare_datatypes (name, ctors) | _ -> assert false

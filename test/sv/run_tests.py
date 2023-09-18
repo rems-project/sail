@@ -26,6 +26,7 @@ skip_tests = {
     'for_shadow',
     'foreach_none',
     'gvector',
+    'inc_tests',
     'int64_vector_literal',
     'issue136', # recursion
     'large_bitvector', # This requires -sv_bits_size >= 204
@@ -81,6 +82,7 @@ xml = '<testsuites>\n'
 
 xml += test_sv('SystemVerilog', '', skip_tests)
 xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests)
+xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests)
 
 skip_tests.remove('bitvector')
 

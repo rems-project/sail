@@ -168,7 +168,7 @@ module Make (Config : CONFIG) = struct
     | CT_poly _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Polymorphic type should not reach SV backend"
 
   module Smt =
-    Smt_builtins.Make
+    Smt_gen.Make
       (struct
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
@@ -223,9 +223,9 @@ module Make (Config : CONFIG) = struct
           | _ -> Reporting.unreachable l __POS__ "tl"
       end)
 
-  let ( let* ) = Smt_builtins.bind
-  let return = Smt_builtins.return
-  let mapM = Smt_builtins.mapM
+  let ( let* ) = Smt_gen.bind
+  let return = Smt_gen.return
+  let mapM = Smt_gen.mapM
 
   let sv_name = function
     | Name (id, _) -> sv_id id
@@ -511,7 +511,6 @@ module Make (Config : CONFIG) = struct
         | None -> string op ^^ parens (sv_smt arg)
       end
     | Tl (op, arg) -> string op ^^ parens (sv_smt arg)
-    | Struct _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct literals not allowed in SV backend"
     | _ -> empty
 
   let sv_cval cval =
@@ -526,7 +525,7 @@ module Make (Config : CONFIG) = struct
   let sv_update_fbits = function
     | [bv; index; bit] -> begin
         match (cval_ctyp bv, cval_ctyp index) with
-        | CT_fbits 1, _ -> Smt_builtins.fmap sv_smt (Smt.smt_cval bit)
+        | CT_fbits 1, _ -> Smt_gen.fmap sv_smt (Smt.smt_cval bit)
         | CT_fbits sz, CT_constant c ->
             let c = Big_int.to_int c in
             let* bv_smt = Smt.smt_cval bv in
@@ -546,7 +545,7 @@ module Make (Config : CONFIG) = struct
   let cval_for_ctyp = function
     | CT_unit -> return (V_lit (VL_unit, CT_unit))
     | ctyp ->
-        let* l = Smt_builtins.current_location in
+        let* l = Smt_gen.current_location in
         Reporting.unreachable l __POS__ ("Cannot create undefined value of type " ^ string_of_ctyp ctyp)
 
   let sv_line_directive l =
@@ -576,14 +575,16 @@ module Make (Config : CONFIG) = struct
     | I_end id -> return (string "return" ^^ space ^^ sv_name id ^^ semi)
     | I_exit _ -> return (if Config.comb then string "sail_reached_unreachable = 1;" else string "$finish" ^^ semi)
     | I_copy (clexp, cval) ->
-        let* value = Smt_builtins.bind (Smt.smt_cval cval) (Smt.smt_conversion (cval_ctyp cval) (clexp_ctyp clexp)) in
+        let* value =
+          Smt_gen.bind (Smt.smt_cval cval) (Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval))
+        in
         return (sv_assign clexp (sv_smt value))
     | I_funcall (clexp, _, (id, _), args) ->
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
           match Smt.builtin name with
           | Some generator ->
-              let* value = Smt_builtins.fmap Smt_exp.simp (generator args (clexp_ctyp clexp)) in
+              let* value = Smt_gen.fmap Smt_exp.simp (generator args (clexp_ctyp clexp)) in
               begin
                 (* We can optimize R = store(R, i x) into R[i] = x *)
                 match (clexp, value) with
@@ -610,8 +611,8 @@ module Make (Config : CONFIG) = struct
               match cval_ctyp arr with
               | CT_fvector (len, _) ->
                   let* i =
-                    Smt_builtins.bind (Smt.smt_cval i)
-                      (Smt_builtins.unsigned_size ~checked:false
+                    Smt_gen.bind (Smt.smt_cval i)
+                      (Smt_gen.unsigned_size ~checked:false
                          ~into:(required_width (Big_int.of_int (len - 1)) - 1)
                          ~from:(Smt.int_size (cval_ctyp i))
                       )
@@ -667,7 +668,7 @@ module Make (Config : CONFIG) = struct
         Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
   and sv_checked_instr ctx (I_aux (_, (_, l)) as instr) =
-    let v, _ = Smt_builtins.run (sv_instr ctx instr) l in
+    let v, _ = Smt_gen.run (sv_instr ctx instr) l in
     v
 
   let sv_fundef_with ctx f params param_ctyps ret_ctyp fun_body =

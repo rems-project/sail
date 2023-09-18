@@ -83,6 +83,8 @@ type checks
     error messages. *)
 type 'a check_writer
 
+(** The SMT generation monad contains the location of the expression
+    or definition we are generating SMT for *)
 val current_location : Parse_ast.l check_writer
 
 val return : 'a -> 'a check_writer
@@ -110,6 +112,9 @@ val signed_size : ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Sm
 val unsigned_size :
   ?max_value:int -> ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
 
+(** [bvint sz n] Create a (two's complement) SMT bitvector
+    representing a the number [n] in a bitvector of length
+    [sz]. Raises an error if this is not possible. *)
 val bvint : int -> Big_int.num -> Smt_exp.smt_exp
 
 module type CONFIG = sig
@@ -158,7 +163,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
 
   val int_size : ctyp -> int
 
-  val smt_conversion : ctyp -> ctyp -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
+  (** Create an SMT expression that converts an expression of the jib
+      type [from] into an SMT expression for the jib type [into]. Note
+      that this function assumes that the input is of the correct
+      type. *)
+  val smt_conversion : into:ctyp -> from:ctyp -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
 
   (** Compile a call to a Sail builtin function into an SMT expression
       implementing that call. Returns None if that builtin is
