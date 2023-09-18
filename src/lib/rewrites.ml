@@ -1802,13 +1802,13 @@ let pat_var (P_aux (paux, a)) =
  *)
 let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, clauses), ((l, _) as fdannot))) def_annot =
-    let rec_clauses, clauses = List.partition is_funcl_rec clauses in
+    (* let rec_clauses, clauses = List.partition is_funcl_rec clauses in *)
     let clauses, aux_funs =
       List.fold_left
         (fun (clauses, aux_funs) (FCL_aux (FCL_funcl (id, pexp), fannot) as clause) ->
           let pat, guard, exp, annot = destruct_pexp pexp in
           match pat with
-          | P_aux (P_app (ctor_id, args), pannot) ->
+          | P_aux (P_app (ctor_id, args), pannot) | P_aux (P_tuple [P_aux (P_app (ctor_id, args), pannot)], _) ->
               let ctor_typq, ctor_typ = Env.get_union_id ctor_id env in
               let args = match args with [P_aux (P_tuple args, _)] -> args | _ -> args in
               let argstup_typ = tuple_typ (List.map typ_of_pat args) in
@@ -1846,7 +1846,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
         )
         ([], Bindings.empty) clauses
     in
-    let add_aux_def id aux_funs defs =
+    let add_aux_def id aux_funs (valdefs, fundefs) =
       let funcls = List.map (fun (fcl, _, _) -> fcl) aux_funs in
       let env, quants, args_typ, ret_typ =
         match aux_funs with
@@ -1882,12 +1882,13 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
       in
       let fundef = FD_aux (FD_function (r_o, t_o, funcls), fdannot) in
       let def_annot = mk_def_annot (gen_loc def_annot.loc) in
-      [DEF_aux (DEF_val val_spec, def_annot); DEF_aux (DEF_fundef fundef, def_annot)] @ defs
+      (DEF_aux (DEF_val val_spec, def_annot) :: valdefs, DEF_aux (DEF_fundef fundef, def_annot) :: fundefs)
     in
-    ( Bindings.fold add_aux_def aux_funs
-        [DEF_aux (DEF_fundef (FD_aux (FD_function (r_o, t_o, rec_clauses @ clauses), fdannot)), def_annot)],
-      List.map fst (Bindings.bindings aux_funs)
-    )
+    let valdefs, fundefs =
+      Bindings.fold add_aux_def aux_funs
+        ([], [DEF_aux (DEF_fundef (FD_aux (FD_function (r_o, t_o, clauses), fdannot)), def_annot)])
+    in
+    (valdefs @ fundefs, List.map fst (Bindings.bindings aux_funs))
   in
   let typquant =
     List.fold_left
@@ -1910,6 +1911,58 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
         | _ -> (def :: defs, effect_info)
       )
       ast.defs ([], effect_info)
+  in
+
+  (* If we have a call to execute(Clause(...)) we can directly
+     transform that to execute_Clause(...). This removes recursion
+     from when one execute clause is implemented in terms of another,
+     like RISC-V compressed instructions. *)
+  let optimize_split_call (f, args) =
+    match args with
+    | [E_aux (E_app (ctor_id, ctor_args), annot)]
+      when string_of_id f = fun_name && Env.is_union_constructor ctor_id (env_of_annot annot) -> begin
+        match ctor_args with
+        | [E_aux (E_tuple ctor_args, _)] -> E_app (prepend_id (fun_name ^ "_") ctor_id, ctor_args)
+        | [ctor_arg] -> E_app (prepend_id (fun_name ^ "_") ctor_id, [ctor_arg])
+        | _ -> Reporting.unreachable (fst annot) __POS__ "Constructor with more than 1 argument found in split rewrite"
+      end
+    | _ -> E_app (f, args)
+  in
+  let optimize_exp = fold_exp { id_exp_alg with e_app = optimize_split_call } in
+
+  let defs =
+    List.map
+      (fun def ->
+        match def with
+        | DEF_aux (DEF_fundef (FD_aux (FD_function (r_o, t_o, clauses), fdannot)), def_annot) ->
+            DEF_aux
+              ( DEF_fundef
+                  (FD_aux
+                     ( FD_function
+                         ( r_o,
+                           t_o,
+                           List.map
+                             (fun (FCL_aux (FCL_funcl (id, Pat_aux (pexp, pann)), fannot)) ->
+                               match pexp with
+                               | Pat_exp (pat, exp) ->
+                                   FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, optimize_exp exp), pann)), fannot)
+                               | Pat_when (pat, guard, exp) ->
+                                   FCL_aux
+                                     ( FCL_funcl
+                                         (id, Pat_aux (Pat_when (pat, optimize_exp guard, optimize_exp exp), pann)),
+                                       fannot
+                                     )
+                             )
+                             clauses
+                         ),
+                       fdannot
+                     )
+                  ),
+                def_annot
+              )
+        | _ -> def
+      )
+      defs
   in
   ({ ast with defs }, new_effect_info, env)
 

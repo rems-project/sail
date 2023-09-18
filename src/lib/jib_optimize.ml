@@ -180,6 +180,37 @@ let rec cval_map_id f = function
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_map_id f cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_map_id f) members, ctyp)
 
+let remove_undefined =
+  let gensym, _ = symbol_generator "gz" in
+  let rec create_value l = function
+    | CT_unit -> ([], V_lit (VL_unit, CT_unit))
+    | CT_bool -> ([], V_lit (VL_bool false, CT_bool))
+    | CT_bit -> ([], V_lit (VL_bit Sail2_values.B0, CT_bit))
+    | CT_string -> ([], V_lit (VL_string "", CT_string))
+    | CT_tup ctyps ->
+        let setup, values =
+          List.fold_right
+            (fun ctyp (setups, values) ->
+              let setup, value = create_value l ctyp in
+              (setup @ setups, value :: values)
+            )
+            ctyps ([], [])
+        in
+        (setup, V_tuple (values, CT_tup ctyps))
+    | ctyp ->
+        let gs = name (gensym ()) in
+        ([idecl l ctyp gs], V_id (gs, ctyp))
+  in
+  let rewrite_instr = function
+    | I_aux (I_undefined ctyp, (_, l)) ->
+        let setup, value = create_value l ctyp in
+        begin
+          match setup with [] -> ireturn value | _ -> iblock (setup @ [ireturn value])
+        end
+    | instr -> instr
+  in
+  map_instr_list rewrite_instr
+
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
   | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
@@ -564,9 +595,9 @@ let structure_control_flow_block instrs =
   in
 
   let iguard l guarded = function
-    | [] -> icomment "nop"
+    | [] -> []
     | instrs -> (
-        match guard_condition guarded with None -> iblock instrs | Some cond -> iif l cond instrs [] CT_unit
+        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs [] CT_unit]
       )
   in
 
@@ -574,18 +605,18 @@ let structure_control_flow_block instrs =
     | [] -> []
     | (I_aux ((I_decl _ | I_init _), (_, l)) as instr) :: instrs ->
         let after_decl, rest = split_after_jump instrs in
-        instr :: iguard l guarded after_decl :: fix_block guarded rest
+        instr :: (iguard l guarded after_decl @ fix_block guarded rest)
     | I_aux (I_goto label, (_, l)) :: instrs ->
         let v = label_var label in
         let set_goto = iguard l guarded [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))] in
         let guarded = NameSet.add v guarded in
         let after_jump, rest = split_after_jump instrs in
-        set_goto :: iguard l guarded after_jump :: fix_block guarded rest
+        set_goto @ iguard l guarded after_jump @ fix_block guarded rest
     | I_aux (I_label label, (_, l)) :: instrs ->
         let v = label_var label in
         let guarded = NameSet.remove v guarded in
         let after_label, rest = split_after_jump instrs in
-        icomment label :: iguard l guarded after_label :: fix_block guarded rest
+        icomment label :: (iguard l guarded after_label @ fix_block guarded rest)
     | I_aux (I_jump (cond, label), (_, l)) :: instrs ->
         let v = label_var label in
         let set_goto =
@@ -599,7 +630,7 @@ let structure_control_flow_block instrs =
         in
         let guarded = NameSet.add v guarded in
         let after_jump, rest = split_after_jump instrs in
-        set_goto :: iguard l guarded after_jump :: fix_block guarded rest
+        set_goto @ iguard l guarded after_jump @ fix_block guarded rest
     | instr :: instrs -> instr :: fix_block guarded instrs
   in
 

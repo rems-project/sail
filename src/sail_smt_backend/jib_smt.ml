@@ -209,7 +209,7 @@ let rec smt_ctyp ctx = function
   | CT_tup ctyps ->
       ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
       Tuple (List.map (smt_ctyp ctx) ctyps)
-  | CT_vector ctyp -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
+  | CT_vector ctyp | CT_fvector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
   | CT_string ->
       ctx.use_string := true;
       String
@@ -223,7 +223,6 @@ let rec smt_ctyp ctx = function
     end
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
   | CT_float _ | CT_rounding_mode -> Reporting.unreachable ctx.pragma_l __POS__ "Floating point in SMT property"
-  | CT_fvector _ -> Reporting.unreachable ctx.pragma_l __POS__ "Found CT_fvector in SMT property"
   | CT_poly _ -> Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
 (* We often need to create a SMT bitvector of a length sz with integer
@@ -311,6 +310,8 @@ let smt_conversion ctx from_ctyp to_ctyp x =
   | CT_fbits n, CT_fbits m -> unsigned_size ctx m n x
   | CT_fbits n, CT_lbits ->
       Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); unsigned_size ctx (lbits_size ctx) n x])
+  | CT_fvector _, CT_vector _ -> x
+  | CT_vector _, CT_fvector _ -> x
   | _, _ ->
       failwith
         (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
@@ -577,8 +578,8 @@ let builtin_eq_bits ctx v1 v2 =
   | CT_lbits, CT_lbits ->
       let len1 = Fn ("len", [smt_cval ctx v1]) in
       let contents1 = Fn ("contents", [smt_cval ctx v1]) in
-      let len2 = Fn ("len", [smt_cval ctx v1]) in
-      let contents2 = Fn ("contents", [smt_cval ctx v1]) in
+      let len2 = Fn ("len", [smt_cval ctx v2]) in
+      let contents2 = Fn ("contents", [smt_cval ctx v2]) in
       Fn
         ( "and",
           [
@@ -1368,7 +1369,7 @@ let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
 module SMT_config (Opts : sig
   val unroll_limit : int
-end) : Jib_compile.Config = struct
+end) : Jib_compile.CONFIG = struct
   open Jib_compile
 
   (** Convert a sail type into a C-type. This function can be quite
@@ -1546,7 +1547,7 @@ end) : Jib_compile.Config = struct
 
   let optimize_anf ctx aexp = aexp |> c_literals ctx |> fold_aexp (unroll_static_foreach ctx)
 
-  let specialize_calls = true
+  let make_call_precise _ _ = false
   let ignore_64 = true
   let unroll_loops = Some Opts.unroll_limit
   let struct_value = true

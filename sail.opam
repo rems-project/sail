@@ -36,6 +36,7 @@ depends: [
   "sail_ocaml_backend" {= version & post}
   "sail_c_backend" {= version & post}
   "sail_smt_backend" {= version & post}
+  "sail_sv_backend" {= version & post}
   "sail_lem_backend" {= version & post}
   "sail_coq_backend" {= version & post}
   "sail_latex_backend" {= version & post}

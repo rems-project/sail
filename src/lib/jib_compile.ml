@@ -233,11 +233,11 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_list ctyp -> "L" ^ mangle_string_of_ctyp ctx ctyp
   | CT_poly kid -> "P" ^ string_of_kid kid
 
-module type Config = sig
+module type CONFIG = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp
   val unroll_loops : int option
-  val specialize_calls : bool
+  val make_call_precise : ctx -> id -> bool
   val ignore_64 : bool
   val struct_value : bool
   val tuple_value : bool
@@ -270,7 +270,7 @@ let callgraph cdefs =
     )
     IdGraph.empty cdefs
 
-module Make (C : Config) = struct
+module Make (C : CONFIG) = struct
   let ctyp_of_typ ctx typ = C.convert_typ ctx typ
 
   let rec chunkify n xs = match (Util.take n xs, Util.drop n xs) with xs, [] -> [xs] | xs, ys -> xs :: chunkify n ys
@@ -498,7 +498,7 @@ module Make (C : Config) = struct
         let len = List.length avals in
         let direction = match ord with Ord_aux (Ord_inc, _) -> false | Ord_aux (Ord_dec, _) -> true in
         let elem_ctyp = ctyp_of_typ ctx typ in
-        let vector_ctyp = CT_vector elem_ctyp in
+        let vector_ctyp = CT_fvector (len, elem_ctyp) in
         let gs = ngensym () in
         let aval_set i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
@@ -551,56 +551,6 @@ module Make (C : Config) = struct
           V_id (gs, CT_list ctyp),
           [iclear (CT_list ctyp) gs]
         )
-
-  (*
-let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
-  let call () =
-    let setup = ref [] in
-    let cleanup = ref [] in
-    let cast_args =
-      List.map2
-        (fun ctyp cval ->
-          let have_ctyp = cval_ctyp cval in
-          if is_polymorphic ctyp then
-            V_poly (cval, have_ctyp)
-          else if C.specialize_calls || ctyp_equal ctyp have_ctyp then
-            cval
-          else
-            let gs = ngensym () in
-            setup := iinit l ctyp gs cval :: !setup;
-            cleanup := iclear ctyp gs :: !cleanup;
-            V_id (gs, ctyp))
-        arg_ctyps args
-    in
-    if C.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
-      !setup @ [ifuncall l clexp id cast_args] @ !cleanup
-    else
-      let gs = ngensym () in
-      List.rev !setup
-      @ [idecl l ret_ctyp gs;
-         ifuncall l (CL_id (gs, ret_ctyp)) id cast_args;
-         icopy l clexp (V_id (gs, ret_ctyp));
-         iclear ret_ctyp gs]
-      @ !cleanup
-  in
-  if not C.specialize_calls && Env.is_extern (fst id) ctx.tc_env "c" then
-    let extern = Env.get_extern (fst id) ctx.tc_env "c" in
-    begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
-    | "slice", [CT_fbits _; CT_lint; _], CT_fbits (n, _) ->
-       let start = ngensym () in
-       [iinit l (CT_fint 64) start (List.nth args 1);
-        icopy l clexp (V_call (Slice n, [List.nth args 0; V_id (start, CT_fint 64)]))]
-    | "sail_unsigned", [CT_fbits _], CT_fint 64 ->
-       [icopy l clexp (V_call (Unsigned 64, [List.nth args 0]))]
-    | "sail_signed", [CT_fbits _], CT_fint 64 ->
-       [icopy l clexp (V_call (Signed 64, [List.nth args 0]))]
-    | "set_slice", [_; _; CT_fbits (n, _); CT_fint 64; CT_fbits (m, _)], CT_fbits (n', _) when n = n' ->
-       [icopy l clexp (V_call (Set_slice, [List.nth args 2; List.nth args 3; List.nth args 4]))]
-    | _, _, _ ->
-       call ()
-    end
-  else call ()
- *)
 
   let compile_funcall l ctx id args =
     let setup = ref [] in
@@ -740,14 +690,14 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
         | CT_list ctyp ->
             let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
             let tl_pre, tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-            ( [ijump l (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_pre @ tl_pre,
+            ( [ijump l (V_call (List_is_empty, [cval])) case_label] @ hd_pre @ tl_pre,
               hd_setup @ tl_setup,
               tl_cleanup @ hd_cleanup,
               ctx
             )
         | _ -> raise (Reporting.err_general l "Tried to pattern match cons on non list type")
       end
-    | AP_nil _ -> ([ijump l (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], [], ctx)
+    | AP_nil _ -> ([ijump l (V_call (Bnot, [V_call (List_is_empty, [cval])])) case_label], [], [], ctx)
 
   let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -2007,7 +1957,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
                   Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
             end
           | None -> instr :: tail
-          | Some (param_ctyps, ret_ctyp) ->
+          | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id ->
               if List.compare_lengths args param_ctyps <> 0 then
                 Reporting.unreachable (id_loc id) __POS__
                   ("Function call found with incorrect arity: " ^ string_of_id id);
@@ -2044,6 +1994,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
                   @ tail @ ret_cleanup @ cleanup
                   );
               ]
+          | Some _ -> instr :: tail
         end
       | instr -> instr :: tail
     in
@@ -2061,9 +2012,9 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
     in
     precise_calls [] cdefs
 
-  (** Once we specialize variants, there may be additional type
-   dependencies which could be in the wrong order. As such we need to
-   sort the type definitions in the list of cdefs. *)
+  (* Once we specialize variants, there may be additional type
+     dependencies which could be in the wrong order. As such we need
+     to sort the type definitions in the list of cdefs. *)
   let sort_ctype_defs reverse cdefs =
     (* Split the cdefs into type definitions and non type definitions *)
     let is_ctype_def = function CDEF_type _ -> true | _ -> false in
@@ -2158,7 +2109,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
     let cdefs, ctx = specialize_functions ctx cdefs in
     let cdefs = sort_ctype_defs true cdefs in
     let cdefs, ctx = specialize_variants ctx [] cdefs in
-    let cdefs = if C.specialize_calls then cdefs else make_calls_precise ctx cdefs in
+    let cdefs = make_calls_precise ctx cdefs in
     let cdefs = sort_ctype_defs false cdefs in
     (cdefs, ctx)
 end

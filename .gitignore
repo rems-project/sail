@@ -88,6 +88,11 @@ lib/hol/sail-heap
 /test/mono/test.cmi
 /test/mono/test.cmo
 /test/mono/test-output
+/test/sv/*.sv
+/test/sv/*.out
+/test/sv/*.result
+/test/sv/*.cpp
+/test/sv/obj_dir/
 
 /language/*.pdf
 /language/*.uo

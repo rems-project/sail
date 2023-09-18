@@ -116,6 +116,11 @@ val print_int = pure "print_int" : (string, int) -> unit
 
 val prerr_int = pure "prerr_int" : (string, int) -> unit
 
+/*!
+We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
+*/
+val pow2 = pure "pow2" : forall 'n. int('n) -> int(2 ^ 'n)
+
 // ***** Integer shifts *****
 
 /*!
@@ -205,5 +210,11 @@ val abs_int_plain = pure {
 } : int -> int
 
 overload abs_int = {abs_int_plain}
+
+val max_int = pure "max_int" : forall 'x 'y.
+  (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}
+
+val min_int = pure "min_int" : forall 'x 'y.
+  (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}
 
 $endif

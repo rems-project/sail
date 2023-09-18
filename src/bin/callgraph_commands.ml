@@ -95,7 +95,7 @@ let dot_of_ast out_chan ast =
   let module G = Graph.Make (Node) in
   let module NodeSet = Set.Make (Node) in
   let g = graph_of_ast ast in
-  G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
+  G.make_dot ~node_color:(node_color NodeSet.empty) ~edge_color ~string_of_node:node_string out_chan g
 
 let node_of_id env =
   let lets = Type_check.Env.get_toplevel_lets env in

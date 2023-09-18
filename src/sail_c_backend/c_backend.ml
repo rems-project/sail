@@ -186,7 +186,7 @@ let literal_to_fragment (L_aux (l_aux, _)) =
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
-end) : Config = struct
+end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
      types and attempts to fit them into the smallest possible C
@@ -513,7 +513,7 @@ end) : Config = struct
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
   let unroll_loops = None
-  let specialize_calls = false
+  let make_call_precise _ _ = true
   let ignore_64 = false
   let struct_value = false
   let tuple_value = false
@@ -898,7 +898,6 @@ let sgen_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
   | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
@@ -924,6 +923,7 @@ and sgen_call op cvals =
   | Bor, vs -> "(" ^ Util.string_of_list " || " sgen_cval vs ^ ")"
   | List_hd, [v] -> sprintf "(%s).hd" ("*" ^ sgen_cval v)
   | List_tl, [v] -> sprintf "(%s).tl" ("*" ^ sgen_cval v)
+  | List_is_empty, [v] -> sprintf "(%s == NULL)" (sgen_cval v)
   | Eq, [v1; v2] -> begin
       match cval_ctyp v1 with
       | CT_sbits _ -> sprintf "eq_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
@@ -1083,7 +1083,8 @@ let rec codegen_conversion l clexp cval =
       if is_stack_ctyp ctyp_to then ksprintf string "  %s = %s;" (sgen_clexp_pure l clexp) (sgen_cval cval)
       else ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval)
   | CT_ref _, _ -> codegen_conversion l (CL_addr clexp) cval
-  | CT_vector ctyp_elem_to, CT_vector ctyp_elem_from ->
+  | (CT_vector ctyp_elem_to | CT_fvector (_, ctyp_elem_to)), (CT_vector ctyp_elem_from | CT_fvector (_, ctyp_elem_from))
+    ->
       let i = ngensym () in
       let from = ngensym () in
       let into = ngensym () in

@@ -26,6 +26,6 @@ function main() = {
             print_endline(b);
             print_endline(c)
         },
-        _ => (),
-    }    
+        _ => print_endline("no match"),
+    }
 }

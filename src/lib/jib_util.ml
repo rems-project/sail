@@ -268,6 +268,7 @@ let string_of_op = function
   | Bor -> "@or"
   | List_hd -> "@hd"
   | List_tl -> "@tl"
+  | List_is_empty -> "@is_empty"
   | Eq -> "@eq"
   | Neq -> "@neq"
   | Bvnot -> "@bvnot"
@@ -366,7 +367,6 @@ let string_of_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
   | VL_undefined -> "undefined"
@@ -392,6 +392,59 @@ let rec string_of_cval = function
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
     end
   | V_tuple (members, _) -> "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
+
+let rec string_of_clexp = function
+  | CL_id (id, ctyp) -> string_of_name id
+  | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_id field
+  | CL_addr clexp -> string_of_clexp clexp ^ "*"
+  | CL_tuple (clexp, n) -> string_of_clexp clexp ^ "." ^ string_of_int n
+  | CL_void -> "void"
+  | CL_rmw (id1, id2, ctyp) -> Printf.sprintf "rmw(%s, %s)" (string_of_name id1) (string_of_name id2)
+
+let rec doc_instr (I_aux (aux, _)) =
+  let open Printf in
+  let instr s = twice space ^^ string s in
+  match aux with
+  | I_decl (ctyp, id) -> ksprintf instr "%s : %s" (string_of_name id) (string_of_ctyp ctyp)
+  | I_reset (ctyp, id) -> ksprintf instr "reset %s : %s" (string_of_name id) (string_of_ctyp ctyp)
+  | I_init (ctyp, id, cval) ->
+      ksprintf instr "%s : %s = %s" (string_of_name id) (string_of_ctyp ctyp) (string_of_cval cval)
+  | I_reinit (ctyp, id, cval) ->
+      ksprintf instr "reinit %s : %s = %s" (string_of_name id) (string_of_ctyp ctyp) (string_of_cval cval)
+  | I_clear (ctyp, id) -> ksprintf instr "clear %s : %s" (string_of_name id) (string_of_ctyp ctyp)
+  | I_label label -> ksprintf string "%s:" label
+  | I_jump (cval, label) -> ksprintf instr "jump %s goto %s" (string_of_cval cval) label
+  | I_goto label -> ksprintf instr "goto %s" label
+  | I_exit cause -> ksprintf instr "exit %s" cause
+  | I_undefined ctyp -> ksprintf instr "arbitrary %s" (string_of_ctyp ctyp)
+  | I_end id -> ksprintf instr "end %s" (string_of_name id)
+  | I_raw str -> string str
+  | I_comment str -> twice space ^^ string "//" ^^ string str
+  | I_throw cval -> ksprintf instr "throw %s" (string_of_cval cval)
+  | I_return cval -> ksprintf instr "return %s" (string_of_cval cval)
+  | I_funcall (clexp, false, uid, args) ->
+      ksprintf instr "%s = %s(%s)" (string_of_clexp clexp) (string_of_uid uid)
+        (Util.string_of_list ", " string_of_cval args)
+  | I_funcall (clexp, true, uid, args) ->
+      ksprintf instr "%s = $%s(%s)" (string_of_clexp clexp) (string_of_uid uid)
+        (Util.string_of_list ", " string_of_cval args)
+  | I_copy (clexp, cval) -> ksprintf instr "%s = %s" (string_of_clexp clexp) (string_of_cval cval)
+  | I_block instrs ->
+      twice space ^^ char '{'
+      ^^ nest 2 (hardline ^^ separate_map hardline doc_instr instrs)
+      ^^ hardline ^^ twice space ^^ char '}'
+  | I_try_block instrs ->
+      twice space ^^ string "try {"
+      ^^ nest 2 (hardline ^^ separate_map hardline doc_instr instrs)
+      ^^ hardline ^^ twice space ^^ char '}'
+  | I_if (cond, then_instrs, else_instrs, _) ->
+      ksprintf instr "if %s {" (string_of_cval cond)
+      ^^ nest 2 (hardline ^^ separate_map hardline doc_instr then_instrs)
+      ^^ hardline ^^ twice space ^^ string "} else {"
+      ^^ nest 2 (hardline ^^ separate_map hardline doc_instr else_instrs)
+      ^^ hardline ^^ twice space ^^ char '}'
+
+let string_of_instr i = Pretty_print_sail.to_string (doc_instr i)
 
 let rec map_ctyp f = function
   | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
@@ -532,7 +585,7 @@ let rec ctyp_suprema = function
   | CT_struct (id, ctors) -> CT_struct (id, ctors)
   | CT_variant (id, ctors) -> CT_variant (id, ctors)
   | CT_vector ctyp -> CT_vector (ctyp_suprema ctyp)
-  | CT_fvector (n, ctyp) -> CT_fvector (n, ctyp_suprema ctyp)
+  | CT_fvector (_, ctyp) -> CT_vector (ctyp_suprema ctyp)
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly kid -> CT_poly kid
@@ -916,6 +969,11 @@ let rec infer_call op vs =
       match cval_ctyp v with
       | CT_list ctyp -> CT_list ctyp
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to tl"
+    end
+  | List_is_empty, [v] -> begin
+      match cval_ctyp v with
+      | CT_list ctyp -> CT_list ctyp
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to is_empty"
     end
   | (Eq | Neq), _ -> CT_bool
   | Bvnot, [v] -> cval_ctyp v

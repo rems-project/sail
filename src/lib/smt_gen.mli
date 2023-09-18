@@ -8,7 +8,7 @@
 (*  The ASL derived parts of the ARMv8.3 specification in                   *)
 (*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               *)
 (*                                                                          *)
-(*  Copyright (c) 2013-2021                                                 *)
+(*  Copyright (c) 2013-2023                                                 *)
 (*    Kathyrn Gray                                                          *)
 (*    Shaked Flur                                                           *)
 (*    Stephen Kell                                                          *)
@@ -65,119 +65,112 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Compile Sail ASTs to Jib intermediate representation *)
+(** Compile Sail builtins to SMT bitvector expressions *)
 
-open Anf
-open Ast
-open Ast_defs
 open Ast_util
 open Jib
-open Type_check
 
-(** This forces all integer struct fields to be represented as
-   int64_t. Specifically intended for the various TLB structs in the
-   ARM v8.5 spec. It is unsound in general. *)
-val optimize_aarch64_fast_struct : bool ref
+(** The main limitiation when converting Sail into pure SMT bitvectors
+    is that Sail has arbitrary precision types, as well as types like
+    real and string that are not very SMT friendly. We can add dynamic
+    assertions that effectivly check at runtime that we never exceed
+    some upper bound on bitvector size, and log if we ever use
+    features like strings or real numbers. *)
+type checks
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-   the Sail version. This cache can obviously become stale if the Sail
-   changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
+(** We generate primitives in a monad that accumulates any required
+    dynamic checks, and contains the location information for any
+    error messages. *)
+type 'a check_writer
 
-(** {2 Jib context} *)
+(** The SMT generation monad contains the location of the expression
+    or definition we are generating SMT for *)
+val current_location : Parse_ast.l check_writer
 
-(** Dynamic context for compiling Sail to Jib. We need to pass a
-   (global) typechecking environment given by checking the full
-   AST. *)
-type ctx = {
-  records : (kid list * ctyp Bindings.t) Bindings.t;
-  enums : IdSet.t Bindings.t;
-  variants : (kid list * ctyp Bindings.t) Bindings.t;
-  valspecs : (string option * ctyp list * ctyp) Bindings.t;
-  quants : ctyp KBindings.t;
-  local_env : Env.t;
-  tc_env : Env.t;
-  effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
-  letbinds : int list;
-  letbind_ids : IdSet.t;
-  no_raw : bool;
-}
+val return : 'a -> 'a check_writer
 
-val ctx_is_extern : id -> ctx -> bool
+val bind : 'a check_writer -> ('a -> 'b check_writer) -> 'b check_writer
 
-val ctx_get_extern : id -> ctx -> string
+val fmap : ('a -> 'b) -> 'a check_writer -> 'b check_writer
 
-val ctx_has_val_spec : id -> ctx -> bool
+val ( let* ) : 'a check_writer -> ('a -> 'b check_writer) -> 'b check_writer
 
-val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
+val ( let+ ) : 'a check_writer -> ('a -> 'b) -> 'b check_writer
 
-(** {2 Compilation functions} *)
+val mapM : ('a -> 'b check_writer) -> 'a list -> 'b list check_writer
 
-(** The Config module specifies static configuration for compiling
-   Sail into Jib.  We have to provide a conversion function from Sail
-   types into Jib types, as well as a function that optimizes ANF
-   expressions (which can just be the identity function) *)
+val run : 'a check_writer -> Parse_ast.l -> 'a * checks
+
+(** Convert a SMT bitvector expression of size [from] into a SMT
+    bitvector expression of size [into] with the same signed
+    value. When [into < from] inserts a dynamic check that the
+    original value is representable at the new length. *)
+val signed_size : ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
+
+(** Similar to [signed_size], except it assumes the bitvector is
+    representing an unsigned value. *)
+val unsigned_size :
+  ?max_value:int -> ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
+
+(** [bvint sz n] Create a (two's complement) SMT bitvector
+    representing a the number [n] in a bitvector of length
+    [sz]. Raises an error if this is not possible. *)
+val bvint : int -> Big_int.num -> Smt_exp.smt_exp
+
 module type CONFIG = sig
-  val convert_typ : ctx -> typ -> ctyp
+  (** Sail has arbitrary precision integers, but in order to generate
+      pure bitvectors we must constrain them to some upper bound. As
+      described above, we can insert dynamic checks to ensure this
+      constraint is never violated at runtime. *)
+  val max_unknown_integer_width : int
 
-  val optimize_anf : ctx -> typ aexp -> typ aexp
+  (** If we have a Sail type [bits('n)], where ['n] is unconstrained,
+      then we cannot know how many bits to use to represent
+      it. Instead we use a bitvector of this length, plus a width
+      field. We will generate runtime checks to ensure this length is
+      sufficient. *)
+  val max_unknown_bitvector_width : int
 
-  (** Unroll all for loops a bounded number of times. Used for SMT
-       generation. *)
-  val unroll_loops : int option
-
-  (** A call is precise if the function arguments match the function
-      type exactly. Leaving functions imprecise can allow later passes
-      to specialize implementations. *)
-  val make_call_precise : ctx -> id -> bool
-
-  (** If false, will ensure that fixed size bitvectors are
-       specifically less that 64-bits. If true this restriction will
-       be ignored. *)
-  val ignore_64 : bool
-
-  (** If false we won't generate any V_struct values *)
-  val struct_value : bool
-
-  (** If false we won't generate any V_tuple values *)
-  val tuple_value : bool
-
-  (** Allow real literals *)
-  val use_real : bool
-
-  (** Insert branch coverage operations *)
-  val branch_coverage : out_channel option
-
-  (** If true track the location of the last exception thrown, useful
-     for debugging C but we want to turn it off for SMT generation
-     where we can't use strings *)
-  val track_throw : bool
+  (** Some SystemVerilog implementations (e.g. Verilator), don't
+      support unpacked union types, which forces us to generate
+      different code for different unions depending on the types the
+      contain. This is abstracted into a classify function that the
+      instantiator of this module can supply. *)
+  val union_ctyp_classify : ctyp -> bool
 end
 
-module IdGraph : sig
-  include Graph.S with type node = id
+(** Some Sail primitives we can't directly convert to pure SMT
+    bitvectors, either because they don't exist in SMTLIB (like
+    count_leading_zeros), or they involve input/output. In these cases
+    we provide a module so the backend can generate the required
+    implementations for these primitives. *)
+module type PRIMOP_GEN = sig
+  val print_bits : Parse_ast.l -> ctyp -> string
+  val string_of_bits : Parse_ast.l -> ctyp -> string
+  val dec_str : Parse_ast.l -> ctyp -> string
+  val hex_str : Parse_ast.l -> ctyp -> string
+  val hex_str_upper : Parse_ast.l -> ctyp -> string
+  val count_leading_zeros : Parse_ast.l -> int -> string
+  val fvector_store : Parse_ast.l -> int -> ctyp -> string
+  val is_empty : Parse_ast.l -> ctyp -> string
+  val hd : Parse_ast.l -> ctyp -> string
+  val tl : Parse_ast.l -> ctyp -> string
 end
 
-val callgraph : cdef list -> IdGraph.graph
+module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
+  (** Convert a Jib IR cval into an SMT expression *)
+  val smt_cval : cval -> Smt_exp.smt_exp check_writer
 
-module Make (C : CONFIG) : sig
-  (** Compile a Sail definition into a Jib definition. The first two
-       arguments are is the current definition number and the total
-       number of definitions, and can be used to drive a progress bar
-       (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
+  val int_size : ctyp -> int
 
-  val compile_ast : ctx -> tannot ast -> cdef list * ctx
+  (** Create an SMT expression that converts an expression of the jib
+      type [from] into an SMT expression for the jib type [into]. Note
+      that this function assumes that the input is of the correct
+      type. *)
+  val smt_conversion : into:ctyp -> from:ctyp -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
+
+  (** Compile a call to a Sail builtin function into an SMT expression
+      implementing that call. Returns None if that builtin is
+      unsupported by this module. *)
+  val builtin : string -> (cval list -> ctyp -> Smt_exp.smt_exp check_writer) option
 end
-
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info
-
-val name_or_global : ctx -> id -> name

@@ -1,5 +1,5 @@
 default Order dec
-$include <vector_dec.sail>
+$include <prelude.sail>
 
 function main () : unit -> unit = {
   assert(count_leading_zeros(0x0) == 4);

@@ -116,7 +116,13 @@ module type S = sig
         components. *)
   val scc : ?original_order:node list -> graph -> node list list
 
-  val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
+  val make_dot :
+    node_color:(node -> string) ->
+    edge_color:(node -> node -> string) ->
+    string_of_node:(node -> string) ->
+    out_channel ->
+    graph ->
+    unit
 end
 
 module Make (Ord : OrderedType) :

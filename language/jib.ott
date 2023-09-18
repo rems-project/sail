@@ -74,6 +74,7 @@ op :: '' ::=
   | and               :: :: band
   | hd                :: :: list_hd
   | tl                :: :: list_tl
+  | is_empty          :: :: list_is_empty
   | eq                :: :: eq
   | neq               :: :: neq
 % Integer ops
@@ -240,8 +241,7 @@ cdef :: 'CDEF_' ::=
     } :: :: register
   | ctype_def :: :: type
 
-% The first list of instructions sets up the global letbinding, while
-% the second clears it.
+% The list of instructions sets up the global letbinding
   | let nat ( id0 : ctyp0 , ... , idn : ctypn ) = {
       instr0 ; ... ; instrm
     } :: :: let

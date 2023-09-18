@@ -314,3 +314,10 @@ let get_sail_dir default_sail_dir =
             ^ " does not exist. Make sure Sail is installed correctly, or try setting the SAIL_DIR environment variable"
              )
           )
+
+let system_checked ?loc:(l = Parse_ast.Unknown) cmd =
+  match Unix.system cmd with
+  | WEXITED 0 -> ()
+  | WEXITED n -> raise (err_general l (Printf.sprintf "Command %s failed with exit code %d" cmd n))
+  | WSTOPPED n -> raise (err_general l (Printf.sprintf "Command %s stopped by signal %d" cmd n))
+  | WSIGNALED n -> raise (err_general l (Printf.sprintf "Command %s killed by signal %d" cmd n))
