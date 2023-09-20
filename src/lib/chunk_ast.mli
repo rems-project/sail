@@ -84,7 +84,9 @@ val match_keywords : match_kind -> string * string option
 
 val comment_type_delimiters : Lexer.comment_type -> string * string
 
-type chunk =
+type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
+
+and chunk =
   | Comment of Lexer.comment_type * int * int * string
   | Spacer of bool * int
   | Function of {
@@ -110,6 +112,7 @@ type chunk =
   | Unary of string * chunks
   | Binary of chunks * string * chunks
   | Ternary of chunks * string * chunks * string * chunks
+  | Infix_sequence of infix_chunk list
   | Index of chunks * chunks
   | Delim of string
   | Opt_delim of string

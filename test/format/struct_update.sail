@@ -16,7 +16,7 @@ val bar : unit -> int
 function baz() = {
     ();
     let some_long_named_variable_to_break_the_line = { function_modify_the_struct(struct_with_a_long_name, x) with foo = 0xFFFF, bar = 0b1 };
-    (*R) = baz; // trailing comment
+    *R = baz; // trailing comment
 
 
     return 3 + (return 4)

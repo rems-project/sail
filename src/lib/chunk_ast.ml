@@ -92,7 +92,9 @@ let binder_keyword = function Var_binder -> "var" | Let_binder -> "let" | Intern
 
 let comment_type_delimiters = function Lexer.Comment_line -> ("//", "") | Lexer.Comment_block -> ("/*", "*/")
 
-type chunk =
+type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
+
+and chunk =
   | Comment of Lexer.comment_type * int * int * string
   | Spacer of bool * int
   | Function of {
@@ -118,6 +120,7 @@ type chunk =
   | Unary of string * chunks
   | Binary of chunks * string * chunks
   | Ternary of chunks * string * chunks * string * chunks
+  | Infix_sequence of infix_chunk list
   | Index of chunks * chunks
   | Delim of string
   | Opt_delim of string
@@ -326,6 +329,17 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) arg
         )
         [("x", x); ("y", y); ("z", z)]
+  | Infix_sequence infix_chunks ->
+      Printf.eprintf "%sInfix:\n" indent;
+      List.iter
+        (function
+          | Infix_prefix op -> Printf.eprintf "%s  Prefix:%s\n" indent op
+          | Infix_op op -> Printf.eprintf "%s  Op:%s\n" indent op
+          | Infix_chunks chunks ->
+              Printf.eprintf "%s  Chunks:\n" indent;
+              Queue.iter (prerr_chunk (indent ^ "    ")) chunks
+          )
+        infix_chunks
   | Delim str -> Printf.eprintf "%sDelim:%s\n" indent str
   | Opt_delim str -> Printf.eprintf "%sOpt_delim:%s\n" indent str
   | Exists ex ->
@@ -521,6 +535,22 @@ let chunk_delimit ?delim ~get_loc ~chunk comments xs =
     )
     xs
 
+let chunk_infix_token comments chunk_primary (infix_token, _, _) =
+  match infix_token with
+  | IT_op id -> Infix_op (string_of_id id)
+  | IT_prefix id -> (
+      match id with
+      | Id_aux (Id "__deref", _) -> Infix_prefix "*"
+      | Id_aux (Id "pow2", _) -> Infix_prefix "2 ^"
+      | Id_aux (Id "negate", _) -> Infix_prefix "-"
+      | _ -> Infix_prefix (string_of_id id)
+    )
+  | IT_in_set set -> Infix_op ("in {" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")
+  | IT_primary exp ->
+      let chunks = Queue.create () in
+      chunk_primary comments chunks exp;
+      Infix_chunks chunks
+
 let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   pop_comments comments chunks l;
   let rec_chunk_atyp atyp =
@@ -534,10 +564,17 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
   | ATyp_nset (n, set) ->
-      (* We would need more granular location information to do anything better here *)
-      Queue.add
-        (Atom (Printf.sprintf "%s in {%s}" (string_of_var n) (Util.string_of_list ", " Big_int.to_string set)))
-        chunks
+      let lhs_chunks = rec_chunk_atyp n in
+      let rhs_chunks = Queue.create () in
+      Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) rhs_chunks;
+      Queue.add (Binary (lhs_chunks, "in", rhs_chunks)) chunks
+  | ATyp_infix [(IT_primary lhs, _, _); (IT_op (Id_aux (Id op, _)), _, _); (IT_primary rhs, _, _)] ->
+      let lhs_chunks = rec_chunk_atyp lhs in
+      let rhs_chunks = rec_chunk_atyp rhs in
+      Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
+  | ATyp_infix infix_tokens ->
+      let infix_chunks = List.map (chunk_infix_token comments chunk_atyp) infix_tokens in
+      Queue.add (Infix_sequence infix_chunks) chunks
   | (ATyp_times (lhs, rhs) | ATyp_sum (lhs, rhs) | ATyp_minus (lhs, rhs)) as binop ->
       let op_symbol =
         match binop with
@@ -757,6 +794,13 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_exit exp ->
       let exp_chunks = rec_chunk_exp exp in
       Queue.add (App (Id_aux (Id "exit", Unknown), [exp_chunks])) chunks
+  | E_infix [(IT_primary lhs, _, _); (IT_op (Id_aux (Id op, _)), _, _); (IT_primary rhs, _, _)] ->
+      let lhs_chunks = rec_chunk_exp lhs in
+      let rhs_chunks = rec_chunk_exp rhs in
+      Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
+  | E_infix infix_tokens ->
+      let infix_chunks = List.map (chunk_infix_token comments chunk_exp) infix_tokens in
+      Queue.add (Infix_sequence infix_chunks) chunks
   | E_app_infix (lhs, op, rhs) ->
       let lhs_chunks = rec_chunk_exp lhs in
       let rhs_chunks = rec_chunk_exp rhs in
