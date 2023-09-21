@@ -4134,6 +4134,26 @@ let rewrite_ast_realize_mappings effect_info env ast =
     match def with
     | DEF_aux (DEF_val spec, def_annot) -> realize_val_spec def_annot spec
     | DEF_aux (DEF_mapdef mdef, def_annot) -> realize_mapdef def_annot mdef
+    | DEF_aux (DEF_overload (id, overloads), def_annot) ->
+        [
+          DEF_aux
+            ( DEF_overload
+                ( id,
+                  List.map
+                    (fun overload ->
+                      if Env.is_mapping overload env then (
+                        let forwards_id = mk_id (string_of_id overload ^ "_forwards") in
+                        let backwards_id = mk_id (string_of_id overload ^ "_backwards") in
+                        [forwards_id; backwards_id]
+                      )
+                      else [overload]
+                    )
+                    overloads
+                  |> List.concat
+                ),
+              def_annot
+            );
+        ]
     | d -> [d]
   in
   let ast = { ast with defs = List.map rewrite_def ast.defs |> List.flatten } in
