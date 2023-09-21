@@ -20,7 +20,7 @@ function baz () = {
         foo = 0xFFFF,
         bar = 0b1,
     };
-    (*R) = baz; // trailing comment
+    *R = baz; // trailing comment
 
     return 3 + (return 4)
 }

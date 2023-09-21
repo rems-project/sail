@@ -97,6 +97,10 @@
 (menhir
  (modules parser))
 
+(menhir
+ (modules infix_parser)
+ (flags --table))
+
 (ocamllex lexer)
 
 (generate_sites_module
@@ -106,6 +110,6 @@
 (library
  (name libsail)
  (public_name libsail)
- (libraries lem linksem pprint dune-site yojson)
+ (libraries lem linksem pprint dune-site yojson menhirLib)
  (instrumentation
   (backend bisect_ppx)))

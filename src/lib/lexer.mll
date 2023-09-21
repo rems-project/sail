@@ -71,51 +71,8 @@ module Big_int = Nat_big_num
 open Parse_ast
 module M = Map.Make(String)
 
-let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
-
-let mk_operator prec n op =
-  match prec, n with
-  | Infix, 0 -> Op0 op
-  | Infix, 1 -> Op1 op
-  | Infix, 2 -> Op2 op
-  | Infix, 3 -> Op3 op
-  | Infix, 4 -> Op4 op
-  | Infix, 5 -> Op5 op
-  | Infix, 6 -> Op6 op
-  | Infix, 7 -> Op7 op
-  | Infix, 8 -> Op8 op
-  | Infix, 9 -> Op9 op
-  | InfixL, 0 -> Op0l op
-  | InfixL, 1 -> Op1l op
-  | InfixL, 2 -> Op2l op
-  | InfixL, 3 -> Op3l op
-  | InfixL, 4 -> Op4l op
-  | InfixL, 5 -> Op5l op
-  | InfixL, 6 -> Op6l op
-  | InfixL, 7 -> Op7l op
-  | InfixL, 8 -> Op8l op
-  | InfixL, 9 -> Op9l op
-  | InfixR, 0 -> Op0r op
-  | InfixR, 1 -> Op1r op
-  | InfixR, 2 -> Op2r op
-  | InfixR, 3 -> Op3r op
-  | InfixR, 4 -> Op4r op
-  | InfixR, 5 -> Op5r op
-  | InfixR, 6 -> Op6r op
-  | InfixR, 7 -> Op7r op
-  | InfixR, 8 -> Op8r op
-  | InfixR, 9 -> Op9r op
-  | _, _ -> assert false
-
-let operators = ref
-  (List.fold_left
-     (fun r (x, y) -> M.add x y r)
-     M.empty
-     [ ("/", mk_operator InfixL 7 "/");
-       ("%", mk_operator InfixL 7 "%");
-     ])
 
 let kw_table =
   List.fold_left
@@ -247,23 +204,17 @@ rule token = parse
   | "\r\n"
     { Lexing.new_line lexbuf;
       token lexbuf }
-  | "&"					{ (Amp(r"&")) }
-  | "@"                                 { (At "@") }
+  | "@"                                 { At }
   | "2" ws "^"                          { TwoCaret }
-  | "^"					{ (Caret(r"^")) }
-  | "::"                                { ColonColon(r "::") }
-  | ":"                                 { Colon(r ":") }
+  | "^"					{ Caret }
+  | "::"                                { ColonColon }
+  | ":"                                 { Colon ":" }
   | ","                                 { Comma }
   | ".."                                { DotDot }
   | "."                                 { Dot }
-  | "=="                                { EqEq(r"==") }
-  | "="                                 { (Eq(r"=")) }
-  | ">"					{ (Gt(r">")) }
-  | "-"					{ Minus }
-  | "<"					{ (Lt(r"<")) }
-  | "+"					{ (Plus(r"+")) }
+  | "="                                 { Eq "=" }
   | ";"                                 { Semi }
-  | "*"                                 { (Star(r"*")) }
+  | "*"                                 { Star }
   | "_"                                 { Under }
   | "[|"                                { LsquareBar }
   | "|]"                                { RsquareBar }
@@ -272,17 +223,15 @@ rule token = parse
   | "|"                                 { Bar }
   | "{"                                 { Lcurly }
   | "}"                                 { Rcurly }
-  | "()"                                { Unit(r"()") }
+  | "()"                                { Unit "()" }
   | "("                                 { Lparen }
   | ")"                                 { Rparen }
   | "["                                 { Lsquare }
   | "]"                                 { Rsquare }
-  | "!="				{ (ExclEq(r"!=")) }
-  | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
+  | "-"                                 { Minus }
   | "<->"                               { Bidir }
-  | "=>"                                { EqGt(r "=>") }
-  | "<="				{ (LtEq(r"<=")) }
+  | "=>"                                { EqGt "=>" }
   | "/*!" wsc*  { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
@@ -292,17 +241,12 @@ rule token = parse
   | "$" (ident+ as i)
     { let p = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in Pragma(i, String.trim p) }
   | "infix" ws (digit as p) ws (operator as op)
-    { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
+    { Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)
-    { operators := M.add op (mk_operator InfixL (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (InfixL, Big_int.of_string (Char.escaped p), op) }
+    { Fixity (InfixL, Big_int.of_string (Char.escaped p), op) }
   | "infixr" ws (digit as p) ws (operator as op)
-    { operators := M.add op (mk_operator InfixR (int_of_string (Char.escaped p)) op) !operators;
-      Fixity (InfixR, Big_int.of_string (Char.escaped p), op) }
-  | operator as op
-    { try M.find op !operators
-      with Not_found -> raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) ("Operator fixity undeclared " ^ op)) }
+    { Fixity (InfixR, Big_int.of_string (Char.escaped p), op) }
+  | operator as op                        { OpId op }
   | tyvar_start startident ident* as i    { TyVar i }
   | "~"                                   { Id "~" }
   | startident ident* as i                { if M.mem i kw_table then

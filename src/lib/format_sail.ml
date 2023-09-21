@@ -266,6 +266,8 @@ let precedence n opts = { opts with precedence = n }
 
 let atomic_parens opts doc = if opts.precedence <= 0 then parens doc else doc
 
+let subatomic_parens opts doc = if opts.precedence < 0 then parens doc else doc
+
 (* While everything in Sail is an expression, for formatting we
    recognize that some constructs will appear as either statement-like
    or expression-like depending on where they occur. For example, and
@@ -287,11 +289,22 @@ let expression_like opts = { opts with statement = false }
 let statement_like opts = { opts with statement = true }
 
 let operator_precedence = function
-  | "=" -> (10, atomic, nonatomic, 1)
+  | "=" -> (10, precedence 1, nonatomic, 1)
   | ":" -> (0, subatomic, subatomic, 1)
   | ".." -> (10, atomic, atomic, 0)
   | "@" -> (6, precedence 5, precedence 6, 1)
   | _ -> (10, subatomic, subatomic, 1)
+
+let max_precedence infix_chunks =
+  List.fold_left
+    (fun max_prec infix_chunk ->
+      match infix_chunk with
+      | Infix_op op ->
+          let prec, _, _, _ = operator_precedence op in
+          max prec max_prec
+      | _ -> max_prec
+    )
+    0 infix_chunks
 
 let intersperse_operator_precedence = function "@" -> (6, precedence 5) | _ -> (10, subatomic)
 
@@ -412,6 +425,18 @@ module Make (Config : CONFIG) = struct
         let outer_prec, inner_prec, spacing = unary_operator_precedence op in
         let doc = string op ^^ spacing ^^ doc_chunks (opts |> inner_prec |> expression_like) exp in
         if outer_prec > opts.precedence then parens doc else doc
+    | Infix_sequence infix_chunks ->
+        let outer_prec = max_precedence infix_chunks in
+        let doc =
+          separate_map empty
+            (function
+              | Infix_prefix op -> string op
+              | Infix_op op -> space ^^ string op ^^ space
+              | Infix_chunks chunks -> doc_chunks (opts |> atomic |> expression_like) chunks
+              )
+            infix_chunks
+        in
+        if outer_prec > opts.precedence then parens doc else doc
     | Binary (lhs, op, rhs) ->
         let outer_prec, lhs_prec, rhs_prec, spacing = operator_precedence op in
         let doc =
@@ -462,7 +487,7 @@ module Make (Config : CONFIG) = struct
     | Index (exp, ix) ->
         let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
         let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
-        exp_doc ^^ surround indent 0 (char '[') ix_doc (char ']') |> atomic_parens opts
+        exp_doc ^^ surround indent 0 (char '[') ix_doc (char ']') |> subatomic_parens opts
     | Exists ex ->
         let ex_doc =
           doc_chunks (atomic opts) ex.vars

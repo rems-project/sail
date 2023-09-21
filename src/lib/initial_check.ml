@@ -93,6 +93,7 @@ type ctx = {
   kinds : kind_aux KBindings.t;
   type_constructors : type_constructor Bindings.t;
   scattereds : ctx Bindings.t;
+  fixities : (prec * int) Bindings.t;
   internal_files : StringSet.t;
   target_sets : string list StringMap.t;
 }
@@ -101,6 +102,7 @@ let rec equal_ctx ctx1 ctx2 =
   KBindings.equal ( = ) ctx1.kinds ctx2.kinds
   && Bindings.equal ( = ) ctx1.type_constructors ctx2.type_constructors
   && Bindings.equal equal_ctx ctx1.scattereds ctx2.scattereds
+  && Bindings.equal ( = ) ctx1.fixities ctx2.fixities
   && StringSet.equal ctx1.internal_files ctx2.internal_files
   && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
 
@@ -125,6 +127,10 @@ let merge_ctx l ctx1 ctx2 =
       Bindings.merge
         (compatible equal_ctx (fun id -> "Scattered definition " ^ string_of_id id ^ " found with mismatching context"))
         ctx1.scattereds ctx2.scattereds;
+    fixities =
+      Bindings.merge
+        (compatible ( = ) (fun id -> "Operator " ^ string_of_id id ^ " declared with multiple fixities"))
+        ctx1.fixities ctx2.fixities;
     internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
     target_sets =
       StringMap.merge
@@ -161,6 +167,121 @@ let to_ast_id ctx (P.Id_aux (id, l)) =
   end
   else to_ast_id' id
 
+let to_infix_parser_op =
+  let open Infix_parser in
+  function
+  | Infix, 0, x -> Op0 x
+  | InfixL, 0, x -> Op0l x
+  | InfixR, 0, x -> Op0r x
+  | Infix, 1, x -> Op1 x
+  | InfixL, 1, x -> Op1l x
+  | InfixR, 1, x -> Op1r x
+  | Infix, 2, x -> Op2 x
+  | InfixL, 2, x -> Op2l x
+  | InfixR, 2, x -> Op2r x
+  | Infix, 3, x -> Op3 x
+  | InfixL, 3, x -> Op3l x
+  | InfixR, 3, x -> Op3r x
+  | Infix, 4, x -> Op4 x
+  | InfixL, 4, x -> Op4l x
+  | InfixR, 4, x -> Op4r x
+  | Infix, 5, x -> Op5 x
+  | InfixL, 5, x -> Op5l x
+  | InfixR, 5, x -> Op5r x
+  | Infix, 6, x -> Op6 x
+  | InfixL, 6, x -> Op6l x
+  | InfixR, 6, x -> Op6r x
+  | Infix, 7, x -> Op7 x
+  | InfixL, 7, x -> Op7l x
+  | InfixR, 7, x -> Op7r x
+  | Infix, 8, x -> Op8 x
+  | InfixL, 8, x -> Op8l x
+  | InfixR, 8, x -> Op8r x
+  | Infix, 9, x -> Op9 x
+  | InfixL, 9, x -> Op9l x
+  | InfixR, 9, x -> Op9r x
+  | _ -> Reporting.unreachable P.Unknown __POS__ "Invalid fixity"
+
+let parse_infix :
+      'a 'b.
+      P.l ->
+      ctx ->
+      ('a P.infix_token * Lexing.position * Lexing.position) list ->
+      ('a -> Infix_parser.token) ->
+      'b Infix_parser.MenhirInterpreter.checkpoint ->
+      'b =
+ fun l ctx infix_tokens mk_primary checkpoint ->
+  let open Infix_parser in
+  let tokens =
+    ref
+      (List.map
+         (function
+           | P.IT_primary x, s, e -> (mk_primary x, s, e)
+           | P.IT_in_set nums, s, e -> (InSet nums, s, e)
+           | P.IT_prefix id, s, e -> (
+               match id with
+               | Id_aux (Id "pow2", _) -> (TwoCaret, s, e)
+               | Id_aux (Id "negate", _) -> (Minus, s, e)
+               | Id_aux (Id "__deref", _) -> (Star, s, e)
+               | _ -> raise (Reporting.err_general (P.Range (s, e)) "Unknown prefix operator")
+             )
+           | P.IT_op id, s, e -> (
+               match id with
+               | Id_aux (Id "+", _) -> (Plus, s, e)
+               | Id_aux (Id "-", _) -> (Minus, s, e)
+               | Id_aux (Id "*", _) -> (Star, s, e)
+               | Id_aux (Id "<", _) -> (Lt, s, e)
+               | Id_aux (Id ">", _) -> (Gt, s, e)
+               | Id_aux (Id "<=", _) -> (LtEq, s, e)
+               | Id_aux (Id ">=", _) -> (GtEq, s, e)
+               | Id_aux (Id "::", _) -> (ColonColon, s, e)
+               | Id_aux (Id "@", _) -> (At, s, e)
+               | _ -> (
+                   match Bindings.find_opt (to_ast_id ctx id) ctx.fixities with
+                   | Some (prec, level) -> (to_infix_parser_op (prec, level, id), s, e)
+                   | None ->
+                       raise
+                         (Reporting.err_general
+                            (P.Range (s, e))
+                            ("Undeclared fixity for operator " ^ string_of_parse_id id)
+                         )
+                 )
+             )
+           )
+         infix_tokens
+      )
+  in
+  let supplier () : token * Lexing.position * Lexing.position =
+    match !tokens with
+    | [((_, _, e) as token)] ->
+        tokens := [(Infix_parser.Eof, e, e)];
+        token
+    | token :: rest ->
+        tokens := rest;
+        token
+    | [] -> assert false
+  in
+  try MenhirInterpreter.loop supplier checkpoint
+  with Infix_parser.Error -> raise (Reporting.err_syntax_loc l "Failed to parse infix expression")
+
+let parse_infix_exp ctx = function
+  | P.E_aux (P.E_infix infix_tokens, l) -> (
+      match infix_tokens with
+      | (_, s, _) :: _ ->
+          parse_infix l ctx infix_tokens (fun exp -> Infix_parser.Exp exp) (Infix_parser.Incremental.exp_eof s)
+      | [] -> Reporting.unreachable l __POS__ "Found empty infix expression"
+    )
+  | exp -> exp
+
+let parse_infix_atyp ctx = function
+  | P.ATyp_aux (P.ATyp_infix infix_tokens, l) -> (
+      match infix_tokens with
+      | (_, s, _) :: _ ->
+          parse_infix l ctx infix_tokens (fun typ -> Infix_parser.Typ typ) (Infix_parser.Incremental.typ_eof s)
+      | [] -> Reporting.unreachable l __POS__ "Found empty infix type"
+    )
+  | atyp -> atyp
+
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
 (* Used for error messages involving lists of kinds *)
@@ -194,7 +315,8 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
         attr
       )
 
-let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
+let rec to_ast_typ ctx atyp =
+  let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
   match aux with
   | P.ATyp_id id -> Typ_aux (Typ_id (to_ast_id ctx id), l)
   | P.ATyp_var v -> Typ_aux (Typ_var (to_ast_var v), l)
@@ -255,7 +377,8 @@ and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_int -> A_aux (A_nexp (to_ast_nexp ctx atyp), l)
   | K_bool -> A_aux (A_bool (to_ast_constraint ctx atyp), l)
 
-and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
+and to_ast_nexp ctx atyp =
+  let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
   match aux with
   | P.ATyp_id id -> Nexp_aux (Nexp_id (to_ast_id ctx id), l)
   | P.ATyp_var v -> Nexp_aux (Nexp_var (to_ast_var v), l)
@@ -269,7 +392,8 @@ and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_parens atyp -> to_ast_nexp ctx atyp
   | _ -> raise (Reporting.err_typ l "Invalid numeric expression in type")
 
-and to_ast_bitfield_index_nexp ctx (P.ATyp_aux (aux, l)) =
+and to_ast_bitfield_index_nexp ctx atyp =
+  let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
   match aux with
   | P.ATyp_id id -> Nexp_aux (Nexp_id (to_ast_id ctx id), l)
   | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_aux (Nexp_constant c, l)
@@ -291,7 +415,8 @@ and to_ast_order ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_parens atyp -> to_ast_order ctx atyp
   | _ -> raise (Reporting.err_typ l "Invalid order in type")
 
-and to_ast_constraint ctx (P.ATyp_aux (aux, l)) =
+and to_ast_constraint ctx atyp =
+  let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
   match aux with
   | P.ATyp_parens atyp -> to_ast_constraint ctx atyp
   | _ ->
@@ -344,7 +469,7 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l)) =
         | P.ATyp_var v -> NC_var (to_ast_var v)
         | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
         | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
-        | P.ATyp_nset (id, bounds) -> NC_set (to_ast_var id, bounds)
+        | P.ATyp_nset (P.ATyp_aux (P.ATyp_var v, _), bounds) -> NC_set (to_ast_var v, bounds)
         | _ -> raise (Reporting.err_typ l "Invalid constraint")
       in
       NC_aux (aux, l)
@@ -480,7 +605,8 @@ and to_ast_fpat ctx (P.FP_aux (aux, l)) =
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
 
-and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
+and to_ast_exp ctx exp =
+  let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
   match exp with
   | P.E_attribute (attr, arg, exp) ->
       let (E_aux (exp, (exp_l, annot))) = to_ast_exp ctx exp in
@@ -490,7 +616,7 @@ and to_ast_exp ctx (P.E_aux (exp, l) : P.exp) =
   | _ ->
       let aux =
         match exp with
-        | P.E_attribute _ -> assert false
+        | P.E_attribute _ | P.E_infix _ -> assert false
         | P.E_block exps -> (
             match to_ast_fexps false ctx exps with
             | Some fexps -> E_struct fexps
@@ -589,7 +715,8 @@ and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot internal_loop_measure =
   in
   Measure_aux (m, l)
 
-and to_ast_lexp ctx (P.E_aux (exp, l) : P.exp) : uannot lexp =
+and to_ast_lexp ctx exp =
+  let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
   let lexp =
     match exp with
     | P.E_id id -> LE_id (to_ast_id ctx id)
@@ -1058,7 +1185,12 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
       | None -> to_ast_def (Some doc_comment) attrs ctx def
     end
   | P.DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx)
-  | P.DEF_fixity (prec, n, op) -> ([DEF_aux (DEF_fixity (to_ast_prec prec, n, to_ast_id ctx op), annot)], ctx)
+  | P.DEF_fixity (prec, n, op) ->
+      let op = to_ast_id ctx op in
+      let prec = to_ast_prec prec in
+      ( [DEF_aux (DEF_fixity (prec, n, op), annot)],
+        { ctx with fixities = Bindings.add op (prec, Big_int.to_int n) ctx.fixities }
+      )
   | P.DEF_type t_def -> to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
       let fd = to_ast_fundef ctx f_def in
@@ -1188,6 +1320,19 @@ let initial_ctx =
         ];
     kinds = KBindings.empty;
     scattereds = Bindings.empty;
+    fixities =
+      List.fold_left
+        (fun m (k, prec, level) -> Bindings.add (mk_id k) (prec, level) m)
+        Bindings.empty
+        [
+          ("^", InfixR, 8);
+          ("|", InfixR, 2);
+          ("&", InfixR, 3);
+          ("==", Infix, 4);
+          ("!=", Infix, 4);
+          ("/", InfixL, 7);
+          ("%", InfixL, 7);
+        ];
     internal_files = StringSet.empty;
     target_sets = StringMap.empty;
   }

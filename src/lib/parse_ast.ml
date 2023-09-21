@@ -125,6 +125,8 @@ type kid = Kid_aux of kid_aux * l
 
 type id = Id_aux of id_aux * l
 
+type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id | IT_in_set of Big_int.num list
+
 type lit_aux =
   | (* Literal constant *)
     L_unit (* $() : _$ *)
@@ -146,12 +148,13 @@ type atyp_aux =
   | ATyp_id of id (* identifier *)
   | ATyp_var of kid (* ticked variable *)
   | ATyp_lit of lit (* literal *)
-  | ATyp_nset of kid * Big_int.num list (* set type *)
+  | ATyp_nset of atyp * Big_int.num list (* set type *)
   | ATyp_times of atyp * atyp (* product *)
   | ATyp_sum of atyp * atyp (* sum *)
   | ATyp_minus of atyp * atyp (* subtraction *)
   | ATyp_exp of atyp (* exponential *)
   | ATyp_neg of atyp (* Internal (but not M as I want a datatype constructor) negative nexp *)
+  | ATyp_infix of (atyp infix_token * Lexing.position * Lexing.position) list
   | ATyp_inc (* increasing *)
   | ATyp_dec (* decreasing *)
   | ATyp_set of base_effect list (* effect set *)
@@ -234,6 +237,7 @@ and exp_aux =
   | E_typ of atyp * exp (* cast *)
   | E_app of id * exp list (* function application *)
   | E_app_infix of exp * id * exp (* infix function application *)
+  | E_infix of (exp infix_token * Lexing.position * Lexing.position) list
   | E_tuple of exp list (* tuple *)
   | E_if of exp * exp * exp * if_loc (* conditional *)
   | E_loop of loop * measure * exp * exp
