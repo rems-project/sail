@@ -92,7 +92,7 @@ type type_constructor = kind_aux option list
 type ctx = {
   kinds : kind_aux KBindings.t;
   type_constructors : type_constructor Bindings.t;
-  scattereds : ctx Bindings.t;
+  scattereds : (P.typquant * ctx) Bindings.t;
   fixities : (prec * int) Bindings.t;
   internal_files : StringSet.t;
   target_sets : string list StringMap.t;
@@ -101,7 +101,9 @@ type ctx = {
 let rec equal_ctx ctx1 ctx2 =
   KBindings.equal ( = ) ctx1.kinds ctx2.kinds
   && Bindings.equal ( = ) ctx1.type_constructors ctx2.type_constructors
-  && Bindings.equal equal_ctx ctx1.scattereds ctx2.scattereds
+  && Bindings.equal
+       (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
+       ctx1.scattereds ctx2.scattereds
   && Bindings.equal ( = ) ctx1.fixities ctx2.fixities
   && StringSet.equal ctx1.internal_files ctx2.internal_files
   && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
@@ -125,7 +127,10 @@ let merge_ctx l ctx1 ctx2 =
         ctx1.type_constructors ctx2.type_constructors;
     scattereds =
       Bindings.merge
-        (compatible equal_ctx (fun id -> "Scattered definition " ^ string_of_id id ^ " found with mismatching context"))
+        (compatible
+           (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
+           (fun id -> "Scattered definition " ^ string_of_id id ^ " found with mismatching context")
+        )
         ctx1.scattereds ctx2.scattereds;
     fixities =
       Bindings.merge
@@ -872,22 +877,28 @@ let anon_rec_constructor_typ record_id = function
       | args -> P.ATyp_aux (P.ATyp_app (record_id, args), Generated l)
     )
 
-let rec realise_union_anon_rec_types orig_union arms =
+let realize_union_anon_rec_arm union_id typq = function
+  | P.Tu_aux (P.Tu_ty_id _, _) as arm -> (None, arm)
+  | P.Tu_aux (P.Tu_ty_anon_rec (fields, id), l) ->
+      let open Parse_ast in
+      let record_str = "_" ^ string_of_parse_id union_id ^ "_" ^ string_of_parse_id id ^ "_record" in
+      let record_id = Id_aux (Id record_str, Generated l) in
+      let new_arm = Tu_aux (Tu_ty_id (anon_rec_constructor_typ record_id typq, id), Generated l) in
+      (Some (record_id, fields, l), new_arm)
+
+let rec realize_union_anon_rec_types orig_union arms =
   match orig_union with
   | P.TD_variant (union_id, typq, _, flag) -> begin
       match arms with
       | [] -> []
-      | arm :: arms -> (
-          match arm with
-          | P.Tu_aux (P.Tu_ty_id _, _) -> (None, arm) :: realise_union_anon_rec_types orig_union arms
-          | P.Tu_aux (P.Tu_ty_anon_rec (fields, id), l) ->
-              let open Parse_ast in
-              let record_str = "_" ^ string_of_parse_id union_id ^ "_" ^ string_of_parse_id id ^ "_record" in
-              let record_id = Id_aux (Id record_str, Generated l) in
-              let new_arm = Tu_aux (Tu_ty_id (anon_rec_constructor_typ record_id typq, id), Generated l) in
-              let new_rec_def = TD_aux (TD_record (record_id, typq, fields, flag), Generated l) in
-              (Some new_rec_def, new_arm) :: realise_union_anon_rec_types orig_union arms
-        )
+      | arm :: arms ->
+          let realized =
+            match realize_union_anon_rec_arm union_id typq arm with
+            | Some (record_id, fields, l), new_arm ->
+                (Some (P.TD_aux (P.TD_record (record_id, typq, fields, flag), Generated l)), new_arm)
+            | None, arm -> (None, arm)
+          in
+          realized :: realize_union_anon_rec_types orig_union arms
     end
   | _ ->
       raise
@@ -960,6 +971,12 @@ let to_ast_reserved_type_id ctx id =
   end
   else id
 
+let to_ast_record ctx id typq fields =
+  let id = to_ast_reserved_type_id ctx id in
+  let typq, typq_ctx = to_ast_typquant ctx typq in
+  let fields = List.map (fun (atyp, id) -> (to_ast_typ typq_ctx atyp, to_ast_id ctx id)) fields in
+  (id, typq, fields, add_constructor id typq ctx)
+
 let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
@@ -975,15 +992,11 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
         | None -> ([], ctx)
       end
   | P.TD_record (id, typq, fields, _) ->
-      let id = to_ast_reserved_type_id ctx id in
-      let typq, typq_ctx = to_ast_typquant ctx typq in
-      let fields = List.map (fun (atyp, id) -> (to_ast_typ typq_ctx atyp, to_ast_id ctx id)) fields in
-      ( [DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)],
-        add_constructor id typq ctx
-      )
+      let id, typq, fields, ctx = to_ast_record ctx id typq fields in
+      ([DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)], ctx)
   | P.TD_variant (id, typq, arms, _) as union ->
       (* First generate auxilliary record types for anonymous records in constructors *)
-      let records_and_arms = realise_union_anon_rec_types union arms in
+      let records_and_arms = realize_union_anon_rec_types union arms in
       let rec filter_records = function
         | [] -> []
         | Some x :: xs -> x :: filter_records xs
@@ -1124,45 +1137,63 @@ let to_ast_dec ctx (P.DEC_aux (regdec, l)) =
     )
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
-  let aux, ctx =
+  let extra_def, aux, ctx =
     match aux with
     | P.SD_function (rec_opt, tannot_opt, _, id) ->
         let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
-        (SD_function (to_ast_rec ctx rec_opt, tannot_opt, to_ast_id ctx id), ctx)
-    | P.SD_funcl funcl -> (SD_funcl (to_ast_funcl ctx funcl), ctx)
-    | P.SD_variant (id, typq) ->
+        (None, SD_function (to_ast_rec ctx rec_opt, tannot_opt, to_ast_id ctx id), ctx)
+    | P.SD_funcl funcl -> (None, SD_funcl (to_ast_funcl ctx funcl), ctx)
+    | P.SD_variant (id, parse_typq) ->
         let id = to_ast_id ctx id in
-        let typq, typq_ctx = to_ast_typquant ctx typq in
-        ( SD_variant (id, typq),
-          add_constructor id typq { ctx with scattereds = Bindings.add id typq_ctx ctx.scattereds }
+        let typq, typq_ctx = to_ast_typquant ctx parse_typq in
+        ( None,
+          SD_variant (id, typq),
+          add_constructor id typq { ctx with scattereds = Bindings.add id (parse_typq, typq_ctx) ctx.scattereds }
         )
-    | P.SD_unioncl (id, tu) ->
-        let id = to_ast_id ctx id in
+    | P.SD_unioncl (union_id, tu) ->
+        let id = to_ast_id ctx union_id in
         begin
           match Bindings.find_opt id ctx.scattereds with
-          | Some typq_ctx ->
-              let tu = to_ast_type_union typq_ctx tu in
-              (SD_unioncl (id, tu), ctx)
+          | Some (typq, scattered_ctx) ->
+              let anon_rec_opt, tu = realize_union_anon_rec_arm union_id typq tu in
+              let extra_def, scattered_ctx =
+                match anon_rec_opt with
+                | Some (record_id, fields, l) ->
+                    let l = gen_loc l in
+                    let record_id, typq, fields, scattered_ctx = to_ast_record scattered_ctx record_id typq fields in
+                    ( Some
+                        (DEF_aux
+                           ( DEF_scattered
+                               (SD_aux (SD_internal_unioncl_record (id, record_id, typq, fields), (l, empty_uannot))),
+                             mk_def_annot l
+                           )
+                        ),
+                      scattered_ctx
+                    )
+                | None -> (None, scattered_ctx)
+              in
+              let tu = to_ast_type_union scattered_ctx tu in
+              (extra_def, SD_unioncl (id, tu), ctx)
           | None -> raise (Reporting.err_typ l ("No scattered union declaration found for " ^ string_of_id id))
         end
-    | P.SD_end id -> (SD_end (to_ast_id ctx id), ctx)
+    | P.SD_end id -> (None, SD_end (to_ast_id ctx id), ctx)
     | P.SD_mapping (id, tannot_opt) ->
         let id = to_ast_id ctx id in
         let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
-        (SD_mapping (id, tannot_opt), ctx)
+        (None, SD_mapping (id, tannot_opt), ctx)
     | P.SD_mapcl (id, mapcl) ->
         let id = to_ast_id ctx id in
         let mapcl = to_ast_mapcl ctx mapcl in
-        (SD_mapcl (id, mapcl), ctx)
+        (None, SD_mapcl (id, mapcl), ctx)
     | P.SD_enum id ->
         let id = to_ast_id ctx id in
-        (SD_enum id, ctx)
+        (None, SD_enum id, ctx)
     | P.SD_enumcl (id, member) ->
         let id = to_ast_id ctx id in
         let member = to_ast_id ctx member in
-        (SD_enumcl (id, member), ctx)
+        (None, SD_enumcl (id, member), ctx)
   in
-  (SD_aux (aux, (l, empty_uannot)), ctx)
+  (extra_def, SD_aux (aux, (l, empty_uannot)), ctx)
 
 let to_ast_prec = function P.Infix -> Infix | P.InfixL -> InfixL | P.InfixR -> InfixR
 
@@ -1255,8 +1286,8 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
       (* Should never occur because of remove_mutrec *)
       raise (Reporting.err_unreachable l __POS__ "Internal mutual block found when processing scattered defs")
   | P.DEF_scattered sdef ->
-      let sdef, ctx = to_ast_scattered ctx sdef in
-      ([DEF_aux (DEF_scattered sdef, annot)], ctx)
+      let extra_def, sdef, ctx = to_ast_scattered ctx sdef in
+      ([DEF_aux (DEF_scattered sdef, annot)] @ Option.to_list extra_def, ctx)
   | P.DEF_measure (id, pat, exp) ->
       ([DEF_aux (DEF_measure (to_ast_id ctx id, to_ast_pat ctx pat, to_ast_exp ctx exp), annot)], ctx)
   | P.DEF_loop_measures (id, measures) ->
@@ -1522,6 +1553,20 @@ let generate_undefineds vs_ids defs =
     | (DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), _)), _) as def) :: defs ->
         let vs, fn = undefined_scattered id typq in
         (def :: vs :: undefined_defs defs) @ [fn]
+    | (DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (_, id, typq, fields), _)), _) as def) :: defs
+      when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+        let pat =
+          p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
+        in
+        let vs = mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None)) in
+        let fn =
+          mk_fundef
+            [
+              mk_funcl (prepend_id "undefined_" id) pat
+                (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+            ]
+        in
+        def :: vs :: fn :: undefined_defs defs
     | def :: defs -> def :: undefined_defs defs
     | [] -> []
   in

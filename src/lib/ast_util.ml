@@ -778,6 +778,7 @@ and map_scattered_annot_aux f = function
   | SD_funcl fcl -> SD_funcl (map_funcl_annot f fcl)
   | SD_variant (id, typq) -> SD_variant (id, typq)
   | SD_unioncl (id, tu) -> SD_unioncl (id, tu)
+  | SD_internal_unioncl_record (id, record_id, typq, fields) -> SD_internal_unioncl_record (id, record_id, typq, fields)
   | SD_mapping (id, tannot_opt) -> SD_mapping (id, tannot_opt)
   | SD_mapcl (id, mcl) -> SD_mapcl (id, map_mapcl_annot f mcl)
   | SD_end id -> SD_end id
@@ -1122,6 +1123,7 @@ let id_of_scattered (SD_aux (sdef, _)) =
   | SD_end id
   | SD_variant (id, _)
   | SD_unioncl (id, _)
+  | SD_internal_unioncl_record (_, id, _, _)
   | SD_mapping (id, _)
   | SD_mapcl (id, _)
   | SD_enum id

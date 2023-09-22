@@ -754,6 +754,15 @@ let doc_scattered (SD_aux (sd_aux, _)) =
   | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), _)) ->
       separate space [string "scattered mapping"; doc_id id; colon; doc_binding (typq, typ)]
   | SD_unioncl (id, tu) -> separate space [string "union clause"; doc_id id; equals; doc_union tu]
+  | SD_internal_unioncl_record (id, record_id, typq, fields) ->
+      let prefix = separate space [string "internal_union_record clause"; doc_id id; doc_id record_id] in
+      let params =
+        match typq with
+        | TypQ_aux (TypQ_no_forall, _) | TypQ_aux (TypQ_tq [], _) -> empty
+        | TypQ_aux (TypQ_tq qs, _) -> doc_param_quants qs
+      in
+      separate space
+        [prefix ^^ params; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
   | SD_enum id -> separate space [string "scattered enum"; doc_id id]
   | SD_enumcl (id, member) -> separate space [string "enum clause"; doc_id id; equals; doc_id member]
 
