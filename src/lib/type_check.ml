@@ -3692,7 +3692,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
           match mpat_aux with
           | MP_lit lit ->
               let var = fresh_var () in
-              let guard = mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
+              let guard = mk_exp ~loc:l (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
               let typed_mpat, env, guards = bind_mpat allow_unknown other_env env (mk_mpat (MP_id var)) typ in
               (typed_mpat, env, guard :: guards)
           | _ -> raise typ_exn
@@ -4152,6 +4152,20 @@ let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ
   wf_binding l env (typq, typ);
   env |> Env.add_union_id v (typq, typ) |> Env.add_val_spec v (typq, typ)
 
+let check_record l env def_annot id typq fields =
+  forbid_recursive_types l (fun () ->
+      List.iter (fun ((Typ_aux (_, l) as field), _) -> wf_binding l env (typq, field)) fields
+  );
+  let env =
+    try
+      match get_def_attribute "bitfield" def_annot with
+      | Some (_, size) when not (Env.is_bitfield id env) ->
+          Env.add_bitfield id (bits_typ env (nconstant (Big_int.of_string size))) Bindings.empty env
+      | _ -> env
+    with _ -> env
+  in
+  Env.add_record id typq fields env
+
 let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
   match tdef with
@@ -4163,18 +4177,8 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       end;
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
   | TD_record (id, typq, fields, _) ->
-      forbid_recursive_types l (fun () ->
-          List.iter (fun ((Typ_aux (_, l) as field), _) -> wf_binding l env (typq, field)) fields
-      );
-      let env =
-        try
-          match get_def_attribute "bitfield" def_annot with
-          | Some (_, size) when not (Env.is_bitfield id env) ->
-              Env.add_bitfield id (bits_typ env (nconstant (Big_int.of_string size))) Bindings.empty env
-          | _ -> env
-        with _ -> env
-      in
-      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_record id typq fields env)
+      let env = check_record l env def_annot id typq fields in
+      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
   | TD_variant (id, typq, arms, _) ->
       let rec_env = Env.add_variant id (typq, arms) env in
       (* register_value is a special type used by theorem prover
@@ -4247,6 +4251,19 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def l
              'scattered union' declaration"
           in
           raise (Type_error (l', err_because (err, id_loc id, Err_other msg)))
+      )
+  | SD_internal_unioncl_record (id, record_id, typq, fields) ->
+      let definition_env = Env.get_scattered_variant_env id env in
+      let definition_env = check_record l definition_env def_annot record_id typq fields in
+      let env = Env.set_scattered_variant_env ~variant_env:definition_env id env in
+      let env = Env.add_record record_id typq fields env in
+      ( [
+          DEF_aux
+            ( DEF_scattered (SD_aux (SD_internal_unioncl_record (id, record_id, typq, fields), (l, empty_tannot))),
+              def_annot
+            );
+        ],
+        env
       )
   | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
       let typq, typ = Env.get_val_spec id env in

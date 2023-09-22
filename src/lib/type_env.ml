@@ -1030,7 +1030,10 @@ let get_enums env = Bindings.map (fun item -> item |> get_item |> snd) env.globa
 
 let is_record id env = Bindings.mem id env.global.records
 
-let get_record id env = get_item (Bindings.find id env.global.records)
+let get_record id env =
+  match Option.map get_item (Bindings.find_opt id env.global.records) with
+  | Some record -> record
+  | None -> typ_error (id_loc id) ("Struct type " ^ string_of_id id ^ " does not exist")
 
 let get_records env = Bindings.map get_item env.global.records
 
@@ -1171,6 +1174,11 @@ let get_scattered_variant_env id env =
   match Bindings.find_opt id env.global.scattered_union_envs with
   | Some global_env -> { env with global = global_env }
   | None -> typ_error (id_loc id) ("scattered union " ^ string_of_id id ^ " has not been declared")
+
+let set_scattered_variant_env ~variant_env id env =
+  update_global
+    (fun global -> { global with scattered_union_envs = Bindings.add id variant_env.global global.scattered_union_envs })
+    env
 
 let is_register id env = Bindings.mem id env.global.registers
 

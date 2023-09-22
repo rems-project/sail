@@ -106,6 +106,7 @@ val add_variant_clause : id -> type_union -> t -> t
 val get_variant : id -> t -> typquant * type_union list
 val get_variants : t -> (typquant * type_union list) Bindings.t
 val get_scattered_variant_env : id -> t -> t
+val set_scattered_variant_env : variant_env:t -> id -> t -> t
 val union_constructor_info : id -> t -> (int * int * id * type_union) option
 val is_union_constructor : id -> t -> bool
 val is_singleton_union_constructor : id -> t -> bool

@@ -284,7 +284,9 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
     match sd with
     | SD_funcl funcl -> SD_funcl (rewrite_funcl rewriters funcl)
     | SD_mapcl (id, mapcl) -> SD_mapcl (id, rewrite_mapcl rewriters mapcl)
-    | SD_variant _ | SD_unioncl _ | SD_mapping _ | SD_function _ | SD_end _ | SD_enum _ | SD_enumcl _ -> sd
+    | SD_variant _ | SD_unioncl _ | SD_mapping _ | SD_function _ | SD_end _ | SD_enum _ | SD_enumcl _
+    | SD_internal_unioncl_record _ ->
+        sd
   in
   SD_aux (sd, (l, annot))
 

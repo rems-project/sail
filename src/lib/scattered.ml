@@ -86,8 +86,20 @@ let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
+let rec get_union_records id acc = function
+  | DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (uid, record_id, typq, fields), annot)), def_annot)
+    :: defs
+    when Id.compare uid id = 0 ->
+      let def = DEF_aux (DEF_type (TD_aux (TD_record (record_id, typq, fields, false), annot)), def_annot) in
+      get_union_records id (def :: acc) defs
+  | def :: defs -> get_union_records id acc defs
+  | [] -> acc
+
 let rec filter_union_clauses id = function
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
+      filter_union_clauses id defs
+  | DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (uid, _, _, _), _)), _) :: defs
+    when Id.compare id uid = 0 ->
       filter_union_clauses id defs
   | def :: defs -> def :: filter_union_clauses id defs
   | [] -> []
@@ -168,6 +180,7 @@ let rec descatter' accumulator funcls mapcls = function
      regular union declaration. *)
   | DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))), def_annot) :: defs ->
       let tus = get_scattered_union_clauses id defs in
+      let records = get_union_records id [] defs in
       begin
         match tus with
         | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
@@ -175,7 +188,8 @@ let rec descatter' accumulator funcls mapcls = function
             let accumulator =
               DEF_aux
                 (DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
-              :: accumulator
+              :: records
+              @ accumulator
             in
             descatter' accumulator funcls mapcls (filter_union_clauses id defs)
       end

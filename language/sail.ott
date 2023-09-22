@@ -704,6 +704,8 @@ scattered_def :: 'SD_' ::=
   | union id member type_union :: :: unioncl
 {{ texlong }} {{ com scattered union definition member }}
 
+  | internal_unioncl_record id1 id2 typquant { typ1 id1 , ... , typn idn } :: :: internal_unioncl_record
+
   | scattered mapping id : tannot_opt :: :: mapping
 
   | mapping clause id = mapcl :: :: mapcl
