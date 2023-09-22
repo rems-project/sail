@@ -88,6 +88,9 @@ let opt_expand_valspec = ref true
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
 
+(* Only allow mutable variables to be declared with var *)
+let opt_strict_var = ref false
+
 let orig_kid (Kid_aux (Var v, l) as kid) =
   try
     let i = String.rindex v '#' in
@@ -2113,15 +2116,18 @@ and check_block l env exps ret_typ =
           let texp, env = bind_assignment assign_l env lexp bind in
           texp :: check_block l env exps ret_typ
       | Declaration ->
-          let lexp, bind, env =
-            match bind_assignment l env lexp bind with
-            | E_aux (E_assign (lexp, bind), _), env -> (lexp, bind, env)
-            | _, _ -> assert false
-          in
-          let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
-          let rest = check_block l env exps ret_typ in
-          let typ = last_typ rest in
-          [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
+          if !opt_strict_var then typ_error assign_l "Variables must be declared with an explicit var expression"
+          else (
+            let lexp, bind, env =
+              match bind_assignment l env lexp bind with
+              | E_aux (E_assign (lexp, bind), _), env -> (lexp, bind, env)
+              | _, _ -> assert false
+            in
+            let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
+            let rest = check_block l env exps ret_typ in
+            let typ = last_typ rest in
+            [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
+          )
     end
   | [exp] -> [final env exp]
   | E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) :: exps when string_of_id f = "_assume" ->

@@ -74,7 +74,13 @@ let default_symbols =
   List.fold_left
     (fun set str -> StringSet.add str set)
     StringSet.empty
-    ["FEATURE_IMPLICITS"; "FEATURE_CONSTANT_TYPES"; "FEATURE_BITVECTOR_TYPE"; "FEATURE_UNION_BARRIER"]
+    [
+      "FEATURE_IMPLICITS";
+      "FEATURE_CONSTANT_TYPES";
+      "FEATURE_BITVECTOR_TYPE";
+      "FEATURE_UNION_BARRIER";
+      "FEATURE_STRICT_VAR";
+    ]
 
 let symbols = ref default_symbols
 

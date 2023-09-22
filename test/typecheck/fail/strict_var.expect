@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/strict_var.sail[0m:6.4-15:
+6[96m |[0m    x : int = 3;
+ [91m |[0m    [91m^---------^[0m
+ [91m |[0m Variables must be declared with an explicit var expression
