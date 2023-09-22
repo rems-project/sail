@@ -90,6 +90,9 @@ val opt_expand_valspec : bool ref
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 
+(** Only allow mutable variables to be declared with var *)
+val opt_strict_var : bool ref
+
 (** {2 Environments} *)
 
 type env

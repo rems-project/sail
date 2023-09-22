@@ -158,6 +158,7 @@ let rec options =
         "<symbol> define a symbol for the preprocessor, as $define does in the source code"
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
+      ("-strict_var", Arg.Set Type_check.opt_strict_var, " require var expressions for variable declarations");
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
       ("-memo_z3", Arg.Set opt_memo_z3, " memoize calls to z3, improving performance when typechecking repeatedly");
