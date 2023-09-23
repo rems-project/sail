@@ -618,7 +618,7 @@ unit cycle_count(const unit u)
 
 void get_cycle_count(sail_int *rop, const unit u)
 {
-    mpz_init_set_ui(*rop, g_cycle_count);
+    mpz_set_ui(*rop, g_cycle_count);
 }
 
 /* ***** Argument Parsing ***** */

@@ -1219,13 +1219,13 @@ let chunk_type_def comments chunks (TD_aux (aux, l)) =
     chunk_atyp comments chunks typ
   in
   match aux with
-  | TD_enum (id, [], members, _) ->
+  | TD_enum (id, [], members) ->
       let members =
         chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments members
       in
       Queue.add (Enum { id; enum_functions = None; members }) chunks;
       Queue.add (Spacer (true, 1)) chunks
-  | TD_enum (id, enum_functions, members, _) ->
+  | TD_enum (id, enum_functions, members) ->
       let enum_functions =
         chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_function comments enum_functions
       in
