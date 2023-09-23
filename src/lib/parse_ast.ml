@@ -389,9 +389,9 @@ type fundef_aux = (* Function definition *)
 type type_def_aux =
   (* Type definition body *)
   | TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
-  | TD_record of id * typquant * (atyp * id) list * bool (* struct type definition *)
-  | TD_variant of id * typquant * type_union list * bool (* union type definition *)
-  | TD_enum of id * (id * atyp) list * (id * exp option) list * bool (* enumeration type definition *)
+  | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
+  | TD_variant of id * typquant * type_union list (* union type definition *)
+  | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type val_spec_aux = (* Value type specification *)

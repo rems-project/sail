@@ -379,10 +379,13 @@ typ_eof:
   | Star
     { [(IT_prefix (mk_id (Id "__deref") $startpos $endpos), $startpos, $endpos)] }
 
+num_set:
+  | Lcurly; xs = num_list; Rcurly { xs } 
+
 postfix_typ:
   | t = atomic_typ
     { [(IT_primary t, $startpos, $endpos)] }
-  | t = atomic_typ; i = In; Lcurly; xs = num_list; Rcurly
+  | t = atomic_typ; i = In; xs = num_set
     { [(IT_primary t, $startpos(t), $endpos(t)); (IT_in_set xs, $startpos(i), $endpos)] }
 
 /* When we parse a type from a pattern, we can't parse a ^ immediately because that's used for string append patterns */
@@ -985,23 +988,23 @@ type_def:
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, $4, $6)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
-    { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
+    { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly
-    { mk_td (TD_record ($2, $3, $6, false)) $startpos $endpos }
+    { mk_td (TD_record ($2, $3, $6)) $startpos $endpos }
   | Enum id Eq enum_bar
-    { mk_td (TD_enum ($2, [], $4, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $4)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
-    { mk_td (TD_enum ($2, [], $5, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $5)) $startpos $endpos }
   | Enum id With enum_functions Eq Lcurly enum Rcurly
-    { mk_td (TD_enum ($2, $4, $7, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, $4, $7)) $startpos $endpos }
   | Newtype id Eq type_union
-    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4])) $startpos $endpos }
   | Newtype id typaram Eq type_union
-    { mk_td (TD_variant ($2, $3, [$5], false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, [$5])) $startpos $endpos }
   | Union id Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Union id typaram Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, $3, $6, false)) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, $6)) $startpos $endpos }
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 

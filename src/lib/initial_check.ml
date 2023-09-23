@@ -888,14 +888,14 @@ let realize_union_anon_rec_arm union_id typq = function
 
 let rec realize_union_anon_rec_types orig_union arms =
   match orig_union with
-  | P.TD_variant (union_id, typq, _, flag) -> begin
+  | P.TD_variant (union_id, typq, _) -> begin
       match arms with
       | [] -> []
       | arm :: arms ->
           let realized =
             match realize_union_anon_rec_arm union_id typq arm with
             | Some (record_id, fields, l), new_arm ->
-                (Some (P.TD_aux (P.TD_record (record_id, typq, fields, flag), Generated l)), new_arm)
+                (Some (P.TD_aux (P.TD_record (record_id, typq, fields), Generated l)), new_arm)
             | None, arm -> (None, arm)
           in
           realized :: realize_union_anon_rec_types orig_union arms
@@ -991,10 +991,10 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
             )
         | None -> ([], ctx)
       end
-  | P.TD_record (id, typq, fields, _) ->
+  | P.TD_record (id, typq, fields) ->
       let id, typq, fields, ctx = to_ast_record ctx id typq fields in
       ([DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)], ctx)
-  | P.TD_variant (id, typq, arms, _) as union ->
+  | P.TD_variant (id, typq, arms) as union ->
       (* First generate auxilliary record types for anonymous records in constructors *)
       let records_and_arms = realize_union_anon_rec_types union arms in
       let rec filter_records = function
@@ -1020,7 +1020,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
         @ generated_records,
         add_constructor id typq ctx
       )
-  | P.TD_enum (id, fns, enums, _) ->
+  | P.TD_enum (id, fns, enums) ->
       let id = to_ast_reserved_type_id ctx id in
       let fns = generate_enum_functions l ctx id fns enums in
       let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
