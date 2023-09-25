@@ -1,3 +1,9 @@
+[93mWarning[0m: Deprecated [96mpass/global_type_var/v3.sail[0m:3.22-32:
+3[96m |[0mlet (size as 'size) : {|32, 64|} = 32
+ [91m |[0m                      [91m^--------^[0m
+ [91m |[0m 
+Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}.
+
 [93mType error[0m:
 [96mpass/global_type_var/v3.sail[0m:13.23-27:
 13[96m |[0m    let y : atom(64) = size in

@@ -125,7 +125,7 @@ type kid = Kid_aux of kid_aux * l
 
 type id = Id_aux of id_aux * l
 
-type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id | IT_in_set of Big_int.num list
+type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id
 
 type lit_aux =
   | (* Literal constant *)
@@ -148,7 +148,8 @@ type atyp_aux =
   | ATyp_id of id (* identifier *)
   | ATyp_var of kid (* ticked variable *)
   | ATyp_lit of lit (* literal *)
-  | ATyp_nset of atyp * Big_int.num list (* set type *)
+  | ATyp_nset of Big_int.num list (* set type *)
+  | ATyp_in of atyp * atyp (* set type *)
   | ATyp_times of atyp * atyp (* product *)
   | ATyp_sum of atyp * atyp (* sum *)
   | ATyp_minus of atyp * atyp (* subtraction *)

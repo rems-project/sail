@@ -545,7 +545,6 @@ let chunk_infix_token comments chunk_primary (infix_token, _, _) =
       | Id_aux (Id "negate", _) -> Infix_prefix "-"
       | _ -> Infix_prefix (string_of_id id)
     )
-  | IT_in_set set -> Infix_op ("in {" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")
   | IT_primary exp ->
       let chunks = Queue.create () in
       chunk_primary comments chunks exp;
@@ -563,10 +562,10 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
-  | ATyp_nset (n, set) ->
-      let lhs_chunks = rec_chunk_atyp n in
-      let rhs_chunks = Queue.create () in
-      Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) rhs_chunks;
+  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) chunks
+  | ATyp_in (lhs, rhs) ->
+      let lhs_chunks = rec_chunk_atyp lhs in
+      let rhs_chunks = rec_chunk_atyp rhs in
       Queue.add (Binary (lhs_chunks, "in", rhs_chunks)) chunks
   | ATyp_infix [(IT_primary lhs, _, _); (IT_op (Id_aux (Id op, _)), _, _); (IT_primary rhs, _, _)] ->
       let lhs_chunks = rec_chunk_atyp lhs in
