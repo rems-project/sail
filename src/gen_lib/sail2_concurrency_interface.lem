@@ -319,10 +319,10 @@ val sail_barrier : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translat
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval unit 'e
 let sail_barrier barrier = Barrier_request barrier (return ())
 
-val sail_cache_op_request : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e.
+val sail_cache_op : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e.
   'cache_op ->
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval unit 'e
-let sail_cache_op_request cache_op = Cache_op_request cache_op (return ())
+let sail_cache_op cache_op = Cache_op_request cache_op (return ())
 
 val sail_tlbi : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'regval 'e.
   'tlb_op ->
