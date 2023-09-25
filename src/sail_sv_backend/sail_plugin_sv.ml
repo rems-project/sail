@@ -591,9 +591,13 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
         Util.close_output_with_check file_info;
 
         Reporting.system_checked
-          (sprintf "verilator --cc --exe --build -j 0 -I%s sim_%s.cpp %s.sv" sail_sv_libdir out out);
+          (sprintf "verilator --cc --exe --build -j 0 -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv" sail_sv_libdir out out
+             out
+          );
         begin
-          match !opt_verilate with Verilator_run -> Reporting.system_checked (sprintf "obj_dir/V%s" out) | _ -> ()
+          match !opt_verilate with
+          | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out out)
+          | _ -> ()
         end
     | _ -> ()
   end
