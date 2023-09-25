@@ -63,9 +63,8 @@ let rec desugar_rchain chain s e =
 %token <Parse_ast.id> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
 %token <Parse_ast.id> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
-%token Lt Gt LtEq GtEq Minus Star Plus ColonColon At
+%token Lt Gt LtEq GtEq Minus Star Plus ColonColon At In
 %token TwoCaret
-%token <Nat_big_num.num list> InSet
 
 %start typ_eof
 %start exp_eof
@@ -219,8 +218,7 @@ typ8r:
   | typ9 { $1 }
 
 typ9:
-  | atomic_typ InSet
-    { mk_typ (ATyp_nset ($1, $2)) $startpos $endpos }
+  | atomic_typ In atomic_typ { mk_typ (ATyp_in ($1, $3)) $startpos $endpos }
   | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9l Op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | atomic_typ Op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }

@@ -222,7 +222,6 @@ let parse_infix :
       (List.map
          (function
            | P.IT_primary x, s, e -> (mk_primary x, s, e)
-           | P.IT_in_set nums, s, e -> (InSet nums, s, e)
            | P.IT_prefix id, s, e -> (
                match id with
                | Id_aux (Id "pow2", _) -> (TwoCaret, s, e)
@@ -241,6 +240,7 @@ let parse_infix :
                | Id_aux (Id ">=", _) -> (GtEq, s, e)
                | Id_aux (Id "::", _) -> (ColonColon, s, e)
                | Id_aux (Id "@", _) -> (At, s, e)
+               | Id_aux (Id "in", _) -> (In, s, e)
                | _ -> (
                    match Bindings.find_opt (to_ast_id ctx id) ctx.fixities with
                    | Some (prec, level) -> (to_infix_parser_op (prec, level, id), s, e)
@@ -333,6 +333,9 @@ let rec to_ast_typ ctx atyp =
       in
       Typ_aux (Typ_fn (from_typs, to_ast_typ ctx to_typ), l)
   | P.ATyp_bidir (typ1, typ2, _) -> Typ_aux (Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2), l)
+  | P.ATyp_nset nums ->
+      let n = Kid_aux (Var "'n", gen_loc l) in
+      Typ_aux (Typ_exist ([mk_kopt ~loc:l K_int n], nc_set n nums, atom_typ (nvar n)), l)
   | P.ATyp_tuple typs -> Typ_aux (Typ_tuple (List.map (to_ast_typ ctx) typs), l)
   | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
       Typ_aux (Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int]), l)
@@ -474,7 +477,7 @@ and to_ast_constraint ctx atyp =
         | P.ATyp_var v -> NC_var (to_ast_var v)
         | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
         | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
-        | P.ATyp_nset (P.ATyp_aux (P.ATyp_var v, _), bounds) -> NC_set (to_ast_var v, bounds)
+        | P.ATyp_in (P.ATyp_aux (P.ATyp_var v, _), P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_var v, bounds)
         | _ -> raise (Reporting.err_typ l "Invalid constraint")
       in
       NC_aux (aux, l)

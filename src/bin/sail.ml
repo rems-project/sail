@@ -332,7 +332,7 @@ let run_sail_format (config : Yojson.Basic.t option) =
     (fun (f, (comments, parse_ast)) ->
       let source = file_to_string f in
       if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs f source comments parse_ast in
+        let formatted = Formatter.format_defs ~debug:true f source comments parse_ast in
         begin
           match !opt_format_backup with
           | Some suffix ->

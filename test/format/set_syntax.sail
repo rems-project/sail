@@ -1,0 +1,9 @@
+default Order dec
+
+$include <prelude.sail>
+
+val main : unit -> unit
+
+function main() = {
+    let x: {|1, 2, 3|} = 3;
+}

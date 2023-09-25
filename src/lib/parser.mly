@@ -240,6 +240,9 @@ let cast_deprecated l =
 let warn_extern_effect l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
 
+let set_syntax_deprecated l =
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}."
+  
 %}
 
 /*Terminals with no content*/
@@ -308,6 +311,8 @@ op_no_caret:
     { mk_id (Id "|") $startpos $endpos }
   | Star
     { mk_id (Id "*") $startpos $endpos }
+  | In
+    { mk_id (Id "in") $startpos $endpos }
 
 op:
   | OpId
@@ -320,6 +325,8 @@ op:
     { mk_id (Id "^") $startpos $endpos }
   | Star
     { mk_id (Id "*") $startpos $endpos }
+  | In
+    { mk_id (Id "in") $startpos $endpos }
 
 exp_op:
   | OpId
@@ -379,14 +386,9 @@ typ_eof:
   | Star
     { [(IT_prefix (mk_id (Id "__deref") $startpos $endpos), $startpos, $endpos)] }
 
-num_set:
-  | Lcurly; xs = num_list; Rcurly { xs } 
-
 postfix_typ:
   | t = atomic_typ
     { [(IT_primary t, $startpos, $endpos)] }
-  | t = atomic_typ; i = In; xs = num_set
-    { [(IT_primary t, $startpos(t), $endpos(t)); (IT_in_set xs, $startpos(i), $endpos)] }
 
 /* When we parse a type from a pattern, we can't parse a ^ immediately because that's used for string append patterns */
 typ_no_caret:
@@ -430,12 +432,11 @@ atomic_typ:
     { mk_typ (ATyp_parens $2) $startpos $endpos }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tuple ($2 :: $4)) $startpos $endpos }
+  | Lcurly num_list Rcurly
+    { mk_typ (ATyp_nset $2) $startpos $endpos }
   | LcurlyBar num_list RcurlyBar
-    { let v = mk_typ (ATyp_var (mk_kid "n" $startpos $endpos)) $startpos $endpos in
-      let atom_id = mk_id (Id "atom") $startpos $endpos in
-      let atom_of_v = mk_typ (ATyp_app (atom_id, [v])) $startpos $endpos in
-      let kopt = mk_kopt (KOpt_kind (None, [mk_kid "n" $startpos $endpos], None)) $startpos $endpos in
-      mk_typ (ATyp_exist ([kopt], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+    { set_syntax_deprecated (loc $startpos $endpos);
+      mk_typ (ATyp_nset $2) $startpos $endpos }
   | Lcurly kopt_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kopt_list Comma typ Dot typ Rcurly
