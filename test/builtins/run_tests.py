@@ -66,7 +66,7 @@ def test_lem_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Lem from Sail
-                step('{} -no_warn -lem {}'.format(sail, filename))
+                step('{} -no_warn -lem -o {} {}'.format(sail, basename, filename))
 
                 # Create a directory to build the generated Lem and
                 # copy/move everything we need into it, as well as
@@ -76,7 +76,7 @@ def test_lem_builtins(name):
                 step('mv {}_types.lem _lbuild_{}'.format(basename, basename))
                 step('cp myocamlbuild.ml _lbuild_{}'.format(basename))
                 os.chdir('_lbuild_{}'.format(basename))
-                step('ln -s $SAIL_DIR/src/gen_lib/ gen_lib')
+                step('ln -s {}/src/gen_lib/ gen_lib'.format(sail_dir))
 
                 # Use ocamlbuild to build the lem to OCaml using the
                 # myocamlbuild.ml rule
@@ -111,9 +111,9 @@ def test_coq_builtins(name):
                 os.chdir('_coqbuild_{}'.format(basename))
 
                 # TODO: find bbv properly
-                step('coqc -Q $SAIL_DIR/lib/coq Sail {}_types.v'.format(basename))
-                step('coqc -Q $SAIL_DIR/lib/coq Sail {}.v'.format(basename))
-                step('coqtop -Q "$SAIL_DIR/lib/coq" Sail -require-import {}_types -require-import {} -l test.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
+                step('coqc {}_types.v'.format(basename))
+                step('coqc {}.v'.format(basename))
+                step('coqtop -require-import {}_types -require-import {} -l test.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
 
                 os.chdir('..')
                 step('rm -r _coqbuild_{}'.format(basename))

@@ -119,13 +119,13 @@ def test_lem(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem {}'.format(sail, filename))
+                step('{} -lem -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
                 step('cp {}*.lem _lbuild_{}'.format(basename, basename))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
                 step('cp ../../src/gen_lib/*.lem _lbuild_{}'.format(basename))
                 os.chdir('_lbuild_{}'.format(basename))
-                step('echo "let _ = {}.main ()" > main.ml'.format(basename.capitalize()))
+                step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
                 step('./main.native 1> {}.lresult'.format(basename))
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))
