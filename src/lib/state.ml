@@ -161,10 +161,6 @@ let generate_initial_regstate env defs =
             else if string_of_id id = "real" then "0"
             else if string_of_id id = "string" then "\"\""
             else if string_of_id id = "unit" then "()"
-            else if Env.is_bitfield id env then (
-              let v = lookup_init_val vals (fst (Env.get_bitfield id env)) in
-              Printf.sprintf "<| %s_bits = %s |>" (string_of_id id) v
-            )
             else Bindings.find id vals []
         | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
         | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "atom" -> string_of_nexp nexp
