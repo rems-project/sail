@@ -4,6 +4,8 @@ $include <prelude.sail>
 $include <generic_equality.sail>
 $include <exception.sail>
 
+$option -undefined_gen
+
 val decode : bits(32) -> unit
 
 overload operator - = {sub_bits}
