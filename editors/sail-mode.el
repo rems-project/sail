@@ -22,11 +22,11 @@
 
 (require 'easymenu)
 
-(defvar sail2-mode-hook nil)
+(defvar sail-mode-hook nil)
 
-(add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
+(add-to-list 'auto-mode-alist '("\\.sail\\'" . sail-mode))
 
-(defconst sail2-keywords
+(defconst sail-keywords
   '("val" "outcome" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
@@ -34,24 +34,24 @@
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
     "mapping" "where" "with" "implicit" "instantiation" "impl"))
 
-(defconst sail2-kinds
+(defconst sail-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"
     "barr" "depend" "rreg" "wreg" "rmem" "rmemt" "wmv" "wmvt" "eamem" "wmem"
     "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 
-(defconst sail2-types
+(defconst sail-types
   '("vector" "bitvector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option" "result"))
 
-(defconst sail2-special
+(defconst sail-special
   '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
     "$define" "$include" "$ifdef" "$ifndef" "$iftarget" "$else" "$endif" "$option" "$optimize" "$non_exec"
     "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert" "$sail_internal" "$target_set"))
 
-(defconst sail2-font-lock-keywords
-  `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)
-    (,(regexp-opt sail2-kinds 'symbols) . font-lock-builtin-face)
-    (,(regexp-opt sail2-types 'symbols) . font-lock-type-face)
-    (,(regexp-opt sail2-special 'symbols) . font-lock-preprocessor-face)
+(defconst sail-font-lock-keywords
+  `((,(regexp-opt sail-keywords 'symbols) . font-lock-keyword-face)
+    (,(regexp-opt sail-kinds 'symbols) . font-lock-builtin-face)
+    (,(regexp-opt sail-types 'symbols) . font-lock-type-face)
+    (,(regexp-opt sail-special 'symbols) . font-lock-preprocessor-face)
     ("~" . font-lock-negation-char-face)
     ("\\(::\\)<" 1 font-lock-keyword-face)
     ("@" . font-lock-preprocessor-face)
@@ -67,7 +67,7 @@
     ("$include \\(\".+\"\\)" 1 font-lock-string-face)
     ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
 
-(defconst sail2-mode-syntax-table
+(defconst sail-mode-syntax-table
   (let ((st (make-syntax-table)))
     (modify-syntax-entry ?> "." st)
     (modify-syntax-entry ?_ "w" st)
@@ -76,24 +76,24 @@
     (modify-syntax-entry ?/ ". 124b" st)
     (modify-syntax-entry ?\n "> b" st)
     st)
-  "Syntax table for Sail2 mode")
+  "Syntax table for Sail mode")
 
-(defun sail2-mode ()
+(defun sail-mode ()
   "Major mode for editing Sail Language files"
   (interactive)
   (kill-all-local-variables)
-  (set-syntax-table sail2-mode-syntax-table)
+  (set-syntax-table sail-mode-syntax-table)
   (use-local-map sail-mode-map)
   (sail-build-menu)
-  (setq font-lock-defaults '(sail2-font-lock-keywords))
+  (setq font-lock-defaults '(sail-font-lock-keywords))
   (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
   (setq comment-start "/*")
   (setq comment-end "*/")
-  (setq major-mode 'sail2-mode)
-  (setq mode-name "Sail2")
-  (add-hook 'sail2-mode-hook
+  (setq major-mode 'sail-mode)
+  (setq mode-name "Sail")
+  (add-hook 'sail-mode-hook
 	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
-  (run-hooks 'sail2-mode-hook))
+  (run-hooks 'sail-mode-hook))
 
 (defvar sail-process nil)
 
@@ -204,6 +204,6 @@
       ["Type at cursor" sail-type-at-cursor t]))
   (easy-menu-add sail-mode-menu))
 
-(provide 'sail2-mode)
+(provide 'sail-mode)
 
 ;;; sail-mode.el ends here
