@@ -23,6 +23,11 @@ let undefined_real () = choose_real "undefined_real"
 let undefined_range i j = choose_int_in_range "undefined_range" i j
 let undefined_atom i = return i
 
+
 (* TODO: Choose each vector element individually *)
 val undefined_vector : forall 'rv 'a 'e. integer -> 'a -> monad 'rv (list 'a) 'e
 let undefined_vector len u = return (repeat [u] len)
+val undefined_list : forall 'rv 'a 'e. Register_Value 'rv => 'a -> monad 'rv (list 'a) 'e
+let undefined_list a =
+  choose_nat ("undefined_list length") >>= fun n ->
+  return (replicate (natFromInteger n) a)
