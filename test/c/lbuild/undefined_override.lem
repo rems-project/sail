@@ -2,8 +2,15 @@ open import Pervasives_extra
 open import Sail2_values
 open import Sail2_prompt_monad
 
-(* Override the normal definitions for these to provide something executable
-   and determinstic. *)
+(* Override the normal definitions for these to provide something
+   executable and determinstic.
+
+   The Lem files are compiled individually here, so we need to include
+   the modules with the definitions that we're overriding to ensure a
+   consistent renaming by Lem. *)
+
+open import Sail2_prompt
+open import Sail2_undefined
 
 val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
 let internal_pick l =
@@ -32,3 +39,6 @@ val undefined_range : forall 'rv 'e. Register_Value 'rv => integer -> integer ->
 let undefined_range i j = return i
 val undefined_atom : forall 'rv 'e. Register_Value 'rv => integer -> monad 'rv integer 'e
 let undefined_atom i = return i
+
+val undefined_list : forall 'rv 'a 'e. Register_Value 'rv => 'a -> monad 'rv (list 'a) 'e
+let undefined_list a = return []

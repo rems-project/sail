@@ -3,15 +3,7 @@ default Order dec
 $option -undefined_gen
 
 $include <prelude.sail>
-
-val "eq_anything" : forall ('a: Type). ('a, 'a) -> bool
-
-overload operator == = {eq_anything}
-
-function neq_anything forall ('a: Type). (x: 'a, y: 'a) -> bool =
-  not_bool(x == y)
-
-overload operator != = {neq_anything}
+$include <generic_equality.sail>
 
 val "print_endline" : string -> unit
 

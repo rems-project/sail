@@ -6,6 +6,8 @@ $include <vector_dec.sail>
 
 $include <exception_basic.sail>
 
+$option -undefined_gen
+
 val sub_vec_int = {
   c: "sub_bits_int",
   _: "sub_vec_int"
