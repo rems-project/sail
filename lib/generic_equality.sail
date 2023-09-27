@@ -74,7 +74,7 @@ val eq_anything = pure {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic
 
 overload operator == = {eq_anything}
 
-val neq_anything : forall ('a : Type). ('a, 'a) -> bool
+val neq_anything = pure {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, 'a) -> bool
 
 function neq_anything(x, y) = not_bool(eq_anything(x, y))
 

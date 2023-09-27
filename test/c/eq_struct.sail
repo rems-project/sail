@@ -2,18 +2,9 @@ default Order dec
 
 $include <flow.sail>
 $include <exception_basic.sail>
-
-val eq = { lem: "eq", _: "eq_anything" } : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator == = {eq}
-
-val neq : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator != = {neq}
+$include <generic_equality.sail>
 
 overload ~ = {not_bool}
-
-function neq(x, y) = ~(eq(x, y))
 
 struct S = {
   field1: int,
