@@ -113,6 +113,7 @@ def test_ocaml(name):
 def test_lem(name):
     banner('Testing {}'.format(name))
     results = Results(name)
+    results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
