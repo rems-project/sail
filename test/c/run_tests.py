@@ -119,7 +119,7 @@ def test_lem(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem -o {} {}'.format(sail, basename, filename))
+                step('{} -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
                 step('cp {}*.lem _lbuild_{}'.format(basename, basename))
                 step('cp lbuild/* _lbuild_{}'.format(basename))

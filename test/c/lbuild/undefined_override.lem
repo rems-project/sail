@@ -1,0 +1,34 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_prompt_monad
+
+(* Override the normal definitions for these to provide something executable
+   and determinstic. *)
+
+val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
+let internal_pick l =
+  match l with
+  | [] -> Fail "internal_pick on empty list"
+  | h :: _ -> return h
+  end
+
+val undefined_bitvector : forall 'rv 'a 'e. Bitvector 'a, Register_Value 'rv => integer -> monad 'rv 'a 'e
+let undefined_bitvector n = return (of_int n 0)
+
+let undefined_bits = undefined_bitvector
+val undefined_bit : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv bitU 'e
+let undefined_bit () = return BU
+val undefined_bool : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv bool 'e
+let undefined_bool () = return false
+val undefined_string : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv string 'e
+let undefined_string () = return "undefined_string"
+val undefined_int : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv integer 'e
+let undefined_int () = return (0 : integer)
+val undefined_nat : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv integer 'e
+let undefined_nat () = return (0 : integer)
+val undefined_real : forall 'rv 'e. Register_Value 'rv => unit -> monad 'rv real 'e
+let undefined_real () = return (0 : real)
+val undefined_range : forall 'rv 'e. Register_Value 'rv => integer -> integer -> monad 'rv integer 'e
+let undefined_range i j = return i
+val undefined_atom : forall 'rv 'e. Register_Value 'rv => integer -> monad 'rv integer 'e
+let undefined_atom i = return i

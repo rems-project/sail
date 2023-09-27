@@ -11,6 +11,10 @@ let rec liftState ra m =
   | Read_reg (r, k)             -> bindS (read_regvalS ra r)             (fun v -> liftState ra (k v))
   | (Excl_res k)               -> bindS (excl_resultS ())               (fun v -> liftState ra (k v))
 (*  | (Choose _ k)               -> bindS (chooseS universal)             (fun v -> liftState ra (k v))*)
+(*  Unconstrained choice of a regval isn't useful for execution,
+    because we don't know what the actual expected type is.  Instead
+    we override the undefined_* functions in Lem. *)
+  | Choose (_, k) -> failS "Can't do Choose at all right now"
   | Write_reg (r, v, k)          -> seqS (write_regvalS ra r v)           (liftState ra k)
   | Write_ea (_, _, _, k)         -> liftState ra k
   | (Footprint k)              -> liftState ra k
@@ -18,7 +22,6 @@ let rec liftState ra m =
   | Print (_, k)                -> liftState ra k (* TODO *)
   | (Fail descr)               -> failS descr
   | (Exception e)              -> throwS e
-| Choose (_, k) -> failS "Can't do Choose at all right now"
 ;;
 
 match Pset.elements (liftState MODULENAME_types.register_accessors (MODULENAME.main ()) (init_state REGSTATE)) with

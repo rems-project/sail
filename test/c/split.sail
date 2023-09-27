@@ -4,6 +4,8 @@ $include <prelude.sail>
 $include <generic_equality.sail>
 $include <string.sail>
 
+$option -undefined_gen
+
 val split : forall 'n 'm, 'n * 'm == 64 & 'n in {1, 2, 4, 8}. (int('n), int('m), bits(64)) -> vector('n, dec, bits('m)) effect {undef}
 
 function split(n, m, bv) = {
