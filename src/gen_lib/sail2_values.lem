@@ -518,6 +518,10 @@ let hex_str i =
   if i = 0 then "0x0" else
   "0x" ^ toString (hex_str_aux (naturalFromInteger (abs i)) [])
 
+val hex_str_upper : integer -> string
+
+let hex_str_upper i = hex_str i
+
 (*** List operations *)
 
 let inline (^^) = append_list
