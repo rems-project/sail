@@ -942,31 +942,32 @@ let initial_gstate primops defs env =
     typecheck_env = env;
   }
 
-let rec initialize_registers allow_registers gstate =
+let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
     | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> begin
         match opt_exp with
-        | None ->
+        | None when undef_registers ->
             let env = Type_check.env_of_annot annot in
             let typ = Type_check.Env.expand_synonyms env typ in
             let exp = mk_exp (E_typ (typ, mk_exp (E_lit (mk_lit L_undef)))) in
             let exp = Type_check.check_exp env exp typ in
             { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+        | None -> gstate
         | Some exp ->
             { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
       end
     | _ -> gstate
   in
-  function def :: defs -> initialize_registers allow_registers (process_def def) defs | [] -> gstate
+  function def :: defs -> initialize_registers allow_registers undef_registers (process_def def) defs | [] -> gstate
 
-let initial_state ?(registers = true) ast env primops =
+let initial_state ?(registers = true) ?(undef_registers = true) ast env primops =
   let gstate = initial_gstate primops ast.defs env in
   let add_function gstate = function
     | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
   let gstate = List.fold_left add_function gstate ast.defs in
-  let gstate = { (initialize_registers registers gstate ast.defs) with allow_registers = registers } in
+  let gstate = { (initialize_registers registers undef_registers gstate ast.defs) with allow_registers = registers } in
   (initial_lstate, gstate)
 
 type value_result = Value_success of value | Value_error of exn

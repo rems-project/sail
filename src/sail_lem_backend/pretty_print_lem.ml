@@ -1738,10 +1738,10 @@ let find_exc_typ defs =
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env { defs; _ }
+let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env ({ defs; _ } as ast)
     concurrency_monad_params top_line =
   (* let regtypes = find_regtypes d in *)
-  let state_ids = State.generate_regstate_defs type_env defs |> val_spec_ids in
+  let state_ids = State.generate_regstate_defs type_env ast |> val_spec_ids in
   let is_state_def = function
     | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
     | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
