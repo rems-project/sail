@@ -792,7 +792,7 @@ let doc_exp_lem, doc_let_lem =
       )
     | E_vector_append (le, re) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_append should have been rewritten before pretty-printing")
-    | E_cons (le, re) -> doc_op (group (colon ^^ colon)) (expY le) (expY re)
+    | E_cons (le, re) -> wrap_parens (doc_op (group (colon ^^ colon)) (expY le) (expY re))
     | E_if (c, t, e) -> wrap_parens (align (if_exp ctxt false c t e))
     | E_for (id, exp1, exp2, exp3, Ord_aux (order, _), exp4) ->
         raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
