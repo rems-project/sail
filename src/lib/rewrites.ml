@@ -1430,6 +1430,11 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
   match exp with
   | E_match (e, ps) when List.exists is_guarded_pexp ps || not (pats_complete l (env_of full_exp) ps (typ_of full_exp))
     ->
+      let add_mapping_match (E_aux (e, (l, a)) as exp) =
+        if Option.is_some (get_attribute "mapping_match" (untyped_annot annot)) then
+          E_aux (e, (l, map_uannot (add_attribute Parse_ast.Unknown "mapping_match" "") a))
+        else exp
+      in
       let clause = function
         | Pat_aux (Pat_exp (pat, body), annot) -> (pat, None, rewrite_rec body, annot)
         | Pat_aux (Pat_when (pat, guard, body), annot) -> (pat, Some (rewrite_rec guard), rewrite_rec body, annot)
@@ -1444,10 +1449,10 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
         let pat_e' = fresh_id_pat "p__" (el, mk_tannot (env_of e) (typ_of e)) in
         let exp_e' = pat_to_exp pat_e' in
         let letbind_e = LB_aux (LB_val (pat_e', e), (el, eannot)) in
-        let exp' = case_exp exp_e' (typ_of full_exp) clauses in
+        let exp' = add_mapping_match (case_exp exp_e' (typ_of full_exp) clauses) in
         rewrap (E_let (letbind_e, exp'))
       )
-      else case_exp e (typ_of full_exp) clauses
+      else add_mapping_match (case_exp e (typ_of full_exp) clauses)
   | E_try (e, ps) when List.exists is_guarded_pexp ps || not (pats_complete l (env_of full_exp) ps (typ_of full_exp)) ->
       let e = rewrite_rec e in
       let clause = function
