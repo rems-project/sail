@@ -95,9 +95,9 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, _), (_, tannot))), _) ->
+      | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), (_, tannot))), _) ->
           let env = match destruct_tannot tannot with Some (env, _) -> env | _ -> Env.empty in
-          (Env.expand_synonyms env typ, id) :: acc
+          (Env.expand_synonyms env typ, id, Option.is_some opt_exp) :: acc
       | _ -> acc
     )
     [] defs
@@ -130,21 +130,31 @@ let generate_regstate env registers =
     else (
       let fields =
         if !opt_type_grouped_regstate then (
-          let type_field (typ, id) =
+          let type_field (typ, id, has_init) =
             let base_typ = regval_base_typ env typ in
             (function_typ [string_typ] base_typ, regstate_field base_typ)
           in
           let cmp_id (_, id1) (_, id2) = Id.compare id1 id2 in
           List.map type_field registers |> List.sort_uniq cmp_id
         )
-        else registers
+        else List.map (fun (t, i, _) -> (t, i)) registers
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
     )
   in
   [DEF_aux (DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))), mk_def_annot Unknown)]
 
-let generate_initial_regstate env defs =
+let generate_initial_regstate env ast =
+  let initial_values =
+    (* We need to turn off intialisation of registers without an
+       initialiser to avoid calling undefined_* functions that might
+       not exist (when -undefined_gen is off). *)
+    let _, initial_state =
+      Interpreter.initial_state ~registers:true ~undef_registers:false ast env Constant_fold.safe_primops
+    in
+    initial_state.Interpreter.registers
+  in
+  let defs = ast.defs in
   let registers = find_registers defs in
   if registers = [] then []
   else (
@@ -230,7 +240,14 @@ let generate_initial_regstate env defs =
           )
           ([], Bindings.empty) defs
       in
-      let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in
+      let init_reg (typ, id, has_init) =
+        let init_val =
+          match Bindings.find_opt id initial_values with
+          | Some v when has_init -> Value.string_of_value v
+          | _ -> lookup_init_val init_vals typ
+        in
+        string_of_id id ^ " = " ^ init_val
+      in
       List.map (defs_of_string __POS__)
         (init_defs
         @ ["let initial_regstate : regstate = struct { " ^ String.concat ", " (List.map init_reg registers) ^ " }"]
@@ -400,7 +417,7 @@ let register_refs_lem pp_tannot env registers =
         "";
       ]
   in
-  let register_ref (typ, id) =
+  let register_ref (typ, id, _) =
     let idd = string (string_of_id id) in
     let read_from, write_to =
       if !opt_type_grouped_regstate then (
@@ -458,7 +475,7 @@ let register_refs_lem pp_tannot env registers =
       ]
   in
   let refs = separate_map hardline register_ref registers in
-  let mk_reg_assoc (_, id) =
+  let mk_reg_assoc (_, id, _) =
     let idd = string_of_id id in
     let qidd = "\"" ^ idd ^ "\"" in
     string ("    (" ^ qidd ^ ", register_ops_of " ^ idd ^ "_ref)")
@@ -499,15 +516,19 @@ let generate_isa_lemmas env defs =
   in
   let remove_underscores str = remove_leading_underscores (remove_trailing_underscores str) in
   let registers = find_registers defs in
-  let regtyp_ids = register_base_types env (List.map fst registers) |> Bindings.bindings |> List.map fst in
-  let bitfield_ids = register_bitfield_types env (List.map fst registers) |> Bindings.bindings |> List.map fst in
+  let regtyp_ids =
+    register_base_types env (List.map (fun (x, _, _) -> x) registers) |> Bindings.bindings |> List.map fst
+  in
+  let bitfield_ids =
+    register_bitfield_types env (List.map (fun (x, _, _) -> x) registers) |> Bindings.bindings |> List.map fst
+  in
   let regval_class_typ_ids = List.map (fun (t, _) -> mk_id t) regval_class_typs_lem in
   let register_defs =
     let reg_id id = remove_leading_underscores (string_of_id id) in
     hang 2
       (flow_map (break 1) string
          (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"]
-         @ List.map (fun (typ, id) -> reg_id id ^ "_ref_def") registers
+         @ List.map (fun (typ, id, _) -> reg_id id ^ "_ref_def") registers
          )
       )
   in
@@ -540,7 +561,7 @@ let generate_isa_lemmas env defs =
     ^^ hardline
     ^^ string ("  by (auto simp: " ^ of_rv ^ "_def " ^ rv_of ^ "_def)")
   in
-  let register_lemmas (typ, id) =
+  let register_lemmas (typ, id, _) =
     let id = remove_leading_underscores (string_of_id id) in
     separate_map hardline string
       [
@@ -583,7 +604,7 @@ let generate_isa_lemmas env defs =
   let field_id_stripped typ = remove_trailing_underscores (field_id typ) in
   (* TODO: Handle bitfield registers *)
   let set_regval_type_cases =
-    let add_reg_case cases (typ, id) =
+    let add_reg_case cases (typ, id, _) =
       let of_regval = remove_underscores (fst (regval_convs_isa typ)) in
       let case =
         "(" ^ field_id_stripped typ ^ ") v where " ^ "\"" ^ of_regval ^ " rv = Some v\" and " ^ "\"s' = s\\<lparr>"
@@ -592,7 +613,7 @@ let generate_isa_lemmas env defs =
       StringMap.add (field_id typ) case cases
     in
     let cases = List.fold_left add_reg_case StringMap.empty registers |> StringMap.bindings |> List.map snd in
-    let prove_case (typ, id) =
+    let prove_case (typ, id, _) =
       "    subgoal using " ^ field_id_stripped typ ^ " by (auto simp: register_defs fun_upd_def)"
     in
     if List.length cases > 0 && !opt_type_grouped_regstate then
@@ -611,7 +632,7 @@ let generate_isa_lemmas env defs =
     else string ""
   in
   let get_regval_type_cases =
-    let add_reg_case cases (typ, id) =
+    let add_reg_case cases (typ, id, _) =
       let regval_of = remove_underscores (snd (regval_convs_isa typ)) in
       let case =
         "(" ^ field_id_stripped typ ^ ") \"get_regval r = (\\<lambda>s. Some (" ^ regval_of ^ " (" ^ field_id typ
@@ -622,7 +643,7 @@ let generate_isa_lemmas env defs =
     let cases = List.fold_left add_reg_case StringMap.empty registers in
     let fail_case = "(None) \"get_regval r = (\\<lambda>s. None)\"" in
     let cases = (StringMap.bindings cases |> List.map snd) @ [fail_case] in
-    let prove_case (typ, id) = "    subgoal using " ^ field_id_stripped typ ^ " by (auto simp: register_defs)" in
+    let prove_case (typ, id, _) = "    subgoal using " ^ field_id_stripped typ ^ " by (auto simp: register_defs)" in
     if !opt_type_grouped_regstate then
       string "lemma get_regval_type_cases:" ^^ hardline ^^ string "  fixes r :: string" ^^ hardline
       ^^ string "  obtains "
@@ -746,7 +767,7 @@ let register_refs_coq doc_id env registers =
         "";
       ]
   in
-  let register_ref (typ, id) =
+  let register_ref (typ, id, _) =
     let idd = doc_id id in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_coq env typ in
@@ -779,7 +800,7 @@ let register_refs_coq doc_id env registers =
       ]
   in
   let refs = separate_map hardline register_ref registers in
-  let get_set_reg (_, id) =
+  let get_set_reg (_, id, _) =
     let idd = doc_id id in
     ( concat
         [
@@ -815,7 +836,8 @@ let register_refs_coq doc_id env registers =
   in
   separate hardline [generic_convs; refs; getters_setters]
 
-let generate_regstate_defs env defs =
+let generate_regstate_defs env ast =
+  let defs = ast.defs in
   (* FIXME We currently don't want to generate undefined_type functions
      for register state and values.  For the Lem backend, this would require
      taking the dependencies of those functions into account when partitioning
@@ -823,7 +845,7 @@ let generate_regstate_defs env defs =
   let gen_undef = !Initial_check.opt_undefined_gen in
   Initial_check.opt_undefined_gen := false;
   let registers = find_registers defs in
-  let regtyps = List.map fst registers in
+  let regtyps = List.map (fun (x, _, _) -> x) registers in
   let base_regtyps = register_base_types env regtyps in
   let bitfield_regtyps = register_bitfield_types env regtyps in
   let regtyps_with_ids = Bindings.union (fun _ x _ -> Some x) base_regtyps bitfield_regtyps in
@@ -838,7 +860,7 @@ let generate_regstate_defs env defs =
        a regstate record with registers grouped per type; the latter would
        require record fields storing functions, which is not supported in
        Sail. *)
-    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else generate_initial_regstate env defs
+    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else generate_initial_regstate env ast
   in
   let defs =
     option_typ @ regval_typ @ regstate_typ @ initregstate
@@ -851,5 +873,5 @@ let generate_regstate_defs env defs =
   typdefs @ valspecs @ defs
 
 let add_regstate_defs mwords env ast =
-  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs env ast.defs) in
+  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs env ast) in
   (env, append_ast_defs ast reg_defs)
