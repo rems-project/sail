@@ -1,5 +1,4 @@
-
-val "print" : string -> unit
+$include <prelude.sail>
 
 val main : unit -> unit
 

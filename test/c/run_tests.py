@@ -113,7 +113,20 @@ def test_ocaml(name):
 def test_lem(name):
     banner('Testing {}'.format(name))
     results = Results(name)
-    results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors")
+    results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Lem library")
+    results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Lem")
+    results.expect_failure("for_shadow.sail", "Pure loops aren't current supported for Lem (and don't really make sense)")
+    results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
+    results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
+    results.expect_failure("real.sail", "print_real not available for Lem at present")
+    results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
+    results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
+    results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
+    results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
+    results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
+    results.expect_failure("poly_outcome.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -128,8 +141,10 @@ def test_lem(name):
                 os.chdir('_lbuild_{}'.format(basename))
                 step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
-                step('./main.native 1> {}.lresult'.format(basename))
+                step('./main.native 1> {}.lresult 2> {}.lerr'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))
+                if os.path.exists('../{}.err_expect'.format(basename)):
+                    step('diff {}.lerr ../{}.err_expect'.format(basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
