@@ -781,6 +781,20 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
       | Some substs1, Some substs2 -> Some (substs1 @ substs2)
       | _ -> None
     )
+  | P_struct (fields1, wild1), P_struct (fields2, wild2) ->
+      List.fold_left
+        (fun acc (f1, p1) ->
+          match List.find_opt (fun (f2, _) -> Id.compare f1 f2 == 0) fields2 with
+          | Some (_, p2) -> (
+              match (subsumes_pat p1 p2, acc) with Some subst, Some substs -> Some (subst @ substs) | _ -> None
+            )
+          | None -> (
+              match wild2 with
+              | FP_wild _ -> if is_irrefutable_pattern p1 then acc else None
+              | FP_no_wild -> Reporting.unreachable (fst annot2) __POS__ "Field mismatch in guarded patterns rewrite"
+            )
+        )
+        (Some []) fields1
   | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
   | _ -> None
 
