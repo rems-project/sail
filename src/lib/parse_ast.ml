@@ -311,8 +311,14 @@ type rec_opt_aux =
 type funcl_aux = (* Function clause *)
   | FCL_funcl of id * pexp
 
-type type_union_aux = (* Type union constructors *)
-  | Tu_ty_id of atyp * id | Tu_ty_anon_rec of (atyp * id) list * id
+type type_union = Tu_aux of type_union_aux * l
+
+and type_union_aux =
+  (* Type union constructors *)
+  | Tu_attribute of string * string * type_union
+  | Tu_doc of string * type_union
+  | Tu_ty_id of atyp * id
+  | Tu_ty_anon_rec of (atyp * id) list * id
 
 type tannot_opt = Typ_annot_opt_aux of tannot_opt_aux * l
 
@@ -321,8 +327,6 @@ type effect_opt = Effect_opt_aux of effect_opt_aux * l
 type rec_opt = Rec_aux of rec_opt_aux * l
 
 type funcl = FCL_aux of funcl_aux * l
-
-type type_union = Tu_aux of type_union_aux * l
 
 type subst_aux =
   (* instantiation substitution *)

@@ -856,10 +856,18 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
       l
     )
 
-let to_ast_type_union ctx = function
+let rec to_ast_type_union doc attrs ctx = function
+  | P.Tu_aux (P.Tu_doc (doc_comment, tu), l) -> begin
+      match doc with
+      | Some _ -> raise (Reporting.err_general l "Union constructor has multiple documentation comments")
+      | None -> to_ast_type_union (Some doc_comment) attrs ctx tu
+    end
+  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc ((attr, arg, l) :: attrs) ctx tu
   | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
+      let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
+      let annot = { annot with doc_comment = doc } in
       let typ = to_ast_typ ctx atyp in
-      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), l)
+      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), annot)
   | P.Tu_aux (_, l) ->
       raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
@@ -880,14 +888,26 @@ let anon_rec_constructor_typ record_id = function
       | args -> P.ATyp_aux (P.ATyp_app (record_id, args), Generated l)
     )
 
-let realize_union_anon_rec_arm union_id typq = function
-  | P.Tu_aux (P.Tu_ty_id _, _) as arm -> (None, arm)
-  | P.Tu_aux (P.Tu_ty_anon_rec (fields, id), l) ->
+(* Strip attributes and doc comment from a type union *)
+let rec type_union_strip = function
+  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) ->
+      let unstrip, tu = type_union_strip tu in
+      ((fun tu -> P.Tu_aux (P.Tu_attribute (attr, arg, unstrip tu), l)), tu)
+  | P.Tu_aux (P.Tu_doc (doc, tu), l) ->
+      let unstrip, tu = type_union_strip tu in
+      ((fun tu -> P.Tu_aux (P.Tu_doc (doc, unstrip tu), l)), tu)
+  | tu -> ((fun tu -> tu), tu)
+
+let realize_union_anon_rec_arm union_id typq (P.Tu_aux (_, l) as tu) =
+  match type_union_strip tu with
+  | unstrip, (P.Tu_aux (P.Tu_ty_id _, _) as arm) -> (None, unstrip arm)
+  | unstrip, P.Tu_aux (P.Tu_ty_anon_rec (fields, id), l) ->
       let open Parse_ast in
       let record_str = "_" ^ string_of_parse_id union_id ^ "_" ^ string_of_parse_id id ^ "_record" in
       let record_id = Id_aux (Id record_str, Generated l) in
       let new_arm = Tu_aux (Tu_ty_id (anon_rec_constructor_typ record_id typq, id), Generated l) in
-      (Some (record_id, fields, l), new_arm)
+      (Some (record_id, fields, l), unstrip new_arm)
+  | _, _ -> Reporting.unreachable l __POS__ "Impossible base type union case"
 
 let rec realize_union_anon_rec_types orig_union arms =
   match orig_union with
@@ -1018,7 +1038,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
       (* Now generate the AST union type *)
       let id = to_ast_reserved_type_id ctx id in
       let typq, typq_ctx = to_ast_typquant ctx typq in
-      let arms = List.map (to_ast_type_union (add_constructor id typq typq_ctx)) arms in
+      let arms = List.map (to_ast_type_union None [] (add_constructor id typq typq_ctx)) arms in
       ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)]
         @ generated_records,
         add_constructor id typq ctx
@@ -1175,7 +1195,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
                     )
                 | None -> (None, scattered_ctx)
               in
-              let tu = to_ast_type_union scattered_ctx tu in
+              let tu = to_ast_type_union None [] scattered_ctx tu in
               (extra_def, SD_unioncl (id, tu), ctx)
           | None -> raise (Reporting.err_typ l ("No scattered union declaration found for " ^ string_of_id id))
         end

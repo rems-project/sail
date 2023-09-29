@@ -1127,7 +1127,9 @@ let is_variant id env = Bindings.mem id env.global.unions
 let add_variant id (typq, constructors) env =
   let constructors =
     List.map
-      (fun (Tu_aux (Tu_ty_id (typ, id), l)) -> Tu_aux (Tu_ty_id (expand_synonyms (add_typquant l typq env) typ, id), l))
+      (fun (Tu_aux (Tu_ty_id (typ, id), def_annot)) ->
+        Tu_aux (Tu_ty_id (expand_synonyms (add_typquant def_annot.loc typq env) typ, id), def_annot)
+      )
       constructors
   in
   if bound_typ_id env id then already_bound "union" id env

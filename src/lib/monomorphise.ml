@@ -657,12 +657,16 @@ let split_defs target all_errors (splits : split_req list) env ast =
   let no_errors_happened = ref true in
   let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors defs =
-    let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l)) =
-      let env = Env.add_typquant l q env in
+    let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), def_annot)) =
+      let env = Env.add_typquant def_annot.loc q env in
       match split_src_type error_opt env id ty q with
-      | None -> ([], [Tu_aux (Tu_ty_id (ty, id), l)])
+      | None -> ([], [Tu_aux (Tu_ty_id (ty, id), def_annot)])
       | Some variants ->
-          ([(id, variants)], List.map (fun (insts, id', ty) -> Tu_aux (Tu_ty_id (ty, id'), Generated l)) variants)
+          ( [(id, variants)],
+            List.map
+              (fun (insts, id', ty) -> Tu_aux (Tu_ty_id (ty, id'), def_annot_map_loc (fun l -> Generated l) def_annot))
+              variants
+          )
     in
     let sc_type_def (TD_aux (tda, annot) as td) =
       match tda with

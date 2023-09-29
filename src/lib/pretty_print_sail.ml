@@ -84,6 +84,15 @@ let doc_kid kid = string (Ast_util.string_of_kid kid)
 let doc_attr attr arg =
   if arg = "" then Printf.ksprintf string "$[%s]" attr ^^ space else Printf.ksprintf string "$[%s %s]" attr arg ^^ space
 
+let get_column l = match Reporting.simp_loc l with Some (l1, _) -> Some (l1.pos_cnum - l1.pos_bol) | None -> None
+
+let doc_def_annot def_annot =
+  (match def_annot.doc_comment with Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline | _ -> empty)
+  ^^
+  match def_annot.attrs with
+  | [] -> empty
+  | attrs -> separate_map hardline (fun (_, attr, arg) -> doc_attr attr arg) attrs ^^ hardline
+
 let doc_kopt_no_parens = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
@@ -648,7 +657,8 @@ let doc_dec (DEC_aux (reg, _)) =
 
 let doc_field (typ, id) = separate space [doc_id id; colon; doc_typ typ]
 
-let doc_union (Tu_aux (Tu_ty_id (typ, id), _)) = separate space [doc_id id; colon; doc_typ typ]
+let doc_union (Tu_aux (Tu_ty_id (typ, id), def_annot)) =
+  doc_def_annot def_annot ^^ separate space [doc_id id; colon; doc_typ typ]
 
 let rec doc_index_range (BF_aux (ir, _)) =
   match ir with
@@ -770,21 +780,8 @@ let doc_filter = function
   | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
   | _ -> true
 
-let rec doc_def_no_hardline ?(comment = false) (DEF_aux (aux, def_annot)) =
-  ( match def_annot.doc_comment with
-  | Some str when comment -> string "/*! " ^^ string str ^^ string " */" ^^ hardline
-  | _ -> empty
-  )
-  ^^ ( match def_annot.attrs with
-     | [] -> empty
-     | attrs ->
-         separate_map hardline
-           (fun (_, attr, arg) ->
-             if arg = "" then Printf.ksprintf string "$[%s]" attr else Printf.ksprintf string "$[%s %s]" attr arg
-           )
-           attrs
-         ^^ hardline
-     )
+let rec doc_def_no_hardline (DEF_aux (aux, def_annot)) =
+  doc_def_annot def_annot
   ^^
   match aux with
   | DEF_default df -> doc_default df
@@ -825,9 +822,9 @@ let rec doc_def_no_hardline ?(comment = false) (DEF_aux (aux, def_annot)) =
       separate space
         [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
 
-and doc_def ?(comment = false) def = group (doc_def_no_hardline ~comment def ^^ hardline)
+and doc_def def = group (doc_def_no_hardline def ^^ hardline)
 
-let doc_ast ?(comment = false) { defs; _ } = separate_map hardline (doc_def ~comment) (List.filter doc_filter defs)
+let doc_ast { defs; _ } = separate_map hardline doc_def (List.filter doc_filter defs)
 
 (* This function is intended to reformat machine-generated Sail into
    something a bit more readable, it is not intended to be used as a
@@ -853,7 +850,7 @@ let reformat dir { defs; _ } =
 
   let output_def def =
     match !file_stack with
-    | Some chan :: _ -> ToChannel.pretty 1. 120 chan (hardline ^^ doc_def ~comment:true def)
+    | Some chan :: _ -> ToChannel.pretty 1. 120 chan (hardline ^^ doc_def def)
     | None :: _ -> ()
     | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "No file for definition"
   in

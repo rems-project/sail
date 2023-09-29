@@ -309,7 +309,7 @@ type_def_aux  :: 'TD_' ::=
 
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
-  {{ aux _ l }}
+  {{ aux _ def_annot }}
   | typ id                                              :: :: ty_id
 
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 

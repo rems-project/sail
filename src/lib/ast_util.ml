@@ -1162,8 +1162,9 @@ let record_ids defs =
   IdSet.of_list (rec_ids defs)
 
 let rec get_scattered_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)), _) :: defs when Id.compare id uid = 0 ->
-      tu :: get_scattered_union_clauses id defs
+  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
+    ->
+      Tu_aux (tu, def_annot) :: get_scattered_union_clauses id defs
   | _ :: defs -> get_scattered_union_clauses id defs
   | [] -> []
 
