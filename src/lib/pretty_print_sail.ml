@@ -583,7 +583,9 @@ and doc_vector_update = function
   | VU_range (high, low, value) ->
       separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
 
-let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, _)), _)) =
+let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, _)), (def_annot, _))) =
+  doc_def_annot def_annot
+  ^^
   match pexp with
   | Pat_exp (pat, exp) -> group (separate space [doc_id id; doc_pat pat; equals; doc_exp_as_block exp])
   | Pat_when (pat, wh, exp) ->

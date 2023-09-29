@@ -308,7 +308,12 @@ type rec_opt_aux =
     Rec_none (* no termination measure *)
   | Rec_measure of pat * exp (* recursive with termination measure *)
 
-type funcl_aux = (* Function clause *)
+type funcl = FCL_aux of funcl_aux * l
+
+and funcl_aux =
+  (* Function clause *)
+  | FCL_attribute of string * string * funcl
+  | FCL_doc of string * funcl
   | FCL_funcl of id * pexp
 
 type type_union = Tu_aux of type_union_aux * l
@@ -325,8 +330,6 @@ type tannot_opt = Typ_annot_opt_aux of tannot_opt_aux * l
 type effect_opt = Effect_opt_aux of effect_opt_aux * l
 
 type rec_opt = Rec_aux of rec_opt_aux * l
-
-type funcl = FCL_aux of funcl_aux * l
 
 type subst_aux =
   (* instantiation substitution *)
