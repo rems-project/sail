@@ -4145,11 +4145,11 @@ let forbid_recursive_types type_l f =
     let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
     raise (Type_error (type_l, err_because (Err_other msg, l, err)))
 
-let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), l)) =
+let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), def_annot)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   let typ = mk_typ (Typ_fn ([arg_typ], ret_typ)) in
-  forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, arg_typ));
-  wf_binding l env (typq, typ);
+  forbid_recursive_types u_l (fun () -> wf_binding def_annot.loc non_rec_env (typq, arg_typ));
+  wf_binding def_annot.loc env (typq, typ);
   env |> Env.add_union_id v (typq, typ) |> Env.add_val_spec v (typq, typ)
 
 let check_record l env def_annot id typq fields =

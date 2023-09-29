@@ -1046,6 +1046,10 @@ struct_fields:
     { $1 :: $3 }
 
 type_union:
+  | attr = Attribute; tu = type_union
+    { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos $endpos) }
+  | doc = Doc; tu = type_union
+    { Tu_aux (Tu_doc (doc, tu), loc $startpos(doc) $endpos(doc)) }
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id Colon typ MinusGt typ
