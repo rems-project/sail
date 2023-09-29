@@ -75,12 +75,12 @@ def test_lem_builtins(name):
                 step('mv {}.lem _lbuild_{}'.format(basename, basename))
                 step('mv {}_types.lem _lbuild_{}'.format(basename, basename))
                 step('cp myocamlbuild.ml _lbuild_{}'.format(basename))
+                step('cp {}/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
-                step('ln -s {}/src/gen_lib/ gen_lib'.format(sail_dir))
 
                 # Use ocamlbuild to build the lem to OCaml using the
                 # myocamlbuild.ml rule
-                step('ocamlbuild -I gen_lib -package lem {}.native'.format(basename))
+                step('ocamlbuild -package lem {}.native'.format(basename))
                 step('./{}.native'.format(basename))
 
                 # Cleanup the build directory

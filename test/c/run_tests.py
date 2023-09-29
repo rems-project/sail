@@ -135,9 +135,9 @@ def test_lem(name):
             if tests[filename] == 0:
                 step('{} -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
-                step('cp {}*.lem _lbuild_{}'.format(basename, basename))
+                step('cp {}/*.lem _lbuild_{}'.format(basename, basename))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
-                step('cp ../../src/gen_lib/*.lem _lbuild_{}'.format(basename))
+                step('cp {}/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
                 step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
@@ -146,6 +146,37 @@ def test_lem(name):
                 if os.path.exists('../{}.err_expect'.format(basename)):
                     step('diff {}.lerr ../{}.err_expect'.format(basename, basename))
                 print_ok(filename)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
+def test_coq(name):
+    banner('Testing {}'.format(name))
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                # Generate Coq from Sail
+                step('{} -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
+
+                step('mkdir -p _coqbuild_{}'.format(basename))
+                step('mv {}.v _coqbuild_{}'.format(basename, basename))
+                step('mv {}_types.v _coqbuild_{}'.format(basename, basename))
+                step('./mk_coq_main.sh {} {}'.format(basename, basename.capitalize()))
+                os.chdir('_coqbuild_{}'.format(basename))
+
+                # TODO: find bbv properly
+                step('coqc {}_types.v'.format(basename))
+                step('coqc {}.v'.format(basename))
+                step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
+
+                os.chdir('..')
+                step('rm -r _coqbuild_{}'.format(basename))
+
+                print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
     return results.finish()
