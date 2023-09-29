@@ -103,7 +103,7 @@ and chunk =
       rec_opt : chunks option;
       typq_opt : chunks option;
       return_typ_opt : chunks option;
-      funcls : pexp_chunks list;
+      funcls : (chunks * pexp_chunks) list;
     }
   | Val of { id : id; extern_opt : extern option; typq_opt : chunks option; typ : chunks }
   | Enum of { id : id; enum_functions : chunks list option; members : chunks list }
@@ -207,7 +207,9 @@ let rec prerr_chunk indent = function
         | None -> ()
       end;
       List.iteri
-        (fun i funcl ->
+        (fun i (funcl_header, funcl) ->
+          Printf.eprintf "%s  header %d:\n" indent i;
+          Queue.iter (prerr_chunk (indent ^ "    ")) funcl_header;
           Printf.eprintf "%s  pat %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.pat;
           begin
@@ -1057,7 +1059,18 @@ and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
       ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
       { funcl_space = true; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks }
 
-let chunk_funcl comments (FCL_aux (FCL_funcl (_, pexp), _)) = chunk_pexp comments pexp
+let chunk_funcl comments funcl =
+  let chunks = Queue.create () in
+  let rec chunk_funcl' comments (FCL_aux (aux, _)) =
+    match aux with
+    | FCL_attribute (attr, arg, funcl) ->
+        Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
+        Queue.add (Spacer (false, 1)) chunks;
+        chunk_funcl' comments funcl
+    | FCL_doc (_, funcl) -> chunk_funcl' comments funcl
+    | FCL_funcl (_, pexp) -> chunk_pexp comments pexp
+  in
+  (chunks, chunk_funcl' comments funcl)
 
 let chunk_quant_item comments chunks last = function
   | QI_aux (QI_id kopt, l) ->

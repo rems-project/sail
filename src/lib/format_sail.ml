@@ -670,12 +670,14 @@ module Make (Config : CONFIG) = struct
     let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
     separate space [guarded_pat; string "=>"; body]
 
-  and doc_funcl return_typ_opt opts pexp =
+  and doc_funcl return_typ_opt opts (header, pexp) =
     let return_typ =
       match return_typ_opt with
       | Some chunks -> space ^^ prefix_parens indent (string "->") (doc_chunks opts chunks) ^^ space
       | None -> space
     in
+    doc_chunks opts header
+    ^^
     match pexp.guard with
     | None ->
         (if pexp.funcl_space then space else empty)

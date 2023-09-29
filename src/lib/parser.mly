@@ -231,6 +231,9 @@ let fix_extern typschm = function
   | None -> None
   | Some extern -> Some { extern with pure = typschm_is_pure typschm }
 
+let funcl_annot fs fcl =
+  List.fold_right (fun f fcl -> f fcl) fs fcl
+
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
@@ -242,7 +245,7 @@ let warn_extern_effect l =
 
 let set_syntax_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}."
-  
+
 %}
 
 /*Terminals with no content*/
@@ -892,6 +895,12 @@ vector_update_list:
   | vector_update Comma vector_update_list
     { $1 :: $3 }
 
+funcl_annotation:
+  | attr = Attribute
+    { (fun funcl -> FCL_aux (FCL_attribute (fst attr, snd attr, funcl), loc $startpos(attr) $endpos(attr))) }
+  | doc = Doc
+    { (fun funcl -> FCL_aux (FCL_doc (doc, funcl), loc $startpos(doc) $endpos(doc))) }
+
 funcl_patexp:
   | pat Eq exp
     { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
@@ -913,6 +922,8 @@ funcl_patexp_typ:
     { (mk_pexp (Pat_when ($5, $7, $12)) $startpos $endpos, mk_tannot $2 $10 $startpos $endpos($10)) }
 
 funcl:
+  | funcl_annotation+ id funcl_patexp
+    { funcl_annot $1 (mk_funcl (FCL_funcl ($2, $3)) $startpos($2) $endpos) }
   | id funcl_patexp
     { mk_funcl (FCL_funcl ($1, $2)) $startpos $endpos }
 
@@ -923,8 +934,12 @@ funcls2:
     { $1 :: $3 }
 
 funcls:
+  | funcl_annotation+ id funcl_patexp_typ
+    { let pexp, tannot = $3 in ([funcl_annot $1 (mk_funcl (FCL_funcl ($2, pexp)) $startpos($2) $endpos)], tannot) }
   | id funcl_patexp_typ
     { let pexp, tannot = $2 in ([mk_funcl (FCL_funcl ($1, pexp)) $startpos $endpos], tannot) }
+  | funcl_annotation+ id funcl_patexp And funcls2
+    { (funcl_annot $1 (mk_funcl (FCL_funcl ($2, $3)) $startpos($2) $endpos($3)) :: $5, mk_tannotn) }
   | id funcl_patexp And funcls2
     { (mk_funcl (FCL_funcl ($1, $2)) $startpos $endpos($2) :: $4, mk_tannotn) }
 

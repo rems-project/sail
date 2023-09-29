@@ -1081,8 +1081,14 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
       let typq, ctx = to_ast_typquant ctx tq in
       (Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx)
 
-let to_ast_funcl ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
+let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
+  | P.FCL_attribute (attr, arg, fcl) -> to_ast_funcl doc ((attr, arg, l) :: attrs) ctx fcl
+  | P.FCL_doc (doc_comment, fcl) -> begin
+      match doc with
+      | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
+      | None -> to_ast_funcl (Some doc_comment) attrs ctx fcl
+    end
   | P.FCL_funcl (id, pexp) ->
       FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
 
@@ -1099,12 +1105,14 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
             targets
       | None -> [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))]
     )
+  | _ -> raise (Reporting.err_general l "Attributes or documentation comment not permitted here")
 
 let to_ast_fundef ctx (P.FD_aux (fd, l) : P.fundef) : uannot fundef =
   match fd with
   | P.FD_function (rec_opt, tannot_opt, _, funcls) ->
       let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
-      FD_aux (FD_function (to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l, empty_uannot))
+      FD_aux
+        (FD_function (to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl None [] ctx) funcls), (l, empty_uannot))
 
 let rec to_ast_mpat ctx (P.MP_aux (mpat, l)) =
   MP_aux
@@ -1165,7 +1173,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
     | P.SD_function (rec_opt, tannot_opt, _, id) ->
         let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
         (None, SD_function (to_ast_rec ctx rec_opt, tannot_opt, to_ast_id ctx id), ctx)
-    | P.SD_funcl funcl -> (None, SD_funcl (to_ast_funcl ctx funcl), ctx)
+    | P.SD_funcl funcl -> (None, SD_funcl (to_ast_funcl None [] ctx funcl), ctx)
     | P.SD_variant (id, parse_typq) ->
         let id = to_ast_id ctx id in
         let typq, typq_ctx = to_ast_typquant ctx parse_typq in
