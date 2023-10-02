@@ -862,12 +862,10 @@ let rec to_ast_type_union doc attrs ctx = function
       | Some _ -> raise (Reporting.err_general l "Union constructor has multiple documentation comments")
       | None -> to_ast_type_union (Some doc_comment) attrs ctx tu
     end
-  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc ((attr, arg, l) :: attrs) ctx tu
+  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc (attrs @ [(l, attr, arg)]) ctx tu
   | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
-      let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
-      let annot = { annot with doc_comment = doc } in
       let typ = to_ast_typ ctx atyp in
-      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), annot)
+      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs l)
   | P.Tu_aux (_, l) ->
       raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
@@ -1083,14 +1081,14 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
 
 let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
-  | P.FCL_attribute (attr, arg, fcl) -> to_ast_funcl doc ((attr, arg, l) :: attrs) ctx fcl
+  | P.FCL_attribute (attr, arg, fcl) -> to_ast_funcl doc (attrs @ [(l, attr, arg)]) ctx fcl
   | P.FCL_doc (doc_comment, fcl) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
       | None -> to_ast_funcl (Some doc_comment) attrs ctx fcl
     end
   | P.FCL_funcl (id, pexp) ->
-      FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
+      FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
 
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
@@ -1141,21 +1139,26 @@ let to_ast_mpexp ctx (P.MPat_aux (mpexp, l)) =
   | P.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat ctx mpat), (l, empty_uannot))
   | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, empty_uannot))
 
-let to_ast_mapcl ctx (P.MCL_aux (mapcl, l)) =
-  let def_annot = mk_def_annot l in
+let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
   match mapcl with
+  | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
+  | P.MCL_doc (doc_comment, mcl) -> begin
+      match doc with
+      | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
+      | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
+    end
   | P.MCL_bidir (mpexp1, mpexp2) ->
-      MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (def_annot, empty_uannot))
+      MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l, empty_uannot))
   | P.MCL_forwards (mpexp, exp) ->
-      MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
+      MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
   | P.MCL_backwards (mpexp, exp) ->
-      MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (def_annot, empty_uannot))
+      MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
 
 let to_ast_mapdef ctx (P.MD_aux (md, l) : P.mapdef) : uannot mapdef =
   match md with
   | P.MD_mapping (id, typschm_opt, mapcls) ->
       let tannot_opt, ctx = to_ast_typschm_opt ctx typschm_opt in
-      MD_aux (MD_mapping (to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l, empty_uannot))
+      MD_aux (MD_mapping (to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl None [] ctx) mapcls), (l, empty_uannot))
 
 let to_ast_dec ctx (P.DEC_aux (regdec, l)) =
   DEC_aux
@@ -1214,7 +1217,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
         (None, SD_mapping (id, tannot_opt), ctx)
     | P.SD_mapcl (id, mapcl) ->
         let id = to_ast_id ctx id in
-        let mapcl = to_ast_mapcl ctx mapcl in
+        let mapcl = to_ast_mapcl None [] ctx mapcl in
         (None, SD_mapcl (id, mapcl), ctx)
     | P.SD_enum id ->
         let id = to_ast_id ctx id in
@@ -1236,11 +1239,19 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
+(* Annotations on some scattered constructs will not be preserved after de-scattering, so warn about this *)
+let check_annotation (DEF_aux (aux, def_annot)) =
+  if Option.is_some def_annot.doc_comment || not (Util.list_empty def_annot.attrs) then (
+    match aux with
+    | DEF_scattered (SD_aux ((SD_function _ | SD_mapping _ | SD_end _), _)) ->
+        Reporting.warn "" def_annot.loc "Documentation comments and attributes will not be preserved on this definition"
+    | _ -> ()
+  )
+
 let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
-  let annot = List.fold_left (fun a (attr, arg, l) -> add_def_attribute l attr arg a) (mk_def_annot l) attrs in
-  let annot = { annot with doc_comment = doc } in
+  let annot = mk_def_annot ?doc ~attrs l in
   match def with
-  | P.DEF_attribute (attr, arg, def) -> to_ast_def doc ((attr, arg, l) :: attrs) ctx def
+  | P.DEF_attribute (attr, arg, def) -> to_ast_def doc (attrs @ [(l, attr, arg)]) ctx def
   | P.DEF_doc (doc_comment, def) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")
@@ -1336,8 +1347,9 @@ let to_ast ctx (P.Defs files) =
     let defs, ctx =
       List.fold_left
         (fun (defs, ctx) def ->
-          let def, ctx = to_ast_def None [] ctx def in
-          (def @ defs, ctx)
+          let new_defs, ctx = to_ast_def None [] ctx def in
+          List.iter check_annotation new_defs;
+          (new_defs @ defs, ctx)
         )
         ([], ctx) defs
     in

@@ -232,7 +232,7 @@ rule token = parse
   | "-"                                 { Minus }
   | "<->"                               { Bidir }
   | "=>"                                { EqGt "=>" }
-  | "/*!" wsc*  { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
+  | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
@@ -302,19 +302,22 @@ and line_comment pos b = parse
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in comment") }
 
 and doc_comment pos b depth lstart = parse
-  | "/*!"                               { doc_comment pos b (depth + 1) false lexbuf }
-  | "/*"                                { doc_comment pos b (depth + 1) false lexbuf }
-  | wsc* "*/"                           { if depth = 0 then Buffer.contents b
-					  else if depth > 0 then doc_comment pos b (depth - 1) false lexbuf
-					  else assert false }
-  | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
+  | "/*!"                               { Buffer.add_string b "/*!"; doc_comment pos b (depth + 1) false lexbuf }
+  | "/*"                                { Buffer.add_string b "/*"; doc_comment pos b (depth + 1) false lexbuf }
+  | "*/"                                { if depth = 0 then Buffer.contents b
+					  else (
+                                            Buffer.add_string b "*/";
+                                            doc_comment pos b (depth - 1) false lexbuf
+					  ) }
   | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth true lexbuf }
-  | wsc* "*" wsc? as prefix             { if lstart then (
+  | wsc+ "*" wsc as prefix              { if lstart then (
+                                            Buffer.add_string b (String.make (String.length prefix - 3) ' ');
                                             doc_comment pos b depth false lexbuf
                                           ) else (
                                             Buffer.add_string b prefix; doc_comment pos b depth false lexbuf
                                           ) }
   | _ as c                              { Buffer.add_string b (String.make 1 c); doc_comment pos b depth false lexbuf }
+  | eof                                 { raise (Reporting.err_lex pos "Unbalanced documentation comment") }
 
 and comment pos b depth = parse
   | "/*"                                { comment pos b (depth + 1) lexbuf }

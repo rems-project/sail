@@ -87,7 +87,7 @@ let get_attributes annot = annot.attrs
 let find_attribute_opt attr1 attrs =
   List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (_, _, arg) -> arg)
 
-let mk_def_annot l = { doc_comment = None; attrs = []; loc = l }
+let mk_def_annot ?doc ?(attrs = []) l = { doc_comment = doc; attrs; loc = l }
 
 let map_clause_annot f (def_annot, annot) =
   let l, annot' = f (def_annot.loc, annot) in
