@@ -372,13 +372,15 @@ type mpexp_aux = MPat_pat of mpat | MPat_when of mpat * exp
 
 type mpexp = MPat_aux of mpexp_aux * l
 
-type mapcl_aux =
+type mapcl = MCL_aux of mapcl_aux * l
+
+and mapcl_aux =
   (* mapping clause (bidirectional pattern-match) *)
+  | MCL_attribute of string * string * mapcl
+  | MCL_doc of string * mapcl
   | MCL_bidir of mpexp * mpexp
   | MCL_forwards of mpexp * exp
   | MCL_backwards of mpexp * exp
-
-type mapcl = MCL_aux of mapcl_aux * l
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)

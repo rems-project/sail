@@ -84,8 +84,6 @@ let doc_kid kid = string (Ast_util.string_of_kid kid)
 let doc_attr attr arg =
   if arg = "" then Printf.ksprintf string "$[%s]" attr ^^ space else Printf.ksprintf string "$[%s %s]" attr arg ^^ space
 
-let get_column l = match Reporting.simp_loc l with Some (l1, _) -> Some (l1.pos_cnum - l1.pos_bol) | None -> None
-
 let doc_def_annot def_annot =
   (match def_annot.doc_comment with Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline | _ -> empty)
   ^^
@@ -202,7 +200,7 @@ and doc_typ ?(simple = false) (Typ_aux (typ_aux, l)) =
         Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)]), _)
       )
     when Kid.compare (kopt_kid kopt) kid1 == 0 && Kid.compare kid1 kid2 == 0 && Id.compare (mk_id "atom") id == 0 ->
-      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
+      enclose (char '{') (char '}') (separate_map (string ", ") doc_int ints)
   | Typ_exist (kopts, nc, typ) ->
       braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
   | Typ_fn ([Typ_aux (Typ_tuple typs, _)], typ) ->
@@ -626,7 +624,9 @@ let doc_mpexp (MPat_aux (mpexp, _)) =
   | MPat_pat mpat -> doc_mpat mpat
   | MPat_when (mpat, guard) -> doc_mpat mpat ^^ space ^^ string "if" ^^ space ^^ doc_exp guard
 
-let doc_mapcl (MCL_aux (cl, _)) =
+let doc_mapcl (MCL_aux (cl, (def_annot, _))) =
+  doc_def_annot def_annot
+  ^^
   match cl with
   | MCL_bidir (mpexp1, mpexp2) ->
       let left = doc_mpexp mpexp1 in

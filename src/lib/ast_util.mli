@@ -97,7 +97,7 @@ val get_attributes : uannot -> (l * string * string) list
 
 val find_attribute_opt : string -> (l * string * string) list -> string option
 
-val mk_def_annot : l -> def_annot
+val mk_def_annot : ?doc:string -> ?attrs:(l * string * string) list -> l -> def_annot
 
 val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 

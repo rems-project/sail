@@ -1166,6 +1166,10 @@ fmpat:
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
 mapcl:
+  | attr = Attribute; mcl = mapcl
+    { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
+  | doc = Doc; mcl = mapcl
+    { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
   | mpexp EqGt exp
