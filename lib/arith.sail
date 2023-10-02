@@ -211,10 +211,10 @@ val abs_int_plain = pure {
 
 overload abs_int = {abs_int_plain}
 
-val max_int = pure {lem: "integerMax", _: "max_int"} : forall 'x 'y.
+val max_int = pure {lem: "integerMax", coq: "Z.max", _: "max_int"} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}
 
-val min_int = pure {lem: "integerMin", _: "min_int"} : forall 'x 'y.
+val min_int = pure {lem: "integerMin", coq: "Z.min", _: "min_int"} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}
 
 $endif
