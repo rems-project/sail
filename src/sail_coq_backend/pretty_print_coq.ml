@@ -249,6 +249,11 @@ let doc_var ctxt kid =
            (string_of_kid (try KBindings.find kid ctxt.kid_renames with Not_found -> kid))
         )
 
+let doc_field_name ctxt typ_id field_id =
+  if prefix_recordtype && string_of_id typ_id <> "regstate" then
+    doc_id ctxt typ_id ^^ string "_" ^^ doc_id ctxt field_id
+  else doc_id ctxt field_id
+
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ))
 let simple_num l n =
   E_aux
@@ -1090,21 +1095,19 @@ let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
       match pats with [p] -> doc_pat ctxt apat_needed p | _ -> parens (separate_map comma_sp (doc_pat ctxt false) pats)
     )
   | P_list pats -> brackets (separate_map semi (doc_pat ctxt false) pats)
-  | P_cons (p, p') -> doc_op (string "::") (doc_pat ctxt true p) (doc_pat ctxt true p')
+  | P_cons (p, p') ->
+      let ppp = doc_op (string "::") (doc_pat ctxt true p) (doc_pat ctxt true p') in
+      if apat_needed then parens ppp else ppp
   | P_string_append _ -> unreachable l __POS__ "string append pattern found in Coq backend, should have been rewritten"
   | P_struct (fpats, _) ->
-      let type_prefix =
+      let type_id =
         match typ with
-        | (Typ_aux (Typ_id tid, _) | Typ_aux (Typ_app (tid, _), _)) when Env.is_record tid env -> string_of_id tid ^ "_"
+        | (Typ_aux (Typ_id tid, _) | Typ_aux (Typ_app (tid, _), _)) when Env.is_record tid env -> tid
         | _ -> Reporting.unreachable l __POS__ "P_struct pattern with no record type"
-      in
-      let doc_field field =
-        if prefix_recordtype && type_prefix <> "regstate_" then string type_prefix ^^ doc_id ctxt field
-        else doc_id ctxt field
       in
       string "{|" ^^ space
       ^^ separate_map (semi ^^ space)
-           (fun (field, pat) -> separate space [doc_field field; coloneq; doc_pat ctxt false pat])
+           (fun (field, pat) -> separate space [doc_field_name ctxt type_id field; coloneq; doc_pat ctxt false pat])
            fpats
       ^^ space ^^ string "|}"
   | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
@@ -1418,7 +1421,9 @@ let doc_exp, doc_let =
       )
     | E_vector_append (le, re) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_append should have been rewritten before pretty-printing")
-    | E_cons (le, re) -> doc_op (group (colon ^^ colon)) (expY le) (expY re)
+    | E_cons (le, re) ->
+        let epp = doc_op (group (colon ^^ colon)) (expY le) (expY re) in
+        if aexp_needed then parens epp else epp
     | E_if (c, t, e) ->
         let epp = if_exp ctxt (env_of full_exp) (typ_of full_exp) false c t e in
         if aexp_needed then parens (align epp) else epp
@@ -1865,11 +1870,7 @@ let doc_exp, doc_let =
         match destruct_tannot fannot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
           ->
-            let fname =
-              if prefix_recordtype && string_of_id tid <> "regstate" then
-                string (string_of_id tid ^ "_") ^^ doc_id ctxt id
-              else doc_id ctxt id
-            in
+            let fname = doc_field_name ctxt tid id in
             let exp_pp = expY fexp ^^ dot ^^ parens fname in
             let field_typ = expand_range_type (Env.expand_synonyms env (typ_of_annot (l, annot))) in
             exp_pp
@@ -1984,11 +1985,7 @@ let doc_exp, doc_let =
             match List.find (fun (FE_aux (FE_fexp (id', _), _)) -> Id.compare id id' == 0) fexps with
             | fexp -> doc_fexp ctxt recordtyp fexp
             | exception Not_found ->
-                let fname =
-                  if prefix_recordtype && string_of_id recordtyp <> "regstate" then
-                    string (string_of_id recordtyp ^ "_") ^^ doc_id ctxt id
-                  else doc_id ctxt id
-                in
+                let fname = doc_field_name ctxt recordtyp id in
                 doc_op coloneq fname (doc_id ctxt var ^^ dot ^^ parens fname)
           in
           let_pp ^^ enclose_record (align (separate_map (semi_sp ^^ break 1) doc_field fields))
@@ -2226,11 +2223,7 @@ let doc_exp, doc_let =
           (separate space [string "let"; squote ^^ parens (doc_pat ctxt true pat); coloneq])
           (top_exp ctxt false e)
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
-    let fname =
-      if prefix_recordtype && string_of_id recordtyp <> "regstate" then
-        string (string_of_id recordtyp ^ "_") ^^ doc_id ctxt id
-      else doc_id ctxt id
-    in
+    let fname = doc_field_name ctxt recordtyp id in
     let e_pp = construct_dep_pairs ctxt (env_of e) false e (general_typ_of e) in
     group (doc_op coloneq fname e_pp)
   and doc_case ctxt old_env typ = function
@@ -2354,11 +2347,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       ^^ twice hardline
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record (id, typq, fs, _) ->
-      let fname fid =
-        if prefix_recordtype && string_of_id id <> "regstate" then
-          concat [doc_id bare_ctxt id; string "_"; doc_id_type types_mod avoid_target_names None fid]
-        else doc_id_type types_mod avoid_target_names None fid
-      in
+      let fname fid = doc_field_name bare_ctxt id fid in
       let f_pp (typ, fid) = concat [fname fid; space; colon; space; doc_typ bare_ctxt Env.empty typ; semi] in
       let rectyp =
         match typq with
