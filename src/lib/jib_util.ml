@@ -900,7 +900,8 @@ let ctype_def_map_ctyp f = function
 (* Map over each ctyp in a cdef using map_instr_ctyp *)
 let cdef_map_ctyp f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, f ctyp, List.map (map_instr_ctyp f) instrs)
-  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr_ctyp f) instrs)
+  | CDEF_let (n, bindings, instrs) ->
+      CDEF_let (n, List.map (fun (id, ctyp) -> (id, f ctyp)) bindings, List.map (map_instr_ctyp f) instrs)
   | CDEF_fundef (id, heap_return, args, instrs) ->
       CDEF_fundef (id, heap_return, args, List.map (map_instr_ctyp f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
