@@ -102,6 +102,7 @@ let opt_max_unknown_bitvector_width = ref 128
 
 let opt_nostrings = ref false
 let opt_nopacked = ref false
+let opt_padding = ref false
 let opt_nomem = ref false
 
 let opt_unreachable = ref []
@@ -146,6 +147,7 @@ let verilog_options =
     );
     ("-sv_nostrings", Arg.Set opt_nostrings, " don't emit any strings, instead emit units");
     ("-sv_nopacked", Arg.Set opt_nopacked, " don't emit packed datastructures");
+    ("-sv_padding", Arg.Set opt_padding, " add padding on packed unions");
     ( "-sv_unreachable",
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "<functionname> Mark function as unreachable."
@@ -391,6 +393,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     let line_directives = !opt_line_directives
     let nostrings = !opt_nostrings
     let nopacked = !opt_nopacked
+    let union_padding = !opt_padding
     let unreachable = !opt_unreachable
     let comb = !opt_comb
     let ignore = !opt_fun2wires

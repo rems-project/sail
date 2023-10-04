@@ -84,6 +84,7 @@ module type CONFIG = sig
   val line_directives : bool
   val nostrings : bool
   val nopacked : bool
+  val union_padding : bool
   val unreachable : string list
   val comb : bool
   val ignore : string list
@@ -113,7 +114,12 @@ module Make (Config : CONFIG) = struct
 
   let sv_id_string id =
     let s = string_of_id id in
-    if valid_sv_identifier s && (not (has_bad_prefix s)) && not (StringSet.mem s Keywords.sv_reserved_words) then s
+    if
+      valid_sv_identifier s
+      && (not (has_bad_prefix s))
+      && (not (StringSet.mem s Keywords.sv_reserved_words))
+      && not (StringSet.mem s Keywords.sv_used_words)
+    then s
     else Util.zencode_string s
 
   let sv_id id = string (sv_id_string id)
@@ -122,12 +128,19 @@ module Make (Config : CONFIG) = struct
 
   let sv_type_id id = string (sv_type_id_string id)
 
-  let rec is_packed = function
-    | CT_fbits _ | CT_unit | CT_bit | CT_bool | CT_fint _ | CT_lbits | CT_lint | CT_enum _ | CT_constant _ ->
-        not Config.nopacked
-    | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors
-    | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_packed ctyp) fields
-    | _ -> false
+  let rec bit_width = function
+    | CT_unit | CT_bit | CT_bool -> Some 1
+    | CT_fbits len -> Some len
+    | CT_lbits -> Some Config.max_unknown_bitvector_width
+    | CT_enum (_, ids) -> Some (required_width (Big_int.of_int (List.length ids - 1)))
+    | CT_constant c -> Some (required_width c)
+    | CT_variant (_, ctors) ->
+        List.map (fun (_, ctyp) -> bit_width ctyp) ctors |> Util.option_all |> Option.map (List.fold_left max 1)
+    | CT_struct (_, fields) ->
+        List.map (fun (_, ctyp) -> bit_width ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
+    | _ -> None
+
+  let is_packed ctyp = if Config.nopacked then false else Option.is_some (bit_width ctyp)
 
   let simple_type str = (str, None)
 
@@ -297,44 +310,121 @@ module Make (Config : CONFIG) = struct
         kind_enum ^^ twice hardline
         ^^
         if can_be_packed then (
-          let constructors =
+          let max_width = bit_width (CT_variant (id, ctors)) |> Option.get in
+          let padding_structs =
             List.map
               (fun (ctor_id, ctyp) ->
-                separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
-                ^^ parens (wrap_type ctyp (char 'v'))
-                ^^ semi
-                ^^ nest 4
-                     (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
-                     ^^ string ("sailunion_" ^ sv_id_string id)
-                     ^^ space ^^ string "u" ^^ semi ^^ hardline
-                     ^^ separate space
-                          [
-                            string "r.tag";
-                            equals;
-                            string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
-                          ]
-                     ^^ semi ^^ hardline
-                     ^^ separate space [char 'u' ^^ dot ^^ sv_id ctor_id; equals; char 'v']
-                     ^^ semi ^^ hardline
-                     ^^ separate space [string "r.value"; equals; char 'u']
-                     ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
-                     )
-                ^^ hardline ^^ string "endfunction"
+                let padding_type = string ("sailpadding_" ^ sv_id_string ctor_id) in
+                let required_padding = max_width - Option.get (bit_width ctyp) in
+                let padded =
+                  separate space
+                    [
+                      string "typedef";
+                      string "struct";
+                      string "packed";
+                      group
+                        (lbrace
+                        ^^ nest 4
+                             (hardline
+                             ^^ sv_ctor (ctor_id, ctyp)
+                             ^^ semi
+                             ^^
+                             if required_padding > 0 then
+                               hardline ^^ ksprintf string "logic [%d:0] padding" (required_padding - 1) ^^ semi
+                             else empty
+                             )
+                        ^^ hardline ^^ rbrace
+                        );
+                      padding_type ^^ semi;
+                    ]
+                in
+                (padded, (ctor_id, ctyp, padding_type, required_padding))
               )
               ctors
           in
-          separate space
-            [
-              string "typedef";
-              string "union";
-              string "packed";
-              group
-                (lbrace
-                ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) sv_ctor ctors)
-                ^^ semi ^^ hardline ^^ rbrace
-                );
-              value_type ^^ semi;
-            ]
+          let constructors =
+            if Config.union_padding then
+              List.map
+                (fun (_, (ctor_id, ctyp, padding_type, required_padding)) ->
+                  separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
+                  ^^ parens (wrap_type ctyp (char 'v'))
+                  ^^ semi
+                  ^^ nest 4
+                       (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                       ^^ string ("sailunion_" ^ sv_id_string id)
+                       ^^ space ^^ char 'u' ^^ semi ^^ hardline ^^ padding_type ^^ space ^^ char 'p' ^^ semi ^^ hardline
+                       ^^ separate space
+                            [
+                              string "r.tag";
+                              equals;
+                              string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
+                            ]
+                       ^^ semi ^^ hardline
+                       ^^ separate space [char 'p' ^^ dot ^^ sv_id ctor_id; equals; char 'v']
+                       ^^ semi ^^ hardline
+                       ^^ ( if required_padding > 0 then
+                              separate space
+                                [
+                                  char 'p' ^^ dot ^^ string "padding";
+                                  equals;
+                                  ksprintf string "%d'b%s" required_padding (String.make required_padding '0');
+                                ]
+                              ^^ semi ^^ hardline
+                            else empty
+                          )
+                       ^^ separate space [char 'u' ^^ dot ^^ sv_id ctor_id; equals; char 'p']
+                       ^^ semi ^^ hardline
+                       ^^ separate space [string "r.value"; equals; char 'u']
+                       ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
+                       )
+                  ^^ hardline ^^ string "endfunction"
+                )
+                padding_structs
+            else
+              List.map
+                (fun (ctor_id, ctyp) ->
+                  separate space [string "function"; string "automatic"; sv_type_id id; sv_id ctor_id]
+                  ^^ parens (wrap_type ctyp (char 'v'))
+                  ^^ semi
+                  ^^ nest 4
+                       (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                       ^^ string ("sailunion_" ^ sv_id_string id)
+                       ^^ space ^^ char 'u' ^^ semi ^^ hardline
+                       ^^ separate space
+                            [
+                              string "r.tag";
+                              equals;
+                              string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
+                            ]
+                       ^^ semi ^^ hardline
+                       ^^ separate space [char 'u' ^^ dot ^^ sv_id ctor_id; equals; char 'v']
+                       ^^ semi ^^ hardline
+                       ^^ separate space [string "r.value"; equals; char 'u']
+                       ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
+                       )
+                  ^^ hardline ^^ string "endfunction"
+                )
+                ctors
+          in
+          let sv_padded_ctor (_, (ctor_id, _, padding_type, _)) = padding_type ^^ space ^^ sv_id ctor_id in
+          (if Config.union_padding then separate_map (twice hardline) fst padding_structs ^^ twice hardline else empty)
+          ^^ separate space
+               [
+                 string "typedef";
+                 string "union";
+                 string "packed";
+                 group
+                   (lbrace
+                   ^^ nest 4
+                        (hardline
+                        ^^
+                        if Config.union_padding then separate_map (semi ^^ hardline) sv_padded_ctor padding_structs
+                        else separate_map (semi ^^ hardline) sv_ctor ctors
+                        )
+                   ^^ semi ^^ hardline ^^ rbrace
+                   );
+                 value_type ^^ semi;
+               ]
           ^^ twice hardline
           ^^ separate space
                [
@@ -499,7 +589,8 @@ module Make (Config : CONFIG) = struct
         opt_parens
           (separate space [sv_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> String.uppercase_ascii)])
     | Unwrap (ctor, packed, v) ->
-        if packed then sv_smt v ^^ dot ^^ string "value" ^^ dot ^^ sv_id ctor else sv_smt v ^^ dot ^^ sv_id ctor
+        let packed_ctor = if Config.union_padding then sv_id ctor ^^ dot ^^ sv_id ctor else sv_id ctor in
+        if packed then sv_smt v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else sv_smt v ^^ dot ^^ sv_id ctor
     | Field (_, field, v) -> sv_smt v ^^ dot ^^ sv_id field
     | Ite (cond, then_exp, else_exp) ->
         separate space [sv_smt_parens cond; char '?'; sv_smt_parens then_exp; char ':'; sv_smt_parens else_exp]
