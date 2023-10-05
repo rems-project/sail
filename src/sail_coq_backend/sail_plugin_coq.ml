@@ -168,6 +168,7 @@ let coq_rewrites =
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
     ("bit_lists_to_lits", []);
+    ("toplevel_let_patterns", []);
     ("recheck_defs", []);
     ("attach_effects", []);
   ]

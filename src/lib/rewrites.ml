@@ -4145,7 +4145,8 @@ let rewrite_ast_realize_mappings effect_info env ast =
 (* Rewrite to make all pattern matches in Coq output exhaustive and
    remove redundant clauses.  Assumes that guards, vector patterns,
    etc have been rewritten already, and the scattered functions have
-   been merged.
+   been merged.  It also reruns effect inference if a pattern match
+   failure has to be added.
 
    Note: if this naive implementation turns out to be too slow or buggy, we
    could look at implementing Maranget JFP 17(3), 2007.
@@ -4438,7 +4439,7 @@ module MakeExhaustive = struct
 
   let funcl_loc (FCL_aux (_, (def_annot, _))) = def_annot.loc
 
-  let rewrite_case (e, ann) =
+  let rewrite_case redo_effects (e, ann) =
     match e with
     | E_match (e1, cases) | E_try (e1, cases) -> begin
         let env = env_of_annot ann in
@@ -4456,9 +4457,11 @@ module MakeExhaustive = struct
 
             let l = Parse_ast.Generated Parse_ast.Unknown in
             let p = P_aux (P_wild, (l, empty_tannot)) in
+            let l_ann = mk_tannot env unit_typ in
             let ann' = mk_tannot env (typ_of_annot ann) in
             (* TODO: use an expression that specifically indicates a failed pattern match *)
-            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, empty_tannot))), (l, ann')) in
+            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, l_ann))), (l, ann')) in
+            redo_effects := true;
             E_aux (rebuild (cases @ [Pat_aux (Pat_exp (p, b), (l, empty_tannot))]), ann)
       end
     | E_let (LB_aux (LB_val (pat, e1), lb_ann), e2) -> begin
@@ -4474,9 +4477,11 @@ module MakeExhaustive = struct
             in
             let l = Parse_ast.Generated Parse_ast.Unknown in
             let p = P_aux (P_wild, (l, empty_tannot)) in
+            let l_ann = mk_tannot env unit_typ in
             let ann' = mk_tannot env (typ_of_annot ann) in
             (* TODO: use an expression that specifically indicates a failed pattern match *)
-            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, empty_tannot))), (l, ann')) in
+            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, l_ann))), (l, ann')) in
+            redo_effects := true;
             E_aux (E_match (e1, [Pat_aux (Pat_exp (pat, e2), ann); Pat_aux (Pat_exp (p, b), (l, empty_tannot))]), ann)
       end
     | _ -> E_aux (e, ann)
@@ -4512,18 +4517,29 @@ module MakeExhaustive = struct
 
         FD_aux (FD_function (r, t, fcls' @ [default]), f_ann)
 
-  let rewrite env =
-    let alg = { id_exp_alg with e_aux = rewrite_case } in
-    rewrite_ast_base
-      {
-        rewrite_exp = (fun _ -> fold_exp alg);
-        rewrite_pat;
-        rewrite_let;
-        rewrite_lexp;
-        rewrite_fun;
-        rewrite_def;
-        rewrite_ast = rewrite_ast_base_progress "Make patterns exhaustive";
-      }
+  let rewrite effect_info env ast =
+    let redo_effects = ref false in
+    let alg = { id_exp_alg with e_aux = rewrite_case redo_effects } in
+    let ast' =
+      rewrite_ast_base
+        {
+          rewrite_exp = (fun _ -> fold_exp alg);
+          rewrite_pat;
+          rewrite_let;
+          rewrite_lexp;
+          rewrite_fun;
+          rewrite_def;
+          rewrite_ast = rewrite_ast_base_progress "Make patterns exhaustive";
+        }
+        ast
+    in
+    let effect_info' =
+      (* TODO: if we use this for anything other than Coq we'll need
+         to replace "true" with Target.asserts_termination target,
+         after plumbing target through to this rewrite. *)
+      if !redo_effects then Effects.infer_side_effects true ast' else effect_info
+    in
+    (ast', effect_info', env)
 end
 
 (* Splitting a function (e.g., an execute function on an AST) can produce
@@ -4906,6 +4922,56 @@ let rewrite_truncate_hex_literals _type_env defs =
     { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
     defs
 
+(* Coq's Definition command doesn't allow patterns, so rewrite
+   top-level let bindings with complex patterns into a sequence of
+   single definitions. *)
+let rewrite_toplevel_let_patterns env ast =
+  let is_pat_simple = function
+    | P_aux (P_typ (_, P_aux (P_id _id, _)), _) | P_aux (P_id _id, _) -> true
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)
+    | P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)), _) ->
+        Id.compare id (id_of_kid kid) == 0
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)
+    | P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)), _)
+      when Id.compare app_id (mk_id "atom") == 0 ->
+        Id.compare id (id_of_kid kid) == 0
+    | _ -> false
+  in
+  let rewrite_def = function
+    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), (l, annot))), def_annot) as def ->
+        if is_pat_simple pat then [def]
+        else (
+          let ids = pat_ids pat in
+          let base_id = fresh_id "let" l in
+          let base_annot = mk_tannot env (typ_of exp) in
+          let base_def =
+            mk_def (DEF_let (LB_aux (LB_val (P_aux (P_id base_id, (l, base_annot)), exp), (l, empty_tannot))))
+          in
+          let id_defs =
+            List.map
+              (fun id ->
+                let id_typ = match Env.lookup_id id env with Local (_, t) -> t | _ -> assert false in
+                let id_annot = (Parse_ast.Unknown, mk_tannot env id_typ) in
+                let def_body =
+                  E_aux
+                    ( E_let
+                        ( LB_aux (LB_val (pat, E_aux (E_id base_id, (l, base_annot))), (l, empty_tannot)),
+                          E_aux (E_id id, id_annot)
+                        ),
+                      id_annot
+                    )
+                in
+                mk_def (DEF_let (LB_aux (LB_val (P_aux (P_id id, id_annot), def_body), (l, empty_tannot))))
+              )
+              (IdSet.elements ids)
+          in
+          base_def :: id_defs
+        )
+    | d -> [d]
+  in
+  let defs = List.map rewrite_def ast.defs |> List.concat in
+  { ast with defs }
+
 let opt_mono_rewrites = ref false
 let opt_mono_complex_nexps = ref true
 
@@ -5020,7 +5086,7 @@ let all_rewriters =
     ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
     ("const_prop_mutrec", String_rewriter (fun target -> Base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
-    ("make_cases_exhaustive", basic_rewriter MakeExhaustive.rewrite);
+    ("make_cases_exhaustive", Base_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
@@ -5074,6 +5140,7 @@ let all_rewriters =
         )
     );
     ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
+    ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
   ]
 
 let rewrites_interpreter =

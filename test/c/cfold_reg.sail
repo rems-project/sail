@@ -2,10 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-val eq_string = { lem: "eq", _: "eq_string" } : (string, string) -> bool
-
-overload operator == = {eq_string}
-
 register R : bool
 
 val "print_endline" : string -> unit
