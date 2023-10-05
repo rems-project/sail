@@ -152,6 +152,11 @@ let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Oper
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
+let doc_fieldname_lem typ_id field_id =
+  if prefix_recordtype && string_of_id typ_id <> "regstate" then
+    string (fix_id false (string_of_id typ_id ^ "_" ^ string_of_id field_id))
+  else doc_id_lem_type field_id
+
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ, no_effect))
 let simple_num l n =
   E_aux
@@ -634,9 +639,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p, (l, annot)) as pa) =
         match destruct_tannot annot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
           ->
-            if prefix_recordtype && string_of_id tid <> "regstate" then
-              string (string_of_id tid ^ "_") ^^ doc_id_lem field
-            else doc_id_lem field
+            doc_fieldname_lem tid field
         | _ -> Reporting.unreachable l __POS__ "P_struct pattern with no record type"
       in
       string "<|" ^^ space
@@ -982,11 +985,7 @@ let doc_exp_lem, doc_let_lem =
         match destruct_tannot fannot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
           ->
-            let fname =
-              if prefix_recordtype && string_of_id tid <> "regstate" then
-                string (string_of_id tid ^ "_") ^^ doc_id_lem id
-              else doc_id_lem id
-            in
+            let fname = doc_fieldname_lem tid id in
             expY fexp ^^ dot ^^ fname
         | _ -> raise (report l __POS__ "E_field expression with no register or record type")
       )
@@ -1163,11 +1162,7 @@ let doc_exp_lem, doc_let_lem =
         let pat = if is_bitvector_cast_out e then replace_env_for_cast_out ctxt.top_env pat else pat in
         prefix 2 1 (separate space [string "let"; doc_pat_lem ctxt true pat; equals]) (top_exp ctxt false e)
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
-    let fname =
-      if prefix_recordtype && string_of_id recordtyp <> "regstate" then
-        string (string_of_id recordtyp ^ "_") ^^ doc_id_lem id
-      else doc_id_lem id
-    in
+    let fname = doc_fieldname_lem recordtyp id in
     group (doc_op equals fname (top_exp ctxt true e))
   and doc_case ctxt = function
     | Pat_aux (Pat_exp (pat, e), _) ->
@@ -1252,12 +1247,9 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
       ^^ hardline ^^ sorts_pp
   | TD_abbrev _ -> empty
   | TD_record (id, typq, fs, _) ->
-      let fname fid =
-        if prefix_recordtype && string_of_id id <> "regstate" then
-          concat [doc_id_lem id; string "_"; doc_id_lem_type fid]
-        else doc_id_lem_type fid
+      let f_pp (typ, fid) =
+        concat [doc_fieldname_lem id fid; space; colon; space; doc_typ_lem params_to_print env typ; semi]
       in
-      let f_pp (typ, fid) = concat [fname fid; space; colon; space; doc_typ_lem params_to_print env typ; semi] in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
       let typq_to_print = typq_to_print params_to_print id typq in
       let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq_to_print in
