@@ -153,6 +153,23 @@ def test_lem(name):
 def test_coq(name):
     banner('Testing {}'.format(name))
     results = Results(name)
+    results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Coq library")
+    results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Coq")
+    results.expect_failure("for_shadow.sail", "Pure loops aren't current supported for Coq (and don't really make sense)")
+    results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
+    results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
+    results.expect_failure("concurrency_interface.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
+    results.expect_failure("outcome_impl.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
+    results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Coq backend")
+    results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
+    results.expect_failure("poly_outcome.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
+    results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
+    results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
+    results.expect_failure("fail_assert_mono_bug.sail", "test output checking not supported for Coq yet")
+    results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
+    results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backedn")
+    results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
+    results.expect_failure("tl_pat.sail", "Coq backend doesn't support constructors with the same name as a type")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -197,6 +214,7 @@ xml += test_interpreter('interpreter')
 xml += test_ocaml('OCaml')
 
 #xml += test_lem('lem')
+#xml += test_coq('coq')
 
 xml += '</testsuites>\n'
 

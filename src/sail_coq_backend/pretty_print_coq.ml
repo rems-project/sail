@@ -130,8 +130,8 @@ type context = {
   constant_kids : Nat_big_num.num KBindings.t; (* type variables that should be replaced by a constant definition *)
   bound_nvars : KidSet.t;
   build_at_return : string option;
-  recursive_fns : (int * int) Bindings.t;
-      (* Number of implicit arguments and constraints for (mutually) recursive definitions *)
+  recursive_fns : (int * int * bool) Bindings.t;
+      (* Number of implicit arguments and constraints for (mutually) recursive definitions, and whether there is a measure *)
   debug : bool;
   ret_typ_pp : PPrint.document; (* Return type formatted for use with returnR *)
   effect_info : Effects.side_effect_info;
@@ -197,7 +197,7 @@ let rec fix_id avoid remove_tick name =
   | "in" | "let" | "match" | "return" | "then" | "where" | "with" | "by" | "exists" | "exists2" | "using"
   (* other identifiers we shouldn't override *)
   | "assert" | "lsl" | "lsr" | "asr" | "type" | "function" | "raise" | "try" | "check" | "field" | "LT" | "GT" | "EQ"
-  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "register_ref" ->
+  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "register_ref" | "vec" ->
       name ^ "'"
   | _ ->
       if StringSet.mem name avoid then name ^ "'"
@@ -1765,10 +1765,16 @@ let doc_exp, doc_let =
                     | ExNone, _, t1 -> t1
                   )
                 in
-                let out_typ = match ann_typ with Typ_aux (Typ_exist (_, _, t1), _) -> t1 | t1 -> t1 in
+                let out_typ_bound, out_typ =
+                  match ann_typ with Typ_aux (Typ_exist (ks, _, t1), _) -> (ks, t1) | t1 -> ([], t1)
+                in
                 let autocast =
                   (* Avoid using helper functions which simplify the nexps *)
                   match (in_typ, out_typ) with
+                  (* When we expect a bitvector of arbitrary length we don't need a cast *)
+                  | _, Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _)
+                    when List.exists (fun k -> Kid.compare v (kopt_kid k) == 0) out_typ_bound ->
+                      false
                   | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
                       Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
                       not (similar_nexps ctxt env n1 n2)
@@ -1841,11 +1847,11 @@ let doc_exp, doc_let =
                   let argspp = List.map2 (doc_arg true) args arg_typs in
                   let all =
                     match is_rec with
-                    | Some (pre, post) ->
+                    | Some (pre, post, is_measured) ->
                         (call :: List.init pre (fun _ -> underscore))
                         @ argspp
                         @ List.init post (fun _ -> underscore)
-                        @ [parens (string "_limit_reduces _acc")]
+                        @ if is_measured then [parens (string "_limit_reduces _acc")] else []
                     | None -> (
                         match f with
                         | Id_aux (Id x, _) when is_prefix "#rec#" x ->
@@ -2940,7 +2946,9 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   in
   let intropp = match mutrec with NotMutrec -> intropp | FirstFn -> string "Fixpoint" | LaterFn -> string "with" in
   let ctxt =
-    if is_measured then { ctxt with recursive_fns = Bindings.singleton id (List.length quantspp, 0) } else ctxt
+    match mutrec with
+    | NotMutrec -> ctxt
+    | _ -> { ctxt with recursive_fns = Bindings.singleton id (List.length quantspp, 0, is_measured) }
   in
   let _ =
     match guard with
@@ -3237,6 +3245,13 @@ let doc_val avoid_target_names pat exp =
     | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 -> (id, None)
     | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)), _)
       when Id.compare id (id_of_kid kid) == 0 ->
+        (id, Some typ)
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)
+      when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
+        (id, None)
+    | P_aux
+        (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)), _)
+      when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
         (id, Some typ)
     | _ ->
         raise
