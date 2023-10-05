@@ -11,7 +11,7 @@ val HaveSomeFeature : unit -> bool
 
 function HaveSomeFeature () = return(true)
 
-val foo : bits(1) -> unit effect {escape, undef}
+val foo : bits(1) -> unit
 
 function foo(x) = {
   let i : int =
@@ -27,7 +27,7 @@ function foo(x) = {
   }
 }
 
-val run : unit -> unit effect {escape, undef}
+val run : unit -> unit
 
 function run () = {
     foo(0b0);

@@ -19,7 +19,7 @@ val use : myunion -> bits(32)
 
 function use(MyConstr(n,v)) = sail_zero_extend(v,32)
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(use(make(0b00)) == 0x00000012);

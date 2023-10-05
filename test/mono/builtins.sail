@@ -19,23 +19,23 @@ val UInt = {
    TODO: need some way to check that everything has propagated. */
 
 /* A function that constant propagation won't touch */
-val launder : forall 'n. bits('n) -> bits('n) effect {escape}
+val launder : forall 'n. bits('n) -> bits('n)
 function launder(x) = {
   assert(true);
   x
 }
 
 /* A function that constant propagation won't touch */
-val launder_int : int -> int effect {escape}
+val launder_int : int -> int
 function launder_int(x) = {
   assert(true);
   x
 }
 
-val test : bool -> unit effect {escape}
+val test : bool -> unit
 
 function test(b) = {
-    let 'n : {'n, 'n in {8,16}. atom('n)} = if b then 8 else 16;
+    let 'n : {'n, 'n in {8,16}. int('n)} = if b then 8 else 16;
     let x : bits('n) = match 'n { 8 => 0x12, 16 => 0x1234 };
     let x' : bits('n) = launder(x);
     let y : bits('n) = match 'n { 8 => 0x35, 16 => 0x5637 };
@@ -48,7 +48,7 @@ function test(b) = {
     assert(shl_int(5,2) == shl_int(launder_int(5),2), "shl_int");
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run() = {
     test(true);

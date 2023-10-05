@@ -10,7 +10,7 @@ function f(m,n,b) = {
   sail_zero_extend(x, 32)
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(f(8,16,false) == 0x000000fa);

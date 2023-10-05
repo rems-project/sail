@@ -3,7 +3,7 @@ $include <prelude.sail>
 
 /* Test constant propagation on some variable patterns in let expressions */
 
-val test : bool -> unit effect {escape}
+val test : bool -> unit
 
 function test(b) = {
     let 'n : {|8,16|} = if b then 8 else 16;
@@ -11,7 +11,7 @@ function test(b) = {
     assert(unsigned(x) == (match n { 8 => 18, 16 => 4660 }) : int, "unsigned");
 }
 
-val test2 : bool -> unit effect {escape}
+val test2 : bool -> unit
 
 function test2(b) = {
     let 'n = (if b then 8 else 16) : {|8,16|};
@@ -19,7 +19,7 @@ function test2(b) = {
     assert(unsigned(x) == (match n { 8 => 18, 16 => 4660 }) : int, "unsigned");
 }
 
-val test_mult : {|4,8|} -> unit effect {escape}
+val test_mult : {|4,8|} -> unit
 
 function test_mult('m) = {
     let 'n = 2 * 'm;
@@ -27,7 +27,7 @@ function test_mult('m) = {
     assert(unsigned(x) == (match n { 8 => 18, 16 => 4660 }) : int, "unsigned");
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run() = {
     test(true);

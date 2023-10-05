@@ -1,11 +1,5 @@
 default Order dec
-type bits ('n : Int) = bitvector('n, dec)
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-overload operator == = {eq_int, eq_vec}
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
-  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
-
+$include <prelude.sail>
 
 /* Check case splitting on a vector */
 
@@ -19,7 +13,7 @@ function test((sel : bits(2)) @ (_ : bits(30))) = {
   }
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(test(0x0f353533) == 5);

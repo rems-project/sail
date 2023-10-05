@@ -17,7 +17,7 @@ function zero_subrange(n, x) = x[n..2] == sail_zeros(n - 2 + 1)
 val ones_subrange : forall 'n, 2 < 'n & 'n < 8. (int('n), bits(8)) -> bool
 function ones_subrange(n, x) = x[n..2] == sail_ones(n - 2 + 1)
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run() = {
     let x : bits(12) = 0x123;

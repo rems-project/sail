@@ -3,7 +3,7 @@ $include <prelude.sail>
 
 /* Should find a set constraint below the let */
 
-val f : forall 'n. atom('n) -> unit effect {escape}
+val f : forall 'n. int('n) -> unit
 
 function f(n) = {
     let 'm = 2 * n in {
@@ -14,7 +14,7 @@ function f(n) = {
 }
 
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
     f(8);

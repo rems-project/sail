@@ -1,27 +1,27 @@
 default Order dec
 $include <prelude.sail>
 $include <smt.sail>
-val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
-val extzv : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
-function extzv(m,v) = extz_vec(m,v)
-val bitvector_cast = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
-val cast ex_int : int -> {'n, true. atom('n)}
+
+val extzv : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
+function extzv(m,v) = sail_zero_extend(v, m)
+
+val cast ex_int : int -> {'n, true. int('n)}
 function ex_int 'n = n
 val quotient = {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (int, int) -> int
 overload operator / = {quotient}
 
 /* Byte/bits size conversions are a pain */
 
-val accept : forall 'n. (atom('n), bits(8 * 'n)) -> unit
+val accept : forall 'n. (int('n), bits(8 * 'n)) -> unit
 
 function accept (_,_) = ()
 
-val f : forall 'n. atom('n) -> unit effect {escape,undef}
+val f : forall 'n. int('n) -> unit
 
 function f(n) = {
     assert(constraint('n in {8,16}));
     x : bits('n) = undefined;
-    let 'm : {'o, true. atom('o)} = ex_int(n / 8) in {
+    let 'm : {'o, true. int('o)} = ex_int(n / 8) in {
         assert(constraint(8 * 'm == 'n));
         x = replicate_bits(0b00000000,'m);
         accept(m,x);
@@ -33,17 +33,17 @@ val accept2 : forall 'n. bits('n) -> unit
 
 function accept2 (_) = ()
 
-val g : forall 'm 'n. (atom('m), atom('n), bits('n)) -> unit effect {escape}
+val g : forall 'm 'n. (int('m), int('n), bits('n)) -> unit
 
 function g(m,n,v) = {
   assert(constraint('m >= 0 & 'n >= 0));
-  let 'o : {'p, true. atom('p)} = ex_int(m / n) in {
+  let 'o : {'p, true. int('p)} = ex_int(m / n) in {
     assert(constraint('o * 'n == 'm));
     accept2(replicate_bits(v,o))
   }
 }
 
-val run : unit -> unit effect {escape, undef}
+val run : unit -> unit
 
 function run () = {
     f(8);
