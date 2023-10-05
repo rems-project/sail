@@ -293,7 +293,7 @@ val RoundUp = {ocaml: "round_up", interpreter: "round_up", lem: "realCeiling", c
 
 val abs_real = {coq: "Rabs", _: "abs_real"} : real -> real
 
-overload abs = {abs_atom, abs_real}
+overload abs = {abs_int_atom, abs_real}
 
 val quotient_real = {ocaml: "quotient_real", interpreter: "quotient_real", lem: "realDiv", c: "div_real", coq: "Rdiv"} : (real, real) -> real
 
