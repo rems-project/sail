@@ -1,12 +1,8 @@
-$include <smt.sail>
-$include <flow.sail>
 default Order dec
-type bits ('n : Int) = bitvector('n, dec)
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-overload operator == = {eq_int, eq_vec}
-val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
-val extz : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
-function extz(m,v) = extz_vec(m,v)
+$include <prelude.sail>
+
+val extz : forall 'n 'm, 'n >= 0 & 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+function extz(m,v) = sail_mask(m,v)
 val UInt = {
   ocaml: "uint",
   lem: "uint",
@@ -15,13 +11,13 @@ val UInt = {
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 
-val a : {|8,16,32|} -> int
-val b : {|8,16,32|} -> int
+val a : {8,16,32} -> int
+val b : {8,16,32} -> int
 
 function a 'n = if n == 8 then b(n) else let x : bits('n) = extz(0x12) in UInt(x)
 function b 'n = if n == 32 then a(n) else let x : bits('n) = extz(0x34) in UInt(x)
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(a(8) == 52);

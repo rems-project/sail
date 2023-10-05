@@ -22,7 +22,7 @@ function test2(n) = {
   use(size)
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(test1(2) == 18);

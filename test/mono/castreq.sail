@@ -1,14 +1,9 @@
 default Order dec
 $include <prelude.sail>
 $include <smt.sail>
-val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
-val extzv : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
-function extzv(m, v) = extz_vec(m,v)
-val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
-val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
-val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
-overload length = {bitvector_length}
-overload __size = {length}
+
+val extzv : forall 'n 'm, 'm >= 0 & 'n >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+function extzv(m, v) = sail_mask(m, v)
 
 
 /* Test generation of casts across case splits (e.g., going from bits('m) to bits(32)) */
@@ -49,7 +44,7 @@ function bar_if(x) =
   then use(x@x)
   else /* 16 */ use(x)
 
-val ret : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect {undef}
+val ret : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n)
 
 function ret(n, x) =
   let y : bits(16) = extzv(x) in
@@ -58,7 +53,7 @@ function ret(n, x) =
     64 => let z = y@y@y@y in { dfsf = 4; return z; undefined }
   }
 
-val assign : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect {undef}
+val assign : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n)
 
 function assign(n, x) = {
   let y : bits(16) = extzv(x);
@@ -151,7 +146,7 @@ function refine_mutable_exp2(n, x) = {
 
 /* Adding casts for top-level pattern matches */
 
-val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (atom('n), bits('m)) -> bits('n) effect pure
+val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (int('n), bits('m)) -> bits('n) effect pure
 
 function foo2(32,x) =
   let y : bits(16) = extzv(x) in
@@ -160,7 +155,7 @@ and foo2(64,x) =
   let y : bits(16) = extzv(x) in
   let z = y@y@y@y in let dfsf = 4 in z
 
-val foo3 : forall 'm 'n, 'n in {4,8}. (atom('n), bits('m)) -> bits(8 * 'n) effect pure
+val foo3 : forall 'm 'n, 'm >= 0 & 'n in {4,8}. (int('n), bits('m)) -> bits(8 * 'n) effect pure
 
 function foo3(4,x) =
   let y : bits(16) = extzv(x) in
@@ -170,7 +165,7 @@ and foo3(8,x) =
   let z = y@y@y@y in let dfsf = 4 in z
 
 /* Casting an argument isn't supported yet 
-val bar2 : forall 'n, 'n in {8,16}. (atom('n),bits('n)) -> unit effect pure
+val bar2 : forall 'n, 'n in {8,16}. (int('n),bits('n)) -> unit effect pure
 
 function bar2(8,x) =
   use(x@x)
@@ -179,7 +174,7 @@ and bar2(16,x) =
 */
 
 
-val run : unit -> unit effect {escape,undef}
+val run : unit -> unit
 
 function run () = {
     bar(0x12);

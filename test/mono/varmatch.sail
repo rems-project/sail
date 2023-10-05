@@ -18,7 +18,7 @@ function foo(x) = {
   }
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(foo(One) == Two);

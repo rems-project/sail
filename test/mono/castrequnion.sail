@@ -43,7 +43,7 @@ and cmp (Some(x),Some(y)) = x == y
 
 overload operator == = {cmp}
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run() = {
   assert((foo(0x12) : option(bits(16))) == None());

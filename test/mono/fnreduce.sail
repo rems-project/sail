@@ -1,9 +1,5 @@
-val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
-overload operator + = {add_int}
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
-overload operator == = {eq_int, eq_anything}
-
+$include <prelude.sail>
+$include <generic_equality.sail>
 
 /* Test constant propagation part of monomorphisation involving
    functions.  We should reduce a function application when the
@@ -38,7 +34,7 @@ function cannotReduce (x) = {
 
 register whatever : int
 
-val impure : AnEnum -> AnEnum effect {rreg}
+val impure : AnEnum -> AnEnum
 
 function impure (x) = {
   match (x) {
@@ -66,7 +62,7 @@ function canReduceUnion2 (x) = {
 }
 
 
-val test : AnEnum -> (AnEnum,int,AnEnum,EnumlikeUnion,ProperUnion) effect {rreg}
+val test : AnEnum -> (AnEnum,int,AnEnum,EnumlikeUnion,ProperUnion)
 
 function test (x) = {
   let a = canReduce(x) in
@@ -77,7 +73,7 @@ function test (x) = {
   (a,b,c,d,e)
 }
 
-val run : unit -> unit effect {rreg,escape}
+val run : unit -> unit
 
 function run () = {
   assert(test(One) == (Two,3,Two,First,Nonsense(First)));

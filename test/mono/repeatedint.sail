@@ -14,7 +14,7 @@ function test(SomeInstr(s as int('size),r)) = {
   sail_sign_extend(x,32)
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(test(SomeInstr(8,8)) == 0xffffff80);

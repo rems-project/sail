@@ -3,7 +3,7 @@ $include <prelude.sail>
 
 /* Test splitting required because there's a size calculation in the function */
 
-val foo : forall 'n. atom('n) -> unit effect {escape}
+val foo : forall 'n. int('n) -> unit
 
 function foo(n) = {
   assert(constraint('n in {2,4}));
@@ -13,7 +13,7 @@ function foo(n) = {
   ()
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
     foo(2);

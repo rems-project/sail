@@ -1,16 +1,16 @@
 default Order dec
 $include <prelude.sail>
-val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
-val extz : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
-function extz(m,v) = extz_vec(m,v)
-val "exts_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
-val exts : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
-function exts(m,v) = exts_vec(m,v)
+
+val extz : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+function extz(m,v) = sail_zero_extend(v, m)
+
+val exts : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+function exts(m,v) = sail_sign_extend(v, m)
 
 /* A function which is merely parametrised by a size does not need to be
    monomorphised */
 
-val parametric : forall 'n, 'n in {32,64}. atom('n) -> bits(64)
+val parametric : forall 'n, 'n in {32,64}. int('n) -> bits(64)
 
 function parametric(n) = {
   let x : bits('n) = exts(0x80000000) in
@@ -19,7 +19,7 @@ function parametric(n) = {
 
 /* But if we do a calculation on the size then we'll need to case split */
 
-val depends : forall 'n, 'n in {16,32}. atom('n) -> bits(64)
+val depends : forall 'n, 'n in {16,32}. int('n) -> bits(64)
 
 function depends(n) = {
   let 'm = 2 * n in
@@ -27,7 +27,7 @@ function depends(n) = {
   extz(x)
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(parametric(32) == 0x0000000080000000);

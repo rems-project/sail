@@ -9,7 +9,7 @@ mapping map_foo : foo <-> bool = {
   B <-> false
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run() = {
   assert(map_foo(A))

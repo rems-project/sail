@@ -4,7 +4,7 @@ $include <smt.sail>
 
 /* Tests set constraints in different constraints */
 
-val f : forall 'n 'm. (atom('n), atom('m)) -> unit effect {escape}
+val f : forall 'n 'm. (int('n), int('m)) -> unit
 
 function f(n,m) = {
     assert(constraint('n in {8,16} & 'm < 'n), "nconstraint");
@@ -13,7 +13,7 @@ function f(n,m) = {
     ()
 }
 
-val f' : forall 'n 'm. (atom('n), atom('m)) -> unit effect {escape}
+val f' : forall 'n 'm. (int('n), int('m)) -> unit
 
 function f'(n,m) = {
     assert(constraint(('n == 8 | 'n == 16) & 'm < 'n), "nconstraint");
@@ -22,7 +22,7 @@ function f'(n,m) = {
     ()
 }
 
-val g : forall 'n 'm. (atom('n), atom('m)) -> unit effect {escape}
+val g : forall 'n 'm. (int('n), int('m)) -> unit
 
 function g(n,m) = {
     assert(constraint('n in {8,16}) & 'm < 'n, "set and exp");
@@ -30,7 +30,7 @@ function g(n,m) = {
     let x : bits('p) = replicate_bits(0b0,'p) in
     ()
 }
-val h : forall 'n 'm. (atom('n), atom('m)) -> unit effect {escape}
+val h : forall 'n 'm. (int('n), int('m)) -> unit
 
 function h(n,m) = {
     assert(('n == 8 | 'n == 16) & 'm < 'n, "all exp");
@@ -39,7 +39,7 @@ function h(n,m) = {
     ()
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
     f(8,3);
