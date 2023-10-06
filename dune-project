@@ -110,6 +110,13 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (omd (and (>= 1.3.1) (< 1.4.0)))))
 
 (package
+  (name sail_json_backend)
+  (synopsis "Sail to JSON formatting")
+  (depends
+    (libsail (= :version))
+    (omd (and (>= 1.3.1) (< 1.4.0)))))
+
+(package
   (name sail_doc_backend)
   (synopsis "Sail documentation generator")
   (depends
@@ -140,6 +147,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (sail_lem_backend (and (= :version) :post))
     (sail_coq_backend (and (= :version) :post))
     (sail_latex_backend (and (= :version) :post))
+    (sail_json_backend (and (= :version) :post))
     (sail_doc_backend (and (= :version) :post))
     (sail_output (and (= :version) :post))
     (linenoise (>= 1.1.0))))
