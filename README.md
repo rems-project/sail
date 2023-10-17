@@ -1,4 +1,4 @@
-![Sail logo](https://github.com/rems-project/sail/blob/sail2/etc/sail_logo.png?raw=true)
+![Sail logo](https://github.com/rems-project/sail/blob/sail2/etc/logo/sail_logo.png?raw=true)
 
 The Sail ISA specification language
 ===================================
@@ -123,6 +123,11 @@ Vim
 [editors/vim](editors/vim) contains support for syntax highlighting in the vim
 editor, in vim's usual format of an `ftdetect` directory to detect Sail files
 and a `syntax` directory to provide the actual syntax highlighting.
+
+Logo
+====
+
+[etc/logo](etc/logo) contains the Sail logo
 
 Licensing
 =========
