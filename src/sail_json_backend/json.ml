@@ -343,6 +343,8 @@ let parse_type_union i ucl =
               None -> ()
             | Some s -> Hashtbl.add descriptions (string_of_id d) s
           end
+      | Typ_aux ( Typ_id (i), _ ) ->
+          Hashtbl.add sigs (string_of_id d) [string_of_id i]
       | _ -> print_endline "Tu_ty_id other"
       end;
       print_endline ")"
@@ -544,6 +546,7 @@ let defs { defs; _ } =
         List.iter (parse_mapcl i) ml
     | _ -> print_string ""
   ) defs;
+
   (*
   print_endline "TYPES";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) types;
@@ -561,18 +564,36 @@ let defs { defs; _ } =
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly;
   print_endline "FUNCTIONS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) functions;
-  print_endline "op_functions";
+  print_endline "OP_FUNCTIONS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) op_functions;
-  *)
   print_endline "EXENSIONS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ (String.concat "," v))) extensions;
-  print_endline "formats";
+  print_endline "FORMATS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) formats;
+  *)
+
   print_endline "{";
   print_endline "  \"instructions\": [";
-  (* Filter out keys which have no match in 'assembly'. *)
-  Hashtbl.iter (fun k v -> if Hashtbl.find_opt assembly k == None then Hashtbl.remove sigs k) sigs;
-  print_endline (String.concat ",\n" (List.map json_of_instruction (Hashtbl.fold (fun k v init -> k :: init) sigs [])));
+
+  (* Filter out 'assembly' keys which have no match in 'encodings'. *)
+  Hashtbl.iter (
+    fun k v ->
+      if Hashtbl.find_opt encodings    k == None then begin print_endline ("assembly: encodings missing " ^ k); Hashtbl.remove assembly k end;
+  ) assembly;
+  (* Filter out 'encodings' keys which have no match in 'assembly'. *)
+  Hashtbl.iter (
+    fun k v ->
+      if Hashtbl.find_opt assembly     k == None then begin print_endline ("encodings: assembly missing " ^ k); Hashtbl.remove encodings k end;
+  ) encodings;
+
+  (* Join keys and mnemonics, then sort by mnemonic, then use the keys in that order to emit instructions *)
+  let keys_sorted_by_mnemonic =
+    let key_mnemonic_sorted =
+      let key_mnemonic_map = Hashtbl.fold (fun k v init -> [k; List.hd v] :: init) assembly [] in
+        List.sort (fun l r -> String.compare (List.hd (List.tl l)) (List.hd (List.tl r))) key_mnemonic_map in
+          List.map List.hd key_mnemonic_sorted in
+            print_endline (String.concat ",\n" (List.map json_of_instruction keys_sorted_by_mnemonic));
+
   print_endline "  ],";
   print_endline "  \"formats\": [";
   let format_list = Hashtbl.fold (fun k v accum -> (("\"" ^ v ^ "\"") :: accum)) formats [] in
