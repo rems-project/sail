@@ -112,6 +112,12 @@ let rec string_list_of_mpat x = match x with
       List.concat (List.map string_list_of_mpat pl)
   | MP_aux (MP_typ ( mp, at ), _) ->
       print_endline "MP_typ";
+      begin match at with
+      | Typ_aux ( Typ_app (i, _), _ ) ->
+            print_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_typ at));
+            Hashtbl.add types (List.hd (string_list_of_mpat mp)) (string_of_typ at)
+      | _ -> print_endline "Typ_other"
+      end;
       string_list_of_mpat mp
   | MP_aux (MP_tuple ( mpl ), _) ->
       print_endline "MP_tuple";
@@ -294,11 +300,11 @@ let parse_mapcl i mc =
     in begin
       print_endline ("FORMAT " ^ format);
       match string_of_id i with
-        "encdec" ->
-          print_endline "ENCDEC!";
+        "encdec" | "encdec_compressed" ->
+          print_endline (string_of_id i);
           parse_encdec i mc format
       | "assembly" ->
-          print_endline "ASSEMBLY!";
+          print_endline (string_of_id i);
           parse_assembly i mc
       | _ -> ();
     end;
@@ -345,6 +351,9 @@ let parse_type_union i ucl =
           end
       | Typ_aux ( Typ_id (i), _ ) ->
           Hashtbl.add sigs (string_of_id d) [string_of_id i]
+      | Typ_aux ( Typ_app (i, _), _ ) ->
+            print_endline (string_of_typ c);
+            Hashtbl.add sigs (string_of_id d) [string_of_typ c]
       | _ -> print_endline "Tu_ty_id other"
       end;
       print_endline ")"
@@ -426,30 +435,42 @@ let rec basetype t =
     None -> t
   | Some bt -> basetype bt
 
-let string_of_sizeof_field k f =
+let extract_func_arg s =
+    List.hd (String.split_on_char ')' (List.hd (List.tl ((String.split_on_char '(' s)))))
+
+let rec string_of_sizeof_field k f =
+  print_endline ("string_of_sizeof_field " ^ k ^ ":" ^ f);
   if String.starts_with ~prefix:"0b" f then string_of_int (String.length f - 2)
   else if String.contains f '(' then
-    let op_func = List.hd (String.split_on_char '(' f) in
-      Hashtbl.find op_functions op_func
-  else begin
-    print_endline ("sizeof " ^ k ^ " " ^ f);
+    if String.starts_with ~prefix:"bits(" f then
+      extract_func_arg f
+    else
+      let op_func = List.hd (String.split_on_char '(' f) in
+        let op_type = Hashtbl.find_opt op_functions op_func in match op_type with
+            Some s -> s
+          | None -> "0"
+  else
     let opmap = List.combine (Hashtbl.find operands k) (Hashtbl.find sigs k) in
-      begin match List.assoc_opt f opmap with
-        Some t ->
-          let bt = basetype t in
-            if bt = "bool" then
-              "1"
-            else if String.starts_with ~prefix:"bits(" bt then
-              List.hd (String.split_on_char ')' (List.hd (List.tl ((String.split_on_char '(' bt)))))
-            else begin
-              print_endline ("unfamiliar base type " ^ bt);
-              "72"
-            end
-      | None ->
-          print_endline ("not found " ^ f);
-          "0"
+      begin
+        match List.assoc_opt f opmap with
+          Some t ->
+            let bt = basetype t in
+              if bt = "bool" then
+                "1"
+              else if String.starts_with ~prefix:"bits(" bt then
+                extract_func_arg bt
+              else begin
+                print_endline ("unfamiliar base type " ^ bt);
+                "72"
+              end
+        | None ->
+            match Hashtbl.find_opt types f with
+                Some t ->
+                  string_of_sizeof_field k t
+              | None ->
+                  print_endline ("not found " ^ f);
+                  "0"
       end
-  end
 
 let json_of_field k f =
   "{ \"field\": \"" ^ f ^ "\", \"size\": " ^ string_of_sizeof_field k f ^ " }"
@@ -547,7 +568,6 @@ let defs { defs; _ } =
     | _ -> print_string ""
   ) defs;
 
-  (*
   print_endline "TYPES";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) types;
   print_endline "SIGS";
@@ -570,7 +590,6 @@ let defs { defs; _ } =
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ (String.concat "," v))) extensions;
   print_endline "FORMATS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) formats;
-  *)
 
   print_endline "{";
   print_endline "  \"instructions\": [";
