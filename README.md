@@ -1,3 +1,5 @@
+![Sail logo](https://github.com/rems-project/sail/blob/sail2/etc/sail_logo.png?raw=true)
+
 The Sail ISA specification language
 ===================================
 
