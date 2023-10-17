@@ -9,9 +9,9 @@ supported. On older Ubuntu versions such as 18.04 you will not be able
 to use opam from the package manager, and will need to install it
 following the instructions on the opam website.
 
-Use `ocaml -version` to check your OCaml version. If you have OCaml 4.08 or newer, that's fine, otherwise use `opam switch` to install 4.08:
+Use `ocaml -version` to check your OCaml version. If you have OCaml 4.08.1 or newer, that's fine, otherwise you can use `opam switch` to install a newer version:
 ```
-opam switch create 4.08.0
+opam switch create 5.1.0
 ```
 and set up the environment for that OCaml version (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
 ```
