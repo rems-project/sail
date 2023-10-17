@@ -575,17 +575,6 @@ let defs { defs; _ } =
   print_endline "{";
   print_endline "  \"instructions\": [";
 
-  (* Filter out 'assembly' keys which have no match in 'encodings'. *)
-  Hashtbl.iter (
-    fun k v ->
-      if Hashtbl.find_opt encodings    k == None then begin print_endline ("assembly: encodings missing " ^ k); Hashtbl.remove assembly k end;
-  ) assembly;
-  (* Filter out 'encodings' keys which have no match in 'assembly'. *)
-  Hashtbl.iter (
-    fun k v ->
-      if Hashtbl.find_opt assembly     k == None then begin print_endline ("encodings: assembly missing " ^ k); Hashtbl.remove encodings k end;
-  ) encodings;
-
   (* Join keys and mnemonics, then sort by mnemonic, then use the keys in that order to emit instructions *)
   let keys_sorted_by_mnemonic =
     let key_mnemonic_sorted =
