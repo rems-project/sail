@@ -130,7 +130,8 @@ let parse_encdec_mpat mp pb format = match mp with
       Hashtbl.add formats (string_of_id app_id) format;
       let operandl = List.concat (List.map string_list_of_mpat mpl) in begin
         List.iter print_endline operandl;
-        Hashtbl.add operands (string_of_id app_id) operandl;
+        if not (String.equal (List.hd operandl) "()") then
+          Hashtbl.add operands (string_of_id app_id) operandl;
         print_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
@@ -225,7 +226,8 @@ let parse_assembly_mpat mp pb = match mp with
       let operandl = List.concat (List.map string_list_of_mpat mpl) in
       begin
         List.iter print_endline operandl;
-        Hashtbl.add operands (string_of_id app_id) operandl;
+        if not (String.equal (List.hd operandl) "()") then
+          Hashtbl.add operands (string_of_id app_id) operandl;
         print_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
