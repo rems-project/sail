@@ -130,8 +130,6 @@ let parse_encdec_mpat mp pb format = match mp with
       Hashtbl.add formats (string_of_id app_id) format;
       let operandl = List.concat (List.map string_list_of_mpat mpl) in begin
         List.iter print_endline operandl;
-        if not (String.equal (List.hd operandl) "()") then
-          Hashtbl.add operands (string_of_id app_id) operandl;
         print_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
@@ -226,8 +224,6 @@ let parse_assembly_mpat mp pb = match mp with
       let operandl = List.concat (List.map string_list_of_mpat mpl) in
       begin
         List.iter print_endline operandl;
-        if not (String.equal (List.hd operandl) "()") then
-          Hashtbl.add operands (string_of_id app_id) operandl;
         print_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
@@ -387,6 +383,20 @@ let parse_execute p e =
       Hashtbl.add functions x (string_of_exp e)
     end
 
+let rec string_list_of_pat p = match p with
+    P_aux (P_lit l, _) ->
+        print_endline ("P_lit " ^ (string_of_lit l));
+        [ string_of_lit l ]
+  | P_aux (P_id i, _) ->
+        print_endline ("P_id " ^ (string_of_id i));
+        [ string_of_id i ]
+  | P_aux (P_tuple pl, _) ->
+        print_endline "P_tuple ->";
+        let l = List.concat (List.map string_list_of_pat pl) in
+          print_endline "<- P_tuple";
+          l
+  | _ -> print_endline "pat other"; []
+
 let parse_funcl fcl =
   print_endline "funcl";
   match fcl with
@@ -401,6 +411,9 @@ let parse_funcl fcl =
             begin match p with
                 P_aux ( P_app (x, pl), _ ) ->
                   print_endline ("P_app " ^ string_of_id x);
+                  let operandl = (List.concat (List.map string_list_of_pat pl)) in
+                    if not (String.equal (List.hd operandl) "()") then
+                      Hashtbl.add operands (string_of_id x) operandl
               | _ -> print_endline "pat other"
             end;
             print_endline "<- pat";
