@@ -116,6 +116,9 @@ let rec string_list_of_mpat x = match x with
       | Typ_aux ( Typ_app (i, _), _ ) ->
             print_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_typ at));
             Hashtbl.add types (List.hd (string_list_of_mpat mp)) (string_of_typ at)
+      | Typ_aux ( Typ_id i, _ ) ->
+            print_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_id i));
+            Hashtbl.add types (List.hd (string_list_of_mpat mp)) (string_of_id i)
       | _ -> print_endline "Typ_other"
       end;
       string_list_of_mpat mp
@@ -144,50 +147,15 @@ let parse_encdec_mpat mp pb format = match mp with
       string_of_id app_id
   | _ -> assert false
 
-let rec parse_exp e = match e with
-  | E_aux (E_app (f, args), _) ->
-      print_endline ("E_app \"" ^ string_of_id f ^ "\" [" ^ Util.string_of_list ", " string_of_arg args ^ "]")
-  | _ -> print_endline ("parse_exp other" ^ string_of_exp e)
-
+(* This looks for any "extension(string)", and does not, for example
+   account for negation. This case should be pretty unlikely, however. *)
 let rec find_extensions e = match e with
-    E_aux (E_block (l), _) -> print_endline "E_block"; []
-  | E_aux (E_id (i), _) -> print_endline "E_id"; []
-  | E_aux (E_ref _, _) -> print_endline "E_ref"; []
-  | E_aux (E_lit _, _) -> print_endline "E_lit"; []
-  | E_aux (E_typ _, _) -> print_endline "E_type"; []
-  | E_aux (E_app (i, el), _) ->
+    E_aux (E_app (i, el), _) ->
       print_endline("E_app " ^ (string_of_id i));
       if String.equal (string_of_id i) "extension" then match List.hd el with
           E_aux (E_lit (extension), _) -> [ string_of_lit extension ]
         | _ -> []
       else List.concat (List.map find_extensions el)
-  | E_aux (E_app_infix _, _) -> print_endline "E_app_infix"; []
-  | E_aux (E_tuple _, _) -> print_endline "E_tuple"; []
-  | E_aux (E_if _, _) -> print_endline "E_if"; []
-  | E_aux (E_loop _, _) -> print_endline "E_loop"; []
-  | E_aux (E_for _, _) -> print_endline "E_for"; []
-  | E_aux (E_vector _, _) -> print_endline "E_vector"; []
-  | E_aux (E_vector_access _, _) -> print_endline "E_vector_access"; []
-  | E_aux (E_vector_subrange _, _) -> print_endline "E_vector_subrange"; []
-  | E_aux (E_vector_update _, _) -> print_endline "E_vector_update"; []
-  | E_aux (E_vector_update_subrange _, _) -> print_endline "E_vector_update_subrange"; []
-  | E_aux (E_vector_append _, _) -> print_endline "E_vector_append"; []
-  | E_aux (E_list _, _) -> print_endline "E_list"; []
-  | E_aux (E_cons _, _) -> print_endline "E_cons"; []
-  | E_aux (E_struct _, _) -> print_endline "E_struct"; []
-  | E_aux (E_struct_update _, _) -> print_endline "E_struct_update"; []
-  | E_aux (E_field _, _) -> print_endline "E_field"; []
-  | E_aux (E_match _, _) -> print_endline "E_match"; []
-  | E_aux (E_let _, _) -> print_endline "E_let"; []
-  | E_aux (E_assign _, _) -> print_endline "E_assign"; []
-  | E_aux (E_sizeof _, _) -> print_endline "E_sizeof"; []
-  | E_aux (E_constraint _, _) -> print_endline "E_constraint"; []
-  | E_aux (E_exit _, _) -> print_endline "E_exit"; []
-  | E_aux (E_throw _, _) -> print_endline "E_throw"; []
-  | E_aux (E_try _, _) -> print_endline "E_try"; []
-  | E_aux (E_return _, _) -> print_endline "E_return"; []
-  | E_aux (E_assert _, _) -> print_endline "E_assert"; []
-  | E_aux (E_var _, _) -> print_endline "E_var"; []
   | _ -> print_endline "E other"; []
 
 let parse_encdec i mc format = match mc with
@@ -248,53 +216,14 @@ let parse_assembly i mc = match mc with
       end
   | _ -> assert false
 
-let rec parse_mpat x = match x with
-  | MP_aux (MP_lit ( l ), _) -> print_endline ("MP_lit " ^ string_of_lit l)
-  | MP_aux (MP_id ( i ), _) -> print_endline ("MP_id " ^ string_of_id i)
-  | MP_aux (MP_app ( i, pl ), _) ->
-      print_endline ("MP_app " ^ (string_of_id i) ^ " -->");
-      List.iter parse_mpat pl;
-      print_endline ("<-- MP_app " ^ (string_of_id i))
-  | MP_aux (MP_vector_concat ( mpl ), _) ->
-      print_endline "MP_vector_concat";
-      List.iter parse_mpat mpl
-  | MP_aux (MP_string_append ( pl ), _) ->
-      print_endline "MP_string_append";
-      List.iter parse_mpat pl
-  | MP_aux (MP_typ ( mp, at ), _) ->
-      print_endline "MP_typ";
-      parse_mpat mp
-  | _ -> print_endline "mpat other"
-
-let parse_MPat_aux p = match p with
-  | MPat_aux ( MPat_pat (p), _ ) ->
-      print_endline ("MPat_pat " ^ string_of_mpat p);
-      parse_mpat p
-  | MPat_aux ( MPat_when (p, e), _ ) ->
-      print_endline ("MPat_when " ^ (string_of_mpat p) ^ " when " ^ (string_of_exp e));
-      parse_mpat p;
-      parse_exp e
-
 let parse_mapcl i mc =
   print_endline ("mapcl " ^ string_of_id i);
-  begin match mc with
-  | MCL_aux (_, (annot, _)) ->
-      begin match annot.doc_comment with
-          None -> ()
-        | Some s -> print_endline ("MAP DOC " ^ s)
-      end;
-      List.iter (fun attr ->
+  let format = match mc with MCL_aux (_, (annot, _)) ->
+      String.concat "-" (List.map (fun attr ->
         match attr with
-          (_, s0, s1) -> print_endline ("MAP ATTR " ^ s0 ^ ": " ^ s1)
-      ) annot.attrs
-  end;
-  let format = match mc with
-    | MCL_aux (_, (annot, _)) ->
-        String.concat "-" (List.map (fun attr ->
-          match attr with
-            (_, "format", s1) -> s1
-            | _ -> ""
-        ) annot.attrs)
+          (_, "format", s) -> s
+          | _ -> ""
+      ) annot.attrs)
     in begin
       print_endline ("FORMAT " ^ format);
       match string_of_id i with
@@ -305,26 +234,10 @@ let parse_mapcl i mc =
           print_endline (string_of_id i);
           parse_assembly i mc
       | _ -> ();
-    end;
-  match mc with
-  | MCL_aux ( MCL_bidir ( pa, pb ), _ ) ->
-      parse_MPat_aux pa;
-      parse_MPat_aux pb
-  | _ -> print_endline "mapcl other"
+    end
 
 let parse_type_union i ucl =
   print_endline ("type_union " ^ string_of_id i);
-  begin match ucl with
-  | Tu_aux (_, annot) ->
-      begin match annot.doc_comment with
-          None -> ()
-        | Some s -> print_endline ("DOC " ^ s)
-      end;
-      List.iter (fun attr ->
-        match attr with
-          (_, s0, s1) -> print_endline ("ATTR " ^ s0 ^ ": " ^ s1)
-      ) annot.attrs
-  end;
   match ucl with
   | Tu_aux ( Tu_ty_id ( c, d ), annot ) ->
       print_string ("Tu_ty_id " ^ string_of_id d ^ "(");
@@ -350,8 +263,8 @@ let parse_type_union i ucl =
       | Typ_aux ( Typ_id (i), _ ) ->
           Hashtbl.add sigs (string_of_id d) [string_of_id i]
       | Typ_aux ( Typ_app (i, _), _ ) ->
-            print_endline (string_of_typ c);
-            Hashtbl.add sigs (string_of_id d) [string_of_typ c]
+          print_endline (string_of_typ c);
+          Hashtbl.add sigs (string_of_id d) [string_of_typ c]
       | _ -> print_endline "Tu_ty_id other"
       end;
       print_endline ")"
@@ -362,26 +275,10 @@ let parse_DEF_type def =
   | TD_aux (TD_abbrev (d, e, f), _) ->
     print_endline ( "TD_abbrev " ^ string_of_id d ^ ":" ^ string_of_typ_arg f);
     Hashtbl.add types (string_of_id d) (string_of_typ_arg f);
-  | TD_aux ( TD_record (d, e, f, g), _) -> print_endline ( "TD_record " ^ string_of_id d )
   | TD_aux ( TD_variant (d, e, f, g), _) ->
       print_endline ( "TD_variant " ^ string_of_id d );
       List.iter (parse_type_union d) f
-  | TD_aux ( TD_enum (d, e, f), _) -> print_endline ( "TD_enum " ^ string_of_id d )
-  | TD_aux ( TD_bitfield (d, e, f), _) -> print_endline ( "TD_bitfield " ^ string_of_id d )
-
-let parse_execute p e =
-  let x = match p with
-        P_aux ( P_app (i, pl), _ ) ->
-          print_endline ("P_app " ^ string_of_id i);
-          string_of_id i
-      | _ -> raise (Failure "pat other")
-    in begin
-      print_endline "<- pat";
-      print_endline "exp -> ";
-      print_endline (string_of_exp e);
-      print_endline "<- exp";
-      Hashtbl.add functions x (string_of_exp e)
-    end
+  | _ -> print_endline "TD other"
 
 let rec string_list_of_pat p = match p with
     P_aux (P_lit l, _) ->
@@ -397,39 +294,19 @@ let rec string_list_of_pat p = match p with
           l
   | _ -> print_endline "pat other"; []
 
-let parse_funcl fcl =
-  print_endline "funcl";
-  match fcl with
-  | FCL_aux ( FCL_funcl ( i, Pat_aux ( j, _ ) ), _ ) ->
-      print_endline ("FCL_funcl " ^ string_of_id i);
-      if (string_of_id i) = "execute" then begin
-        match j with
-        | Pat_exp ( p, e ) -> (* parse_exp e *)
-            print_endline "Pat_exp";
-            print_endline (string_of_pat p);
-            print_endline "pat -> ";
-            begin match p with
-                P_aux ( P_app (x, pl), _ ) ->
-                  print_endline ("P_app " ^ string_of_id x);
-                  let operandl = (List.concat (List.map string_list_of_pat pl)) in
-                    if not (String.equal (List.hd operandl) "()") then
-                      Hashtbl.add operands (string_of_id x) operandl
-              | _ -> print_endline "pat other"
-            end;
-            print_endline "<- pat";
-            print_endline "exp -> ";
-            print_endline (string_of_exp e);
-            print_endline "<- exp";
-            parse_execute p e
-        | Pat_when ( p, e, w ) ->
-            print_endline "Pat_when";
-            print_endline (string_of_pat p);
-            print_endline (string_of_exp e);
-            print_endline (string_of_exp w);
-            parse_execute p e
+let parse_funcl fcl = match fcl with
+    FCL_aux ( FCL_funcl ( Id_aux (Id "execute", _), Pat_aux ( (
+          Pat_exp ( P_aux ( P_app (i, pl), _ ) , e )
+        | Pat_when ( P_aux ( P_app (i, pl), _ ) , e, _ )
+      ), _ ) ), _ ) ->
+      begin
+        print_endline ("FCL_funcl execute " ^ string_of_id i);
+        let operandl = (List.concat (List.map string_list_of_pat pl)) in
+          if not (String.equal (List.hd operandl) "()") then
+            Hashtbl.add operands (string_of_id i) operandl;
+        Hashtbl.add functions (string_of_id i) (string_of_exp e)
       end
-
-let json_of_operand op = "\"" ^ op ^ "\""
+  | _ -> print_endline "FCL_funcl other"
 
 let json_of_key_operand key op t =
   "\n{\n" ^
@@ -455,20 +332,31 @@ let extract_func_arg s =
 
 let rec string_of_sizeof_field k f =
   print_endline ("string_of_sizeof_field " ^ k ^ ":" ^ f);
-  if String.starts_with ~prefix:"0b" f then string_of_int (String.length f - 2)
+
+  if String.starts_with ~prefix:"0b" f then
+    (* binary literal "0b..." *)
+    string_of_int (String.length f - 2)
+
   else if String.contains f '(' then
+
     if String.starts_with ~prefix:"bits(" f then
+      (* bits(n) *)
       extract_func_arg f
+
     else
       let op_func = List.hd (String.split_on_char '(' f) in
         let op_type = Hashtbl.find_opt op_functions op_func in match op_type with
             Some s -> s
-          | None -> "0"
-  else
+          | None -> "0" (* TODO: needs work *)
+
+  else begin
+    (* match operand names to function signature types *)
     let opmap = List.combine (Hashtbl.find operands k) (Hashtbl.find sigs k) in
       begin
+        (* find matching operand type *)
         match List.assoc_opt f opmap with
           Some t ->
+            (* try to drill down to a base type *)
             let bt = basetype t in
               if bt = "bool" then
                 "1"
@@ -476,7 +364,7 @@ let rec string_of_sizeof_field k f =
                 extract_func_arg bt
               else begin
                 print_endline ("unfamiliar base type " ^ bt);
-                "72"
+                "72" (* TODO: needs work *)
               end
         | None ->
             match Hashtbl.find_opt types f with
@@ -484,8 +372,9 @@ let rec string_of_sizeof_field k f =
                   string_of_sizeof_field k t
               | None ->
                   print_endline ("not found " ^ f);
-                  "0"
+                  "0" (* TODO: needs work *)
       end
+  end
 
 let json_of_field k f =
   "{ \"field\": \"" ^ f ^ "\", \"size\": " ^ string_of_sizeof_field k f ^ " }"
@@ -496,26 +385,30 @@ let json_of_fields k =
   | Some (fields) -> String.concat ", " (List.map (fun f -> json_of_field k f) fields)
 
 let json_of_function k =
-  match Hashtbl.find_opt functions k with
-    None -> ""
-  | Some (f) -> String.escaped f
+  let fspec = match Hashtbl.find_opt functions k with
+      None -> ""
+    | Some (f) -> String.escaped f
+  in "\"" ^ fspec ^ "\""
 
 let json_of_name k =
-  match Hashtbl.find_opt names k with
-    None -> "TBD"
-  | Some (f) -> String.escaped f
+  let name = match Hashtbl.find_opt names k with
+      None -> "TBD"
+    | Some (f) -> String.escaped f
+  in "\"" ^ name ^ "\""
 
 let json_of_description k =
-  match Hashtbl.find_opt descriptions k with
-    None -> "TBD"
-  | Some (f) -> String.escaped f
+  let description = match Hashtbl.find_opt descriptions k with
+      None -> "TBD"
+    | Some (f) -> String.escaped f
+  in "\"" ^ description ^ "\""
 
 let json_of_format k =
-  match Hashtbl.find_opt formats k with
-    None -> "TBD"
-  | Some (f) -> match f with
-        "" -> "TBD"
-      | s -> String.escaped s
+  let format = match Hashtbl.find_opt formats k with
+      None -> "TBD"
+    | Some (f) -> match f with
+          "" -> "TBD"
+        | s -> String.escaped s
+  in "\"" ^ format ^ "\""
 
 let json_of_extensions k =
   match Hashtbl.find_opt extensions k with
@@ -526,13 +419,13 @@ let json_of_instruction k =
   let m = Hashtbl.find assembly k in
     "{\n" ^
     "  \"mnemonic\": " ^ List.hd m ^ ",\n" ^
-    "  \"name\": \"" ^ (json_of_name k) ^ "\",\n" ^
+    "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
     "  \"operands\": [ " ^ (json_of_operands k) ^ " ],\n" ^
-    "  \"format\": \"" ^ (json_of_format k) ^ "\",\n" ^
+    "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
     "  \"fields\": [ " ^ (json_of_fields k) ^ " ],\n" ^
     "  \"extensions\": [ " ^ (json_of_extensions k) ^ " ],\n" ^
-    "  \"function\": \"" ^ (json_of_function k) ^ "\",\n" ^
-    "  \"description\": \"" ^ (json_of_description k) ^ "\"\n" ^
+    "  \"function\": " ^ (json_of_function k) ^ ",\n" ^
+    "  \"description\": " ^ (json_of_description k) ^ "\n" ^
     "}"
 
 let rec parse_typ name t = match t with
@@ -549,32 +442,13 @@ let rec parse_typ name t = match t with
       end
   | _ -> print_endline "typ other"
 
-let parse_typschm name ts = match ts with
-    TypSchm_aux ( TypSchm_ts ( _, x ), _ ) ->
-      parse_typ name x (* This compiles as if x is a 'typ' instead of 'atyp' (?) *)
-
 let defs { defs; _ } =
   List.iter (fun def ->
-    begin match def with
-      DEF_aux (_, annot) ->
-        begin match annot.doc_comment with
-            None -> ()
-          | Some s -> print_endline s;
-        end;
-        List.iter (fun attr ->
-          match attr with
-            (_, s0, s1) -> print_endline ("ATTR " ^ s0 ^ ": " ^ s1)
-        ) annot.attrs
-    end;
     match def with
       DEF_aux (DEF_type ( def ), _) -> parse_DEF_type def
-    | DEF_aux (DEF_val ( vs ), _) ->
-        print_endline "DEF_val";
-        begin match vs with
-          VS_aux ( VS_val_spec (ts, i, _), _) ->
-            parse_typschm (string_of_id i) ts
-        end
-    | DEF_aux (DEF_fundef (FD_aux (FD_function (Rec_aux (_, _), Typ_annot_opt_aux(_, _), fl), _)), _) ->
+    | DEF_aux (DEF_val ( VS_aux ( VS_val_spec (TypSchm_aux ( TypSchm_ts ( _, t ), _ ), i, _), _) ), _) ->
+        parse_typ (string_of_id i) t
+    | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, fl), _)), _) ->
         print_endline "DEF_fundef";
         List.iter parse_funcl fl
     | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (i, _, ml), _)), _) ->
@@ -618,10 +492,12 @@ let defs { defs; _ } =
             print_endline (String.concat ",\n" (List.map json_of_instruction keys_sorted_by_mnemonic));
 
   print_endline "  ],";
+
   print_endline "  \"formats\": [";
   let format_list = Hashtbl.fold (fun k v accum -> (("\"" ^ v ^ "\"") :: accum)) formats [] in
     print_endline (String.concat ",\n" (List.fold_right (fun s accum -> if String.equal "\"\"" s then accum else (s :: accum)) (List.sort_uniq String.compare ("\"TBD\"" :: format_list)) []));
   print_endline "  ],";
+
   print_endline "  \"extensions\": [";
   let extension_list = Hashtbl.fold (fun k v accum -> v :: accum) extensions [] in
     print_endline (String.concat ",\n" (List.sort_uniq String.compare (List.concat extension_list)));
