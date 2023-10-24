@@ -1398,16 +1398,20 @@ let codegen_type_def = function
       (* Create an if, else if, ... block that does something for each constructor *)
       let rec each_ctor v f = function
         | [] -> string "{}"
-        | [(ctor_id, ctyp)] ->
-            string (Printf.sprintf "if (%skind == Kind_%s)" v (sgen_id ctor_id))
-            ^^ lbrace ^^ hardline
-            ^^ jump 0 2 (f ctor_id ctyp)
-            ^^ hardline ^^ rbrace
-        | (ctor_id, ctyp) :: ctors ->
-            string (Printf.sprintf "if (%skind == Kind_%s) " v (sgen_id ctor_id))
-            ^^ lbrace ^^ hardline
-            ^^ jump 0 2 (f ctor_id ctyp)
-            ^^ hardline ^^ rbrace ^^ string " else " ^^ each_ctor v f ctors
+        | [(ctor_id, ctyp)] -> begin
+            match f ctor_id ctyp with
+            | None -> string "{}"
+            | Some op ->
+                string (Printf.sprintf "if (%skind == Kind_%s)" v (sgen_id ctor_id))
+                ^^ lbrace ^^ hardline ^^ jump 0 2 op ^^ hardline ^^ rbrace
+          end
+        | (ctor_id, ctyp) :: ctors -> begin
+            match f ctor_id ctyp with
+            | None -> each_ctor v f ctors
+            | Some op ->
+                string (Printf.sprintf "if (%skind == Kind_%s) " v (sgen_id ctor_id))
+                ^^ lbrace ^^ hardline ^^ jump 0 2 op ^^ hardline ^^ rbrace ^^ string " else " ^^ each_ctor v f ctors
+          end
       in
       let codegen_init =
         let n = sgen_id id in
@@ -1429,8 +1433,8 @@ let codegen_type_def = function
         string (Printf.sprintf "static void RECREATE(%s)(struct %s *op) {}" n n)
       in
       let clear_field v ctor_id ctyp =
-        if is_stack_ctyp ctyp then string (Printf.sprintf "/* do nothing */")
-        else string (Printf.sprintf "KILL(%s)(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_id ctor_id))
+        if is_stack_ctyp ctyp then None
+        else Some (string (Printf.sprintf "KILL(%s)(&%s->%s);" (sgen_ctyp_name ctyp) v (sgen_id ctor_id)))
       in
       let codegen_clear =
         let n = sgen_id id in
@@ -1464,11 +1468,15 @@ let codegen_type_def = function
       let codegen_setter =
         let n = sgen_id id in
         let set_field ctor_id ctyp =
-          if is_stack_ctyp ctyp then string (Printf.sprintf "rop->%s = op.%s;" (sgen_id ctor_id) (sgen_id ctor_id))
-          else
-            string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
-            ^^ string
-                 (Printf.sprintf " COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id) (sgen_id ctor_id))
+          Some
+            ( if is_stack_ctyp ctyp then string (Printf.sprintf "rop->%s = op.%s;" (sgen_id ctor_id) (sgen_id ctor_id))
+              else
+                string (Printf.sprintf "CREATE(%s)(&rop->%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id))
+                ^^ string
+                     (Printf.sprintf " COPY(%s)(&rop->%s, op.%s);" (sgen_ctyp_name ctyp) (sgen_id ctor_id)
+                        (sgen_id ctor_id)
+                     )
+            )
         in
         string (Printf.sprintf "static void COPY(%s)(struct %s *rop, struct %s op)" n n n)
         ^^ hardline

@@ -486,6 +486,8 @@ let rec ctyp_equal ctyp1 ctyp2 =
 
 let rec ctyp_compare ctyp1 ctyp2 =
   let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
+  let compare_fst cmp (x, _) (y, _) = cmp x y in
+  let compare_snd cmp (_, x) (_, y) = cmp x y in
   match (ctyp1, ctyp2) with
   | CT_lint, CT_lint -> 0
   | CT_lint, _ -> 1
@@ -538,7 +540,28 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> lex_ord (compare n1 n2) (ctyp_compare ctyp1 ctyp2)
   | CT_fvector _, _ -> 1
   | _, CT_fvector _ -> -1
-  | ctyp1, ctyp2 -> String.compare (full_string_of_ctyp ctyp1) (full_string_of_ctyp ctyp2)
+  | CT_tup ctyps1, CT_tup ctyps2 -> Util.lex_ord_list ctyp_compare ctyps1 ctyps2
+  | CT_tup _, _ -> 1
+  | _, CT_tup _ -> -1
+  | CT_struct (id1, fields1), CT_struct (id2, fields2) ->
+      let fields1 = List.sort (compare_fst Id.compare) fields1 in
+      let fields2 = List.sort (compare_fst Id.compare) fields2 in
+      lex_ord (Id.compare id1 id2) (Util.lex_ord_list (compare_snd ctyp_compare) fields1 fields2)
+  | CT_struct _, _ -> 1
+  | _, CT_struct _ -> -1
+  | CT_variant (id1, ctors1), CT_variant (id2, ctors2) ->
+      let ctors1 = List.sort (compare_fst Id.compare) ctors1 in
+      let ctors2 = List.sort (compare_fst Id.compare) ctors2 in
+      lex_ord (Id.compare id1 id2) (Util.lex_ord_list (compare_snd ctyp_compare) ctors1 ctors2)
+  | CT_variant _, _ -> 1
+  | _, CT_variant _ -> -1
+  | CT_enum (id1, members1), CT_enum (id2, members2) ->
+      let members1 = List.sort Id.compare members1 in
+      let members2 = List.sort Id.compare members2 in
+      lex_ord (Id.compare id1 id2) (Util.lex_ord_list Id.compare members1 members2)
+  | CT_enum _, _ -> 1
+  | _, CT_enum _ -> -1
+  | CT_rounding_mode, CT_rounding_mode -> 0
 
 module CT = struct
   type t = ctyp
