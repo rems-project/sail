@@ -1691,6 +1691,10 @@ module Make (C : CONFIG) = struct
     if IdSet.is_empty (IdSet.diff polymorphic_functions unreachable_polymorphic_functions) then (cdefs, ctx)
     else specialize_functions ~specialized_calls ctx cdefs
 
+  let is_struct id = function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false
+
+  let is_variant id = function CT_variant (id', _) -> Id.compare id id' = 0 | _ -> false
+
   let map_structs_and_variants f = function
     | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real
       | CT_string | CT_poly _ | CT_enum _ | CT_float _ | CT_rounding_mode ) as ctyp ->
@@ -1845,8 +1849,8 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior = List.map (cdef_map_ctyp (fix_variants ctx var_id)) prior in
-        let cdefs = List.map (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
+        let prior = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
+        let cdefs = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
 
         let ctx =
           {
@@ -1900,8 +1904,12 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
-        let cdefs = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
+        let prior =
+          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) prior
+        in
+        let cdefs =
+          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs
+        in
         let ctx =
           {
             ctx with

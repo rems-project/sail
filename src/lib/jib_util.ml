@@ -458,6 +458,18 @@ let rec map_ctyp f = function
   | CT_struct (id, fields) -> f (CT_struct (id, List.map (fun (id, ctyp) -> (id, map_ctyp f ctyp)) fields))
   | CT_variant (id, ctors) -> f (CT_variant (id, List.map (fun (id, ctyp) -> (id, map_ctyp f ctyp)) ctors))
 
+let rec ctyp_has pred ctyp =
+  pred ctyp
+  ||
+  match ctyp with
+  | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
+  | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ ->
+      false
+  | CT_tup ctyps -> List.exists pred ctyps
+  | CT_ref ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp -> pred ctyp
+  | CT_struct (id, fields) -> List.exists (fun (_, ctyp) -> pred ctyp) fields
+  | CT_variant (id, ctors) -> List.exists (fun (_, ctyp) -> pred ctyp) ctors
+
 let rec ctyp_equal ctyp1 ctyp2 =
   match (ctyp1, ctyp2) with
   | CT_lint, CT_lint -> true
@@ -1101,6 +1113,21 @@ let rec instr_ctyps (I_aux (instr, aux)) =
 
 and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr_ctyps instrs)
 
+let rec instr_ctyps_exist pred (I_aux (instr, aux)) =
+  match instr with
+  | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp -> pred ctyp
+  | I_init (ctyp, _, cval) | I_reinit (ctyp, _, cval) -> pred ctyp || pred (cval_ctyp cval)
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+      pred (cval_ctyp cval) || instrs_ctyps_exist pred instrs1 || instrs_ctyps_exist pred instrs2 || pred ctyp
+  | I_funcall (clexp, _, (_, ctyps), cvals) ->
+      pred (clexp_ctyp clexp) || List.exists pred ctyps || Util.map_exists pred cval_ctyp cvals
+  | I_copy (clexp, cval) -> pred (clexp_ctyp clexp) || pred (cval_ctyp cval)
+  | I_block instrs | I_try_block instrs -> instrs_ctyps_exist pred instrs
+  | I_throw cval | I_jump (cval, _) | I_return cval -> pred (cval_ctyp cval)
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_end _ -> false
+
+and instrs_ctyps_exist pred instrs = List.exists (instr_ctyps_exist pred) instrs
+
 let ctype_def_ctyps = function
   | CTD_enum _ -> []
   | CTD_struct (_, fields) -> List.map snd fields
@@ -1115,6 +1142,17 @@ let cdef_ctyps = function
       List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map snd bindings)
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
+
+let rec cdef_ctyps_exist pred = function
+  | CDEF_register (_, ctyp, instrs) -> pred ctyp || instrs_ctyps_exist pred instrs
+  | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
+  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps_exist pred instrs
+  | CDEF_type tdef -> List.exists pred (ctype_def_ctyps tdef)
+  | CDEF_let (_, bindings, instrs) ->
+      List.exists (fun (_, ctyp) -> pred ctyp) bindings || instrs_ctyps_exist pred instrs
+  | CDEF_pragma (_, _) -> false
+
+let cdef_ctyps_has pred cdef = cdef_ctyps_exist (ctyp_has pred) cdef
 
 let rec c_ast_registers = function
   | CDEF_register (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast

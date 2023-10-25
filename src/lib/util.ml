@@ -421,6 +421,15 @@ let fold_left_index_last f init xs =
   let rec go n acc = function [] -> acc | [x] -> f n true acc x | x :: xs -> go (n + 1) (f n false acc x) xs in
   go 0 init xs
 
+let map_if pred f xs =
+  let rec go acc = function
+    | x :: xs -> begin match pred x with true -> go (f x :: acc) xs | false -> go (x :: acc) xs end
+    | [] -> List.rev acc
+  in
+  go [] xs
+
+let rec map_exists pred f = function x :: xs -> if pred (f x) then true else map_exists pred f xs | [] -> false
+
 let rec take n xs = match (n, xs) with 0, _ -> [] | _, [] -> [] | n, x :: xs -> x :: take (n - 1) xs
 
 let rec drop n xs = match (n, xs) with 0, xs -> xs | _, [] -> [] | n, _ :: xs -> drop (n - 1) xs

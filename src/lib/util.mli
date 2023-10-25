@@ -168,6 +168,10 @@ val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
     the [Some] function is removed from the list. *)
 val map_all : ('a -> 'b option) -> 'a list -> 'b list option
 
+val map_if : ('a -> bool) -> ('a -> 'a) -> 'a list -> 'a list
+
+val map_exists : ('b -> bool) -> ('a -> 'b) -> 'a list -> bool
+
 (** [list_to_front i l] resorts the list [l] by bringing the element at index [i]
     to the front. 
     @throws Failure if [i] is not smaller than the length of [l]*)
