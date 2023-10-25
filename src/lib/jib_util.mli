@@ -186,6 +186,8 @@ val cval_ctyp : cval -> ctyp
 val clexp_ctyp : clexp -> ctyp
 val cdef_ctyps : cdef -> CTSet.t
 
+val cdef_ctyps_has : (ctyp -> bool) -> cdef -> bool
+
 (** {1 Functions for mapping over and extracting information from instructions, values, and definitions} *)
 
 val instr_ids : instr -> NameSet.t
