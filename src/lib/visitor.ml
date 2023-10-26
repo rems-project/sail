@@ -118,6 +118,8 @@ let do_visit (vis : 'v) (action : 'a visit_action) (children : 'v -> 'a -> 'a) (
   | DoChildren -> children vis node
   | ChangeDoChildrenPost (node', f) -> f (children vis node')
 
+let change_do_children node' = ChangeDoChildrenPost (node', fun n -> n)
+
 (* map_no_copy is like map but avoid copying the list if the function does not
  * change the elements. *)
 let rec map_no_copy (f : 'a -> 'a) = function

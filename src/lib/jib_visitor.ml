@@ -7,6 +7,7 @@ class type jib_visitor = object
   method vctyp : ctyp -> ctyp visit_action
   method vcval : cval -> cval visit_action
   method vclexp : clexp -> clexp visit_action
+  method vinstrs : instr list -> instr list visit_action
   method vinstr : instr -> instr visit_action
   method vcdef : cdef -> cdef visit_action
 end
@@ -222,7 +223,16 @@ let rec visit_instr vis outer_instr =
   in
   do_visit vis (vis#vinstr outer_instr) aux outer_instr
 
-and visit_instrs vis instrs = map_no_copy (visit_instr vis) instrs
+and visit_instrs vis outer_instrs =
+  let aux vis no_change =
+    match no_change with
+    | instr :: instrs ->
+        let instr' = visit_instr vis instr in
+        let instrs' = visit_instrs vis instrs in
+        if instr == instr' && instrs == instrs' then no_change else instr' :: instrs'
+    | [] -> []
+  in
+  do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
 
 let rec visit_cdef vis outer_cdef =
   let aux vis no_change =
@@ -272,6 +282,7 @@ class empty_jib_visitor : jib_visitor =
     method vctyp _ = DoChildren
     method vcval _ = DoChildren
     method vclexp _ = DoChildren
+    method vinstrs _ = DoChildren
     method vinstr _ = DoChildren
     method vcdef _ = DoChildren
   end

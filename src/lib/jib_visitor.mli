@@ -12,12 +12,17 @@ type 'a visit_action =
      node if any of the children has changed and then apply the
      function on the node *)
 
+val change_do_children : 'a -> 'a visit_action
+
+val map_no_copy : ('a -> 'a) -> 'a list -> 'a list
+
 class type jib_visitor = object
   method vid : Ast.id -> Ast.id option
   method vname : name -> name option
   method vctyp : ctyp -> ctyp visit_action
   method vcval : cval -> cval visit_action
   method vclexp : clexp -> clexp visit_action
+  method vinstrs : instr list -> instr list visit_action
   method vinstr : instr -> instr visit_action
   method vcdef : cdef -> cdef visit_action
 end

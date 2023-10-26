@@ -68,6 +68,7 @@
 open Ast
 open Ast_util
 open Jib
+open Jib_visitor
 open Value2
 open PPrint
 
@@ -169,83 +170,32 @@ let return = Return (-1)
 let name id = Name (id, -1)
 let global id = Global (id, -1)
 
-let rec cval_rename from_id to_id = function
-  | V_id (id, ctyp) when Name.compare id from_id = 0 -> V_id (to_id, ctyp)
-  | V_id (id, ctyp) -> V_id (id, ctyp)
-  | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
-  | V_call (call, cvals) -> V_call (call, List.map (cval_rename from_id to_id) cvals)
-  | V_field (f, field) -> V_field (cval_rename from_id to_id f, field)
-  | V_tuple_member (f, len, n) -> V_tuple_member (cval_rename from_id to_id f, len, n)
-  | V_ctor_kind (f, ctor, ctyp) -> V_ctor_kind (cval_rename from_id to_id f, ctor, ctyp)
-  | V_ctor_unwrap (f, ctor, ctyp) -> V_ctor_unwrap (cval_rename from_id to_id f, ctor, ctyp)
-  | V_struct (fields, ctyp) ->
-      V_struct (List.map (fun (field, cval) -> (field, cval_rename from_id to_id cval)) fields, ctyp)
-  | V_tuple (members, ctyp) -> V_tuple (List.map (cval_rename from_id to_id) members, ctyp)
+class rename_visitor from_name to_name : jib_visitor =
+  object
+    inherit empty_jib_visitor
 
-let rec map_cval g = function
-  | V_id (id, ctyp) -> g (V_id (id, ctyp))
-  | V_lit (vl, ctyp) -> g (V_lit (vl, ctyp))
-  | V_call (call, cvals) -> g (V_call (call, List.map (map_cval g) cvals))
-  | V_field (f, field) -> g (V_field (map_cval g f, field))
-  | V_tuple_member (f, len, n) -> g (V_tuple_member (map_cval g f, len, n))
-  | V_ctor_kind (f, ctor, ctyp) -> g (V_ctor_kind (map_cval g f, ctor, ctyp))
-  | V_ctor_unwrap (f, ctor, ctyp) -> g (V_ctor_unwrap (map_cval g f, ctor, ctyp))
-  | V_struct (fields, ctyp) -> g (V_struct (List.map (fun (field, cval) -> (field, map_cval g cval)) fields, ctyp))
-  | V_tuple (members, ctyp) -> g (V_tuple (List.map (map_cval g) members, ctyp))
+    method vctyp _ = SkipChildren
 
-let rec clexp_rename from_id to_id = function
-  | CL_id (id, ctyp) when Name.compare id from_id = 0 -> CL_id (to_id, ctyp)
-  | CL_id (id, ctyp) -> CL_id (id, ctyp)
-  | CL_rmw (read, write, ctyp) ->
-      CL_rmw
-        ( (if Name.compare read from_id = 0 then to_id else read),
-          (if Name.compare write from_id = 0 then to_id else write),
-          ctyp
-        )
-  | CL_field (clexp, field) -> CL_field (clexp_rename from_id to_id clexp, field)
-  | CL_addr clexp -> CL_addr (clexp_rename from_id to_id clexp)
-  | CL_tuple (clexp, n) -> CL_tuple (clexp_rename from_id to_id clexp, n)
-  | CL_void -> CL_void
+    method vname name = if Name.compare name from_name = 0 then Some to_name else None
+  end
 
-let rec instr_rename from_id to_id (I_aux (instr, aux)) =
-  let instr =
-    match instr with
-    | I_decl (ctyp, id) when Name.compare id from_id = 0 -> I_decl (ctyp, to_id)
-    | I_decl (ctyp, id) -> I_decl (ctyp, id)
-    | I_init (ctyp, id, cval) when Name.compare id from_id = 0 -> I_init (ctyp, to_id, cval_rename from_id to_id cval)
-    | I_init (ctyp, id, cval) -> I_init (ctyp, id, cval_rename from_id to_id cval)
-    | I_if (cval, then_instrs, else_instrs, ctyp2) ->
-        I_if
-          ( cval_rename from_id to_id cval,
-            List.map (instr_rename from_id to_id) then_instrs,
-            List.map (instr_rename from_id to_id) else_instrs,
-            ctyp2
-          )
-    | I_jump (cval, label) -> I_jump (cval_rename from_id to_id cval, label)
-    | I_funcall (clexp, extern, id, args) ->
-        I_funcall (clexp_rename from_id to_id clexp, extern, id, List.map (cval_rename from_id to_id) args)
-    | I_copy (clexp, cval) -> I_copy (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
-    | I_clear (ctyp, id) when Name.compare id from_id = 0 -> I_clear (ctyp, to_id)
-    | I_clear (ctyp, id) -> I_clear (ctyp, id)
-    | I_return cval -> I_return (cval_rename from_id to_id cval)
-    | I_block instrs -> I_block (List.map (instr_rename from_id to_id) instrs)
-    | I_try_block instrs -> I_try_block (List.map (instr_rename from_id to_id) instrs)
-    | I_throw cval -> I_throw (cval_rename from_id to_id cval)
-    | I_comment str -> I_comment str
-    | I_raw str -> I_raw str
-    | I_label label -> I_label label
-    | I_goto label -> I_goto label
-    | I_undefined ctyp -> I_undefined ctyp
-    | I_exit cause -> I_exit cause
-    | I_end id when Name.compare id from_id = 0 -> I_end to_id
-    | I_end id -> I_end id
-    | I_reset (ctyp, id) when Name.compare id from_id = 0 -> I_reset (ctyp, to_id)
-    | I_reset (ctyp, id) -> I_reset (ctyp, id)
-    | I_reinit (ctyp, id, cval) when Name.compare id from_id = 0 ->
-        I_reinit (ctyp, to_id, cval_rename from_id to_id cval)
-    | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, cval_rename from_id to_id cval)
-  in
-  I_aux (instr, aux)
+let cval_rename from_name to_name = visit_cval (new rename_visitor from_name to_name)
+
+class map_cval_visitor f : jib_visitor =
+  object
+    inherit empty_jib_visitor
+
+    method vctyp _ = SkipChildren
+    method vclexp _ = SkipChildren
+
+    method vcval cval = ChangeDoChildrenPost (cval, f)
+  end
+
+let map_cval f = visit_cval (new map_cval_visitor f)
+
+let clexp_rename from_name to_name = visit_clexp (new rename_visitor from_name to_name)
+
+let instr_rename from_name to_name = visit_instr (new rename_visitor from_name to_name)
 
 (**************************************************************************)
 (* 1. Instruction pretty printer                                          *)
@@ -311,21 +261,9 @@ let rec string_of_ctyp = function
   | CT_real -> "%real"
   | CT_string -> "%string"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
-  | CT_struct (id, _fields) ->
-      "%struct " ^ Util.zencode_string (string_of_id id)
-      (*
-     ^ "{"
-     ^ Util.string_of_list ", " (fun ((id, _), ctyp) -> Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp) fields
-     ^ "}"
-     *)
+  | CT_struct (id, _fields) -> "%struct " ^ Util.zencode_string (string_of_id id)
   | CT_enum (id, _) -> "%enum " ^ Util.zencode_string (string_of_id id)
-  | CT_variant (id, _ctors) ->
-      "%union " ^ Util.zencode_string (string_of_id id)
-      (*
-     ^ "{"
-     ^ Util.string_of_list ", " (fun ((id, _), ctyp) -> Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp) ctors
-     ^ "}"
-     *)
+  | CT_variant (id, _ctors) -> "%union " ^ Util.zencode_string (string_of_id id)
   | CT_vector ctyp -> "%vec(" ^ string_of_ctyp ctyp ^ ")"
   | CT_fvector (n, ctyp) -> "%fvec(" ^ string_of_int n ^ ", " ^ string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "%list(" ^ string_of_ctyp ctyp ^ ")"
@@ -812,39 +750,20 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
   in
   I_aux (instr, aux)
 
-let rec map_instr_cval f (I_aux (instr, aux)) =
-  let instr =
-    match instr with
-    | I_init (ctyp, id, cval) -> I_init (ctyp, id, f cval)
-    | I_if (cval, then_instrs, else_instrs, ctyp) ->
-        I_if (f cval, List.map (map_instr_cval f) then_instrs, List.map (map_instr_cval f) else_instrs, ctyp)
-    | I_jump (cval, label) -> I_jump (f cval, label)
-    | I_funcall (clexp, extern, uid, cvals) -> I_funcall (clexp, extern, uid, List.map f cvals)
-    | I_copy (clexp, cval) -> I_copy (clexp, f cval)
-    | I_return cval -> I_return (f cval)
-    | I_block instrs -> I_block (List.map (map_instr_cval f) instrs)
-    | I_try_block instrs -> I_try_block (List.map (map_instr_cval f) instrs)
-    | I_throw cval -> I_throw (f cval)
-    | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, f cval)
-    | I_end id -> I_end id
-    | (I_undefined _ | I_reset _ | I_decl _ | I_clear _ | I_comment _ | I_raw _ | I_label _ | I_goto _ | I_exit _) as
-      instr ->
-        instr
-  in
-  I_aux (instr, aux)
+let map_instr_cval f = visit_instr (new map_cval_visitor f)
 
-let rec map_instr f (I_aux (instr, aux)) =
-  let instr =
-    match instr with
-    | I_decl _ | I_init _ | I_reset _ | I_reinit _ | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _
-    | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_undefined _ | I_end _ ->
-        instr
-    | I_if (cval, instrs1, instrs2, ctyp) ->
-        I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
-    | I_block instrs -> I_block (List.map (map_instr f) instrs)
-    | I_try_block instrs -> I_try_block (List.map (map_instr f) instrs)
-  in
-  f (I_aux (instr, aux))
+class instr_visitor f : jib_visitor =
+  object
+    inherit empty_jib_visitor
+
+    method vcval _ = SkipChildren
+    method vctyp _ = SkipChildren
+    method vclexp _ = SkipChildren
+
+    method vinstr instr = ChangeDoChildrenPost (instr, f)
+  end
+
+let map_instr f = visit_instr (new instr_visitor f)
 
 let rec concatmap_instr f (I_aux (instr, aux)) =
   let instr =
@@ -874,15 +793,7 @@ let rec iter_instr f (I_aux (instr, aux)) =
       List.iter (iter_instr f) instrs2
   | I_block instrs | I_try_block instrs -> List.iter (iter_instr f) instrs
 
-let cdef_map_instr f = function
-  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.map (map_instr f) instrs)
-  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr f) instrs)
-  | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr f) instrs)
-  | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr f) instrs)
-  | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
-  | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
-  | CDEF_type tdef -> CDEF_type tdef
-  | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
+let cdef_map_instr f = visit_cdef (new instr_visitor f)
 
 let rec map_funcall f instrs =
   match instrs with
