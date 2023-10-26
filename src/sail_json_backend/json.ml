@@ -78,10 +78,12 @@ let descriptions = Hashtbl.create 997
 let operands = Hashtbl.create 997
 let encodings = Hashtbl.create 997
 let assembly = Hashtbl.create 997
+let assembly_clean = Hashtbl.create 997
 let functions = Hashtbl.create 997
 let op_functions = Hashtbl.create 997
 let formats = Hashtbl.create 997
 let extensions = Hashtbl.create 997
+let mappings = Hashtbl.create 997
 
 let string_of_arg = function
   | E_aux (E_id id, _) -> "\"" ^ string_of_id id ^ "\""
@@ -97,10 +99,11 @@ let rec string_list_of_mpat x = match x with
   | MP_aux (MP_app ( i, pl ), _) ->
       print_endline ("MP_app " ^ string_of_id i);
       begin match string_of_id i with
-      | "spc" | "sep" -> []
+      | "spc" -> [ string_of_id i ]
+      | "sep" -> []
       | _ -> let b = List.concat (List.map string_list_of_mpat pl) in
           begin
-            print_endline ("<-- MP_app" ^ string_of_id i);
+            print_endline ("<-- MP_app " ^ string_of_id i);
             [ (string_of_id i) ^ "(" ^ (String.concat "," b) ^ ")" ]
           end
       end
@@ -178,12 +181,8 @@ let parse_encdec i mc format = match mc with
 let add_assembly app_id p = 
   let x = string_list_of_mpat p in
     begin
-      (* We only support "simple" assembly at the moment,
-         where the quoted literal mnemonic is in the statement. *)
-      if String.get (List.hd x) 0 = '"' then begin
-        print_endline ("assembly.add " ^ string_of_id app_id ^ " : " ^ List.hd x);
-        Hashtbl.add assembly (string_of_id app_id) x
-      end
+      print_endline ("assembly.add " ^ string_of_id app_id ^ " : " ^ List.hd x);
+      Hashtbl.add assembly (string_of_id app_id) x
     end
 
 let parse_assembly_mpat mp pb = match mp with
@@ -225,7 +224,6 @@ let parse_mapcl i mc =
           | _ -> ""
       ) annot.attrs)
     in begin
-      print_endline ("FORMAT " ^ format);
       match string_of_id i with
         "encdec" | "encdec_compressed" ->
           print_endline (string_of_id i);
@@ -233,7 +231,17 @@ let parse_mapcl i mc =
       | "assembly" ->
           print_endline (string_of_id i);
           parse_assembly i mc
-      | _ -> ();
+      | _ ->
+          begin match mc with
+            | MCL_aux (MCL_bidir (MPat_aux (MPat_pat mpl, _), MPat_aux (MPat_pat mpr, _)), _) ->
+                print_endline ("MCL_bidir " ^ (string_of_id i));
+                let sl = string_list_of_mpat mpl in
+                  List.iter (fun s -> print_endline ("L: " ^ s)) sl;
+                let sl = string_list_of_mpat mpr in
+                  List.iter (fun s -> print_endline ("R: " ^ s)) sl;
+                Hashtbl.add mappings (string_of_id i) ((string_list_of_mpat mpl), (string_list_of_mpat mpr))
+            | _ -> print_endline "MCL other";
+          end
     end
 
 let parse_type_union i ucl =
@@ -312,6 +320,8 @@ let json_of_key_operand key op t =
   "\n{\n" ^
   "  \"name\": \"" ^ op ^ "\", \"type\": \"" ^ t ^ "\"\n" ^
   "}"
+
+let json_of_mnemonic m = "\"" ^ m ^ "\""
 
 let json_of_operands k =
   let ops = Hashtbl.find_opt operands k
@@ -415,10 +425,9 @@ let json_of_extensions k =
     None -> ""
   | Some (l) -> String.concat "," l
 
-let json_of_instruction k =
-  let m = Hashtbl.find assembly k in
+let json_of_instruction k v =
     "{\n" ^
-    "  \"mnemonic\": " ^ List.hd m ^ ",\n" ^
+    "  \"mnemonic\": " ^ (json_of_mnemonic (List.hd v)) ^ ",\n" ^
     "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
     "  \"operands\": [ " ^ (json_of_operands k) ^ " ],\n" ^
     "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
@@ -441,6 +450,42 @@ let rec parse_typ name t = match t with
         | _ -> print_endline "Typ_app other"
       end
   | _ -> print_endline "typ other"
+
+let dequote qs =
+  if String.starts_with ~prefix:"\"" qs && String.ends_with ~suffix:"\"" qs then
+    List.hd (List.tl (String.split_on_char '"' qs))
+  else
+    qs
+
+let explode_mnemonic heads tails =
+  List.concat(
+    List.map (fun tail ->
+      List.map (fun head -> match head with
+        (* presuming right side of mapping is a list of a single string *)
+        l, r ->
+          print_endline (List.hd l);
+          ((dequote (List.hd r)) ^ (dequote (List.hd tail))) :: List.tl tail
+      ) heads
+    ) tails
+  )
+
+let rec explode_mnemonics asm =
+  if List.length asm == 0 then [ [ "" ] ]
+  else if String.equal (List.hd asm) "spc" then [ "" :: List.tl asm ]
+  else
+    let tails = explode_mnemonics (List.tl asm) in
+      if String.ends_with ~suffix:")" (List.hd asm) then begin
+        print_endline (extract_func_arg (List.hd asm));
+        let heads = Hashtbl.find_all mappings (List.hd (String.split_on_char '(' (List.hd asm))) in
+          let found = List.find_opt (fun head ->
+                match head with
+                    l, _ -> String.equal (List.hd l) (extract_func_arg (List.hd asm))
+            ) heads in match found with
+                None -> explode_mnemonic heads tails
+              | Some head -> explode_mnemonic [ head ] tails
+      end
+      else
+          explode_mnemonic [ ([""], [List.hd asm]) ] tails
 
 let defs { defs; _ } =
   List.iter (fun def ->
@@ -479,10 +524,23 @@ let defs { defs; _ } =
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ (String.concat "," v))) extensions;
   print_endline "FORMATS";
   Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) formats;
+  print_endline "MAPPINGS";
+  Hashtbl.iter (fun k v ->
+    match v with (l, r) ->
+      print_endline (k ^ ": " ^ (String.concat "," l) ^ " <-> " ^ (String.concat "," r))) mappings;
+
+  Hashtbl.iter (fun k v ->
+    let asms = explode_mnemonics v in
+      List.iter (fun asm -> Hashtbl.add assembly_clean k asm) asms;
+  ) assembly;
+
+  print_endline "ASSEMBLY_CLEAN";
+  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly_clean;
 
   print_endline "{";
   print_endline "  \"instructions\": [";
 
+(*
   (* Join keys and mnemonics, then sort by mnemonic, then use the keys in that order to emit instructions *)
   let keys_sorted_by_mnemonic =
     let key_mnemonic_sorted =
@@ -490,6 +548,10 @@ let defs { defs; _ } =
         List.sort (fun l r -> String.compare (List.hd (List.tl l)) (List.hd (List.tl r))) key_mnemonic_map in
           List.map List.hd key_mnemonic_sorted in
             print_endline (String.concat ",\n" (List.map json_of_instruction keys_sorted_by_mnemonic));
+*)
+
+  let instructions = Hashtbl.fold (fun k v accum -> (json_of_instruction k v) :: accum) assembly_clean [] in
+     print_endline (String.concat ",\n" instructions);
 
   print_endline "  ],";
 
