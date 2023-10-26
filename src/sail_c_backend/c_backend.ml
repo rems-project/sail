@@ -712,9 +712,11 @@ let remove_alias =
     | instr -> instr
   in
   let rec opt = function
-    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
+    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs as original_instrs -> begin
         match pattern ctyp id instrs with
-        | None -> instr :: opt instrs
+        | None ->
+            let instrs' = opt instrs in
+            if instrs == instrs' then original_instrs else instr :: instrs'
         | Some alias ->
             let instrs = List.map (map_instr (remove_alias id alias)) instrs in
             filter_instrs is_not_removed (List.map (instr_rename id alias) instrs)
@@ -774,9 +776,11 @@ let combine_variables =
     | _ -> true
   in
   let rec opt = function
-    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
+    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs as original_instrs -> begin
         match pattern ctyp id instrs with
-        | None -> instr :: opt instrs
+        | None ->
+            let instrs' = opt instrs in
+            if instrs == instrs' then original_instrs else instr :: instrs'
         | Some combine ->
             let instrs = List.map (map_instr (remove_variable combine)) instrs in
             let instrs =
