@@ -97,6 +97,17 @@ and exp_of_value =
   | V_attempted_read str -> mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
+(* A simple heuristic to avoid generating overly large literals. Note
+   that we avoid traversing through every element of vectors and
+   lists, so a list of large lists could still sneak through *)
+let rec is_too_large =
+  let open Value in
+  function
+  | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ -> false
+  | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
+  | V_record fields -> StringMap.exists (fun _ v -> is_too_large v) fields
+  | V_ctor (_, vs) -> List.exists is_too_large vs
+
 (* We want to avoid evaluating things like print statements at compile
    time, so we remove them from this list of primops we can use when
    constant folding. *)
@@ -205,19 +216,22 @@ let rw_exp fixed target ok not_ok istate =
     try
       begin
         let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
-        let exp = exp_of_value v in
-        try
-          ok ();
-          Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
-        with Type_error.Type_error (l, err) ->
-          (* A type error here would be unexpected, so don't ignore it! *)
-          Reporting.warn "" l
-            ("Type error when folding constants in "
-            ^ string_of_exp (E_aux (e_aux, annot))
-            ^ "\n" ^ Type_error.string_of_type_error err
-            );
-          not_ok ();
-          E_aux (e_aux, annot)
+        if not (is_too_large v) then (
+          let exp = exp_of_value v in
+          try
+            ok ();
+            Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
+          with Type_error.Type_error (l, err) ->
+            (* A type error here would be unexpected, so don't ignore it! *)
+            Reporting.warn "" l
+              ("Type error when folding constants in "
+              ^ string_of_exp (E_aux (e_aux, annot))
+              ^ "\n" ^ Type_error.string_of_type_error err
+              );
+            not_ok ();
+            E_aux (e_aux, annot)
+        )
+        else E_aux (e_aux, annot)
       end
     with
     (* Otherwise if anything goes wrong when trying to constant

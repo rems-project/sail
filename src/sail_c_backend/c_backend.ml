@@ -72,6 +72,7 @@ open Ast_util
 open Jib
 open Jib_compile
 open Jib_util
+open Jib_visitor
 open Type_check
 open PPrint
 open Value2
@@ -741,7 +742,7 @@ let remove_alias =
     kill y;
 
     If found we can replace y by x *)
-let combine_variables =
+module Combine_variables = struct
   let pattern ctyp id =
     let combine = ref None in
     let rec scan id n instrs =
@@ -765,41 +766,41 @@ let combine_variables =
       | _, _, [] -> None
     in
     scan id 0
-  in
+
   let remove_variable id = function
     | I_aux (I_decl (_, id'), _) when Name.compare id id' = 0 -> removed
     | I_aux (I_clear (_, id'), _) when Name.compare id id' = 0 -> removed
     | instr -> instr
-  in
+
   let is_not_self_assignment = function
     | I_aux (I_copy (CL_id (id, _), V_id (id', _)), _) when Name.compare id id' = 0 -> false
     | _ -> true
-  in
-  let rec opt = function
-    | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs as original_instrs -> begin
-        match pattern ctyp id instrs with
-        | None ->
-            let instrs' = opt instrs in
-            if instrs == instrs' then original_instrs else instr :: instrs'
-        | Some combine ->
-            let instrs = List.map (map_instr (remove_variable combine)) instrs in
-            let instrs =
-              filter_instrs
-                (fun i -> is_not_removed i && is_not_self_assignment i)
-                (List.map (instr_rename combine id) instrs)
-            in
-            opt (instr :: instrs)
-      end
-    | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (opt block), aux) :: opt instrs
-    | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (opt block), aux) :: opt instrs
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-        I_aux (I_if (cval, opt then_instrs, opt else_instrs, ctyp), aux) :: opt instrs
-    | instr :: instrs -> instr :: opt instrs
-    | [] -> []
-  in
-  function
-  | CDEF_fundef (function_id, heap_return, args, body) -> [CDEF_fundef (function_id, heap_return, args, opt body)]
-  | cdef -> [cdef]
+
+  class visitor : jib_visitor =
+    object
+      inherit empty_jib_visitor
+
+      method vinstrs =
+        function
+        | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
+            match pattern ctyp id instrs with
+            | None -> DoChildren
+            | Some combine ->
+                let instrs = map_no_copy (map_instr (remove_variable combine)) instrs in
+                let instrs =
+                  filter_instrs
+                    (fun i -> is_not_removed i && is_not_self_assignment i)
+                    (map_no_copy (instr_rename combine id) instrs)
+                in
+                change_do_children (instr :: instrs)
+          end
+        | _ -> DoChildren
+
+      method vcdef = function CDEF_fundef _ -> DoChildren | _ -> SkipChildren
+    end
+end
+
+let combine_variables = visit_cdefs (new Combine_variables.visitor)
 
 let concatMap f xs = List.concat (List.map f xs)
 
@@ -807,7 +808,7 @@ let optimize recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_alias then concatMap remove_alias else nothing)
-  |> (if !optimize_alias then concatMap combine_variables else nothing)
+  |> (if !optimize_alias then combine_variables else nothing)
   (* We need the runtime to initialize hoisted allocations *)
   |>
   if !optimize_hoist_allocations && not !opt_no_rts then concatMap (hoist_allocations recursive_functions) else nothing

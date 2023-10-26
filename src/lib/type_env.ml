@@ -976,10 +976,7 @@ let union_constructor_info id env =
     type_unions
 
 let is_union_constructor id env =
-  let type_unions =
-    List.concat (List.map (fun (_, { item = _, tus; _ }) -> tus) (Bindings.bindings env.global.unions))
-  in
-  List.exists (is_ctor id) type_unions
+  Bindings.exists (fun _ { item = _, tus; _ } -> List.exists (is_ctor id) tus) env.global.unions
 
 let is_singleton_union_constructor id env =
   let type_unions = List.map (fun (_, { item = _, tus; _ }) -> tus) (Bindings.bindings env.global.unions) in
