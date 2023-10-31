@@ -4,7 +4,7 @@
 (using dune_site 0.1)
 
 (name sail)
-(version 0.16)
+(version 0.17)
 
 (generate_opam_files true)
 
