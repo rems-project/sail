@@ -1,6 +1,41 @@
 Changelog
 =========
 
+Sail 0.17
+---------
+
+##### Performance improvements
+
+This release is primarily intended to fix performance issues. Overall
+the Sail to C compilation can be almost 10x faster, and consumes
+significantly less memory.
+
+##### Order parameters deprecated
+
+The order parameter on the bitvector and vector types no longer does
+anything. The `default Order <ord>` statement now sets the bitvector
+and vector ordering globally. In practice only POWER uses increasing
+bit order, and there is never a valid reason to mix them in a
+specification. Overall they added significant complexity to the
+language for no real gain. Over subsequent releases a warning will be
+added before they are eventually removed from the syntax.
+
+##### String append pattern rework
+
+For a while string append patterns `x ^ y` have been marked with a
+special non-executable effect that forbids them from being used. Now
+the implementation has been removed due to the deleterious effect
+the generated code has on performance. Such clauses are now eagerly
+removed from the syntax tree during rewriting pending a revised
+implementation.
+
+##### SystemVerilog backend (EXPERIMENTAL)
+
+Sail can now produce SystemVerilog output using the -sv flag. Note
+that this is not intended to be human readable or produce a
+synthesizable design, but is instead intended to be used with
+SystemVerilog verification tools like JasperGold.
+
 Sail 0.16
 ---------
 
