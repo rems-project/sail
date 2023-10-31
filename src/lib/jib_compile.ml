@@ -1768,6 +1768,23 @@ module Make (C : CONFIG) = struct
         | _ -> DoChildren
     end
 
+  class scan_variant_visitor instantiations ctx var_id =
+    object
+      inherit empty_jib_visitor
+
+      method vctyp =
+        function
+        | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
+            let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
+            let unifiers =
+              ctyp_unify (id_loc var_id') (CT_variant (var_id, generic_ctors)) (CT_variant (var_id, ctors))
+              |> KBindings.bindings |> List.map snd
+            in
+            instantiations := CTListSet.add unifiers !instantiations;
+            DoChildren
+        | _ -> DoChildren
+    end
+
   let rec specialize_variants ctx prior =
     let instantiations = ref CTListSet.empty in
     let fix_variants ctx var_id = visit_ctyp (new fix_variants_visitor ctx var_id) in
@@ -1787,32 +1804,7 @@ module Make (C : CONFIG) = struct
     | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
         let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
 
-        List.iter
-          (function
-            | CDEF_val (id, _, ctyps, ctyp) ->
-                let _ =
-                  List.map
-                    (map_ctyp (fun ctyp ->
-                         match ctyp with
-                         | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
-                             let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
-                             let unifiers =
-                               ctyp_unify (id_loc var_id')
-                                 (CT_variant (var_id, generic_ctors))
-                                 (CT_variant (var_id, ctors))
-                               |> KBindings.bindings |> List.map snd
-                             in
-                             instantiations := CTListSet.add unifiers !instantiations;
-                             ctyp
-                         | ctyp -> ctyp
-                     )
-                    )
-                    (ctyp :: ctyps)
-                in
-                ()
-            | _ -> ()
-            )
-          cdefs;
+        let _ = visit_cdefs (new scan_variant_visitor instantiations ctx var_id) cdefs in
 
         let cdefs =
           List.fold_left (fun cdefs (ctor_id, ctyp) -> specialize_constructor ctx ctor_id cdefs) cdefs ctors
