@@ -1059,7 +1059,7 @@ let rec subtyp l env typ1 typ2 =
       let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
       let prop = nc_eq nexp1 nexp2 in
       if prove __POS__ env prop then ()
-      else typ_raise l (Err_subtype (typ1, typ2, Some prop, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
+      else typ_raise l (Err_subtype (typ1, typ2, Some prop, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
       let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
       let env =
@@ -1081,7 +1081,7 @@ let rec subtyp l env typ1 typ2 =
             let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
             if prove __POS__ env nc2 then ()
             else
-              typ_raise l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
+              typ_raise l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
         | _ -> typ_error l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
       end
   | _, _ -> (
@@ -1126,9 +1126,9 @@ let rec subtyp l env typ1 typ2 =
               if prove __POS__ env nc then ()
               else
                 typ_raise l
-                  (Err_subtype (typ1, typ2, Some nc, Env.get_constraint_reasons orig_env, Env.get_typ_var_locs env))
+                  (Err_subtype (typ1, typ2, Some nc, Env.get_constraint_reasons orig_env, Env.get_typ_vars_info env))
           | None, None ->
-              typ_raise l (Err_subtype (typ1, typ2, None, Env.get_constraint_reasons env, Env.get_typ_var_locs env))
+              typ_raise l (Err_subtype (typ1, typ2, None, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
         )
     )
 
@@ -1136,7 +1136,7 @@ and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   typ_print
     (lazy (("Subtype arg " |> Util.green |> Util.clear) ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2));
   let raise_failed_constraint nc =
-    typ_raise l (Err_failed_constraint (nc, Env.get_locals env, Env.get_constraints env))
+    typ_raise l (Err_failed_constraint (nc, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
   in
   match (aux1, aux2) with
   | A_nexp n1, A_nexp n2 ->
@@ -2905,7 +2905,9 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
             annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len)
-          else typ_raise l (Err_failed_constraint (check, Env.get_locals env, Env.get_constraints env))
+          else
+            typ_raise l
+              (Err_failed_constraint (check, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
       | _ -> typ_error l "Cannot assign slice of non vector type"
     end
   | LE_vector (v_lexp, exp) -> begin
@@ -2918,14 +2920,22 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LE_vector (inferred_v_lexp, inferred_exp)) elem_typ
-          else typ_raise l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
+          else
+            typ_raise l
+              (Err_failed_constraint
+                 (bounds_check, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+              )
       | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
           let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LE_vector (inferred_v_lexp, inferred_exp)) bit_typ
-          else typ_raise l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
+          else
+            typ_raise l
+              (Err_failed_constraint
+                 (bounds_check, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+              )
       | Typ_id id -> begin
           match exp with
           | E_aux (E_id field, _) ->
