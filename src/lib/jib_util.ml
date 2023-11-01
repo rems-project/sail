@@ -403,10 +403,10 @@ let rec ctyp_has pred ctyp =
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
   | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ ->
       false
-  | CT_tup ctyps -> List.exists pred ctyps
-  | CT_ref ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp -> pred ctyp
-  | CT_struct (id, fields) -> List.exists (fun (_, ctyp) -> pred ctyp) fields
-  | CT_variant (id, ctors) -> List.exists (fun (_, ctyp) -> pred ctyp) ctors
+  | CT_tup ctyps -> List.exists (ctyp_has pred) ctyps
+  | CT_ref ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp -> ctyp_has pred ctyp
+  | CT_struct (id, fields) -> List.exists (fun (_, ctyp) -> ctyp_has pred ctyp) fields
+  | CT_variant (id, ctors) -> List.exists (fun (_, ctyp) -> ctyp_has pred ctyp) ctors
 
 let rec ctyp_equal ctyp1 ctyp2 =
   match (ctyp1, ctyp2) with
