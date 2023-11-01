@@ -71,7 +71,9 @@ This file wraps the functions in Type_check, so they return
 Fatal_error exceptions from the Reporting module rather than
 Type_errors. *)
 
+open Ast
 open Ast_util
+open Type_env
 
 (** If false (default), we'll only explain generated variables, not
    variables written explicitly by the user in the source. *)
@@ -81,7 +83,17 @@ val opt_explain_all_variables : bool ref
    into detail about how they were derived *)
 val opt_explain_constraints : bool ref
 
-type type_error
+type constraint_reason = (l * string) option
+
+type type_error =
+  | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
+  | Err_no_overloading of id * (id * type_error) list
+  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * type_variables * n_constraint list
+  | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
+  | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * Ast.l KBindings.t
+  | Err_no_num_ident of id
+  | Err_other of string
+  | Err_inner of type_error * Parse_ast.l * string * string option * type_error
 
 exception Type_error of Parse_ast.l * type_error
 

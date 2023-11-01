@@ -406,8 +406,7 @@ and simp_typ_aux = function
    which is then a problem we can feed to the constraint solver expecting unsat.
 *)
 
-let prove_smt env (NC_aux (_, l) as nc) =
-  let ncs = Env.get_constraints env in
+let prove_smt ~assumptions:ncs (NC_aux (_, l) as nc) =
   match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat ->
       typ_debug (lazy "unsat");
@@ -449,10 +448,11 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
 let debug_pos (file, line, _, _) = "(" ^ file ^ "/" ^ string_of_int line ^ ") "
 
 let prove pos env nc =
+  let ncs = Env.get_constraints env in
   typ_print
     ( lazy
       (Util.("Prove " |> red |> clear)
-      ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
+      ^ string_of_list ", " string_of_n_constraint ncs
       ^ " |- " ^ string_of_n_constraint nc
       )
       );
@@ -461,11 +461,10 @@ let prove pos env nc =
     prerr_endline
       (Util.("Prove " |> red |> clear)
       ^ debug_pos pos
-      ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
+      ^ string_of_list ", " string_of_n_constraint ncs
       ^ " |- " ^ string_of_n_constraint nc
-      )
-  else ();
-  match nc_aux with NC_true -> true | _ -> prove_smt env nc
+      );
+  match nc_aux with NC_true -> true | _ -> prove_smt ~assumptions:ncs nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)
@@ -1525,7 +1524,8 @@ let check_function_instantiation l id env bind1 bind2 =
 
       let quants = List.fold_left instantiate_quants (quant_items typq2) (KBindings.bindings unifiers) in
       if not (List.for_all (solve_quant check_env) quants) then
-        typ_raise l (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_constraints env));
+        typ_raise l
+          (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env));
       let typ2 = subst_unifiers unifiers typ2 in
 
       check check_env typ1 typ2
@@ -2375,7 +2375,10 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               let arg_typ' = subst_unifiers unifiers arg_typ in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
               if not (List.for_all (solve_quant env) quants') then
-                typ_raise l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
+                typ_raise l
+                  (Err_unresolved_quants
+                     (f, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                  );
               let _ret_typ' = subst_unifiers unifiers ret_typ in
               let arg_typ', env = bind_existential l None arg_typ' env in
               let tpat, env, guards = bind_pat env pat arg_typ' in
@@ -2398,7 +2401,10 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
             let arg_typ' = subst_unifiers unifiers typ1 in
             let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
             if not (List.for_all (solve_quant env) quants') then
-              typ_raise l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
+              typ_raise l
+                (Err_unresolved_quants
+                   (f, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                );
             let _ret_typ' = subst_unifiers unifiers typ2 in
             let tpat, env, guards = bind_pat env pat arg_typ' in
             (annot_pat_uannot (backwards_attr (gen_loc l) uannot) (P_app (f, [tpat])) typ, env, guards)
@@ -2410,7 +2416,10 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               let arg_typ' = subst_unifiers unifiers typ2 in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
               if not (List.for_all (solve_quant env) quants') then
-                typ_raise l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
+                typ_raise l
+                  (Err_unresolved_quants
+                     (f, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                  );
               let _ret_typ' = subst_unifiers unifiers typ1 in
               let tpat, env, guards = bind_pat env pat arg_typ' in
               (annot_pat_uannot (forwards_attr (gen_loc l) uannot) (P_app (f, [tpat])) typ, env, guards)
@@ -3468,7 +3477,8 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   let xs = List.map solve_implicit implicits @ xs in
 
   if not (List.for_all (solve_quant env) !quants) then
-    typ_raise l (Err_unresolved_quants (f, !quants, Env.get_locals env, Env.get_constraints env))
+    typ_raise l
+      (Err_unresolved_quants (f, !quants, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
   else ();
 
   let ty_vars = KBindings.bindings (Env.get_typ_vars env) |> List.map (fun (v, k) -> mk_kopt k v) in
@@ -3589,7 +3599,10 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
             let arg_typ' = subst_unifiers unifiers arg_typ in
             let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
             if not (List.for_all (solve_quant env) quants') then
-              typ_raise l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env));
+              typ_raise l
+                (Err_unresolved_quants
+                   (f, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                );
             let _ret_typ' = subst_unifiers unifiers ret_typ in
             let tpats, env, guards =
               try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ')
@@ -3614,7 +3627,10 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
             let arg_typ' = subst_unifiers unifiers typ1 in
             let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
             if not (List.for_all (solve_quant env) quants') then
-              typ_raise l (Err_unresolved_quants (other, quants', Env.get_locals env, Env.get_constraints env));
+              typ_raise l
+                (Err_unresolved_quants
+                   (other, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                );
             let _ret_typ' = subst_unifiers unifiers typ2 in
             let tpat, env, guards = bind_mpat allow_unknown other_env env mpat arg_typ' in
             (annot_mpat (MP_app (other, [tpat])) typ, env, guards)
@@ -3627,7 +3643,10 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
               let arg_typ' = subst_unifiers unifiers typ2 in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
               if not (List.for_all (solve_quant env) quants') then
-                typ_raise l (Err_unresolved_quants (other, quants', Env.get_locals env, Env.get_constraints env));
+                typ_raise l
+                  (Err_unresolved_quants
+                     (other, quants', Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                  );
               let _ret_typ' = subst_unifiers unifiers typ1 in
               let tpat, env, guards = bind_mpat allow_unknown other_env env mpat arg_typ' in
               (annot_mpat (MP_app (other, [tpat])) typ, env, guards)
