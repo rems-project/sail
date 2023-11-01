@@ -251,15 +251,16 @@ let message_of_type_error =
             Line ("Could not resolve quantifiers for " ^ string_of_id id);
             Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
           ]
-    | Err_failed_constraint (check, locals, ncs) ->
+    | Err_failed_constraint (check, locals, _, ncs) ->
         Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check))
-    | Err_subtype (typ1, typ2, nc, all_constraints, all_vars) ->
+    | Err_subtype (typ1, typ2, nc, all_constraints, tyvars) ->
         let nc = Option.map constraint_simp nc in
         let typ1, typ2 = (simp_typ typ1, simp_typ typ2) in
         let nc_vars = match nc with Some nc -> tyvars_of_constraint nc | None -> KidSet.empty in
         (* Variables appearing in the types and constraint *)
         let appear_vars =
-          KBindings.bindings all_vars
+          KBindings.bindings tyvars.vars
+          |> List.map (fun (v, (l, _)) -> (v, l))
           |> List.filter (fun (v, _) ->
                  KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))
              )
@@ -285,7 +286,7 @@ let message_of_type_error =
             (fun (substs, new_vars) (v, _) ->
               if is_kid_generated v || has_underscore v then (
                 let v' = readable_name v in
-                if (not (KBindings.mem v' all_vars)) && not (KidSet.mem v' new_vars) then
+                if (not (KBindings.mem v' tyvars.vars)) && not (KidSet.mem v' new_vars) then
                   (KBindings.add v (nvar v') substs, KidSet.add v' new_vars)
                 else (substs, new_vars)
               )
