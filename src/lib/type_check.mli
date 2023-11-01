@@ -507,4 +507,4 @@ val check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list
 (** The initial type checking environment *)
 val initial_env : Env.t
 
-val prove_smt : Env.t -> n_constraint -> bool
+val prove_smt : assumptions:n_constraint list -> n_constraint -> bool

@@ -95,13 +95,15 @@ let adding = Util.("Adding " |> darkgray |> clear)
 
 type constraint_reason = (Ast.l * string) option
 
+type type_variables = { vars : (Ast.l * kind_aux) KBindings.t; shadows : int KBindings.t }
+
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
      coercions *)
   | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
-  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
+  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * Ast.l KBindings.t
   | Err_no_num_ident of id

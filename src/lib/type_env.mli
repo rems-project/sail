@@ -145,6 +145,12 @@ val get_typ_var_loc_opt : kid -> t -> Ast.l option
 val get_typ_vars : t -> kind_aux KBindings.t
 val get_typ_var_locs : t -> Ast.l KBindings.t
 
+type type_variables = Type_internal.type_variables
+
+val get_typ_vars_info : t -> type_variables
+val lookup_typ_var : kid -> type_variables -> (Ast.l * kind_aux) option
+val is_shadowed : kid -> type_variables -> bool
+
 val shadows : kid -> t -> int
 val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
 val add_typ_var : l -> kinded_id -> t -> t

@@ -156,6 +156,8 @@ type env = {
   outcome_typschm : (typquant * typ) option;
 }
 
+type type_variables = Type_internal.type_variables
+
 type t = env
 
 let update_global f env = { env with global = f env.global }
@@ -242,6 +244,12 @@ let get_typ_var kid env =
 
 let get_typ_vars env = KBindings.map snd env.typ_vars
 let get_typ_var_locs env = KBindings.map fst env.typ_vars
+
+let get_typ_vars_info env = { vars = env.typ_vars; shadows = env.shadow_vars }
+
+let lookup_typ_var v tv_info = match KBindings.find_opt v tv_info.vars with Some v -> Some v | None -> None
+
+let is_shadowed v tv_info = match KBindings.find_opt v tv_info.shadows with Some _ -> true | None -> false
 
 let k_counter = ref 0
 let k_name () =

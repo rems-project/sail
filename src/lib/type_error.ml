@@ -245,7 +245,7 @@ let message_of_type_error =
             Line ("No overloading for " ^ string_of_id id ^ ", tried:");
             List (List.map (fun (id, err) -> (string_of_id id, msg err)) errs);
           ]
-    | Err_unresolved_quants (id, quants, locals, ncs) ->
+    | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->
         Seq
           [
             Line ("Could not resolve quantifiers for " ^ string_of_id id);
