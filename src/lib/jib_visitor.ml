@@ -193,7 +193,9 @@ let rec visit_instr vis outer_instr =
         if name == name' then no_change else I_aux (I_end name', aux)
     | I_aux (I_comment _, aux) -> no_change
     | I_aux (I_raw _, aux) -> no_change
-    | I_aux (I_return cval, aux) -> no_change
+    | I_aux (I_return cval, aux) ->
+        let cval' = visit_cval vis cval in
+        if cval == cval' then no_change else I_aux (I_return cval', aux)
     | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
         let cval' = visit_cval vis cval in
         let then_instrs' = visit_instrs vis then_instrs in

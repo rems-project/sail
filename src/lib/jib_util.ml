@@ -197,6 +197,8 @@ let clexp_rename from_name to_name = visit_clexp (new rename_visitor from_name t
 
 let instr_rename from_name to_name = visit_instr (new rename_visitor from_name to_name)
 
+let instrs_rename from_name to_name = visit_instrs (new rename_visitor from_name to_name)
+
 (**************************************************************************)
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)
@@ -1077,32 +1079,3 @@ let instr_split_at f =
     | instr :: instrs -> instr_split_at' f (instr :: before) instrs
   in
   instr_split_at' f []
-
-let rec instrs_rename from_id to_id =
-  let rename id = if Name.compare id from_id = 0 then to_id else id in
-  let crename = cval_rename from_id to_id in
-  let irename instrs = instrs_rename from_id to_id instrs in
-  let lrename = clexp_rename from_id to_id in
-  function
-  | I_aux (I_decl (ctyp, new_id), _) :: _ as instrs when Name.compare from_id new_id = 0 -> instrs
-  | I_aux (I_decl (ctyp, new_id), aux) :: instrs -> I_aux (I_decl (ctyp, new_id), aux) :: irename instrs
-  | I_aux (I_reset (ctyp, id), aux) :: instrs -> I_aux (I_reset (ctyp, rename id), aux) :: irename instrs
-  | I_aux (I_init (ctyp, id, cval), aux) :: instrs ->
-      I_aux (I_init (ctyp, rename id, crename cval), aux) :: irename instrs
-  | I_aux (I_reinit (ctyp, id, cval), aux) :: instrs ->
-      I_aux (I_reinit (ctyp, rename id, crename cval), aux) :: irename instrs
-  | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-      I_aux (I_if (crename cval, irename then_instrs, irename else_instrs, ctyp), aux) :: irename instrs
-  | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
-  | I_aux (I_funcall (clexp, extern, function_id, cvals), aux) :: instrs ->
-      I_aux (I_funcall (lrename clexp, extern, function_id, List.map crename cvals), aux) :: irename instrs
-  | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
-  | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs
-  | I_aux (I_return cval, aux) :: instrs -> I_aux (I_return (crename cval), aux) :: irename instrs
-  | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
-  | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
-  | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
-  | I_aux (I_end id, aux) :: instrs -> I_aux (I_end (rename id), aux) :: irename instrs
-  | (I_aux ((I_comment _ | I_raw _ | I_label _ | I_goto _ | I_exit _ | I_undefined _), _) as instr) :: instrs ->
-      instr :: irename instrs
-  | [] -> []
