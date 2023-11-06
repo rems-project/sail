@@ -408,11 +408,17 @@ let filter_ast_extra cuts g ast keep_std =
     | DEF_aux (DEF_register rdec, def_annot) :: defs when NM.mem (Register (id_of_reg_dec rdec)) g ->
         DEF_aux (DEF_register rdec, def_annot) :: filter_ast' g defs
     | DEF_aux (DEF_register _, _) :: defs -> filter_ast' g defs
-    | DEF_aux (DEF_overload (id, overloads), def_annot) :: defs ->
-        let cut_overload overload =
-          NS.mem (Function overload) cuts || NS.mem (Constructor overload) cuts || NS.mem (Overload overload) cuts
+    | DEF_aux (DEF_overload (id, overloads), def_annot) :: defs -> begin
+        let keep_overload overload =
+          (NM.mem (Function overload) g || NM.mem (Constructor overload) g || NM.mem (Overload overload) g)
+          && not
+               (NS.mem (Function overload) cuts || NS.mem (Constructor overload) cuts || NS.mem (Overload overload) cuts)
         in
-        DEF_aux (DEF_overload (id, List.filter cut_overload overloads), def_annot) :: filter_ast' g defs
+        let filtered = List.filter keep_overload overloads in
+        match filtered with
+        | [] -> filter_ast' g defs
+        | _ -> DEF_aux (DEF_overload (id, filtered), def_annot) :: filter_ast' g defs
+      end
     | DEF_aux (DEF_val vs, def_annot) :: defs when NM.mem (Function (id_of_val_spec vs)) g ->
         DEF_aux (DEF_val vs, def_annot) :: filter_ast' g defs
     | DEF_aux (DEF_val _, _) :: defs -> filter_ast' g defs
