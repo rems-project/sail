@@ -69,7 +69,11 @@ To remove the pin and revert to the latest released opam package type:
 opam pin remove sail
 ```
 
-### Building from source
+### Building from source (without opam)
+
+Note that if you are just interested in using development versions of Sail, rather than
+working the Sail source yourself, the above instructions using opam pin are likely better
+suited to your needs.
 
 opam can be used to just install Sail's dependencies. From within the Sail root directory run:
 ```
