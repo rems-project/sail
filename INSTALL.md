@@ -110,7 +110,7 @@ nor on a per-project basis, instead they are installed in
 *switches*. A switch has its own OCaml compiler version and set of
 libraries and executables. Earlier in this document we created a switch
 ```
-opam switch create 4.08.0
+opam switch create 5.1.0
 ```
 but you can create your own switch
 ```
