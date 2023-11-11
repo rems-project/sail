@@ -1,6 +1,15 @@
 Changelog
 =========
 
+Sail 0.17.1
+-----------
+
+Updated 0.17 release with bugfixes for:
+
+* Issue 362 https://github.com/rems-project/sail/issues/362
+
+Additionally includes patches for better ASL to Sail compatibility
+
 Sail 0.17
 ---------
 

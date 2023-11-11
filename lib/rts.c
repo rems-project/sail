@@ -68,6 +68,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <sys/types.h>
 
 #include "sail.h"
 #include "rts.h"
