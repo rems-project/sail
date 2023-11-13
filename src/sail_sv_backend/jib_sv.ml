@@ -242,7 +242,6 @@ module Make (Config : CONFIG) = struct
 
   let sv_name = function
     | Name (id, _) -> sv_id id
-    | Global (id, _) -> sv_id id
     | Have_exception _ -> string "sail_have_exception"
     | Current_exception _ -> string "sail_current_exception"
     | Throw_location _ -> string "sail_throw_location"

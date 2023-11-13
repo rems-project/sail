@@ -179,5 +179,3 @@ end
    convert several Sail language features, these are sail_assert,
    sail_exit, and sail_cons. *)
 val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info
-
-val name_or_global : ctx -> id -> name

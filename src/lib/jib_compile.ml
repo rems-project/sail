@@ -247,9 +247,6 @@ module type CONFIG = sig
   val track_throw : bool
 end
 
-let name_or_global ctx id =
-  if Env.is_register id ctx.local_env || IdSet.mem id (Env.get_toplevel_lets ctx.local_env) then global id else name id
-
 module IdGraph = Graph.Make (Id)
 module IdGraphNS = Set.Make (Id)
 
@@ -354,7 +351,7 @@ module Make (C : CONFIG) = struct
     | AV_id (id, typ) -> begin
         match Bindings.find_opt id ctx.locals with
         | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
-        | None -> ([], V_id (name_or_global ctx id, ctyp_of_typ ctx (lvar_typ typ)), [])
+        | None -> ([], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
     | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), [])
@@ -621,7 +618,7 @@ module Make (C : CONFIG) = struct
     match apat_aux with
     | AP_global (pid, typ) ->
         let global_ctyp = ctyp_of_typ ctx typ in
-        ([], [icopy l (CL_id (global pid, global_ctyp)) cval], [], ctx)
+        ([], [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx)
     | AP_id (pid, _) when is_ct_enum ctyp -> begin
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
@@ -717,10 +714,10 @@ module Make (C : CONFIG) = struct
     match alexp with
     | AL_id (id, typ) ->
         let ctyp = match Bindings.find_opt id ctx.locals with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
-        CL_id (name_or_global ctx id, ctyp)
+        CL_id (name id, ctyp)
     | AL_addr (id, typ) ->
         let ctyp = match Bindings.find_opt id ctx.locals with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
-        CL_addr (CL_id (name_or_global ctx id, ctyp))
+        CL_addr (CL_id (name id, ctyp))
     | AL_field (alexp, field_id) -> CL_field (compile_alexp ctx alexp, field_id)
 
   let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
@@ -931,9 +928,7 @@ module Make (C : CONFIG) = struct
       when Id.compare id rid = 0 ->
         let compile_fields (field_id, aval) =
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
-          field_setup
-          @ [icopy l (CL_field (CL_id (name_or_global ctx id, ctyp_of_typ ctx typ), field_id)) cval]
-          @ field_cleanup
+          field_setup @ [icopy l (CL_field (CL_id (name id, ctyp_of_typ ctx typ), field_id)) cval] @ field_cleanup
         in
         (List.concat (List.map compile_fields (Bindings.bindings fields)), (fun clexp -> icopy l clexp unit_cval), [])
     | AE_assign (alexp, aexp) ->
@@ -1480,7 +1475,7 @@ module Make (C : CONFIG) = struct
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
         let aexp = C.optimize_anf ctx (no_shadow ctx.letbind_ids (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
-        let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
+        let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
         let instrs = unique_names instrs in
         ([CDEF_register (id, ctyp_of_typ ctx typ, instrs)], ctx)
     | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->

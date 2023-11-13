@@ -263,7 +263,6 @@ let rec find_function fid = function
 
 let ssa_name i = function
   | Name (id, _) -> Name (id, i)
-  | Global (id, _) -> Global (id, i)
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
   | Throw_location _ -> Throw_location i
