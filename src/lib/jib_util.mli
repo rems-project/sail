@@ -122,7 +122,6 @@ val throw_location : name
 val return : name
 
 val name : id -> name
-val global : id -> name
 
 val cval_rename : name -> name -> cval -> cval
 val clexp_rename : name -> name -> clexp -> clexp

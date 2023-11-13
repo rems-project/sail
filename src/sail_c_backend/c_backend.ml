@@ -332,19 +332,19 @@ end) : CONFIG = struct
               try
                 (* We need to check that id's type hasn't changed due to flow typing *)
                 let _, ctyp' = Bindings.find id ctx.locals in
-                if ctyp_equal ctyp ctyp' then AV_cval (V_id (name_or_global ctx id, ctyp), typ)
+                if ctyp_equal ctyp ctyp' then AV_cval (V_id (name id, ctyp), typ)
                 else
                   (* id's type changed due to flow typing, so it's
                      really still heap allocated! *)
                   v
               with (* Hack: Assuming global letbindings don't change from flow typing... *)
               | Not_found ->
-                AV_cval (V_id (name_or_global ctx id, ctyp), typ)
+                AV_cval (V_id (name id, ctyp), typ)
             end
             else v
         | Register typ ->
             let ctyp = convert_typ ctx typ in
-            if is_stack_ctyp ctyp && not (never_optimize ctyp) then AV_cval (V_id (global id, ctyp), typ) else v
+            if is_stack_ctyp ctyp && not (never_optimize ctyp) then AV_cval (V_id (name id, ctyp), typ) else v
         | _ -> v
       end
     | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
@@ -1054,7 +1054,6 @@ let rec sgen_clexp l = function
   | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
-  | CL_id (Global (id, _), _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_id field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
@@ -1067,7 +1066,6 @@ let rec sgen_clexp_pure l = function
   | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> sgen_id id
-  | CL_id (Global (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_id field
   | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
   | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
