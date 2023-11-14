@@ -2946,9 +2946,9 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   in
   let intropp = match mutrec with NotMutrec -> intropp | FirstFn -> string "Fixpoint" | LaterFn -> string "with" in
   let ctxt =
-    match mutrec with
-    | NotMutrec -> ctxt
-    | _ -> { ctxt with recursive_fns = Bindings.singleton id (List.length quantspp, 0, is_measured) }
+    match (rec_opt, mutrec) with
+    | Rec_aux (Rec_nonrec, _), NotMutrec -> ctxt
+    | _, _ -> { ctxt with recursive_fns = Bindings.singleton id (List.length quantspp, 0, is_measured) }
   in
   let _ =
     match guard with
