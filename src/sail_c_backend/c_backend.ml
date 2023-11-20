@@ -201,6 +201,7 @@ end) : CONFIG = struct
     | Typ_id id when string_of_id id = "nat" -> CT_lint
     | Typ_id id when string_of_id id = "unit" -> CT_unit
     | Typ_id id when string_of_id id = "string" -> CT_string
+    | Typ_id id when string_of_id id = "string_literal" -> CT_string
     | Typ_id id when string_of_id id = "real" -> CT_real
     | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
     | Typ_app (id, args) when string_of_id id = "itself" -> convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))

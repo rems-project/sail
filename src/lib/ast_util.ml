@@ -481,6 +481,7 @@ let range_typ nexp1 nexp2 =
 let bool_typ = mk_id_typ (mk_id "bool")
 let atom_bool_typ nc = mk_typ (Typ_app (mk_id "atom_bool", [mk_typ_arg (A_bool nc)]))
 let string_typ = mk_id_typ (mk_id "string")
+let string_literal_typ = mk_id_typ (mk_id "string_literal")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tuple typs)
 let function_typ arg_typs ret_typ = mk_typ (Typ_fn (arg_typs, ret_typ))

@@ -220,6 +220,7 @@ val app_typ : id -> typ_arg list -> typ
 val register_typ : typ -> typ
 val unit_typ : typ
 val string_typ : typ
+val string_literal_typ : typ
 val real_typ : typ
 val vector_typ : nexp -> typ -> typ
 val bitvector_typ : nexp -> typ

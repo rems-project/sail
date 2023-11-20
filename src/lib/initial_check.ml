@@ -1381,6 +1381,7 @@ let initial_ctx =
           ("unit", []);
           ("bit", []);
           ("string", []);
+          ("string_literal", []);
           ("real", []);
           ("list", [Some K_type]);
           ("register", [Some K_type]);

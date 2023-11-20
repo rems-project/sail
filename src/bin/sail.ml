@@ -168,6 +168,10 @@ let rec options =
         "<symbol> check if a feature symbol is set by default"
       );
       ("-no_color", Arg.Clear Util.opt_colors, " do not use terminal color codes in output");
+      ( "-string_literal_type",
+        Arg.Set Type_env.opt_string_literal_type,
+        " use a separate string_literal type for string literals"
+      );
       ( "-undefined_gen",
         Arg.Set Initial_check.opt_undefined_gen,
         " generate undefined_type functions for types in the specification"
