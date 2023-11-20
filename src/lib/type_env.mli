@@ -72,6 +72,9 @@ open Ast_util
    the SMT solver to use non-linear arithmetic. *)
 val opt_smt_linearize : bool ref
 
+(** Val use a separate string literal type *)
+val opt_string_literal_type : bool ref
+
 type global_env
 
 type env

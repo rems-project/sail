@@ -398,6 +398,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     | _ -> atomic_typ params_to_print atyp_needed ty
   and atomic_typ params_to_print atyp_needed (Typ_aux (t, l) as ty) =
     match t with
+    | Typ_id (Id_aux (Id "string_literal", _)) -> string "string"
     | Typ_id (Id_aux (Id "bool", _)) -> string "bool"
     | Typ_id (Id_aux (Id "bit", _)) -> string "bitU"
     | Typ_id id ->

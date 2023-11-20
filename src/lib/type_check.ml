@@ -601,6 +601,8 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
   | Typ_id id1, Typ_app (id2, []) when Id.compare id1 id2 = 0 -> KBindings.empty
   | Typ_id id1, Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
+  | Typ_id id1, Typ_id id2 when Id.compare id1 (mk_id "string") = 0 && Id.compare id2 (mk_id "string_literal") = 0 ->
+      KBindings.empty
   | Typ_tuple typs1, Typ_tuple typs2 when List.length typs1 = List.length typs2 ->
       List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ l env goals) typs1 typs2)
   | Typ_fn (arg_typs1, ret_typ1), Typ_fn (arg_typs2, ret_typ2) when List.length arg_typs1 = List.length arg_typs2 ->
@@ -1088,6 +1090,7 @@ let rec subtyp l env typ1 typ2 =
       match (typ_aux1, typ_aux2) with
       | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
       | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" -> ()
+      | Typ_id id1, Typ_id id2 when string_of_id id1 = "string_literal" && string_of_id id2 = "string" -> ()
       | Typ_tuple typs1, Typ_tuple typs2 when List.length typs1 = List.length typs2 ->
           List.iter2 (subtyp l env) typs1 typs2
       | Typ_app (id1, args1), Typ_app (id2, args2) when Id.compare id1 id2 = 0 && List.length args1 = List.length args2
@@ -1343,6 +1346,7 @@ let infer_lit env (L_aux (lit_aux, l)) =
   | L_num n -> atom_typ (nconstant n)
   | L_true -> atom_bool_typ nc_true
   | L_false -> atom_bool_typ nc_false
+  | L_string _ when !Type_env.opt_string_literal_type -> string_literal_typ
   | L_string _ -> string_typ
   | L_real _ -> real_typ
   | L_bin str -> bits_typ env (nint (String.length str))
@@ -2316,7 +2320,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
     end
   | P_string_append pats -> begin
       match Env.expand_synonyms env typ with
-      | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
+      | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 || Id.compare id (mk_id "string_literal") = 0 ->
           let rec process_pats env = function
             | [] -> ([], env, [])
             | pat :: pats ->
@@ -2531,6 +2535,9 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
       Env.wf_typ env typ_annot;
       let typed_pat, env, guards = bind_pat env pat typ_annot in
       (annot_pat (P_typ (typ_annot, typed_pat)) typ_annot, env, guards)
+  | P_lit (L_aux (L_string _, _) as lit) ->
+      (* String literal patterns match strings, not just string_literals *)
+      (annot_pat (P_lit lit) string_typ, env, [])
   | P_lit lit -> (annot_pat (P_lit lit) (infer_lit env lit), env, [])
   | P_vector (pat :: pats) ->
       let fold_pats (pats, env, guards) pat =
@@ -2550,7 +2557,7 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
   | P_string_append pats ->
       let fold_pats (pats, env, guards) pat =
         let inferred_pat, env, guards' = infer_pat env pat in
-        typ_equality l env (typ_of_pat inferred_pat) string_typ;
+        subtyp l env (typ_of_pat inferred_pat) string_typ;
         (pats @ [inferred_pat], env, guards' @ guards)
       in
       let typed_pats, env, guards = List.fold_left fold_pats ([], env, []) pats in
@@ -3553,7 +3560,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
     end
   | MP_string_append mpats -> begin
       match Env.expand_synonyms env typ with
-      | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
+      | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 || Id.compare id (mk_id "string_literal") = 0 ->
           let rec process_mpats env = function
             | [] -> ([], env, [])
             | pat :: pats ->
@@ -3808,6 +3815,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
         end
       | _ -> typ_error l ("Malformed mapping type " ^ string_of_id f)
     end
+  | MP_lit (L_aux (L_string _, _) as lit) -> (annot_mpat (MP_lit lit) string_typ, env, [])
   | MP_lit lit -> (annot_mpat (MP_lit lit) (infer_lit env lit), env, [])
   | MP_typ (mpat, typ_annot) ->
       Env.wf_typ env typ_annot;
@@ -3827,7 +3835,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
   | MP_string_append mpats ->
       let fold_pats (pats, env, guards) pat =
         let inferred_pat, env, guards' = infer_mpat allow_unknown other_env env pat in
-        typ_equality l env (typ_of_mpat inferred_pat) string_typ;
+        subtyp l env (typ_of_mpat inferred_pat) string_typ;
         (pats @ [inferred_pat], env, guards' @ guards)
       in
       let typed_mpats, env, guards = List.fold_left fold_pats ([], env, []) mpats in

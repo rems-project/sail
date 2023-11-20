@@ -77,6 +77,8 @@ open Type_internal
    the SMT solver to use non-linear arithmetic. *)
 let opt_smt_linearize = ref false
 
+let opt_string_literal_type = ref false
+
 module IdPair = struct
   type t = id * id
   let compare (a, b) (c, d) =
@@ -278,6 +280,7 @@ let builtin_typs =
       ("real", []);
       ("list", [K_type]);
       ("string", []);
+      ("string_literal", []);
       ("itself", [K_int]);
       ("atom_bool", [K_bool]);
       ("float16", []);

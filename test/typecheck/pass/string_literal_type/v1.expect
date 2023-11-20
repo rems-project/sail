@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/string_literal_type/v1.sail[0m:14.7-23:
+14[96m |[0m  test(concat_str(x, z))
+  [91m |[0m       [91m^--------------^[0m
+  [91m |[0m string is not a subtype of string_literal
