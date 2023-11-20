@@ -113,9 +113,14 @@ let is_number_char c =
 
 let rec fix_id remove_tick name =
   match name with
-  | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try" | "match" | "with" | "check"
-  | "field" | "LT" | "lt" | "lteq" | "GT" | "gt" | "gteq" | "EQ" | "eq" | "neq" | "integer" | "union" | "inter"
-  | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" ->
+  | "as" | "let" | "and" | "in" | "of" | "rec" | "module" | "rename" | "struct" | "end" | "open" | "import" | "include"
+  | "begin" | "val" | "class" | "instance" | "default_instance" | "indreln" | "forall" | "exists" | "inline"
+  | "lem_transform" | "IN" | "MEM" | "declare" | "infix" | "automatic" | "exhaustive" | "inexhaustive" | "ascii_rep"
+  | "compile_message" | "set_flag" | "termination_argument" | "pattern_match" | "right_assoc" | "left_assoc"
+  | "non_assoc" | "non_exec" | "special" | "target_rep" | "target_sorts" | "target_type" | "target_const" | "lemma"
+  | "theorem" | "do" | "witness" | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try"
+  | "match" | "with" | "check" | "field" | "LT" | "lt" | "lteq" | "GT" | "gt" | "gteq" | "EQ" | "eq" | "neq" | "integer"
+  | "union" | "inter" | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" ->
       name ^ "'"
   | _ ->
       if String.contains name '#' then fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
