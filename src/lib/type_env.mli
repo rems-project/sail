@@ -81,6 +81,12 @@ type env
 
 type t = env
 
+(** This implements the unscope# pragma, which removes an identifier
+    from scope by setting its module id to -1 (which is never a valid
+    module id). This is used only to test the typechecker, and should
+    not be used for any other reason! *)
+val unscope_pragma : string -> id -> t -> t
+
 val freshen_bind : t -> typquant * typ -> typquant * typ
 
 val get_default_order : t -> order

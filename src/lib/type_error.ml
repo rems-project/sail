@@ -352,6 +352,14 @@ let message_of_type_error =
           ([coercion; Line "Coercion failed because:"; msg trigger]
           @ if not (reasons = []) then Line "Possible reasons:" :: List.map msg reasons else []
           )
+    | Err_not_in_scope (explanation, Some l) ->
+        Seq
+          [
+            Line (Option.value ~default:"Not in scope" explanation);
+            Line "Try bringing the following definition into scope:";
+            Location ("", Some "definition here", l, Seq []);
+          ]
+    | Err_not_in_scope (explanation, None) -> Line (Option.value ~default:"Not in scope" explanation)
   in
   msg
 

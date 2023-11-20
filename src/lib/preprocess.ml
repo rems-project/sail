@@ -240,7 +240,8 @@ let preprocess dir target opts =
        incorrect start/end annotations *)
     | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs -> aux acc defs
     | DEF_aux (DEF_pragma (p, arg), l) :: defs ->
-        if not (StringSet.mem p all_pragmas) then Reporting.warn "" l ("Unrecognised directive: " ^ p);
+        if not (StringSet.mem p all_pragmas || String.contains p '#') then
+          Reporting.warn "" l ("Unrecognised directive: " ^ p);
         aux (DEF_aux (DEF_pragma (p, arg), l) :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
         aux (DEF_aux (DEF_outcome (outcome_spec, aux [] inner_defs), l) :: acc) defs
