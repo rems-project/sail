@@ -1,0 +1,16 @@
+[93mType error[0m:
+[96mfail/bitfield_error.sail[0m:5.0-7.1:
+5[96m |[0mbitfield foo : bits(15) = {
+ [91m |[0m[91m^--------------------------[0m
+7[96m |[0m}
+ [91m |[0m[91m^[0m
+ [91m |[0m Error while checking bitfield
+ [91m |[0m 
+ [91m |[0m Code generated nearby:
+ [91m |[0m [93mBitfield error [0m[96mfail/bitfield_error.sail[0m:6.6-13:
+ [91m |[0m 6[96m |[0m  b : 0 .. 15,
+ [91m |[0m  [91m |[0m      [91m^-----^[0m
+ [91m |[0m  [91m |[0m No overloading for vector_subrange, tried:
+ [91m |[0m  [91m |[0m [94m*[0m subrange_bits
+ [91m |[0m  [91m |[0m    Could not resolve quantifiers for subrange_bits
+ [91m |[0m  [91m |[0m    [94m*[0m (0 <= 15 & (15 <= 0 & 0 < 15))
