@@ -89,6 +89,16 @@ let rec indices_of_range = function
   | BF_aux (BF_range (i, j), _) -> [(index_of_nexp i, index_of_nexp j)]
   | BF_aux (BF_concat (l, r), _) -> indices_of_range l @ indices_of_range r
 
+let range_loc (BF_aux (_, l)) = l
+
+let fix_locations l defs =
+  let rec go acc = function
+    | DEF_aux (def, def_annot) :: defs ->
+        go (DEF_aux (def, add_def_attribute (gen_loc l) "fix_location" "" def_annot) :: acc) defs
+    | [] -> acc
+  in
+  List.rev (go [] defs)
+
 let slice_width (i, j) = Big_int.succ (Big_int.abs (Big_int.sub i j))
 let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left Big_int.add Big_int.zero
 
@@ -163,7 +173,7 @@ let field_getter typ_name field order range =
   let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let body = get_field_exp range (get_bits_field (mk_exp (E_id (mk_id "v")))) in
   let funcl = mk_funcl fun_id (mk_pat (P_id (mk_id "v"))) body in
-  [spec; mk_fundef [funcl]]
+  [spec; mk_fundef [funcl]] |> fix_locations (range_loc range)
 
 let field_updater typ_name field order range =
   let size = range_width range in
@@ -180,7 +190,7 @@ let field_updater typ_name field order range =
   let overload =
     defs_of_string __POS__ (Printf.sprintf "overload update_%s = {%s}" (string_of_id field) (string_of_id fun_id))
   in
-  [spec; mk_fundef [funcl]] @ overload
+  [spec; mk_fundef [funcl]] @ overload |> fix_locations (range_loc range)
 
 let register_field_setter typ_name field order range =
   let size = range_width range in
@@ -199,7 +209,7 @@ let register_field_setter typ_name field order range =
         "}";
       ]
   in
-  List.concat [defs_of_string __POS__ rfs_val; defs_of_string __POS__ rfs_function]
+  List.concat [defs_of_string __POS__ rfs_val; defs_of_string __POS__ rfs_function] |> fix_locations (range_loc range)
 
 let field_overload name field =
   let fun_id = string_of_id (field_accessor_ids name field).overload in

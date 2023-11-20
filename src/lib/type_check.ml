@@ -4254,7 +4254,11 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             let defs =
               if !Initial_check.opt_undefined_gen then Initial_check.generate_undefineds IdSet.empty defs else defs
             in
-            let defs, env = check_defs env defs in
+            let defs, env =
+              try check_defs env defs
+              with Type_error (inner_l, err) ->
+                typ_raise l (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", None, err))
+            in
             let env = Env.add_bitfield id typ ranges env in
             if !opt_no_bitfield_expansion then
               ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
@@ -4501,9 +4505,15 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
   let rec aux n total acc env defs =
     match defs with
     | [] -> (List.rev acc, env)
-    | def :: defs ->
+    | (DEF_aux (_, def_annot) as def) :: defs ->
         Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
-        let def, env = check_def env def in
+        let def, env =
+          match get_def_attribute "fix_location" def_annot with
+          | Some (fix_l, _) -> (
+              try check_def env def with Type_error (_, err) -> typ_raise fix_l err
+            )
+          | None -> check_def env def
+        in
         aux (n + 1) total (List.rev def @ acc) env defs
   in
   aux n total [] env defs
