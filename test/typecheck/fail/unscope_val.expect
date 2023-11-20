@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/unscope_val.sail[0m:11.9-12:
+11[96m |[0mfunction foo() = ()
+  [91m |[0m         [91m^-^[0m
+  [91m |[0m Cannot infer type of function as it has a defined type already. However, this type is not in scope.
+  [91m |[0m Try bringing the following definition into scope:
+  [91m |[0m [96mfail/unscope_val.sail[0m:7.4-7:
+  [91m |[0m 7[96m |[0mval foo : unit -> unit
+  [91m |[0m  [91m |[0m    [91m^-^[0m [91mdefinition here[0m

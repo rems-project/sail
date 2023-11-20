@@ -4057,10 +4057,17 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
   in
   typ_print (lazy ("\n" ^ Util.("Check function " |> cyan |> clear) ^ string_of_id id));
   let have_val_spec, (quant, typ), env =
-    try (true, Env.get_val_spec id env, env)
-    with Type_error (l, _) ->
-      let quant, typ = infer_funtyp l env tannotopt funcls in
-      (false, (quant, typ), env)
+    try (true, Env.get_val_spec id env, env) with
+    | Type_error (l, Err_not_in_scope (_, scope_l)) ->
+        typ_raise l
+          (Err_not_in_scope
+             ( Some "Cannot infer type of function as it has a defined type already. However, this type is not in scope.",
+               scope_l
+             )
+          )
+    | Type_error (l, _) ->
+        let quant, typ = infer_funtyp l env tannotopt funcls in
+        (false, (quant, typ), env)
   in
   let vtyp_args, vtyp_ret, vl =
     match typ with
@@ -4493,6 +4500,13 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
         ],
         env
       )
+  | DEF_pragma ("unscope#", arg, l) when !Initial_check.opt_magic_hash ->
+      let env =
+        match String.split_on_char ' ' arg with
+        | [id_category; id] -> Type_env.unscope_pragma id_category (mk_id id) env
+        | _ -> env
+      in
+      ([DEF_aux (DEF_pragma ("unscope#", arg, l), def_annot)], env)
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
