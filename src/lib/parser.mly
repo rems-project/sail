@@ -122,7 +122,6 @@ let rec same_pat_ops (Id_aux (_, l) as op) = function
                                 (string_of_id op')))
   | [] -> ()
 
-let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_pat p n m = P_aux (p, loc n m)
 let mk_fpat fp n m = FP_aux (fp, loc n m)
@@ -254,7 +253,6 @@ let set_syntax_deprecated l =
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
-%token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
 %token InternalPLet InternalReturn InternalAssume
 %token Forwards Backwards
@@ -489,34 +487,10 @@ typquant:
     { TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1), loc $startpos $endpos) }
 
 effect:
-  | Barr
-    { mk_effect BE_barr $startpos $endpos }
-  | Depend
-    { mk_effect BE_depend $startpos $endpos }
-  | Rreg
-    { mk_effect BE_rreg $startpos $endpos }
-  | Wreg
-    { mk_effect BE_wreg $startpos $endpos }
-  | Rmem
-    { mk_effect BE_rmem $startpos $endpos }
-  | Wmem
-    { mk_effect BE_wmem $startpos $endpos }
-  | Wmv
-    { mk_effect BE_wmv $startpos $endpos }
-  | Eamem
-    { mk_effect BE_eamem $startpos $endpos }
-  | Exmem
-    { mk_effect BE_exmem $startpos $endpos }
-  | Undef
-    { mk_effect BE_undef $startpos $endpos }
-  | Unspec
-    { mk_effect BE_unspec $startpos $endpos }
-  | Nondet
-    { mk_effect BE_nondet $startpos $endpos }
-  | Escape
-    { mk_effect BE_escape $startpos $endpos }
+  | id
+    { $1 }
   | Configuration
-    { mk_effect BE_config $startpos $endpos }
+    { mk_id (Id "configuration") $startpos $endpos }
 
 effect_list:
   | effect
