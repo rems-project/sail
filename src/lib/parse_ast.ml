@@ -96,30 +96,11 @@ type kind_aux =
 
 type kind = K_aux of kind_aux * l
 
-type base_effect_aux =
-  | (* effect *)
-    BE_rreg (* read register *)
-  | BE_wreg (* write register *)
-  | BE_rmem (* read memory *)
-  | BE_wmem (* write memory *)
-  | BE_wmv (* write memory value *)
-  | BE_eamem (* address for write signaled *)
-  | BE_exmem (* determine if a store-exclusive (ARM) is going to succeed *)
-  | BE_barr (* memory barrier *)
-  | BE_depend (* dynamically dependent footprint *)
-  | BE_undef (* undefined-instruction exception *)
-  | BE_unspec (* unspecified values *)
-  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
-  | BE_escape
-  | BE_config
-
 type kid_aux = (* identifiers with kind, ticked to differentiate from program variables *)
   | Var of x
 
 type id_aux = (* Identifier *)
   | Id of x | Operator of x (* remove infix status *)
-
-type base_effect = BE_aux of base_effect_aux * l
 
 type kid = Kid_aux of kid_aux * l
 
@@ -158,7 +139,7 @@ type atyp_aux =
   | ATyp_infix of (atyp infix_token * Lexing.position * Lexing.position) list
   | ATyp_inc (* increasing *)
   | ATyp_dec (* decreasing *)
-  | ATyp_set of base_effect list (* effect set *)
+  | ATyp_set of id list (* effect set *)
   | ATyp_fn of atyp * atyp * atyp (* Function type, last atyp is an effect *)
   | ATyp_bidir of atyp * atyp * atyp (* Mapping type, last atyp is an effect *)
   | ATyp_wild
