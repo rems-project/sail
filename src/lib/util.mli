@@ -102,6 +102,9 @@ val assoc_compare_opt : ('a -> 'a -> int) -> 'a -> ('a * 'b) list -> 'b option
 
 val power : int -> int -> int
 
+(** Apply a function to the last element of a list *)
+val update_last : ('a -> 'a) -> 'a list -> 'a list
+
 (** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
 

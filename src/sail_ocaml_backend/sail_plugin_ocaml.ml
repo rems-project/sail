@@ -169,7 +169,7 @@ let tofrominterp_target _ _ out_file ast _ _ =
 
 let _ =
   Target.register ~name:"tofrominterp"
-    ~description:"output OCaml functions to translate between shallow embedding and interpreter"
+    ~description:" output OCaml functions to translate between shallow embedding and interpreter"
     ~options:tofrominterp_options ~rewrites:tofrominterp_rewrites tofrominterp_target
 
 let marshal_target _ _ out_file ast _ env =
@@ -184,5 +184,5 @@ let marshal_target _ _ out_file ast _ env =
   close_out f
 
 let _ =
-  Target.register ~name:"marshal" ~description:"OCaml-marshal out the rewritten AST to a file"
+  Target.register ~name:"marshal" ~description:" OCaml-marshal out the rewritten AST to a file"
     ~rewrites:tofrominterp_rewrites marshal_target

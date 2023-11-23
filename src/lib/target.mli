@@ -135,5 +135,8 @@ val get_the_target : unit -> target option
 
 val get : name:string -> target option
 
+(** Used internally when updating the option list during plugin loading *)
+val extract_registered : unit -> string list
+
 (** Used internally to dynamically update the option list when loading plugins *)
 val extract_options : unit -> (Arg.key * Arg.spec * Arg.doc) list
