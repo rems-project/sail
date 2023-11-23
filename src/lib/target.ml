@@ -92,6 +92,7 @@ let rewrites tgt = Rewrites.instantiate_rewrites tgt.rewrites
 
 let asserts_termination tgt = tgt.asserts_termination
 
+let registered = ref []
 let targets = ref StringMap.empty
 
 let the_target = ref None
@@ -118,12 +119,18 @@ let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fu
       asserts_termination;
     }
   in
+  registered := name :: !registered;
   targets := StringMap.add name tgt !targets;
   tgt
 
 let get_the_target () = match !the_target with Some name -> StringMap.find_opt name !targets | None -> None
 
 let get ~name = StringMap.find_opt name !targets
+
+let extract_registered () =
+  let names = !registered in
+  registered := [];
+  List.rev names
 
 let extract_options () =
   let opts = StringMap.bindings !targets |> List.map (fun (_, tgt) -> tgt.options) |> List.concat in

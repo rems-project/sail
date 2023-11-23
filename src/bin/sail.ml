@@ -67,6 +67,7 @@
 
 open Libsail
 
+let opt_new_cli = ref false
 let opt_file_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
@@ -83,16 +84,68 @@ let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
 
-(* Allow calling all options as either -foo_bar or -foo-bar *)
+(* Allow calling all options as either -foo_bar or -foo-bar. If
+   !opt_new_cli is set we force --foo for long options and -f for
+   short options. *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts ->
-      (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
+      if !opt_new_cli then
+        if flag = "-help" || flag = "--help" then (flag, spec, doc) :: fix_options opts
+        else (
+          let flag = String.map (function '_' -> '-' | c -> c) flag in
+          let flag = if String.length flag > 2 then "-" ^ flag else flag in
+          (flag, spec, doc) :: fix_options opts
+        )
+      else if Option.is_some (String.index_from_opt flag 0 '_') then
+        (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: (flag, spec, doc) :: fix_options opts
+      else (flag, spec, doc) :: fix_options opts
   | [] -> []
+
+(* This function does roughly the same thing as Arg.align, except we
+   can call it per target and it won't add additional -help
+   options. *)
+let target_align opts =
+  let split_doc doc =
+    if String.length doc > 0 then
+      if doc.[0] = ' ' then ("", doc)
+      else if doc.[0] = '\n' then ("", doc)
+      else (
+        match String.index_from_opt doc 0 ' ' with
+        | Some n -> (String.sub doc 0 n, String.sub doc n (String.length doc - n))
+        | None -> ("", doc)
+      )
+    else ("", "")
+  in
+  let opts = List.map (fun (flag, spec, doc) -> (flag, spec, split_doc doc)) opts in
+  let alignment = List.fold_left (fun a (flag, _, (arg, _)) -> max a (String.length flag + String.length arg)) 0 opts in
+  let opts =
+    List.map
+      (fun (flag, spec, (arg, doc)) ->
+        if doc = "" then (flag, spec, arg)
+        else (flag, spec, arg ^ String.make (max 0 (alignment - (String.length flag + String.length arg))) ' ' ^ doc)
+      )
+      opts
+  in
+  opts
+
+(* Add a header to separate arguments from each plugin *)
+let add_target_header plugin opts =
+  let add_header (flag, spec, doc) =
+    let desc =
+      match Target.extract_registered () with
+      | [] -> "plugin " ^ plugin
+      | [name] -> "target " ^ name
+      | names -> "targets " ^ Util.string_of_list ", " (fun x -> x) names
+    in
+    (flag, spec, doc ^ " \n\nOptions for " ^ desc)
+  in
+  Util.update_last add_header opts
 
 let load_plugin opts plugin =
   try
     Dynlink.loadfile_private plugin;
-    opts := Arg.align (!opts @ fix_options (Target.extract_options ()))
+    let plugin_opts = Target.extract_options () |> fix_options |> target_align in
+    opts := add_target_header plugin !opts @ plugin_opts
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
 let version =
@@ -148,10 +201,10 @@ let rec options =
         Arg.String (fun suffix -> opt_format_backup := Some suffix),
         "<suffix> Create backups of formated files as 'file.suffix'"
       );
-      ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> Format only this file");
+      ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
       ( "-fmt_skip",
         Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
-        "<file> Skip formatting this file"
+        "<file> skip formatting this file"
       );
       ( "-D",
         Arg.String (fun symbol -> Preprocess.add_symbol symbol),
@@ -210,7 +263,7 @@ let rec options =
       );
       ( "-smt_linearize",
         Arg.Set Type_env.opt_smt_linearize,
-        "(experimental) force linearization for constraints involving exponentials"
+        " (experimental) force linearization for constraints involving exponentials"
       );
       ("-Oconstant_fold", Arg.Set Constant_fold.optimize_constant_fold, " apply constant folding optimizations");
       ( "-Oaarch64_fast",
@@ -255,32 +308,29 @@ let rec options =
       );
       ("-dmono_continue", Arg.Set Rewrites.opt_dmono_continue, " (debug) continue despite monomorphisation errors");
       ("-dpattern_warning_no_literals", Arg.Set Pattern_completeness.opt_debug_no_literals, "");
-      ( "-infer_effects",
-        Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
-        " Ignored for compatibility with older versions; effects are always inferred now (deprecated)"
-      );
       ( "-dbacktrace",
         Arg.Int (fun l -> Reporting.opt_backtrace_length := l),
-        "<length> Length of backtrace to show when reporting unreachable code"
+        "<length> (debug) length of backtrace to show when reporting unreachable code"
+      );
+      ( "-infer_effects",
+        Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
+        " (deprecated) ignored for compatibility with older versions; effects are always inferred now"
       );
       ("-v", Arg.Set opt_print_version, " print version");
       ("-version", Arg.Set opt_print_version, " print version");
       ("-verbose", Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity), "<verbosity> produce verbose output");
       ( "-explain_all_variables",
         Arg.Set Type_error.opt_explain_all_variables,
-        " Explain all type variables in type error messages"
+        " explain all type variables in type error messages"
       );
-      ( "-explain_constraints",
-        Arg.Set Type_error.opt_explain_constraints,
-        " Explain all type variables in type error messages"
-      );
+      ("-explain_constraints", Arg.Set Type_error.opt_explain_constraints, " explain constraints in type error messages");
       ( "-explain_verbose",
         Arg.Tuple [Arg.Set Type_error.opt_explain_all_variables; Arg.Set Type_error.opt_explain_constraints],
-        " Add the maximum amount of explanation to type errors"
+        " add the maximum amount of explanation to type errors"
       );
-      ("-help", Arg.Unit (fun () -> help !options), " Display this list of options. Also available as -h or --help");
-      ("-h", Arg.Unit (fun () -> help !options), "");
-      ("--help", Arg.Unit (fun () -> help !options), "");
+      ("-h", Arg.Unit (fun () -> help !options), " display this list of options. Also available as -help or --help");
+      ("-help", Arg.Unit (fun () -> help !options), " display this list of options");
+      ("--help", Arg.Unit (fun () -> help !options), " display this list of options");
     ]
 
 let register_default_target () = Target.register ~name:"default" (fun _ _ _ _ _ _ -> ())
@@ -394,6 +444,10 @@ let parse_config_file file =
     None
 
 let main () =
+  if Option.is_some (Sys.getenv_opt "SAIL_NEW_CLI") then opt_new_cli := true;
+
+  options := Arg.align (fix_options !options);
+
   begin
     match Sys.getenv_opt "SAIL_NO_PLUGINS" with
     | Some _ -> ()
@@ -409,8 +463,6 @@ let main () =
         | [] -> ()
       )
   end;
-
-  options := Arg.align !options;
 
   Arg.parse_dynamic options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg;
 
