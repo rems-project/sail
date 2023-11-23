@@ -83,6 +83,8 @@ module type S = sig
        the nodes if they do not exist. *)
   val add_edge : node -> node -> graph -> graph
 
+  val has_edge : node -> node -> graph -> bool
+
   val add_edges : node -> node list -> graph -> graph
 
   val children : graph -> node -> node list
@@ -113,6 +115,18 @@ module type S = sig
         This algorithm also returns a topological sorting of the graph
         components. *)
   val scc : ?original_order:node list -> graph -> node list list
+
+  val edge_list : graph -> (node * node) list
+
+  val transitive_reduction : graph -> graph
+
+  val make_multi_dot :
+    node_color:(node -> string) ->
+    edge_color:(node -> node -> string) ->
+    string_of_node:(node -> string) ->
+    out_channel ->
+    (string * graph) list ->
+    unit
 
   val make_dot :
     node_color:(node -> string) ->
@@ -155,6 +169,10 @@ module Make (Ord : OrderedType) = struct
   let add_edge caller callee cg =
     let cg = fix_some_leaves cg (NS.singleton callee) in
     try NM.add caller (NS.add callee (NM.find caller cg)) cg with Not_found -> NM.add caller (NS.singleton callee) cg
+
+  let has_edge x y g = match NM.find_opt x g with Some children -> NS.mem y children | None -> false
+
+  let delete_edge x y g = NM.update x (function Some children -> Some (NS.remove y children) | None -> None) g
 
   let add_edges caller callees cg =
     let callees = List.fold_left (fun s c -> NS.add c s) NS.empty callees in
@@ -291,7 +309,22 @@ module Make (Ord : OrderedType) = struct
     List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
     List.rev !components
 
-  let make_dot ~node_color ~edge_color ~string_of_node out_chan graph =
+  let edge_list graph =
+    NM.bindings graph
+    |> List.map (fun (from_node, to_nodes) -> List.map (fun to_node -> (from_node, to_node)) (NS.elements to_nodes))
+    |> List.concat
+
+  let transitive_reduction g =
+    let g' = ref g in
+    NM.iter
+      (fun i _ ->
+        NM.iter (fun j _ -> NM.iter (fun k _ -> if has_edge i j g && has_edge j k g then g' := delete_edge i k !g') g) g
+      )
+      g;
+    !g'
+
+  let make_multi_dot ~node_color ~edge_color ~string_of_node out_chan graphs =
+    let using_colors = !Util.opt_colors in
     Util.opt_colors := false;
     let to_string node = String.escaped (string_of_node node) in
     output_string out_chan "digraph DEPS {\n";
@@ -299,14 +332,24 @@ module Make (Ord : OrderedType) = struct
       output_string out_chan
         (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
     in
-    let make_line from_node to_node =
+    let make_line style from_node to_node =
       output_string out_chan
-        (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node)
-           (edge_color from_node to_node)
+        (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s,style=%s];\n" (to_string from_node) (to_string to_node)
+           (edge_color from_node to_node) style
         )
     in
-    NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
-    NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
+    NM.bindings (List.fold_left (fun g1 (_, g2) -> NM.union (fun _ x _ -> Some x) g1 g2) NM.empty graphs)
+    |> List.iter (fun (from_node, _) -> make_node from_node);
+
+    List.iter
+      (fun (style, graph) ->
+        NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line style from_node) to_nodes)
+      )
+      graphs;
+
     output_string out_chan "}\n";
-    Util.opt_colors := true
+    Util.opt_colors := using_colors
+
+  let make_dot ~node_color ~edge_color ~string_of_node out_chan graph =
+    make_multi_dot ~node_color ~edge_color ~string_of_node out_chan [("solid", graph)]
 end

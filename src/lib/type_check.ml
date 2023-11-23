@@ -1793,6 +1793,8 @@ end
 module PC = Pattern_completeness.Make (PC_config)
 
 let pattern_completeness_ctx env =
+  (* For checking pattern completeness, ensure all types are in scope for the checker to use *)
+  let env = Env.open_all_modules env in
   {
     Pattern_completeness.variants = Env.get_variants env;
     Pattern_completeness.structs = Env.get_records env;
@@ -4507,6 +4509,20 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
         | _ -> env
       in
       ([DEF_aux (DEF_pragma ("unscope#", arg, l), def_annot)], env)
+  | DEF_pragma ("module_start#", arg, l) ->
+      let sep = String.index_from arg 0 ' ' in
+      let m = int_of_string (String.sub arg 0 sep) in
+      typ_print
+        ( lazy
+          (let name = String.sub arg (sep + 1) (String.length arg - (sep + 1)) in
+           Printf.sprintf "module start %s %d" name m
+          )
+          );
+      ([], Env.start_module m env)
+  | DEF_pragma ("require#", arg, l) ->
+      let ms = List.map int_of_string (String.split_on_char ' ' arg) in
+      ([], Env.open_modules ms env)
+  | DEF_pragma ("module_end#", arg, l) -> ([], Env.end_module env)
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
@@ -4518,7 +4534,7 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
  fun n total env defs ->
   let rec aux n total acc env defs =
     match defs with
-    | [] -> (List.rev acc, env)
+    | [] -> (List.rev acc, Env.open_all_modules env)
     | (DEF_aux (_, def_annot) as def) :: defs ->
         Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
         let def, env =

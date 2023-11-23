@@ -24,7 +24,11 @@
 
 (defvar sail-mode-hook nil)
 
+(defvar sail-project-mode-hook nil)
+
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail-mode))
+
+(add-to-list 'auto-mode-alist '("\\.sail_project\\'" . sail-project-mode))
 
 (defconst sail-keywords
   '("val" "outcome" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
@@ -33,6 +37,9 @@
     "pure" "monadic" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
     "mapping" "where" "with" "implicit" "instantiation" "impl"))
+
+(defconst sail-project-keywords
+  '("after" "before" "directory" "else" "file" "files" "if" "default" "module" "optional" "requires" "then" "variable"))
 
 (defconst sail-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"
@@ -48,7 +55,8 @@
     "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert" "$sail_internal" "$target_set"))
 
 (defconst sail-font-lock-keywords
-  `((,(regexp-opt sail-keywords 'symbols) . font-lock-keyword-face)
+  `(("$\\[[a-zA-Z_]+[^]]*\\]" . font-lock-preprocessor-face)
+    (,(regexp-opt sail-keywords 'symbols) . font-lock-keyword-face)
     (,(regexp-opt sail-kinds 'symbols) . font-lock-builtin-face)
     (,(regexp-opt sail-types 'symbols) . font-lock-type-face)
     (,(regexp-opt sail-special 'symbols) . font-lock-preprocessor-face)
@@ -66,6 +74,14 @@
     ("$include \\(<.+>\\)" 1 font-lock-string-face)
     ("$include \\(\".+\"\\)" 1 font-lock-string-face)
     ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
+
+(defconst sail-project-font-lock-keywords
+  `((,(regexp-opt sail-project-keywords 'symbols) . font-lock-keyword-face)
+    ("\\([a-zA-Z0-9_]+\\)[[:space:]]*{" 1 font-lock-function-name-face)
+    ("\\.\\." . font-lock-string-face)
+    ("$[a-zA-Z0-9]+" . font-lock-preprocessor-face)
+    ("variable \\([a-zA-Z0-9_]+\\)" 1 font-lock-preprocessor-face)
+    ("[a-zA-Z0-9_]+\\.sail" . font-lock-string-face)))
 
 (defconst sail-mode-syntax-table
   (let ((st (make-syntax-table)))
@@ -94,6 +110,20 @@
   (add-hook 'sail-mode-hook
 	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail-mode-hook))
+
+(defun sail-project-mode ()
+  "Major mode for editing Sail Language files"
+  (interactive)
+  (kill-all-local-variables)
+  (set-syntax-table sail-mode-syntax-table)
+  (use-local-map sail-mode-map)
+  (setq font-lock-defaults '(sail-project-font-lock-keywords))
+  (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
+  (setq comment-start "/*")
+  (setq comment-end "*/")
+  (setq major-mode 'sail-project-mode)
+  (setq mode-name "Sail project")
+  (run-hooks 'sail-project-mode-hook))
 
 (defvar sail-process nil)
 

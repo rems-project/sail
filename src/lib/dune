@@ -95,13 +95,13 @@
    (run sed -i.bak -f %{sed} %{target}))))
 
 (menhir
- (modules parser))
+ (modules parser project_parser))
 
 (menhir
  (modules infix_parser)
  (flags --table))
 
-(ocamllex lexer)
+(ocamllex lexer project_lexer)
 
 (generate_sites_module
  (module libsail_sites)

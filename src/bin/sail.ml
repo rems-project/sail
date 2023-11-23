@@ -78,6 +78,8 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref false
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
+let opt_project_file : string option ref = ref None
+let opt_list_files = ref false
 let opt_config_file : string option ref = ref None
 let opt_format = ref false
 let opt_format_backup : string option ref = ref None
@@ -195,11 +197,13 @@ let rec options =
         " drop to an interactive session after running Sail. Differs from -i in that it does not set up the \
          interpreter in the interactive shell."
       );
+      ("-project", Arg.String (fun file -> opt_project_file := Some file), "<file> project file");
+      ("-list_files", Arg.Set opt_list_files, " list files in project");
       ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
         Arg.String (fun suffix -> opt_format_backup := Some suffix),
-        "<suffix> Create backups of formated files as 'file.suffix'"
+        "<suffix> create backups of formated files as 'file.suffix'"
       );
       ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
       ( "-fmt_skip",
@@ -335,24 +339,6 @@ let rec options =
 
 let register_default_target () = Target.register ~name:"default" Target.empty_action
 
-let run_sail (config : Yojson.Basic.t option) tgt =
-  Target.run_pre_parse_hook tgt ();
-  let ast, env, effect_info =
-    Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments
-  in
-  let ast, env = Frontend.initial_rewrite effect_info env ast in
-  let ast, env = List.fold_right (fun file (ast, _) -> Splice.splice ast file) !opt_splice (ast, env) in
-  let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
-  Reporting.opt_warnings := false;
-
-  (* Don't show warnings during re-writing for now *)
-  Target.run_pre_rewrites_hook tgt ast effect_info env;
-  let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
-
-  Target.action tgt config Manifest.dir !opt_file_out ast effect_info env;
-
-  (ast, env, effect_info)
-
 let file_to_string filename =
   let chan = open_in filename in
   let buf = Buffer.create 4096 in
@@ -367,6 +353,41 @@ let file_to_string filename =
   with End_of_file ->
     close_in chan;
     Buffer.contents buf
+
+let run_sail (config : Yojson.Basic.t option) tgt =
+  Target.run_pre_parse_hook tgt ();
+  let ast, env, effect_info =
+    match !opt_project_file with
+    | Some file ->
+        let t = Profile.start () in
+        let root_directory = Filename.dirname file in
+        let defs = Initial_check.parse_project ~filename:file ~contents:(file_to_string file) in
+        let proj = Project.initialize_project_structure ~root_directory defs in
+        let mod_ids =
+          List.map
+            (fun mod_name ->
+              match Project.get_module_id proj mod_name with
+              | Some id -> id
+              | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
+            )
+            !opt_file_arguments
+        in
+        Profile.finish "parsing project" t;
+        Frontend.load_modules ~target:tgt Manifest.dir !options Type_check.initial_env proj mod_ids
+    | None -> Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments
+  in
+  let ast, env = Frontend.initial_rewrite effect_info env ast in
+  let ast, env = List.fold_right (fun file (ast, _) -> Splice.splice ast file) !opt_splice (ast, env) in
+  let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
+  Reporting.opt_warnings := false;
+
+  (* Don't show warnings during re-writing for now *)
+  Target.run_pre_rewrites_hook tgt ast effect_info env;
+  let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
+
+  Target.action tgt config Manifest.dir !opt_file_out ast effect_info env;
+
+  (ast, env, effect_info)
 
 let run_sail_format (config : Yojson.Basic.t option) =
   let is_format_file f = match !opt_format_only with [] -> true | files -> List.exists (fun f' -> f = f') files in

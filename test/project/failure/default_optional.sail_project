@@ -1,0 +1,6 @@
+A {
+  default
+  B {
+    optional
+  }
+}

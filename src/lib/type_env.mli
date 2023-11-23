@@ -81,6 +81,13 @@ type env
 
 type t = env
 
+val start_module : Project.mod_id -> t -> t
+val end_module : t -> t
+val open_modules : Project.mod_id list -> t -> t
+
+(** This effectively disables all module related access control *)
+val open_all_modules : t -> t
+
 (** This implements the unscope# pragma, which removes an identifier
     from scope by setting its module id to -1 (which is never a valid
     module id). This is used only to test the typechecker, and should

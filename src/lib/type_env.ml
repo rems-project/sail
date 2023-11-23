@@ -94,8 +94,6 @@ type 'a env_item = ('a, Parse_ast.l) generic_env_item
 
 type 'a multiple_env_item = ('a, Parse_ast.l list) generic_env_item
 
-let mk_item ~loc:l item = { item; loc = l; mod_id = 0 }
-
 let item_loc item = item.loc
 
 type global_env = {
@@ -143,6 +141,8 @@ let empty_global_env =
 
 type env = {
   global : global_env;
+  current_module : int;
+  open_all : bool;
   opened : IntSet.t;
   locals : (mut * typ) Bindings.t;
   typ_vars : (Ast.l * kind_aux) KBindings.t;
@@ -157,14 +157,15 @@ type env = {
   outcome_typschm : (typquant * typ) option;
 }
 
+let mk_item ~loc:l env item = { item; loc = l; mod_id = env.current_module }
+let mk_item_in ~loc:l scope item = { item; loc = l; mod_id = scope }
+
+let item_in_scope env item = item.mod_id = env.current_module || IntSet.mem item.mod_id env.opened || env.open_all
+
 let filter_items_with f env bindings =
-  Bindings.map
-    (fun item -> f item.item)
-    (Bindings.filter (fun _ item -> item.mod_id = 0 || IntSet.mem item.mod_id env.opened) bindings)
+  Bindings.map (fun item -> f item.item) (Bindings.filter (fun _ item -> item_in_scope env item) bindings)
 
 let filter_items env bindings = filter_items_with (fun x -> x) env bindings
-
-let item_in_scope env item = item.mod_id = 0 || IntSet.mem item.mod_id env.opened
 
 let get_item_with_loc get_loc l env item =
   if item_in_scope env item then item.item else typ_raise l (Err_not_in_scope (None, get_loc item.loc))
@@ -177,11 +178,23 @@ type type_variables = Type_internal.type_variables
 
 type t = env
 
+let global_scope = -1
+
+let start_module id env = { env with current_module = id; opened = IntSet.singleton global_scope }
+
+let end_module env = { env with current_module = global_scope; opened = IntSet.empty }
+
+let open_modules ids env = { env with opened = IntSet.of_list (global_scope :: ids) }
+
+let open_all_modules env = { env with open_all = true }
+
 let update_global f env = { env with global = f env.global }
 
 let unscope_pragma id_category id env =
   typ_debug (lazy ("Unscope " ^ id_category ^ " " ^ string_of_id id));
-  let update_id id m = Bindings.update id (function Some item -> Some { item with mod_id = -1 } | None -> None) m in
+  let update_id id m =
+    Bindings.update id (function Some item -> Some { item with mod_id = Int.max_int } | None -> None) m
+  in
   match id_category with
   | "bitfield" -> update_global (fun global -> { global with bitfields = update_id id global.bitfields }) env
   | "enum" -> update_global (fun global -> { global with enums = update_id id global.enums }) env
@@ -200,6 +213,8 @@ let unscope_pragma id_category id env =
 let empty =
   {
     global = empty_global_env;
+    current_module = global_scope;
+    open_all = false;
     opened = IntSet.empty;
     locals = Bindings.empty;
     typ_vars = KBindings.empty;
@@ -400,14 +415,16 @@ let add_overloads l id ids env =
             global with
             overloads =
               Bindings.add id
-                (mk_item ~loc:(l :: item_loc existing) (get_item_with_loc hd_opt l env existing @ ids))
+                (mk_item_in global_scope ~loc:(l :: item_loc existing) (get_item_with_loc hd_opt l env existing @ ids))
                 global.overloads;
           }
         )
         env
   | None ->
       update_global
-        (fun global -> { global with overloads = Bindings.add id (mk_item ~loc:[l] ids) global.overloads })
+        (fun global ->
+          { global with overloads = Bindings.add id (mk_item_in global_scope ~loc:[l] ids) global.overloads }
+        )
         env
 
 let infer_kind env id =
@@ -821,7 +838,7 @@ let add_typ_synonym id typq arg env =
           global with
           synonyms =
             Bindings.add id
-              (mk_item ~loc:(id_loc id) (typq, expand_arg_synonyms (add_typquant (id_loc id) typq env) arg))
+              (mk_item env ~loc:(id_loc id) (typq, expand_arg_synonyms (add_typquant (id_loc id) typq env) arg))
               global.synonyms;
         }
       )
@@ -855,7 +872,7 @@ let add_union_id id bind env =
   else (
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
     update_global
-      (fun global -> { global with union_ids = Bindings.add id (mk_item ~loc:(id_loc id) bind) global.union_ids })
+      (fun global -> { global with union_ids = Bindings.add id (mk_item env ~loc:(id_loc id) bind) global.union_ids })
       env
   )
 
@@ -898,7 +915,7 @@ let rec update_val_spec id (typq, typ) env =
         typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
         update_global
           (fun global ->
-            { global with val_specs = Bindings.add id (mk_item ~loc:(id_loc id) (typq, typ)) global.val_specs }
+            { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
           )
           env
     | Typ_aux (Typ_bidir (typ1, typ2), _) ->
@@ -906,7 +923,7 @@ let rec update_val_spec id (typq, typ) env =
         typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
         update_global
           (fun global ->
-            { global with val_specs = Bindings.add id (mk_item ~loc:(id_loc id) (typq, typ)) global.val_specs }
+            { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
           )
           env
     | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
@@ -941,7 +958,7 @@ and add_outcome id (typq, typ, params, vals, outcome_env) env =
         global with
         outcomes =
           Bindings.add id
-            (mk_item ~loc:(id_loc id) (typq, typ, params, vals, outcome_env.global.val_specs))
+            (mk_item env ~loc:(id_loc id) (typq, typ, params, vals, outcome_env.global.val_specs))
             global.outcomes;
       }
     )
@@ -966,7 +983,7 @@ and add_mapping id (typq, typ1, typ2) env =
   let env =
     env
     |> update_global (fun global ->
-           { global with mappings = Bindings.add id (mk_item ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
+           { global with mappings = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
        )
     |> add_val_spec ~ignore_duplicate:true forwards_id (typq, forwards_typ)
     |> add_val_spec ~ignore_duplicate:true backwards_id (typq, backwards_typ)
@@ -1041,7 +1058,7 @@ let add_enum' is_scattered id ids env =
       (fun global ->
         {
           global with
-          enums = Bindings.add id (mk_item ~loc:(id_loc id) (is_scattered, IdSet.of_list ids)) global.enums;
+          enums = Bindings.add id (mk_item env ~loc:(id_loc id) (is_scattered, IdSet.of_list ids)) global.enums;
         }
       )
       env
@@ -1107,13 +1124,13 @@ let add_record id typq fields env =
           ^ string_of_bind (typq, accessor_typ)
           )
           );
-      IdPairMap.add (id, field) (mk_item ~loc:(id_loc field) (typq, accessor_typ)) accessors
+      IdPairMap.add (id, field) (mk_item env ~loc:(id_loc field) (typq, accessor_typ)) accessors
     in
     update_global
       (fun global ->
         {
           global with
-          records = Bindings.add id (mk_item ~loc:(id_loc id) (typq, fields)) global.records;
+          records = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, fields)) global.records;
           accessors = List.fold_left fold_accessors global.accessors fields;
         }
       )
@@ -1160,7 +1177,7 @@ let add_toplevel_lets ids (env : env) =
       | Some (_, typ) ->
           let env = { env with locals = Bindings.remove id env.locals } in
           update_global
-            (fun global -> { global with letbinds = Bindings.add id (mk_item ~loc:(id_loc id) typ) global.letbinds })
+            (fun global -> { global with letbinds = Bindings.add id (mk_item env ~loc:(id_loc id) typ) global.letbinds })
             env
       | None -> env
     )
@@ -1183,7 +1200,7 @@ let add_variant id (typq, constructors) env =
     typ_print (lazy (adding ^ "variant " ^ string_of_id id));
     update_global
       (fun global ->
-        { global with unions = Bindings.add id (mk_item ~loc:(id_loc id) (typq, constructors)) global.unions }
+        { global with unions = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, constructors)) global.unions }
       )
       env
   )
@@ -1196,7 +1213,7 @@ let add_scattered_variant id typq env =
       (fun global ->
         {
           global with
-          unions = Bindings.add id (mk_item ~loc:(id_loc id) (typq, [])) global.unions;
+          unions = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, [])) global.unions;
           scattered_union_envs = Bindings.add id env.global global.scattered_union_envs;
         }
       )
@@ -1257,7 +1274,7 @@ let add_register id typ env =
   else (
     typ_print (lazy (adding ^ "register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ));
     update_global
-      (fun global -> { global with registers = Bindings.add id (mk_item ~loc:(id_loc id) typ) global.registers })
+      (fun global -> { global with registers = Bindings.add id (mk_item env ~loc:(id_loc id) typ) global.registers })
       env
   )
 
@@ -1342,7 +1359,9 @@ let get_bitfield id env =
 
 let add_bitfield id typ ranges env =
   update_global
-    (fun global -> { global with bitfields = Bindings.add id (mk_item ~loc:(id_loc id) (typ, ranges)) global.bitfields })
+    (fun global ->
+      { global with bitfields = Bindings.add id (mk_item env ~loc:(id_loc id) (typ, ranges)) global.bitfields }
+    )
     env
 
 let allow_polymorphic_undefineds env = { env with poly_undefineds = true }

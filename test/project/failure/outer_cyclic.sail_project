@@ -1,0 +1,9 @@
+A {
+  B {
+    requires C
+  }
+}
+
+C {
+  requires A
+}

@@ -1,0 +1,7 @@
+[93mError[0m:
+[96mfailure/outer_cyclic.sail_project[0m:2.2-3:
+2[96m |[0m  B {
+ [91m |[0m  [91m^[0m
+ [91m |[0m Cyclic modules detected: B depends on itself
+ [91m |[0m 
+ [91m |[0m Cycle: B -> C -> B

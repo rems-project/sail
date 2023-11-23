@@ -85,6 +85,8 @@ module type S = sig
        the nodes if they do not exist. *)
   val add_edge : node -> node -> graph -> graph
 
+  val has_edge : node -> node -> graph -> bool
+
   val add_edges : node -> node list -> graph -> graph
 
   val children : graph -> node -> node list
@@ -115,6 +117,20 @@ module type S = sig
         This algorithm also returns a topological sorting of the graph
         components. *)
   val scc : ?original_order:node list -> graph -> node list list
+
+  val edge_list : graph -> (node * node) list
+
+  (** Note that this is at least O(n^3) where n is the number of nodes
+      and very inefficiently constructs the result graph! *)
+  val transitive_reduction : graph -> graph
+
+  val make_multi_dot :
+    node_color:(node -> string) ->
+    edge_color:(node -> node -> string) ->
+    string_of_node:(node -> string) ->
+    out_channel ->
+    (string * graph) list ->
+    unit
 
   val make_dot :
     node_color:(node -> string) ->

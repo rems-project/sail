@@ -105,6 +105,8 @@ val power : int -> int -> int
 (** Apply a function to the last element of a list *)
 val update_last : ('a -> 'a) -> 'a list -> 'a list
 
+val update_first : ('a -> 'a) -> 'a list -> 'a list
+
 (** Map but pass true to the function for the last element *)
 val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
 
@@ -243,10 +245,12 @@ val same_content_files : string -> string -> bool
 (** [string_to_list l] translates the string [l] to the list of its characters. *)
 val string_to_list : string -> char list
 
-(** {2 Useful Sets} *)
+(** {2 Useful sets} *)
 
 (** Sets of Integers *)
-module IntSet : Set.S with type elt = int
+module IntSet : Set.S with type elt = int and type t = Set.Make(Int).t
+
+module IntMap : Map.S with type key = int and type 'a t = 'a Map.Make(Int).t
 
 module IntIntSet : Set.S with type elt = int * int
 
