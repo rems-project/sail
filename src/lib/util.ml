@@ -179,6 +179,8 @@ let rec compare_list f l1 l2 =
       let c = f x y in
       if c = 0 then compare_list f l1 l2 else c
 
+let update_first f = function [] -> [] | x :: xs -> f x :: xs
+
 let rec update_last f = function [] -> [] | [x] -> [f x] | x :: xs -> x :: update_last f xs
 
 let rec map_last f = function [] -> [] | [x] -> [f true x] | x :: xs -> f false x :: map_last f xs
@@ -309,10 +311,8 @@ let string_to_list s =
   let rec aux i acc = if i < 0 then acc else aux (i - 1) (s.[i] :: acc) in
   aux (String.length s - 1) []
 
-module IntSet = Set.Make (struct
-  let compare = Stdlib.compare
-  type t = int
-end)
+module IntSet = Set.Make (Int)
+module IntMap = Map.Make (Int)
 
 module IntIntSet = Set.Make (struct
   let compare = Stdlib.compare

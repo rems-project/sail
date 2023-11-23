@@ -65,78 +65,65 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Initial desugaring pass over AST after parsing *)
+module ModSet = Util.IntSet
 
-open Ast
-open Ast_defs
-open Ast_util
+type mod_id = int
 
-type ctx
+type l = Lexing.position * Lexing.position
 
-val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
+type 'a spanned = 'a * l
 
-(** {2 Options} *)
+(** Convert a project file location to a full Parse_ast location *)
+val to_loc : l -> Parse_ast.l
 
-(** Generate undefined_T functions for every type T. False by
-   default. *)
-val opt_undefined_gen : bool ref
+type value
 
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
-val opt_fast_undefined : bool ref
+type exp =
+  | E_app of string * exp spanned list
+  | E_file of string
+  | E_id of string
+  | E_if of exp spanned * exp spanned * exp spanned
+  | E_list of exp spanned list
+  | E_op of exp spanned * string * exp spanned
+  | E_parent
+  | E_string of string
+  | E_value of value
+  | E_var of string
 
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
-val opt_magic_hash : bool ref
+type 'a non_empty = 'a * 'a list
 
-(** This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the AST
-   once. The original assumption in sail is that the whole AST gets
-   processed at once (therefore they could only get added once), and
-   this isn't true any more with the interpreter. This needs to be
-   public so the interpreter can set it back to false if it unloads
-   all the loaded files. *)
-val have_undefined_builtins : bool ref
+type dependency =
+  | D_requires of exp spanned non_empty
+  | D_after of exp spanned non_empty
+  | D_before of exp spanned non_empty
+  | D_default
+  | D_optional
 
-(** Val specs of undefined functions for builtin types that get added to
-    the AST if opt_undefined_gen is set (minus those functions that already
-    exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
+type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of mdl | M_files of exp spanned non_empty
 
-(** {2 Desugar and process AST } *)
+and mdl = { name : string spanned; defs : mdl_def spanned list; span : l }
 
-val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
+type def = Def_var of string spanned * exp spanned | Def_module of mdl | Def_test of string list
 
-(** If the generate flag is false, then we won't generate any
-   auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
+type project_structure
 
-(** {2 Parsing expressions and definitions from strings} *)
+val initialize_project_structure : root_directory:string -> def spanned list -> project_structure
 
-val extern_of_string : ?pure:bool -> id -> string -> uannot def
-val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : string * int * int * int -> string -> uannot def list
-val ast_of_def_string : string * int * int * int -> string -> uannot ast
-val ast_of_def_string_with :
-  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
-val exp_of_string : string -> uannot exp
-val typ_of_string : string -> typ
-val constraint_of_string : string -> n_constraint
+val get_module_id : project_structure -> string -> mod_id option
 
-(** {2 Parsing files } *)
+val get_children : mod_id -> project_structure -> ModSet.t
 
-(** Parse a file into a sequence of comments and a parse AST
+(** Create a predicate that returns true for any module that is
+    (transitively) required by any module in the root set of
+    modules. *)
+val required_modules : roots:ModSet.t -> project_structure -> mod_id -> bool
 
-   @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
+val module_name : project_structure -> mod_id -> string spanned
 
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
+val module_order : project_structure -> mod_id list
 
-val parse_project : filename:string -> contents:string -> Project.def Project.spanned list
+val module_files : project_structure -> mod_id -> string spanned list
+
+val module_requires : project_structure -> mod_id -> mod_id list
+
+val file_list : mod_id list -> project_structure -> string spanned list

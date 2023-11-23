@@ -1772,3 +1772,14 @@ let parse_file_from_string ~filename:f ~contents:s =
     let pos = Lexing.lexeme_start_p lexbuf in
     let tok = Lexing.lexeme lexbuf in
     raise (Reporting.err_syntax pos ("current token: " ^ tok))
+
+let parse_project ~filename:f ~contents:s =
+  let open Project in
+  let open Lexing in
+  let lexbuf = from_string s in
+  lexbuf.lex_curr_p <- { pos_fname = f; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  try Project_parser.file Project_lexer.token lexbuf
+  with Project_parser.Error ->
+    let pos = Lexing.lexeme_start_p lexbuf in
+    let tok = Lexing.lexeme lexbuf in
+    raise (Reporting.err_syntax pos ("current token: " ^ tok))

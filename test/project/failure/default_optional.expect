@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfailure/default_optional.sail_project[0m:3.2-3:
+3[96m |[0m  B {
+ [91m |[0m  [91m^[0m
+ [91m |[0m B is marked as both optional and default

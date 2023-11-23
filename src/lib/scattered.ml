@@ -114,14 +114,6 @@ let patch_funcl_loc def_annot (FCL_aux (aux, (_, tannot))) = FCL_aux (aux, (def_
 
 let patch_mapcl_annot def_annot (MCL_aux (aux, (_, tannot))) = MCL_aux (aux, (def_annot, tannot))
 
-module PC_config = struct
-  type t = Type_check.tannot
-  let typ_of_t = Type_check.typ_of_tannot
-  let add_attribute l attr arg = Type_check.map_uannot (add_attribute l attr arg)
-end
-
-module PC = Pattern_completeness.Make (PC_config)
-
 let rec descatter' accumulator funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function

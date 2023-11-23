@@ -1,0 +1,12 @@
+// This module structure is equivalent to the one in `outer_cyclic`
+A {
+
+}
+
+B {
+  requires A, C
+}
+
+C {
+  requires A, B
+}
