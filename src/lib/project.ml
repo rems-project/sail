@@ -518,16 +518,25 @@ let run_tests defs (proj : project_structure) =
         let chan =
           match List.nth_opt args 0 with Some "stderr" -> stderr | Some "stdout" -> stdout | _ -> invalid_cmd ()
         in
+        let reduce_req = match List.nth_opt args 1 with Some "reduce_req" -> true | _ -> false in
+        let darken id color = match ModMap.find_opt id proj.files with Some [] -> color | _ -> color ^ "3" in
         ModGraph.make_multi_dot
           ~node_color:(fun id ->
-            if ModSet.mem id proj.optional then "aquamarine"
-            else if ModSet.mem id proj.default then "lemonchiffon"
-            else "white"
+            darken id
+              ( if ModSet.mem id proj.optional then "aquamarine"
+                else if ModSet.mem id proj.default then "lemonchiffon"
+                else "chartreuse"
+              )
           )
           ~edge_color:(fun _ _ -> "black")
           ~string_of_node:(fun id -> fst proj.names.(id))
           chan
-          [("dotted", ModGraph.transitive_reduction proj.deps); ("solid", proj.requires)]
+          [
+            ("dotted", ModGraph.reverse (ModGraph.transitive_reduction proj.deps));
+            ( "solid",
+              ModGraph.reverse (if reduce_req then ModGraph.transitive_reduction proj.requires else proj.requires)
+            );
+          ]
     | _ -> ()
   in
   List.iter (function Def_test (cmd :: args), l -> run_test_cmd l cmd args | _ -> ()) defs
