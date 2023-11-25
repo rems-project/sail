@@ -1764,6 +1764,15 @@ let fresh_var =
     let () = counter := n + 1 in
     mk_id ("v#" ^ string_of_int n)
 
+let check_overload_member_scope l f overloads env =
+  if Util.list_empty overloads then (
+    let err_l =
+      List.nth_opt (Env.get_overload_locs f env) 0
+      |> Option.fold ~none:l ~some:(fun o_l -> Parse_ast.Hint ("Overload defined here", o_l, l))
+    in
+    typ_error err_l ("Overload " ^ string_of_id f ^ " is defined, but nothing it overloads is in scope")
+  )
+
 let rec exp_unconditionally_returns (E_aux (aux, _)) =
   match aux with
   | E_return _ -> true
@@ -1957,7 +1966,9 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
               typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
           end
       end
-  | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
+  | E_app (f, xs), _ when Env.is_overload f env ->
+      let overloads = Env.get_overloads f env in
+      check_overload_member_scope l f overloads env;
       let rec try_overload = function
         | errs, [] -> typ_raise l (Err_no_overloading (f, errs))
         | errs, f :: fs -> begin
@@ -1968,7 +1979,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
               try_overload (errs @ [(f, err)], fs)
           end
       in
-      try_overload ([], Env.get_overloads f env)
+      try_overload ([], overloads)
   | E_app (f, [x; y]), _ when string_of_id f = "and_bool" || string_of_id f = "or_bool" -> begin
       (* We have to ensure that the type of y in (x || y) and (x && y)
          is non-empty, otherwise it could force the entire type of the
@@ -3136,7 +3147,9 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
               typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
           end
       end
-  | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
+  | E_app (f, xs) when Env.is_overload f env ->
+      let overloads = Env.get_overloads f env in
+      check_overload_member_scope l f overloads env;
       let rec try_overload = function
         | errs, [] -> typ_raise l (Err_no_overloading (f, errs))
         | errs, f :: fs -> begin
@@ -3147,7 +3160,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
               try_overload (errs @ [(f, err)], fs)
           end
       in
-      try_overload ([], Env.get_overloads f env)
+      try_overload ([], overloads)
   | E_app (f, [x; y]) when string_of_id f = "and_bool" || string_of_id f = "or_bool" -> begin
       match destruct_exist (typ_of (irule infer_exp env y)) with
       | None | Some (_, NC_aux (NC_true, _), _) -> infer_funapp l env f [x; y] None

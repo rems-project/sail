@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/overload_bound.sail[0m:2.4-7:
+2[96m |[0mval foo : unit -> unit
+ [92m |[0m    [92m^-^[0m [92mPrevious binding[0m
+[96mfail/overload_bound.sail[0m:4.0-20:
+4[96m |[0moverload foo = {foo}
+ [91m |[0m[91m^------------------^[0m
+ [91m |[0m foo cannot be defined as an overload, as it is already bound

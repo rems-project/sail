@@ -394,11 +394,38 @@ let already_bound_ctor_fn str id env =
       Reporting.unreachable (id_loc id) __POS__
         ("Could not find original binding for duplicate " ^ str ^ " called " ^ string_of_id id)
 
+let overload_item_in_scope env id =
+  match Bindings.find_opt id env.global.val_specs with
+  | Some item -> item_in_scope env item
+  | None -> (
+      match Bindings.find_opt id env.global.union_ids with
+      | Some item -> item_in_scope env item
+      | None -> (
+          match Bindings.find_opt id env.global.overloads with
+          | Some item -> item_in_scope env item
+          | None -> Reporting.unreachable (id_loc id) __POS__ "Does not appear to be a valid overload item"
+        )
+    )
+
+let is_overload id env = Bindings.mem id env.global.overloads
+
+let get_overload_locs id env = match Bindings.find_opt id env.global.overloads with Some item -> item.loc | None -> []
+
 let get_overloads id env =
-  try get_item_with_loc hd_opt (id_loc id) env (Bindings.find id env.global.overloads) with Not_found -> []
+  match Bindings.find_opt id env.global.overloads with
+  | None -> []
+  | Some item ->
+      let ids = get_item_with_loc hd_opt (id_loc id) env item in
+      List.filter (overload_item_in_scope env) ids
 
 let add_overloads l id ids env =
   typ_print (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"));
+  if bound_ctor_fn env id then (
+    let bound_l = Option.get (get_ctor_fn_binding_loc env id) in
+    typ_error
+      (Hint ("Previous binding", bound_l, l))
+      (string_of_id id ^ " cannot be defined as an overload, as it is already bound")
+  );
   List.iter
     (fun overload ->
       if not (bound_ctor_fn env overload || Bindings.mem overload env.global.overloads) then

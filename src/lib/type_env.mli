@@ -179,6 +179,8 @@ val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
 
 val bound_typ_id : t -> id -> bool
 
+val is_overload : id -> t -> bool
+val get_overload_locs : id -> t -> Ast.l list
 val add_overloads : l -> id -> id list -> t -> t
 val get_overloads : id -> t -> id list
 
