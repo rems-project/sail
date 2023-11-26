@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/duplicate_toplevel_let_mod.sail[0m:7.4-5:
+7[96m |[0mlet x : int = 3
+ [92m |[0m    [92m^[0m [92mPrevious definition[0m
+[96mfail/duplicate_toplevel_let_mod.sail[0m:13.4-15:
+13[96m |[0mlet x : int = 4
+  [91m |[0m    [91m^---------^[0m
+  [91m |[0m Duplicate toplevel let binding x
