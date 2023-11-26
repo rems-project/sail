@@ -75,7 +75,7 @@ let span x s e = (x, (s, e))
 
 %}
 
-%token After Before Directory If Then Else Requires Files Default Optional Variable Test
+%token After Before Directory If Then Else Requires Files Default Optional Variable Test True False
 %token Comma DotDot Eq Gt Lt EqEq GtEq LtEq ExclEq Slash Semi
 %token Lparen Rparen Lsquare Rsquare Lcurly Rcurly
 %token Eof
@@ -142,6 +142,10 @@ slash_exp:
     { e }
 
 atomic_exp:
+  | True
+    { span (E_value (bool_value true)) $startpos $endpos }
+  | False
+    { span (E_value (bool_value false)) $startpos $endpos }
   | f = FileId
     { span (E_file f) $startpos $endpos }
   | id = Id
@@ -156,6 +160,8 @@ atomic_exp:
     { span (E_string s) $startpos $endpos }
   | DotDot
     { span E_parent $startpos $endpos }
+  | Lsquare; Rsquare
+    { span (E_list []) $startpos $endpos }
   | Lsquare; es = exp_list; Rsquare
     { span (E_list es) $startpos $endpos }
   | Lparen; e = exp; Rparen

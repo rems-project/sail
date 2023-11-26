@@ -314,6 +314,8 @@ let string_to_list s =
 module IntSet = Set.Make (Int)
 module IntMap = Map.Make (Int)
 
+module StringMap = Map.Make (String)
+
 module IntIntSet = Set.Make (struct
   let compare = Stdlib.compare
   type t = int * int

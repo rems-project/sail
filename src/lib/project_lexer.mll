@@ -77,20 +77,24 @@ let kw_table =
     (fun r (x, y) -> M.add x y r)
     M.empty
     [
+      ("__test",    (fun _ -> Test));
       ("after",     (fun _ -> After));
       ("before",    (fun _ -> Before));
       ("default",   (fun _ -> Default));
       ("directory", (fun _ -> Directory));
       ("else",      (fun _ -> Else));
+      ("false",     (fun _ -> False));
       ("files",     (fun _ -> Files));
       ("if",        (fun _ -> If));
       ("optional",  (fun _ -> Optional));
       ("requires",  (fun _ -> Requires));
       ("then",      (fun _ -> Then));
+      ("true",      (fun _ -> True));
       ("variable",  (fun _ -> Variable));
-      ("__test",    (fun _ -> Test));
       ("import",    (fun p -> raise (Reporting.err_lex p "import is a reserved keyword")));
       ("namespace", (fun p -> raise (Reporting.err_lex p "namespace is a reserved keyword")));
+      ("open",      (fun p -> raise (Reporting.err_lex p "open is a reserved keyword")));
+      ("use",       (fun p -> raise (Reporting.err_lex p "use is a reserved keyword")));
       ("versions",  (fun p -> raise (Reporting.err_lex p "versions is a reserved keyword")));
     ]
 

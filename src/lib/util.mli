@@ -252,6 +252,8 @@ module IntSet : Set.S with type elt = int and type t = Set.Make(Int).t
 
 module IntMap : Map.S with type key = int and type 'a t = 'a Map.Make(Int).t
 
+module StringMap : Map.S with type key = string and type 'a t = 'a Map.Make(String).t
+
 module IntIntSet : Set.S with type elt = int * int
 
 (** {2 Formatting functions} *)
