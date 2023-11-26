@@ -1,3 +1,5 @@
 [93mError[0m:
-[96mhelp_option_pragma.sail[0m:2.13-3.0:
+[96mhelp_option_pragma.sail[0m:2.0-13:
+2[96m |[0m$option -help
+ [91m |[0m[91m^-----------^[0m
  [91m |[0m -help flag passed to $option directive

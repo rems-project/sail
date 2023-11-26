@@ -233,6 +233,20 @@ let fix_extern typschm = function
 let funcl_annot fs fcl =
   List.fold_right (fun f fcl -> f fcl) fs fcl
 
+let pragma_left_spaces pragma p s =
+  let n = ref 0 in
+  while !n < String.length s && (s.[!n] = ' ' || s.[!n] = '\t') do
+    if s.[!n] = '\t' then (
+      (* If find a tab we won't be able to correctly format errors
+         found in the directive argument. It would be very weird for a
+         tab to show up here, so just bail. *)
+      let p = { p with Lexing.pos_cnum = p.Lexing.pos_cnum + String.length pragma + 1 + !n } in
+      raise (Reporting.err_lex p "Tab character (\\t) found between directive and argument. Please use spaces.")
+    );
+    incr n
+  done;
+  !n
+
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
@@ -1319,7 +1333,9 @@ def_aux:
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma
-    { DEF_pragma (fst $1, snd $1) }
+    { let (pragma, arg) = $1 in
+      let ltrim = pragma_left_spaces pragma $startpos arg in
+      DEF_pragma (pragma, String.trim arg, ltrim) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures

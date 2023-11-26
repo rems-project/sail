@@ -439,7 +439,7 @@ type def_aux =
   | DEF_measure of id * pat * exp (* separate termination measure declaration *)
   | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
   | DEF_register of dec_spec (* register declaration *)
-  | DEF_pragma of string * string
+  | DEF_pragma of string * string * int
   | DEF_attribute of string * string * def
   | DEF_doc of string * def
   | DEF_internal_mutrec of fundef list

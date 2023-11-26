@@ -68,14 +68,14 @@
 open Libsail
 
 let opt_new_cli = ref false
-let opt_file_arguments : string list ref = ref []
+let opt_free_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
 let opt_auto_interpreter_rewrites : bool ref = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
-let opt_memo_z3 = ref false
+let opt_memo_z3 = ref true
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
 let opt_project_file : string option ref = ref None
@@ -356,13 +356,33 @@ let file_to_string filename =
 
 let run_sail (config : Yojson.Basic.t option) tgt =
   Target.run_pre_parse_hook tgt ();
+
+  let rigging_files, frees = List.partition (fun free -> Filename.check_suffix free ".rigging") !opt_free_arguments in
+
   let ast, env, effect_info =
-    match !opt_project_file with
-    | Some file ->
+    match rigging_files with
+    | [] ->
+        (* If there are no provided rigging files, we concatenate all
+           the free file arguments into one big blob like before *)
+        Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env frees
+    | _ ->
         let t = Profile.start () in
-        let root_directory = Filename.dirname file in
-        let defs = Initial_check.parse_project ~filename:file ~contents:(file_to_string file) in
-        let proj = Project.initialize_project_structure ~root_directory defs in
+        let defs =
+          List.map
+            (fun rigging_file ->
+              let root_directory = Filename.dirname rigging_file in
+              let contents = file_to_string rigging_file in
+              Project.mk_root root_directory :: Initial_check.parse_project ~filename:rigging_file ~contents ()
+            )
+            rigging_files
+          |> List.concat
+        in
+        let proj = Project.initialize_project_structure defs in
+        if !opt_list_files then (
+          let files = Project.all_files proj in
+          print_endline (Util.string_of_list " " fst files);
+          exit 0
+        );
         let mod_ids =
           List.map
             (fun mod_name ->
@@ -370,11 +390,11 @@ let run_sail (config : Yojson.Basic.t option) tgt =
               | Some id -> id
               | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
             )
-            !opt_file_arguments
+            frees
         in
         Profile.finish "parsing project" t;
-        Frontend.load_modules ~target:tgt Manifest.dir !options Type_check.initial_env proj mod_ids
-    | None -> Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env !opt_file_arguments
+        let env = Type_check.initial_env_with_modules proj in
+        Frontend.load_modules ~target:tgt Manifest.dir !options env proj mod_ids
   in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = List.fold_right (fun file (ast, _) -> Splice.splice ast file) !opt_splice (ast, env) in
@@ -402,7 +422,7 @@ let run_sail_format (config : Yojson.Basic.t option) =
       | None -> Format_sail.default_config
   end in
   let module Formatter = Format_sail.Make (Config) in
-  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_file_arguments in
+  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_free_arguments in
   List.iter
     (fun (f, (comments, parse_ast)) ->
       let source = file_to_string f in
@@ -485,7 +505,7 @@ let main () =
       )
   end;
 
-  Arg.parse_dynamic options (fun s -> opt_file_arguments := !opt_file_arguments @ [s]) usage_msg;
+  Arg.parse_dynamic options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg;
 
   let config = Option.bind (get_config_file ()) parse_config_file in
 

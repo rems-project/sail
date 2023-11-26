@@ -1,12 +1,16 @@
 $option -dmagic_hash
 
+$rigging# A {}
+
 default Order dec
 
 $include <prelude.sail>
 
+$start_module# A
+
 type foo = bits(32)
 
-$unscope# type foo
+$end_module# A
 
 val bar : unit -> unit
 

@@ -1,12 +1,16 @@
 $option -dmagic_hash
 
+$rigging# A {}
+
 default Order dec
 
 $include <prelude.sail>
 
+$start_module# A
+
 enum E = A | B | C
 
-$unscope# enum E
+$end_module# A
 
 val bar : unit -> unit
 

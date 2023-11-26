@@ -93,17 +93,10 @@ let wrap_module proj parsed_module =
   let module P = Parse_ast in
   let open Project in
   let name, l = module_name proj parsed_module.id in
-  let bracket_pragma p = P.DEF_aux (P.DEF_pragma (p, Printf.sprintf "%d %s" parsed_module.id name), to_loc l) in
-  let require_pragma =
-    let reqs = module_requires proj parsed_module.id in
-    if Util.list_empty reqs then []
-    else [P.DEF_aux (P.DEF_pragma ("require#", Util.string_of_list " " string_of_int reqs), to_loc l)]
-  in
+  let bracket_pragma p = P.DEF_aux (P.DEF_pragma (p, name, 1), to_loc l) in
   parsed_module.files
-  |> Util.update_first (fun (f, (comments, defs)) ->
-         (f, (comments, (bracket_pragma "module_start#" :: require_pragma) @ defs))
-     )
-  |> Util.update_last (fun (f, (comments, defs)) -> (f, (comments, defs @ [bracket_pragma "module_end#"])))
+  |> Util.update_first (fun (f, (comments, defs)) -> (f, (comments, bracket_pragma "start_module#" :: defs)))
+  |> Util.update_last (fun (f, (comments, defs)) -> (f, (comments, defs @ [bracket_pragma "end_module#"])))
 
 let process_ast target type_envs ast =
   if !opt_ddump_initial_ast then Pretty_print_sail.pp_ast stdout ast;

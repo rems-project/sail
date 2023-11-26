@@ -70,6 +70,19 @@ open Parse_ast
 (* Simple preprocessor features for conditional file loading *)
 module StringSet = Set.Make (String)
 
+(* Adjust a pragma location so it doesn't end after the newline. *)
+let pragma_loc l =
+  let open Lexing in
+  Reporting.map_loc_range
+    (fun p1 p2 ->
+      if p1.pos_lnum + 1 = p2.pos_lnum then (
+        let p2 = { p2 with pos_cnum = p2.pos_cnum - 1; pos_bol = p1.pos_bol; pos_lnum = p1.pos_lnum } in
+        (p1, p2)
+      )
+      else (p1, p2)
+    )
+    l
+
 let default_symbols =
   List.fold_left
     (fun set str -> StringSet.add str set)
@@ -110,22 +123,22 @@ let cond_pragma l defs =
   let push_def def = if !in_then then then_defs := def :: !then_defs else else_defs := def :: !else_defs in
 
   let rec scan = function
-    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
-    | DEF_aux (DEF_pragma ("else", _), _) :: defs when !depth = 0 ->
+    | DEF_aux (DEF_pragma ("endif", _, _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
+    | DEF_aux (DEF_pragma ("else", _, _), _) :: defs when !depth = 0 ->
         in_then := false;
         scan defs
-    | (DEF_aux (DEF_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
+    | (DEF_aux (DEF_pragma (p, _, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
         incr depth;
         push_def def;
         scan defs
-    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs ->
+    | (DEF_aux (DEF_pragma ("endif", _, _), _) as def) :: defs ->
         decr depth;
         push_def def;
         scan defs
     | def :: defs ->
         push_def def;
         scan defs
-    | [] -> raise (Reporting.err_general l "$ifdef, $ifndef, or $iftarget never ended by $endif")
+    | [] -> raise (Reporting.err_general (pragma_loc l) "$ifdef, $ifndef, or $iftarget never ended by $endif")
   in
   scan defs
 
@@ -161,16 +174,18 @@ let all_pragmas =
 
 let wrap_include l file = function
   | [] -> []
-  | defs -> [DEF_aux (DEF_pragma ("include_start", file), l)] @ defs @ [DEF_aux (DEF_pragma ("include_end", file), l)]
+  | defs ->
+      [DEF_aux (DEF_pragma ("include_start", file, 1), l)] @ defs @ [DEF_aux (DEF_pragma ("include_end", file, 1), l)]
 
 let preprocess dir target opts =
   let module P = Parse_ast in
   let rec aux acc = function
     | [] -> List.rev acc
-    | DEF_aux (DEF_pragma ("define", symbol), _) :: defs ->
+    | DEF_aux (DEF_pragma ("define", symbol, _), _) :: defs ->
         symbols := StringSet.add symbol !symbols;
         aux acc defs
-    | (DEF_aux (DEF_pragma ("option", command), l) as opt_pragma) :: defs ->
+    | (DEF_aux (DEF_pragma ("option", command, _), l) as opt_pragma) :: defs ->
+        let l = pragma_loc l in
         begin
           let first_line err_msg =
             match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
@@ -188,28 +203,30 @@ let preprocess dir target opts =
           | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
         end;
         aux (opt_pragma :: acc) defs
-    | DEF_aux (DEF_pragma ("ifndef", symbol), l) :: defs ->
+    | DEF_aux (DEF_pragma ("ifndef", symbol, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if not (StringSet.mem symbol !symbols) then aux acc (then_defs @ defs) else aux acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("ifdef", symbol), l) :: defs ->
+    | DEF_aux (DEF_pragma ("ifdef", symbol, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if StringSet.mem symbol !symbols then aux acc (then_defs @ defs) else aux acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("iftarget", t), l) :: defs ->
+    | DEF_aux (DEF_pragma ("iftarget", t, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         begin
           match target with Some t' when t = t' -> aux acc (then_defs @ defs) | _ -> aux acc (else_defs @ defs)
         end
-    | DEF_aux (DEF_pragma ("include", file), l) :: defs ->
+    | DEF_aux (DEF_pragma ("include", file, _), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
-          Reporting.warn "" l "Skipping bad $include. No file argument.";
+          Reporting.warn "" (pragma_loc l) "Skipping bad $include. No file argument.";
           aux acc defs
         )
         else if file.[0] = '"' && file.[len - 1] = '"' then (
           let relative =
             match l with
             | Parse_ast.Range (pos, _) -> Filename.dirname Lexing.(pos.pos_fname)
-            | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
+            | _ ->
+                Reporting.unreachable (pragma_loc l) __POS__
+                  "Couldn't figure out relative path for $include. This really shouldn't ever happen."
           in
           let file = String.sub file 1 (len - 2) in
           let include_file = Filename.concat relative file in
@@ -225,10 +242,10 @@ let preprocess dir target opts =
         )
         else (
           let help = "Make sure the filename is surrounded by quotes or angle brackets" in
-          Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help);
+          Reporting.warn "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
           aux acc defs
         )
-    | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("suppress_warnings", _, _), l) :: defs ->
         begin
           match Reporting.simp_loc l with
           | None -> () (* This shouldn't happen, but if it does just continue *)
@@ -238,11 +255,12 @@ let preprocess dir target opts =
     (* Filter file_start and file_end out of the AST so when we
        round-trip files through the compiler we don't end up with
        incorrect start/end annotations *)
-    | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs -> aux acc defs
-    | DEF_aux (DEF_pragma (p, arg), l) :: defs ->
+    | (DEF_aux (DEF_pragma ("file_start", _, _), _) | DEF_aux (DEF_pragma ("file_end", _, _), _)) :: defs ->
+        aux acc defs
+    | (DEF_aux (DEF_pragma (p, _, _), l) as pragma_def) :: defs ->
         if not (StringSet.mem p all_pragmas || String.contains p '#') then
-          Reporting.warn "" l ("Unrecognised directive: " ^ p);
-        aux (DEF_aux (DEF_pragma (p, arg), l) :: acc) defs
+          Reporting.warn "" (pragma_loc l) ("Unrecognised directive: " ^ p);
+        aux (pragma_def :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
         aux (DEF_aux (DEF_outcome (outcome_spec, aux [] inner_defs), l) :: acc) defs
     | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> begin

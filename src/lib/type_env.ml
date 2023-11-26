@@ -79,6 +79,8 @@ let opt_smt_linearize = ref false
 
 let opt_string_literal_type = ref false
 
+module StringMap = Map.Make (String)
+
 module IdPair = struct
   type t = id * id
   let compare (a, b) (c, d) =
@@ -98,6 +100,7 @@ let item_loc item = item.loc
 
 type global_env = {
   default_order : order option;
+  modules : Project.project_structure option;
   val_specs : (typquant * typ) env_item Bindings.t;
   defined_val_specs : IdSet.t;
   externs : extern Bindings.t;
@@ -120,6 +123,7 @@ type global_env = {
 let empty_global_env =
   {
     default_order = None;
+    modules = None;
     val_specs = Bindings.empty;
     defined_val_specs = IdSet.empty;
     externs = Bindings.empty;
@@ -157,8 +161,13 @@ type env = {
   outcome_typschm : (typquant * typ) option;
 }
 
+let update_global f env = { env with global = f env.global }
+
 let mk_item ~loc:l env item = { item; loc = l; mod_id = env.current_module }
 let mk_item_in ~loc:l scope item = { item; loc = l; mod_id = scope }
+
+let mk_item_in2 ~loc scope_opt env item =
+  match scope_opt with Some scope -> mk_item_in ~loc scope item | None -> mk_item ~loc env item
 
 let item_in_scope env item = item.mod_id = env.current_module || IntSet.mem item.mod_id env.opened || env.open_all
 
@@ -167,8 +176,22 @@ let filter_items_with f env bindings =
 
 let filter_items env bindings = filter_items_with (fun x -> x) env bindings
 
+let err_not_in_scope env msg l item =
+  match env.global.modules with
+  | None -> Err_not_in_scope (msg, l, None, None)
+  | Some proj ->
+      let module_name_opt mod_id =
+        if Project.valid_module_id proj mod_id then Some (Project.module_name proj mod_id) else None
+      in
+      Err_not_in_scope (msg, l, module_name_opt item.mod_id, module_name_opt env.current_module)
+
 let get_item_with_loc get_loc l env item =
-  if item_in_scope env item then item.item else typ_raise l (Err_not_in_scope (None, get_loc item.loc))
+  if item_in_scope env item then item.item
+  else (
+    match env.global.modules with
+    | None -> typ_raise l (err_not_in_scope env None (get_loc item.loc) item)
+    | Some proj -> typ_raise l (err_not_in_scope env None (get_loc item.loc) item)
+  )
 
 let get_item env item = get_item_with_loc (fun l -> Some l) env item
 
@@ -180,35 +203,25 @@ type t = env
 
 let global_scope = -1
 
-let start_module id env = { env with current_module = id; opened = IntSet.singleton global_scope }
+let set_modules proj env = update_global (fun global -> { global with modules = Some proj }) env
+
+let get_module_id_opt env name = Option.bind env.global.modules (fun proj -> Project.get_module_id proj name)
+
+let get_module_id ~at:l env name =
+  match get_module_id_opt env name with Some mod_id -> mod_id | None -> typ_error l ("Failed to find module " ^ name)
+
+let start_module ~at:l mod_id env =
+  match env.global.modules with
+  | None -> Reporting.unreachable l __POS__ "start_module called in environment with no modules"
+  | Some proj ->
+      if not (Project.valid_module_id proj mod_id) then
+        Reporting.unreachable l __POS__ "start_module got an invalid module id";
+      let requires = Project.module_requires proj mod_id in
+      { env with current_module = mod_id; opened = IntSet.of_list (global_scope :: requires) }
 
 let end_module env = { env with current_module = global_scope; opened = IntSet.empty }
 
-let open_modules ids env = { env with opened = IntSet.of_list (global_scope :: ids) }
-
 let open_all_modules env = { env with open_all = true }
-
-let update_global f env = { env with global = f env.global }
-
-let unscope_pragma id_category id env =
-  typ_debug (lazy ("Unscope " ^ id_category ^ " " ^ string_of_id id));
-  let update_id id m =
-    Bindings.update id (function Some item -> Some { item with mod_id = Int.max_int } | None -> None) m
-  in
-  match id_category with
-  | "bitfield" -> update_global (fun global -> { global with bitfields = update_id id global.bitfields }) env
-  | "enum" -> update_global (fun global -> { global with enums = update_id id global.enums }) env
-  | "let" -> update_global (fun global -> { global with letbinds = update_id id global.letbinds }) env
-  | "mapping" -> update_global (fun global -> { global with mappings = update_id id global.mappings }) env
-  | "overload" -> update_global (fun global -> { global with overloads = update_id id global.overloads }) env
-  | "register" -> update_global (fun global -> { global with registers = update_id id global.registers }) env
-  | "struct" -> update_global (fun global -> { global with records = update_id id global.records }) env
-  | "type" -> update_global (fun global -> { global with synonyms = update_id id global.synonyms }) env
-  | "union" -> update_global (fun global -> { global with unions = update_id id global.unions }) env
-  | "val" -> update_global (fun global -> { global with val_specs = update_id id global.val_specs }) env
-  | _ ->
-      typ_debug (lazy "Unrecognized unscope category");
-      env
 
 let empty =
   {
@@ -831,7 +844,7 @@ let add_typquant l quant env =
   | TypQ_aux (TypQ_no_forall, _) -> env
   | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
 
-let wf_typ env (Typ_aux (_, l) as typ) =
+let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
   let typ = expand_synonyms env typ in
   wf_debug "typ" string_of_typ typ KidSet.empty;
   incr depth;
@@ -840,7 +853,8 @@ let wf_typ env (Typ_aux (_, l) as typ) =
     decr depth
   with Type_error (err_l, err) ->
     decr depth;
-    typ_raise l (err_because (Err_other "Well-formedness check failed for type", err_l, err))
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l (err_because (Err_other ("Well-formedness check failed for type" ^ extra), err_l, err))
 
 let add_typ_synonym id typq arg env =
   if bound_typ_id env id then
@@ -894,12 +908,14 @@ let get_val_spec id env =
 
 let get_val_specs env = filter_items env env.global.val_specs
 
-let add_union_id id bind env =
+let add_union_id ?in_module id bind env =
   if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env
   else (
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
     update_global
-      (fun global -> { global with union_ids = Bindings.add id (mk_item env ~loc:(id_loc id) bind) global.union_ids })
+      (fun global ->
+        { global with union_ids = Bindings.add id (mk_item_in2 in_module env ~loc:(id_loc id) bind) global.union_ids }
+      )
       env
   )
 
@@ -917,7 +933,7 @@ let rec valid_implicits env start = function
   | _ :: rest -> valid_implicits env false rest
   | [] -> ()
 
-let rec update_val_spec id (typq, typ) env =
+let rec update_val_spec ?in_module id (typq, typ) env =
   let typq_env = add_typquant (id_loc id) typq env in
   begin
     match expand_synonyms typq_env typ with
@@ -942,7 +958,10 @@ let rec update_val_spec id (typq, typ) env =
         typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
         update_global
           (fun global ->
-            { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
+            {
+              global with
+              val_specs = Bindings.add id (mk_item_in2 in_module env ~loc:(id_loc id) (typq, typ)) global.val_specs;
+            }
           )
           env
     | Typ_aux (Typ_bidir (typ1, typ2), _) ->
@@ -956,8 +975,9 @@ let rec update_val_spec id (typq, typ) env =
     | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
   end
 
-and add_val_spec ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
-  if (not (Bindings.mem id env.global.val_specs)) || ignore_duplicate then update_val_spec id (bind_typq, bind_typ) env
+and add_val_spec ?in_module ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
+  if (not (Bindings.mem id env.global.val_specs)) || ignore_duplicate then
+    update_val_spec ?in_module id (bind_typq, bind_typ) env
   else if ignore_duplicate then env
   else (
     let previous_loc =
@@ -1189,7 +1209,7 @@ let string_of_mtyp (mut, typ) =
 
 let add_local id mtyp env =
   if not env.allow_bindings then typ_error (id_loc id) "Bindings are not allowed in this context";
-  wf_typ env (snd mtyp);
+  wf_typ ~at:(id_loc id) env (snd mtyp);
   if Bindings.mem id env.global.val_specs then
     typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
   else ();
@@ -1295,7 +1315,7 @@ let get_extern id env backend =
   with Not_found -> typ_error (id_loc id) ("No extern binding found for " ^ string_of_id id)
 
 let add_register id typ env =
-  wf_typ env typ;
+  wf_typ ~at:(id_loc id) env typ;
   if Bindings.mem id env.global.registers then
     typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
   else (
@@ -1330,10 +1350,9 @@ let lookup_id id env =
                   else (
                     let enum_name = string_of_id enum_id in
                     typ_raise (id_loc id)
-                      (Err_not_in_scope
-                         ( Some ("Enumeration " ^ enum_name ^ " containing " ^ string_of_id id ^ " is not in scope"),
-                           Some item.loc
-                         )
+                      (err_not_in_scope env
+                         (Some ("Enumeration " ^ enum_name ^ " containing " ^ string_of_id id ^ " is not in scope"))
+                         (Some item.loc) item
                       )
                   )
               | None -> Unbound id

@@ -224,7 +224,10 @@ rule token = parse
   | "$[" (ident+ as i)
     { let attr = attribute 0 (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Attribute(i, String.trim attr) }
   | "$" (ident+ as i)
-    { let p = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in Pragma(i, String.trim p) }
+    { let startpos = Lexing.lexeme_start_p lexbuf in
+      let arg = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in
+      lexbuf.lex_start_p <- startpos;
+      Pragma (i, arg) }
   | "infix" ws (digit as p) ws (operator as op)
     { Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)

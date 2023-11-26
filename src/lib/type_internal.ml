@@ -109,7 +109,8 @@ type type_error =
   | Err_no_num_ident of id
   | Err_other of string
   | Err_inner of type_error * Parse_ast.l * string * string option * type_error
-  | Err_not_in_scope of string option * Parse_ast.l option
+  | Err_not_in_scope of
+      string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option
 
 let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", None, error2)
 
