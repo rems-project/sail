@@ -5,6 +5,8 @@ import re
 import sys
 import hashlib
 
+from shutil import which
+
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
 sys.path.insert(0, os.path.realpath('..'))
@@ -21,12 +23,18 @@ step('mkdir -p rtpass')
 step('mkdir -p rtpass2')
 
 def test_pass():
+    skip_tests = set()
+    if which('cvc4') is None:
+        skip_tests.add('type_pow_zero')
     banner('Testing passing programs')
     results = Results('pass')
     for filenames in chunks(os.listdir('pass'), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
+            if basename in skip_tests:
+                print_skip(filename)
+                continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_memo_z3 -just_check -ddump_tc_ast pass/{} 1> rtpass/{}'.format(sail, filename, filename))
