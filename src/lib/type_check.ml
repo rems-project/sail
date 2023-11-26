@@ -215,7 +215,7 @@ let expand_bind_synonyms l env (typq, typ) = (typq, Env.expand_synonyms (Env.add
 
 let wf_binding l env (typq, typ) =
   let env = Env.add_typquant l typq env in
-  Env.wf_typ env typ
+  Env.wf_typ ~at:l env typ
 
 let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) = wf_binding l env (typq, typ)
 
@@ -1656,7 +1656,7 @@ let crule r env exp typ =
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
   try
     let checked_exp = r env exp typ in
-    Env.wf_typ env (typ_of checked_exp);
+    Env.wf_typ ~at:(exp_loc exp) env (typ_of checked_exp);
     decr depth;
     checked_exp
   with Type_error (l, err) ->
@@ -1669,7 +1669,7 @@ let irule r env exp =
     let inferred_exp = r env exp in
     typ_print
       (lazy (Util.("Infer " |> blue |> clear) ^ string_of_exp exp ^ " => " ^ string_of_typ (typ_of inferred_exp)));
-    Env.wf_typ env (typ_of inferred_exp);
+    Env.wf_typ ~at:(exp_loc exp) env (typ_of inferred_exp);
     decr depth;
     inferred_exp
   with Type_error (l, err) ->
@@ -1899,7 +1899,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ -> begin
       match letbind with
       | LB_val ((P_aux (P_typ (ptyp, _), _) as pat), bind) ->
-          Env.wf_typ env ptyp;
+          Env.wf_typ ~at:l env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
           ignore (check_pattern_duplicates env pat);
           let env = bind_pattern_vector_subranges pat env in
@@ -1925,11 +1925,11 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       if prove __POS__ env nc then typ_error l ("Can prove " ^ string_of_n_constraint nc)
       else annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
   | E_app (f, [E_aux (E_typ (typ, exp), _)]), _ when string_of_id f = "_check" ->
-      Env.wf_typ env typ;
+      Env.wf_typ ~at:l env typ;
       let _ = crule check_exp env exp typ in
       annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
   | E_app (f, [E_aux (E_typ (typ, exp), _)]), _ when string_of_id f = "_not_check" ->
-      Env.wf_typ env typ;
+      Env.wf_typ ~at:l env typ;
       if
         try
           ignore (crule check_exp env exp typ);
@@ -2061,7 +2061,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       let bind_exp, ptyp =
         match pat with
         | P_aux (P_typ (ptyp, _), _) ->
-            Env.wf_typ env ptyp;
+            Env.wf_typ ~at:l env ptyp;
             let checked_bind = crule check_exp env bind ptyp in
             (checked_bind, ptyp)
         | _ ->
@@ -2545,7 +2545,7 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
       | _ -> typ_error l ("Malformed mapping type " ^ string_of_id f)
     end
   | P_typ (typ_annot, pat) ->
-      Env.wf_typ env typ_annot;
+      Env.wf_typ ~at:l env typ_annot;
       let typed_pat, env, guards = bind_pat env pat typ_annot in
       (annot_pat (P_typ (typ_annot, typed_pat)) typ_annot, env, guards)
   | P_lit (L_aux (L_string _, _) as lit) ->
@@ -3305,7 +3305,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let bind_exp, ptyp =
         match pat with
         | P_aux (P_typ (ptyp, _), _) ->
-            Env.wf_typ env ptyp;
+            Env.wf_typ ~at:l env ptyp;
             let checked_bind = crule check_exp env bind ptyp in
             (checked_bind, ptyp)
         | _ ->
@@ -3331,7 +3331,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let bind_exp, pat, ptyp =
         match letbind with
         | LB_val ((P_aux (P_typ (ptyp, _), _) as pat), bind) ->
-            Env.wf_typ env ptyp;
+            Env.wf_typ ~at:l env ptyp;
             let checked_bind = crule check_exp env bind ptyp in
             (checked_bind, pat, ptyp)
         | LB_val (pat, bind) ->
@@ -3833,7 +3833,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
   | MP_lit (L_aux (L_string _, _) as lit) -> (annot_mpat (MP_lit lit) string_typ, env, [])
   | MP_lit lit -> (annot_mpat (MP_lit lit) (infer_lit env lit), env, [])
   | MP_typ (mpat, typ_annot) ->
-      Env.wf_typ env typ_annot;
+      Env.wf_typ ~at:l env typ_annot;
       let typed_mpat, env, guards = bind_mpat allow_unknown other_env env mpat typ_annot in
       (annot_mpat (MP_typ (typed_mpat, typ_annot)) typ_annot, env, guards)
   | MP_vector (mpat :: mpats) ->
@@ -3890,7 +3890,7 @@ let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
   match letbind with
   | LB_val ((P_aux (P_typ (typ_annot, _), _) as pat), bind) ->
       check_duplicate_letbinding l pat orig_env;
-      Env.wf_typ orig_env typ_annot;
+      Env.wf_typ ~at:l orig_env typ_annot;
       let checked_bind = crule check_exp orig_env bind typ_annot in
       let tpat, env = bind_pat_no_guard orig_env pat typ_annot in
       ( [DEF_aux (DEF_let (LB_aux (LB_val (tpat, checked_bind), (l, empty_tannot))), def_annot)],
@@ -4073,11 +4073,13 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
   typ_print (lazy ("\n" ^ Util.("Check function " |> cyan |> clear) ^ string_of_id id));
   let have_val_spec, (quant, typ), env =
     try (true, Env.get_val_spec id env, env) with
-    | Type_error (l, Err_not_in_scope (_, scope_l)) ->
+    | Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope)) ->
         typ_raise l
           (Err_not_in_scope
              ( Some "Cannot infer type of function as it has a defined type already. However, this type is not in scope.",
-               scope_l
+               scope_l,
+               item_scope,
+               into_scope
              )
           )
     | Type_error (l, _) ->
@@ -4204,12 +4206,16 @@ let forbid_recursive_types type_l f =
     let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
     raise (Type_error (type_l, err_because (Err_other msg, l, err)))
 
+let extension_def_attribute env def_annot =
+  match get_def_attribute "extension" def_annot with Some (l, name) -> Env.get_module_id_opt env name | None -> None
+
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), def_annot)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   let typ = mk_typ (Typ_fn ([arg_typ], ret_typ)) in
   forbid_recursive_types u_l (fun () -> wf_binding def_annot.loc non_rec_env (typq, arg_typ));
   wf_binding def_annot.loc env (typq, typ);
-  env |> Env.add_union_id v (typq, typ) |> Env.add_val_spec v (typq, typ)
+  let in_module = extension_def_attribute env def_annot in
+  env |> Env.add_union_id ?in_module v (typq, typ) |> Env.add_val_spec ?in_module v (typq, typ)
 
 let check_record l env def_annot id typq fields =
   forbid_recursive_types l (fun () ->
@@ -4421,7 +4427,7 @@ and check_outcome_instantiation :
                 in
                 typ_raise decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
             | None ->
-                Env.wf_typ env subst_typ;
+                Env.wf_typ ~at:decl_l env subst_typ;
                 ( typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
                   (kid, subst_typ) :: new_instantiated,
                   fns,
@@ -4515,27 +4521,17 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
         ],
         env
       )
-  | DEF_pragma ("unscope#", arg, l) when !Initial_check.opt_magic_hash ->
-      let env =
-        match String.split_on_char ' ' arg with
-        | [id_category; id] -> Type_env.unscope_pragma id_category (mk_id id) env
-        | _ -> env
-      in
-      ([DEF_aux (DEF_pragma ("unscope#", arg, l), def_annot)], env)
-  | DEF_pragma ("module_start#", arg, l) ->
-      let sep = String.index_from arg 0 ' ' in
-      let m = int_of_string (String.sub arg 0 sep) in
-      typ_print
-        ( lazy
-          (let name = String.sub arg (sep + 1) (String.length arg - (sep + 1)) in
-           Printf.sprintf "module start %s %d" name m
-          )
-          );
-      ([], Env.start_module m env)
-  | DEF_pragma ("require#", arg, l) ->
-      let ms = List.map int_of_string (String.split_on_char ' ' arg) in
-      ([], Env.open_modules ms env)
-  | DEF_pragma ("module_end#", arg, l) -> ([], Env.end_module env)
+  | DEF_pragma ("rigging#", arg, l) ->
+      let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
+      let proj_defs = Initial_check.parse_project ?inline:start_p ~contents:arg () in
+      let proj = Project.initialize_project_structure proj_defs in
+      typ_print (lazy "set modules");
+      ([], Env.set_modules proj env)
+  | DEF_pragma ("start_module#", arg, l) ->
+      let mod_id = Env.get_module_id ~at:l env arg in
+      typ_print (lazy (Printf.sprintf "module start %d '%s'" mod_id arg));
+      ([], Env.start_module ~at:l mod_id env)
+  | DEF_pragma ("end_module#", _, _) -> ([], Env.end_module env)
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
@@ -4597,3 +4593,5 @@ let initial_env =
      but which don't affect flow-typing. *)
   |> Env.add_val_spec (mk_id "sail_assume")
        (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), function_typ [bool_typ] unit_typ)
+
+let initial_env_with_modules proj = Env.set_modules proj initial_env

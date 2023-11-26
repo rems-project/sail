@@ -1,9 +1,10 @@
 [93mType error[0m:
-[96mfail/unscope_enum.sail[0m:14.10-11:
-14[96m |[0m  let _ = A;
+[96mfail/unscope_enum.sail[0m:18.10-11:
+18[96m |[0m  let _ = A;
   [91m |[0m          [91m^[0m
   [91m |[0m Enumeration E containing A is not in scope
-  [91m |[0m Try bringing the following definition into scope:
-  [91m |[0m [96mfail/unscope_enum.sail[0m:7.5-6:
-  [91m |[0m 7[96m |[0menum E = A | B | C
-  [91m |[0m  [91m |[0m     [91m^[0m [91mdefinition here[0m
+  [91m |[0m 
+  [91m |[0m Try requiring module A to bring the following into scope:
+  [91m |[0m [96mfail/unscope_enum.sail[0m:11.5-6:
+  [91m |[0m 11[96m |[0menum E = A | B | C
+  [91m |[0m   [91m |[0m     [91m^[0m [91mdefinition here in A[0m

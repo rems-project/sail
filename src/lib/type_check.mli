@@ -118,7 +118,7 @@ module Env : sig
       Useful when processing the body of the function. *)
   val get_val_spec_orig : id -> t -> typquant * typ
 
-  val update_val_spec : id -> typquant * typ -> t -> t
+  val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 
   val get_register : id -> t -> typ
   val get_registers : t -> typ Bindings.t
@@ -506,5 +506,8 @@ val check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t
+
+(** The initial type checking environment, with a specific set of available modules. *)
+val initial_env_with_modules : Project.project_structure -> Env.t
 
 val prove_smt : assumptions:n_constraint list -> n_constraint -> bool

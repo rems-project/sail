@@ -114,13 +114,17 @@ type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of md
 
 and mdl = { name : string spanned; defs : mdl_def spanned list; span : l }
 
-type def = Def_var of string spanned * exp spanned | Def_module of mdl | Def_test of string list
+type def = Def_root of string | Def_var of string spanned * exp spanned | Def_module of mdl | Def_test of string list
+
+let mk_root root = (Def_root root, (Lexing.dummy_pos, Lexing.dummy_pos))
 
 class type project_visitor = object
   method vexp : exp spanned -> exp spanned visit_action
   method vdependency : l -> dependency -> dependency visit_action
   method vmodule : mdl -> mdl visit_action
   method vdef : def spanned -> def spanned visit_action
+
+  method on_root_change : string -> unit
 
   method short_circuit_if : bool
 end
@@ -197,13 +201,16 @@ let rec visit_module vis (outer_module : mdl) =
 let visit_def vis outer_def =
   let aux vis no_change =
     match no_change with
+    | Def_test _, _ -> no_change
     | Def_var (v, exp), l ->
         let exp' = visit_exp vis exp in
         if exp == exp' then no_change else (Def_var (v, exp'), l)
     | Def_module m, l ->
         let m' = visit_module vis m in
         if m == m' then no_change else (Def_module m', l)
-    | Def_test _, _ -> no_change
+    | Def_root root, _ ->
+        vis#on_root_change root;
+        no_change
   in
   do_visit vis (vis#vdef outer_def) aux outer_def
 
@@ -226,6 +233,8 @@ class empty_project_visitor : project_visitor =
     method vdependency _ _ = DoChildren
     method vmodule _ = DoChildren
     method vdef _ = DoChildren
+
+    method on_root_change _ = ()
 
     method short_circuit_if = false
   end
@@ -328,7 +337,6 @@ class eval_visitor (vars : value StringMap.t ref) =
 type project_structure = {
   names : string spanned array;
   ids : int StringMap.t;
-  root_directory : string;
   mutable parents : int ModMap.t;
   mutable children : ModGraph.graph;
   mutable files : string spanned list ModMap.t;
@@ -386,11 +394,16 @@ let rec collect_files = function
   | _ :: mdefs -> collect_files mdefs
   | [] -> []
 
+let add_root root_opt (file, l) =
+  match root_opt with Some root -> (root ^ Filename.dir_sep ^ file, l) | None -> (file, l)
+
 class structure_visitor (proj : project_structure) =
   object
     inherit empty_project_visitor
 
     val mutable parents : int list = []
+
+    val mutable last_root : string option = None
 
     method vexp _ = SkipChildren
     method vdependency _ _ = SkipChildren
@@ -399,7 +412,7 @@ class structure_visitor (proj : project_structure) =
       let name = fst m.name in
       let id = StringMap.find name proj.ids in
       let files = collect_files m.defs in
-      proj.files <- ModMap.add id files proj.files;
+      proj.files <- ModMap.add id (List.map (add_root last_root) files) proj.files;
       link_parent id parents proj;
       parents <- id :: parents;
       ChangeDoChildrenPost
@@ -408,6 +421,8 @@ class structure_visitor (proj : project_structure) =
             parents <- List.tl parents;
             m
         )
+
+    method on_root_change new_root = last_root <- Some new_root
   end
 
 (**************************************************************************)
@@ -441,7 +456,7 @@ let get_from_frame f stack proj =
                | S_only, Some id -> ModSet.add id acc
                | S_tree, Some id ->
                    ModSet.union acc (ModGraph.reachable (ModSet.singleton id) ModSet.empty proj.children)
-               | _, None -> raise (Reporting.err_general (to_loc l) (name ^ " does not exist"))
+               | _, None -> raise (Reporting.err_general (to_loc l) ("Module " ^ name ^ " does not exist"))
              )
              acc (f frame)
           )
@@ -541,7 +556,7 @@ let run_tests defs (proj : project_structure) =
   in
   List.iter (function Def_test (cmd :: args), l -> run_test_cmd l cmd args | _ -> ()) defs
 
-let initialize_project_structure ~root_directory defs =
+let initialize_project_structure defs =
   (* Visit all the declared modules and assign them module ids *)
   let xs = ref [] in
   let _ = visit_defs (new order_visitor xs) defs in
@@ -556,7 +571,6 @@ let initialize_project_structure ~root_directory defs =
     {
       names;
       ids;
-      root_directory;
       parents = ModMap.empty;
       children = ModMap.empty;
       files = ModMap.empty;
@@ -590,6 +604,8 @@ let required_modules ~roots (proj : project_structure) =
   let reqs = ModGraph.prune roots ModSet.empty proj.requires in
   fun id -> ModMap.mem id reqs
 
+let valid_module_id proj id = 0 <= id && id < Array.length proj.names
+
 let module_name proj id = proj.names.(id)
 
 let module_order proj =
@@ -610,9 +626,8 @@ let module_order proj =
   in
   flatten sccs
 
-let module_files proj id =
-  List.map (fun (f, l) -> (proj.root_directory ^ Filename.dir_sep ^ f, l)) (ModMap.find id proj.files)
+let module_files proj id = ModMap.find id proj.files
 
 let module_requires (proj : project_structure) id = ModMap.find id proj.requires |> ModSet.elements
 
-let file_list modules proj = List.map (fun id -> ModMap.find id proj.files) modules |> List.concat
+let all_files proj = List.map (fun id -> ModMap.find id proj.files) (module_order proj) |> List.concat

@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/overload_member_scope.sail[0m:21.0-20:
+21[96m |[0moverload bar = {foo}
+  [92m |[0m[92m^------------------^[0m [92mOverload defined here[0m
+[96mfail/overload_member_scope.sail[0m:29.17-22:
+29[96m |[0mfunction baz() = bar()
+  [91m |[0m                 [91m^---^[0m
+  [91m |[0m Overload bar is defined, but nothing it overloads is in scope

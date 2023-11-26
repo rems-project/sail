@@ -1,4 +1,6 @@
 [93mError[0m:
-[96mbad_option_pragma2.sail[0m:2.24-3.0:
+[96mbad_option_pragma2.sail[0m:2.0-24:
+2[96m |[0m$option -not_a_sail_flag
+ [91m |[0m[91m^----------------------^[0m
  [91m |[0m Invalid flag passed to $option directive
  [91m |[0m sail: unknown option '-not_a_sail_flag'.

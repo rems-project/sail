@@ -139,4 +139,5 @@ val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.de
 
 val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
 
-val parse_project : filename:string -> contents:string -> Project.def Project.spanned list
+val parse_project :
+  ?inline:Lexing.position -> ?filename:string -> contents:string -> unit -> Project.def Project.spanned list

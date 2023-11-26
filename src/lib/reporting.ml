@@ -140,6 +140,15 @@ let rec simp_loc = function
   | Parse_ast.Hint (_, l1, l2) -> begin match simp_loc l1 with None -> simp_loc l2 | pos -> pos end
   | Parse_ast.Range (p1, p2) -> Some (p1, p2)
 
+let rec map_loc_range f = function
+  | Parse_ast.Unknown -> Parse_ast.Unknown
+  | Parse_ast.Unique (n, l) -> Parse_ast.Unique (n, map_loc_range f l)
+  | Parse_ast.Generated l -> Parse_ast.Generated (map_loc_range f l)
+  | Parse_ast.Hint (hint, l1, l2) -> Parse_ast.Hint (hint, l1, map_loc_range f l2)
+  | Parse_ast.Range (p1, p2) ->
+      let p1, p2 = f p1 p2 in
+      Parse_ast.Range (p1, p2)
+
 let rec loc_file = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> loc_file l

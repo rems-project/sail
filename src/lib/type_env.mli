@@ -81,18 +81,25 @@ type env
 
 type t = env
 
-val start_module : Project.mod_id -> t -> t
+(** Set the modules in the environment. Note that calling this twice
+    on an environment with different arguments will invalidate all
+    module identifiers! *)
+val set_modules : Project.project_structure -> t -> t
+
+val get_module_id_opt : t -> string -> Project.mod_id option
+val get_module_id : at:l -> t -> string -> Project.mod_id
+
+(** Start typechecking within a module context. The module id must be
+    a valid module created via the set_modules call, otherwise we will
+    fail with an internal error. *)
+val start_module : at:l -> Project.mod_id -> t -> t
+
+(** End the current module context, returning us to type-checking in
+    the global scope. *)
 val end_module : t -> t
-val open_modules : Project.mod_id list -> t -> t
 
 (** This effectively disables all module related access control *)
 val open_all_modules : t -> t
-
-(** This implements the unscope# pragma, which removes an identifier
-    from scope by setting its module id to -1 (which is never a valid
-    module id). This is used only to test the typechecker, and should
-    not be used for any other reason! *)
-val unscope_pragma : string -> id -> t -> t
 
 val freshen_bind : t -> typquant * typ -> typquant * typ
 
@@ -100,8 +107,8 @@ val get_default_order : t -> order
 val get_default_order_opt : t -> order option
 val set_default_order : order -> t -> t
 
-val add_val_spec : ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
-val update_val_spec : id -> typquant * typ -> t -> t
+val add_val_spec : ?in_module:Project.mod_id -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val define_val_spec : id -> t -> t
 val get_defined_val_specs : t -> IdSet.t
 val get_val_spec : id -> t -> typquant * typ
@@ -126,7 +133,7 @@ val set_scattered_variant_env : variant_env:t -> id -> t -> t
 val union_constructor_info : id -> t -> (int * int * id * type_union) option
 val is_union_constructor : id -> t -> bool
 val is_singleton_union_constructor : id -> t -> bool
-val add_union_id : id -> typquant * typ -> t -> t
+val add_union_id : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val get_union_id : id -> t -> typquant * typ
 
 val is_mapping : id -> t -> bool
@@ -217,7 +224,7 @@ val no_bindings : t -> t
 val is_toplevel : t -> l option
 
 (* Well formedness-checks *)
-val wf_typ : t -> typ -> unit
+val wf_typ : at:l -> t -> typ -> unit
 val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
 
 (** Some of the code in the environment needs to use the smt solver,

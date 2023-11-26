@@ -1277,7 +1277,7 @@ let chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
   begin
     match def with
     | DEF_fundef fdef -> chunk_fundef comments chunks fdef
-    | DEF_pragma (pragma, arg) ->
+    | DEF_pragma (pragma, arg, _) ->
         Queue.add (Pragma (pragma, arg)) chunks;
         pragma_span := true
     | DEF_default dts -> chunk_default_typing_spec comments chunks dts

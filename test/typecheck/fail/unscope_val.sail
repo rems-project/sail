@@ -1,11 +1,15 @@
 $option -dmagic_hash
 
+$rigging# A {}
+
 default Order dec
 
 $include <prelude.sail>
 
+$start_module# A
+
 val foo : unit -> unit
 
-$unscope# val foo
+$end_module# A
 
 function foo() = ()

@@ -1,9 +1,10 @@
 [93mType error[0m:
-[96mfail/unscope_type.sail[0m:14.10-13:
-14[96m |[0m  let _ : foo = 0xFFFF_FFFF;
+[96mfail/unscope_type.sail[0m:18.10-13:
+18[96m |[0m  let _ : foo = 0xFFFF_FFFF;
   [91m |[0m          [91m^-^[0m
   [91m |[0m Not in scope
-  [91m |[0m Try bringing the following definition into scope:
-  [91m |[0m [96mfail/unscope_type.sail[0m:7.5-8:
-  [91m |[0m 7[96m |[0mtype foo = bits(32)
-  [91m |[0m  [91m |[0m     [91m^-^[0m [91mdefinition here[0m
+  [91m |[0m 
+  [91m |[0m Try requiring module A to bring the following into scope:
+  [91m |[0m [96mfail/unscope_type.sail[0m:11.5-8:
+  [91m |[0m 11[96m |[0mtype foo = bits(32)
+  [91m |[0m   [91m |[0m     [91m^-^[0m [91mdefinition here in A[0m

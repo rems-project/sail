@@ -352,14 +352,40 @@ let message_of_type_error =
           ([coercion; Line "Coercion failed because:"; msg trigger]
           @ if not (reasons = []) then Line "Possible reasons:" :: List.map msg reasons else []
           )
-    | Err_not_in_scope (explanation, Some l) ->
+    | Err_not_in_scope (explanation, Some l, item_scope, into_scope) ->
+        let suggest, in_mod, add_requires_here =
+          match (item_scope, into_scope) with
+          | None, None -> ("Try bringing the following into scope:", "", [])
+          | Some (item, _), None ->
+              (Printf.sprintf "Try requiring module %s to bring the following into scope:" item, " in " ^ item, [])
+          | None, Some (into, into_l) ->
+              ( Printf.sprintf "Try bringing the following into scope for module %s:" into,
+                "",
+                [Location ("", Some "add requires here", Project.to_loc into_l, Seq [])]
+              )
+          | Some (item, _), Some (into, into_l) ->
+              ( Printf.sprintf "Try requiring module %s to bring the following into scope for module %s:" item into,
+                " in " ^ item,
+                [
+                  Location
+                    ( "",
+                      Some (Printf.sprintf "add 'requires %s' within %s here" item into),
+                      Project.to_loc into_l,
+                      Seq []
+                    );
+                ]
+              )
+        in
         Seq
-          [
-            Line (Option.value ~default:"Not in scope" explanation);
-            Line "Try bringing the following definition into scope:";
-            Location ("", Some "definition here", l, Seq []);
-          ]
-    | Err_not_in_scope (explanation, None) -> Line (Option.value ~default:"Not in scope" explanation)
+          ([
+             Line (Option.value ~default:"Not in scope" explanation);
+             Line "";
+             Line suggest;
+             Location ("", Some ("definition here" ^ in_mod), l, Seq []);
+           ]
+          @ add_requires_here
+          )
+    | Err_not_in_scope (explanation, None, _, _) -> Line (Option.value ~default:"Not in scope" explanation)
   in
   msg
 
