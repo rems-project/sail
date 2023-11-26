@@ -78,6 +78,11 @@ val to_loc : l -> Parse_ast.l
 
 type value
 
+val bool_value : bool -> value
+val string_value : string -> value
+
+val parse_assignment : variables:value Util.StringMap.t ref -> string -> bool
+
 type exp =
   | E_app of string * exp spanned list
   | E_file of string
@@ -109,7 +114,7 @@ val mk_root : string -> def spanned
 
 type project_structure
 
-val initialize_project_structure : def spanned list -> project_structure
+val initialize_project_structure : variables:value Util.StringMap.t ref -> def spanned list -> project_structure
 
 val get_module_id : project_structure -> string -> mod_id option
 

@@ -68,7 +68,7 @@
 include Visitor
 
 module StringSet = Set.Make (String)
-module StringMap = Map.Make (String)
+module StringMap = Util.StringMap
 module ModSet = Util.IntSet
 module ModMap = Util.IntMap
 module ModGraph = Graph.Make (Int)
@@ -87,7 +87,24 @@ type 'a spanned = 'a * l
 
 type selector = S_tree | S_only
 
-type value = V_string of string | V_bool of bool | V_selector of selector * string
+type value = V_string of string | V_bool of bool | V_selector of selector * string | V_list of value list
+
+let string_value s = V_string s
+let bool_value b = V_bool b
+
+let parse_assignment ~variables s =
+  match String.index_from_opt s 0 '=' with
+  | None -> false
+  | Some n ->
+      let var = String.trim (String.sub s 0 n) in
+      let arg =
+        match String.trim (String.sub s (n + 1) (String.length s - (n + 1))) with
+        | "true" -> V_bool true
+        | "false" -> V_bool false
+        | s -> V_string s
+      in
+      variables := StringMap.add var arg !variables;
+      true
 
 type exp =
   | E_app of string * exp spanned list
@@ -216,15 +233,25 @@ let visit_def vis outer_def =
 
 let visit_defs vis defs = map_no_copy (visit_def vis) defs
 
+let rec value_to_strings l = function
+  | V_string s -> [(s, l)]
+  | V_list vs -> List.concat (List.map (value_to_strings l) vs)
+  | _ -> raise (Reporting.err_typ (to_loc l) "Expected strings")
+
 let rec to_strings = function
-  | (E_value (V_string s), l) :: xs -> (s, l) :: to_strings xs
-  | (_, l) :: _ -> raise (Reporting.err_typ (to_loc l) "Expected string")
+  | (E_value v, l) :: xs -> value_to_strings l v @ to_strings xs
+  | (_, l) :: _ -> raise (Reporting.err_typ (to_loc l) "String has not been evaluated")
   | [] -> []
 
+let rec value_to_selectors l = function
+  | V_selector (sel, s) -> [((sel, s), l)]
+  | V_string s -> [((S_tree, s), l)]
+  | V_list vs -> List.concat (List.map (value_to_selectors l) vs)
+  | _ -> raise (Reporting.err_typ (to_loc l) "Expected module selector")
+
 let rec to_selectors = function
-  | (E_value (V_selector (sel, s)), l) :: xs -> ((sel, s), l) :: to_selectors xs
-  | (E_value (V_string s), l) :: xs -> ((S_tree, s), l) :: to_selectors xs
-  | (_, l) :: _ -> raise (Reporting.err_typ (to_loc l) "Expected string")
+  | (E_value v, l) :: xs -> value_to_selectors l v @ to_selectors xs
+  | (_, l) :: _ -> raise (Reporting.err_typ (to_loc l) "Module selector has not been evaluated")
   | [] -> []
 
 class empty_project_visitor : project_visitor =
@@ -321,6 +348,16 @@ class eval_visitor (vars : value StringMap.t ref) =
                 xs
             in
             (E_value (project_app l f xs), l)
+        | E_list xs, l ->
+            let xs =
+              List.map
+                (function
+                  | E_value v, _ -> v
+                  | _, l -> Reporting.unreachable (to_loc l) __POS__ "Value in list has not been fully evaluated"
+                  )
+                xs
+            in
+            (E_value (V_list xs), l)
         | E_value _, _ -> no_change
         | E_if ((_, l), _, _), _ -> raise (Reporting.err_typ (to_loc l) "Expected boolean value in if")
         | _, l -> Reporting.unreachable (to_loc l) __POS__ "Value has not been fully evaluated"
@@ -556,7 +593,7 @@ let run_tests defs (proj : project_structure) =
   in
   List.iter (function Def_test (cmd :: args), l -> run_test_cmd l cmd args | _ -> ()) defs
 
-let initialize_project_structure defs =
+let initialize_project_structure ~variables defs =
   (* Visit all the declared modules and assign them module ids *)
   let xs = ref [] in
   let _ = visit_defs (new order_visitor xs) defs in
@@ -564,9 +601,8 @@ let initialize_project_structure defs =
   let ids =
     snd (Array.fold_left (fun (n, m) name -> (n + 1, StringMap.add (fst name) n m)) (0, StringMap.empty) names)
   in
-  let vars = ref StringMap.empty in
   (* Evaluate the expressions in the project file *)
-  let defs = visit_defs (new eval_visitor vars) defs in
+  let defs = visit_defs (new eval_visitor variables) defs in
   let proj =
     {
       names;
