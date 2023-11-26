@@ -3881,8 +3881,9 @@ let effect_of_pat (P_aux (_, (_, annot))) = effect_of_annot annot
 (**************************************************************************)
 
 let check_duplicate_letbinding l pat env =
-  match IdSet.choose_opt (IdSet.inter (pat_ids pat) (Env.get_toplevel_lets env)) with
-  | Some id -> typ_error l ("Duplicate toplevel let binding " ^ string_of_id id)
+  match IdSet.choose_opt (IdSet.inter (Env.get_toplevel_lets env) (pat_ids pat)) with
+  | Some id ->
+      typ_error (Hint ("Previous definition", id_loc id, l)) ("Duplicate toplevel let binding " ^ string_of_id id)
   | None -> ()
 
 let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
