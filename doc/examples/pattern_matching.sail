@@ -7,7 +7,7 @@ val f : unit -> int
 val example : unit -> unit
 
 function example() = {
-    let n: int = f();
+    let n : int = f();
     match n {
         1 => print_endline("1"),
         2 => print_endline("2"),
@@ -16,7 +16,7 @@ function example() = {
     }
 }
 
-function match_switch(expression: int) -> unit = {
+function match_switch(expression : int) -> unit = {
     match expression {
         1 => print_endline("expression == 1"),
         2 => {
@@ -29,7 +29,7 @@ function match_switch(expression: int) -> unit = {
     }
 }
 
-function match_bind(x: int, y: int) -> unit = {
+function match_bind(x : int, y : int) -> unit = {
     match x + y {
         1 => print_endline("x + y == 1"),
         z => {
@@ -40,7 +40,7 @@ function match_bind(x: int, y: int) -> unit = {
     }
 }
 
-function match_destruct(pair: (int, int)) -> unit = {
+function match_destruct(pair : (int, int)) -> unit = {
     match pair : (int, int) {
         (first, second) => {
             // here we have split a pair into two variables first and second
@@ -55,7 +55,7 @@ struct my_struct = {
     field2 : int,
 }
 
-function match_struct(value: my_struct) -> unit = {
+function match_struct(value : my_struct) -> unit = {
     match value {
         // match against literals in the struct fields
         struct { field1 = 0x0000, field2 = 3 } => (),
@@ -68,7 +68,7 @@ function match_struct(value: my_struct) -> unit = {
     }
 }
 
-function match_struct2(value: my_struct) -> unit = {
+function match_struct2(value : my_struct) -> unit = {
     match value {
         struct { field1 = x, _ } => {
             print_bits("value.field1 = ", x)

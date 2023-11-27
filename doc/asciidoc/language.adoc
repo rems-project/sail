@@ -17,9 +17,10 @@ variables_. Type variables are written with a leading 'tick', so `'n`
 and `'m` are the type variables in the above signature.
 
 NOTE: The leading tick is a convention derived from Standard ML, and
-other functional languages derived from Standard ML, such as
-OCaml. Readers who are familiar with Rust will also recognise this
-naming convention from lifetime variables in Rust types.
+other functional languages derived from Standard ML, such as OCaml.
+Readers who are familiar with Rust will also recognise this naming
+convention from lifetime variables in Rust types. The `val` keyword to
+declare functions is also taken from OCaml.
 
 The type `bits('m)` is a bitvector of length `'m`, and `int('n)` is an
 integer with the value `'n`. The result of this function will
@@ -50,11 +51,29 @@ include::sail:extz[from=mrb]
 ----
 
 Implicit parameters are always integers, and they must appear first
-before any other parameters in the function type signature. The first argument can then just be omitted when calling the function, like so:
+before any other parameters in the function type signature. The first
+argument can then just be omitted when calling the function, like so:
 
 sail::extz_usage[from=mrb,part=body,dedent]
 
-=== Numeric types
+=== The unit type
+
+The simplest type in Sail is the _unit type_ `unit`. It is a type with
+a single member `()`. Rather than have functions that takes zero
+arguments, we have functions that take a single `unit` argument.
+Similarly, rather than having functions that return no results, a
+function with no meaningful return value can return `()`. The `()`
+notation reflects the fact that the unit type can be thought of as an
+empty tuple (see <<Tuples>>).
+
+In Sail `unit` plays a similar role to void in C and C++, except
+unlike void it is an ordinary type and can appear anywhere and be used
+in generic functions.
+
+The https://en.wikipedia.org/wiki/Unit_type[wikipedia page for the unit type],
+goes into further details on the difference between unit and void.
+
+=== Numeric types and bits
 
 Sail has three basic numeric types, `int`, `nat`, and `range`. The
 type `int` which we have already seen above is an arbitrary precision
@@ -81,18 +100,219 @@ which would end up being equivalent to
 bits to other numeric types would be highly undesirable. The `bit`
 type itself is a two-element type with members `bitzero` and `bitone`.
 
+In addition, we can write a numeric type that only contains a fixed
+set of integers. The type `{32,{nbsp}64}` is a type that can only
+contain the values `32` and `64`.
+
+NOTE: In older Sail versions the numeric set type would have been
+denoted `{|32, 64|}`.
+
 === Bitvector Literals
 
 Bitvector literals in Sail are written as either `0x` followed by a
 sequence of hexadecimal digits or `0b` followed by a sequence of
-binary digits, for example `0x12FE or `0b1010100`. The length of a hex
-literal is always four times the number of digits, and the length of
-binary string is always the exact number of digits, so `0x12FE` has
+binary digits, for example `0x12FE` or `0b1010100`. The length of a
+hex literal is always four times the number of digits, and the length
+of binary string is always the exact number of digits, so `0x12FE` has
 length 16, while `0b1010100` has length 7. To ensure bitvector logic
-in specifications is precisly specified, we do not do any kind of
+in specifications is precisly specified, we do not allow any kind of
 implicit widening or truncation as might occur in C. To change the
 length of a bitvector, explicit zero/sign extension and truncation
-functions must be used.
+functions must be used. Underscores can be used in bitvector literals
+to separate groups of bits (typically in groups of 16), for example:
+
+[source,sail]
+----
+let large_bitvector : bits(64) = 0xFFFF_0000_1234_0000
+----
+
+We can make bitvectors as large as we need:
+
+[source,sail]
+----
+let even_larger_bitvector : bits(192) =
+  0xFFFF_FFFF_FFFF_FFFF_0000_0000_0000_0000_ABCD_ABCD_ABCD_ABCD
+----
+
+We can also write bitvectors very verbosely using `bitzero` and
+`bitone`, like:
+
+[source,sail]
+----
+let v : bits(2) = [bitzero, bitzero]
+----
+
+The `@` operator is used to concatenate bitvectors, for example:
+
+[source,sail]
+----
+let x = 0xFFFF;
+let y = 0x0000;
+assert(x @ y == 0xFFFF_0000);
+----
+
+For historical reasons the `bit` type is not equal to `bits(1)`, and
+while this does simplify naively mapping the bits type into a (very
+inefficient!) representation like `bit list` in Isabelle or OCaml, it
+might be something we reconsider in the future.
+
+Sail allows two different types of bitvector orderings---increasing
+(`inc`) and decreasing (`dec`). These two orderings are shown for the
+bitvector 0b10110000 below.
+
+image::ordering-tikz.png[width=70%,align=center,pdfwidth=80%]
+
+For increasing (bit)vectors, the 0 index is the most significant bit
+and the indexing increases towards the least significant bit. Whereas
+for decreasing (bit)vectors the least significant bit is 0 indexed,
+and the indexing decreases from the most significant to the least
+significant bit. For this reason, increasing indexing is sometimes
+called `most significant bit is zero' or MSB0, while decreasing
+indexing is sometimes called `least significant bit is zero' or
+LSB0. While this vector ordering makes most sense for bitvectors (it
+is usually called bit-ordering), in Sail it applies to all
+vectors. A default ordering can be set using
+
+[source,sail]
+----
+default Order dec
+----
+
+and this should usually be done right at the beginning of a
+specification. This setting is global, and increasing and decreasing
+bitvectors can therefore never be mixed within the same specification!
+
+In practice decreasing order is the almost universal standard and only
+POWER uses increasing order. All currently maintained Sail
+specifications use decreasing. You may run into issues with increasing
+bitvectors as the code to support these is effectively never exercised
+as a result.
+
+=== Vectors
+
+Sail has the built-in type `vector`, which is a polymorphic type for
+fixed-length vectors. For example, we could define a vector `v` of
+three integers as follows:
+
+[source,sail]
+----
+let v : vector(3, int) = [3, 2, 1]
+----
+
+The first argument of the vector type is a numeric expression
+representing the length of the vector, and the second is the type of
+the vector's elements. As mentioned in the bitvector section, the
+ordering of bitvectors and vectors is always the same, so:
+
+[source,sail]
+----
+let a_generic_vector : vector(3, bit) = [bitzero, bitzero, bitone]
+let a_bit_vector : bits(3) = [bitzero, bitzero, bitone] // 0b001
+
+assert(a_generic_vector[0] == bitone)
+assert(a_bitvector_vector[0] == bitone)
+----
+
+Note that a generic vector of bits and a bitvector are not the same
+type, despite us being able to write them using the same syntax. This
+means you cannot write a function that is polymorphic over both
+generic vectors and bitvectors). This is because we typically want
+these types to have very different representations in our various Sail
+backends, and we don't want to be forced into a compilation strategy
+that requires monomorphising such functions.
+
+=== Accessing and Updating Vectors
+
+A (bit)vector can be indexed by using the _vector index_ notation. So,
+in the following code:
+
+[source,sail]
+----
+let v : vector(4, int) = [1, 2, 3, 4]
+let a = v[0]
+let b = v[3]
+----
+`a` will be `4`, and `b` will be `1` (we assume `default Order dec`
+here). By default, Sail will statically check for out of bounds
+errors, and will raise a type error if it cannot prove that all such
+vector accesses are valid.
+
+A vector `v` can be sliced using the `v[n{nbsp}..{nbsp}m]` notation. The
+indexes are always supplied with the index closest to the MSB being
+given first, so we would take the bottom 32-bits of a decreasing
+bitvector `v` as `v[31{nbsp}..{nbsp}0]`, and the upper 32-bits of an
+increasing bitvector as `v[0{nbsp}..{nbsp}31]`, i.e. the indexing
+order for decreasing vectors decreases, and the indexing order for
+increasing vectors increases.
+
+A vector `v` can have an index index using
+`[v{nbsp}with{nbsp}index{nbsp}={nbsp}expression]`. Similarly, a
+sub-range of v can be updated using
+`[v{nbsp}with{nbsp}n{nbsp}..{nbsp}m{nbsp}={nbsp}expression]` where the
+order of the indexes is the same as described above for increasing and
+decreasing vectors.
+
+=== Tuples
+:tuples: sail_doc/tuples.json
+
+Sail has tuple types which represent heterogenous sequences containing
+values of different types. A tuple type `(T1,{nbsp}T2,{nbsp}...)` has
+values `(x1,{nbsp}x2,{nbsp}...)` where `x1{nbsp}:{nbsp}T1`,
+`x2{nbsp}:{nbsp}T2` and so on. A tuple must have 2 or more elements.
+Some examples of tuples would be:
+
+sail::TUPLES[from=tuples,type=span]
+
+Note that while the function type `(A,{nbsp}B){nbsp}\->{nbsp}C` might
+look like a function taking a single tuple argument, it is in fact a
+function taking two arguments. If we wanted to write a function taking
+a single tuple argument, we would instead write:
+
+[source,sail]
+----
+include::sail:single_tuple_argument[from=tuples,type=val]
+
+include::sail:single_tuple_argument[from=tuples,type=function]
+----
+
+which would be called as
+
+sail::caller[from=tuples,type=function,part=body,dedent]
+
+NOTE: This is because in Sail the function type is denoted
+`(A,{nbsp}B,{nbsp}...){nbsp}\->{nbsp}C`, but we allow the brackets to
+be elided when the function has a single non-tuple argument so we can
+write `A{nbsp}\->{nbsp}B` rather than `(A){nbsp}\->{nbsp}B`.
+
+=== Strings
+:strings: sail_doc/string.json
+
+Sail has a `string` type, which is primarily used for error reporting
+and debugging.
+
+CAUTION: Sail is not a language designed for working with strings, and
+the semantics of ISA specifications should not depend on any logic
+involving strings. If you find yourself using strings for reasons
+other than printing or logging errors in a Sail specification, you
+should probably reconsider.
+
+A Sail string is any sequence of ASCII characters between double
+quotes. Backslash is used to introduce escape sequences, and the
+following escape sequences are supported:
+
+* `\\` -- Backslash
+* `\n` -- Newline character
+* `\t` -- Tab character
+* `\b` -- Backspace character
+* `\r` -- Carriage return
+* `\'` -- Single quote (somewhat unnecessary, as single quotes are allowed in Sail strings)
+* `\"` -- Double quote
+* `\DDD` -- The character with decimal ASCII code `DDD`
+* `\xHH` -- The character with hexadecimal ASCII code `HH`
+
+Multi-line strings can be written by escaping the newline character at the end of a line:
+
+sail::multi_line[from=strings,type=function,part=body,dedent]
 
 === Pattern Matching
 :pattern-match: sail_doc/pattern_matching.json
@@ -165,7 +385,7 @@ We now describe all the things that can be matched on in Sail
 ==== Matching on literals
 
 First, and as we have already seen, we can match on literal
-values. These literal values can be bitvectors, the boolean values
+values. These literal values can be `()`, bitvectors, the boolean values
 `true` and `false`, numbers, and strings.
 
 ==== Matching on enumerations
@@ -190,7 +410,7 @@ sail::match_tuple[from=pattern-match,part=body,dedent]
 ==== Matching on unions
 
 Match can also be used to destructure tagged union constructors, for example
-using the option type from Section~\ref{sec:union}:
+using the option type from the Sail library.
 [source,sail]
 ----
 include::sail:OPTION[from=pattern-match,type=span]
@@ -245,11 +465,11 @@ operator in a pattern, so in this example the pattern brackets as
 
 ==== Automatic wildcard insertion
 
-The various theorem provers Sail can produce definitions for are
-strict, and _require_ patterns to be exhaustive. However, their
-pattern exhaustiveness checkers do not understand bitvectors in the
-same way Sail does. For example, Sail can tell that the following
-match is complete:
+The various theorem provers that Sail can produce definitions for are
+often strict, and enforce that pattern matches are exhaustive.
+However, their pattern exhaustiveness checkers do not understand
+bitvectors in the same way Sail does. For example, Sail can tell that
+the following match is complete:
 
 sail::match_wildcard_remove[from=pattern-match,part=body,dedent]
 
@@ -270,6 +490,517 @@ This warning should be heeded, and the match simplified otherwise the
 generated theorem prover definitions produced by Sail may be rejected
 by the prover.
 
+=== Type patterns
+
+In the previous section we saw as patterns, which allowed us bind
+additional variables for subpatterns. However, as patterns can also be
+used to bind type variables. For example:
+
+[source,sail]
+----
+// Some function that returns either 32 or 64 at runtime
+val get_current_xlen : unit -> {32, 64}
+
+register R : bits(32)
+
+val example : int -> unit
+
+function example() = {
+  let xlen as int('n) = get_current_xlen()
+
+  // Create a bitvector of length xlen
+  let bv : bits('n) = zero_extend(xlen, *R);
+
+  print_bits("bv = ", bv)
+}
+----
+
+You can think of the `as int('n)` as matching on the return type of
+the `get_current_xlen` rather than the value, and binding it's length
+to a new type variable `'n`, which we can subsequently use in types
+later in our function. Note that even though we only know if xlen will
+be 32 or 64 at runtime after the call to get_current_xlen, Sail is
+still able to statically check all our bitvector accesses.
+
+If a type only contains a single type variable (as `int('n)` does),
+then we allow omitting the type name and just using a variable as the
+type pattern, for example the following would be equivalent to the
+first line of example above:
+
+[source,sail]
+----
+let xlen as 'n = get_current_xlen();
+----
+
+If we want to give the variable `xlen` and the type variable `'n` the
+same name, we could go further and simplify to:
+
+[source,sail]
+----
+function example() = {
+  let 'xlen = get_current_xlen()
+
+  // Create a bitvector of length xlen
+  let bv : bits('xlen) = zero_extend(xlen, *R);
+
+  print_bits("bv = ", bv)
+}
+----
+
+Here we can use xlen within the function as both a regular variable
+`xlen` and as a type variable `'xlen`.
+
+=== Mutable variables
+
+Bindings made using let are always immutable, but Sail also allows mutable
+variables. Mutable variables are bound implicitly by using the
+var keyword within a block.
+
+[source,sail]
+----
+{
+  var x : int = 3; // Create a new mutable variable x initialised to 3
+  x = 2            // Rebind it to the value 2
+}
+----
+
+Like let-bound variables, mutable variables are lexically scoped, so
+they only exist within the block that declared them.
+
+Technically, unless the `-strict_var` option is used Sail also allows
+mutable variables to be implicitly declared, like so:
+
+[source,sail]
+----
+{
+  x : int = 3 // Create a new mutable variable x initialised to 3
+  x = 2       // Rebind it to the value 2
+}
+----
+
+This functions identically, just without the keyword. We consider this
+deprecated and strongly encourage the use of the `var` keyword going
+forwards.
+
+The assignment operator is the equality symbol, as in C and other
+programming languages. Sail supports a rich language of _l-value_
+forms, which can appear on the left of an assignment. These will be
+described in the next section.
+
+One important thing to note is that Sail always infers the most
+specific type it can for variables, and in the presence of integer
+types with constraints, these types can be _very_ specific. This is
+not a problem for immutable bindings, but can cause issues for mutable
+variables when explicit types are omitted. The following will not
+typecheck:
+
+[source,sail]
+----
+{
+  var x = 3;
+  x = 2;
+}
+----
+
+The reason is that Sail (correctly) infers that `x` has the type 'the
+integer equal to 3', and therefore refuses to allow us to assign `2`
+to it (as it well should), because two is not equal to three. To avoid
+this we must give an annotation with a less specific type like `int`.
+
+=== Assignment and l-values
+
+It is common in ISA specifications to assign to complex l-values,
+e.g.{nbsp}to a subvector or named field of a bitvector register, or to
+an l-value computed with some auxiliary function, e.g.{nbsp}to select
+the appropriate register for the current execution model.
+
+Sail has l-values that allow writing to individual elements of a
+(bit)vector:
+
+[source,sail]
+----
+var v : bits(8) = 0xFF;
+v[0] = bitzero;
+assert(v == 0xFE)
+----
+
+As well as sub-ranges of a (bit)vector:
+
+[source,sail]
+----
+var v : bits(8) = 0xFF;
+v[3 .. 0] = 0x0; // assume default Order dec
+assert(v == 0xF0)
+----
+
+We also have vector concatenation l-values, which work much like
+vector concatenation patterns
+
+[source,sail]
+----
+var v1 : bits(4) = 0xF;
+var v2 : bits(4) = 0xF;
+v1 @ v2 = 0xAB;
+assert(v1 == 0xA & v2 == 0xB)
+----
+
+For structs we can write to an individual struct field as
+
+[source,sail]
+----
+// Assume S is a struct type with a single bits(8) field (called field)
+var s : S = struct { field = 0xFF };
+s.field = 0x00;
+assert(s.field == 0x00)
+----
+
+We can also do multiple assignment using tuples, for example:
+
+[source,sail]
+----
+var (x, y) = (2, 3);
+assert(x == 2 & x == 3)
+// swap values
+(y, x) = (x, y)
+assert(x == 3 & x == 2)
+----
+
+Finally, we allow functions to appear in l-values. This is a very
+simple way to declare _setter functions_ that look like custom
+l-values, for example:
+
+[source,sail]
+----
+memory(addr) = 0x0F
+// is just syntactic sugar for
+memory(addr, 0x0F)
+----
+
+This feature is commonly used when setting registers or memory that
+have some additional semantics when they are read or written. We
+commonly use the ad-hoc overloading feature to declare what appear to
+be getter/setter pairs, so for the above example we could implement a
+`read_memory` function and a `write_memory` function and overload them
+both as `memory` to allow us to write memory using
+`memory(addr){nbsp}={nbsp}data` and read memory as
+`data{nbsp}={nbsp}memory(addr)`, for example:
+
+[source,sail]
+----
+val read_memory : bits(64) -> bits(8)
+val write_memory : (bits(64), bits(8)) -> unit
+
+overload memory = {read_memory, write_memory}
+----
+
+=== Bitfields
+:bitf: sail_doc/bitfield.json
+
+The following example creates a bitfield type called `cr_type` and a
+register `CR` of that type. The underlying bitvector type (in this
+case `bits(8)`) must be specified as part of the bitfield declaration.
+
+NOTE: The underlying bitvector type can be specified using a type
+synonym, like `xlenbits` in sail-riscv.
+
+[source,sail]
+----
+include::sail:BITFIELD[from=bitf,type=span]
+----
+
+If the bitvector is decreasing then indexes for the fields must also
+be in decreasing order, and vice-versa for an increasing vector. The
+field definitions can be overlapping and do not need to be contiguous.
+
+A bitfield generates a type that is simply a struct wrapper around the
+underlying bitvector, with a single field called `bits` containing
+that bitvector. For the above example, this will be:
+
+[source,sail]
+----
+struct cr_type = {
+  bits : bits(8)
+}
+----
+
+This representation is guaranteed, so it is expected that Sail code
+will use the `bits` field to access the underlying bits of the
+bitfield as needed. The following function shows how the bits
+contained in a bitfield can be accessed:
+
+sail::bitfield_access_example[from=bitf,type=function]
+
+Similarly, bitfields can be updated much like regular vectors just
+using the field names rather than numeric indices:
+
+sail::bitfield_update_example[from=bitf,type=function]
+
+Older versions of Sail did not guarantee the underlying representation
+of the bitfield (because it tried to do clever things to optimise
+them). This meant that bitfields had to be accessed using getter and
+setter functions, like so:
+
+sail::legacy_bitfields[from=bitf,type=function]
+
+The method like accessor syntax was (overly sweet) syntactic sugar for
+getter and setter functions following a specific naming convention
+that was generated by the bitfield. These functions are still
+generated for backwards compatibility, but we would advise against
+using them.
+
+NOTE: Except perhaps for the `Mk_cr_type` function or equivalent for
+other bitfields, which is still quite useful for creating bitfields.
+
+=== Operators
+
+Valid operators in Sail are sequences of the following non
+alpha-numeric characters: `!%&*+-./:<>=@^|#`. Additionally, any such
+sequence may be suffixed by an underscore followed by any valid
+identifier, so `\<=_u` or even `\<=_unsigned` are valid operator names.
+Operators may be left, right, or non-associative, and there are 10
+different precedence levels, ranging from 0 to 9, with 9 binding the
+tightest. To declare the precedence of an operator, we use a fixity
+declaration like:
+
+[source,sail]
+----
+infix 4 <=_u
+----
+
+For left or right associative operators, we'd use the keywords
+`infixl` or `infixr` respectively. An operator can be used anywhere a
+normal identifier could be used via the `operator` keyword. As such,
+the `\<=_u` operator can be defined as:
+
+[source,sail]
+----
+val operator <=_u : forall 'n. (bits('n), bits('n)) -> bool
+function operator <=_u(x, y) = unsigned(x) <= unsigned(y)
+----
+
+==== Builtin precedences
+
+The precedence of several common operators are built into Sail. These
+include all the operators that are used in type-level numeric
+expressions, as well as several common operations such as equality,
+division, and modulus. The precedences for these operators are
+summarised in the following table.
+
+.Default Sail operator precedences
+[cols="1,2m,2m,2m",width=80%]
+|===
+| Precedence | Left associative | Non-associative | Right associative
+
+| 9 |         |                         |
+| 8 |         |                         | ^
+| 7 | *, \, % |                         |
+| 6 | +, -    |                         |
+| 4 |         | <, <=, >, >=, !=, =, == |
+| 3 |         |                         | &
+| 2 |         |                         | \|
+| 1 |         |                         |
+| 0 |         |                         |
+|===
+
+=== Ad-hoc Overloading
+
+Sail has a flexible overloading mechanism using the overload keyword. For example:
+
+[source,sail]
+----
+overload foo = {bar, baz}
+----
+
+It takes an identifier name, and a list of other identifier names to
+overload that name with. When the overloaded name is seen in a Sail
+definition, the type-checker will try each of the overloads (that are
+in scope) in order from left to right until it finds one that causes
+the resulting expression to type-check correctly.
+
+Multiple `overload` declarations are permitted for the same
+identifier, with each overload declaration after the first adding its
+list of identifier names to the right of the overload list (so earlier
+overload declarations take precedence over later ones). As such, we
+could split every identifier from above example into its own
+line like so:
+[source,sail]
+----
+overload foo = {bar}
+overload foo = {baz}
+----
+
+Note that if an overload is defined in module `B` using identifiers
+provided by another module `A`, then a module `C` that requires only
+`B` will not see any of the identifiers from `A`, unless it also
+requires `A`. See the section on modules for details. Note that this
+means an overload cannot be used to 're-export' defintions provided by
+another module.
+
+As an example for how overloaded functions can be used, consider the
+following example, where we define a function `print_int` and a
+function `print_string` for printing integers and strings
+respectively. We overload `print` as either `print_int` or
+`print_string`, so we can print either number such as 4, or strings
+like `"Hello, World!"` in the following `main` function definition.
+
+[source,sail]
+----
+include::../examples/overload.sail[]
+----
+
+We can see that the overloading has had the desired effect by dumping
+the type-checked AST to stdout using the following command
+`sail -ddump_tc_ast examples/overload.sail`. This will print the
+following, which shows how the overloading has been resolved
+
+[source,sail]
+----
+function main () : unit = {
+  print_string("Hello, World!");
+  print_int(4)
+}
+----
+
+This option can sometimes be quite useful for observing how
+overloading has been resolved. Since the overloadings are done in the
+order they are defined, it can be important to ensure that this order
+is correct. A common idiom in the standard library is to have versions
+of functions that guarantee more constraints about their output be
+overloaded with functions that accept more inputs but guarantee less
+about their results. For example, we might have two division
+functions:
+
+[source,sail]
+----
+val div1 : forall 'm 'n, 'n >= 0 & 'm > 0. (int('n), int('m)) -> {'o, 'o >= 0. int('o)}
+
+val div2 : (int, int) -> option(int)
+----
+
+The first guarantees that if the first argument is greater than or
+equal to zero, and the second argument is greater than zero, then the
+result will be greater than or equal to zero. If we overload these
+definitions as
+
+[source,sail]
+----
+overload operator / = {div1, div2}
+----
+
+Then the first will be applied when the constraints on its inputs can
+be resolved, and therefore the guarantees on its output can be
+guaranteed, but the second will be used when this is not the case, and
+indeed, we will need to manually check for the division by zero case
+due to the option type. Notice that the return type can be different
+between different cases in the overload.
+
+=== Mappings
+:maps: sail_doc/mapping.json
+
+Mappings are a feature of Sail that allow concise expression of
+bidirectional relationships between values that are common in ISA
+specifications: for example, bit-representations of an enum type, or
+the encoding-decoding of instructions.
+
+They are defined similarly to functions, with a `val` keyword to
+specify the type and a definition, using a bidirectional arrow `+<->+`
+rather than a function arrow `+->+`, and a separate `mapping`
+definition.
+
+[source,sail]
+----
+include::sail:size_bits[from=maps,type=val]
+
+include::sail:M1[from=maps,type=span]
+----
+
+As a shorthand, you can also specify a mapping and its type
+simultaneously:
+
+sail::M2[from=maps,type=span]
+
+Mappings are used simply by calling them as if they were functions:
+type inference will determine in which direction the mapping is
+applied. (This gives rise to the restriction that the types on either
+side of a mapping must be different.)
+
+[source,sail]
+----
+include::sail:example[from=maps,part=body,dedent]
+----
+
+Sometimes, because the subset of Sail allowed in bidirectional mapping
+clauses is quite restrictive, it can be useful to specify the forwards
+and backwards part of a mapping separately:
+
+sail::M3[from=maps,type=span]
+
+=== Sizeof and Constraint
+
+Sail allows for arbitrary type variables to be included within
+expressions. However, we can go slightly further than this, and
+include both arbitrary (type-level) numeric expressions in code, as
+well as type constraints. For example, if we have a function that
+takes two bitvectors as arguments, then there are several ways we
+could compute the sum of their lengths.
+
+[source,sail]
+----
+val f : forall 'n 'm. (bits('n), bits('m)) -> unit
+
+function f(xs, ys) = {
+  let len = length(xs) + length(ys);
+  let len = 'n + 'm;
+  let len = sizeof('n + 'm);
+  ()
+}
+----
+
+Note that the second line is equivalent to
+
+[source,sail]
+----
+  let len = sizeof('n) + sizeof('n)
+----
+
+There is also the `constraint` keyword, which takes a type-level
+constraint and allows it to be used as a boolean expression, so we
+could write:
+
+[source,sail]
+----
+function f(xs, ys) = {
+  if constraint('n <= 'm) {
+    // Do something
+  }
+}
+----
+
+rather than the equivalent test `length(xs){nbsp}\<={nbsp}length(ys)`.
+This way of writing expressions can be succinct, and can also make it
+very explicit what constraints will be generated during flow typing.
+However, all the constraint and sizeof definitions must be re-written
+to produce executable code, which can result in the generated theorem
+prover output diverging (in appearance) somewhat from the source
+input. In general, it is probably best to use `sizeof` and
+`constraint` sparingly on type variables.
+
+One common use for sizeof however, is to lower type-level integers
+down to the value level, for example:
+
+[source,sail]
+----
+// xlen is a type of kind 'Int'
+type xlen : Int = 64
+
+val f : int -> unit
+
+function xlen_example() = {
+  let v = sizeof(xlen);
+  f(v)
+}
+----
+
 === Exceptions
 :exn: sail_doc/exn.json
 
@@ -279,7 +1010,9 @@ appear in vendor ISA pseudocode (they are a feature in Arm's ASL
 language), and such code would be very difficult to translate into
 Sail if Sail did not itself support exceptions. We already translate
 Sail to monadic theorem prover code, so working with a monad that
-supports exceptions is fairly natural.
+supports exceptions is fairly natural. In practice Sail language-level
+exceptions end up being quite a nice tool for implementing processor
+exceptions in ISA specifications.
 
 For exceptions we have two language features: `throw` statements
 and `try`--`catch` blocks. The throw keyword takes a value of
@@ -293,3 +1026,72 @@ would be in OCaml, for example:
 ----
 include::sail:EXN[from=exn,type=span]
 ----
+
+=== Scattered Definitions
+:sdef: sail_doc/scattered.json
+
+In a Sail specification, sometimes it is desirable to collect together
+the definitions relating to each machine instruction (or group
+thereof), e.g.~grouping the clauses of an AST type with the associated
+clauses of decode and execute functions, as in
+the <<A tutorial RISC-V style example>> section.
+Sail permits this with syntactic sugar for `scattered' definitions.
+Functions, mappings, unions, and enums can be scattered.
+
+One begins a scattered definition by declaring the name and kind
+(either function or union) of the scattered definition, e.g.
+
+sail::DECS[type=span,from=sdef]
+
+This is then followed by _clauses_ for either, which can be freely
+interleaved with other definitions. It is common to define both a
+scattered type (either union or enum), with a scattered function that
+operates on newly defined clauses of that type, as is shown below:
+
+sail::CLAUSES[type=span,from=sdef]
+
+Finally the scattered definitions are ended with the `end` keyword, like so:
+
+sail::ENDS[type=span,from=sdef]
+
+Technically the `end` keyword is not required, but it is good practice
+to include it as it informs Sail that the clauses are now complete,
+which forbids new clauses and means subsequent pattern completeness
+checks no longer have to require extra wildcards to account for new
+clauses being added.
+
+Semantically, scattered definitions for types appear at the start of
+their definition (note however, that this does not mean that a module
+that requires just the start `scattered union` definition can access
+any constructors of a union defined in modules it does not require).
+Scattered definitions for functions and mappings appear at the
+end. A scattered function definition can be recursive, but mutually
+recursive scattered function definitions should be avoided.
+
+=== Preludes and Default Environment
+
+By default Sail has almost no built-in types or functions, except for
+the primitive types described in this Chapter. This is because
+different vendor-pseudocodes have varying naming conventions and
+styles for even the most basic operators, so we aim to provide
+flexibility and avoid committing to any particular naming convention or
+set of built-ins. However, each Sail backend typically implements
+specific external names, so for a PowerPC ISA description one might
+have:
+
+[source,sail]
+----
+val EXTZ = "zero_extend" : ...
+----
+
+while for ARM, to mimic ASL, one would have
+
+[source,sail]
+----
+val ZeroExtend = "zero_extend" : ...
+----
+
+where each backend knows about the `"zero_extend"` external name, but
+the actual Sail functions are named appropriately for each vendor's
+pseudocode. As such each ISA spec written in Sail tends to have its
+own prelude.

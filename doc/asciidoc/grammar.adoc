@@ -1,0 +1,41 @@
+This appendix contains a grammar for the Sail language that is
+automatically generated from the
+https://gallium.inria.fr/~fpottier/menhir[Menhir] parser definition.
+
+NOTE: This means that the grammar is stated in such a way that the
+parser generator can see it is free of LR shift/reduce and
+reduce/reduce conflicts, rather than being optimised for human
+readability.
+
+First, we need some lexical conventions:
+
+* `ID` is any valid Sail identifier
+
+* `OPERATOR` is any valid Sail operator, as defined in <<Operators>>.
+
+* `TYPE_VARIABLE` is a valid Sail identifier with a leading single quote `'`.
+
+* `NUMBER` is a non-empty sequence of decimal digits `[0-9]+`.
+
+* `HEXADECIMAL_LITERAL` is `0x[A-Ba-f0-9_]+`
+
+* `BINARY_LITERAL` is `0b[0-1_]+`
+
+* `STRING_LITERAL` is a Sail string literal.
+
+`$[ATTRIBUTE]` and `$LINE_DIRECTIVE` represent attributes and single
+line directives. Examples of line directives would be things like
+`$include`, `$ifdef` and so on. These start with a leading `$`, are
+followed by the directive name (which follows the same lexical rules
+as a Sail identifier), is followed by one or more spaces, then
+proceeds to the end of the line, with everything between the
+identifier and the line ending being the line directive's argument
+(with leading and trailing whitespace removed). An attribute starts
+with `$[` and ends with `]`, and in between consists of an attribute
+name, followed by at least one whitespace character, then any
+arbitrary sequence of characters that does not contain `]`.
+
+[source,sail]
+----
+include::parser.txt[]
+----

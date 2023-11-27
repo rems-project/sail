@@ -677,6 +677,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           | DEF_pragma ("span", arg, _) when arg = "end" -> begin
               match !current_span with
               | Some (name, start_l) ->
+                  current_span := None;
                   let end_l = def_annot.loc in
                   begin
                     match (Reporting.simp_loc start_l, Reporting.simp_loc end_l) with

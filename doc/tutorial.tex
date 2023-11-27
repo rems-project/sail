@@ -790,7 +790,17 @@ must be valid identifiers.
 The following example creates a bitfield type called \ll{cr} and a
 register \ll{CR} of that type.
 
-\lstinputlisting{examples/bitfield.sail}
+\begin{lstlisting}
+bitfield cr : bitvector(8,dec) = {
+  CR0 : 7 .. 4,
+  LT  : 7,
+  GT  : 6,
+  CR1 : 3 .. 2,
+  CR3 : 1 .. 0
+}
+
+register CR : cr
+\end{lstlisting}
 
 A bitfield definition creates a wrapper around a bit vector type, and
 generates getters and setters for the fields. For the setters, it is
