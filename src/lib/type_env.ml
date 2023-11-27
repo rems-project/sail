@@ -223,6 +223,15 @@ let end_module env = { env with current_module = global_scope; opened = IntSet.e
 
 let open_all_modules env = { env with open_all = true }
 
+type module_state = int * IntSet.t
+
+let with_global_scope env =
+  let current_module = env.current_module in
+  let opened = env.opened in
+  (open_all_modules (end_module env), (current_module, opened))
+
+let restore_scope (current_module, opened) env = { env with current_module; opened; open_all = false }
+
 let empty =
   {
     global = empty_global_env;
