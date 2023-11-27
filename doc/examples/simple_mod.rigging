@@ -1,0 +1,8 @@
+A {
+  files amod.sail
+}
+
+B {
+  requires A
+  files bmod.sail
+}

@@ -19,8 +19,8 @@ and `riscv_vmem.sail` describe the physical and virtual memory
 interaction, and then `riscv_sys.sail` and `riscv.sail`
 implement most of the specification.
 
-For more complex projects, one can use `$include` statements in
-Sail source, for example:
+One can use also use `$include` directives in Sail source, for
+example:
 [source,sail]
 ----
 $include <library.sail>
@@ -35,9 +35,23 @@ file containing the `$include`. The space after the `$include` before
 the filename is mandatory. Sail also supports `$define`, `$ifdef`, and
 `$ifndef` for basic conditional compilation. These are things that are
 understood by Sail itself, not a separate preprocessor, and are
-handled after the AST is parsed{blank}footnote:[This can affect precedence
-declarations for custom user defined operators -- the precedence must
-be redeclared in the file you are including the operator into.].
+handled after the AST is parsed.
+
+For more complex projects, a module hierarchy can be defined. See the
+<<Modules>> section for details.
+
+=== Sail options
+
+For command line arguments, by default Sail accepts arguments of
+the form `&#8209;long_opt`, i.e. leading with a single `-` and words
+separated by `_`. For those who find this departure from standard
+convention distasteful, you can define the `SAIL_NEW_CLI` environment
+variable, and all such options will be formatted as
+`&#8209;&#8209;long&#8209;opt` (short opts like `&#8209;o` will remain
+unchanged). For backwards compatibility reasons, this default is hard
+to change.
+
+For a list of all options, one can call Sail as `sail -help`.
 
 <<<
 === C compilation
@@ -72,11 +86,49 @@ There are several Sail options that affect the C output:
 
 * `-c_include` Supply additional header files to be included in the
     generated C.
-    
+
 * `-c_no_main` Do not generate a `main()` function.
 
 * `-static` Mark generated C functions as static where possible. This
     is useful for measuring code coverage.
+
+<<<
+=== SystemVerilog compilation (Experimental)
+
+CAUTION: This feature is new and experimental, so it is not guaranteed
+to provide working SystemVerilog. Furthermore, it is intended for
+hardware model checking against a hand-written design. Sail is not a
+hardware description language!
+
+To compile Sail into SystemVerilog, the `-sv` option is used. The `-o`
+option provides a prefix that is used on the various generated files.
+
+There are several options for the SystemVerilog output:
+
+* `-sv_output_dir` Generate all files in the specified directory
+
+* `-sv_include` Add an include directive to the generated SystemVerilog
+
+* `-sv_verilate` Can be used as either `-sv_verilate run` or
+  `-sv_verilate compile`. If used Sail will automatically invoke
+  https://www.veripool.org/verilator/[verilator] on the generated
+  SystemVerilog
+
+
+* `-sv_lines` Output SystemVerilog `line directives to aid debugging.
+
+* `-sv_int_size` Set the maximum integer size allowed in the specification.
+
+* `-sv_bits_size` Bound the maximum bitvector width on the generated SystemVerilog.
+
+* `-sv_specialize` The `-sv_specialize n` option will perform `n`
+  rounds of specialisation on the Sail code before generating
+  SystemVerilog. This will make bitvectors more monomorphic, but at
+  the cost of code duplication.
+
+The are various other options that control various minutae about the
+generated SystemVerilog, see `sail -help` for more details.
+
 
 <<<
 === Automatic formatting (Experimental)

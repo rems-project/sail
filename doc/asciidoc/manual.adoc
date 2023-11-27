@@ -6,7 +6,9 @@
 = The Sail instruction-set semantics specification language
 Alasdair Armstrong; Thomas Bauereiss; Brian Campbell; Shaked Flur; Kathryn E. Gray; Robert Norton-Wright; Christopher Pulte; Peter Sewell
 :title-logo-image: image:../../etc/logo/sail_logo_square.svg[top=25%,align=center,pdfwidth=2in]
-:toc:
+:docinfo: shared
+:toc: left
+:stylesheet: manual.css
 
 == Introduction
 
@@ -23,6 +25,14 @@ include::usage.adoc[]
 == The Sail Language
 
 include::language.adoc[]
+
+== Modular Sail Specifications
+
+include::modules.adoc[]
+
+== The Sail Grammar
+
+include::grammar.adoc[]
 
 == References
 

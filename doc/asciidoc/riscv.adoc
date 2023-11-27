@@ -2,7 +2,7 @@
 
 We introduce the basic features of Sail via a small example from our
 RISC-V model that includes just two instructions: add immediate and
-load double. We start by defining the default order (see \ref{sec:vec}
+load double. We start by defining the default order (see <<Vectors>>
 for details), and including the Sail prelude:
 
 sail::PREAMBLE[from=riscv-code,type=span,trim]

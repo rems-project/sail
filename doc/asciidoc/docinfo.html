@@ -1,0 +1,23 @@
+<style>
+#toc img.logo {
+  width: 100px;
+  height: 100px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 10px;
+  display: block;
+}
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    var image = document.createElement('img')
+    image.setAttribute('src', '../../etc/logo/sail_logo_square.png')
+    image.setAttribute('alt', 'Sail Logo')
+    image.classList.add('logo')
+    var toc = document.querySelector('#toc')
+    if (toc) {
+      toc.insertAdjacentElement('afterbegin', image)
+    }
+  });
+</script>

@@ -1,0 +1,30 @@
+variable ARCH = A64
+variable ARCH_MODULES = if ARCH == A64 then arch64_only else []
+
+arch_prelude {
+  files
+    prelude.sail,
+    if $ARCH == A32 then arch_xlen32.sail
+    else if $ARCH == A64 then [
+      arch_xlen64.sail,
+      arch_xlen64_helpers.sail
+    ] else error("Invalid value for ARCH")
+}
+
+arch64_only {
+  requires arch_prelude
+  files
+    instructions64.sail
+}
+
+arch_instructions {
+  requires arch_prelude
+  files
+    instructions.sail
+}
+
+arch_end {
+  requires arch_instructions, $ARCH_MODULES
+  files
+    end.sail
+}
