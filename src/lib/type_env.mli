@@ -101,6 +101,15 @@ val end_module : t -> t
 (** This effectively disables all module related access control *)
 val open_all_modules : t -> t
 
+type module_state
+
+(** This is the same as end_module and open_all_modules, except it
+    returns the module state so it can be restored with
+    restore_scope. *)
+val with_global_scope : t -> t * module_state
+
+val restore_scope : module_state -> t -> t
+
 val freshen_bind : t -> typquant * typ -> typquant * typ
 
 val get_default_order : t -> order

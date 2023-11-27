@@ -4544,9 +4544,16 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
  fun n total env defs ->
   let rec aux n total acc env defs =
     match defs with
-    | [] -> (List.rev acc, Env.open_all_modules env)
+    | [] -> (List.rev acc, env)
     | (DEF_aux (_, def_annot) as def) :: defs ->
         Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
+        let env, restore =
+          if Option.is_some (get_def_attribute "global" def_annot) then (
+            let env, state = Env.with_global_scope env in
+            (env, Env.restore_scope state)
+          )
+          else (env, fun env -> env)
+        in
         let def, env =
           match get_def_attribute "fix_location" def_annot with
           | Some (fix_l, _) -> (
@@ -4554,7 +4561,7 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
             )
           | None -> check_def env def
         in
-        aux (n + 1) total (List.rev def @ acc) env defs
+        aux (n + 1) total (List.rev def @ acc) (restore env) defs
   in
   aux n total [] env defs
 
@@ -4567,7 +4574,7 @@ let check : Env.t -> uannot ast -> tannot ast * Env.t =
  fun env ast ->
   let total = List.length ast.defs in
   let defs, env = check_defs_progress 1 total env ast.defs in
-  ({ ast with defs }, env)
+  ({ ast with defs }, Env.open_all_modules env)
 
 let rec check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list =
  fun env defs ->

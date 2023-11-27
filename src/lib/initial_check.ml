@@ -1499,6 +1499,9 @@ let undefined_builtin_val_specs =
     extern_of_string (mk_id "undefined_unit") "unit -> unit";
   ]
 
+let make_global (DEF_aux (def, def_annot)) =
+  DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" "" def_annot)
+
 let generate_undefineds vs_ids defs =
   let undefined_builtins =
     if !have_undefined_builtins then []
@@ -1608,11 +1611,12 @@ let generate_undefineds vs_ids defs =
     undefined_union id typq tus
   in
   let rec undefined_defs = function
-    | (DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def) :: defs -> (def :: undefined_td td_aux) @ undefined_defs defs
+    | (DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def) :: defs ->
+        (def :: List.map make_global (undefined_td td_aux)) @ undefined_defs defs
     (* The function definition must come after the scattered type definition is complete, so put it at the end. *)
     | (DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), _)), _) as def) :: defs ->
         let vs, fn = undefined_scattered id typq in
-        (def :: vs :: undefined_defs defs) @ [fn]
+        (def :: make_global vs :: undefined_defs defs) @ [make_global fn]
     | (DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (_, id, typq, fields), _)), _) as def) :: defs
       when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
         let pat =
@@ -1626,7 +1630,7 @@ let generate_undefineds vs_ids defs =
                 (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
             ]
         in
-        def :: vs :: fn :: undefined_defs defs
+        def :: make_global vs :: make_global fn :: undefined_defs defs
     | def :: defs -> def :: undefined_defs defs
     | [] -> []
   in
@@ -1661,7 +1665,7 @@ let generate_initialize_registers vs_ids defs =
           ];
       ]
   in
-  defs @ initialize_registers
+  defs @ List.map make_global initialize_registers
 
 let generate_enum_functions vs_ids defs =
   let rec gen_enums acc = function
