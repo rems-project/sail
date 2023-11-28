@@ -123,6 +123,8 @@ let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fu
   targets := StringMap.add name tgt !targets;
   tgt
 
+let empty_action _ _ _ _ _ _ = ()
+
 let get_the_target () = match !the_target with Some name -> StringMap.find_opt name !targets | None -> None
 
 let get ~name = StringMap.find_opt name !targets

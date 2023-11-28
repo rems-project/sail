@@ -333,7 +333,7 @@ let rec options =
       ("--help", Arg.Unit (fun () -> help !options), " display this list of options");
     ]
 
-let register_default_target () = Target.register ~name:"default" (fun _ _ _ _ _ _ -> ())
+let register_default_target () = Target.register ~name:"default" Target.empty_action
 
 let run_sail (config : Yojson.Basic.t option) tgt =
   Target.run_pre_parse_hook tgt ();
