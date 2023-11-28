@@ -1,5 +1,5 @@
 === Modules
-:simplemod: sail_doc/simple_mod.json
+:simplemod: module_sail_doc/simple_mod.json
 
 Sail provides support for organizing large specifications into
 _modules_. Modules provide an access control mechanism, meaning a Sail
@@ -30,7 +30,7 @@ We can use the following rigging file:
 .`simple_mod.rigging`
 [source]
 ----
-include::../examples/simple_mod.rigging[]
+include::module_sail_doc/simple_mod.rigging[]
 ----
 This file defines two modules `A` and `B`, with module `A` containing
 the file `amod.sail` and module B containing the file `bmod.sail`.

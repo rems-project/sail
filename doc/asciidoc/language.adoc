@@ -316,7 +316,7 @@ sail::multi_line[from=strings,type=function,part=body,dedent]
 
 === Pattern Matching
 :pattern-match: sail_doc/pattern_matching.json
-:cannot-wildcard: custom_sail_doc/cannot_wildcard.json
+:cannot-wildcard: sail_doc/cannot_wildcard.json
 
 Like most functional languages, Sail supports pattern matching via the
 `match` keyword. For example:
@@ -484,7 +484,7 @@ include::sailcomment:cannot_wildcard[from=cannot-wildcard]
 In this case Sail will print a warning explaining the problem:
 [source]
 ----
-include::custom_sail_doc/cannot_wildcard_warning[]
+include::sail_doc/cannot_wildcard.warning[]
 ----
 This warning should be heeded, and the match simplified otherwise the
 generated theorem prover definitions produced by Sail may be rejected

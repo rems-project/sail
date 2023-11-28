@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean docker test core-tests c-tests
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests
 
 all: sail
 
@@ -15,6 +15,9 @@ coverage:
 
 clean:
 	dune clean
+
+asciidoc:
+	$(MAKE) -C doc/asciidoc
 
 docker:
 	docker build --tag sail:0.1 .
