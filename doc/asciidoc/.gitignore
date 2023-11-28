@@ -1,0 +1,12 @@
+sail_doc/
+lib_sail_doc/
+module_sail_doc/
+
+manual.html
+
+*.pdf
+*.log
+*.aux
+*.png
+
+parser.txt

@@ -12,18 +12,18 @@ SAIL_DOCS += sail_doc/string.json
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
 SAIL_DOCS += module_sail_doc/cond.rigging
-SAIL_DOCS += custom_sail_doc/cannot_wildcard.json
+SAIL_DOCS += sail_doc/cannot_wildcard.json
 SAIL_DOCS += lib_sail_doc/concurrency_interface/read_write.json
 
 TIKZ_FIGURES = ordering-tikz.png
 
-EXTRAS = ../examples/simple_mod.rigging
+INCS = module_sail_doc/simple_mod.rigging
 
-default: manual.pdf
+all: manual.html manual.pdf
 
 sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
-	sail -doc -doc_file $< -doc_embed plain -doc_bundle $(notdir $@) $<
+	sail -no_color -doc -doc_file $< -doc_embed plain -doc_bundle $(notdir $@) $< 2> $(basename $@).warning
 
 lib_sail_doc/%.json: ../../lib/%.sail
 	mkdir -p lib_sail_doc
@@ -42,15 +42,14 @@ module_sail_doc/%.error: ../examples/%.rigging $$(shell sail ../examples/%.riggi
 
 module_sail_doc/%.rigging: ../examples/%.rigging
 	mkdir -p module_sail_doc
-	sail $< -list_files
+	sail $< -list_files 1>/dev/null
 	cp $< $@
 
-custom_sail_doc/cannot_wildcard.json: ../examples/cannot_wildcard.sail
-	mkdir -p custom_sail_doc
-	sail -no_color -doc -doc_file $< -doc_embed plain -doc_bundle $(notdir $@) -o custom_sail_doc 2> custom_sail_doc/cannot_wildcard_warning $<
-
-ordering-tikz.pdf: latex/ordering.tex
+ordering-tikz.pdf: latex_figures/ordering.tex
 	pdflatex --jobname=ordering-tikz $<
+
+sail_logo_square.png: ../../etc/logo/sail_logo_square.png
+	cp $< $@
 
 %.png: %.pdf
 	pdftoppm -r 300 -png $< > $@
@@ -59,14 +58,17 @@ parser.txt: ../../src/lib/parser.mly parser.sed
 	obelisk -i $< | tr '\n' '+' | sed 's/+[ ][ ]*\([^| ]\)/ \1/g' | tr '+' '\n' > $@
 	sed -i.bak -f parser.sed $@
 
-manual.pdf: *.adoc $(SAIL_DOCS) $(EXTRAS) $(TIKZ_FIGURES) parser.txt
+manual.pdf: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt
 	asciidoctor-pdf manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
-manual.html: *.adoc $(SAIL_DOCS) $(EXTRAS) $(TIKZ_FIGURES) parser.txt manual.css
+manual.html: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt manual.css sail_logo_square.png
 	asciidoctor manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
 .PHONY: clean
 clean:
+	-rm -rf sail_doc/
+	-rm -rf lib_sail_doc/
+	-rm -rf module_sail_doc/
 	-rm *.pdf
 	-rm *.png
 	-rm *.log

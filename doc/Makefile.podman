@@ -1,0 +1,30 @@
+# Containerised documentation builds using podman
+
+# Note that commands in this Makefile should be run from the root
+# directory with 'make -f doc/Makefile.podman <target>'
+
+asciidoc-image: doc/Dockerfile
+	podman build . --file doc/Dockerfile --iidfile asciidoc-image
+
+asciidoc-container: asciidoc-image
+	podman run -d $(shell cat asciidoc-image) > asciidoc-container
+
+asciidoc-manual.html: asciidoc-container
+	podman cp $(shell cat asciidoc-container):/sail/doc/asciidoc/manual.html asciidoc-manual.html
+	podman stop $(shell cat asciidoc-container)
+	podman rm $(shell cat asciidoc-container)
+	rm asciidoc-container
+
+asciidoc-manual.pdf: asciidoc-container
+	podman cp $(shell cat asciidoc-container):/sail/doc/asciidoc/manual.pdf asciidoc-manual.pdf
+	podman stop $(shell cat asciidoc-container)
+	podman rm $(shell cat asciidoc-container)
+	rm asciidoc-container
+
+clean:
+	-rm asciidoc-image
+	-rm asciidoc-container
+	-rm asciidoc-manual.html
+	-rm asciidoc-manual.pdf
+	-rm Dockerfile.doc
+	@echo "Can use: \"podman system prune --all --force && podman rmi --all\" to remove all images"
