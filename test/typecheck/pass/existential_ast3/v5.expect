@@ -3,13 +3,13 @@
 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m                                                  [91m^-------------^[0m
   [91m |[0m range(0, 63) is not a subtype of range(0, ('datasize - 2))
-  [91m |[0m as (0 <= 'ex348 & 'ex348 <= ('datasize - 2)) could not be proven
+  [91m |[0m as (0 <= 'ex356 & 'ex356 <= ('datasize - 2)) could not be proven
   [91m |[0m 
-  [91m |[0m type variable 'ex348:
+  [91m |[0m type variable 'ex356:
   [91m |[0m [96mpass/existential_ast3/v5.sail[0m:37.10-33:
   [91m |[0m 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m   [92m |[0m          [92m^---------------------^[0m [92mderived from here[0m
   [91m |[0m [96mpass/existential_ast3/v5.sail[0m:37.50-65:
   [91m |[0m 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m   [93m |[0m                                                  [93m^-------------^[0m [93mbound here[0m
-  [91m |[0m   [93m |[0m has constraint: (0 <= 'ex348 & 'ex348 <= 63)
+  [91m |[0m   [93m |[0m has constraint: (0 <= 'ex356 & 'ex356 <= 63)

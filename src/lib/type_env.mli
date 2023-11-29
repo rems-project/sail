@@ -120,6 +120,7 @@ val add_val_spec : ?in_module:Project.mod_id -> ?ignore_duplicate:bool -> id -> 
 val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val define_val_spec : id -> t -> t
 val get_defined_val_specs : t -> IdSet.t
+val get_val_spec_opt : id -> t -> ((typquant * typ) * l) option
 val get_val_spec : id -> t -> typquant * typ
 val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ

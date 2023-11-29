@@ -193,7 +193,7 @@ let get_item_with_loc get_loc l env item =
     | Some proj -> typ_raise l (err_not_in_scope env None (get_loc item.loc) item)
   )
 
-let get_item env item = get_item_with_loc (fun l -> Some l) env item
+let get_item l env item = get_item_with_loc (fun l -> Some l) l env item
 
 let hd_opt = function x :: _ -> Some x | [] -> None
 
@@ -899,21 +899,29 @@ let get_val_spec_orig id env =
   try get_item (id_loc id) env (Bindings.find id env.global.val_specs)
   with Not_found -> typ_error (id_loc id) ("No type signature found for " ^ string_of_id id)
 
+let get_val_spec_opt id env =
+  match Bindings.find_opt id env.global.val_specs with
+  | Some item ->
+      let bind = get_item (id_loc id) env item in
+      typ_debug
+        ( lazy
+          ("get_val_spec: Env has "
+          ^ string_of_list ", "
+              (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
+              (KBindings.bindings env.typ_vars)
+          )
+          );
+      let bind' =
+        List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+      in
+      typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
+      Some (bind', item.loc)
+  | None -> None
+
 let get_val_spec id env =
-  try
-    let bind = get_item (id_loc id) env (Bindings.find id env.global.val_specs) in
-    typ_debug
-      ( lazy
-        ("get_val_spec: Env has "
-        ^ string_of_list ", "
-            (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
-            (KBindings.bindings env.typ_vars)
-        )
-        );
-    let bind' = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
-    typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
-    bind'
-  with Not_found -> typ_error (id_loc id) ("No type declaration found for " ^ string_of_id id)
+  match get_val_spec_opt id env with
+  | Some (bind, _) -> bind
+  | None -> typ_error (id_loc id) ("No type declaration found for " ^ string_of_id id)
 
 let get_val_specs env = filter_items env env.global.val_specs
 
