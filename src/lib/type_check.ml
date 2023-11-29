@@ -4073,8 +4073,14 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
   in
   typ_print (lazy ("\n" ^ Util.("Check function " |> cyan |> clear) ^ string_of_id id));
   let have_val_spec, (quant, typ), env =
-    try (true, Env.get_val_spec id env, env) with
-    | Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope)) ->
+    match Env.get_val_spec_opt id env with
+    | Some (bind, l) -> (Some l, bind, env)
+    | None ->
+        (* No val, so get the function type from annotations attached to clauses *)
+        let bind = infer_funtyp l env tannotopt funcls in
+        (None, bind, env)
+    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope)) ->
+        (* If we defined the function type with val in another module, but didn't require it. *)
         typ_raise l
           (Err_not_in_scope
              ( Some "Cannot infer type of function as it has a defined type already. However, this type is not in scope.",
@@ -4083,18 +4089,24 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
                into_scope
              )
           )
-    | Type_error (l, _) ->
-        let quant, typ = infer_funtyp l env tannotopt funcls in
-        (false, (quant, typ), env)
   in
   let vtyp_args, vtyp_ret, vl =
     match typ with
     | Typ_aux (Typ_fn (vtyp_args, vtyp_ret), vl) -> (vtyp_args, vtyp_ret, vl)
-    | _ -> typ_error l "Function val spec is not a function type"
+    | _ ->
+        (* This could be the case if the val had a bidirectional type *)
+        let err_l = Option.fold ~none:l ~some:(fun val_l -> Hint ("val here", val_l, l)) have_val_spec in
+        typ_error err_l "function does not have a function type"
   in
   check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
-  let funcl_env = Env.add_typquant l quant env in
+  let funcl_env =
+    if Option.is_some have_val_spec then Env.add_typquant l quant env
+    else
+      (* If we don't have a val spec, add it to funcl_env so we can
+         handle recursive calls *)
+      env |> Env.add_val_spec id (quant, typ) |> Env.add_typquant l quant
+  in
   let recopt =
     match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
@@ -4104,10 +4116,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
         Rec_aux (Rec_measure (tpat, texp), l)
   in
   let vs_def, env =
-    if not have_val_spec then (
-      let typ = Typ_aux (Typ_fn (vtyp_args, vtyp_ret), vl) in
-      ([synthesize_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env)
-    )
+    if Option.is_none have_val_spec then ([synthesize_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in

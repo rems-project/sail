@@ -3,13 +3,13 @@
 36[96m |[0m    if is_64 then 64 else 32;
   [91m |[0m                  [91m^^[0m
   [91m |[0m int(64) is not a subtype of {('d : Int), (('is_64 & 'd == 63) | (not('is_64) & 'd == 32)). int('d)}
-  [91m |[0m as (('is_64 & 'ex342 == 63) | (not('is_64) & 'ex342 == 32)) could not be proven
+  [91m |[0m as (('is_64 & 'ex350 == 63) | (not('is_64) & 'ex350 == 32)) could not be proven
   [91m |[0m 
-  [91m |[0m type variable 'ex342:
+  [91m |[0m type variable 'ex350:
   [91m |[0m [96mpass/existential_ast3/v4.sail[0m:35.18-79:
   [91m |[0m 35[96m |[0m  let 'datasize : {'d, ('is_64 & 'd == 63) | (not('is_64) & 'd == 32). int('d)} =
   [91m |[0m   [92m |[0m                  [92m^-----------------------------------------------------------^[0m [92mderived from here[0m
   [91m |[0m [96mpass/existential_ast3/v4.sail[0m:36.18-20:
   [91m |[0m 36[96m |[0m    if is_64 then 64 else 32;
   [91m |[0m   [93m |[0m                  [93m^^[0m [93mbound here[0m
-  [91m |[0m   [93m |[0m has constraint: 64 == 'ex342
+  [91m |[0m   [93m |[0m has constraint: 64 == 'ex350
