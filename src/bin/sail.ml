@@ -87,21 +87,39 @@ let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
 
-(* Allow calling all options as either -foo_bar or -foo-bar. If
-   !opt_new_cli is set we force --foo for long options and -f for
-   short options. *)
+let non_canonical_spec ~flag ~canonical_flag spec =
+  if !opt_new_cli then (
+    let explanation = Printf.sprintf "Old style flag %s, use %s instead" flag canonical_flag in
+    Arg.Tuple [Arg.Unit (fun () -> Reporting.warn "Old style flag" Parse_ast.Unknown explanation); spec]
+  )
+  else spec
+
+(* Allow calling all options as either -foo_bar, -foo-bar, or
+   --foo-bar (for long options). The standard long-opt version
+   --foo-bar is treated as the canonical choice. If !opt_new_cli is
+   set we warn for any non-canonical options. *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts ->
-      if !opt_new_cli then
-        if flag = "-help" || flag = "--help" then (flag, spec, doc) :: fix_options opts
-        else (
-          let flag = String.map (function '_' -> '-' | c -> c) flag in
-          let flag = if String.length flag > 2 then "-" ^ flag else flag in
-          (flag, spec, doc) :: fix_options opts
-        )
-      else if Option.is_some (String.index_from_opt flag 0 '_') then
-        (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: (flag, spec, doc) :: fix_options opts
-      else (flag, spec, doc) :: fix_options opts
+      if flag = "-help" || flag = "--help" then (flag, spec, doc) :: fix_options opts
+      else (
+        let dash_flag = String.map (function '_' -> '-' | c -> c) flag in
+        let canonical_flag = if String.length flag > 2 then "-" ^ dash_flag else dash_flag in
+        let non_canonical spec =
+          if !opt_new_cli then (
+            let explanation =
+              Printf.sprintf "Old style command line flag %s used, use %s instead" flag canonical_flag
+            in
+            Arg.Tuple [Arg.Unit (fun () -> Reporting.warn "Old style flag" Parse_ast.Unknown explanation); spec]
+          )
+          else spec
+        in
+        if canonical_flag = flag then (flag, spec, doc) :: fix_options opts
+        else if dash_flag = flag then (flag, non_canonical spec, "") :: (canonical_flag, spec, doc) :: fix_options opts
+        else
+          (flag, non_canonical spec, "")
+          :: (dash_flag, non_canonical spec, "")
+          :: (canonical_flag, spec, doc) :: fix_options opts
+      )
   | [] -> []
 
 (* This function does roughly the same thing as Arg.align, except we
