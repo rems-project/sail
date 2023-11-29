@@ -1,6 +1,6 @@
 $option -dmagic_hash
 
-$rigging# variable b = false A {} B { requires if $b then A else [] }
+$project# variable b = false A {} B { requires if $b then A else [] }
 
 $start_module# A
 

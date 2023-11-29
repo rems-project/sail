@@ -4522,7 +4522,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
         ],
         env
       )
-  | DEF_pragma ("rigging#", arg, l) ->
+  | DEF_pragma ("project#", arg, l) ->
       let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
       let proj_defs = Initial_check.parse_project ?inline:start_p ~contents:arg () in
       let proj = Project.initialize_project_structure ~variables:(ref Util.StringMap.empty) proj_defs in

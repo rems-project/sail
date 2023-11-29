@@ -9,5 +9,5 @@
   [91m |[0m 7[96m |[0mlet x : int = 3
   [91m |[0m  [91m |[0m    [91m^[0m [91mdefinition here in A[0m
   [91m |[0m [96mfail/cond_mod.sail[0m:3.34-35:
-  [91m |[0m 3[96m |[0m$rigging# variable b = false A {} B { requires if $b then A else [] }
+  [91m |[0m 3[96m |[0m$project# variable b = false A {} B { requires if $b then A else [] }
   [91m |[0m  [91m |[0m                                  [91m^[0m [91madd 'requires A' within B here[0m

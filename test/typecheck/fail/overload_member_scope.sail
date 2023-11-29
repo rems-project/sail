@@ -8,7 +8,7 @@ $option -dmagic_hash
 // that allows us to cleanly remove optional modules if they overload
 // identifiers.
 
-$rigging# A { } B { requires A } C { requires B }
+$project# A { } B { requires A } C { requires B }
 
 $start_module# A
 

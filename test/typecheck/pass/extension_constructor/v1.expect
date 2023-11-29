@@ -9,5 +9,5 @@
   [91m |[0m 10[96m |[0m  $[extension B] Baz : unit,
   [91m |[0m   [91m |[0m                 [91m^-^[0m [91mdefinition here in B[0m
   [91m |[0m [96mpass/extension_constructor/v1.sail[0m:3.33-34:
-  [91m |[0m 3[96m |[0m$rigging# A { } B { requires A } C { requires A }
+  [91m |[0m 3[96m |[0m$project# A { } B { requires A } C { requires A }
   [91m |[0m  [91m |[0m                                 [91m^[0m [91madd 'requires B' within C here[0m

@@ -14,5 +14,5 @@
   [91m |[0m   [91m |[0m 8[96m |[0munion Foo = {
   [91m |[0m   [91m |[0m  [91m |[0m      [91m^-^[0m [91mdefinition here in A[0m
   [91m |[0m   [91m |[0m [96mpass/extension_constructor/v2.sail[0m:3.33-34:
-  [91m |[0m   [91m |[0m 3[96m |[0m$rigging# A { } B { requires A } C { }
+  [91m |[0m   [91m |[0m 3[96m |[0m$project# A { } B { requires A } C { }
   [91m |[0m   [91m |[0m  [91m |[0m                                 [91m^[0m [91madd 'requires A' within C here[0m

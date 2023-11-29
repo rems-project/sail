@@ -1,6 +1,6 @@
 $option -dmagic_hash
 
-$rigging# A {}
+$project# A {}
 
 default Order dec
 

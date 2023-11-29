@@ -11,13 +11,13 @@ SAIL_DOCS += sail_doc/tuples.json
 SAIL_DOCS += sail_doc/string.json
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
-SAIL_DOCS += module_sail_doc/cond.rigging
+SAIL_DOCS += module_sail_doc/cond.sail_project
 SAIL_DOCS += sail_doc/cannot_wildcard.json
 SAIL_DOCS += lib_sail_doc/concurrency_interface/read_write.json
 
 TIKZ_FIGURES = ordering-tikz.png
 
-INCS = module_sail_doc/simple_mod.rigging
+INCS = module_sail_doc/simple_mod.sail_project
 
 all: manual.html manual.pdf
 
@@ -32,15 +32,15 @@ lib_sail_doc/%.json: ../../lib/%.sail
 
 .SECONDEXPANSION:
 
-module_sail_doc/%.json: ../examples/%.rigging $$(shell sail ../examples/%.rigging -list_files)
+module_sail_doc/%.json: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
 	mkdir -p module_sail_doc
 	sail -doc $(addprefix -doc_file ,$(shell sail $< -list_files)) -doc_embed plain -doc_bundle $(notdir $@) -o module_sail_doc $<
 
-module_sail_doc/%.error: ../examples/%.rigging $$(shell sail ../examples/%.rigging -list_files)
+module_sail_doc/%.error: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
 	mkdir -p module_sail_doc
 	-sail -no_color $< 2> $@
 
-module_sail_doc/%.rigging: ../examples/%.rigging
+module_sail_doc/%.sail_project: ../examples/%.sail_project
 	mkdir -p module_sail_doc
 	sail $< -list_files 1>/dev/null
 	cp $< $@
