@@ -1,6 +1,6 @@
 $option -dmagic_hash
 
-$rigging# variable mods = [A] A {} B { requires $mods }
+$project# variable mods = [A] A {} B { requires $mods }
 
 $start_module# A
 

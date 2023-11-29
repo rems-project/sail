@@ -1,6 +1,6 @@
 $option -dmagic_hash
 
-$rigging# A {} B {}
+$project# A {} B {}
 
 $start_module# A
 

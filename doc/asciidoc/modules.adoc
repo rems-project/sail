@@ -6,10 +6,8 @@ _modules_. Modules provide an access control mechanism, meaning a Sail
 definition in one module cannot access or use definitions provided by
 another module unless it explicitly _requires_ the other module.
 
-The module structure of a Sail specification is specified in a
-separate `.rigging` file (so named because
-https://en.wikipedia.org/wiki/Rigging[rigging] is what supports and
-organizes the sails on a ship).
+The module structure of a Sail project/specification is specified in a
+separate `.sail_project` file.
 
 For a simple example, let's assume we have two Sail files `amod.sail` and
 `bmod.sail`:
@@ -25,12 +23,12 @@ include::sail:ALFA[from=simplemod,type=span]
 ----
 include::sail:BRAVO[from=simplemod,type=span]
 ----
-We can use the following rigging file:
+We can use the following `.sail_project` file:
 
-.`simple_mod.rigging`
+.`simple_mod.sail_project`
 [source]
 ----
-include::module_sail_doc/simple_mod.rigging[]
+include::module_sail_doc/simple_mod.sail_project[]
 ----
 This file defines two modules `A` and `B`, with module `A` containing
 the file `amod.sail` and module B containing the file `bmod.sail`.
@@ -48,24 +46,25 @@ exists as it has already checked module `A`, so it points us at the
 definition and suggests how we could resolve the error by adding the
 requires line we just removed.
 
-When using a rigging file we do not have to pass all the files on the
-command line, so we can invoke Sail simply as
+When using a `.sail_project` file we do not have to pass all the files
+on the command line, so we can invoke Sail simply as
 
 [source,shell]
 ----
-sail simple_mod.rigging
+sail simple_mod.sail_project
 ----
 
 and it will know where to find `amod.sail` and `bmod.sail` relative to
-the location of the rigging file.
+the location of the project file.
 
 A module can have more than one Sail file. These files are processed
 sequentially in the order they are listed. This is exactly like what
 happens when we pass multiple Sail files on the command line without a
-rigging file to define the module structure. A module can therefore be
-thought of as a sequence of Sail files that is treated as a single
-logical unit. As an example, we could add a third module to our above
-file, which is comprised of three Sail files and depends on A and B.
+`.sail_project` file to define the module structure. A module can
+therefore be thought of as a sequence of Sail files that is treated as
+a single logical unit. As an example, we could add a third module to
+our above file, which is comprised of three Sail files and depends on
+A and B.
 
 [source]
 ----
@@ -96,48 +95,48 @@ C {
 ----
 
 If we wanted to we could define `C` in a separate file, rather than
-adding it to our previous file, and pass multiple rigging files to
+adding it to our previous file, and pass multiple project files to
 Sail like so:
 
 [source,shell]
 ----
-sail simple_mod.rigging new_file_with_C.rigging
+sail simple_mod.sail_project new_file_with_C.sail_project
 ----
 
-These will be treated together as a single large rigging file. A use
+These will be treated together as a single large project file. A use
 case might be if you were defining an out-of-tree extension `Xfoo` for
 sail-riscv, you could do something like:
 
 [source,shell]
 ----
-sail sail-riscv/riscv.rigging src/Xfoo.rigging
+sail sail-riscv/riscv.sail_project src/Xfoo.sail_project
 ----
 
-and the modules you define in `Xfoo.rigging` can require modules from
-`riscv.rigging` (and technically also vice-versa, although it makes
-less sense in this example).
+and the modules you define in `Xfoo.sail_project` can require modules
+from `riscv.sail_project`, and also vice-versa, although it makes less
+sense in this example.
 
 === Working with Makefiles
 
 The `-list_files` option can be used to list all the files within a
-rigging file, which allows them to be used in a Makefile prerequisite.
+project file, which allows them to be used in a Makefile prerequisite.
 As an example, to build the module examples in this very manual, we
 use the rule below to generate documentation indexes (which our
-Asciidoctor plugin consumes) for every `.sail` file within a rigging
+Asciidoctor plugin consumes) for every `.sail` file within a project
 file.
 
 [%nowrap,make]
 ----
 .SECONDEXPANSION:
 
-module_sail_doc/%.json: ../examples/%.rigging $$(shell sail ../examples/%.rigging -list_files)
+module_sail_doc/%.json: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
 	mkdir -p module_sail_doc
 	sail -doc $(addprefix -doc_file ,$(shell sail $< -list_files)) -doc_embed plain -doc_bundle $(notdir $@) -o module_sail_doc $<
 ----
 
 === Conditional compilation within modules
 
-We can use _variables_ in our rigging files to control either file
+We can use _variables_ in our project files to control either file
 inclusion within a module or to control whether a module requires
 another or not. A variable can even contain a sequence of modules,
 that can then be used in a require statement, as shown in the
@@ -145,7 +144,7 @@ following example:
 
 [source]
 ----
-include::module_sail_doc/cond.rigging[]
+include::module_sail_doc/cond.sail_project[]
 ----
 
 === Optional and default modules

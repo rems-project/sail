@@ -1,6 +1,6 @@
 $option -dmagic_hash
 
-$rigging# A { } B { requires A } C { requires A }
+$project# A { } B { requires A } C { requires A }
 
 // Module A
 $start_module# A

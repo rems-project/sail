@@ -78,7 +78,7 @@ let opt_print_version = ref false
 let opt_memo_z3 = ref true
 let opt_have_feature = ref None
 let opt_show_sail_dir = ref false
-let opt_rigging_files : string list ref = ref []
+let opt_project_files : string list ref = ref []
 let opt_list_files = ref false
 let opt_variable_assignments : string list ref = ref []
 let opt_config_file : string option ref = ref None
@@ -198,15 +198,15 @@ let rec options =
         " drop to an interactive session after running Sail. Differs from -i in that it does not set up the \
          interpreter in the interactive shell."
       );
-      ( "-rigging",
-        Arg.String (fun file -> opt_rigging_files := !opt_rigging_files @ [file]),
-        "<file> module rigging file"
+      ( "-project",
+        Arg.String (fun file -> opt_project_files := !opt_project_files @ [file]),
+        "<file> sail project file defining module structure"
       );
       ( "-variable",
         Arg.String (fun assignment -> opt_variable_assignments := assignment :: !opt_variable_assignments),
         "<variable=value> assign a module variable to a value"
       );
-      ("-list_files", Arg.Set opt_list_files, " list files used in all module rigging files");
+      ("-list_files", Arg.Set opt_list_files, " list files used in all project files");
       ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
@@ -365,24 +365,29 @@ let file_to_string filename =
 let run_sail (config : Yojson.Basic.t option) tgt =
   Target.run_pre_parse_hook tgt ();
 
-  let rigging_files, frees = List.partition (fun free -> Filename.check_suffix free ".rigging") !opt_free_arguments in
+  let project_files, frees =
+    List.partition (fun free -> Filename.check_suffix free ".sail_project") !opt_free_arguments
+  in
 
   let ast, env, effect_info =
-    match (rigging_files, !opt_rigging_files) with
+    match (project_files, !opt_project_files) with
     | [], [] ->
-        (* If there are no provided rigging files, we concatenate all
+        (* If there are no provided project files, we concatenate all
            the free file arguments into one big blob like before *)
         Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env frees
-    | rigging_files, [] | [], rigging_files ->
+    (* Allows project files from either free arguments via suffix, or
+       from -project, but not both as the ordering between them would
+       be unclear. *)
+    | project_files, [] | [], project_files ->
         let t = Profile.start () in
         let defs =
           List.map
-            (fun rigging_file ->
-              let root_directory = Filename.dirname rigging_file in
-              let contents = file_to_string rigging_file in
-              Project.mk_root root_directory :: Initial_check.parse_project ~filename:rigging_file ~contents ()
+            (fun project_file ->
+              let root_directory = Filename.dirname project_file in
+              let contents = file_to_string project_file in
+              Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents ()
             )
-            rigging_files
+            project_files
           |> List.concat
         in
         let variables = ref Util.StringMap.empty in
@@ -413,8 +418,8 @@ let run_sail (config : Yojson.Basic.t option) tgt =
     | _, _ ->
         raise
           (Reporting.err_general Parse_ast.Unknown
-             "Module rigging files should either be specified with the appropriate option, or as free arguments with \
-              the appropriate extension, but not both!"
+             "Module files (.sail_project) should either be specified with the appropriate option, or as free \
+              arguments with the appropriate extension, but not both!"
           )
   in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
