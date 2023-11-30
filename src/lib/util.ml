@@ -442,6 +442,27 @@ let list_init len f =
   let rec list_init' len f acc = if acc >= len then [] else f acc :: list_init' len f (acc + 1) in
   list_init' len f 0
 
+let levenshtein_distance ?(osa = false) str1 str2 =
+  let dist = Array.make_matrix (String.length str1 + 1) (String.length str2 + 1) 0 in
+
+  for i = 1 to String.length str1 do
+    dist.(i).(0) <- i
+  done;
+  for j = 1 to String.length str2 do
+    dist.(0).(j) <- j
+  done;
+
+  for i = 1 to String.length str1 do
+    for j = 1 to String.length str2 do
+      let subst_cost = if str1.[i - 1] = str2.[j - 1] then 0 else 1 in
+      dist.(i).(j) <- min (min (dist.(i - 1).(j) + 1) (dist.(i).(j - 1) + 1)) (dist.(i - 1).(j - 1) + subst_cost);
+      if osa && i > 1 && j > 1 && str1.[i - 1] = str2.[j - 2] && str1.[i - 2] = str2.[j - 1] then
+        dist.(i).(j) <- min dist.(i).(j) (dist.(i - 2).(j - 2) + 1)
+    done
+  done;
+
+  dist.(String.length str1).(String.length str2)
+
 let termcode n = if !opt_colors then "\x1B[" ^ string_of_int n ^ "m" else ""
 
 let bold str = termcode 1 ^ str
