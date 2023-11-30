@@ -1,0 +1,7 @@
+[93mType error[0m:
+[96mfail/no_function.sail[0m:10.10-17:
+10[96m |[0m  let _ = foo_baz()
+  [91m |[0m          [91m^-----^[0m
+  [91m |[0m No function type found for foo_baz
+  [91m |[0m 
+  [91m |[0m Did you mean foo_bar?

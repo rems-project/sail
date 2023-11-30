@@ -219,6 +219,12 @@ val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> '
 
 val list_init : int -> (int -> 'a) -> 'a list
 
+(** Compute the levenshtein distance between two strings using the
+    Wagner–Fischer algorithm. If [~osa] is true computes the optimal
+    string alignment distance, which is similar but allows swaps as a
+    single action. *)
+val levenshtein_distance : ?osa:bool -> string -> string -> int
+
 (** {2 Files} *)
 
 (** [copy_file src dst] copies file [src] to file [dst]. Only files are supported,
