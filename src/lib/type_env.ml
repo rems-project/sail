@@ -90,7 +90,7 @@ end
 
 module IdPairMap = Map.Make (IdPair)
 
-type ('a, 'b) generic_env_item = { item : 'a; loc : 'b; mod_id : int }
+type ('a, 'b) generic_env_item = { item : 'a; loc : 'b; mod_id : Project.mod_id }
 
 type 'a env_item = ('a, Parse_ast.l) generic_env_item
 
@@ -145,9 +145,9 @@ let empty_global_env =
 
 type env = {
   global : global_env;
-  current_module : int;
+  current_module : Project.mod_id;
   open_all : bool;
-  opened : IntSet.t;
+  opened : Project.ModSet.t;
   locals : (mut * typ) Bindings.t;
   typ_vars : (Ast.l * kind_aux) KBindings.t;
   shadow_vars : int KBindings.t;
@@ -169,7 +169,8 @@ let mk_item_in ~loc:l scope item = { item; loc = l; mod_id = scope }
 let mk_item_in2 ~loc scope_opt env item =
   match scope_opt with Some scope -> mk_item_in ~loc scope item | None -> mk_item ~loc env item
 
-let item_in_scope env item = item.mod_id = env.current_module || IntSet.mem item.mod_id env.opened || env.open_all
+let item_in_scope env item =
+  item.mod_id = env.current_module || Project.ModSet.mem item.mod_id env.opened || env.open_all
 
 let filter_items_with f env bindings =
   Bindings.map (fun item -> f item.item) (Bindings.filter (fun _ item -> item_in_scope env item) bindings)
@@ -201,8 +202,6 @@ type type_variables = Type_internal.type_variables
 
 type t = env
 
-let global_scope = -1
-
 let set_modules proj env = update_global (fun global -> { global with modules = Some proj }) env
 
 let get_module_id_opt env name = Option.bind env.global.modules (fun proj -> Project.get_module_id proj name)
@@ -217,13 +216,13 @@ let start_module ~at:l mod_id env =
       if not (Project.valid_module_id proj mod_id) then
         Reporting.unreachable l __POS__ "start_module got an invalid module id";
       let requires = Project.module_requires proj mod_id in
-      { env with current_module = mod_id; opened = IntSet.of_list (global_scope :: requires) }
+      { env with current_module = mod_id; opened = Project.ModSet.of_list (Project.global_scope :: requires) }
 
-let end_module env = { env with current_module = global_scope; opened = IntSet.empty }
+let end_module env = { env with current_module = Project.global_scope; opened = Project.ModSet.empty }
 
 let open_all_modules env = { env with open_all = true }
 
-type module_state = int * IntSet.t
+type module_state = Project.mod_id * Project.ModSet.t
 
 let with_global_scope env =
   let current_module = env.current_module in
@@ -235,9 +234,9 @@ let restore_scope (current_module, opened) env = { env with current_module; open
 let empty =
   {
     global = empty_global_env;
-    current_module = global_scope;
+    current_module = Project.global_scope;
     open_all = false;
-    opened = IntSet.empty;
+    opened = Project.ModSet.empty;
     locals = Bindings.empty;
     typ_vars = KBindings.empty;
     shadow_vars = KBindings.empty;
@@ -464,7 +463,9 @@ let add_overloads l id ids env =
             global with
             overloads =
               Bindings.add id
-                (mk_item_in global_scope ~loc:(l :: item_loc existing) (get_item_with_loc hd_opt l env existing @ ids))
+                (mk_item_in Project.global_scope ~loc:(l :: item_loc existing)
+                   (get_item_with_loc hd_opt l env existing @ ids)
+                )
                 global.overloads;
           }
         )
@@ -472,7 +473,7 @@ let add_overloads l id ids env =
   | None ->
       update_global
         (fun global ->
-          { global with overloads = Bindings.add id (mk_item_in global_scope ~loc:[l] ids) global.overloads }
+          { global with overloads = Bindings.add id (mk_item_in Project.global_scope ~loc:[l] ids) global.overloads }
         )
         env
 

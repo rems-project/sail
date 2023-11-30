@@ -73,7 +73,15 @@ module ModSet = Util.IntSet
 module ModMap = Util.IntMap
 module ModGraph = Graph.Make (Int)
 
-type mod_id = int
+module ModId = struct
+  type t = int
+
+  let to_int mod_id = mod_id
+end
+
+type mod_id = ModId.t
+
+let global_scope = -1
 
 type l = Lexing.position * Lexing.position
 

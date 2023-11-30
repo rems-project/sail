@@ -4539,7 +4539,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
       ([], Env.set_modules proj env)
   | DEF_pragma ("start_module#", arg, l) ->
       let mod_id = Env.get_module_id ~at:l env arg in
-      typ_print (lazy (Printf.sprintf "module start %d '%s'" mod_id arg));
+      typ_print (lazy (Printf.sprintf "module start %d '%s'" (Project.ModId.to_int mod_id) arg));
       ([], Env.start_module ~at:l mod_id env)
   | DEF_pragma ("end_module#", _, _) -> ([], Env.end_module env)
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
