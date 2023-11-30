@@ -499,7 +499,7 @@ let const_props target ast =
           end
       | E_match (e, cases) -> (
           let e', assigns = const_prop_exp substs assigns e in
-          match can_match e' cases substs assigns with
+          match can_match l e' cases substs assigns with
           | None ->
               let assigned_in =
                 List.fold_left (fun vs pe -> IdSet.union vs (assigned_vars_in_pexp pe)) IdSet.empty cases
@@ -522,7 +522,7 @@ let const_props target ast =
                 re (E_let (LB_aux (LB_val (p, e'), annot), e2')) assigns
               in
               if is_value e' then (
-                match can_match e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
+                match can_match l e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
                 | None -> plain ()
                 | Some (e'', bindings, kbindings) ->
                     let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
@@ -656,7 +656,7 @@ let const_props target ast =
           | _ -> exp_orig
         )
       | _ -> exp_orig
-    and can_match_with_env env (E_aux (e, (l, annot)) as exp0) cases (substs, ksubsts) assigns =
+    and can_match_with_env l env (E_aux (e, (_l, annot)) as exp0) cases (substs, ksubsts) assigns =
       let rec check_exp_pat (E_aux (e, (l, annot)) as exp) (P_aux (p, (l', _)) as pat) =
         match (e, p) with
         | _, P_wild -> DoesMatch ([], [])
@@ -826,9 +826,9 @@ let const_props target ast =
           )
       in
       findpat_generic (string_of_exp exp0) assigns cases
-    and can_match exp =
+    and can_match l exp =
       let env = Type_check.env_of exp in
-      can_match_with_env env exp
+      can_match_with_env l env exp
     in
 
     (const_prop_exp, const_prop_pexp)
