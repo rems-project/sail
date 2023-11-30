@@ -3127,7 +3127,11 @@ module MonoRewrites = struct
         when is_ones ones1 && is_zeros_exp zeros_exp
              && not (is_constant len1 && is_constant_vec_typ env (typ_of zeros_exp)) -> begin
           match get_zeros_exp_len zeros_exp with
-          | Some zlen -> try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [zlen; len1])))
+          | Some zlen ->
+              (* Give the length explicitly rather than relying on the context;
+                 it might not be sufficiently constrained. *)
+              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
         end
       (* ones @ variable *)
