@@ -65,9 +65,24 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-module ModSet = Util.IntSet
+(** Definition of Sail project files, and functions for working with them. *)
 
-type mod_id = int
+(** Module identifiers are just integers, but we don't want to expose
+    that representation to the world. *)
+module ModId : sig
+  type t = private int
+
+  val to_int : t -> int
+end
+
+type mod_id = ModId.t
+
+(** The global scope is for code not defined in any module. *)
+val global_scope : mod_id
+
+module ModSet : sig
+  include Set.S with type elt = mod_id
+end
 
 type l = Lexing.position * Lexing.position
 
