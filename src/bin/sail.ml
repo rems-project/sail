@@ -218,6 +218,7 @@ let rec options =
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
       ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
       ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
+      ("-abstract_types", Arg.Set Initial_check.opt_abstract_types, " (experimental) allow abstract types");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
         Arg.String (fun suffix -> opt_format_backup := Some suffix),

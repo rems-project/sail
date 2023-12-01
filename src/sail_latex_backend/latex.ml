@@ -470,6 +470,7 @@ let process_pragma l command =
       None
 
 let tdef_id = function
+  | TD_abstract (id, _) -> id
   | TD_abbrev (id, _, _) -> id
   | TD_record (id, _, _, _) -> id
   | TD_variant (id, _, _, _) -> id

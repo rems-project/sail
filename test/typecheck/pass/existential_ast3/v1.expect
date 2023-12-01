@@ -3,7 +3,7 @@
 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m                                                [91m^---------------^[0m
   [91m |[0m (int(33), int('ex291)) is not a subtype of (int('ex286), int('ex287))
-  [91m |[0m as ((33 == 32 | 33 == 64) & (0 <= 'ex291 & 'ex291 < 33)) could not be proven
+  [91m |[0m as false could not be proven
   [91m |[0m 
   [91m |[0m type variable 'ex286:
   [91m |[0m [96mpass/existential_ast3/v1.sail[0m:16.23-25:

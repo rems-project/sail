@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/abstract_bool_inconsistent.sail[0m:10.0-17:
+10[96m |[0mconstraint not(b)
+  [91m |[0m[91m^---------------^[0m
+  [91m |[0m Global constraint appears inconsistent with previous global constraints

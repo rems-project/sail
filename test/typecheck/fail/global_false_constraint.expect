@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/global_false_constraint.sail[0m:3.0-16:
+3[96m |[0mconstraint false
+ [91m |[0m[91m^--------------^[0m
+ [91m |[0m Global constraint appears inconsistent with previous global constraints

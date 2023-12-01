@@ -77,6 +77,9 @@ module P = Parse_ast
 (* See mli file for details on what these flags do *)
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
+let opt_abstract_types = ref false
+
+let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -334,7 +337,7 @@ let rec to_ast_typ ctx atyp =
   | P.ATyp_bidir (typ1, typ2, _) -> Typ_aux (Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2), l)
   | P.ATyp_nset nums ->
       let n = Kid_aux (Var "'n", gen_loc l) in
-      Typ_aux (Typ_exist ([mk_kopt ~loc:l K_int n], nc_set n nums, atom_typ (nvar n)), l)
+      Typ_aux (Typ_exist ([mk_kopt ~loc:l K_int n], nc_set (nvar n) nums, atom_typ (nvar n)), l)
   | P.ATyp_tuple typs -> Typ_aux (Typ_tuple (List.map (to_ast_typ ctx) typs), l)
   | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
       Typ_aux (Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int]), l)
@@ -473,10 +476,11 @@ and to_ast_constraint ctx atyp =
                          )
                       )
             end
+        | P.ATyp_id id -> NC_id (to_ast_id ctx id)
         | P.ATyp_var v -> NC_var (to_ast_var v)
         | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
         | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
-        | P.ATyp_in (P.ATyp_aux (P.ATyp_var v, _), P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_var v, bounds)
+        | P.ATyp_in (n, P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_nexp ctx n, bounds)
         | _ -> raise (Reporting.err_typ l "Invalid constraint")
       in
       NC_aux (aux, l)
@@ -1055,6 +1059,17 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
       ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
       )
+  | P.TD_abstract (id, kind) ->
+      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
+      let id = to_ast_reserved_type_id ctx id in
+      begin
+        match to_ast_kind kind with
+        | Some kind ->
+            ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
+              { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
+            )
+        | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
+      end
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
@@ -1329,6 +1344,10 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : uannot def list ctx_
   | P.DEF_register dec ->
       let d = to_ast_dec ctx dec in
       ([DEF_aux (DEF_register d, annot)], ctx)
+  | P.DEF_constraint nc ->
+      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
+      let nc = to_ast_constraint ctx nc in
+      ([DEF_aux (DEF_constraint nc, annot)], ctx)
   | P.DEF_pragma (pragma, arg, ltrim) ->
       let l = pragma_arg_loc pragma ltrim l in
       begin

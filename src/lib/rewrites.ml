@@ -1989,6 +1989,7 @@ let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) = Tu_aux
 
 let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
+  | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
   | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
       TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
   | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, rw_typquant typq, typ_arg), annot)

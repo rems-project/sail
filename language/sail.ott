@@ -266,10 +266,11 @@ n_constraint :: 'NC_' ::=
   | nexp '<=' nexp'                  :: :: bounded_le
   | nexp '<' nexp'                   :: :: bounded_lt
   | nexp != nexp'                    :: :: not_equal
-  | kid 'IN' { num1 , ... , numn }   :: :: set
+  | nexp 'IN' { num1 , ... , numn }  :: :: set
   | n_constraint & n_constraint'     :: :: or
   | n_constraint | n_constraint'     :: :: and
   | id ( typ_arg0 , ... , typ_argn ) :: :: app
+  | id                               :: :: id
   | kid                              :: :: var
   | true                             :: :: true
   | false                            :: :: false
@@ -318,6 +319,8 @@ type_def_aux  :: 'TD_' ::=
     {{ com tagged union type definition}} {{ texlong }}
   | typedef id = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
+  | typedef id : kind :: :: abstract
+    {{ com abstract type }}
   | bitfield id : typ = { id1 : index_range1 , ... , idn : index_rangen } :: :: bitfield
     {{ com register mutable bitfield type definition }} {{ texlong }}
 
@@ -760,6 +763,8 @@ def :: 'DEF_' ::=
   {{ aux _ def_annot }} {{ auxparam 'a }}
   | type_def                                           :: :: type
     {{ com type definition }}
+  | constraint n_constraint                            :: :: constraint
+    {{ com top-level constraint }}
   | fundef                                             :: :: fundef
     {{ com function definition }}
   | mapdef                                             :: :: mapdef

@@ -77,6 +77,10 @@ val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
 
 (** {2 Options} *)
 
+(** Enable abstract types in the AST. If unset, will report an error
+    if they are encountered. *)
+val opt_abstract_types : bool ref
+
 (** Generate faster undefined_T functions. Rather than generating
    functions that allow for the undefined values of enums and variants
    to be picked at runtime using a RNG or similar, this creates

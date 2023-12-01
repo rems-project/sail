@@ -232,7 +232,7 @@ let extract_set_nc env l var nc =
     in
 
     match nc with
-    | NC_set (id, is) when KidSet.mem id vars -> Some (is, re NC_true)
+    | NC_set (Nexp_aux (Nexp_var id, _), is) when KidSet.mem id vars -> Some (is, re NC_true)
     | NC_equal (Nexp_aux (Nexp_var id, _), Nexp_aux (Nexp_constant n, _)) when KidSet.mem id vars ->
         Some ([n], re NC_true)
     | NC_and ((NC_aux (NC_bounded_le (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
@@ -1255,8 +1255,8 @@ let split_defs target all_errors (splits : split_req list) env ast =
     let map_def idx (DEF_aux (aux, def_annot) as def) =
       Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match aux with
-      | DEF_type _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _ | DEF_pragma _
-      | DEF_internal_mutrec _ ->
+      | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _
+      | DEF_pragma _ | DEF_internal_mutrec _ ->
           [def]
       | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
       | DEF_let lb -> [DEF_aux (DEF_let (map_letbind lb), def_annot)]
@@ -2030,16 +2030,12 @@ module Analysis = struct
     | NC_bounded_lt (nexp1, nexp2)
     | NC_not_equal (nexp1, nexp2) ->
         dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
-    | NC_set (kid, _) -> (
-        match KBindings.find kid kid_deps with
-        | deps -> deps
-        | exception Not_found -> Unknown (l, "Unknown type variable in constraint " ^ string_of_kid kid)
-      )
+    | NC_set (nexp, _) -> deps_of_nexp l kid_deps [] nexp
     | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
     | NC_true | NC_false -> dempty
     | NC_app (Id_aux (Id "mod", _), [A_aux (A_nexp nexp1, _); A_aux (A_nexp nexp2, _)]) ->
         dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
-    | NC_var _ | NC_app _ -> dempty
+    | NC_id _ | NC_var _ | NC_app _ -> dempty
 
   and deps_of_typ l kid_deps arg_deps typ = deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
@@ -2397,7 +2393,7 @@ module Analysis = struct
                 let l' = Generated l in
                 let split =
                   match typ_of e1 with
-                  | Typ_aux (Typ_exist ([kdid], NC_aux (NC_set (kid, sizes), _), typ), _)
+                  | Typ_aux (Typ_exist ([kdid], NC_aux (NC_set (Nexp_aux (Nexp_var kid, _), sizes), _), typ), _)
                     when Kid.compare (kopt_kid kdid) kid == 0 -> begin
                       match Type_check.destruct_atom_nexp (env_of e1) typ with
                       | Some nexp when Nexp.compare (nvar kid) nexp == 0 ->
@@ -2412,7 +2408,11 @@ module Analysis = struct
                       begin
                         match
                           Util.find_map
-                            (function NC_aux (NC_set (kid'', is), _) when KidSet.mem kid'' vars -> Some is | _ -> None)
+                            (function
+                              | NC_aux (NC_set (Nexp_aux (Nexp_var kid'', _), is), _) when KidSet.mem kid'' vars ->
+                                  Some is
+                              | _ -> None
+                              )
                             constraints
                         with
                         | Some sizes ->
@@ -2766,7 +2766,7 @@ module Analysis = struct
     let rec sets_from_nc (NC_aux (nc, l) as nc_full) =
       match nc with
       | NC_and (nc1, nc2) -> merge_set_asserts_by_kid (sets_from_nc nc1) (sets_from_nc nc2)
-      | NC_set (kid, is) -> KBindings.singleton kid (l, is)
+      | NC_set (Nexp_aux (Nexp_var kid, _), is) -> KBindings.singleton kid (l, is)
       | NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant n, _)) -> KBindings.singleton kid (l, [n])
       | NC_or _ -> (
           match set_from_nc_or nc_full with
@@ -4659,6 +4659,7 @@ module ToplevelNexpRewrites = struct
       | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
+      | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
       | TD_record (id, typq, typ_ids, flag) ->
           TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)

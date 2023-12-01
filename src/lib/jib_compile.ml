@@ -1154,6 +1154,7 @@ module Make (C : CONFIG) = struct
     | TD_bitfield _ -> Reporting.unreachable l __POS__ "Cannot compile TD_bitfield"
     (* All type abbreviations are filtered out in compile_def  *)
     | TD_abbrev _ -> Reporting.unreachable l __POS__ "Found TD_abbrev in compile_type_def"
+    | TD_abstract _ -> Reporting.unreachable l __POS__ "Abstract type not supported yet"
 
   let generate_cleanup instrs =
     let generate_cleanup' (I_aux (instr, _)) =
@@ -1559,6 +1560,7 @@ module Make (C : CONFIG) = struct
     | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
         Reporting.unreachable (def_loc def) __POS__
           ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def (strip_def def)))
+    | DEF_constraint _ -> Reporting.unreachable (def_loc def) __POS__ "Toplevel constraint not supported"
 
   let mangle_mono_id id ctx ctyps = append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
 

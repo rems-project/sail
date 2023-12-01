@@ -263,6 +263,7 @@ let infer_mapdef_extra_direct_effects def =
 let can_have_direct_side_effect (DEF_aux (aux, _)) =
   match aux with
   | DEF_type _ -> false
+  | DEF_constraint _ -> false
   | DEF_fundef _ -> true
   | DEF_mapdef _ -> false
   | DEF_impl _ -> true

@@ -156,6 +156,7 @@ and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
   let rep_nc = replace_nexp_nc nexp nexp' in
   let rep n = if Nexp.compare n nexp == 0 then nexp' else n in
   match nc_aux with
+  | NC_id id -> NC_aux (NC_id id, l)
   | NC_equal (n1, n2) -> NC_aux (NC_equal (rep n1, rep n2), l)
   | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (rep n1, rep n2), l)
   | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (rep n1, rep n2), l)
@@ -393,8 +394,8 @@ and simp_typ_aux = function
    which is then a problem we can feed to the constraint solver expecting unsat.
 *)
 
-let prove_smt ~assumptions:ncs (NC_aux (_, l) as nc) =
-  match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs) with
+let prove_smt ~abstract ~assumptions:ncs (NC_aux (_, l) as nc) =
+  match Constraint.call_smt l abstract (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat ->
       typ_debug (lazy "unsat");
       true
@@ -406,7 +407,7 @@ let prove_smt ~assumptions:ncs (NC_aux (_, l) as nc) =
          constraints, even when such constraints are irrelevant *)
       let ncs' = List.concat (List.map constraint_conj ncs) in
       let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
-      match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs') with
+      match Constraint.call_smt l abstract (List.fold_left nc_and (nc_not nc) ncs') with
       | Constraint.Unsat ->
           typ_debug (lazy "unsat");
           true
@@ -429,8 +430,9 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
       let env = Env.add_typ_var l (mk_kopt K_int (mk_kid "solve#")) env in
       let vars = Env.get_typ_vars env in
       let _vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
+      let abstract = Env.get_abstract_typs env in
       let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-      Constraint.solve_unique_smt l constr (mk_kid "solve#")
+      Constraint.solve_unique_smt l abstract constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) = "(" ^ file ^ "/" ^ string_of_int line ^ ") "
 
@@ -451,7 +453,7 @@ let prove pos env nc =
       ^ string_of_list ", " string_of_n_constraint ncs
       ^ " |- " ^ string_of_n_constraint nc
       );
-  match nc_aux with NC_true -> true | _ -> prove_smt ~assumptions:ncs nc
+  match nc_aux with NC_true -> true | _ -> prove_smt ~abstract:(Env.get_abstract_typs env) ~assumptions:ncs nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)
@@ -495,8 +497,8 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_and (nc1a, nc1b), NC_and (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_true, NC_true -> true
   | NC_false, NC_false -> true
-  | NC_set (kid1, ints1), NC_set (kid2, ints2) when List.length ints1 = List.length ints2 ->
-      Kid.compare kid1 kid2 = 0 && List.for_all2 (fun i1 i2 -> i1 = i2) ints1 ints2
+  | NC_set (nexp1, ints1), NC_set (nexp2, ints2) when List.length ints1 = List.length ints2 ->
+      nexp_identical nexp1 nexp2 && List.for_all2 (fun i1 i2 -> i1 = i2) ints1 ints2
   | NC_var kid1, NC_var kid2 -> Kid.compare kid1 kid2 = 0
   | NC_app (id1, args1), NC_app (id2, args2) when List.length args1 = List.length args2 ->
       Id.compare id1 id2 = 0 && List.for_all2 typ_arg_identical args1 args2
@@ -926,10 +928,10 @@ and kid_order_arg kind_map (A_aux (aux, _)) =
 
 and kid_order_constraint kind_map (NC_aux (aux, _)) =
   match aux with
-  | (NC_var kid | NC_set (kid, _)) when KBindings.mem kid kind_map ->
+  | NC_var kid when KBindings.mem kid kind_map ->
       ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
-  | NC_var _ | NC_set _ -> ([], kind_map)
-  | NC_true | NC_false -> ([], kind_map)
+  | NC_set (n, _) -> kid_order_nexp kind_map n
+  | NC_var _ | NC_id _ | NC_true | NC_false -> ([], kind_map)
   | NC_equal (n1, n2)
   | NC_not_equal (n1, n2)
   | NC_bounded_le (n1, n2)
@@ -1065,7 +1067,7 @@ let rec subtyp l env typ1 typ2 =
         KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env)
       in
       begin
-        match Constraint.call_smt l (nc_eq nexp1 nexp2) with
+        match Constraint.call_smt l Bindings.empty (nc_eq nexp1 nexp2) with
         | Constraint.Sat ->
             let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
             if prove __POS__ env nc2 then ()
@@ -1218,6 +1220,7 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
       let exp1 = rewrite_sizeof' l env nexp1 in
       let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "emod_int", [exp1; exp2]))
+  | Nexp_id id when Env.is_abstract_typ id env -> mk_exp (E_sizeof nexp)
   | Nexp_app _ | Nexp_id _ -> typ_error l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
 
 let rewrite_sizeof l env nexp =
@@ -1255,14 +1258,16 @@ and rewrite_nc_aux l env =
   | NC_false -> E_lit (mk_lit L_false)
   | NC_true -> E_lit (mk_lit L_true)
   | NC_set (_, []) -> E_lit (mk_lit L_false)
-  | NC_set (kid, int :: ints) ->
-      let kid_eq kid int = nc_eq (nvar kid) (nconstant int) in
-      unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
+  | NC_set (nexp, int :: ints) ->
+      let nexp_eq int = nc_eq nexp (nconstant int) in
+      unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (nexp_eq int)) (nexp_eq int) ints))
   | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
   | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
   | NC_var v ->
       (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
       E_id (id_of_kid v)
+  | NC_id id when Env.is_abstract_typ id env -> E_constraint (NC_aux (NC_id id, l))
+  | NC_id id -> typ_error l ("Cannot re-write constraint(" ^ string_of_id id ^ ")")
 
 let can_be_undefined ~at:l env typ =
   let rec check (Typ_aux (aux, _)) =
@@ -1932,11 +1937,11 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
     end
   | E_app_infix (x, op, y), _ -> check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, uannot))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_prove" ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       if prove __POS__ env nc then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
       else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_not_prove" ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       if prove __POS__ env nc then typ_error l ("Can prove " ^ string_of_n_constraint nc)
       else annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
   | E_app (f, [E_aux (E_typ (typ, exp), _)]), _ when string_of_id f = "_check" ->
@@ -2119,7 +2124,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         else typ_error l ("Type " ^ string_of_typ typ ^ " could be empty")
       else typ_error l ("Type " ^ string_of_typ typ ^ " cannot be undefined")
   | E_internal_assume (nc, exp), _ ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       let env = Env.add_constraint nc env in
       let exp' = crule check_exp env exp typ in
       annot_exp (E_internal_assume (nc, exp')) typ
@@ -2162,7 +2167,7 @@ and check_block l env exps ret_typ =
     end
   | [exp] -> [final env exp]
   | E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) :: exps when string_of_id f = "_assume" ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       let env = Env.add_constraint nc env in
       let annotated_exp = annot_exp (E_app (f, [annot_exp (E_constraint nc) bool_typ None])) unit_typ None in
       annotated_exp :: check_block l env exps ret_typ
@@ -3068,9 +3073,13 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
         )
     end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
-  | E_sizeof nexp -> irule infer_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp))
+  | E_sizeof nexp -> begin
+      match nexp with
+      | Nexp_aux (Nexp_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
+      | _ -> irule infer_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp))
+    end
   | E_constraint nc ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
   | E_field (exp, field) -> begin
       let inferred_exp = irule infer_exp env exp in
@@ -3348,7 +3357,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let typ = Env.get_register id env in
       annot_exp (E_ref id) (register_typ typ)
   | E_internal_assume (nc, exp) ->
-      Env.wf_constraint env nc;
+      Env.wf_constraint ~at:l env nc;
       let env = Env.add_constraint nc env in
       let exp' = irule infer_exp env exp in
       annot_exp (E_internal_assume (nc, exp')) (typ_of exp')
@@ -4305,8 +4314,15 @@ let check_record l env def_annot id typq fields =
   in
   Env.add_record id typq fields env
 
+let check_global_constraint env def_annot nc =
+  let env = Env.add_constraint ~global:true nc env in
+  if prove __POS__ env nc_false then
+    typ_error def_annot.loc "Global constraint appears inconsistent with previous global constraints";
+  ([DEF_aux (DEF_constraint nc, def_annot)], env)
+
 let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
+  typ_print (lazy ("\n" ^ Util.("Check type " |> cyan |> clear) ^ string_of_id (id_of_type_def_aux tdef)));
   match tdef with
   | TD_abbrev (id, typq, typ_arg) ->
       begin
@@ -4315,6 +4331,8 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
         | _ -> ()
       end;
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
+  | TD_abstract (id, kind) ->
+      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind env)
   | TD_record (id, typq, fields, _) ->
       let env = check_record l env def_annot id typq fields in
       begin
@@ -4625,6 +4643,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
   match aux with
   | DEF_fixity (prec, n, op) -> ([DEF_aux (DEF_fixity (prec, n, op), def_annot)], env)
   | DEF_type tdef -> check_typedef env def_annot tdef
+  | DEF_constraint nc -> check_global_constraint env def_annot nc
   | DEF_fundef fdef -> check_fundef env def_annot fdef
   | DEF_mapdef mdef -> check_mapdef env def_annot mdef
   | DEF_impl funcl -> check_impldef env def_annot funcl
