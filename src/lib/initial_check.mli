@@ -77,10 +77,6 @@ val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
 
 (** {2 Options} *)
 
-(** Generate undefined_T functions for every type T. False by
-   default. *)
-val opt_undefined_gen : bool ref
-
 (** Generate faster undefined_T functions. Rather than generating
    functions that allow for the undefined values of enums and variants
    to be picked at runtime using a RNG or similar, this creates
@@ -110,6 +106,10 @@ val have_undefined_builtins : bool ref
 val undefined_builtin_val_specs : uannot def list
 
 (** {2 Desugar and process AST } *)
+
+val generate_undefined_record_context : typquant -> (id * typ) list
+val generate_undefined_record : id -> typquant -> (typ * id) list -> uannot def list
+val generate_undefined_enum : id -> id list -> uannot def list
 
 val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
 val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list

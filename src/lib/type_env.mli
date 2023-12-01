@@ -132,6 +132,12 @@ val add_outcome_variable : l -> kid -> typ -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
 val get_outcome_typschm_opt : t -> (typquant * typ) option
 
+(** For a user-defined type identifier we can control whether it is
+   allowed to be created with the undefined literal in Sail *)
+val is_user_undefined : id -> t -> bool
+
+val allow_user_undefined : id -> t -> t
+
 val is_variant : id -> t -> bool
 val add_variant : id -> typquant * type_union list -> t -> t
 val add_scattered_variant : id -> typquant -> t -> t
@@ -208,11 +214,9 @@ val get_extern : id -> t -> string -> string
 val add_enum : id -> id list -> t -> t
 val add_scattered_enum : id -> t -> t
 val add_enum_clause : id -> id -> t -> t
+val get_enum_opt : id -> t -> id list option
 val get_enum : id -> t -> id list
 val get_enums : t -> IdSet.t Bindings.t
-
-val allow_polymorphic_undefineds : t -> t
-val polymorphic_undefineds : t -> bool
 
 val lookup_id : id -> t -> typ lvar
 

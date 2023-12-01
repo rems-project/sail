@@ -4,7 +4,7 @@ $include <prelude.sail>
 
 val "print_endline" : string -> unit
 
-register R : nat
+register R : nat = 0
 
 register T : int
 

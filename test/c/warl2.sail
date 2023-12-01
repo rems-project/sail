@@ -1,7 +1,5 @@
 default Order dec
 
-$option -undefined_gen
-
 $include <prelude.sail>
 $include <generic_equality.sail>
 
@@ -16,6 +14,6 @@ let x : WARL_range = struct {
 }
 
 function main () : unit -> unit = {
-  let z: WARL_range = undefined;
+  let z: WARL_range = x;
   print_endline("ok")
 }

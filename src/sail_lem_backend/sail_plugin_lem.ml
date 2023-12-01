@@ -161,17 +161,15 @@ let output_lem filename libs effect_info type_env ast =
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = filename ^ "_types" in
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
-  let monad_modules, monad_undefined_gen =
+  let monad_modules =
     if Option.is_some concurrency_monad_params then
-      (["Sail2_concurrency_interface"; "Sail2_monadic_combinators"], ["Sail2_undefined_concurrency_interface"])
-    else (["Sail2_prompt_monad"; "Sail2_prompt"], ["Sail2_undefined"])
+      ["Sail2_concurrency_interface"; "Sail2_monadic_combinators"; "Sail2_undefined_concurrency_interface"]
+    else ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_undefined"]
   in
-  let undefined_modules = if !Initial_check.opt_undefined_gen then monad_undefined_gen else [] in
   let operators_module = if !Monomorphise.opt_mwords then "Sail2_operators_mwords" else "Sail2_operators_bitlists" in
   (* let libs = List.map (fun lib -> lib ^ seq_suffix) libs in *)
   let base_imports =
-    ["Pervasives_extra"; "Sail2_instr_kinds"; "Sail2_values"; "Sail2_string"; operators_module]
-    @ monad_modules @ undefined_modules
+    ["Pervasives_extra"; "Sail2_instr_kinds"; "Sail2_values"; "Sail2_string"; operators_module] @ monad_modules
   in
   let isa_thy_name = String.capitalize_ascii filename ^ "_lemmas" in
   let isa_lemmas =

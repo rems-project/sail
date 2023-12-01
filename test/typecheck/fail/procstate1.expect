@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/procstate1.sail[0m:14.0-30:
+14[96m |[0mregister PSTATE : ProcState(1)
+  [91m |[0m[91m^----------------------------^[0m
+  [91m |[0m Must provide a default register value for a register of type ProcState(1)

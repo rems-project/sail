@@ -85,7 +85,7 @@ struct cr = {
   CR3 : 1 ... 0,
 }
 
-register CR : cr
+register CR : cr = struct { CR0 = MkSlice(4, 0b0000), CR1 = MkSlice(2, 0b00), CR3 = MkSlice(0, 0b00) }
 
 val _get_LT : cr -> bit
 val _set_LT : (register(cr), bit) -> unit effect {rreg, wreg}

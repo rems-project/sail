@@ -1,6 +1,8 @@
 default Order dec
 
-struct State('n: Int) = {
+$include <prelude.sail>
+
+struct State('n: Int), 'n >= 0 = {
   N : bitvector('n, dec),
   Z : bitvector(1, dec)
 }

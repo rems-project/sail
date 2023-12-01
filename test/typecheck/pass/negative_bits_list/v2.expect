@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/negative_bits_list/v2.sail[0m:9.28-37:
+9[96m |[0m    let y: list(bits(-1)) = undefined;
+ [91m |[0m                            [91m^-------^[0m
+ [91m |[0m Type list(bits(-1)) cannot be undefined

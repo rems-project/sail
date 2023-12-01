@@ -11,6 +11,6 @@ struct ProcState ('n : Int) = {
   V : bitvector(1, dec)
 }
 
-register PSTATE : ProcState(1) = struct { N = 0b0, Z = 0b0, C = 0b0, V = 0b0 }
+register PSTATE : ProcState(1)
 
 function test () -> bool = PSTATE.N == 0b1

@@ -3,7 +3,7 @@ default Order dec
 $include <prelude.sail>
 $include <string.sail>
 
-register R : (bits(1), option(bits(2)))
+register R : (bits(1), option(bits(2))) = (0b0, None())
 
 val test : unit -> int
 

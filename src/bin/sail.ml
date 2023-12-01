@@ -192,7 +192,6 @@ let rec options =
             Arg.Set Interactive.opt_interactive;
             Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
-            Arg.Set Initial_check.opt_undefined_gen;
           ],
         " start interactive interpreter"
       );
@@ -202,7 +201,6 @@ let rec options =
             Arg.Set Interactive.opt_interactive;
             Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
-            Arg.Set Initial_check.opt_undefined_gen;
             Arg.String (fun s -> opt_interactive_script := Some s);
           ],
         "<filename> start interactive interpreter and execute commands in script"
@@ -254,10 +252,6 @@ let rec options =
       ( "-string_literal_type",
         Arg.Set Type_env.opt_string_literal_type,
         " use a separate string_literal type for string literals"
-      );
-      ( "-undefined_gen",
-        Arg.Set Initial_check.opt_undefined_gen,
-        " generate undefined_type functions for types in the specification"
       );
       ( "-grouped_regstate",
         Arg.Set State.opt_type_grouped_regstate,
@@ -345,6 +339,10 @@ let rec options =
       ( "-infer_effects",
         Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
         " (deprecated) ignored for compatibility with older versions; effects are always inferred now"
+      );
+      ( "-undefined_gen",
+        Arg.Unit (fun () -> ()),
+        " (deprecated) ignored as undefined generation is now always the same for all Sail backends"
       );
       ("-v", Arg.Set opt_print_version, " print version");
       ("-version", Arg.Set opt_print_version, " print version");

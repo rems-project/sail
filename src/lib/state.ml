@@ -142,7 +142,12 @@ let generate_regstate env registers =
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
     )
   in
-  [DEF_aux (DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))), mk_def_annot Unknown)]
+  [
+    DEF_aux
+      ( DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
+        add_def_attribute Unknown "undefined_gen" "forbid" (mk_def_annot Unknown)
+      );
+  ]
 
 let generate_initial_regstate env ast =
   let initial_values =
@@ -838,12 +843,6 @@ let register_refs_coq doc_id env registers =
 
 let generate_regstate_defs env ast =
   let defs = ast.defs in
-  (* FIXME We currently don't want to generate undefined_type functions
-     for register state and values.  For the Lem backend, this would require
-     taking the dependencies of those functions into account when partitioning
-     definitions into the different lem files, which we currently don't do. *)
-  let gen_undef = !Initial_check.opt_undefined_gen in
-  Initial_check.opt_undefined_gen := false;
   let registers = find_registers defs in
   let regtyps = List.map (fun (x, _, _) -> x) registers in
   let base_regtyps = register_base_types env regtyps in
@@ -869,7 +868,6 @@ let generate_regstate_defs env ast =
   in
   let typdefs, defs = List.partition (function DEF_aux (DEF_type _, _) -> true | _ -> false) defs in
   let valspecs, defs = List.partition (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs in
-  Initial_check.opt_undefined_gen := gen_undef;
   typdefs @ valspecs @ defs
 
 let add_regstate_defs mwords env ast =

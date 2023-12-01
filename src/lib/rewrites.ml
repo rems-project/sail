@@ -2016,8 +2016,7 @@ let rewrite_undefined mwords env =
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp_undefined) }
 
 let rewrite_undefined_if_gen always_bitvector env defs =
-  if !Initial_check.opt_undefined_gen then rewrite_undefined (always_bitvector || !Monomorphise.opt_mwords) env defs
-  else defs
+  rewrite_undefined (always_bitvector || !Monomorphise.opt_mwords) env defs
 
 let rec simple_typ (Typ_aux (typ_aux, l)) = Typ_aux (simple_typ_aux l typ_aux, l)
 
