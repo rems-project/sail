@@ -211,10 +211,10 @@ let get_module_id ~at:l env name =
 
 let start_module ~at:l mod_id env =
   match env.global.modules with
-  | None -> Reporting.unreachable l __POS__ "start_module called in environment with no modules"
+  | None -> Reporting.unreachable l __POS__ "start_module called in environment with no modules" [@coverage off]
   | Some proj ->
       if not (Project.valid_module_id proj mod_id) then
-        Reporting.unreachable l __POS__ "start_module got an invalid module id";
+        Reporting.unreachable l __POS__ "start_module got an invalid module id" [@coverage off];
       let requires = Project.module_requires proj mod_id in
       { env with current_module = mod_id; opened = Project.ModSet.of_list (Project.global_scope :: requires) }
 
@@ -290,7 +290,7 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
         (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v)
            (string_of_kind_aux k)
         )
-        );
+        ) [@coverage off];
     ( {
         env with
         constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
@@ -302,7 +302,7 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     )
   end
   else begin
-    typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k));
+    typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
     ({ env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None)
   end
 
@@ -413,7 +413,7 @@ let already_bound_ctor_fn str id env =
         )
   | None ->
       Reporting.unreachable (id_loc id) __POS__
-        ("Could not find original binding for duplicate " ^ str ^ " called " ^ string_of_id id)
+        ("Could not find original binding for duplicate " ^ str ^ " called " ^ string_of_id id) [@coverage off]
 
 let overload_item_in_scope env id =
   match Bindings.find_opt id env.global.val_specs with
@@ -424,7 +424,8 @@ let overload_item_in_scope env id =
       | None -> (
           match Bindings.find_opt id env.global.overloads with
           | Some item -> item_in_scope env item
-          | None -> Reporting.unreachable (id_loc id) __POS__ "Does not appear to be a valid overload item"
+          | None ->
+              Reporting.unreachable (id_loc id) __POS__ "Does not appear to be a valid overload item" [@coverage off]
         )
     )
 
@@ -440,7 +441,9 @@ let get_overloads id env =
       List.filter (overload_item_in_scope env) ids
 
 let add_overloads l id ids env =
-  typ_print (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"));
+  typ_print
+    (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"))
+  [@coverage off];
   if bound_ctor_fn env id then (
     let bound_l = Option.get (get_ctor_fn_binding_loc env id) in
     typ_error
@@ -558,6 +561,7 @@ let get_constraint_reasons env = env.constraints
 let wf_debug str f x exs =
   typ_debug ~level:2
     (lazy ("wf_" ^ str ^ ": " ^ f x ^ " exs: " ^ Util.string_of_list ", " string_of_kid (KidSet.elements exs)))
+[@@coverage off]
 
 (* Check if a type, order, n-expression or constraint is
    well-formed. Throws a type error if the type is badly formed. *)
@@ -599,7 +603,7 @@ let rec wf_typ' ?(exs = KidSet.empty) env (Typ_aux (typ_aux, l) as typ) =
       wf_constraint ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env nc;
       wf_typ' ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env typ
   | Typ_exist (_, _, _) -> typ_error l "Nested existentials are not allowed"
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown" [@coverage off]
 
 and wf_typ_arg ?(exs = KidSet.empty) env (A_aux (typ_arg_aux, _)) =
   match typ_arg_aux with
@@ -819,7 +823,7 @@ and add_constraint ?reason constr env =
               ^ string_of_n_constraint constr ^ " for " ^ string_of_kid v ^ " in "
               ^ Util.string_of_list ", " Big_int.to_string solutions
               )
-              );
+              ) [@coverage off];
           let linearized =
             List.fold_left
               (fun c s ->
@@ -827,7 +831,7 @@ and add_constraint ?reason constr env =
               )
               nc_false solutions
           in
-          typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
+          typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized)) [@coverage off];
           { env with constraints = (reason, linearized) :: env.constraints }
       | None ->
           typ_error l
@@ -840,7 +844,7 @@ and add_constraint ?reason constr env =
     match nc_aux with
     | NC_true -> env
     | _ ->
-        typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
+        typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr)) [@coverage off];
         { env with constraints = (reason, constr) :: env.constraints }
   )
 
@@ -882,7 +886,7 @@ let add_typ_synonym id typq arg env =
     typ_print
       ( lazy
         (adding ^ "type synonym " ^ string_of_id id ^ ", " ^ string_of_typquant typq ^ " = " ^ string_of_typ_arg arg)
-        );
+        ) [@coverage off];
     update_global
       (fun global ->
         {
@@ -911,11 +915,11 @@ let get_val_spec_opt id env =
               (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
               (KBindings.bindings env.typ_vars)
           )
-          );
+          ) [@coverage off];
       let bind' =
         List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
       in
-      typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
+      typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind')) [@coverage off];
       Some (bind', item.loc)
   | None -> None
 
@@ -944,7 +948,7 @@ let get_val_specs env = filter_items env env.global.val_specs
 let add_union_id ?in_module id bind env =
   if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env
   else (
-    typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
+    typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind)) [@coverage off];
     update_global
       (fun global ->
         { global with union_ids = Bindings.add id (mk_item_in2 in_module env ~loc:(id_loc id) bind) global.union_ids }
@@ -988,7 +992,7 @@ let rec update_val_spec ?in_module id (typq, typ) env =
         let typq = List.fold_left existential_arg typq base_args in
         let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
         let typ = Typ_aux (Typ_fn (arg_typs, ret_typ), l) in
-        typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
+        typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
         update_global
           (fun global ->
             {
@@ -999,7 +1003,7 @@ let rec update_val_spec ?in_module id (typq, typ) env =
           env
     | Typ_aux (Typ_bidir (typ1, typ2), _) ->
         let env = add_mapping id (typq, typ1, typ2) env in
-        typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
+        typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
         update_global
           (fun global ->
             { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
@@ -1051,7 +1055,7 @@ and get_outcome l id env =
   | None -> typ_error l ("Outcome " ^ string_of_id id ^ " does not exist")
 
 and add_mapping id (typq, typ1, typ2) env =
-  typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
+  typ_print (lazy (adding ^ "mapping " ^ string_of_id id)) [@coverage off];
   let forwards_id = mk_id (string_of_id id ^ "_forwards") in
   let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
   let backwards_id = mk_id (string_of_id id ^ "_backwards") in
@@ -1133,7 +1137,7 @@ let is_mapping id env = Bindings.mem id env.global.mappings
 let add_enum' is_scattered id ids env =
   if bound_typ_id env id then already_bound "enum" id env
   else (
-    typ_print (lazy (adding ^ "enum " ^ string_of_id id));
+    typ_print (lazy (adding ^ "enum " ^ string_of_id id)) [@coverage off];
     update_global
       (fun global ->
         {
@@ -1184,7 +1188,7 @@ let add_record id typq fields env =
   let fields = List.map (fun (typ, id) -> (expand_synonyms env typ, id)) fields in
   if bound_typ_id env id then already_bound "struct" id env
   else (
-    typ_print (lazy (adding ^ "struct " ^ string_of_id id));
+    typ_print (lazy (adding ^ "struct " ^ string_of_id id)) [@coverage off];
     let rec record_typ_args = function
       | [] -> []
       | QI_aux (QI_id kopt, _) :: qis when is_int_kopt kopt ->
@@ -1203,7 +1207,7 @@ let add_record id typq fields env =
           (indent 1 ^ adding ^ "field accessor " ^ string_of_id id ^ "." ^ string_of_id field ^ " :: "
           ^ string_of_bind (typq, accessor_typ)
           )
-          );
+          ) [@coverage off];
       IdPairMap.add (id, field) (mk_item env ~loc:(id_loc field) (typq, accessor_typ)) accessors
     in
     update_global
@@ -1246,7 +1250,7 @@ let add_local id mtyp env =
   if Bindings.mem id env.global.val_specs then
     typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
   else ();
-  typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp));
+  typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp)) [@coverage off];
   { env with locals = Bindings.add id mtyp env.locals }
 
 (* Promote a set of identifiers from local bindings to top-level global letbindings *)
@@ -1277,7 +1281,7 @@ let add_variant id (typq, constructors) env =
   in
   if bound_typ_id env id then already_bound "union" id env
   else (
-    typ_print (lazy (adding ^ "variant " ^ string_of_id id));
+    typ_print (lazy (adding ^ "variant " ^ string_of_id id)) [@coverage off];
     update_global
       (fun global ->
         { global with unions = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, constructors)) global.unions }
@@ -1288,7 +1292,7 @@ let add_variant id (typq, constructors) env =
 let add_scattered_variant id typq env =
   if bound_typ_id env id then already_bound "scattered union" id env
   else (
-    typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
+    typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id)) [@coverage off];
     update_global
       (fun global ->
         {
@@ -1352,7 +1356,7 @@ let add_register id typ env =
   if Bindings.mem id env.global.registers then
     typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
   else (
-    typ_print (lazy (adding ^ "register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ));
+    typ_print (lazy (adding ^ "register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ)) [@coverage off];
     update_global
       (fun global -> { global with registers = Bindings.add id (mk_item env ~loc:(id_loc id) typ) global.registers })
       env
