@@ -2267,6 +2267,11 @@ module Analysis = struct
         end
       | E_lit _ -> (dempty, assigns, empty)
       | E_typ (_, e) -> analyse_sub env assigns e
+      | E_app (id, args) when string_of_id id = "bitvector_length" -> begin
+          match destruct_atom_nexp (env_of_annot (l, annot)) (typ_of_annot (l, annot)) with
+          | Some nexp -> (deps_of_nexp l env.kid_deps [] nexp, assigns, empty)
+          | None -> (Unknown (l, "bitvector_length with bad type"), assigns, empty)
+        end
       | E_app (id, args) ->
           let typ_env = env_of_annot (l, annot) in
           let _, fn_typ = Env.get_val_spec_orig id typ_env in
@@ -2428,6 +2433,8 @@ module Analysis = struct
           let d1, assigns, r1 = analyse_sub env assigns e1 in
           let assigns, r2 = analyse_lexp env assigns d1 lexp in
           (dempty, assigns, merge r1 r2)
+      (* Currently this case isn't used because E_sizeof is rewritten by the typechecker, see
+         the bitvector_length case above instead. *)
       | E_sizeof nexp -> (deps_of_nexp l env.kid_deps [] nexp, assigns, empty)
       | E_return e | E_exit e | E_throw e ->
           let _, _, r = analyse_sub env assigns e in
