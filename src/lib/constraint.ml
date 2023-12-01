@@ -72,11 +72,19 @@ open Util
 
 let opt_smt_verbose = ref false
 
-type solver = { command : string; header : string; footer : string; negative_literals : bool; uninterpret_power : bool }
+type solver = {
+  command : string;
+  args : string -> string Array.t;
+  header : string;
+  footer : string;
+  negative_literals : bool;
+  uninterpret_power : bool;
+}
 
 let cvc4_solver =
   {
-    command = "cvc4 -L smtlib2 --tlimit=2000";
+    command = "cvc4";
+    args = (fun input -> [| "-L"; "smtlib2"; "--tlimit=2000"; input |]);
     header = "(set-logic QF_UFNIA)\n";
     footer = "";
     negative_literals = false;
@@ -86,6 +94,7 @@ let cvc4_solver =
 let mathsat_solver =
   {
     command = "mathsat";
+    args = (fun input -> [| input |]);
     header = "(set-logic QF_UFLIA)\n";
     footer = "";
     negative_literals = false;
@@ -94,7 +103,8 @@ let mathsat_solver =
 
 let z3_solver =
   {
-    command = "z3 -t:1000 -T:10";
+    command = "z3";
+    args = (fun input -> [| "-t:1000"; "-T:10"; input |]);
     (* Using push and pop is much faster, I believe because
        incremental mode uses a different solver. *)
     header = "(push)\n";
@@ -106,24 +116,22 @@ let z3_solver =
 let yices_solver =
   {
     command = "yices-smt2 --timeout=2";
+    args = (fun input -> [| "--timeout=2"; input |]);
     header = "(set-logic QF_UFLIA)\n";
     footer = "";
     negative_literals = false;
     uninterpret_power = true;
   }
 
-let vampire_solver =
+let alt_ergo_solver =
   {
-    (* vampire sometimes likes to ignore its time limit *)
-    command = "timeout -s SIGKILL 3s vampire --time_limit 2s --input_syntax smtlib2 --mode smtcomp";
+    command = "alt-ergo";
+    args = (fun input -> [| input |]);
     header = "";
     footer = "";
     negative_literals = false;
     uninterpret_power = true;
   }
-
-let alt_ergo_solver =
-  { command = "alt-ergo"; header = ""; footer = ""; negative_literals = false; uninterpret_power = true }
 
 let opt_solver = ref z3_solver
 
@@ -132,7 +140,6 @@ let set_solver = function
   | "alt-ergo" -> opt_solver := alt_ergo_solver
   | "cvc4" -> opt_solver := cvc4_solver
   | "mathsat" -> opt_solver := mathsat_solver
-  | "vampire" -> opt_solver := vampire_solver
   | "yices" -> opt_solver := yices_solver
   | unknown -> prerr_endline ("Unrecognised SMT solver " ^ unknown)
 
@@ -168,9 +175,9 @@ let rec add_list buf sep add_elem = function
 let smt_type l = function
   | K_int -> Atom "Int"
   | K_bool -> Atom "Bool"
-  | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kinded variable to SMT solver")
+  | K_type -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type kinded variable to SMT solver")
 
-let to_smt l vars constr =
+let to_smt l abstract vars constr =
   (* Numbering all SMT variables v0, ... vn, rather than generating
      names based on their Sail names (e.g. using zencode) ensures that
      alpha-equivalent constraints generate the same SMT problem, which
@@ -189,10 +196,20 @@ let to_smt l vars constr =
 
   let exponentials = ref [] in
 
+  let abstract_decs =
+    abstract |> Bindings.bindings
+    |> List.filter_map (fun (id, kind) ->
+           match kind with
+           | K_aux (K_type, _) -> None
+           | _ ->
+               Some (sfun "declare-const" [Atom (Util.zencode_string (string_of_id id)); smt_type l (unaux_kind kind)])
+       )
+  in
+
   (* var_decs outputs the list of variables to be used by the SMT
      solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
      returned by Type_check.get_typ_vars *)
-  let var_decs l (vars : kind_aux KBindings.t) : sexpr list =
+  let var_decs (vars : kind_aux KBindings.t) : sexpr list =
     vars |> KBindings.bindings |> List.map (fun (v, k) -> sfun "declare-const" [fst (smt_var v); smt_type l k])
   in
   let rec smt_nexp (Nexp_aux (aux, _) : nexp) : sexpr =
@@ -223,13 +240,14 @@ let to_smt l vars constr =
   in
   let rec smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
     match aux with
+    | NC_id id -> Atom (Util.zencode_string (string_of_id id))
     | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_lt (nexp1, nexp2) -> sfun "<" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_gt (nexp1, nexp2) -> sfun ">" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
-    | NC_set (v, ints) -> sfun "or" (List.map (fun i -> sfun "=" [fst (smt_var v); Atom (Big_int.to_string i)]) ints)
+    | NC_set (nexp, ints) -> sfun "or" (List.map (fun i -> sfun "=" [smt_nexp nexp; Atom (Big_int.to_string i)]) ints)
     | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
     | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
     | NC_app (id, args) -> sfun (string_of_id id) (List.map smt_typ_arg args)
@@ -243,18 +261,19 @@ let to_smt l vars constr =
     | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
   in
   let smt_constr = smt_constraint constr in
-  (var_decs l vars, smt_constr, smt_var, !exponentials)
+  (abstract_decs @ var_decs vars, smt_constr, smt_var, !exponentials)
 
 let sailexp_concrete n =
   List.init (n + 1) (fun i ->
       sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
   )
 
-let smtlib_of_constraints ?(get_model = false) l vars extra constr : string * (kid -> sexpr * bool) * sexpr list =
+let smtlib_of_constraints ?(get_model = false) l abstract vars extra constr :
+    string * (kid -> sexpr * bool) * sexpr list =
   let open Buffer in
   let buf = create 512 in
   add_string buf !opt_solver.header;
-  let variables, problem, var_map, exponentials = to_smt l vars constr in
+  let variables, problem, var_map, exponentials = to_smt l abstract vars constr in
   add_list buf '\n' add_sexpr variables;
   add_char buf '\n';
   if !opt_solver.uninterpret_power then add_string buf "(declare-fun sailexp (Int) Int)\n";
@@ -326,7 +345,7 @@ let constraint_to_smt l constr =
     kopts_of_constraint constr |> KOptSet.elements |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
-  let vars, sexpr, var_map, exponentials = to_smt l vars constr in
+  let vars, sexpr, var_map, exponentials = to_smt l Bindings.empty vars constr in
   let vars = string_of_list "\n" pp_sexpr vars in
   ( vars ^ "\n(assert " ^ pp_sexpr sexpr ^ ")",
     (fun v ->
@@ -336,13 +355,13 @@ let constraint_to_smt l constr =
     List.map pp_sexpr exponentials
   )
 
-let rec call_smt' l extra constraints =
+let rec call_smt' l abstract extra constraints =
   let vars =
     kopts_of_constraint constraints |> KOptSet.elements |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
   let problems = [constraints] in
-  let smt_file, _, exponentials = smtlib_of_constraints l vars extra constraints in
+  let smt_file, _, exponentials = smtlib_of_constraints l abstract vars extra constraints in
 
   if !opt_smt_verbose then prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" smt_file);
 
@@ -371,7 +390,11 @@ let rec call_smt' l extra constraints =
         let status, smt_output, smt_errors =
           try
             let smt_out, smt_in, smt_err =
-              Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ())
+              let cmd =
+                !opt_solver.command ^ " "
+                ^ Util.string_of_list " " (fun x -> x) (Array.to_list (!opt_solver.args input_file))
+              in
+              Unix.open_process_full cmd (Unix.environment ())
             in
             let smt_output =
               try List.combine problems (input_lines smt_out (List.length problems))
@@ -418,7 +441,7 @@ let rec call_smt' l extra constraints =
            then try replacing `2^` with an uninterpreted function to see
            if the problem would be unsat in that case. *)
         opt_solver := { !opt_solver with uninterpret_power = true };
-        let result = call_smt_uninterpret_power ~bound:64 l constraints in
+        let result = call_smt_uninterpret_power ~bound:64 l abstract constraints in
         opt_solver := { !opt_solver with uninterpret_power = false };
         result
     | Unknown -> Unknown
@@ -426,31 +449,31 @@ let rec call_smt' l extra constraints =
     exponentials
   )
 
-and call_smt_uninterpret_power ~bound l constraints =
-  match call_smt' l (sailexp_concrete bound) constraints with
+and call_smt_uninterpret_power ~bound l abstract constraints =
+  match call_smt' l abstract (sailexp_concrete bound) constraints with
   | Unsat, _ -> Unsat
   | Sat, exponentials -> begin
-      match call_smt' l (sailexp_concrete bound @ List.map bound_exponential exponentials) constraints with
+      match call_smt' l abstract (sailexp_concrete bound @ List.map bound_exponential exponentials) constraints with
       | Sat, _ -> Sat
       | _ -> Unknown
     end
   | _ -> Unknown
 
-let call_smt l constraints =
+let call_smt l abstract constraints =
   let t = Profile.start_smt () in
   let result =
-    if !opt_solver.uninterpret_power then call_smt_uninterpret_power ~bound:64 l constraints
-    else fst (call_smt' l [] constraints)
+    if !opt_solver.uninterpret_power then call_smt_uninterpret_power ~bound:64 l abstract constraints
+    else fst (call_smt' l abstract [] constraints)
   in
   Profile.finish_smt t;
   result
 
-let solve_smt_file l extra constraints =
+let solve_smt_file l abstract extra constraints =
   let vars =
     kopts_of_constraint constraints |> KOptSet.elements |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
-  smtlib_of_constraints ~get_model:true l vars extra constraints
+  smtlib_of_constraints ~get_model:true l abstract vars extra constraints
 
 let call_smt_solve l smt_file smt_vars var =
   let smt_var = pp_sexpr (fst (smt_vars var)) in
@@ -539,23 +562,23 @@ let call_smt_solve_bitvector l smt_file smt_vars =
     smt_vars
   |> Util.option_all
 
-let solve_smt l constraints var =
-  let smt_file, smt_vars, _ = solve_smt_file l [] constraints in
+let solve_smt l abstract constraints var =
+  let smt_file, smt_vars, _ = solve_smt_file l abstract [] constraints in
   call_smt_solve l smt_file smt_vars var
 
-let solve_all_smt l constraints var =
+let solve_all_smt l abstract constraints var =
   let rec aux results =
     let constraints = List.fold_left (fun ncs r -> nc_and ncs (nc_neq (nconstant r) (nvar var))) constraints results in
-    match solve_smt l constraints var with
+    match solve_smt l abstract constraints var with
     | Some result -> aux (result :: results)
     | None -> (
-        match call_smt l constraints with Unsat -> Some results | _ -> None
+        match call_smt l abstract constraints with Unsat -> Some results | _ -> None
       )
   in
   aux []
 
-let solve_unique_smt' l constraints exp_defn exp_bound var =
-  let smt_file, smt_vars, exponentials = solve_smt_file l (exp_defn @ exp_bound) constraints in
+let solve_unique_smt' l abstract constraints exp_defn exp_bound var =
+  let smt_file, smt_vars, exponentials = solve_smt_file l abstract (exp_defn @ exp_bound) constraints in
   let digest = Digest.string (smt_file ^ pp_sexpr (fst (smt_vars var))) in
   let result =
     match DigestMap.find_opt digest !known_uniques with
@@ -565,7 +588,9 @@ let solve_unique_smt' l constraints exp_defn exp_bound var =
         match call_smt_solve l smt_file smt_vars var with
         | Some result ->
             let t = Profile.start_smt () in
-            let smt_result' = fst (call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var)))) in
+            let smt_result' =
+              fst (call_smt' l abstract exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))))
+            in
             Profile.finish_smt t;
             begin
               match smt_result' with
@@ -588,17 +613,17 @@ let solve_unique_smt' l constraints exp_defn exp_bound var =
 (* Follows the same approach as call_smt' for unknown results due to
    exponentials, retrying with a bounded spec. *)
 
-let solve_unique_smt l constraints var =
+let solve_unique_smt l abstract constraints var =
   let t = Profile.start_smt () in
   let result =
-    match solve_unique_smt' l constraints [] [] var with
+    match solve_unique_smt' l abstract constraints [] [] var with
     | Some result, _ -> Some result
     | None, [] -> None
     | None, exponentials ->
         opt_solver := { !opt_solver with uninterpret_power = true };
         let sailexp = sailexp_concrete 64 in
         let exp_bound = List.map bound_exponential exponentials in
-        let result, _ = solve_unique_smt' l constraints sailexp exp_bound var in
+        let result, _ = solve_unique_smt' l abstract constraints sailexp exp_bound var in
         opt_solver := { !opt_solver with uninterpret_power = false };
         result
   in

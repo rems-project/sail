@@ -964,6 +964,8 @@ type_def:
     { mk_td (TD_abbrev ($2, $3, $5, $7)) $startpos $endpos }
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, $4, $6)) $startpos $endpos }
+  | Typedef id Colon kind
+    { mk_td (TD_abstract ($2, $4)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly
@@ -1305,6 +1307,8 @@ def_aux:
     { DEF_scattered $1 }
   | default_def
     { DEF_default $1 }
+  | Constraint typ
+    { DEF_constraint $2 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | Pragma

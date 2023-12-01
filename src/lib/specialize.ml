@@ -197,6 +197,7 @@ let string_of_instantiation instantiation =
     | A_typ typ -> string_of_typ typ
     | A_bool nc -> string_of_n_constraint nc
   and string_of_n_constraint = function
+    | NC_aux (NC_id id, _) -> string_of_id id
     | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
     | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
     | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
@@ -205,8 +206,7 @@ let string_of_instantiation instantiation =
     | NC_aux (NC_bounded_lt (n1, n2), _) -> string_of_nexp n1 ^ " < " ^ string_of_nexp n2
     | NC_aux (NC_or (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
     | NC_aux (NC_and (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
-    | NC_aux (NC_set (kid, ns), _) ->
-        kid_name (mk_kopt K_int kid) ^ " in {" ^ Util.string_of_list ", " Big_int.to_string ns ^ "}"
+    | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ Util.string_of_list ", " Big_int.to_string ns ^ "}"
     | NC_aux (NC_true, _) -> "true"
     | NC_aux (NC_false, _) -> "false"
     | NC_aux (NC_var kid, _) -> kid_name (mk_kopt K_bool kid)

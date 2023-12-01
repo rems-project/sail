@@ -147,7 +147,7 @@ module Env : sig
   (** Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
-  val add_constraint : ?reason:Ast.l * string -> n_constraint -> t -> t
+  val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into
       an environment *)
@@ -512,4 +512,4 @@ val initial_env : Env.t
 (** The initial type checking environment, with a specific set of available modules. *)
 val initial_env_with_modules : Project.project_structure -> Env.t
 
-val prove_smt : assumptions:n_constraint list -> n_constraint -> bool
+val prove_smt : abstract:kind Bindings.t -> assumptions:n_constraint list -> n_constraint -> bool

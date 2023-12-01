@@ -144,7 +144,7 @@ let lit_match = function
 let fabricate_nexp_exist env l typ kids nc typ' =
   match (kids, nc, Env.expand_synonyms env typ') with
   | ( [kid],
-      NC_aux (NC_set (kid', i :: _), _),
+      NC_aux (NC_set (Nexp_aux (Nexp_var kid', _), i :: _), _),
       Typ_aux (Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp (Nexp_aux (Nexp_var kid'', _)), _)]), _) )
     when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 ->
       Nexp_aux (Nexp_constant i, Unknown)
@@ -154,7 +154,7 @@ let fabricate_nexp_exist env l typ kids nc typ' =
     when Kid.compare kid kid'' = 0 ->
       nint 32
   | ( [kid],
-      NC_aux (NC_set (kid', i :: _), _),
+      NC_aux (NC_set (Nexp_aux (Nexp_var kid', _), i :: _), _),
       Typ_aux
         ( Typ_app
             ( Id_aux (Id "range", _),

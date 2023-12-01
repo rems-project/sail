@@ -3,7 +3,7 @@
 3[96m |[0mfunction foo(x) = 4
  [91m |[0m                  [91m^[0m
  [91m |[0m int(4) is not a subtype of {('q : Int), 'q in {0, 1}. int((2 * 'q))}
- [91m |[0m as ('ex2 == 0 | 'ex2 == 1) could not be proven
+ [91m |[0m as 'ex2 in {0, 1} could not be proven
  [91m |[0m 
  [91m |[0m type variable 'ex2:
  [91m |[0m [96mpass/complex_exist_sat/v2.sail[0m:1.18-50:

@@ -144,6 +144,7 @@ let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
+    | NC_id id -> doc_id id
     | NC_true -> string "true"
     | NC_false -> string "false"
     | NC_equal (n1, n2) -> nc_op "==" n1 n2
@@ -152,8 +153,8 @@ let rec doc_nc nc =
     | NC_bounded_gt (n1, n2) -> nc_op ">" n1 n2
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
     | NC_bounded_lt (n1, n2) -> nc_op "<" n1 n2
-    | NC_set (kid, ints) ->
-        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
+    | NC_set (nexp, ints) ->
+        separate space [doc_nexp nexp; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
     | NC_app (id, args) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
     | NC_var kid -> doc_kid kid
     | NC_or _ | NC_and _ -> nc0 ~parenthesize:true nc
@@ -197,7 +198,7 @@ and doc_typ ?(simple = false) (Typ_aux (typ_aux, l)) =
   (* Resugar set types like {|1, 2, 3|} *)
   | Typ_exist
       ( [kopt],
-        NC_aux (NC_set (kid1, ints), _),
+        NC_aux (NC_set (Nexp_aux (Nexp_var kid1, _), ints), _),
         Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)]), _)
       )
     when Kid.compare (kopt_kid kopt) kid1 == 0 && Kid.compare kid1 kid2 == 0 && Id.compare (mk_id "atom") id == 0 ->
@@ -677,6 +678,7 @@ let doc_typ_arg_kind sep (A_aux (aux, _)) =
 
 let doc_typdef (TD_aux (td, _)) =
   match td with
+  | TD_abstract (id, kind) -> begin doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) end
   | TD_abbrev (id, typq, typ_arg) -> begin
       match doc_typquant typq with
       | Some qdoc ->
@@ -792,6 +794,7 @@ let rec doc_def_no_hardline (DEF_aux (aux, def_annot)) =
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
+  | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
   | DEF_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
       string "outcome" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm ^^ break 1
       ^^ (string "with" ^//^ separate_map (comma ^^ break 1) doc_kopt_no_parens args)

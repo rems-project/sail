@@ -12,4 +12,4 @@
   [91m |[0m   [91m |[0m [93mCaused by [0m[96mpass/constrained_struct/v1.sail[0m:10.18-26:
   [91m |[0m   [91m |[0m 10[96m |[0mtype MyStruct64 = MyStruct(65)
   [91m |[0m   [91m |[0m   [91m |[0m                  [91m^------^[0m
-  [91m |[0m   [91m |[0m Could not prove (65 == 32 | 65 == 64) for type constructor MyStruct
+  [91m |[0m   [91m |[0m Could not prove 65 in {32, 64} for type constructor MyStruct

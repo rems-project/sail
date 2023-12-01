@@ -160,12 +160,14 @@ and fv_of_nconstraint consider_var bound used (Ast.NC_aux (nc, _)) =
   | NC_bounded_lt (n1, n2)
   | NC_not_equal (n1, n2) ->
       fv_of_nexp consider_var bound (fv_of_nexp consider_var bound used n1) n2
-  | NC_set (Ast.Kid_aux (Ast.Var i, _), _) | NC_var (Ast.Kid_aux (Ast.Var i, _)) ->
+  | NC_var (Ast.Kid_aux (Ast.Var i, _)) ->
       if consider_var then conditional_add_typ bound used (Ast.Id_aux (Ast.Id i, Parse_ast.Unknown)) else used
+  | NC_set (n, _) -> fv_of_nexp consider_var bound used n
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) ->
       fv_of_nconstraint consider_var bound (fv_of_nconstraint consider_var bound used nc1) nc2
   | NC_app (id, targs) ->
       List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
+  | NC_id id -> conditional_add_typ bound used id
   | NC_true | NC_false -> used
 
 let typq_bindings (TypQ_aux (tq, _)) =
@@ -361,6 +363,7 @@ let fv_of_abbrev consider_var bound used typq typ_arg =
 
 let fv_of_type_def consider_var (TD_aux (t, _)) =
   match t with
+  | TD_abstract (id, kind) -> (init_env ("typ:" ^ string_of_id id), Nameset.empty)
   | TD_abbrev (id, typq, typ_arg) ->
       (init_env ("typ:" ^ string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg))
   | TD_record (id, typq, tids, _) ->
@@ -522,6 +525,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs (DEF_aux (aux, _) as
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_mapdef mdef -> (mt, mt (* fv_of_map consider_var mdef *))
+  | DEF_constraint nc -> (mt, mt)
   | DEF_let lebind -> (fun (b, u, _) -> (b, u)) (fv_of_let consider_var mt mt mt lebind)
   | DEF_val vspec -> fv_of_vspec consider_var vspec
   | DEF_fixity _ -> (mt, mt)

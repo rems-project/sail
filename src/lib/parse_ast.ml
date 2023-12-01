@@ -385,6 +385,7 @@ type type_def_aux =
   | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
   | TD_variant of id * typquant * type_union list (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
+  | TD_abstract of id * kind
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type val_spec_aux = (* Value type specification *)
@@ -427,6 +428,7 @@ type fixity_token = prec * Big_int.num * string
 type def_aux =
   (* Top-level definition *)
   | DEF_type of type_def (* type definition *)
+  | DEF_constraint of atyp (* global constraint *)
   | DEF_fundef of fundef (* function definition *)
   | DEF_mapdef of mapdef (* mapping definition *)
   | DEF_impl of funcl (* impl definition *)

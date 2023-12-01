@@ -143,6 +143,10 @@ val is_user_undefined : id -> t -> bool
 
 val allow_user_undefined : id -> t -> t
 
+val add_abstract_typ : id -> kind -> t -> t
+val is_abstract_typ : id -> t -> bool
+val get_abstract_typs : t -> kind Bindings.t
+
 val is_variant : id -> t -> bool
 val add_variant : id -> typquant * type_union list -> t -> t
 val add_scattered_variant : id -> typquant -> t -> t
@@ -180,7 +184,7 @@ val add_register : id -> typ -> t -> t
 
 val get_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
-val add_constraint : ?reason:Ast.l * string -> n_constraint -> t -> t
+val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
 val add_typquant : l -> typquant -> t -> t
 
@@ -244,7 +248,7 @@ val is_toplevel : t -> l option
 
 (* Well formedness-checks *)
 val wf_typ : at:l -> t -> typ -> unit
-val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
+val wf_constraint : at:l -> t -> n_constraint -> unit
 
 (** Some of the code in the environment needs to use the smt solver,
    which is defined below. To break the circularity this would cause

@@ -809,6 +809,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
       ^^ ocaml_def_end ^^ ocaml_string_of_abbrev ctx id typq typ ^^ ocaml_def_end
   | TD_abbrev _ -> empty
+  | TD_abstract _ -> Reporting.unreachable l __POS__ "Abstract type not supported in OCaml backend"
   | TD_bitfield _ -> Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
 let get_externs defs =
@@ -895,6 +896,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     match td with
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
+    | TD_abstract _ -> required
     | TD_record (_, _, fields, _) -> List.fold_left (fun req (typ, _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
@@ -911,7 +913,7 @@ let ocaml_pp_generators ctx defs orig_types required =
           | TD_abbrev (_, tqs, A_aux (A_typ _, _)) -> tqs
           | TD_record (_, tqs, _, _) -> tqs
           | TD_variant (_, tqs, _, _) -> tqs
-          | TD_enum _ -> TypQ_aux (TypQ_no_forall, Unknown)
+          | TD_abstract _ | TD_enum _ -> TypQ_aux (TypQ_no_forall, Unknown)
           | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false
         )

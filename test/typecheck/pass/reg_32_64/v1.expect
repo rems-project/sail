@@ -11,6 +11,6 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
   [91m |[0m No overloading for R, tried:
   [91m |[0m [94m*[0m set_R
   [91m |[0m    Could not resolve quantifiers for set_R
-  [91m |[0m    [94m*[0m (regno(0) & (56 == 32 | 56 == 64))
+  [91m |[0m    [94m*[0m (regno(0) & 56 in {32, 64})
   [91m |[0m [94m*[0m get_R
   [91m |[0m    Could not unify int('r) and bitvector(56)

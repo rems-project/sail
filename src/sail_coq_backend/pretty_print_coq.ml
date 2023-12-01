@@ -320,12 +320,12 @@ let rec orig_nc (NC_aux (nc, l) as full_nc) =
   | NC_bounded_le (nexp1, nexp2) -> rewrap (NC_bounded_le (orig_nexp nexp1, orig_nexp nexp2))
   | NC_bounded_lt (nexp1, nexp2) -> rewrap (NC_bounded_lt (orig_nexp nexp1, orig_nexp nexp2))
   | NC_not_equal (nexp1, nexp2) -> rewrap (NC_not_equal (orig_nexp nexp1, orig_nexp nexp2))
-  | NC_set (kid, s) -> rewrap (NC_set (orig_kid kid, s))
+  | NC_set (nexp, s) -> rewrap (NC_set (orig_nexp nexp, s))
   | NC_or (nc1, nc2) -> rewrap (NC_or (orig_nc nc1, orig_nc nc2))
   | NC_and (nc1, nc2) -> rewrap (NC_and (orig_nc nc1, orig_nc nc2))
   | NC_app (f, args) -> rewrap (NC_app (f, List.map orig_typ_arg args))
   | NC_var kid -> rewrap (NC_var (orig_kid kid))
-  | NC_true | NC_false -> full_nc
+  | NC_id _ | NC_true | NC_false -> full_nc
 
 and orig_typ_arg (A_aux (arg, l)) =
   let rewrap a = A_aux (a, l) in
@@ -419,7 +419,8 @@ let rec count_nc_vars (NC_aux (nc, _)) =
   in
   match nc with
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> merge_kid_count (count_nc_vars nc1) (count_nc_vars nc2)
-  | NC_var kid | NC_set (kid, _) -> KBindings.singleton kid 1
+  | NC_var kid -> KBindings.singleton kid 1
+  | NC_set (n, _) -> count_nexp_vars n
   | NC_equal (n1, n2)
   | NC_bounded_ge (n1, n2)
   | NC_bounded_gt (n1, n2)
@@ -427,7 +428,7 @@ let rec count_nc_vars (NC_aux (nc, _)) =
   | NC_bounded_lt (n1, n2)
   | NC_not_equal (n1, n2) ->
       merge_kid_count (count_nexp_vars n1) (count_nexp_vars n2)
-  | NC_true | NC_false -> KBindings.empty
+  | NC_id _ | NC_true | NC_false -> KBindings.empty
   | NC_app (_, args) -> List.fold_left merge_kid_count KBindings.empty (List.map count_arg args)
 
 (* Simplify some of the complex boolean types created by the Sail type checker,
@@ -459,7 +460,7 @@ let simplify_atom_bool l kopts nc atom_nc =
       | NC_bounded_lt (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_not_equal (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_not_equal (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_set (kid, _ :: _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_set (Nexp_aux (Nexp_var kid, _), _ :: _) when KBindings.mem kid lin_ty_vars -> Some kid
       | _ -> None
     in
     let replace kills vars =
@@ -816,17 +817,18 @@ and doc_nc_exp ctx env nc =
     match nc with
     | NC_not_equal (ne1, ne2) ->
         string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
-    | NC_set (kid, is) ->
+    | NC_set (nexp, is) ->
         separate space
           [
             string "member_Z_list";
-            doc_var ctx kid;
+            doc_nexp ctx nexp;
             brackets (separate (string "; ") (List.map (fun i -> string (Nat_big_num.to_string i)) is));
           ]
     | NC_app (f, args) -> separate space (doc_nc_fn ctx f :: List.map doc_typ_arg_exp args)
     | _ -> l0 nc_full
   and l0 (NC_aux (nc, _) as nc_full) =
     match nc with
+    | NC_id id -> doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id
     | NC_true -> string "true"
     | NC_false -> string "false"
     | NC_var kid -> doc_nexp ctx (nvar kid)
@@ -2326,7 +2328,8 @@ let types_used_with_generic_eq defs =
   in
   let typs_req_def (DEF_aux (aux, _) as def) =
     match aux with
-    | DEF_type _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _ | DEF_register _ ->
+    | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
+    | DEF_register _ ->
         IdSet.empty
     | DEF_fundef fd -> typs_req_fundef fd
     | DEF_internal_mutrec fds -> List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
@@ -2387,6 +2390,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       ^^ dot ^^ hardline
       ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
       ^^ twice hardline
+  | TD_abstract _ -> unreachable l __POS__ "Abstract type not supported by Coq backend"
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record (id, typq, fs, _) ->
       let fname fid = doc_field_name bare_ctxt id fid in
@@ -3350,6 +3354,7 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
         ("Loop termination measures for " ^ string_of_id id ^ " should have been rewritten before backend")
   | DEF_impl _ | DEF_outcome _ | DEF_instantiation _ ->
       unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
+  | DEF_constraint _ -> unreachable (def_loc def) __POS__ "Abstract constraint not supported by Coq backend"
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

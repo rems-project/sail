@@ -108,6 +108,8 @@ type global_env = {
   unions : (typquant * type_union list) env_item Bindings.t;
   union_ids : (typquant * typ) env_item Bindings.t;
   scattered_union_envs : global_env Bindings.t;
+  abstract_typs : kind env_item Bindings.t;
+  constraints : (constraint_reason * n_constraint) list;
   enums : (bool * IdSet.t) env_item Bindings.t;
   records : (typquant * (typ * id) list) env_item Bindings.t;
   synonyms : (typquant * typ_arg) env_item Bindings.t;
@@ -132,6 +134,8 @@ let empty_global_env =
     unions = Bindings.empty;
     union_ids = Bindings.empty;
     scattered_union_envs = Bindings.empty;
+    abstract_typs = Bindings.empty;
+    constraints = [];
     enums = Bindings.empty;
     records = Bindings.empty;
     accessors = IdPairMap.empty;
@@ -382,6 +386,7 @@ let builtin_typs =
 let bound_typ_id env id =
   Bindings.mem id env.global.synonyms || Bindings.mem id env.global.unions || Bindings.mem id env.global.records
   || Bindings.mem id env.global.enums || Bindings.mem id builtin_typs
+  || Bindings.mem id env.global.abstract_typs
 
 let get_binding_loc env id =
   let find map = Some (item_loc (Bindings.find id map)) in
@@ -390,6 +395,7 @@ let get_binding_loc env id =
   else if Bindings.mem id env.global.records then find env.global.records
   else if Bindings.mem id env.global.enums then find env.global.enums
   else if Bindings.mem id env.global.synonyms then find env.global.synonyms
+  else if Bindings.mem id env.global.abstract_typs then find env.global.abstract_typs
   else None
 
 let already_bound str id env =
@@ -510,6 +516,7 @@ let infer_kind env id =
   else if Bindings.mem id env.global.enums then mk_typquant []
   else if Bindings.mem id env.global.synonyms then
     typ_error (id_loc id) ("Cannot infer kind of type synonym " ^ string_of_id id)
+  else if Bindings.mem id env.global.abstract_typs then mk_typquant []
   else typ_error (id_loc id) ("Cannot infer kind of " ^ string_of_id id)
 
 let check_args_typquant id env args typq =
@@ -529,6 +536,10 @@ let check_args_typquant id env args typq =
   else
     typ_error (id_loc id)
       ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
+
+let get_constraints env = List.map snd env.global.constraints @ List.map snd env.constraints
+
+let get_constraint_reasons env = env.global.constraints @ env.constraints
 
 let mk_synonym typq typ_arg =
   let kopts, ncs = quant_split typq in
@@ -571,7 +582,7 @@ let mk_synonym typq typ_arg =
         ("Could not prove constraints "
         ^ string_of_list ", " string_of_n_constraint ncs
         ^ " in type synonym " ^ string_of_typ_arg typ_arg ^ " with "
-        ^ Util.string_of_list ", " string_of_n_constraint (List.map snd env.constraints)
+        ^ Util.string_of_list ", " string_of_n_constraint (get_constraints env)
         )
 
 let get_typ_synonym id env =
@@ -581,141 +592,150 @@ let get_typ_synonym id env =
 
 let get_typ_synonyms env = filter_items env env.global.synonyms
 
-let get_constraints env = List.map snd env.constraints
+module Well_formedness = struct
+  let wf_debug str f x exs =
+    typ_debug ~level:2
+      (lazy ("wf_" ^ str ^ ": " ^ f x ^ " exs: " ^ Util.string_of_list ", " string_of_kid (KidSet.elements exs)))
+  [@@coverage off]
 
-let get_constraint_reasons env = env.constraints
+  (* Check if a type, order, n-expression or constraint is
+     well-formed. Throws a type error if the type is badly formed. *)
+  let rec wf_typ exs env (Typ_aux (typ_aux, l) as typ) =
+    match typ_aux with
+    | Typ_id id when bound_typ_id env id ->
+        let typq = infer_kind env id in
+        if not (Util.list_empty (quant_kopts typq)) then
+          typ_error l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
+        else ()
+    | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
+    | Typ_var kid -> begin
+        match KBindings.find kid env.typ_vars with
+        | _, K_type -> ()
+        | _, k ->
+            typ_error l
+              ("Type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ ^ " is " ^ string_of_kind_aux k
+             ^ " rather than Type"
+              )
+        | exception Not_found ->
+            typ_error l ("Unbound type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
+      end
+    | Typ_fn (arg_typs, ret_typ) ->
+        List.iter (wf_typ exs env) arg_typs;
+        wf_typ exs env ret_typ
+    | Typ_bidir (typ1, typ2) when unloc_typ typ1 = unloc_typ typ2 ->
+        typ_error l "Bidirectional types cannot be the same on both sides"
+    | Typ_bidir (typ1, typ2) ->
+        wf_typ exs env typ1;
+        wf_typ exs env typ2
+    | Typ_tuple typs -> List.iter (wf_typ exs env) typs
+    | Typ_app (id, [(A_aux (A_nexp _, _) as arg)]) when string_of_id id = "implicit" -> wf_typ_arg exs env arg
+    | Typ_app (id, args) when bound_typ_id env id ->
+        List.iter (wf_typ_arg exs env) args;
+        check_args_typquant id env args (infer_kind env id)
+    | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
+    | Typ_exist ([], _, _) -> typ_error l "Existential must have some type variables"
+    | Typ_exist (kopts, nc, typ) when KidSet.is_empty exs ->
+        wf_constraint (KidSet.of_list (List.map kopt_kid kopts)) env nc;
+        wf_typ (KidSet.of_list (List.map kopt_kid kopts)) env typ
+    | Typ_exist (_, _, _) -> typ_error l "Nested existentials are not allowed"
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown" [@coverage off]
 
-let wf_debug str f x exs =
-  typ_debug ~level:2
-    (lazy ("wf_" ^ str ^ ": " ^ f x ^ " exs: " ^ Util.string_of_list ", " string_of_kid (KidSet.elements exs)))
-[@@coverage off]
+  and wf_typ_arg exs env (A_aux (typ_arg_aux, _)) =
+    match typ_arg_aux with
+    | A_nexp nexp -> wf_nexp exs env nexp
+    | A_typ typ -> wf_typ exs env typ
+    | A_bool nc -> wf_constraint exs env nc
 
-(* Check if a type, order, n-expression or constraint is
-   well-formed. Throws a type error if the type is badly formed. *)
-let rec wf_typ' ?(exs = KidSet.empty) env (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_id id when bound_typ_id env id ->
-      let typq = infer_kind env id in
-      if quant_kopts typq != [] then
-        typ_error l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
-      else ()
-  | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
-  | Typ_var kid -> begin
-      match KBindings.find kid env.typ_vars with
-      | _, K_type -> ()
-      | _, k ->
-          typ_error l
-            ("Type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ ^ " is " ^ string_of_kind_aux k
-           ^ " rather than Type"
-            )
-      | exception Not_found ->
-          typ_error l ("Unbound type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
-    end
-  | Typ_fn (arg_typs, ret_typ) ->
-      List.iter (wf_typ' ~exs env) arg_typs;
-      wf_typ' ~exs env ret_typ
-  | Typ_bidir (typ1, typ2) when unloc_typ typ1 = unloc_typ typ2 ->
-      typ_error l "Bidirectional types cannot be the same on both sides"
-  | Typ_bidir (typ1, typ2) ->
-      wf_typ' ~exs env typ1;
-      wf_typ' ~exs env typ2
-  | Typ_tuple typs -> List.iter (wf_typ' ~exs env) typs
-  | Typ_app (id, [(A_aux (A_nexp _, _) as arg)]) when string_of_id id = "implicit" -> wf_typ_arg ~exs env arg
-  | Typ_app (id, args) when bound_typ_id env id ->
-      List.iter (wf_typ_arg ~exs env) args;
-      check_args_typquant id env args (infer_kind env id)
-  | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
-  | Typ_exist ([], _, _) -> typ_error l "Existential must have some type variables"
-  | Typ_exist (kopts, nc, typ) when KidSet.is_empty exs ->
-      wf_constraint ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env nc;
-      wf_typ' ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env typ
-  | Typ_exist (_, _, _) -> typ_error l "Nested existentials are not allowed"
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown" [@coverage off]
+  and wf_nexp exs env (Nexp_aux (nexp_aux, l) as nexp) =
+    wf_debug "nexp" string_of_nexp nexp exs;
+    match nexp_aux with
+    | Nexp_id id when Bindings.mem id env.global.abstract_typs -> ()
+    | Nexp_id id -> typ_error l ("Undefined type synonym " ^ string_of_id id)
+    | Nexp_var kid when KidSet.mem kid exs -> ()
+    | Nexp_var kid -> begin
+        match get_typ_var kid env with
+        | K_int -> ()
+        | kind ->
+            typ_error l
+              ("Constraint is badly formed, " ^ string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind
+             ^ " but should have kind Int"
+              )
+      end
+    | Nexp_constant _ -> ()
+    | Nexp_app (id, nexps) ->
+        let name = string_of_id id in
+        (* We allow the abs, mod, and div functions that are included in the SMTLIB2 integer theory *)
+        if name = "abs" || name = "mod" || name = "div" || Bindings.mem id env.global.synonyms then
+          List.iter (fun n -> wf_nexp exs env n) nexps
+        else typ_error l ("Unknown type level operator or function " ^ name)
+    | Nexp_times (nexp1, nexp2) ->
+        wf_nexp exs env nexp1;
+        wf_nexp exs env nexp2
+    | Nexp_sum (nexp1, nexp2) ->
+        wf_nexp exs env nexp1;
+        wf_nexp exs env nexp2
+    | Nexp_minus (nexp1, nexp2) ->
+        wf_nexp exs env nexp1;
+        wf_nexp exs env nexp2
+    | Nexp_exp nexp -> wf_nexp exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
+    | Nexp_neg nexp -> wf_nexp exs env nexp
 
-and wf_typ_arg ?(exs = KidSet.empty) env (A_aux (typ_arg_aux, _)) =
-  match typ_arg_aux with
-  | A_nexp nexp -> wf_nexp ~exs env nexp
-  | A_typ typ -> wf_typ' ~exs env typ
-  | A_bool nc -> wf_constraint ~exs env nc
+  and wf_constraint exs env (NC_aux (nc_aux, l) as nc) =
+    wf_debug "constraint" string_of_n_constraint nc exs;
+    match nc_aux with
+    | NC_id id when Bindings.mem id env.global.abstract_typs -> ()
+    | NC_id id -> typ_error l ("Undefined type synonym " ^ string_of_id id)
+    | NC_equal (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_not_equal (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_bounded_ge (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_bounded_gt (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_bounded_le (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_bounded_lt (n1, n2) ->
+        wf_nexp exs env n1;
+        wf_nexp exs env n2
+    | NC_set (nexp, _) -> wf_nexp exs env nexp
+    | NC_or (nc1, nc2) ->
+        wf_constraint exs env nc1;
+        wf_constraint exs env nc2
+    | NC_and (nc1, nc2) ->
+        wf_constraint exs env nc1;
+        wf_constraint exs env nc2
+    | NC_app (_, args) -> List.iter (wf_typ_arg exs env) args
+    | NC_var kid when KidSet.mem kid exs -> ()
+    | NC_var kid -> begin
+        match get_typ_var kid env with
+        | K_bool -> ()
+        | kind -> typ_error l (string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind ^ " but should have kind Bool")
+      end
+    | NC_true | NC_false -> ()
+end
 
-and wf_nexp ?(exs = KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
-  wf_debug "nexp" string_of_nexp nexp exs;
-  match nexp_aux with
-  | Nexp_id id -> typ_error l ("Undefined type synonym " ^ string_of_id id)
-  | Nexp_var kid when KidSet.mem kid exs -> ()
-  | Nexp_var kid -> begin
-      match get_typ_var kid env with
-      | K_int -> ()
-      | kind ->
-          typ_error l
-            ("Constraint is badly formed, " ^ string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind
-           ^ " but should have kind Int"
-            )
-    end
-  | Nexp_constant _ -> ()
-  | Nexp_app (id, nexps) ->
-      let name = string_of_id id in
-      (* We allow the abs, mod, and div functions that are included in the SMTLIB2 integer theory *)
-      if name = "abs" || name = "mod" || name = "div" || Bindings.mem id env.global.synonyms then
-        List.iter (fun n -> wf_nexp ~exs env n) nexps
-      else typ_error l ("Unknown type level operator or function " ^ name)
-  | Nexp_times (nexp1, nexp2) ->
-      wf_nexp ~exs env nexp1;
-      wf_nexp ~exs env nexp2
-  | Nexp_sum (nexp1, nexp2) ->
-      wf_nexp ~exs env nexp1;
-      wf_nexp ~exs env nexp2
-  | Nexp_minus (nexp1, nexp2) ->
-      wf_nexp ~exs env nexp1;
-      wf_nexp ~exs env nexp2
-  | Nexp_exp nexp -> wf_nexp ~exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
-  | Nexp_neg nexp -> wf_nexp ~exs env nexp
+let add_abstract_typ id kind env =
+  if bound_typ_id env id then
+    typ_error (id_loc id)
+      ("Cannot introduce abstract type " ^ string_of_id id ^ " as a type or synonym with that name already exists")
+  else (
+    typ_print (lazy (adding ^ "abstract type " ^ string_of_id id ^ " : " ^ string_of_kind kind)) [@coverage off];
+    update_global
+      (fun global ->
+        { global with abstract_typs = Bindings.add id (mk_item env ~loc:(id_loc id) kind) global.abstract_typs }
+      )
+      env
+  )
 
-and wf_constraint ?(exs = KidSet.empty) env (NC_aux (nc_aux, l) as nc) =
-  wf_debug "constraint" string_of_n_constraint nc exs;
-  match nc_aux with
-  | NC_equal (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_not_equal (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_bounded_ge (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_bounded_gt (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_bounded_le (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_bounded_lt (n1, n2) ->
-      wf_nexp ~exs env n1;
-      wf_nexp ~exs env n2
-  | NC_set (kid, _) when KidSet.mem kid exs -> ()
-  | NC_set (kid, _) -> begin
-      match get_typ_var kid env with
-      | K_int -> ()
-      | kind ->
-          typ_error l
-            ("Set constraint is badly formed, " ^ string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind
-           ^ " but should have kind Int"
-            )
-    end
-  | NC_or (nc1, nc2) ->
-      wf_constraint ~exs env nc1;
-      wf_constraint ~exs env nc2
-  | NC_and (nc1, nc2) ->
-      wf_constraint ~exs env nc1;
-      wf_constraint ~exs env nc2
-  | NC_app (_, args) -> List.iter (wf_typ_arg ~exs env) args
-  | NC_var kid when KidSet.mem kid exs -> ()
-  | NC_var kid -> begin
-      match get_typ_var kid env with
-      | K_bool -> ()
-      | kind -> typ_error l (string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind ^ " but should have kind Bool")
-    end
-  | NC_true | NC_false -> ()
+let get_abstract_typs env = filter_items env env.global.abstract_typs
+
+let is_abstract_typ id env = Bindings.mem id env.global.abstract_typs
 
 let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
   match aux with
@@ -736,6 +756,16 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
               typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
         end
       with Not_found -> NC_aux (NC_app (id, List.map (expand_arg_synonyms env) args), l)
+    )
+  | NC_id id -> (
+      try
+        begin
+          match get_typ_synonym id env l env [] with
+          | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
+          | arg ->
+              typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
+        end
+      with Not_found -> nc
     )
   | NC_true | NC_false | NC_var _ | NC_set _ -> nc
 
@@ -834,9 +864,9 @@ and expand_arg_synonyms env (A_aux (typ_arg, l)) =
   | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
   | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
 
-and add_constraint ?reason constr env =
+and add_constraint ?(global = false) ?reason constr env =
   let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
-  wf_constraint env constr;
+  Well_formedness.wf_constraint KidSet.empty env constr;
   let power_vars = constraint_power_variables constr in
   if KidSet.cardinal power_vars > 1 && !opt_smt_linearize then
     typ_error l
@@ -847,7 +877,7 @@ and add_constraint ?reason constr env =
     let v = KidSet.choose power_vars in
     let constrs = List.fold_left nc_and nc_true (get_constraints env) in
     begin
-      match Constraint.solve_all_smt l constrs v with
+      match Constraint.solve_all_smt l (get_abstract_typs env) constrs v with
       | Some solutions ->
           typ_print
             ( lazy
@@ -877,8 +907,36 @@ and add_constraint ?reason constr env =
     | NC_true -> env
     | _ ->
         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr)) [@coverage off];
-        { env with constraints = (reason, constr) :: env.constraints }
+        if global then
+          update_global
+            (fun global_env -> { global_env with constraints = (reason, constr) :: global_env.constraints })
+            env
+        else { env with constraints = (reason, constr) :: env.constraints }
   )
+
+let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
+  let typ = expand_synonyms env typ in
+  Well_formedness.wf_debug "typ" string_of_typ typ KidSet.empty;
+  incr depth;
+  try
+    Well_formedness.wf_typ KidSet.empty env typ;
+    decr depth
+  with Type_error (err_l, err) ->
+    decr depth;
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l (err_because (Err_other ("Well-formedness check failed for type" ^ extra), err_l, err))
+
+let wf_constraint ~at:at_l env (NC_aux (_, l) as nc) =
+  let nc = expand_constraint_synonyms env nc in
+  Well_formedness.wf_debug "constraint" string_of_n_constraint nc KidSet.empty;
+  incr depth;
+  try
+    Well_formedness.wf_constraint KidSet.empty env nc;
+    decr depth
+  with Type_error (err_l, err) ->
+    decr depth;
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l (err_because (Err_other ("Well-formedness check failed for constraint" ^ extra), err_l, err))
 
 let add_typquant l quant env =
   let rec add_quant_item env = function QI_aux (qi, _) -> add_quant_item_aux env qi
@@ -889,18 +947,6 @@ let add_typquant l quant env =
   match quant with
   | TypQ_aux (TypQ_no_forall, _) -> env
   | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
-
-let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
-  let typ = expand_synonyms env typ in
-  wf_debug "typ" string_of_typ typ KidSet.empty;
-  incr depth;
-  try
-    wf_typ' env typ;
-    decr depth
-  with Type_error (err_l, err) ->
-    decr depth;
-    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
-    typ_raise l (err_because (Err_other ("Well-formedness check failed for type" ^ extra), err_l, err))
 
 let add_typ_synonym id typq arg env =
   if bound_typ_id env id then

@@ -166,6 +166,7 @@ val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
 val mk_fundef : uannot funcl list -> uannot def
 val mk_val_spec : val_spec_aux -> uannot def
 val mk_typschm : typquant -> typ -> typschm
+val mk_empty_typquant : loc:l -> typquant
 val mk_typquant : quant_item list -> typquant
 val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
@@ -214,6 +215,8 @@ val mk_id_typ : id -> typ
 val is_typ_arg_nexp : typ_arg -> bool
 val is_typ_arg_typ : typ_arg -> bool
 val is_typ_arg_bool : typ_arg -> bool
+
+val typ_arg_kind : typ_arg -> kind
 
 (** {2 Sail built-in types} *)
 
@@ -301,8 +304,9 @@ val nc_or : n_constraint -> n_constraint -> n_constraint
 val nc_not : n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
-val nc_set : kid -> Big_int.num list -> n_constraint
-val nc_int_set : kid -> int list -> n_constraint
+val nc_set : nexp -> Big_int.num list -> n_constraint
+val nc_int_set : nexp -> int list -> n_constraint
+val nc_id : id -> n_constraint
 val nc_var : kid -> n_constraint
 
 (** {2 Functions for building type arguments}*)
@@ -466,6 +470,7 @@ val string_of_index_range : index_range -> string
 
 val id_of_fundef : 'a fundef -> id
 val id_of_mapdef : 'a mapdef -> id
+val id_of_type_def_aux : type_def_aux -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id
