@@ -514,23 +514,38 @@ let const_props target ast =
         )
       | E_let (lb, e2) -> begin
           match lb with
-          | LB_aux (LB_val (p, e), annot) ->
+          | LB_aux (LB_val (p, e), annot) -> (
               let e', assigns = const_prop_exp substs assigns e in
               let substs' = remove_bound substs p in
               let plain () =
                 let e2', assigns = const_prop_exp substs' assigns e2 in
                 re (E_let (LB_aux (LB_val (p, e'), annot), e2')) assigns
               in
-              if is_value e' then (
-                match can_match l e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
-                | None -> plain ()
-                | Some (e'', bindings, kbindings) ->
-                    let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
-                    let bindings = bindings_from_list bindings in
-                    let substs'' = (bindings_union (fst substs') bindings, snd substs') in
-                    const_prop_exp substs'' assigns e''
-              )
-              else plain ()
+              match can_match l e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
+              | None -> plain ()
+              | Some (e'', bindings, kbindings) ->
+                  let val_bindings, exp_bindings = List.partition (fun (_, e) -> is_value e) bindings in
+                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
+                  let val_bindings = bindings_from_list val_bindings in
+                  let substs'' = (bindings_union (fst substs') val_bindings, snd substs') in
+                  let tail_exp, tail_assigns = const_prop_exp substs'' assigns e'' in
+                  ( List.fold_left
+                      (fun (E_aux (_, t_annot) as t_exp) (id, bind_exp) ->
+                        E_aux
+                          ( E_let
+                              ( LB_aux
+                                  ( LB_val (P_aux (P_id id, (Generated l, empty_tannot)), bind_exp),
+                                    (Generated l, empty_tannot)
+                                  ),
+                                t_exp
+                              ),
+                            t_annot
+                          )
+                      )
+                      tail_exp exp_bindings,
+                    tail_assigns
+                  )
+            )
         end
       (* TODO maybe - tuple assignments *)
       | E_assign (le, e) ->

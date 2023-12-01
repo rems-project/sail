@@ -1745,7 +1745,11 @@ module Analysis = struct
     let compare = compare
   end)
 
-  type dependencies = Have of arg_splits * extra_splits * let_binding_splits | Unknown of Parse_ast.l * string
+  (* When we've obviously got a tuple, keep the elements separate *)
+  type dependencies =
+    | Have of arg_splits * extra_splits * let_binding_splits
+    | Tuple of dependencies list
+    | Unknown of Parse_ast.l * string
 
   let string_of_match_detail = function
     | Total -> "[total]"
@@ -1785,10 +1789,11 @@ module Analysis = struct
   let string_of_callerkidset s =
     String.concat ", " (List.map (fun (id, kid) -> string_of_id id ^ "." ^ string_of_kid kid) (CallerKidSet.elements s))
 
-  let string_of_dep = function
+  let rec string_of_dep = function
     | Have (args, extras, letbinds) ->
         "Have (" ^ string_of_argsplits args ^ ";" ^ string_of_extra_splits extras ^ ";"
         ^ string_of_let_binding_splits letbinds ^ ")"
+    | Tuple deps -> "[" ^ String.concat ", " (List.map string_of_dep deps) ^ "]"
     | Unknown (l, msg) -> "Unknown " ^ msg ^ " at " ^ Reporting.loc_to_string l
 
   (* If a callee uses a type variable as a size, does it need to be split in the
@@ -1840,15 +1845,26 @@ module Analysis = struct
 
   let merge_extras = ExtraSplits.merge (opt_merge (KBindings.merge merge_detail))
 
-  let dmerge x y =
+  let rec dmerge x y =
     match (x, y) with
     | Unknown (l, s), _ -> Unknown (l, s)
     | _, Unknown (l, s) -> Unknown (l, s)
     | Have (args, extras, lets), Have (args', extras', lets') ->
         Have
           (ArgSplits.merge merge_detail args args', merge_extras extras extras', LetSplits.merge merge_detail lets lets')
+    | Tuple xs, Tuple ys -> Tuple (List.map2 dmerge xs ys)
+    (* Flatten when one side isn't a tuple *)
+    | Tuple ds, d | d, Tuple ds -> List.fold_left dmerge d ds
 
   let dempty = Have (ArgSplits.empty, ExtraSplits.empty, LetSplits.empty)
+
+  let flatten_deps d =
+    match d with
+    | Have _ -> d
+    | Unknown _ -> d
+    | Tuple [] -> dempty
+    | Tuple [d'] -> d'
+    | Tuple (d' :: ds) -> List.fold_left dmerge d' ds
 
   let dep_bindings_merge a1 a2 = Bindings.merge (opt_merge dmerge) a1 a2
 
@@ -2087,7 +2103,7 @@ module Analysis = struct
             )
           | _ -> None
         end
-      | Unknown _ -> None
+      | _ -> None
       | exception Not_found -> None
     in
     match e with
@@ -2202,7 +2218,11 @@ module Analysis = struct
       | Some (Nexp_aux (Nexp_var kid, _)) -> List.exists (fun k -> Kid.compare k kid == 0) env.top_kids
       | _ -> false
     in
-    let merge_deps deps = List.fold_left dmerge dempty deps in
+    let merge_deps = function [] -> dempty | d :: ds -> List.fold_left dmerge d ds in
+    let rec add_dep_respecting_tuples d = function
+      | Tuple ds -> Tuple (List.map (add_dep_respecting_tuples d) ds)
+      | d' -> dmerge d d'
+    in
     let deps, assigns, r =
       match e with
       | E_block es ->
@@ -2277,7 +2297,10 @@ module Analysis = struct
             else (dempty, { empty with split_on_call = Bindings.singleton id kid_deps })
           in
           (merge_deps (rdep :: eff_dep :: deps), assigns, merge r r')
-      | E_tuple es | E_list es ->
+      | E_tuple es ->
+          let deps, assigns, r = non_det es in
+          (Tuple deps, assigns, r)
+      | E_list es ->
           let deps, assigns, r = non_det es in
           (merge_deps deps, assigns, r)
       | E_if (e1, e2, e3) ->
@@ -2340,25 +2363,18 @@ module Analysis = struct
                 (dmerge d1 d2, assigns, merge r1 r2)
           in
           let ds, assigns, rs = split3 (List.map analyse_case cases) in
-          (merge_deps (deps :: ds), List.fold_left dep_bindings_merge Bindings.empty assigns, List.fold_left merge r rs)
+          let deps = add_dep_respecting_tuples deps (merge_deps ds) in
+          (deps, List.fold_left dep_bindings_merge Bindings.empty assigns, List.fold_left merge r rs)
       | E_let (LB_aux (LB_val (pat, e1), (lb_l, _)), e2) ->
           let d1, assigns, r1 = analyse_sub env assigns e1 in
-          let unknown_deps = match d1 with Unknown _ -> true | Have _ -> false in
-          let d =
-            (* As a special case, detect
-                 let 'size = if ... then 'typaram1 else 'typaram2;
-               where we can reduce the dependencies of 'size to the guard. *)
-            match (pat, e1) with
-            | ( P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _),
-                E_aux (E_if (guard_exp, E_aux (E_id id1, annot1), E_aux (E_id id2, annot2)), _) )
-              when is_toplevel_int annot1 && is_toplevel_int annot2 ->
-                let guard_deps, _, _ = analyse_sub env assigns guard_exp in
-                guard_deps
+          let rec update_env_subpat env pat d =
+            match (pat, d) with
             (* Add a new case split after the let if necessary *)
             (* Potential improvements: match on more patterns (e.g. tuples);
                allow disjunctions of equalities as well as set constraints;
                allow set constraint to be part of a larger constraint. *)
-            | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), _ when unknown_deps && useful_loc lb_l ->
+            | P_aux (P_typ (_, pat), _), _ -> update_env_subpat env pat d
+            | P_aux ((P_id id | P_var (P_aux (P_id id, _), _)), _), Unknown _ when useful_loc lb_l ->
                 let l' = Generated l in
                 let split =
                   match typ_of e1 with
@@ -2387,10 +2403,24 @@ module Analysis = struct
                       end
                   | _ -> Total
                 in
-                Have (ArgSplits.empty, ExtraSplits.empty, LetSplits.singleton (id, lb_l) split)
-            | _, _ -> d1
+                let d' = Have (ArgSplits.empty, ExtraSplits.empty, LetSplits.singleton (id, lb_l) split) in
+                update_env env d' pat (env_of_annot (l, annot)) (env_of e2)
+            | P_aux (P_tuple pats, _), Tuple deps when List.length deps == List.length pats ->
+                List.fold_left2 update_env_subpat env pats deps
+            | _ -> update_env env d pat (env_of_annot (l, annot)) (env_of e2)
           in
-          let env = update_env env d pat (env_of_annot (l, annot)) (env_of e2) in
+          let env =
+            (* As a special case, detect
+                 let 'size = if ... then 'typaram1 else 'typaram2;
+               where we can reduce the dependencies of 'size to the guard. *)
+            match (pat, e1) with
+            | ( P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _),
+                E_aux (E_if (guard_exp, E_aux (E_id id1, annot1), E_aux (E_id id2, annot2)), _) )
+              when is_toplevel_int annot1 && is_toplevel_int annot2 ->
+                let guard_deps, _, _ = analyse_sub env assigns guard_exp in
+                update_env env guard_deps pat (env_of_annot (l, annot)) (env_of e2)
+            | _ -> update_env_subpat env pat d1
+          in
           let d2, assigns, r2 = analyse_sub env assigns e2 in
           (d2, assigns, merge r1 r2)
       (* There's a more general assignment case above to update env inside a block. *)
@@ -2471,7 +2501,7 @@ module Analysis = struct
               | Nexp_var v when is_tyvar_parameter v ->
                   { r with kid_in_caller = CallerKidSet.add (fn_id, v) r.kid_in_caller }
               | _ -> (
-                  match deps_of_nexp l env.kid_deps [] size_nexp with
+                  match flatten_deps (deps_of_nexp l env.kid_deps [] size_nexp) with
                   | Have (args, extras, lets) ->
                       {
                         r with
@@ -2487,6 +2517,7 @@ module Analysis = struct
                             (StringSet.singleton ("Unable to monomorphise " ^ string_of_nexp size_nexp ^ ": " ^ msg))
                             r.failures;
                       }
+                  | Tuple _ -> assert false
                 )
             )
             else (
@@ -2844,7 +2875,8 @@ module Analysis = struct
     let _ = Util.progress "Analysing " "done" total_defs total_defs in
 
     (* Resolve the interprocedural dependencies *)
-    let rec separate_deps = function
+    let rec separate_deps d =
+      match flatten_deps d with
       | Have (splits, extras, lets) -> (splits, extras, lets, Failures.empty)
       | Unknown (l, msg) ->
           ( ArgSplits.empty,
@@ -2852,6 +2884,7 @@ module Analysis = struct
             LetSplits.empty,
             Failures.singleton l (StringSet.singleton ("Unable to monomorphise dependency: " ^ msg))
           )
+      | Tuple _ -> assert false
     and chase_kid_caller (id, kid) =
       match Bindings.find id r.split_on_call with
       | kid_deps -> begin
