@@ -24,7 +24,7 @@ struct TestStruct = {
 
 register SREG : TestStruct
 
-register OREG : option(byte)
+register OREG : option(byte) = None()
 
 val main : unit -> unit effect {rreg, wreg}
 

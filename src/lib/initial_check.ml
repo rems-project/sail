@@ -75,7 +75,6 @@ module Big_int = Nat_big_num
 module P = Parse_ast
 
 (* See mli file for details on what these flags do *)
-let opt_undefined_gen = ref false
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
 
@@ -1459,18 +1458,22 @@ let extern_of_string ?(pure = false) id str =
 
 let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None))
 
-let quant_item_param = function
-  | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
-  | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [prepend_id "typ_" (id_of_kid (kopt_kid kopt))]
+let quant_item_param_typ = function
+  | QI_aux (QI_id kopt, _) when is_int_kopt kopt ->
+      [(prepend_id "atom_" (id_of_kid (kopt_kid kopt)), atom_typ (nvar (kopt_kid kopt)))]
+  | QI_aux (QI_id kopt, _) when is_typ_kopt kopt ->
+      [(prepend_id "typ_" (id_of_kid (kopt_kid kopt)), mk_typ (Typ_var (kopt_kid kopt)))]
   | _ -> []
-let quant_item_typ = function
-  | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [atom_typ (nvar (kopt_kid kopt))]
-  | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ (Typ_var (kopt_kid kopt))]
-  | _ -> []
+
+let quant_item_param qi = List.map fst (quant_item_param_typ qi)
+
+let quant_item_typ qi = List.map snd (quant_item_param_typ qi)
+
 let quant_item_arg = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [mk_typ_arg (A_nexp (nvar (kopt_kid kopt)))]
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))]
   | _ -> []
+
 let undefined_typschm id typq =
   let qis = quant_items typq in
   if qis = [] then mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)))
@@ -1479,6 +1482,37 @@ let undefined_typschm id typq =
     let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
     mk_typschm typq (function_typ arg_typs ret_typ)
   )
+
+let generate_undefined_record_context typq =
+  quant_items typq |> List.map (fun qi -> quant_item_param_typ qi) |> List.concat
+
+let generate_undefined_record id typq fields =
+  let p_tup = function [pat] -> pat | pats -> mk_pat (P_tuple pats) in
+  let pat =
+    p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
+  in
+  [
+    mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
+    mk_fundef
+      [
+        mk_funcl (prepend_id "undefined_" id) pat
+          (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+      ];
+  ]
+
+let generate_undefined_enum id ids =
+  let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
+  [
+    mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None));
+    mk_fundef
+      [
+        mk_funcl (prepend_id "undefined_" id)
+          (mk_pat (P_lit (mk_lit L_unit)))
+          ( if !opt_fast_undefined && List.length ids > 0 then mk_exp (E_id (List.hd ids))
+            else mk_exp (E_app (mk_id "internal_pick", [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))]))
+          );
+      ];
+  ]
 
 let have_undefined_builtins = ref false
 
@@ -1510,131 +1544,7 @@ let generate_undefineds vs_ids defs =
       List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) undefined_builtin_val_specs
     end
   in
-  let undefined_tu = function
-    | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) ->
-        mk_exp (E_app (id, List.map (fun typ -> mk_exp (E_typ (typ, mk_lit_exp L_undef))) typs))
-    | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_exp (E_typ (typ, mk_lit_exp L_undef))]))
-  in
-  let p_tup = function [pat] -> pat | pats -> mk_pat (P_tuple pats) in
-  let undefined_union id typq tus =
-    let pat =
-      p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
-    in
-    let body =
-      if !opt_fast_undefined && List.length tus > 0 then undefined_tu (List.hd tus)
-      else (
-        (* Deduplicate arguments for each constructor to keep definitions
-           manageable. *)
-        let extract_tu = function
-          | Tu_aux (Tu_ty_id (Typ_aux (Typ_tuple typs, _), id), _) -> (id, typs)
-          | Tu_aux (Tu_ty_id (typ, id), _) -> (id, [typ])
-        in
-        let record_arg_typs m (_, typs) =
-          let m' =
-            List.fold_left
-              (fun m typ -> TypMap.add typ (1 + try TypMap.find typ m with Not_found -> 0) m)
-              TypMap.empty typs
-          in
-          TypMap.merge
-            (fun _ x y -> match (x, y) with Some m, Some n -> Some (max m n) | None, x -> x | x, None -> x)
-            m m'
-        in
-        let make_undef_var typ n (i, lbs, m) =
-          let j = i + n in
-          let rec aux k =
-            if k = j then []
-            else (
-              let v = mk_id ("u_" ^ string_of_int k) in
-              mk_letbind (mk_pat (P_typ (typ, mk_pat (P_id v)))) (mk_lit_exp L_undef) :: aux (k + 1)
-            )
-          in
-          (j, aux i @ lbs, TypMap.add typ i m)
-        in
-        let make_constr m (id, typs) =
-          let args, _ =
-            List.fold_right
-              (fun typ (acc, m) ->
-                let i = TypMap.find typ m in
-                (mk_exp (E_id (mk_id ("u_" ^ string_of_int i))) :: acc, TypMap.add typ (i + 1) m)
-              )
-              typs ([], m)
-          in
-          mk_exp (E_app (id, args))
-        in
-        let constr_args = List.map extract_tu tus in
-        let typs_needed = List.fold_left record_arg_typs TypMap.empty constr_args in
-        let _, letbinds, typ_to_var = TypMap.fold make_undef_var typs_needed (0, [], TypMap.empty) in
-        List.fold_left
-          (fun e lb -> mk_exp (E_let (lb, e)))
-          (mk_exp (E_app (mk_id "internal_pick", [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))])))
-          letbinds
-      )
-    in
-    ( mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None)),
-      mk_fundef [mk_funcl (prepend_id "undefined_" id) pat body]
-    )
-  in
-  let undefined_td = function
-    | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-        let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
-        [
-          mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None));
-          mk_fundef
-            [
-              mk_funcl (prepend_id "undefined_" id)
-                (mk_pat (P_lit (mk_lit L_unit)))
-                ( if !opt_fast_undefined && List.length ids > 0 then mk_exp (E_id (List.hd ids))
-                  else
-                    mk_exp (E_app (mk_id "internal_pick", [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))]))
-                );
-            ];
-        ]
-    | TD_record (id, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-        let pat =
-          p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
-        in
-        [
-          mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
-          mk_fundef
-            [
-              mk_funcl (prepend_id "undefined_" id) pat
-                (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
-            ];
-        ]
-    | TD_variant (id, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-        let vs, def = undefined_union id typq tus in
-        [vs; def]
-    | _ -> []
-  in
-  let undefined_scattered id typq =
-    let tus = get_scattered_union_clauses id defs in
-    undefined_union id typq tus
-  in
-  let rec undefined_defs = function
-    | (DEF_aux (DEF_type (TD_aux (td_aux, _)), _) as def) :: defs ->
-        (def :: List.map make_global (undefined_td td_aux)) @ undefined_defs defs
-    (* The function definition must come after the scattered type definition is complete, so put it at the end. *)
-    | (DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), _)), _) as def) :: defs ->
-        let vs, fn = undefined_scattered id typq in
-        (def :: make_global vs :: undefined_defs defs) @ [make_global fn]
-    | (DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (_, id, typq, fields), _)), _) as def) :: defs
-      when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-        let pat =
-          p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
-        in
-        let vs = mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None)) in
-        let fn =
-          mk_fundef
-            [
-              mk_funcl (prepend_id "undefined_" id) pat
-                (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
-            ]
-        in
-        def :: make_global vs :: make_global fn :: undefined_defs defs
-    | def :: defs -> def :: undefined_defs defs
-    | [] -> []
-  in
-  undefined_builtins @ undefined_defs defs
+  undefined_builtins @ defs
 
 let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs ->
@@ -1732,8 +1642,7 @@ let process_ast ?(generate = true) ast =
   let ast, ctx = to_ast !incremental_ctx ast in
   incremental_ctx := ctx;
   let vs_ids = val_spec_ids ast.defs in
-  if (not !opt_undefined_gen) && generate then { ast with defs = generate_enum_functions vs_ids ast.defs }
-  else if generate then
+  if generate then
     {
       ast with
       defs =

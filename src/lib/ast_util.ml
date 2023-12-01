@@ -100,6 +100,9 @@ let add_def_attribute l attr arg (annot : def_annot) = { annot with attrs = (l, 
 let get_def_attribute attr (annot : def_annot) =
   List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
+let remove_def_attribute attr (annot : def_annot) =
+  { annot with attrs = List.filter (fun (_, attr', _) -> attr <> attr') annot.attrs }
+
 type mut = Immutable | Mutable
 
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id

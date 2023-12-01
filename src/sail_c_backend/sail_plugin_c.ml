@@ -164,7 +164,4 @@ let c_target _ _ out_file ast effect_info env =
   flush output_chan;
   if close then close_out output_chan
 
-let _ =
-  Target.register ~name:"c" ~options:c_options
-    ~pre_parse_hook:(fun () -> Initial_check.opt_undefined_gen := true)
-    ~rewrites:c_rewrites c_target
+let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites c_target

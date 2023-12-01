@@ -2,7 +2,7 @@ $include <arith.sail>
 $include <flow.sail>
 $include <option.sail>
 
-register X : option(int)
+register X : option(int) = None()
 
 val inc_X : unit -> int effect {rreg, wreg}
 function inc_X () = {

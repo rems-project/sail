@@ -194,7 +194,11 @@ let rec descatter' accumulator funcls mapcls = function
         match members with
         | [] -> raise (Reporting.err_general l "No clauses found for scattered enum type")
         | _ ->
-            let def_annot = add_def_attribute (gen_loc l) "no_enum_functions" "" def_annot in
+            let def_annot =
+              def_annot
+              |> add_def_attribute (gen_loc l) "no_enum_functions" ""
+              |> add_def_attribute (gen_loc l) "undefined_gen" "forbid"
+            in
             let accumulator =
               DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
               :: accumulator

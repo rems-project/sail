@@ -103,6 +103,8 @@ val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 
 val get_def_attribute : string -> def_annot -> (l * string) option
 
+val remove_def_attribute : string -> def_annot -> def_annot
+
 val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
 
 (** The empty annotation (as a location + uannot pair). Should be used

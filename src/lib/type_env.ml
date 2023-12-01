@@ -113,6 +113,7 @@ type global_env = {
   synonyms : (typquant * typ_arg) env_item Bindings.t;
   accessors : (typquant * typ) env_item IdPairMap.t;
   bitfields : (typ * index_range Bindings.t) env_item Bindings.t;
+  allow_undefined : IdSet.t;
   letbinds : typ env_item Bindings.t;
   registers : typ env_item Bindings.t;
   overloads : id list multiple_env_item Bindings.t;
@@ -136,6 +137,7 @@ let empty_global_env =
     accessors = IdPairMap.empty;
     synonyms = Bindings.empty;
     bitfields = Bindings.empty;
+    allow_undefined = IdSet.empty;
     letbinds = Bindings.empty;
     registers = Bindings.empty;
     overloads = Bindings.empty;
@@ -154,7 +156,6 @@ type env = {
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
   ret_typ : typ option;
-  poly_undefineds : bool;
   prove : (env -> n_constraint -> bool) option;
   allow_unknowns : bool;
   toplevel : l option;
@@ -243,7 +244,6 @@ let empty =
     allow_bindings = true;
     constraints = [];
     ret_typ = None;
-    poly_undefineds = false;
     prove = None;
     allow_unknowns = false;
     toplevel = None;
@@ -272,6 +272,11 @@ let set_prover f env = { env with prove = f }
 
 let allow_unknowns env = env.allow_unknowns
 let set_allow_unknowns b env = { env with allow_unknowns = b }
+
+let is_user_undefined id env = IdSet.mem id env.global.allow_undefined
+
+let allow_user_undefined id env =
+  update_global (fun global -> { global with allow_undefined = IdSet.add id global.allow_undefined }) env
 
 (* First, we define how type variables are added to the
    environment. If we add a new variable shadowing a previous
@@ -1168,9 +1173,14 @@ let add_enum_clause id member env =
         ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
   | None -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
-let get_enum id env =
+let get_enum_opt id env =
   match Option.map (get_item (id_loc id) env) (Bindings.find_opt id env.global.enums) with
-  | Some (_, enum) -> IdSet.elements enum
+  | Some (_, enum) -> Some (IdSet.elements enum)
+  | None -> None
+
+let get_enum id env =
+  match get_enum_opt id env with
+  | Some enum -> enum
   | None -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
 let get_enums env = filter_items_with snd env env.global.enums
@@ -1446,9 +1456,5 @@ let add_bitfield id typ ranges env =
       { global with bitfields = Bindings.add id (mk_item env ~loc:(id_loc id) (typ, ranges)) global.bitfields }
     )
     env
-
-let allow_polymorphic_undefineds env = { env with poly_undefineds = true }
-
-let polymorphic_undefineds env = env.poly_undefineds
 
 let is_toplevel env = env.toplevel

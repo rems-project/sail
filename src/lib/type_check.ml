@@ -1277,6 +1277,33 @@ and rewrite_nc_aux l env =
       (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
       E_id (id_of_kid v)
 
+let can_be_undefined ~at:l env typ =
+  let rec check (Typ_aux (aux, _)) =
+    match aux with
+    | Typ_fn _ | Typ_bidir _ | Typ_exist _ | Typ_var _ -> false
+    | Typ_id (Id_aux (Id name, _) as id) ->
+        name = "bool" || name = "bit" || name = "nat" || name = "int" || name = "real" || name = "string"
+        || Env.is_bitfield id env || Env.is_user_undefined id env
+    | Typ_id _ -> false
+    | Typ_app ((Id_aux (Id name, _) as id), args) ->
+        (name = "bitvector" || name = "vector" || name = "range" || Env.is_user_undefined id env)
+        && List.for_all check_arg args
+    | Typ_app _ -> false
+    | Typ_tuple typs -> List.for_all check typs
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "unexpected Typ_internal_unknown"
+  and check_arg (A_aux (aux, _)) =
+    match aux with
+    | A_nexp nexp -> (
+        try
+          let _ = rewrite_sizeof l env nexp in
+          true
+        with Type_error _ -> false
+      )
+    | A_typ typ -> check typ
+    | A_bool _ -> true
+  in
+  check (Env.expand_synonyms env typ)
+
 (**************************************************************************)
 (* 5. Type checking expressions                                           *)
 (**************************************************************************)
@@ -2099,11 +2126,10 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
       else typ_error l "Vector literal with incorrect length" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
-      if is_typ_monomorphic typ || Env.polymorphic_undefineds env then
-        if is_typ_inhabited env (Env.expand_synonyms env typ) || Env.polymorphic_undefineds env then
-          annot_exp (E_lit lit) typ
-        else typ_error l ("Type " ^ string_of_typ typ ^ " is empty")
-      else typ_error l ("Type " ^ string_of_typ typ ^ " must be monomorphic")
+      if can_be_undefined ~at:l env typ then
+        if is_typ_inhabited env (Env.expand_synonyms env typ) then annot_exp (E_lit lit) typ
+        else typ_error l ("Type " ^ string_of_typ typ ^ " could be empty")
+      else typ_error l ("Type " ^ string_of_typ typ ^ " cannot be undefined")
   | E_internal_assume (nc, exp), _ ->
       Env.wf_constraint env nc;
       let env = Env.add_constraint nc env in
@@ -3921,16 +3947,6 @@ let bind_funcl_arg_typ l env typ =
 let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) typ =
   let l = def_annot.loc in
   let typ_arg, typ_ret, env = bind_funcl_arg_typ l env typ in
-  (* We want to forbid polymorphic undefined values in all cases,
-     except when type checking the specific undefined_(type) functions
-     created by the -undefined_gen functions in initial_check.ml. Only
-     in these functions will the rewriter be able to correctly
-     re-write the polymorphic undefineds (due to the specific form the
-     functions have *)
-  let env =
-    if Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0 then Env.allow_polymorphic_undefineds env
-    else env
-  in
   let typed_pexp = check_case env typ_arg pexp typ_ret in
   FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
 
@@ -4253,7 +4269,53 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
   | TD_record (id, typq, fields, _) ->
       let env = check_record l env def_annot id typq fields in
-      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+      begin
+        match get_def_attribute "undefined_gen" def_annot with
+        | Some (_, "forbid") -> ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+        | Some (_, "skip") ->
+            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
+        | (Some (_, "generate") | None) as attr ->
+            let field_env = Env.add_typquant l typq env in
+            let field_env =
+              List.fold_left
+                (fun env (id, typ) -> Env.add_local id (Immutable, typ) env)
+                field_env
+                (Initial_check.generate_undefined_record_context typq)
+            in
+            let gen_undefined =
+              List.for_all (fun (typ, field_id) -> can_be_undefined ~at:(id_loc field_id) field_env typ) fields
+            in
+            if (not gen_undefined) && Option.is_none attr then (
+              (* If we cannot generate an undefined value, and we weren't explicitly asked to *)
+              let def_annot = add_def_attribute (gen_loc l) "undefined_gen" "forbid" def_annot in
+              ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+            )
+            else if not gen_undefined then
+              (* If we cannot generate an undefined value, but we were
+                 explicitly told to then it's an error. *)
+              typ_error l ("Cannot generate undefined function for struct " ^ string_of_id id)
+            else (
+              let undefined_defs = Initial_check.generate_undefined_record id typq fields in
+              try
+                let undefined_defs, env = check_defs env undefined_defs in
+                let def_annot =
+                  def_annot |> remove_def_attribute "undefined_gen"
+                  |> add_def_attribute (gen_loc l) "undefined_gen" "skip"
+                in
+                ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
+                  Env.allow_user_undefined id env
+                )
+              with
+              | Type_error _ when Option.is_none attr ->
+                  let def_annot = add_def_attribute (gen_loc l) "undefined_gen" "forbid" def_annot in
+                  ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+              | Type_error _ -> typ_error l ("Cannot generate undefined function for struct " ^ string_of_id id)
+            )
+        | Some (attr_l, arg) ->
+            typ_error
+              (Hint ("When checking this struct", l, attr_l))
+              ("Unrecognized argument to undefined attribute: " ^ arg)
+      end
   | TD_variant (id, typq, arms, _) ->
       let rec_env = Env.add_variant id (typq, arms) env in
       (* register_value is a special type used by theorem prover
@@ -4263,7 +4325,27 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
         rec_env |> fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms
       in
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
-  | TD_enum (id, ids, _) -> ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_enum id ids env)
+  | TD_enum (id, ids, _) ->
+      let env = Env.add_enum id ids env in
+      begin
+        match get_def_attribute "undefined_gen" def_annot with
+        | Some (_, "forbid") -> ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+        | Some (_, "skip") ->
+            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
+        | Some (_, "generate") | None ->
+            let undefined_defs = Initial_check.generate_undefined_enum id ids in
+            let undefined_defs, env = check_defs env undefined_defs in
+            let def_annot =
+              def_annot |> remove_def_attribute "undefined_gen" |> add_def_attribute (gen_loc l) "undefined_gen" "skip"
+            in
+            ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
+              Env.allow_user_undefined id env
+            )
+        | Some (attr_l, arg) ->
+            typ_error
+              (Hint ("When checking this enum", l, attr_l))
+              ("Unrecognized argument to undefined attribute: " ^ arg)
+      end
   | TD_bitfield (id, typ, ranges) as unexpanded ->
       let typ = Env.expand_synonyms env typ in
       begin
@@ -4288,9 +4370,6 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             let defs =
               DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
               :: Bitfield.macro id size (Env.get_default_order env) ranges
-            in
-            let defs =
-              if !Initial_check.opt_undefined_gen then Initial_check.generate_undefineds IdSet.empty defs else defs
             in
             let defs, env =
               try check_defs env defs
@@ -4513,6 +4592,8 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
   | DEF_default default -> check_default env def_annot default
   | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, _))) ->
+      if not (can_be_undefined ~at:l env typ) then
+        typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
       let env = Env.add_register id typ env in
       ( [
           DEF_aux
