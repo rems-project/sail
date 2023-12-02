@@ -4591,16 +4591,23 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
   | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
   | DEF_default default -> check_default env def_annot default
   | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
-  | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, _))) ->
-      if not (can_be_undefined ~at:l env typ) then
-        typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
-      let env = Env.add_register id typ env in
-      ( [
-          DEF_aux
-            (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
-        ],
-        env
-      )
+  | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> begin
+      match typ with
+      | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
+          Reporting.warn "No default value" l "Registers of type option should explicitly be given a default value";
+          let none_ctor = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))) in
+          check_def env (DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), def_annot))
+      | _ ->
+          if not (can_be_undefined ~at:l env typ) then
+            typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
+          let env = Env.add_register id typ env in
+          ( [
+              DEF_aux
+                (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
+            ],
+            env
+          )
+    end
   | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
       let checked_exp = crule check_exp env exp typ in
       let env = Env.add_register id typ env in

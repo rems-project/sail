@@ -1547,8 +1547,11 @@ let generate_undefineds vs_ids defs =
   undefined_builtins @ defs
 
 let rec get_uninitialized_registers = function
-  | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs ->
-      (typ, id) :: get_uninitialized_registers defs
+  | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> begin
+      match typ with
+      | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) -> get_uninitialized_registers defs
+      | _ -> (typ, id) :: get_uninitialized_registers defs
+    end
   | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
