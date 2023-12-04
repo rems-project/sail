@@ -202,31 +202,45 @@ let extract_set_nc env l var nc =
   (* Lazily expand constraints to keep close to the original form *)
   let rec aux expanded (NC_aux (nc, l) as nc_full) =
     let re nc = NC_aux (nc, l) in
+
+    (* Turn (i <= 'v & 'v <= j & ...) into set constraint ('v in {i..j}) *)
+    let handle_range n kid nc1 nc2 =
+      let aux2 () =
+        match aux expanded nc2 with Some (is, nc2') -> Some (is, re (NC_and (nc1, nc2'))) | None -> None
+      in
+      let handle' n' kid' ncs =
+        let len = Big_int.succ (Big_int.sub n' n) in
+        if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int size_set_limit) then (
+          let elem i = Big_int.add n (Big_int.of_int i) in
+          let is = List.init (Big_int.to_int len) elem in
+          if aux expanded (List.fold_left nc_and nc_true ncs) <> None then
+            raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var))
+          else Some (is, nc_full)
+        )
+        else aux2 ()
+      in
+      begin
+        match constraint_conj nc2 with
+        | NC_aux (NC_bounded_le (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
+          when KidSet.mem kid' vars ->
+            handle' n' kid' ncs
+        | NC_aux (NC_bounded_lt (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
+          when KidSet.mem kid' vars ->
+            handle' (Nat_big_num.pred n') kid' ncs
+        | _ -> aux2 ()
+      end
+    in
+
     match nc with
     | NC_set (id, is) when KidSet.mem id vars -> Some (is, re NC_true)
     | NC_equal (Nexp_aux (Nexp_var id, _), Nexp_aux (Nexp_constant n, _)) when KidSet.mem id vars ->
         Some ([n], re NC_true)
-    (* Turn (i <= 'v & 'v <= j & ...) into set constraint ('v in {i..j}) *)
     | NC_and ((NC_aux (NC_bounded_le (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
-        let aux2 () =
-          match aux expanded nc2 with Some (is, nc2') -> Some (is, re (NC_and (nc1, nc2'))) | None -> None
-        in
-        begin
-          match constraint_conj nc2 with
-          | NC_aux (NC_bounded_le (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
-            when KidSet.mem kid' vars ->
-              let len = Big_int.succ (Big_int.sub n' n) in
-              if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int size_set_limit) then (
-                let elem i = Big_int.add n (Big_int.of_int i) in
-                let is = List.init (Big_int.to_int len) elem in
-                if aux expanded (List.fold_left nc_and nc_true ncs) <> None then
-                  raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var))
-                else Some (is, nc_full)
-              )
-              else aux2 ()
-          | _ -> aux2 ()
-        end
+        handle_range n kid nc1 nc2
+    | NC_and ((NC_aux (NC_bounded_lt (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
+      when KidSet.mem kid vars ->
+        handle_range (Nat_big_num.succ n) kid nc1 nc2
     | NC_and (nc1, nc2) -> (
         match (aux expanded nc1, aux expanded nc2) with
         | None, None -> None
