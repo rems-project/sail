@@ -68,6 +68,7 @@
 open Ast_defs
 
 val opt_mwords : bool ref
+val opt_size_set_limit : int ref
 
 type options = {
   auto : bool; (* Analyse ast to find splits for monomorphisation *)

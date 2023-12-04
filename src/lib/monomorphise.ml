@@ -137,7 +137,7 @@ let rec typeclass_nexps (Typ_aux (t, l)) =
   )
   else NexpSet.empty
 
-let size_set_limit = 64
+let opt_size_set_limit = ref 64
 
 let optmap v f = match v with None -> None | Some v -> Some (f v)
 
@@ -210,7 +210,7 @@ let extract_set_nc env l var nc =
       in
       let handle' n' kid' ncs =
         let len = Big_int.succ (Big_int.sub n' n) in
-        if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int size_set_limit) then (
+        if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int !opt_size_set_limit) then (
           let elem i = Big_int.add n (Big_int.of_int i) in
           let is = List.init (Big_int.to_int len) elem in
           if aux expanded (List.fold_left nc_and nc_true ncs) <> None then
@@ -379,10 +379,10 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
   | [] -> None
   | [(l, _)] when List.for_all (function _, None -> true | _ -> false) l -> None
   | sample :: _ ->
-      if List.length variants > size_set_limit then
+      if List.length variants > !opt_size_set_limit then
         cannot ql
           (string_of_int (List.length variants)
-          ^ "variants for constructor " ^ i ^ "bigger than limit " ^ string_of_int size_set_limit
+          ^ "variants for constructor " ^ i ^ "bigger than limit " ^ string_of_int !opt_size_set_limit
           )
           None
       else (
@@ -786,7 +786,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
             let sz = Big_int.to_int sz in
             let num_lits = Big_int.pow_int (Big_int.of_int 2) sz in
             (* Check that split size is within limits before generating the list of literals *)
-            if Big_int.less_equal num_lits (Big_int.of_int size_set_limit) then (
+            if Big_int.less_equal num_lits (Big_int.of_int !opt_size_set_limit) then (
               let lits = make_vectors sz in
               (* Some parts of Sail don't recognise complete bitvector
                  matches, so make the last one a wildcard. *)
@@ -1046,10 +1046,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
 
     let check_split_size lst l =
       let size = List.length lst in
-      if size > size_set_limit then
+      if size > !opt_size_set_limit then
         let open Reporting in
         let error_msg =
-          "Case split is too large (" ^ string_of_int size ^ " > limit " ^ string_of_int size_set_limit ^ ")"
+          "Case split is too large (" ^ string_of_int size ^ " > limit " ^ string_of_int !opt_size_set_limit ^ ")"
         in
         if all_errors then (
           no_errors_happened := false;
