@@ -331,6 +331,7 @@ let rec options =
         "<verbosity> (debug) dump information about monomorphisation analysis: 0 silent, 3 max"
       );
       ("-dmono_continue", Arg.Set Rewrites.opt_dmono_continue, " (debug) continue despite monomorphisation errors");
+      ("-dmono_limit", Arg.Set_int Monomorphise.opt_size_set_limit, " (debug) adjust maximum size of split allowed");
       ("-dpattern_warning_no_literals", Arg.Set Pattern_completeness.opt_debug_no_literals, "");
       ( "-dbacktrace",
         Arg.Int (fun l -> Reporting.opt_backtrace_length := l),
