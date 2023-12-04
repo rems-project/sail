@@ -2196,9 +2196,9 @@ module Analysis = struct
      and dependencies on mutable variables.  The latter are quite conservative,
      we currently drop variables assigned inside loops, for example. *)
 
-  let rec analyse_exp fn_id effect_info env assigns (E_aux (e, (l, annot)) as exp) =
-    let analyse_sub = analyse_exp fn_id effect_info in
-    let analyse_lexp = analyse_lexp fn_id effect_info in
+  let rec analyse_exp debug fn_id effect_info env assigns (E_aux (e, (l, annot)) as exp) =
+    let analyse_sub = analyse_exp debug fn_id effect_info in
+    let analyse_lexp = analyse_lexp debug fn_id effect_info in
     let remove_assigns es message =
       let assigned = assigned_vars_exps es in
       IdSet.fold (fun id asn -> Bindings.add id (Unknown (l, string_of_id id ^ message)) asn) assigned assigns
@@ -2521,7 +2521,10 @@ module Analysis = struct
               | Nexp_constant _ -> r
               | Nexp_var v when is_tyvar_parameter v ->
                   { r with kid_in_caller = CallerKidSet.add (fn_id, v) r.kid_in_caller }
-              | _ -> (
+              | _ -> begin
+                  if debug > 2 then
+                    print_endline
+                      ("  Need size " ^ string_of_nexp size_nexp ^ " at location " ^ Reporting.loc_to_string l);
                   match flatten_deps (deps_of_nexp l env.kid_deps [] size_nexp) with
                   | Have (args, extras, lets) ->
                       {
@@ -2539,7 +2542,7 @@ module Analysis = struct
                             r.failures;
                       }
                   | Tuple _ -> assert false
-                )
+                end
             )
             else (
               match typ with
@@ -2551,9 +2554,9 @@ module Analysis = struct
     in
     (deps, assigns, r)
 
-  and analyse_lexp fn_id effect_info env assigns deps (LE_aux (lexp, (l, _))) =
-    let analyse_sub = analyse_exp fn_id effect_info in
-    let analyse_lexp = analyse_lexp fn_id effect_info in
+  and analyse_lexp debug fn_id effect_info env assigns deps (LE_aux (lexp, (l, _))) =
+    let analyse_sub = analyse_exp debug fn_id effect_info in
+    let analyse_lexp = analyse_lexp debug fn_id effect_info in
     (* TODO: maybe subexps and sublexps should be non-det (and in const_prop_lexp, too?) *)
     match lexp with
     | LE_id id | LE_typ (_, id) ->
@@ -2842,12 +2845,12 @@ module Analysis = struct
     let set_assertions = find_set_assertions body in
     let _ = if debug > 2 then print_set_assertions set_assertions in
     let aenv = initial_env id l tq pat body set_assertions constants in
-    let _, _, r = analyse_exp id effect_info aenv Bindings.empty body in
+    let _, _, r = analyse_exp debug id effect_info aenv Bindings.empty body in
     let r =
       match guard with
       | None -> r
       | Some exp ->
-          let _, _, r' = analyse_exp id effect_info aenv Bindings.empty exp in
+          let _, _, r' = analyse_exp debug id effect_info aenv Bindings.empty exp in
           let r' =
             if ExtraSplits.is_empty r'.extra_splits then r'
             else
