@@ -113,8 +113,8 @@ let rec is_value (E_aux (e, (l, annot))) =
   | E_app (id, es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
   | E_typ (typ, E_aux (E_lit (L_aux (L_undef, _)), _)) -> true
-  (* Also keep casts around records, as type inference fails without *)
-  | E_typ (_, (E_aux (E_struct _, _) as e')) -> is_value e'
+  (* Also keep casts around, as type inference fails without (e.g., for records for vectors) *)
+  | E_typ (_, e') -> is_value e'
   (* TODO: more? *)
   | _ -> false
 
@@ -266,6 +266,17 @@ let keep_undef_typ value =
 let is_env_inconsistent env ksubsts =
   let env = KBindings.fold (fun k nexp env -> Env.add_constraint (nc_eq (nvar k) nexp) env) ksubsts env in
   prove __POS__ env nc_false
+
+let rec typ_has_existential (Typ_aux (t, _)) =
+  match t with
+  | Typ_internal_unknown | Typ_id _ | Typ_var _ -> false
+  | Typ_fn _ | Typ_bidir _ -> assert false
+  | Typ_tuple typs -> List.exists typ_has_existential typs
+  | Typ_app (_, args) -> List.exists typ_arg_has_existential args
+  | Typ_exist _ -> true
+
+and typ_arg_has_existential (A_aux (a, _)) =
+  match a with A_nexp _ | A_bool _ -> false | A_typ typ -> typ_has_existential typ
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -676,9 +687,9 @@ let const_props target ast =
         match (e, p) with
         | _, P_wild -> DoesMatch ([], [])
         | _, P_typ (typ, p') -> begin
-            match check_exp_pat exp p' with
-            | DoesMatch ([(id, v)], ns) -> DoesMatch ([(id, E_aux (E_typ (typ, v), (l', p_annot)))], ns)
-            | m -> m
+            match (typ_has_existential typ, check_exp_pat exp p') with
+            | false, DoesMatch ([(id, v)], ns) -> DoesMatch ([(id, E_aux (E_typ (typ, v), (l', p_annot)))], ns)
+            | _, m -> m
           end
         | _, P_id id' when pat_id_is_variable env id' ->
             let exp_typ = typ_of exp in
@@ -789,7 +800,8 @@ let const_props target ast =
         | E_typ (undef_typ, E_aux (E_lit (L_aux (L_undef, lit_l)), _)), _ ->
             Reporting.print_err l' "Monomorphisation" ("Unexpected kind of pattern for literal: " ^ string_of_pat pat);
             GiveUp
-        | E_struct _, _ | E_typ (_, E_aux (E_struct _, _)), _ -> DoesNotMatch
+        | E_typ (_, exp'), _ -> check_exp_pat exp' pat
+        | E_struct _, _ -> DoesNotMatch
         | _ -> GiveUp
       in
       let check_pat = check_exp_pat exp0 in
