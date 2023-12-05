@@ -177,7 +177,7 @@ assert(x @ y == 0xFFFF_0000);
 ----
 
 For historical reasons the `bit` type is not equal to `bits(1)`, and
-while this does simplify na&iuml;vely mapping the bits type into a (very
+while this does simplify naively mapping the bits type into a (very
 inefficient!) representation like `bit list` in Isabelle or OCaml, it
 might be something we reconsider in the future.
 

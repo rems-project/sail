@@ -1,3 +1,5 @@
+SAIL_LOGO_PATH ?= etc/logo/sail_logo_square.png
+
 SAIL_PLUGIN ?= asciidoctor-sail
 
 SAIL_DOCS = sail_doc/riscv_duopod.json
@@ -64,7 +66,10 @@ parser.txt: ../../src/lib/parser.mly parser.sed
 manual.pdf: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt
 	asciidoctor-pdf manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
-manual.html: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt manual.css sail_logo_square.png
+docinfo.html: docinfo.template
+	sed 's/SAIL_LOGO_PATH/$(shell echo $(SAIL_LOGO_PATH) | sed 's/\//\\\//g')/' $< > $@
+
+manual.html: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt manual.css docinfo.html
 	asciidoctor manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
 .PHONY: clean

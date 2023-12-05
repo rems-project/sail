@@ -401,7 +401,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let doc_loc l g f x =
     match Reporting.simp_loc l with
-    | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname -> doc_lexing_pos p1 p2
+    | Some (p1, p2)
+      when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname && Sys.file_exists p1.pos_fname ->
+        doc_lexing_pos p1 p2
     | _ -> Raw (g x |> f |> Pretty_print_sail.to_string |> encode)
 
   let get_doc_comment def_annot =
