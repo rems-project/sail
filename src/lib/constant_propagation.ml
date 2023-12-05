@@ -672,10 +672,14 @@ let const_props target ast =
         )
       | _ -> exp_orig
     and can_match_with_env l env (E_aux (e, (_l, annot)) as exp0) cases (substs, ksubsts) assigns =
-      let rec check_exp_pat (E_aux (e, (l, annot)) as exp) (P_aux (p, (l', _)) as pat) =
+      let rec check_exp_pat (E_aux (e, (l, annot)) as exp) (P_aux (p, (l', p_annot)) as pat) =
         match (e, p) with
         | _, P_wild -> DoesMatch ([], [])
-        | _, P_typ (_, p') -> check_exp_pat exp p'
+        | _, P_typ (typ, p') -> begin
+            match check_exp_pat exp p' with
+            | DoesMatch ([(id, v)], ns) -> DoesMatch ([(id, E_aux (E_typ (typ, v), (l', p_annot)))], ns)
+            | m -> m
+          end
         | _, P_id id' when pat_id_is_variable env id' ->
             let exp_typ = typ_of exp in
             let pat_typ = typ_of_pat pat in
