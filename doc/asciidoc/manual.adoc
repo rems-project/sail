@@ -1,5 +1,5 @@
 :doctype: book
-:bibtex-file: ../manual.bib
+:bibtex-file: manual.bib
 :hide-uri-scheme:
 :source-highlighter: rouge
 

@@ -38,7 +38,7 @@ descriptions of the current state.
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
 
-* A manual, [manual.html](manual.html) with source (in [doc/](doc/)), currently [available online here](https://alasdair.github.io/manual.html)
+* A manual, [doc/manual.html](doc/manual.html) with source (in [doc/](doc/)), currently [available online here](https://alasdair.github.io/manual.html)
 
 * The Sail source code (in [src/](src/))
 

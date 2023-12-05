@@ -1,4 +1,4 @@
-SAIL_LOGO_PATH ?= etc/logo/sail_logo_square.png
+SAIL_LOGO_PATH ?= ../../etc/logo/sail_logo_square.png
 
 SAIL_PLUGIN ?= asciidoctor-sail
 
@@ -63,13 +63,13 @@ parser.txt: ../../src/lib/parser.mly parser.sed
 	obelisk -i $< | tr '\n' '+' | sed 's/+[ ][ ]*\([^| ]\)/ \1/g' | tr '+' '\n' > $@
 	sed -i.bak -f parser.sed $@
 
-manual.pdf: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt
+manual.pdf: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) manual.bib parser.txt
 	asciidoctor-pdf manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
 docinfo.html: docinfo.template
 	sed 's/SAIL_LOGO_PATH/$(shell echo $(SAIL_LOGO_PATH) | sed 's/\//\\\//g')/' $< > $@
 
-manual.html: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) parser.txt manual.css docinfo.html
+manual.html: *.adoc $(SAIL_DOCS) $(INCS) $(TIKZ_FIGURES) manual.bib parser.txt manual.css docinfo.html
 	asciidoctor manual.adoc -r $(SAIL_PLUGIN) -r asciidoctor-bibtex
 
 .PHONY: clean
@@ -82,4 +82,5 @@ clean:
 	-rm *.log
 	-rm *.aux
 	-rm parser.txt
+	-rm docinfo.html
 	-rm manual.html
