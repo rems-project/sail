@@ -3040,6 +3040,7 @@ module MonoRewrites = struct
     let is_slice = is_id env (Id "slice") in
     let is_zeros id = is_zeros env id in
     let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id || is_id env (Id "sail_ones") id in
+    let is_ones_lit str = String.for_all (function '1' -> true | _ -> false) str in
     let is_zero_extend = is_zero_extend env id in
     let is_sign_extend =
       is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id
@@ -3189,6 +3190,42 @@ module MonoRewrites = struct
                  it might not be sufficiently constrained. *)
               let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
+          | None -> E_app (id, args)
+        end
+      | [E_aux (E_lit (L_aux (L_bin lit, _)), _); zeros_exp]
+        when is_ones_lit lit && is_zeros_exp zeros_exp && not (is_constant_vec_typ env (typ_of zeros_exp)) -> begin
+          match get_zeros_exp_len zeros_exp with
+          | Some zlen ->
+              (* Give the length explicitly rather than relying on the context;
+                 it might not be sufficiently constrained. *)
+              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
+              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
+          | None -> E_app (id, args)
+        end
+      (* zeros @ ones *)
+      | [zeros_exp; E_aux (E_app (ones2, [len2]), _)]
+        when is_ones ones2 && is_zeros_exp zeros_exp
+             && not (is_constant len2 && is_constant_vec_typ env (typ_of zeros_exp)) -> begin
+          match get_zeros_exp_len zeros_exp with
+          | Some zlen ->
+              (* Give the length explicitly rather than relying on the context;
+                 it might not be sufficiently constrained. *)
+              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
+          | None -> E_app (id, args)
+        end
+      | [zeros_exp; E_aux (E_lit (L_aux (L_bin lit, _)), _)]
+        when is_ones_lit lit && is_zeros_exp zeros_exp && not (is_constant_vec_typ env (typ_of zeros_exp)) -> begin
+          match get_zeros_exp_len zeros_exp with
+          | Some zlen ->
+              (* Give the length explicitly rather than relying on the context;
+                 it might not be sufficiently constrained. *)
+              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
+              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
         end
       (* ones @ variable *)
