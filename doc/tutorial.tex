@@ -299,7 +299,9 @@ example:
 let l : list(int) = [|1, 2, 3|]
 \end{lstlisting}
 The cons operator is \ll{::}, so we could equally write:
-\lstinputlisting{examples/list.sail}
+\begin{lstlisting}
+let l : list(int) = 1 :: 2 :: 3 :: [||]
+\end{lstlisting}
 Pattern matching can be used to destructure lists, see Section~\ref{sec:pat}.
 
 \subsection{Other Types}

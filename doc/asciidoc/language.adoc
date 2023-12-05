@@ -56,6 +56,31 @@ argument can then just be omitted when calling the function, like so:
 
 sail::extz_usage[from=mrb,part=body,dedent]
 
+=== Blocks
+:let-var: sail_doc/let_var.json
+
+You may have noticed that in the definition of `my_replicate_bits`
+above, there was no `return` keyword. This is because unlike languages
+such as C and C++, and more similar to languages like OCaml and Rust,
+everything in Sail is an _expression_ which evaluates to a value. A
+block in Sail is simply a sequence of expressions surrounded by curly
+braces `{` and `}`, and separated by semicolons. The value returned by
+a block is the value returned by the last expressions, and likewise
+the type of a block is determined by it's final expressions, so
+`{{nbsp}A;{nbsp}B;{nbsp}C{nbsp}}`, will evaluate to the value of `C`
+after evaluating `A` and `B` in order. The expressions other than the
+final expression in the block must have type `unit`, which is
+discussed in the following section. Within blocks we can declare
+immutable variables using `let`, and mutable variables using `var`,
+for example:
+
+sail::example[from=let-var,part=body,dedent]
+
+include::sailcomment:example[from=let-var]
+
+NOTE: For those familiar with Rust, a trailing semicolon in Sail does
+not change the semantics of the block and is purely optional.
+
 === The unit type
 
 The simplest type in Sail is the _unit type_ `unit`. It is a type with
@@ -85,7 +110,7 @@ equal to the value of that type variable. In other words, the values
 of type `int('n)` are integers equal to `'n`. So
 `5{nbsp}:{nbsp}int(5)` and similarly for any integer constant. These
 types can often be used interchangeably provided certain constraints
-are satisified. For example, `int('n)` is equivalent to
+are satisfied. For example, `int('n)` is equivalent to
 `range('n,{nbsp}'n)` and `range('n,{nbsp}'m)` can be converted into
 `int('n)` when `'n{nbsp}=={nbsp}'m`.
 
@@ -107,7 +132,7 @@ contain the values `32` and `64`.
 NOTE: In older Sail versions the numeric set type would have been
 denoted `{|32, 64|}`.
 
-=== Bitvector Literals
+=== Bitvector literals
 
 Bitvector literals in Sail are written as either `0x` followed by a
 sequence of hexadecimal digits or `0b` followed by a sequence of
@@ -115,7 +140,7 @@ binary digits, for example `0x12FE` or `0b1010100`. The length of a
 hex literal is always four times the number of digits, and the length
 of binary string is always the exact number of digits, so `0x12FE` has
 length 16, while `0b1010100` has length 7. To ensure bitvector logic
-in specifications is precisly specified, we do not allow any kind of
+in specifications is precisely specified, we do not allow any kind of
 implicit widening or truncation as might occur in C. To change the
 length of a bitvector, explicit zero/sign extension and truncation
 functions must be used. Underscores can be used in bitvector literals
@@ -152,7 +177,7 @@ assert(x @ y == 0xFFFF_0000);
 ----
 
 For historical reasons the `bit` type is not equal to `bits(1)`, and
-while this does simplify naively mapping the bits type into a (very
+while this does simplify na&iuml;vely mapping the bits type into a (very
 inefficient!) representation like `bit list` in Isabelle or OCaml, it
 might be something we reconsider in the future.
 
@@ -221,7 +246,7 @@ these types to have very different representations in our various Sail
 backends, and we don't want to be forced into a compilation strategy
 that requires monomorphising such functions.
 
-=== Accessing and Updating Vectors
+=== Accessing and updating vectors
 
 A (bit)vector can be indexed by using the _vector index_ notation. So,
 in the following code:
@@ -252,10 +277,33 @@ sub-range of v can be updated using
 order of the indexes is the same as described above for increasing and
 decreasing vectors.
 
+=== The list type
+:list-example: sail_doc/list.json
+
+In addition to vectors, Sail also has `list` as a built-in type. For
+example:
+
+sail::example1[from=list-example,part=body,dedent]
+
+The cons operator is `::`, so we could equally write:
+
+sail::example2[from=list-example,part=body,dedent]
+
+For those unfamiliar the word, 'cons' is derived from Lisp dialects,
+and has become standard functional programming jargon for such an
+operator -- see https://en.wikipedia.org/wiki/Cons for more details.
+
+CAUTION: The list type (plus the recursive functions typically used to
+manipulate lists) does not work well with certain Sail targets, such
+as the SMT and SystemVerilog backends. The `vector` type is almost
+always preferable to the `list` type. The inclusion of the list type
+(where we otherwise forbid recursive types) was perhaps a design
+mistake.
+
 === Tuples
 :tuples: sail_doc/tuples.json
 
-Sail has tuple types which represent heterogenous sequences containing
+Sail has tuple types which represent heterogeneous sequences containing
 values of different types. A tuple type `(T1,{nbsp}T2,{nbsp}...)` has
 values `(x1,{nbsp}x2,{nbsp}...)` where `x1{nbsp}:{nbsp}T1`,
 `x2{nbsp}:{nbsp}T2` and so on. A tuple must have 2 or more elements.
@@ -314,7 +362,7 @@ Multi-line strings can be written by escaping the newline character at the end o
 
 sail::multi_line[from=strings,type=function,part=body,dedent]
 
-=== Pattern Matching
+=== Pattern matching
 :pattern-match: sail_doc/pattern_matching.json
 :cannot-wildcard: sail_doc/cannot_wildcard.json
 
@@ -335,7 +383,7 @@ used in Rust -- but programmers coming from languages with no pattern
 matching features may be unfamiliar with the concept. One can think of
 the match statement like a super-powered switch statement in C. At its
 most basic level a match statement can function like a switch
-statement (except without any fallthrough). As in the above example we
+statement (except without any fall-through). As in the above example we
 can use match to compare an expression against a sequence of values
 like so:
 
@@ -358,7 +406,7 @@ sail::match_destruct[from=pattern-match,part=body,dedent]
 
 These features can be combined, so if we had a pattern `(first, 3)` in
 the above example, the expression for that pattern would be executed
-when the second elemt of the pair is equal to 3, and the first element
+when the second element of the pair is equal to 3, and the first element
 would be bound to the variable `first`.
 
 Sail will check match statements for exhaustiveness (meaning that the
@@ -424,10 +472,7 @@ unit type can be achieved by using `C()` rather than `pass:[C(())]`.
 Sail allows lists to be destructured using patterns. There are two
 types of patterns for lists, cons patterns and list literal
 patterns. The cons pattern destructures lists into the first element
-(the _head_) and the rest of the list (the _tail_). For those
-unfamiliar the word 'cons' is derived from Lisp dialects, and has
-become standard functional programming jargon for such an operator --
-see https://en.wikipedia.org/wiki/Cons for more details.
+(the _head_) and the rest of the list (the _tail_).
 
 sail::match_cons[from=pattern-match,part=body,dedent]
 
@@ -450,6 +495,13 @@ We can omit fields from the match by using a wildcard `_` in place of
 some of the fields:
 
 sail::match_struct2[from=pattern-match,part=body,dedent]
+
+Finally, if we want to create a variable with the same name as a
+field, rather than typing `struct { field_name = field_name, _ }`, we
+can shorten this to just `struct { field_name, _ }`, So the above
+example is equivalent to:
+
+sail::match_struct3[from=pattern-match,part=body,dedent]
 
 ==== As patterns
 
@@ -482,13 +534,23 @@ sail::cannot_wildcard[from=cannot-wildcard]
 include::sailcomment:cannot_wildcard[from=cannot-wildcard]
 
 In this case Sail will print a warning explaining the problem:
+
 [source]
 ----
 include::sail_doc/cannot_wildcard.warning[]
 ----
+
 This warning should be heeded, and the match simplified otherwise the
 generated theorem prover definitions produced by Sail may be rejected
 by the prover.
+
+=== Matching in let and function arguments
+:funpat: sail_doc/function_pat.json
+
+The `match` statement isn't the only place we can use patterns. We can
+also use patterns in function arguments and with `let`, for example:
+
+sail::EXAMPLE[from=funpat,type=span]
 
 === Type patterns
 
@@ -552,9 +614,9 @@ Here we can use xlen within the function as both a regular variable
 
 === Mutable variables
 
-Bindings made using let are always immutable, but Sail also allows mutable
-variables. Mutable variables are bound implicitly by using the
-var keyword within a block.
+Bindings made using `let` are always immutable, but Sail also allows
+mutable variables. Mutable variables are created by using the `var`
+keyword within a block.
 
 [source,sail]
 ----
@@ -778,7 +840,7 @@ val operator <=_u : forall 'n. (bits('n), bits('n)) -> bool
 function operator <=_u(x, y) = unsigned(x) <= unsigned(y)
 ----
 
-==== Builtin precedences
+==== Built-in precedences
 
 The precedence of several common operators are built into Sail. These
 include all the operators that are used in type-level numeric
@@ -802,7 +864,7 @@ summarised in the following table.
 | 0 |         |                         |
 |===
 
-=== Ad-hoc Overloading
+=== Ad-hoc overloading
 
 Sail has a flexible overloading mechanism using the overload keyword. For example:
 
@@ -833,7 +895,7 @@ Note that if an overload is defined in module `B` using identifiers
 provided by another module `A`, then a module `C` that requires only
 `B` will not see any of the identifiers from `A`, unless it also
 requires `A`. See the section on modules for details. Note that this
-means an overload cannot be used to 're-export' defintions provided by
+means an overload cannot be used to 're-export' definitions provided by
 another module.
 
 As an example for how overloaded functions can be used, consider the
@@ -935,7 +997,7 @@ and backwards part of a mapping separately:
 
 sail::M3[from=maps,type=span]
 
-=== Sizeof and Constraint
+=== Sizeof and constraint
 
 Sail allows for arbitrary type variables to be included within
 expressions. However, we can go slightly further than this, and
@@ -1017,7 +1079,7 @@ exceptions in ISA specifications.
 For exceptions we have two language features: `throw` statements
 and `try`--`catch` blocks. The throw keyword takes a value of
 type `exception` as an argument, which can be any user defined type
-with that name. There is no builtin exception type, so to use
+with that name. There is no built-in exception type, so to use
 exceptions one must be set up on a per-project basis. Usually the
 exception type will be a union, often a scattered union, which allows
 for the exceptions to be declared throughout the specification as they
@@ -1027,7 +1089,7 @@ would be in OCaml, for example:
 include::sail:EXN[from=exn,type=span]
 ----
 
-=== Scattered Definitions
+=== Scattered definitions
 :sdef: sail_doc/scattered.json
 
 In a Sail specification, sometimes it is desirable to collect together
@@ -1068,7 +1130,7 @@ Scattered definitions for functions and mappings appear at the
 end. A scattered function definition can be recursive, but mutually
 recursive scattered function definitions should be avoided.
 
-=== Preludes and Default Environment
+=== Preludes and default environment
 
 By default Sail has almost no built-in types or functions, except for
 the primitive types described in this Chapter. This is because

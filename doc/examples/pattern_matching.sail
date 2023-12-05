@@ -76,6 +76,14 @@ function match_struct2(value : my_struct) -> unit = {
     }
 }
 
+function match_struct3(value : my_struct) -> unit = {
+    match value {
+        struct { field1, _ } => {
+            print_bits("value.field1 = ", field1)
+        }
+    }
+}
+
 /*!
 You may wonder -- why not write `z if z < 0` for the final case? Here
 we run into one of the limitations of the exhaustiveness checker
