@@ -1714,20 +1714,22 @@ let ast_of_def_string ocaml_pos str = ast_of_def_string_with ocaml_pos (fun x ->
 
 let defs_of_string ocaml_pos str = (ast_of_def_string ocaml_pos str).defs
 
-let get_lexbuf f =
-  let in_chan = open_in f in
-  let lexbuf = Lexing.from_channel in_chan in
+let get_lexbuf_from_string ~filename:f ~contents:s =
+  let lexbuf = Lexing.from_string s in
   lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f; Lexing.pos_lnum = 1; Lexing.pos_bol = 0; Lexing.pos_cnum = 0 };
-  (lexbuf, in_chan)
+  lexbuf
+
+let get_lexbuf f =
+  let handle = Sail_file.open_file f in
+  get_lexbuf_from_string ~filename:f ~contents:(Sail_file.contents handle)
 
 let parse_file ?loc:(l = Parse_ast.Unknown) (f : string) : Lexer.comment list * Parse_ast.def list =
   try
-    let lexbuf, in_chan = get_lexbuf f in
+    let lexbuf = get_lexbuf f in
     begin
       try
         let comments = ref [] in
         let defs = Parser.file (Lexer.token comments) lexbuf in
-        close_in in_chan;
         (!comments, defs)
       with Parser.Error ->
         let pos = Lexing.lexeme_start_p lexbuf in
@@ -1735,11 +1737,6 @@ let parse_file ?loc:(l = Parse_ast.Unknown) (f : string) : Lexer.comment list * 
         raise (Reporting.err_syntax pos ("current token: " ^ tok))
     end
   with Sys_error err -> raise (Reporting.err_general l err)
-
-let get_lexbuf_from_string ~filename:f ~contents:s =
-  let lexbuf = Lexing.from_string s in
-  lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f; Lexing.pos_lnum = 1; Lexing.pos_bol = 0; Lexing.pos_cnum = 0 };
-  lexbuf
 
 let parse_file_from_string ~filename:f ~contents:s =
   let lexbuf = get_lexbuf_from_string ~filename:f ~contents:s in

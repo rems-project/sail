@@ -68,13 +68,13 @@
 let rec skip_lines in_chan = function
   | n when n <= 0 -> ()
   | n ->
-      ignore (input_line in_chan);
+      ignore (Sail_file.In_channel.input_line in_chan);
       skip_lines in_chan (n - 1)
 
 let rec read_lines in_chan = function
   | n when n <= 0 -> []
   | n ->
-      let l = input_line in_chan in
+      let l = Sail_file.In_channel.input_line in_chan in
       let ls = read_lines in_chan (n - 1) in
       l :: ls
 
@@ -134,7 +134,7 @@ let format_hint color = function Some hint -> " " ^ Util.(hint |> color |> clear
 
 let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf =
   skip_lines in_chan (lnum - 1);
-  let line = input_line in_chan in
+  let line = Sail_file.In_channel.input_line in_chan in
   let line_prefix = string_of_int lnum ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
@@ -153,9 +153,9 @@ let underline_double_to color cnum_to =
 
 let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
   skip_lines in_chan (lnum_from - 1);
-  let line_from = input_line in_chan in
+  let line_from = Sail_file.In_channel.input_line in_chan in
   skip_lines in_chan (lnum_to - lnum_from - 1);
-  let line_to = input_line in_chan in
+  let line_to = Sail_file.In_channel.input_line in_chan in
   let line_to_prefix = string_of_int lnum_to ^ Util.(clear (cyan " |")) in
   let line_from_padding =
     String.make (String.length (string_of_int lnum_to) - String.length (string_of_int lnum_from)) ' '
@@ -181,15 +181,9 @@ let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
 
 let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
   try
-    let in_chan = open_in fname in
-    begin
-      try
-        format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf;
-        close_in in_chan
-      with _ ->
-        format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf;
-        close_in_noerr in_chan
-    end
+    let handle = Sail_file.open_file fname in
+    let in_chan = Sail_file.In_channel.from_file handle in
+    format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf
   with _ -> format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
 
 let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
@@ -201,15 +195,9 @@ let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to
 
 let format_code_double prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
-    let in_chan = open_in fname in
-    begin
-      try
-        format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf;
-        close_in in_chan
-      with _ ->
-        format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf;
-        close_in_noerr in_chan
-    end
+    let handle = Sail_file.open_file fname in
+    let in_chan = Sail_file.In_channel.from_file handle in
+    format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
   with _ -> format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf
 
 let format_pos prefix hint p1 p2 contents ppf =
