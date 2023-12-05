@@ -3,10 +3,13 @@ lib_sail_doc/
 module_sail_doc/
 
 manual.html
+docinfo.html
 
 *.pdf
 *.log
 *.aux
 *.png
+
+.ruby-version
 
 parser.txt
