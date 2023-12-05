@@ -18,6 +18,7 @@ clean:
 
 asciidoc:
 	$(MAKE) -C doc/asciidoc
+	cp doc/asciidoc/manual.html manual.html
 
 docker:
 	docker build --tag sail:0.1 .
