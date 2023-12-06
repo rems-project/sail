@@ -2834,7 +2834,7 @@ and bind_assignment assign_l env (LE_aux (lexp_aux, (lexp_l, uannot)) as lexp) e
   in
   let has_typ v env = match Env.lookup_id v env with Local (Mutable, _) | Register _ -> true | _ -> false in
   match lexp_aux with
-  | LE_app (f, xs) -> (check_exp env (E_aux (E_app (f, xs @ [exp]), (lexp_l, uannot))) unit_typ, env)
+  | LE_app (f, xs) -> (check_exp env (E_aux (E_app (f, xs @ [exp]), (assign_l, uannot))) unit_typ, env)
   | LE_typ (typ_annot, _) ->
       let checked_exp = crule check_exp env exp typ_annot in
       let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
