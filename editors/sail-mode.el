@@ -111,6 +111,14 @@
 	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail-mode-hook))
 
+;; (with-eval-after-load 'lsp-mode **/
+;;   (add-to-list 'lsp-language-id-configuration '(sail-mode . "sail")) **/
+
+;;   (lsp-register-client (make-lsp-client **/
+;;                         :new-connection (lsp-stdio-connection "sail_lsp") **/
+;;                         :activation-fn (lsp-activate-on "sail") **/
+;;                         :server-id 'sail))) **/
+
 (defun sail-project-mode ()
   "Major mode for editing Sail Language files"
   (interactive)

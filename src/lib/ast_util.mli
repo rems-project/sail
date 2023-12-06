@@ -607,12 +607,20 @@ val unique : l -> l
 
 val extern_assoc : string -> extern option -> string option
 
-(** Try to find the annotation closest to the provided (simplified)
-   location. Note that this function makes no guarantees about finding
-   the closest annotation or even finding an annotation at all. This
-   is used by the Emacs mode to provide type-at-cursor functionality
-   and we don't mind if it's a bit fuzzy in that context. *)
-val find_annot_ast : (Lexing.position * Lexing.position) option -> ('a, 'b) ast -> (Ast.l * 'a) option
+(** Try to find the annotation closest to the provided location (which
+    can be in any format, as long as we can tell if it is smaller than
+    any other location). Note that this function makes no guarantees
+    about finding the closest annotation or even finding an annotation
+    at all. This is used by the LSP to provide type-at-cursor
+    functionality and we don't mind if it's a bit fuzzy in that
+    context. *)
+module Scanner (Loc : sig
+  type t
+
+  val subloc : t -> Parse_ast.l -> bool
+end) : sig
+  val find_annot_ast : Loc.t -> ('a, 'b) ast -> (Parse_ast.l * 'a) option
+end
 
 (** {1 Substitutions}
 

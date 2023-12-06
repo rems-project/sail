@@ -2136,101 +2136,106 @@ let subst_kids_nexp, subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
   in
   (subst_kids_nexp, subst_kids_nc, s_styp, s_starg)
 
-let before p1 p2 =
-  let open Lexing in
-  p1.pos_fname = p2.pos_fname && p1.pos_cnum <= p2.pos_cnum
+module Scanner (Loc : sig
+  type t
 
-let subloc sl l =
-  match (sl, Reporting.simp_loc l) with
-  | _, None -> false
-  | None, _ -> false
-  | Some (p1a, p1b), Some (p2a, p2b) -> before p2a p1a && before p1b p2b
+  val subloc : t -> Parse_ast.l -> bool
+end) =
+struct
+  let subloc = Loc.subloc
 
-let rec option_mapm f = function
-  | [] -> None
-  | x :: xs -> begin match f x with Some y -> Some y | None -> option_mapm f xs end
+  let rec option_mapm f = function
+    | [] -> None
+    | x :: xs -> begin match f x with Some y -> Some y | None -> option_mapm f xs end
 
-let option_chain opt1 opt2 =
-  begin
-    match opt1 with None -> opt2 | _ -> opt1
-  end
-
-let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
-  if not (subloc sl l) then None
-  else (
-    let result =
-      match aux with
-      | E_block exps | E_tuple exps -> option_mapm (find_annot_exp sl) exps
-      | E_app (_, exps) -> option_mapm (find_annot_exp sl) exps
-      | E_let (LB_aux (LB_val (pat, exp), _), body) ->
-          option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
-      | E_assign (lexp, exp) -> option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
-      | E_var (lexp, exp1, exp2) -> option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
-      | E_if (cond_exp, then_exp, else_exp) -> option_mapm (find_annot_exp sl) [cond_exp; then_exp; else_exp]
-      | E_match (exp, cases) | E_try (exp, cases) ->
-          option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
-      | E_return exp | E_typ (_, exp) -> find_annot_exp sl exp
-      | _ -> None
-    in
-    match result with None -> Some (l, annot) | _ -> result
-  )
-
-and find_annot_lexp sl (LE_aux (aux, (l, annot))) =
-  if not (subloc sl l) then None
-  else (
-    let result =
-      match aux with
-      | LE_vector_range (lexp, exp1, exp2) ->
-          option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
-      | LE_deref exp -> find_annot_exp sl exp
-      | LE_tuple lexps -> option_mapm (find_annot_lexp sl) lexps
-      | LE_app (_, exps) -> option_mapm (find_annot_exp sl) exps
-      | _ -> None
-    in
-    match result with None -> Some (l, annot) | _ -> result
-  )
-
-and find_annot_pat sl (P_aux (aux, (l, annot))) =
-  if not (subloc sl l) then None
-  else (
-    let result = match aux with P_vector_concat pats -> option_mapm (find_annot_pat sl) pats | _ -> None in
-    match result with None -> Some (l, annot) | _ -> result
-  )
-
-and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
-  if not (subloc sl l) then None
-  else (
-    match aux with
-    | Pat_exp (pat, exp) -> option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
-    | Pat_when (pat, guard, exp) -> option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
-  )
-
-let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (def_annot, annot))) =
-  let l = def_annot.loc in
-  if not (subloc sl l) then None else (match find_annot_pexp sl pexp with None -> Some (l, annot) | result -> result)
-
-let find_annot_fundef sl (FD_aux (FD_function (_, _, funcls), (l, annot))) =
-  if not (subloc sl l) then None
-  else (match option_mapm (find_annot_funcl sl) funcls with None -> Some (l, annot) | result -> result)
-
-let find_annot_scattered sl (SD_aux (aux, (l, annot))) =
-  if not (subloc sl l) then None
-  else (
-    let result = match aux with SD_funcl fcl -> find_annot_funcl sl fcl | _ -> None in
-    match result with None -> Some (l, annot) | _ -> result
-  )
-
-let rec find_annot_defs sl = function
-  | DEF_aux (DEF_fundef fdef, _) :: defs -> begin
-      match find_annot_fundef sl fdef with None -> find_annot_defs sl defs | result -> result
+  let option_chain opt1 opt2 =
+    begin
+      match opt1 with None -> opt2 | _ -> opt1
     end
-  | DEF_aux (DEF_scattered sdef, _) :: defs -> begin
-      match find_annot_scattered sl sdef with None -> find_annot_defs sl defs | result -> result
-    end
-  | _ :: defs -> find_annot_defs sl defs
-  | [] -> None
 
-let find_annot_ast sl { defs; _ } = find_annot_defs sl defs
+  let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
+    if not (subloc sl l) then None
+    else (
+      let result =
+        match aux with
+        | E_block exps | E_tuple exps -> option_mapm (find_annot_exp sl) exps
+        | E_app (_, exps) -> option_mapm (find_annot_exp sl) exps
+        | E_let (LB_aux (LB_val (pat, exp), _), body) ->
+            option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
+        | E_assign (lexp, exp) -> option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
+        | E_var (lexp, exp1, exp2) ->
+            option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+        | E_if (cond_exp, then_exp, else_exp) -> option_mapm (find_annot_exp sl) [cond_exp; then_exp; else_exp]
+        | E_match (exp, cases) | E_try (exp, cases) ->
+            option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
+        | E_return exp | E_typ (_, exp) -> find_annot_exp sl exp
+        | _ -> None
+      in
+      match result with None -> Some (l, annot) | _ -> result
+    )
+
+  and find_annot_lexp sl (LE_aux (aux, (l, annot))) =
+    if not (subloc sl l) then None
+    else (
+      let result =
+        match aux with
+        | LE_vector_range (lexp, exp1, exp2) ->
+            option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+        | LE_deref exp -> find_annot_exp sl exp
+        | LE_tuple lexps -> option_mapm (find_annot_lexp sl) lexps
+        | LE_app (_, exps) -> option_mapm (find_annot_exp sl) exps
+        | _ -> None
+      in
+      match result with None -> Some (l, annot) | _ -> result
+    )
+
+  and find_annot_pat sl (P_aux (aux, (l, annot))) =
+    if not (subloc sl l) then None
+    else (
+      let result =
+        match aux with
+        | P_vector_concat pats | P_tuple pats | P_app (_, pats) -> option_mapm (find_annot_pat sl) pats
+        | _ -> None
+      in
+      match result with None -> Some (l, annot) | _ -> result
+    )
+
+  and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
+    if not (subloc sl l) then None
+    else (
+      match aux with
+      | Pat_exp (pat, exp) -> option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
+      | Pat_when (pat, guard, exp) -> option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
+    )
+
+  let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (def_annot, annot))) =
+    let l = def_annot.loc in
+    if not (subloc sl l) then None
+    else (match find_annot_pexp sl pexp with None -> Some (l, annot) | result -> result)
+
+  let find_annot_fundef sl (FD_aux (FD_function (_, _, funcls), (l, annot))) =
+    if not (subloc sl l) then None
+    else (match option_mapm (find_annot_funcl sl) funcls with None -> Some (l, annot) | result -> result)
+
+  let find_annot_scattered sl (SD_aux (aux, (l, annot))) =
+    if not (subloc sl l) then None
+    else (
+      let result = match aux with SD_funcl fcl -> find_annot_funcl sl fcl | _ -> None in
+      match result with None -> Some (l, annot) | _ -> result
+    )
+
+  let rec find_annot_defs sl = function
+    | DEF_aux (DEF_fundef fdef, _) :: defs -> begin
+        match find_annot_fundef sl fdef with None -> find_annot_defs sl defs | result -> result
+      end
+    | DEF_aux (DEF_scattered sdef, _) :: defs -> begin
+        match find_annot_scattered sl sdef with None -> find_annot_defs sl defs | result -> result
+      end
+    | _ :: defs -> find_annot_defs sl defs
+    | [] -> None
+
+  let find_annot_ast sl { defs; _ } = find_annot_defs sl defs
+end
 
 let string_of_lx lx =
   let open Lexing in
