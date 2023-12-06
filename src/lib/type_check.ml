@@ -1855,8 +1855,9 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         if Option.is_some (get_attribute "complete" uannot) || Option.is_some (get_attribute "incomplete" uannot) then
           (checked_cases, fun attrs -> attrs)
         else (
+          let completeness_typ, env = bind_existential (exp_loc exp) None inferred_typ env in
           let ctx = pattern_completeness_ctx env in
-          match PC.is_complete_wildcarded l ctx checked_cases inferred_typ with
+          match PC.is_complete_wildcarded l ctx checked_cases completeness_typ with
           | Some wildcarded -> (wildcarded, add_attribute (gen_loc l) "complete" "")
           | None -> (checked_cases, add_attribute (gen_loc l) "incomplete" "")
         )
