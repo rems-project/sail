@@ -781,7 +781,7 @@ module Combine_variables = struct
     object
       inherit empty_jib_visitor
 
-      method vinstrs =
+      method! vinstrs =
         function
         | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
             match pattern ctyp id instrs with
@@ -797,7 +797,7 @@ module Combine_variables = struct
           end
         | _ -> DoChildren
 
-      method vcdef = function CDEF_fundef _ -> DoChildren | _ -> SkipChildren
+      method! vcdef = function CDEF_fundef _ -> DoChildren | _ -> SkipChildren
     end
 end
 

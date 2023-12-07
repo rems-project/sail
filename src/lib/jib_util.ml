@@ -168,9 +168,9 @@ class rename_visitor from_name to_name : jib_visitor =
   object
     inherit empty_jib_visitor
 
-    method vctyp _ = SkipChildren
+    method! vctyp _ = SkipChildren
 
-    method vname name = if Name.compare name from_name = 0 then Some to_name else None
+    method! vname name = if Name.compare name from_name = 0 then Some to_name else None
   end
 
 let cval_rename from_name to_name = visit_cval (new rename_visitor from_name to_name)
@@ -179,10 +179,10 @@ class map_cval_visitor f : jib_visitor =
   object
     inherit empty_jib_visitor
 
-    method vctyp _ = SkipChildren
-    method vclexp _ = SkipChildren
+    method! vctyp _ = SkipChildren
+    method! vclexp _ = SkipChildren
 
-    method vcval cval = ChangeDoChildrenPost (cval, f)
+    method! vcval cval = ChangeDoChildrenPost (cval, f)
   end
 
 let map_cval f = visit_cval (new map_cval_visitor f)
@@ -751,11 +751,11 @@ class instr_visitor f : jib_visitor =
   object
     inherit empty_jib_visitor
 
-    method vcval _ = SkipChildren
-    method vctyp _ = SkipChildren
-    method vclexp _ = SkipChildren
+    method! vcval _ = SkipChildren
+    method! vctyp _ = SkipChildren
+    method! vclexp _ = SkipChildren
 
-    method vinstr instr = ChangeDoChildrenPost (instr, f)
+    method! vinstr instr = ChangeDoChildrenPost (instr, f)
   end
 
 let map_instr f = visit_instr (new instr_visitor f)
@@ -1049,7 +1049,7 @@ let cdef_ctyps = function
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
 
-let rec cdef_ctyps_exist pred = function
+let cdef_ctyps_exist pred = function
   | CDEF_register (_, ctyp, instrs) -> pred ctyp || instrs_ctyps_exist pred instrs
   | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
   | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps_exist pred instrs

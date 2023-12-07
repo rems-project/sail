@@ -87,13 +87,6 @@ let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
 
-let non_canonical_spec ~flag ~canonical_flag spec =
-  if !opt_new_cli then (
-    let explanation = Printf.sprintf "Old style flag %s, use %s instead" flag canonical_flag in
-    Arg.Tuple [Arg.Unit (fun () -> Reporting.warn "Old style flag" Parse_ast.Unknown explanation); spec]
-  )
-  else spec
-
 (* Allow calling all options as either -foo_bar, -foo-bar, or
    --foo-bar (for long options). The standard long-opt version
    --foo-bar is treated as the canonical choice. If !opt_new_cli is

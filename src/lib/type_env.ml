@@ -1167,7 +1167,7 @@ let add_enum_clause id member env =
             { global with enums = Bindings.add id { item with item = (true, IdSet.add member members) } global.enums }
           )
           env
-  | Some { item = false, _; loc = l } ->
+  | Some { item = false, _; loc = l; _ } ->
       typ_error
         (Parse_ast.Hint ("Declared as regular enumeration here", l, id_loc id))
         ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
@@ -1390,7 +1390,9 @@ let lookup_id id env =
           | Some typ -> Register typ
           | None -> (
               match
-                List.find_opt (fun (_, { item = _, ctors }) -> IdSet.mem id ctors) (Bindings.bindings env.global.enums)
+                List.find_opt
+                  (fun (_, { item = _, ctors; _ }) -> IdSet.mem id ctors)
+                  (Bindings.bindings env.global.enums)
               with
               | Some (enum_id, item) ->
                   if item_in_scope env item then Enum (mk_typ (Typ_id enum_id))

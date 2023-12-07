@@ -319,12 +319,6 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let use_real = false
 end
 
-type function_footprint = { register_reads : IdSet.t; register_writes : IdSet.t }
-
-let rec instr_footprint (I_aux (aux, _)) = ()
-
-and instrs_footprint instrs = ()
-
 let register_types cdefs =
   List.fold_left
     (fun acc cdef -> match cdef with CDEF_register (id, ctyp, _) -> Bindings.add id ctyp acc | _ -> acc)

@@ -70,21 +70,10 @@ open Jib
 open Jib_util
 open Smt_exp
 
-let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
-let zencode_id id = Util.zencode_string (string_of_id id)
-
 let zencode_uid (id, ctyps) =
   match ctyps with
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
-
-(* [required_width n] is the required number of bits to losslessly
-   represent an integer n *)
-let required_width n =
-  let rec required_width' n =
-    if Big_int.equal n Big_int.zero then 1 else 1 + required_width' (Big_int.shift_right n 1)
-  in
-  required_width' (Big_int.abs n)
 
 (* Generate SMT definitions in a writer monad that keeps tracks of any
    overflow checks needed. *)
