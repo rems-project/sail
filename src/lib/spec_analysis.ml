@@ -727,8 +727,8 @@ let nexp_subst_fns substs =
   let s_typschm tsh = tsh in*)
   let s_tannot tannot =
     match Type_check.destruct_tannot tannot with
-    | None -> Type_check.empty_tannot
-    | Some (env, t) -> Type_check.mk_tannot env (s_t t)
+    | None -> tannot
+    | Some (_env, t) -> Type_check.replace_typ (s_t t) tannot
     (* TODO: what about env? *)
   in
   let rec s_pat (P_aux (p, (l, annot))) =
