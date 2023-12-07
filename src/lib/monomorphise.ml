@@ -3040,7 +3040,12 @@ module MonoRewrites = struct
     let is_slice = is_id env (Id "slice") in
     let is_zeros id = is_zeros env id in
     let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id || is_id env (Id "sail_ones") id in
-    let is_ones_lit str = String.for_all (function '1' -> true | _ -> false) str in
+    let is_ones_lit str =
+      (* String.for_all requires a newer version of OCaml than our current minimum *)
+      let rec aux i = if str.[i] = '1' then if i = 0 then true else aux (i - 1) else false in
+      let len = String.length str in
+      if len = 0 then false else aux (len - 1)
+    in
     let is_zero_extend = is_zero_extend env id in
     let is_sign_extend =
       is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id
