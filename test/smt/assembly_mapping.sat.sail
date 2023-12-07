@@ -3,6 +3,7 @@ default Order dec
 $include <prelude.sail>
 $include <string.sail>
 $include <mapping.sail>
+$include <hex_bits.sail>
 
 type regbits  = bits(5)
 

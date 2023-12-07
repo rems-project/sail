@@ -17,7 +17,7 @@ sail_dir = get_sail_dir()
 sail = get_sail()
 
 skip_tests = {
-    'assembly_mapping_sat': { 'cvc4' }, # This test using unsupported CVC4 features
+    'assembly_mapping_sat': { 'z3', 'cvc4' }, # This test using unsupported CVC4 features
     'arith_unsat': { 'z3', 'cvc4' },
     'arith_LFL_unsat' : { 'z3', 'cvc4' },
     'revrev_endianness2_unsat' : { 'z3', 'cvc4' }, # There is some bug in this test

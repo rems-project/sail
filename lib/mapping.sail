@@ -74,7 +74,7 @@ $include <option.sail>
 val string_take = pure "string_take" : (string, nat) -> string
 val string_drop = pure "string_drop" : (string, nat) -> string
 val string_length = pure "string_length" : string -> nat
-val string_append = pure {c: "concat_str", _: "string_append"} : (string, string) -> string
+val string_append = pure {coq: "String.append", c: "concat_str", _: "string_append"} : (string, string) -> string
 val string_startswith = pure "string_startswith" : (string, string) -> bool
 
 val n_leading_spaces = pure { coq: "n_leading_spaces_Z" } : string -> nat
@@ -87,65 +87,47 @@ function n_leading_spaces s =
     }
   }
 
-val spc_forwards : unit -> string
-function spc_forwards () = " "
-val spc_backwards : string -> unit
-function spc_backwards s = ()
-val spc_matches_prefix : string -> option((unit, nat))
-function spc_matches_prefix s = {
-  let n = n_leading_spaces(s);
-  match n {
-    0 => None(),
-    _ => Some((), n)
-  }
+/*!
+In a string mapping this is treated as `[ ]+`, i.e one or more space
+characters. It is printed as a single space `" "`.
+*/
+val spc : unit <-> string
+
+function spc_forwards() = " "
+function spc_forwards_matches() = true
+
+function spc_backwards _ = ()
+function spc_backwards_matches s = {
+  let len = string_length(s);
+  n_leading_spaces(s) == len & len > 0
 }
 
-val opt_spc_forwards : unit -> string
-function opt_spc_forwards () = ""
-val opt_spc_backwards : string -> unit
-function opt_spc_backwards s = ()
-val opt_spc_matches_prefix : string -> option((unit, nat))
-function opt_spc_matches_prefix s =
-  Some((), n_leading_spaces(s))
-
-val def_spc_forwards : unit -> string
-function def_spc_forwards () = " "
-val def_spc_backwards : string -> unit
-function def_spc_backwards s = ()
-val def_spc_matches_prefix : string -> option((unit, nat))
-function def_spc_matches_prefix s = opt_spc_matches_prefix(s)
-
-val spc     : unit <-> string
+/*!
+In a string mapping this is treated as `[ ]*`, i.e. zero or more space
+characters. It is printed as the empty string.
+*/
 val opt_spc : unit <-> string
+
+function opt_spc_forwards() = ""
+function opt_spc_forwards_matches() = true
+
+function opt_spc_backwards _ = ()
+function opt_spc_backwards_matches s = n_leading_spaces(s) == string_length(s)
+
+/*!
+Like `opt_spc`, in a string mapping this is treated as `[ ]*`, i.e. zero or more space
+characters. It differs however in that it is printed as a single space `" "`.
+*/
 val def_spc : unit <-> string
 
-val sep : unit <-> string
+function def_spc_forwards() = " "
+function def_spc_forwards_matches() = true
+
+function def_spc_backwards _ = ()
+function def_spc_backwards_matches s = n_leading_spaces(s) == string_length(s)
+
 mapping sep : unit <-> string = {
-  ()     <-> opt_spc() ^ "," ^ def_spc()
+  () <-> opt_spc() ^ "," ^ def_spc()
 }
-
-$ifdef _DEFAULT_DEC
-$include <vector_dec.sail>
-
-val hex_bits_20 : bits(20) <-> string
-val hex_bits_20_forwards = pure "decimal_string_of_bits" : bits(20) -> string
-val hex_bits_20_forwards_matches : bits(20) -> bool
-function hex_bits_20_forwards_matches bv = true
-val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
-val hex_bits_20_backwards_matches : string -> bool
-function hex_bits_20_backwards_matches s = match s {
-  s if match hex_bits_20_matches_prefix(s) {
-    Some (_, n) if n == string_length(s) => true,
-    _ => false
-  } => true,
-  _ => false
-}
-val hex_bits_20_backwards : string -> bits(20)
-function hex_bits_20_backwards s =
-  match hex_bits_20_matches_prefix(s) {
-      Some (bv, n) if n == string_length(s) => bv
-  }
-
-$endif
 
 $endif
