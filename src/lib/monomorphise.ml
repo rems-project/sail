@@ -137,7 +137,7 @@ let rec typeclass_nexps (Typ_aux (t, l)) =
   )
   else NexpSet.empty
 
-let opt_size_set_limit = ref 64
+let opt_size_set_limit = ref 128
 
 let optmap v f = match v with None -> None | Some v -> Some (f v)
 
