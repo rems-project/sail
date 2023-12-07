@@ -236,7 +236,7 @@ and visit_instrs vis outer_instrs =
   in
   do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
 
-let rec visit_cdef vis outer_cdef =
+let visit_cdef vis outer_cdef =
   let aux vis no_change =
     match no_change with
     | CDEF_register (id, ctyp, instrs) ->

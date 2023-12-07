@@ -325,19 +325,6 @@ let vector_start_index env typ =
   | Ord_aux (Ord_inc, _) -> nint 0
   | Ord_aux (Ord_dec, _) -> nexp_simp (nminus len (nint 1))
 
-let rec is_typ_monomorphic (Typ_aux (typ, l)) =
-  match typ with
-  | Typ_id _ -> true
-  | Typ_tuple typs -> List.for_all is_typ_monomorphic typs
-  | Typ_app (_, args) -> List.for_all is_typ_arg_monomorphic args
-  | Typ_fn (arg_typs, ret_typ) -> List.for_all is_typ_monomorphic arg_typs && is_typ_monomorphic ret_typ
-  | Typ_bidir (typ1, typ2) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
-  | Typ_exist _ | Typ_var _ -> false
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
-
-and is_typ_arg_monomorphic (A_aux (arg, _)) =
-  match arg with A_nexp _ -> true | A_typ typ -> is_typ_monomorphic typ | A_bool _ -> true
-
 (**************************************************************************)
 (* 2. Subtyping and constraint solving                                    *)
 (**************************************************************************)

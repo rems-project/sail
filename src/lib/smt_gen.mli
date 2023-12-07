@@ -163,6 +163,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
 
   val int_size : ctyp -> int
 
+  val bv_size : ctyp -> int
+
   (** Create an SMT expression that converts an expression of the jib
       type [from] into an SMT expression for the jib type [into]. Note
       that this function assumes that the input is of the correct

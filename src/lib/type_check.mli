@@ -442,6 +442,8 @@ val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * 
 val destruct_vector : Env.t -> typ -> (nexp * typ) option
 val destruct_bitvector : Env.t -> typ -> nexp option
 
+val destruct_boolean : ?name:string option -> typ -> (kid * n_constraint) option
+
 val vector_start_index : Env.t -> typ -> nexp
 
 (** Construct an existential type with a guaranteed fresh

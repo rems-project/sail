@@ -181,7 +181,7 @@ let rec visit_exp vis outer_exp =
   in
   do_visit vis (vis#vexp outer_exp) aux outer_exp
 
-let rec visit_dependency vis l outer_dependency =
+let visit_dependency vis l outer_dependency =
   let aux vis no_change =
     match no_change with
     | D_requires (e, es) ->
@@ -321,7 +321,7 @@ class eval_visitor (vars : value StringMap.t ref) =
 
     val mutable declared : StringSet.t = StringSet.empty
 
-    method vdef def =
+    method! vdef def =
       let aux no_change =
         match no_change with
         | Def_var ((name, l), (E_value v, _)), _ ->
@@ -335,7 +335,7 @@ class eval_visitor (vars : value StringMap.t ref) =
       in
       ChangeDoChildrenPost (def, aux)
 
-    method vexp outer_exp =
+    method! vexp outer_exp =
       let aux no_change =
         match no_change with
         | (E_string s | E_file s | E_id s), l -> (E_value (V_string s), l)
@@ -372,7 +372,7 @@ class eval_visitor (vars : value StringMap.t ref) =
       in
       ChangeDoChildrenPost (outer_exp, aux)
 
-    method short_circuit_if = true
+    method! short_circuit_if = true
   end
 
 (**************************************************************************)
@@ -398,9 +398,9 @@ class order_visitor (xs : string spanned list ref) =
   object
     inherit empty_project_visitor
 
-    method vexp _ = SkipChildren
+    method! vexp _ = SkipChildren
 
-    method vmodule m =
+    method! vmodule m =
       xs := m.name :: !xs;
       DoChildren
   end
@@ -450,10 +450,10 @@ class structure_visitor (proj : project_structure) =
 
     val mutable last_root : string option = None
 
-    method vexp _ = SkipChildren
-    method vdependency _ _ = SkipChildren
+    method! vexp _ = SkipChildren
+    method! vdependency _ _ = SkipChildren
 
-    method vmodule m =
+    method! vmodule m =
       let name = fst m.name in
       let id = StringMap.find name proj.ids in
       let files = collect_files m.defs in
@@ -467,7 +467,7 @@ class structure_visitor (proj : project_structure) =
             m
         )
 
-    method on_root_change new_root = last_root <- Some new_root
+    method! on_root_change new_root = last_root <- Some new_root
   end
 
 (**************************************************************************)
@@ -522,9 +522,9 @@ class dependency_visitor (proj : project_structure) =
 
     val mutable stack : stack = []
 
-    method vexp _ = SkipChildren
+    method! vexp _ = SkipChildren
 
-    method vdependency _ dep =
+    method! vdependency _ dep =
       begin
         match dep with
         | D_requires (e, es) ->
@@ -538,7 +538,7 @@ class dependency_visitor (proj : project_structure) =
       end;
       SkipChildren
 
-    method vmodule m =
+    method! vmodule m =
       let name = fst m.name in
       let l = snd m.name in
       let id = StringMap.find name proj.ids in

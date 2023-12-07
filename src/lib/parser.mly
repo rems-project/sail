@@ -97,8 +97,6 @@ let prepend_id str1 = function
 let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
-let mk_kopt k n m = KOpt_aux (k, loc n m)
-
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
@@ -172,42 +170,6 @@ let mk_tannot typq typ n m = Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), 
 let mk_eannotn = Effect_opt_aux (Effect_opt_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
-
-type lchain =
-  LC_lt
-| LC_lteq
-| LC_nexp of atyp
-
-let tyop op t1 t2 s e = mk_typ (ATyp_app (Id_aux (Operator op, loc s e), [t1; t2])) s e
-
-let rec desugar_lchain chain s e =
-  match chain with
-  | [LC_nexp n1; LC_lteq; LC_nexp n2] -> tyop "<=" n1 n2 s e
-  | [LC_nexp n1; LC_lt; LC_nexp n2] -> tyop "<" n1 n2 s e
-  | (LC_nexp n1 :: LC_lteq :: LC_nexp n2 :: chain) ->
-     let nc1 = tyop "<=" n1 n2 s e in
-     tyop "&" nc1 (desugar_lchain (LC_nexp n2 :: chain) s e) s e
-  | (LC_nexp n1 :: LC_lt :: LC_nexp n2 :: chain) ->
-     let nc1 = tyop "<" n1 n2 s e in
-     tyop "&" nc1 (desugar_lchain (LC_nexp n2 :: chain) s e) s e
-  | _ -> assert false
-
-type rchain =
-  RC_gt
-| RC_gteq
-| RC_nexp of atyp
-
-let rec desugar_rchain chain s e =
-  match chain with
-  | [RC_nexp n1; RC_gteq; RC_nexp n2] -> tyop ">=" n1 n2 s e
-  | [RC_nexp n1; RC_gt; RC_nexp n2] -> tyop ">" n1 n2 s e
-  | (RC_nexp n1 :: RC_gteq :: RC_nexp n2 :: chain) ->
-     let nc1 = tyop ">=" n1 n2 s e in
-     tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
-  | (RC_nexp n1 :: RC_gt :: RC_nexp n2 :: chain) ->
-     let nc1 = tyop ">" n1 n2 s e in
-     tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
-  | _ -> assert false
 
 type vector_update =
   VU_single of exp * exp

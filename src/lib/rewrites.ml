@@ -2526,68 +2526,9 @@ let rewrite_ast_internal_lets env =
       rewrite_ast = rewrite_ast_base;
     }
 
-let fold_typed_guards env guards =
-  match guards with
-  | [] -> annot_exp (E_lit (mk_lit L_true)) Parse_ast.Unknown env bool_typ
-  | g :: gs ->
-      List.fold_left (fun g g' -> annot_exp (E_app (mk_id "and_bool", [g; g'])) Parse_ast.Unknown env bool_typ) g gs
-
 let pexp_rewriters rewrite_pexp =
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
-
-let stringappend_counter = ref 0
-
-let fresh_stringappend_id () =
-  let id = mk_id ("_s" ^ string_of_int !stringappend_counter ^ "#") in
-  stringappend_counter := !stringappend_counter + 1;
-  id
-
-let unk = Parse_ast.Unknown
-let unkt = (Parse_ast.Unknown, empty_tannot)
-
-let construct_bool_match env (match_on : tannot exp) (pexp : tannot pexp) : tannot exp =
-  let true_exp = annot_exp (E_lit (mk_lit L_true)) unk env bool_typ in
-  let false_exp = annot_exp (E_lit (mk_lit L_false)) unk env bool_typ in
-  let true_pexp =
-    match pexp with
-    | Pat_aux (Pat_exp (pat, exp), annot) -> Pat_aux (Pat_exp (pat, true_exp), unkt)
-    | Pat_aux (Pat_when (pat, guards, exp), annot) -> Pat_aux (Pat_when (pat, guards, true_exp), unkt)
-  in
-  let false_pexp = Pat_aux (Pat_exp (annot_pat P_wild unk env (typ_of match_on), false_exp), unkt) in
-  annot_exp (E_match (match_on, [true_pexp; false_pexp])) unk env bool_typ
-
-let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
-  match p_aux with
-  | P_lit _ | P_wild -> []
-  | P_id id -> [pat]
-  (* Should have been rewritten early *)
-  | P_vector_subrange _ -> []
-  (* we assume the type-checker has already checked the two sides have the same bindings *)
-  | P_or (left, right) -> bindings_of_pat left
-  | P_as (p, id) -> [annot_pat (P_id id) unk (env_of_pat p) (typ_of_pat p)]
-  | P_cons (left, right) -> bindings_of_pat left @ bindings_of_pat right
-  (* todo: is this right for negated patterns? *)
-  | P_not p | P_typ (_, p) | P_var (p, _) -> bindings_of_pat p
-  | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
-      List.map bindings_of_pat ps |> List.flatten
-  | P_struct (fpats, _) -> List.map snd fpats |> List.map bindings_of_pat |> List.flatten
-
-let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
-  match p_aux with
-  | P_lit _ | P_wild -> []
-  (* This pattern should be rewritten early *)
-  | P_vector_subrange _ -> []
-  | P_id id -> [typ_of_pat pat]
-  (* we assume the type-checker has already checked the two sides have the same bindings *)
-  | P_or (left, right) -> binding_typs_of_pat left
-  | P_as (p, id) -> [typ_of_pat p]
-  | P_cons (left, right) -> binding_typs_of_pat left @ binding_typs_of_pat right
-  (* todo: is this right for negated patterns? *)
-  | P_not p | P_typ (_, p) | P_var (p, _) -> binding_typs_of_pat p
-  | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
-      List.map binding_typs_of_pat ps |> List.flatten
-  | P_struct (fpats, _) -> List.map snd fpats |> List.map binding_typs_of_pat |> List.flatten
 
 let rewrite_ast_toplevel_string_append effect_info env ast = (ast, effect_info, env)
 

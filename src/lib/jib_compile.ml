@@ -1695,7 +1695,7 @@ module Make (C : CONFIG) = struct
     object
       inherit empty_jib_visitor
 
-      method vctyp =
+      method! vctyp =
         function
         | CT_variant (id, ctors) when Id.compare var_id id = 0 ->
             let generic_ctors = Bindings.find id ctx.variants |> snd |> Bindings.bindings in
@@ -1723,10 +1723,10 @@ module Make (C : CONFIG) = struct
     object
       inherit empty_jib_visitor
 
-      method vctyp _ = SkipChildren
-      method vclexp _ = SkipChildren
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
 
-      method vcval =
+      method! vcval =
         function
         | V_ctor_kind (cval, (id, unifiers), pat_ctyp) when Id.compare id ctor_id = 0 ->
             change_do_children (V_ctor_kind (cval, (mangle_mono_id id ctx unifiers, []), pat_ctyp))
@@ -1734,7 +1734,7 @@ module Make (C : CONFIG) = struct
             change_do_children (V_ctor_unwrap (cval, (mangle_mono_id id ctx unifiers, []), ctor_ctyp))
         | _ -> DoChildren
 
-      method vinstr =
+      method! vinstr =
         function
         | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux) when Id.compare id ctor_id = 0 ->
             instantiations := CTListSet.add ctyp_args !instantiations;
@@ -1746,11 +1746,11 @@ module Make (C : CONFIG) = struct
     object
       inherit empty_jib_visitor
 
-      method vctyp _ = SkipChildren
-      method vclexp _ = SkipChildren
-      method vcval _ = SkipChildren
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
+      method! vcval _ = SkipChildren
 
-      method vinstr =
+      method! vinstr =
         function
         | I_aux (I_decl (CT_struct (struct_id', fields), _), (_, l)) when Id.compare struct_id struct_id' = 0 ->
             let generic_fields = Bindings.find struct_id ctx.records |> snd |> Bindings.bindings in
@@ -1767,7 +1767,7 @@ module Make (C : CONFIG) = struct
     object
       inherit empty_jib_visitor
 
-      method vctyp =
+      method! vctyp =
         function
         | CT_variant (var_id', ctors) when Id.compare var_id var_id' = 0 ->
             let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
