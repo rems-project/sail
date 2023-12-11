@@ -117,5 +117,40 @@ mapping hex_bits_29 : bits(29) <-> string = { hex_bits(29, s) <-> s }
 mapping hex_bits_30 : bits(30) <-> string = { hex_bits(30, s) <-> s }
 mapping hex_bits_31 : bits(31) <-> string = { hex_bits(31, s) <-> s }
 mapping hex_bits_32 : bits(32) <-> string = { hex_bits(32, s) <-> s }
+mapping hex_bits_33 : bits(33) <-> string = { hex_bits(33, s) <-> s }
+mapping hex_bits_34 : bits(34) <-> string = { hex_bits(34, s) <-> s }
+mapping hex_bits_35 : bits(35) <-> string = { hex_bits(35, s) <-> s }
+mapping hex_bits_36 : bits(36) <-> string = { hex_bits(36, s) <-> s }
+mapping hex_bits_37 : bits(37) <-> string = { hex_bits(37, s) <-> s }
+mapping hex_bits_38 : bits(38) <-> string = { hex_bits(38, s) <-> s }
+mapping hex_bits_39 : bits(39) <-> string = { hex_bits(39, s) <-> s }
+
+mapping hex_bits_40 : bits(40) <-> string = { hex_bits(40, s) <-> s }
+mapping hex_bits_41 : bits(41) <-> string = { hex_bits(41, s) <-> s }
+mapping hex_bits_42 : bits(42) <-> string = { hex_bits(42, s) <-> s }
+mapping hex_bits_43 : bits(43) <-> string = { hex_bits(43, s) <-> s }
+mapping hex_bits_44 : bits(44) <-> string = { hex_bits(44, s) <-> s }
+mapping hex_bits_45 : bits(45) <-> string = { hex_bits(45, s) <-> s }
+mapping hex_bits_46 : bits(46) <-> string = { hex_bits(46, s) <-> s }
+mapping hex_bits_47 : bits(47) <-> string = { hex_bits(47, s) <-> s }
+mapping hex_bits_48 : bits(48) <-> string = { hex_bits(48, s) <-> s }
+mapping hex_bits_49 : bits(49) <-> string = { hex_bits(49, s) <-> s }
+
+mapping hex_bits_50 : bits(50) <-> string = { hex_bits(50, s) <-> s }
+mapping hex_bits_51 : bits(51) <-> string = { hex_bits(51, s) <-> s }
+mapping hex_bits_52 : bits(52) <-> string = { hex_bits(52, s) <-> s }
+mapping hex_bits_53 : bits(53) <-> string = { hex_bits(53, s) <-> s }
+mapping hex_bits_54 : bits(54) <-> string = { hex_bits(54, s) <-> s }
+mapping hex_bits_55 : bits(55) <-> string = { hex_bits(55, s) <-> s }
+mapping hex_bits_56 : bits(56) <-> string = { hex_bits(56, s) <-> s }
+mapping hex_bits_57 : bits(57) <-> string = { hex_bits(57, s) <-> s }
+mapping hex_bits_58 : bits(58) <-> string = { hex_bits(58, s) <-> s }
+mapping hex_bits_59 : bits(59) <-> string = { hex_bits(59, s) <-> s }
+
+mapping hex_bits_60 : bits(60) <-> string = { hex_bits(60, s) <-> s }
+mapping hex_bits_61 : bits(61) <-> string = { hex_bits(61, s) <-> s }
+mapping hex_bits_62 : bits(62) <-> string = { hex_bits(62, s) <-> s }
+mapping hex_bits_63 : bits(63) <-> string = { hex_bits(63, s) <-> s }
+mapping hex_bits_64 : bits(64) <-> string = { hex_bits(64, s) <-> s }
 
 $endif _HEX_BITS
