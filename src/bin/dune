@@ -130,6 +130,7 @@
   (%{workspace_root}/lib/isla.sail as lib/isla.sail)
   (%{workspace_root}/lib/main.ml as lib/main.ml)
   (%{workspace_root}/lib/mapping.sail as lib/mapping.sail)
+  (%{workspace_root}/lib/hex_bits.sail as lib/hex_bits.sail)
   (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
   (%{workspace_root}/lib/myocamlbuild_coverage.ml
    as
