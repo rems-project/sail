@@ -112,6 +112,7 @@
 (**************************************************************************)
 
 let opt_warnings = ref true
+let opt_all_warnings = ref false
 let opt_backtrace_length = ref 10
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
@@ -255,18 +256,32 @@ let suppress_warnings_for_file f = ignored_files := StringSet.add f !ignored_fil
 
 let seen_warnings = ref RangeMap.empty
 let once_from_warnings = ref StringSet.empty
+let suppressed_warnings = ref 0
+
+let suppressed_warning_info () =
+  if !suppressed_warnings > 0 then (
+    prerr_endline
+      (Util.("Warning" |> yellow |> clear)
+      ^ ": " ^ string_of_int !suppressed_warnings
+      ^ " warnings have been suppressed. Use --all-warnings to display them."
+      );
+    suppressed_warnings := 0
+  )
 
 let warn ?once_from short_str l explanation =
   let already_shown =
     match once_from with
-    | Some (file, lnum, cnum, enum) ->
+    | Some (file, lnum, cnum, enum) when not !opt_all_warnings ->
         let key = Printf.sprintf "%d:%d:%d:%s" lnum cnum enum file in
-        if StringSet.mem key !once_from_warnings then true
+        if StringSet.mem key !once_from_warnings then (
+          incr suppressed_warnings;
+          true
+        )
         else (
           once_from_warnings := StringSet.add key !once_from_warnings;
           false
         )
-    | None -> false
+    | _ -> false
   in
   if !opt_warnings && not already_shown then (
     match simp_loc l with
@@ -287,14 +302,17 @@ let warn ?once_from short_str l explanation =
 let format_warn ?once_from short_str l explanation =
   let already_shown =
     match once_from with
-    | Some (file, lnum, cnum, enum) ->
+    | Some (file, lnum, cnum, enum) when not !opt_all_warnings ->
         let key = Printf.sprintf "%d:%d:%d:%s" lnum cnum enum file in
-        if StringSet.mem key !once_from_warnings then true
+        if StringSet.mem key !once_from_warnings then (
+          incr suppressed_warnings;
+          true
+        )
         else (
           once_from_warnings := StringSet.add key !once_from_warnings;
           false
         )
-    | None -> false
+    | _ -> false
   in
   if !opt_warnings && not already_shown then (
     match simp_loc l with

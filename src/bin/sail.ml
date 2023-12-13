@@ -232,6 +232,7 @@ let rec options =
         "<symbol> define a symbol for the preprocessor, as $define does in the source code"
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
+      ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
       ("-strict_var", Arg.Set Type_check.opt_strict_var, " require var expressions for variable declarations");
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
@@ -435,9 +436,11 @@ let run_sail (config : Yojson.Basic.t option) tgt =
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = List.fold_right (fun file (ast, _) -> Splice.splice ast file) !opt_splice (ast, env) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
-  Reporting.opt_warnings := false;
 
   (* Don't show warnings during re-writing for now *)
+  Reporting.suppressed_warning_info ();
+  Reporting.opt_warnings := false;
+
   Target.run_pre_rewrites_hook tgt ast effect_info env;
   let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
 

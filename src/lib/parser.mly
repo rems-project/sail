@@ -215,6 +215,11 @@ let effect_deprecated l =
 let cast_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."
 
+let old_bitfield_deprecated ?(bitfield = "<bitfield>") l field =
+  let replace = if field = "bits" then Printf.sprintf "%s.bits" bitfield else Printf.sprintf "%s[%s]" bitfield field in
+  Reporting.warn ~once_from:__POS__ "Deprecated" l
+    ("Old bitfield syntax, use '" ^ replace ^ "' instead")
+
 let warn_extern_effect l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
 
@@ -755,13 +760,17 @@ atomic_exp:
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit
-    { mk_exp (E_app (prepend_id "_mod_" $3, [mk_exp (E_ref $1) $startpos($1) $endpos($1)])) $startpos $endpos }
+    { old_bitfield_deprecated ~bitfield:(string_of_id $1) (loc $startpos $endpos) (string_of_id $3);
+      mk_exp (E_app (prepend_id "_mod_" $3, [mk_exp (E_ref $1) $startpos($1) $endpos($1)])) $startpos $endpos }
   | id MinusGt id Lparen exp_list Rparen
-    { mk_exp (E_app (prepend_id "_mod_" $3, mk_exp (E_ref $1) $startpos($1) $endpos($1) :: $5)) $startpos $endpos }
+    { old_bitfield_deprecated ~bitfield:(string_of_id $1) (loc $startpos $endpos) (string_of_id $3);
+      mk_exp (E_app (prepend_id "_mod_" $3, mk_exp (E_ref $1) $startpos($1) $endpos($1) :: $5)) $startpos $endpos }
   | atomic_exp Dot id Unit
-    { mk_exp (E_app (prepend_id "_mod_" $3, [$1])) $startpos $endpos }
+    { old_bitfield_deprecated (loc $startpos $endpos) (string_of_id $3);
+      mk_exp (E_app (prepend_id "_mod_" $3, [$1])) $startpos $endpos }
   | atomic_exp Dot id Lparen exp_list Rparen
-    { mk_exp (E_app (prepend_id "_mod_" $3, $1 :: $5)) $startpos $endpos }
+    { old_bitfield_deprecated (loc $startpos $endpos) (string_of_id $3);
+      mk_exp (E_app (prepend_id "_mod_" $3, $1 :: $5)) $startpos $endpos }
   | atomic_exp Dot id
     { mk_exp (E_field ($1, $3)) $startpos $endpos }
   | id
