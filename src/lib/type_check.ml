@@ -4083,14 +4083,16 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
         (* No val, so get the function type from annotations attached to clauses *)
         let bind = infer_funtyp l env tannotopt funcls in
         (None, bind, env)
-    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope)) ->
+    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, priv)) ->
         (* If we defined the function type with val in another module, but didn't require it. *)
+        let reason = if priv then "private." else "not in scope." in
         typ_raise l
           (Err_not_in_scope
-             ( Some "Cannot infer type of function as it has a defined type already. However, this type is not in scope.",
+             ( Some ("Cannot infer type of function as it has a defined type already. However, this type is " ^ reason),
                scope_l,
                item_scope,
-               into_scope
+               into_scope,
+               priv
              )
           )
   in
@@ -4221,7 +4223,18 @@ let forbid_recursive_types type_l f =
     raise (Type_error (type_l, err_because (Err_other msg, l, err)))
 
 let extension_def_attribute env def_annot =
-  match get_def_attribute "extension" def_annot with Some (l, name) -> Env.get_module_id_opt env name | None -> None
+  match get_def_attribute "extension" def_annot with
+  | Some (l, name) -> begin
+      match Env.get_current_visibility env with
+      | Private vis_l ->
+          raise
+            (Reporting.err_general
+               (Hint ("private scope started here", vis_l, l))
+               "extension attribute within private scope"
+            )
+      | Public -> Env.get_module_id_opt env name
+    end
+  | None -> None
 
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), def_annot)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
@@ -4229,7 +4242,10 @@ let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ
   forbid_recursive_types u_l (fun () -> wf_binding def_annot.loc non_rec_env (typq, arg_typ));
   wf_binding def_annot.loc env (typq, typ);
   let in_module = extension_def_attribute env def_annot in
-  env |> Env.add_union_id ?in_module v (typq, typ) |> Env.add_val_spec ?in_module v (typq, typ)
+  let env, restore =
+    Env.with_private_visibility_if ~at:(visibility_loc def_annot.visibility) (is_private def_annot.visibility) env
+  in
+  env |> Env.add_union_id ?in_module v (typq, typ) |> Env.add_val_spec ?in_module v (typq, typ) |> restore
 
 let check_record l env def_annot id typq fields =
   forbid_recursive_types l (fun () ->
@@ -4638,6 +4654,10 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
             (env, Env.restore_scope state)
           )
           else (env, fun env -> env)
+        in
+        let env, restore =
+          Env.with_private_visibility_if ~restore ~at:(visibility_loc def_annot.visibility)
+            (is_private def_annot.visibility) env
         in
         let def, env =
           match get_def_attribute "fix_location" def_annot with

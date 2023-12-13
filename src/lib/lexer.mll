@@ -135,6 +135,7 @@ let kw_table =
      ("outcome",                 (fun _ -> Outcome));
      ("instantiation",           (fun _ -> Instantiation));
      ("impl",                    (fun _ -> Impl));
+     ("private",                 (fun _ -> Private));
      ("import",                  (fun p -> raise (Reporting.err_lex p "import is a reserved keyword")));
      ("module",                  (fun p -> raise (Reporting.err_lex p "module is a reserved keyword")));
      ("repeat",                  (fun _ -> Repeat));
@@ -222,7 +223,10 @@ rule token = parse
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
-    { let attr = attribute 0 (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Attribute(i, String.trim attr) }
+    { let startpos = Lexing.lexeme_start_p lexbuf in
+      let attr = attribute 0 (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in
+      lexbuf.lex_start_p <- startpos;
+      Attribute(i, String.trim attr) }
   | "$" (ident+ as i)
     { let startpos = Lexing.lexeme_start_p lexbuf in
       let arg = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in

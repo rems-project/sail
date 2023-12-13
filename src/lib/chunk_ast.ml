@@ -1063,6 +1063,10 @@ let chunk_funcl comments funcl =
   let chunks = Queue.create () in
   let rec chunk_funcl' comments (FCL_aux (aux, _)) =
     match aux with
+    | FCL_private funcl ->
+        Queue.add (Atom "private") chunks;
+        Queue.add (Spacer (false, 1)) chunks;
+        chunk_funcl' comments funcl
     | FCL_attribute (attr, arg, funcl) ->
         Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
         Queue.add (Spacer (false, 1)) chunks;

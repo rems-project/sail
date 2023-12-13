@@ -90,7 +90,7 @@ end
 
 module IdPairMap = Map.Make (IdPair)
 
-type ('a, 'b) generic_env_item = { item : 'a; loc : 'b; mod_id : Project.mod_id }
+type ('a, 'b) generic_env_item = { item : 'a; loc : 'b; mod_id : Project.mod_id; visibility : visibility }
 
 type 'a env_item = ('a, Parse_ast.l) generic_env_item
 
@@ -148,6 +148,7 @@ let empty_global_env =
 type env = {
   global : global_env;
   current_module : Project.mod_id;
+  current_visibility : visibility;
   open_all : bool;
   opened : Project.ModSet.t;
   locals : (mut * typ) Bindings.t;
@@ -164,14 +165,16 @@ type env = {
 
 let update_global f env = { env with global = f env.global }
 
-let mk_item ~loc:l env item = { item; loc = l; mod_id = env.current_module }
-let mk_item_in ~loc:l scope item = { item; loc = l; mod_id = scope }
+let mk_item ~loc:l env item = { item; loc = l; mod_id = env.current_module; visibility = env.current_visibility }
+let mk_item_in ~loc:l scope env item = { item; loc = l; mod_id = scope; visibility = env.current_visibility }
 
-let mk_item_in2 ~loc scope_opt env item =
-  match scope_opt with Some scope -> mk_item_in ~loc scope item | None -> mk_item ~loc env item
+let mk_item_in_opt ~loc scope_opt env item =
+  match scope_opt with Some scope -> mk_item_in ~loc scope env item | None -> mk_item ~loc env item
 
 let item_in_scope env item =
-  item.mod_id = env.current_module || Project.ModSet.mem item.mod_id env.opened || env.open_all
+  item.mod_id = env.current_module
+  || (Project.ModSet.mem item.mod_id env.opened && is_public item.visibility)
+  || env.open_all
 
 let filter_items_with f env bindings =
   Bindings.map (fun item -> f item.item) (Bindings.filter (fun _ item -> item_in_scope env item) bindings)
@@ -180,12 +183,13 @@ let filter_items env bindings = filter_items_with (fun x -> x) env bindings
 
 let err_not_in_scope env msg l item =
   match env.global.modules with
-  | None -> Err_not_in_scope (msg, l, None, None)
+  | None -> Err_not_in_scope (msg, l, None, None, is_private item.visibility)
   | Some proj ->
       let module_name_opt mod_id =
         if Project.valid_module_id proj mod_id then Some (Project.module_name proj mod_id) else None
       in
-      Err_not_in_scope (msg, l, module_name_opt item.mod_id, module_name_opt env.current_module)
+      Err_not_in_scope
+        (msg, l, module_name_opt item.mod_id, module_name_opt env.current_module, is_private item.visibility)
 
 let get_item_with_loc get_loc l env item =
   if item_in_scope env item then item.item
@@ -223,6 +227,15 @@ let end_module env = { env with current_module = Project.global_scope; opened = 
 
 let open_all_modules env = { env with open_all = true }
 
+let with_private_visibility ?(restore = fun env -> env) ~at:l env =
+  let saved_visibility = env.current_visibility in
+  ({ env with current_visibility = Private l }, fun env -> { (restore env) with current_visibility = saved_visibility })
+
+let with_private_visibility_if ?(restore : env -> env = fun env -> env) ~at:l b env =
+  if b then with_private_visibility ~restore ~at:l env else (env, restore)
+
+let get_current_visibility env = env.current_visibility
+
 type module_state = Project.mod_id * Project.ModSet.t
 
 let with_global_scope env =
@@ -236,6 +249,7 @@ let empty =
   {
     global = empty_global_env;
     current_module = Project.global_scope;
+    current_visibility = Public;
     open_all = false;
     opened = Project.ModSet.empty;
     locals = Bindings.empty;
@@ -471,7 +485,7 @@ let add_overloads l id ids env =
             global with
             overloads =
               Bindings.add id
-                (mk_item_in Project.global_scope ~loc:(l :: item_loc existing)
+                (mk_item_in Project.global_scope env ~loc:(l :: item_loc existing)
                    (get_item_with_loc hd_opt l env existing @ ids)
                 )
                 global.overloads;
@@ -481,7 +495,10 @@ let add_overloads l id ids env =
   | None ->
       update_global
         (fun global ->
-          { global with overloads = Bindings.add id (mk_item_in Project.global_scope ~loc:[l] ids) global.overloads }
+          {
+            global with
+            overloads = Bindings.add id (mk_item_in Project.global_scope env ~loc:[l] ids) global.overloads;
+          }
         )
         env
 
@@ -956,7 +973,10 @@ let add_union_id ?in_module id bind env =
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind)) [@coverage off];
     update_global
       (fun global ->
-        { global with union_ids = Bindings.add id (mk_item_in2 in_module env ~loc:(id_loc id) bind) global.union_ids }
+        {
+          global with
+          union_ids = Bindings.add id (mk_item_in_opt in_module env ~loc:(id_loc id) bind) global.union_ids;
+        }
       )
       env
   )
@@ -1002,7 +1022,7 @@ let rec update_val_spec ?in_module id (typq, typ) env =
           (fun global ->
             {
               global with
-              val_specs = Bindings.add id (mk_item_in2 in_module env ~loc:(id_loc id) (typq, typ)) global.val_specs;
+              val_specs = Bindings.add id (mk_item_in_opt in_module env ~loc:(id_loc id) (typq, typ)) global.val_specs;
             }
           )
           env

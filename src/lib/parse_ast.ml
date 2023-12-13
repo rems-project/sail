@@ -293,6 +293,7 @@ type funcl = FCL_aux of funcl_aux * l
 
 and funcl_aux =
   (* Function clause *)
+  | FCL_private of funcl
   | FCL_attribute of string * string * funcl
   | FCL_doc of string * funcl
   | FCL_funcl of id * pexp
@@ -301,6 +302,7 @@ type type_union = Tu_aux of type_union_aux * l
 
 and type_union_aux =
   (* Type union constructors *)
+  | Tu_private of type_union
   | Tu_attribute of string * string * type_union
   | Tu_doc of string * type_union
   | Tu_ty_id of atyp * id
@@ -440,6 +442,7 @@ type def_aux =
   | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
   | DEF_register of dec_spec (* register declaration *)
   | DEF_pragma of string * string * int
+  | DEF_private of def
   | DEF_attribute of string * string * def
   | DEF_doc of string * def
   | DEF_internal_mutrec of fundef list

@@ -97,7 +97,7 @@ val get_attributes : uannot -> (l * string * string) list
 
 val find_attribute_opt : string -> (l * string * string) list -> string option
 
-val mk_def_annot : ?doc:string -> ?attrs:(l * string * string) list -> l -> def_annot
+val mk_def_annot : ?doc:string -> ?attrs:(l * string * string) list -> ?visibility:visibility -> l -> def_annot
 
 val add_def_attribute : l -> string -> string -> def_annot -> def_annot
 
@@ -119,6 +119,14 @@ val no_annot : l * uannot
 val gen_loc : Parse_ast.l -> Parse_ast.l
 
 val is_gen_loc : Parse_ast.l -> bool
+
+(** {1 Visibility modifiers} *)
+
+val is_private : visibility -> bool
+
+val is_public : visibility -> bool
+
+val visibility_loc : visibility -> Parse_ast.l
 
 (** {1 Variable information} *)
 

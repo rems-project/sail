@@ -855,16 +855,21 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
       l
     )
 
-let rec to_ast_type_union doc attrs ctx = function
+let rec to_ast_type_union doc attrs vis ctx = function
+  | P.Tu_aux (P.Tu_private tu, l) -> begin
+      match vis with
+      | Some _ -> raise (Reporting.err_general l "Union constructor has multiple visibility modifiers")
+      | None -> to_ast_type_union doc attrs (Some (Private l)) ctx tu
+    end
   | P.Tu_aux (P.Tu_doc (doc_comment, tu), l) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Union constructor has multiple documentation comments")
-      | None -> to_ast_type_union (Some doc_comment) attrs ctx tu
+      | None -> to_ast_type_union (Some doc_comment) attrs vis ctx tu
     end
-  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc (attrs @ [(l, attr, arg)]) ctx tu
+  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc (attrs @ [(l, attr, arg)]) vis ctx tu
   | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
       let typ = to_ast_typ ctx atyp in
-      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs l)
+      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs ?visibility:vis l)
   | P.Tu_aux (_, l) ->
       raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
@@ -887,6 +892,9 @@ let anon_rec_constructor_typ record_id = function
 
 (* Strip attributes and doc comment from a type union *)
 let rec type_union_strip = function
+  | P.Tu_aux (P.Tu_private tu, l) ->
+      let unstrip, tu = type_union_strip tu in
+      ((fun tu -> P.Tu_aux (P.Tu_private (unstrip tu), l)), tu)
   | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) ->
       let unstrip, tu = type_union_strip tu in
       ((fun tu -> P.Tu_aux (P.Tu_attribute (attr, arg, unstrip tu), l)), tu)
@@ -1035,7 +1043,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
       (* Now generate the AST union type *)
       let id = to_ast_reserved_type_id ctx id in
       let typq, typq_ctx = to_ast_typquant ctx typq in
-      let arms = List.map (to_ast_type_union None [] (add_constructor id typq typq_ctx)) arms in
+      let arms = List.map (to_ast_type_union None [] None (add_constructor id typq typq_ctx)) arms in
       ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)]
         @ generated_records,
         add_constructor id typq ctx
@@ -1080,6 +1088,7 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
 
 let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
+  | P.FCL_private fcl -> raise (Reporting.err_general l "private visibility modifier on function clause")
   | P.FCL_attribute (attr, arg, fcl) -> to_ast_funcl doc (attrs @ [(l, attr, arg)]) ctx fcl
   | P.FCL_doc (doc_comment, fcl) -> begin
       match doc with
@@ -1205,7 +1214,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
                     )
                 | None -> (None, scattered_ctx)
               in
-              let tu = to_ast_type_union None [] scattered_ctx tu in
+              let tu = to_ast_type_union None [] None scattered_ctx tu in
               (extra_def, SD_unioncl (id, tu), ctx)
           | None -> raise (Reporting.err_typ l ("No scattered union declaration found for " ^ string_of_id id))
         end
@@ -1258,14 +1267,19 @@ let pragma_arg_loc pragma arg_left_trim l =
     )
     l
 
-let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
-  let annot = mk_def_annot ?doc ~attrs l in
+let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
+  let annot = mk_def_annot ?doc ~attrs ?visibility:vis l in
   match def with
-  | P.DEF_attribute (attr, arg, def) -> to_ast_def doc (attrs @ [(l, attr, arg)]) ctx def
+  | P.DEF_private def -> begin
+      match vis with
+      | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple visibility modifiers")
+      | None -> to_ast_def doc attrs (Some (Private l)) ctx def
+    end
+  | P.DEF_attribute (attr, arg, def) -> to_ast_def doc (attrs @ [(l, attr, arg)]) vis ctx def
   | P.DEF_doc (doc_comment, def) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")
-      | None -> to_ast_def (Some doc_comment) attrs ctx def
+      | None -> to_ast_def (Some doc_comment) attrs vis ctx def
     end
   | P.DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx)
   | P.DEF_fixity (prec, n, op) ->
@@ -1295,7 +1309,7 @@ let rec to_ast_def doc attrs ctx (P.DEF_aux (def, l)) : uannot def list ctx_out 
       let defs, _ =
         List.fold_left
           (fun (defs, ctx) def ->
-            let def, ctx = to_ast_def doc attrs ctx def in
+            let def, ctx = to_ast_def None [] None ctx def in
             (def @ defs, ctx)
           )
           ([], inner_ctx) defs
@@ -1362,7 +1376,7 @@ let to_ast ctx (P.Defs files) =
     let defs, ctx =
       List.fold_left
         (fun (defs, ctx) def ->
-          let new_defs, ctx = to_ast_def None [] ctx def in
+          let new_defs, ctx = to_ast_def None [] None ctx def in
           List.iter check_annotation new_defs;
           (new_defs @ defs, ctx)
         )

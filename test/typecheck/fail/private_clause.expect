@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/private_clause.sail[0m:6.9-16:
+6[96m |[0mfunction private foo() -> unit = ()
+ [91m |[0m         [91m^-----^[0m
+ [91m |[0m private visibility modifier on function clause

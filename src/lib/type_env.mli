@@ -101,6 +101,11 @@ val end_module : t -> t
 (** This effectively disables all module related access control *)
 val open_all_modules : t -> t
 
+val with_private_visibility : ?restore:(t -> t) -> at:l -> t -> t * (t -> t)
+val with_private_visibility_if : ?restore:(t -> t) -> at:l -> bool -> t -> t * (t -> t)
+
+val get_current_visibility : t -> visibility
+
 type module_state
 
 (** This is the same as end_module and open_all_modules, except it

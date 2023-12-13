@@ -352,7 +352,7 @@ let message_of_type_error =
           ([coercion; Line "Coercion failed because:"; msg trigger]
           @ if not (reasons = []) then Line "Possible reasons:" :: List.map msg reasons else []
           )
-    | Err_not_in_scope (explanation, Some l, item_scope, into_scope) ->
+    | Err_not_in_scope (explanation, Some l, item_scope, into_scope, priv) ->
         let suggest, in_mod, add_requires_here =
           match (item_scope, into_scope) with
           | None, None -> ("Try bringing the following into scope:", "", [])
@@ -376,16 +376,24 @@ let message_of_type_error =
                 ]
               )
         in
-        Seq
-          ([
-             Line (Option.value ~default:"Not in scope" explanation);
-             Line "";
-             Line suggest;
-             Location ("", Some ("definition here" ^ in_mod), l, Seq []);
-           ]
-          @ add_requires_here
-          )
-    | Err_not_in_scope (explanation, None, _, _) -> Line (Option.value ~default:"Not in scope" explanation)
+        if not priv then
+          Seq
+            ([
+               Line (Option.value ~default:"Not in scope" explanation);
+               Line "";
+               Line suggest;
+               Location ("", Some ("definition here" ^ in_mod), l, Seq []);
+             ]
+            @ add_requires_here
+            )
+        else
+          Seq
+            [
+              Line (Option.value ~default:"Cannot use private definition" explanation);
+              Line "";
+              Location ("", Some ("private definition here" ^ in_mod), l, Seq []);
+            ]
+    | Err_not_in_scope (explanation, None, _, _, _) -> Line (Option.value ~default:"Not in scope" explanation)
   in
   msg
 
