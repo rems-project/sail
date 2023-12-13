@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_function.sail[0m:18.17-20:
+18[96m |[0mfunction bar() = foo()
+  [91m |[0m                 [91m^-^[0m
+  [91m |[0m Cannot use private definition
+  [91m |[0m 
+  [91m |[0m [96mfail/private_function.sail[0m:10.12-15:
+  [91m |[0m 10[96m |[0mprivate val foo : unit -> unit
+  [91m |[0m   [91m |[0m            [91m^-^[0m [91mprivate definition here in A[0m

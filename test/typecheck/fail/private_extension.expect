@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mfail/private_extension.sail[0m:10.0-7:
+10[96m |[0mprivate union Foo = {
+  [92m |[0m[92m^-----^[0m [92mprivate scope started here[0m
+[96mfail/private_extension.sail[0m:11.2-16:
+11[96m |[0m  $[extension E] Bar : unit
+  [91m |[0m  [91m^------------^[0m
+  [91m |[0m extension attribute within private scope

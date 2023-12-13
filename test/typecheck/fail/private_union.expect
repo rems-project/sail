@@ -1,0 +1,14 @@
+[93mType error[0m:
+[96mfail/private_union.sail[0m:18.10-21:
+18[96m |[0mval baz : unit -> Foo
+  [91m |[0m          [91m^---------^[0m
+  [91m |[0m Well-formedness check failed for type
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/private_union.sail[0m:18.18-21:
+  [91m |[0m 18[96m |[0mval baz : unit -> Foo
+  [91m |[0m   [91m |[0m                  [91m^-^[0m
+  [91m |[0m   [91m |[0m Cannot use private definition
+  [91m |[0m   [91m |[0m 
+  [91m |[0m   [91m |[0m [96mfail/private_union.sail[0m:10.14-17:
+  [91m |[0m   [91m |[0m 10[96m |[0mprivate union Foo = {
+  [91m |[0m   [91m |[0m   [91m |[0m              [91m^-^[0m [91mprivate definition here in A[0m

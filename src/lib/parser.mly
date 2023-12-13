@@ -234,7 +234,7 @@ let set_syntax_deprecated l =
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
-%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
+%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
 %token InternalPLet InternalReturn InternalAssume
 %token Forwards Backwards
 
@@ -855,6 +855,8 @@ vector_update_list:
     { $1 :: $3 }
 
 funcl_annotation:
+  | visibility = Private
+    { (fun funcl -> FCL_aux (FCL_private funcl, loc $startpos(visibility) $endpos(visibility))) }
   | attr = Attribute
     { (fun funcl -> FCL_aux (FCL_attribute (fst attr, snd attr, funcl), loc $startpos(attr) $endpos(attr))) }
   | doc = Doc
@@ -1020,8 +1022,10 @@ struct_fields:
     { $1 :: $3 }
 
 type_union:
+  | visibility = Private; tu = type_union
+    { Tu_aux (Tu_private tu, loc $startpos(visibility) $endpos(visibility)) }
   | attr = Attribute; tu = type_union
-    { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos $endpos) }
+    { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; tu = type_union
     { Tu_aux (Tu_doc (doc, tu), loc $startpos(doc) $endpos(doc)) }
   | id Colon typ
@@ -1313,6 +1317,8 @@ def_aux:
     { DEF_loop_measures ($2,$3) }
 
 def:
+  | visibility = Private; def = def
+    { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
   | attr = Attribute; def = def
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; def = def

@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_ctor.sail[0m:20.17-20:
+20[96m |[0mfunction baz() = Bar()
+  [91m |[0m                 [91m^-^[0m
+  [91m |[0m Cannot use private definition
+  [91m |[0m 
+  [91m |[0m [96mfail/private_ctor.sail[0m:11.10-13:
+  [91m |[0m 11[96m |[0m  private Bar : unit
+  [91m |[0m   [91m |[0m          [91m^-^[0m [91mprivate definition here in A[0m

@@ -21,7 +21,7 @@ metavar nat ::=
   {{ lex numeric }}
   {{ lem nat }}
   {{ isa nat }}
-  
+
 metavar hex ::=
   {{ phantom }}
   {{ lex numeric }}
@@ -84,7 +84,14 @@ type loop = While | Until
 
 type extern = { pure : bool; bindings : (string * string) list } option
 
-type def_annot = { doc_comment : string option; attrs : (l * string * string) list; loc : l }
+type visibility = Public | Private of  l
+
+type def_annot = {
+    doc_comment : string option;
+    attrs : (l * string * string) list;
+    visibility : visibility;
+    loc : l
+}
 
 type 'a clause_annot = def_annot * 'a
 
@@ -103,7 +110,14 @@ type annot 'a = l * 'a
 
 type extern = <| pure : bool; bindings : list (string * string) |>
 
-type def_annot = <| doc_comment : maybe string; attrs : list (l * string * string); loc: l |>
+type visibility = Public | Private of l
+
+type def_annot = <|
+    doc_comment : maybe string;
+    attrs : list (l * string * string);
+    visibility : visibility;
+    loc : l
+|>
 
 type clause_annot 'a = def_annot * 'a
 

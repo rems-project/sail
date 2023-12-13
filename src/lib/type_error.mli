@@ -95,7 +95,7 @@ type type_error =
   | Err_other of string
   | Err_inner of type_error * Parse_ast.l * string * string option * type_error
   | Err_not_in_scope of
-      string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option
+      string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool
 
 exception Type_error of Parse_ast.l * type_error
 
