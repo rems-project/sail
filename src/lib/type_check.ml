@@ -4009,26 +4009,28 @@ let infer_funtyp l env tannotopt funcls =
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
 (* This is used for functions and mappings that do not have an explicit type signature using val *)
-let synthesize_val_spec env typq typ id =
-  mk_def
-    (DEF_val
-       (VS_aux
-          ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None),
-            (Parse_ast.Unknown, mk_tannot env typ)
-          )
-       )
+let synthesize_val_spec env id typq typ def_annot =
+  DEF_aux
+    ( DEF_val
+        (VS_aux
+           ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None),
+             (Parse_ast.Unknown, mk_tannot env typ)
+           )
+        ),
+      def_annot
     )
 
-let check_tannotopt env typq ret_typ = function
+let check_tannot_opt ~def_type vs_l env typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
-  | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
-      if expanded_typ_identical env ret_typ annot_ret_typ then ()
+  | Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_tq _, _), _), l) ->
+      typ_error (Hint ("declared here", vs_l, l)) "Duplicate quantifier between inline annotation and 'val' declaration"
+  | Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_no_forall, _), annot_typ), l) ->
+      if expanded_typ_identical env typ annot_typ then ()
       else
-        typ_error l
-          (string_of_bind (typq, ret_typ)
-          ^ " and "
-          ^ string_of_bind (annot_typq, annot_ret_typ)
-          ^ " do not match between function and val spec"
+        typ_error
+          (Hint ("declared here", vs_l, l))
+          (string_of_typ typ ^ " and " ^ string_of_typ annot_typ ^ " do not match between " ^ def_type
+         ^ " and 'val' declaration"
           )
 
 let check_termination_measure env arg_typs pat exp =
@@ -4055,7 +4057,9 @@ let check_funcls_complete l env funcls typ =
   | Some funcls -> (funcls, add_def_attribute (gen_loc l) "complete" "")
   | None -> (funcls, add_def_attribute (gen_loc l) "incomplete" "")
 
-let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _))) =
+let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
+
+let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
   let id =
     match
       List.fold_right
@@ -4081,7 +4085,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
     | Some (bind, l) -> (Some l, bind, env)
     | None ->
         (* No val, so get the function type from annotations attached to clauses *)
-        let bind = infer_funtyp l env tannotopt funcls in
+        let bind = infer_funtyp l env tannot_opt funcls in
         (None, bind, env)
     | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, priv)) ->
         (* If we defined the function type with val in another module, but didn't require it. *)
@@ -4096,6 +4100,18 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
              )
           )
   in
+  (* If we have a val spec, then the function itself shouldn't be marked as private *)
+  let fix_body_visibility =
+    match (have_val_spec, def_annot.visibility) with
+    | Some vs_l, Private priv_l ->
+        raise
+          (Reporting.err_general
+             (Hint ("function declared here", vs_l, priv_l))
+             "Function body has private modifier, which should be attached to 'val' declaration instead"
+          )
+    | None, Private _ -> fun def_annot -> { def_annot with visibility = Public }
+    | _, _ -> fun def_annot -> def_annot
+  in
   let vtyp_args, vtyp_ret, vl =
     match typ with
     | Typ_aux (Typ_fn (vtyp_args, vtyp_ret), vl) -> (vtyp_args, vtyp_ret, vl)
@@ -4104,7 +4120,11 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
         let err_l = Option.fold ~none:l ~some:(fun val_l -> Hint ("val here", val_l, l)) have_val_spec in
         typ_error err_l "function does not have a function type"
   in
-  check_tannotopt env quant vtyp_ret tannotopt;
+  begin
+    match have_val_spec with
+    | Some vs_l -> check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt
+    | None -> ()
+  end;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let funcl_env =
     if Option.is_some have_val_spec then Env.add_typquant l quant env
@@ -4122,7 +4142,8 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
         Rec_aux (Rec_measure (tpat, texp), l)
   in
   let vs_def, env =
-    if Option.is_none have_val_spec then ([synthesize_val_spec env quant typ id], Env.add_val_spec id (quant, typ) env)
+    if Option.is_none have_val_spec then
+      ([synthesize_val_spec env id quant typ def_annot], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
@@ -4133,50 +4154,59 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannotopt, funcls),
     then (funcls, fun attrs -> attrs)
     else check_funcls_complete l funcl_env funcls typ
   in
+  let def_annot = fix_body_visibility (update_attr def_annot) in
   let env = Env.define_val_spec id env in
   ( vs_def
-    @ [
-        DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, empty_tannot))), update_attr def_annot);
-      ],
+    @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)],
     env
   )
 
 let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
-  let have_val_spec, (quant, typ), env =
-    try (true, Env.get_val_spec id env, env)
-    with Type_error (_, _) as err -> (
-      match tannot_opt with
-      | Typ_annot_opt_aux (Typ_annot_opt_some (quant, typ), _) -> (false, (quant, typ), env)
-      | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> raise err
-    )
+  let inline_tannot =
+    match tannot_opt with
+    | Typ_annot_opt_aux (Typ_annot_opt_some (quant, typ), l) -> Some (quant, typ, l)
+    | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> None
+  in
+  let have_val_spec, quant, typ =
+    match (Env.get_val_spec_opt id env, inline_tannot) with
+    | Some ((quant, typ), l), None -> (Some l, quant, typ)
+    | None, Some (quant, typ, _) -> (None, quant, typ)
+    | Some ((quant, typ), vs_l), Some (_, _, annot_l) ->
+        check_tannot_opt ~def_type:"mapping" vs_l env typ tannot_opt;
+        (Some vs_l, quant, typ)
+    | None, None -> typ_error l "Mapping does not have any declared type"
   in
   begin
-    match typ with Typ_aux (Typ_bidir (_, _), _) -> () | _ -> typ_error l "Mapping val spec was not a mapping type"
+    match typ with
+    | Typ_aux (Typ_bidir (_, _), _) -> ()
+    | _ -> typ_error l "Mapping type must be a bi-directional mapping"
   end;
-  begin
-    match tannot_opt with
-    | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
-    | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_typ), l) ->
-        if expanded_typ_identical env typ annot_typ then ()
-        else
-          typ_error l
-            (string_of_bind (quant, typ)
-            ^ " and "
-            ^ string_of_bind (annot_typq, annot_typ)
-            ^ " do not match between mapping and val spec"
-            )
-  end;
+  (* If we have a val spec, then the mapping itself shouldn't be marked as private *)
+  let fix_body_visibility =
+    match (have_val_spec, def_annot.visibility) with
+    | Some vs_l, Private priv_l ->
+        raise
+          (Reporting.err_general
+             (Hint ("mapping declared here", vs_l, priv_l))
+             "Mapping body has private modifier, which should be attached to 'val' declaration instead"
+          )
+    | None, Private _ -> fun def_annot -> { def_annot with visibility = Public }
+    | _, _ -> fun def_annot -> def_annot
+  in
   typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let vs_def, env =
-    if not have_val_spec then
-      ([synthesize_val_spec env quant (Env.expand_synonyms env typ) id], Env.add_val_spec id (quant, typ) env)
+    if Option.is_none have_val_spec then
+      ([synthesize_val_spec env id quant (Env.expand_synonyms env typ) def_annot], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
   let mapcl_env = Env.add_typquant l quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
+  let def_annot = fix_body_visibility def_annot in
   let env = Env.define_val_spec id env in
-  (vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, empty_tannot))), def_annot)], env)
+  ( vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, empty_tannot_opt, mapcls), (l, empty_tannot))), def_annot)],
+    env
+  )
 
 (* Checking a val spec simply adds the type as a binding in the context. *)
 let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
