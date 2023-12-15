@@ -77,9 +77,9 @@ let opt_splice : string list ref = ref []
 let opt_print_version = ref false
 let opt_memo_z3 = ref true
 let opt_have_feature = ref None
+let opt_all_modules = ref false
 let opt_show_sail_dir = ref false
 let opt_project_files : string list ref = ref []
-let opt_list_files = ref false
 let opt_variable_assignments : string list ref = ref []
 let opt_config_file : string option ref = ref None
 let opt_format = ref false
@@ -215,7 +215,8 @@ let rec options =
         Arg.String (fun assignment -> opt_variable_assignments := assignment :: !opt_variable_assignments),
         "<variable=value> assign a module variable to a value"
       );
-      ("-list_files", Arg.Set opt_list_files, " list files used in all project files");
+      ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
+      ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
       ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
@@ -409,12 +410,8 @@ let run_sail (config : Yojson.Basic.t option) tgt =
           )
           !opt_variable_assignments;
         let proj = Project.initialize_project_structure ~variables defs in
-        if !opt_list_files then (
-          let files = Project.all_files proj in
-          print_endline (Util.string_of_list " " fst files);
-          exit 0
-        );
         let mod_ids =
+          if !opt_all_modules then Project.all_modules proj else
           List.map
             (fun mod_name ->
               match Project.get_module_id proj mod_name with
