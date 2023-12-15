@@ -186,7 +186,7 @@ and replace_nc_typ_arg nc nc' (A_aux (typ_arg_aux, l) as arg) =
 
 let rec name_pat (P_aux (aux, _)) =
   match aux with
-  | P_id id | P_as (_, id) -> Some ("_" ^ string_of_id id)
+  | P_id id | P_as (_, id) -> Some ("_#" ^ string_of_id id)
   | P_typ (_, pat) | P_var (pat, _) -> name_pat pat
   | _ -> None
 
