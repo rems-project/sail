@@ -8,7 +8,7 @@ function main((): unit) -> unit = {
   _prove(constraint('x + 'x == 8));
   _not_prove(constraint('x + 'x == 6 | 'x + 'x == 7));
 
-  let y : {'n, 'n == 3. int('n)} = 3;
-  _prove(constraint('_y == 3))
+  let 'y : {'n, 'n == 3. int('n)} = 3;
+  _prove(constraint('y == 3))
 }
 
