@@ -72,6 +72,7 @@ module StringMap = Map.Make (String)
 
 let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
+let opt_list_files = ref false
 let opt_reformat : string option ref = ref None
 
 let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uannot ast) :
@@ -137,6 +138,19 @@ let load_modules ?target default_sail_dir options type_envs proj root_mod_ids =
       )
       mod_ids
   in
+
+  if !opt_list_files then (
+    let included_files =
+      List.map (fun parsed_module ->
+          if parsed_module.included then
+            parsed_module.files
+          else
+            []
+        ) parsed_modules
+      |> List.concat in
+    print_endline (Util.string_of_list " " fst included_files);
+    exit 0
+  );
 
   let comments =
     List.map (fun m -> List.map (fun (f, (comments, _)) -> (f, comments)) m.files) parsed_modules |> List.concat

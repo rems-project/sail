@@ -675,3 +675,5 @@ let module_files proj id = ModMap.find id proj.files
 let module_requires (proj : project_structure) id = ModMap.find id proj.requires |> ModSet.elements
 
 let all_files proj = List.map (fun id -> ModMap.find id proj.files) (module_order proj) |> List.concat
+
+let all_modules proj = List.map snd (StringMap.bindings proj.ids)

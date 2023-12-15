@@ -151,3 +151,5 @@ val module_files : project_structure -> mod_id -> string spanned list
 val module_requires : project_structure -> mod_id -> mod_id list
 
 val all_files : project_structure -> string spanned list
+
+val all_modules : project_structure -> mod_id list
