@@ -669,17 +669,17 @@ module Make (C : CONFIG) = struct
                       (string_of_ctyp (cval_ctyp cval))
                       (string_of_ctyp (ctyp_of_typ ctx variant_typ))
                    )
-                )
-            else ();
+                );
             let unifiers, ctor_ctyp =
               let generic_ctors = Bindings.find var_id ctx.variants |> snd |> Bindings.bindings in
               let unifiers =
                 ctyp_unify l (CT_variant (var_id, generic_ctors)) (cval_ctyp cval) |> KBindings.bindings |> List.map snd
               in
-              let is_poly_ctor =
-                List.exists (fun (id, ctyp) -> Id.compare id ctor = 0 && is_polymorphic ctyp) generic_ctors
-              in
-              (unifiers, if is_poly_ctor then ctyp_suprema pat_ctyp else pat_ctyp)
+              match List.find_opt (fun (id, ctyp) -> Id.compare id ctor = 0 && is_polymorphic ctyp) generic_ctors with
+              | Some (_, poly_ctor_ctyp) ->
+                  let instantiated_parts = KBindings.map ctyp_suprema (ctyp_unify l poly_ctor_ctyp pat_ctyp) in
+                  (unifiers, subst_poly instantiated_parts poly_ctor_ctyp)
+              | None -> (unifiers, pat_ctyp)
             in
             let pre, instrs, cleanup, ctx =
               compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label
