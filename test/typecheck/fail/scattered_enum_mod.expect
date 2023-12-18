@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/scattered_enum_mod.sail[0m:20.12-13:
+20[96m |[0menum clause E = E_three
+  [91m |[0m            [91m^[0m
+  [91m |[0m Enumeration E is not in scope
+  [91m |[0m 
+  [91m |[0m Try requiring module A to bring the following into scope for module C:
+  [91m |[0m [96mfail/scattered_enum_mod.sail[0m:7.15-16:
+  [91m |[0m 7[96m |[0mscattered enum E
+  [91m |[0m  [91m |[0m               [91m^[0m [91mdefinition here in A[0m
+  [91m |[0m [96mfail/scattered_enum_mod.sail[0m:3.32-33:
+  [91m |[0m 3[96m |[0m$project# A {} B { requires A } C { requires B }
+  [91m |[0m  [91m |[0m                                [91m^[0m [91madd 'requires A' within C here[0m

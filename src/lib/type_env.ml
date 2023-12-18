@@ -1178,19 +1178,29 @@ let add_enum id ids env = add_enum' false id ids env
 
 let add_enum_clause id member env =
   match Bindings.find_opt id env.global.enums with
-  | Some ({ item = true, members; _ } as item) ->
-      if IdSet.mem member members then
-        typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " already has a member " ^ string_of_id member)
-      else
-        update_global
-          (fun global ->
-            { global with enums = Bindings.add id { item with item = (true, IdSet.add member members) } global.enums }
-          )
-          env
-  | Some { item = false, _; loc = l; _ } ->
-      typ_error
-        (Parse_ast.Hint ("Declared as regular enumeration here", l, id_loc id))
-        ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
+  | Some item ->
+      if not (item_in_scope env item) then
+        typ_raise (id_loc id)
+          (err_not_in_scope env (Some ("Enumeration " ^ string_of_id id ^ " is not in scope")) (Some item.loc) item)
+      else (
+        match item with
+        | { item = true, members; _ } ->
+            if IdSet.mem member members then
+              typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " already has a member " ^ string_of_id member)
+            else
+              update_global
+                (fun global ->
+                  {
+                    global with
+                    enums = Bindings.add id { item with item = (true, IdSet.add member members) } global.enums;
+                  }
+                )
+                env
+        | { item = false, _; loc = l; _ } ->
+            typ_error
+              (Parse_ast.Hint ("Declared as regular enumeration here", l, id_loc id))
+              ("Enumeration " ^ string_of_id id ^ " is not scattered - cannot add a new member with 'enum clause'")
+      )
   | None -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
 let get_enum_opt id env =
