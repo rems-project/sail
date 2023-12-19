@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_scattered_union.sail[0m:15.13-14:
+15[96m |[0munion clause U = B : unit
+  [91m |[0m             [91m^[0m
+  [91m |[0m Cannot use private definition
+  [91m |[0m 
+  [91m |[0m [96mfail/private_scattered_union.sail[0m:7.24-25:
+  [91m |[0m 7[96m |[0mprivate scattered union U
+  [91m |[0m  [91m |[0m                        [91m^[0m [91mprivate definition here in A[0m

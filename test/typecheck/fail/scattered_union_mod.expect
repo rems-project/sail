@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/scattered_union_mod.sail[0m:21.13-14:
+21[96m |[0munion clause U = U3 : string
+  [91m |[0m             [91m^[0m
+  [91m |[0m Not in scope
+  [91m |[0m 
+  [91m |[0m Try requiring module A to bring the following into scope for module C:
+  [91m |[0m [96mfail/scattered_union_mod.sail[0m:7.16-17:
+  [91m |[0m 7[96m |[0mscattered union U
+  [91m |[0m  [91m |[0m                [91m^[0m [91mdefinition here in A[0m
+  [91m |[0m [96mfail/scattered_union_mod.sail[0m:3.32-33:
+  [91m |[0m 3[96m |[0m$project# A {} B { requires A } C { requires B }
+  [91m |[0m  [91m |[0m                                [91m^[0m [91madd 'requires A' within C here[0m

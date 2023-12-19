@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/scattered_function_mod.sail[0m:23.16-17:
+23[96m |[0mfunction clause f _ = 0
+  [91m |[0m                [91m^[0m
+  [91m |[0m Not in scope
+  [91m |[0m 
+  [91m |[0m Try requiring module A to bring the following into scope for module C:
+  [91m |[0m [96mfail/scattered_function_mod.sail[0m:7.4-5:
+  [91m |[0m 7[96m |[0mval f : int -> int
+  [91m |[0m  [91m |[0m    [91m^[0m [91mdefinition here in A[0m
+  [91m |[0m [96mfail/scattered_function_mod.sail[0m:3.32-33:
+  [91m |[0m 3[96m |[0m$project# A {} B { requires A } C { requires B }
+  [91m |[0m  [91m |[0m                                [91m^[0m [91madd 'requires A' within C here[0m
