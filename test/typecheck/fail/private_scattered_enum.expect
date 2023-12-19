@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_scattered_enum.sail[0m:15.12-13:
+15[96m |[0menum clause E = B
+  [91m |[0m            [91m^[0m
+  [91m |[0m Enumeration E is not in scope
+  [91m |[0m 
+  [91m |[0m [96mfail/private_scattered_enum.sail[0m:7.23-24:
+  [91m |[0m 7[96m |[0mprivate scattered enum E
+  [91m |[0m  [91m |[0m                       [91m^[0m [91mprivate definition here in A[0m

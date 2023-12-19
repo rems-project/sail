@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_scattered_fn.sail[0m:17.16-17:
+17[96m |[0mfunction clause f _ = 0
+  [91m |[0m                [91m^[0m
+  [91m |[0m Cannot use private definition
+  [91m |[0m 
+  [91m |[0m [96mfail/private_scattered_fn.sail[0m:7.12-13:
+  [91m |[0m 7[96m |[0mprivate val f : int -> int
+  [91m |[0m  [91m |[0m            [91m^[0m [91mprivate definition here in A[0m

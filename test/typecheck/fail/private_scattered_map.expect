@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/private_scattered_map.sail[0m:17.15-16:
+17[96m |[0mmapping clause m = 1 <-> "1"
+  [91m |[0m               [91m^[0m
+  [91m |[0m Cannot use private definition
+  [91m |[0m 
+  [91m |[0m [96mfail/private_scattered_map.sail[0m:7.12-13:
+  [91m |[0m 7[96m |[0mprivate val m : int <-> string
+  [91m |[0m  [91m |[0m            [91m^[0m [91mprivate definition here in A[0m
