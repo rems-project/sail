@@ -1443,27 +1443,27 @@ let initial_ctx =
 
 let exp_of_string str =
   try
-    let exp = Parser.exp_eof Lexer.token (Lexing.from_string str) in
+    let exp = Parser.exp_eof (Lexer.token (ref [])) (Lexing.from_string str) in
     to_ast_exp initial_ctx exp
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let typschm_of_string str =
   try
-    let typschm = Parser.typschm_eof Lexer.token (Lexing.from_string str) in
+    let typschm = Parser.typschm_eof (Lexer.token (ref [])) (Lexing.from_string str) in
     let typschm, _ = to_ast_typschm initial_ctx typschm in
     typschm
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let typ_of_string str =
   try
-    let typ = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+    let typ = Parser.typ_eof (Lexer.token (ref [])) (Lexing.from_string str) in
     let typ = to_ast_typ initial_ctx typ in
     typ
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let constraint_of_string str =
   try
-    let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+    let atyp = Parser.typ_eof (Lexer.token (ref [])) (Lexing.from_string str) in
     to_ast_constraint initial_ctx atyp
   with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
@@ -1672,7 +1672,7 @@ let ast_of_def_string_with ocaml_pos f str =
   let internal = !opt_magic_hash in
   opt_magic_hash := true;
   lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-  let def = Parser.def_eof Lexer.token lexbuf in
+  let def = Parser.def_eof (Lexer.token (ref [])) lexbuf in
   let ast = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ~generate:false ast) (P.Defs [("", f [def])]) in
   opt_magic_hash := internal;
   ast
@@ -1692,10 +1692,10 @@ let parse_file ?loc:(l = Parse_ast.Unknown) (f : string) : Lexer.comment list * 
     let lexbuf, in_chan = get_lexbuf f in
     begin
       try
-        Lexer.comments := [];
-        let defs = Parser.file Lexer.token lexbuf in
+        let comments = ref [] in
+        let defs = Parser.file (Lexer.token comments) lexbuf in
         close_in in_chan;
-        (!Lexer.comments, defs)
+        (!comments, defs)
       with Parser.Error ->
         let pos = Lexing.lexeme_start_p lexbuf in
         let tok = Lexing.lexeme lexbuf in
@@ -1711,9 +1711,9 @@ let get_lexbuf_from_string f s =
 let parse_file_from_string ~filename:f ~contents:s =
   let lexbuf = get_lexbuf_from_string f s in
   try
-    Lexer.comments := [];
-    let defs = Parser.file Lexer.token lexbuf in
-    (!Lexer.comments, defs)
+    let comments = ref [] in
+    let defs = Parser.file (Lexer.token comments) lexbuf in
+    (!comments, defs)
   with Parser.Error ->
     let pos = Lexing.lexeme_start_p lexbuf in
     let tok = Lexing.lexeme lexbuf in

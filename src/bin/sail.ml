@@ -411,14 +411,15 @@ let run_sail (config : Yojson.Basic.t option) tgt =
           !opt_variable_assignments;
         let proj = Project.initialize_project_structure ~variables defs in
         let mod_ids =
-          if !opt_all_modules then Project.all_modules proj else
-          List.map
-            (fun mod_name ->
-              match Project.get_module_id proj mod_name with
-              | Some id -> id
-              | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
-            )
-            frees
+          if !opt_all_modules then Project.all_modules proj
+          else
+            List.map
+              (fun mod_name ->
+                match Project.get_module_id proj mod_name with
+                | Some id -> id
+                | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
+              )
+              frees
         in
         Profile.finish "parsing project" t;
         let env = Type_check.initial_env_with_modules proj in
