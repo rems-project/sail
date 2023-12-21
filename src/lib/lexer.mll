@@ -71,9 +71,6 @@ module Big_int = Nat_big_num
 open Parse_ast
 module M = Map.Make(String)
 
-(* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
-let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
-
 let kw_table =
   List.fold_left
     (fun r (x,y) -> M.add x y r)
@@ -158,8 +155,6 @@ type comment_type = Comment_block | Comment_line
 type comment =
   | Comment of comment_type * Lexing.position * Lexing.position * string
 
-let comments = ref []
-
 }
 
 let wsc = [' ''\t']
@@ -183,13 +178,13 @@ let operator = operator1 | operator2 | operatorn
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 let lchar = [^'\n']
 
-rule token = parse
+rule token comments = parse
   | ws
-    { token lexbuf }
+    { token comments lexbuf }
   | "\n"
   | "\r\n"
     { Lexing.new_line lexbuf;
-      token lexbuf }
+      token comments lexbuf }
   | "@"                                 { At }
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ Caret }
@@ -219,8 +214,8 @@ rule token = parse
   | "<->"                               { Bidir }
   | "=>"                                { EqGt "=>" }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
-  | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
-  | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
+  | "//"        { line_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token comments lexbuf }
+  | "/*"        { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token comments lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
     { let startpos = Lexing.lexeme_start_p lexbuf in
@@ -229,7 +224,7 @@ rule token = parse
       Attribute(i, String.trim attr) }
   | "$" (ident+ as i)
     { let startpos = Lexing.lexeme_start_p lexbuf in
-      let arg = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in
+      let arg = pragma comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in
       lexbuf.lex_start_p <- startpos;
       Pragma (i, arg) }
   | "infix" ws (digit as p) ws (operator as op)
@@ -274,23 +269,23 @@ line comment or a block comment, but the pragma cannot continue after
 a block comment. This ensures that `$pragma fo/* comment */o` is not
 allowed (it would otherwise have value `foo`) *)
 
-and pragma pos b after_block = parse
+and pragma comments pos b after_block = parse
   | "\n"                                { Lexing.new_line lexbuf; Buffer.contents b }
-  | (wsc as c)                          { Buffer.add_string b (String.make 1 c); pragma pos b after_block lexbuf }
-  | "//"                                { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; unescaped (Buffer.contents b) }
-  | "/*"                                { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; pragma pos b true lexbuf }
+  | (wsc as c)                          { Buffer.add_string b (String.make 1 c); pragma comments pos b after_block lexbuf }
+  | "//"                                { line_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; Scanf.unescaped (Buffer.contents b) }
+  | "/*"                                { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; pragma comments pos b true lexbuf }
   | _ as c                              { if after_block then
                                             raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Directive continued after block comment")
                                           else (
                                             Buffer.add_string b (String.make 1 c);
-                                            pragma pos b after_block lexbuf
+                                            pragma comments pos b after_block lexbuf
                                           ) }
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in directive") }
 
-and line_comment pos b = parse
+and line_comment comments pos b = parse
   | "\n"                                { Lexing.new_line lexbuf;
                                           comments := Comment (Comment_line, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments }
-  | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment pos b lexbuf }
+  | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment comments pos b lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in comment") }
 
 and doc_comment pos b depth lstart = parse
@@ -311,17 +306,17 @@ and doc_comment pos b depth lstart = parse
   | _ as c                              { Buffer.add_string b (String.make 1 c); doc_comment pos b depth false lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "Unbalanced documentation comment") }
 
-and comment pos b depth = parse
-  | "/*"                                { comment pos b (depth + 1) lexbuf }
+and block_comment comments pos b depth = parse
+  | "/*"                                { block_comment comments pos b (depth + 1) lexbuf }
   | "*/"                                { if depth = 0 then (
                                             comments := Comment (Comment_block, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments
                                           ) else (
-                                            comment pos b (depth-1) lexbuf
+                                            block_comment comments pos b (depth-1) lexbuf
                                           ) }
-  | "\n"                                { Buffer.add_string b "\n"; 
+  | "\n"                                { Buffer.add_string b "\n";
                                           Lexing.new_line lexbuf;
-                                          comment pos b depth lexbuf }
-  | _ as c                              { Buffer.add_string b (String.make 1 c); comment pos b depth lexbuf }
+                                          block_comment comments pos b depth lexbuf }
+  | _ as c                              { Buffer.add_string b (String.make 1 c); block_comment comments pos b depth lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
 
 and string pos b = parse
@@ -332,5 +327,5 @@ and string pos b = parse
   | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
   | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
   | '\\'                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "String literal contains illegal backslash escape sequence") }
-  | '"'                                 { unescaped (Buffer.contents b) }
+  | '"'                                 { Scanf.unescaped (Buffer.contents b) }
   | eof                                 { raise (Reporting.err_lex pos "String literal not terminated") }
