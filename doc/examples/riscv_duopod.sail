@@ -111,7 +111,9 @@ function wX(r, v) =
      Xs[unsigned(r)] = v;
   }
 
+$span start XOVERLOAD
 overload X = {rX, wX}
+$span end
 
 /* Accessors for memory */
 val MEMr = monadic { lem: "MEMr", coq: "MEMr", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
