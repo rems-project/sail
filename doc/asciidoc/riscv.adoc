@@ -18,7 +18,7 @@ this example we define zero-extension and sign-extension functions as:
 [source,sail]
 ----
 include::sail:EXTZ[from=riscv-code,type=val]
-include::sail:EXTS[from=riscv-code,type=function]
+include::sail:EXTZ[from=riscv-code,type=function]
 
 include::sail:EXTS[from=riscv-code,type=val]
 include::sail:EXTS[from=riscv-code,type=function]
@@ -71,6 +71,8 @@ include::sail:rX[from=riscv-code,type=function]
 
 include::sail:wX[from=riscv-code,type=val]
 include::sail:wX[from=riscv-code,type=function]
+
+include::sail:XOVERLOAD[from=riscv-code,type=span]
 ----
 
 We also give a function `MEMr` for reading memory, this function just

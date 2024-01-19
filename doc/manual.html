@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="generator" content="Asciidoctor 2.0.18">
+<meta name="generator" content="Asciidoctor 2.0.20">
 <meta name="author" content="Alasdair Armstrong, Thomas Bauereiss, Brian Campbell, Shaked Flur, Kathryn E. Gray, Robert Norton-Wright, Christopher Pulte, Peter Sewell">
 <title>The Sail instruction-set semantics specification language</title>
 <style>
@@ -2827,7 +2827,7 @@ this example we define zero-extension and sign-extension functions as:</p>
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight"><code data-lang="sail"><span class="k">val</span><span class="w"> </span><span class="nf">EXTZ</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">forall</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="nv">'m</span><span class="p">,</span><span class="w"> </span><span class="nv">'m</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="nv">'n</span><span class="o">.</span><span class="w"> </span><span class="p">(</span><span class="kt">implicit</span><span class="p">(</span><span class="nv">'m</span><span class="p">),</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">))</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'m</span><span class="p">)</span><span class="w">
-</span><span class="k">function</span><span class="w"> </span><span class="nf">EXTS</span><span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">sail_sign_extend</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w">
+</span><span class="k">function</span><span class="w"> </span><span class="nf">EXTZ</span><span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">sail_zero_extend</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w">
 
 </span><span class="k">val</span><span class="w"> </span><span class="nf">EXTS</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">forall</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="nv">'m</span><span class="p">,</span><span class="w"> </span><span class="nv">'m</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="nv">'n</span><span class="o">.</span><span class="w"> </span><span class="p">(</span><span class="kt">implicit</span><span class="p">(</span><span class="nv">'m</span><span class="p">),</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">))</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'m</span><span class="p">)</span><span class="w">
 </span><span class="k">function</span><span class="w"> </span><span class="nf">EXTS</span><span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">sail_sign_extend</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span></code></pre>
@@ -2892,7 +2892,9 @@ with the aim of allowing pseudo-code like definitions.</p>
 </span><span class="k">function</span><span class="w"> </span><span class="nf">wX</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w">
   </span><span class="k">if</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mb">0b00000</span><span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="p">{</span><span class="w">
      </span><span class="n">Xs</span><span class="p">[</span><span class="n">unsigned</span><span class="p">(</span><span class="n">r</span><span class="p">)]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">v</span><span class="p">;</span><span class="w">
-  </span><span class="p">}</span></code></pre>
+  </span><span class="p">}</span><span class="w">
+
+</span><span class="k">overload</span><span class="w"> </span><span class="n">X</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="n">rX</span><span class="p">,</span><span class="w"> </span><span class="n">wX</span><span class="p">}</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -5793,7 +5795,8 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w">
 
-</span><span class="o">&lt;</span><span class="n">funcl_annotation</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w">
+</span><span class="o">&lt;</span><span class="n">funcl_annotation</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="n">Private</span><span class="w">
+                     </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">funcl_patexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
                  </span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
@@ -5863,7 +5866,8 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_field</span><span class="o">&gt;</span><span class="w"> </span><span class="p">,</span><span class="w">
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_field</span><span class="o">&gt;</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w">
 
-</span><span class="o">&lt;</span><span class="n">type_union</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">type_union</span><span class="o">&gt;</span><span class="w">
+</span><span class="o">&lt;</span><span class="n">type_union</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="n">Private</span><span class="w"> </span><span class="o">&lt;</span><span class="n">type_union</span><span class="o">&gt;</span><span class="w">
+               </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">type_union</span><span class="o">&gt;</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
 
@@ -5974,7 +5978,8 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
 
-</span><span class="o">&lt;</span><span class="n">def</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">def</span><span class="o">&gt;</span><span class="w">
+</span><span class="o">&lt;</span><span class="n">def</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="n">Private</span><span class="w"> </span><span class="o">&lt;</span><span class="n">def</span><span class="o">&gt;</span><span class="w">
+        </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">def</span><span class="o">&gt;</span><span class="w">
         </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">def_aux</span><span class="o">&gt;</span><span class="w">
 
 
@@ -6040,7 +6045,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2023-12-05 16:11:17 UTC
+Last updated 2023-12-06 21:54:14 UTC
 </div>
 </div>
 </body>
