@@ -2824,6 +2824,7 @@ and bind_assignment assign_l env (LE_aux (lexp_aux, (lexp_l, uannot)) as lexp) e
   match lexp_aux with
   | LE_app (f, xs) -> (check_exp env (E_aux (E_app (f, xs @ [exp]), (lexp_l, uannot))) unit_typ, env)
   | LE_typ (typ_annot, _) ->
+      Env.wf_typ ~at:lexp_l env typ_annot;
       let checked_exp = crule check_exp env exp typ_annot in
       let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
       (annot_assign tlexp checked_exp, env')
@@ -3453,7 +3454,8 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   let typ_args =
     match expected_ret_typ with
     | None -> typ_args
-    | Some expect when is_exist (Env.expand_synonyms env expect) || is_exist !typ_ret -> typ_args
+    | Some expect when is_exist (Env.expand_synonyms env expect) -> typ_args
+    | Some expect when is_exist !typ_ret -> typ_args
     | Some expect -> (
         let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
         try
@@ -4626,6 +4628,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
   | DEF_default default -> check_default env def_annot default
   | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> begin
+      Env.wf_typ ~at:l env typ;
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
           Reporting.warn "No default value" l "Registers of type option should explicitly be given a default value";
@@ -4643,6 +4646,8 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
           )
     end
   | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
+      typ_print (lazy "WF reg");
+      Env.wf_typ ~at:l env typ;
       let checked_exp = crule check_exp env exp typ in
       let env = Env.add_register id typ env in
       ( [

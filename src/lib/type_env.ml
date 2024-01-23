@@ -556,7 +556,12 @@ let mk_synonym typq typ_arg =
         let typ_arg, ncs = subst_args env l kopts args in
         (typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs)
     | [], [] -> (typ_arg, ncs)
-    | _, _ -> typ_error l "Synonym applied to bad arguments"
+    | kopts, args ->
+        typ_error l
+          ("Synonym applied to bad arguments "
+          ^ Util.string_of_list ", " string_of_kinded_id kopts
+          ^ Util.string_of_list ", " string_of_typ_arg args
+          )
   in
   fun l env args ->
     let typ_arg, ncs = subst_args env l kopts args in
@@ -648,7 +653,12 @@ and wf_nexp ?(exs = KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
             )
     end
   | Nexp_constant _ -> ()
-  | Nexp_app (_, nexps) -> List.iter (fun n -> wf_nexp ~exs env n) nexps
+  | Nexp_app (id, nexps) ->
+      let name = string_of_id id in
+      (* We allow the abs, mod, and div functions that are included in the SMTLIB2 integer theory *)
+      if name = "abs" || name = "mod" || name = "div" || Bindings.mem id env.global.synonyms then
+        List.iter (fun n -> wf_nexp ~exs env n) nexps
+      else typ_error l ("Unknown type level operator or function " ^ name)
   | Nexp_times (nexp1, nexp2) ->
       wf_nexp ~exs env nexp1;
       wf_nexp ~exs env nexp2
@@ -734,7 +744,7 @@ and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
   | Nexp_app (id, args) -> (
       try
         begin
-          match get_typ_synonym id env l env [] with
+          match get_typ_synonym id env l env (List.map arg_nexp args) with
           | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
           | _ -> typ_error l ("Expected Int when expanding synonym " ^ string_of_id id)
         end
