@@ -43,6 +43,7 @@ skip_tests_mwords = {
     # The Lem backend needs sail_mem_read to be instantiated at a minimum
     'concurrency_interface_dec',
     'concurrency_interface_inc',
+    'wf_register_type',
 }
 
 print('Sail is {}'.format(sail))

@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/wf_assign_type.sail[0m:9.10-17:
+9[96m |[0m  var Y : bits(X) = 0b00;
+ [91m |[0m          [91m^-----^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/wf_assign_type.sail[0m:9.15-16:
+ [91m |[0m 9[96m |[0m  var Y : bits(X) = 0b00;
+ [91m |[0m  [91m |[0m               [91m^[0m
+ [91m |[0m  [91m |[0m Undefined type synonym X

@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/wf_register_type/v1.sail[0m:7.13-24:
+7[96m |[0mregister r : bits(x / 2) = 0x0
+ [91m |[0m             [91m^---------^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mpass/wf_register_type/v1.sail[0m:7.18-23:
+ [91m |[0m 7[96m |[0mregister r : bits(x / 2) = 0x0
+ [91m |[0m  [91m |[0m                  [91m^---^[0m
+ [91m |[0m  [91m |[0m Unknown type level operator or function (operator /)
