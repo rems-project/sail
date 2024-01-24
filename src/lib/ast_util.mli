@@ -257,6 +257,8 @@ val is_bitvector_typ : typ -> bool
 val nexp_simp : nexp -> nexp
 val constraint_simp : n_constraint -> n_constraint
 
+val get_nexp_constant : nexp -> Big_int.num option
+
 (** If a constraint is a conjunction, return a list of all the top-level conjuncts *)
 val constraint_conj : n_constraint -> n_constraint list
 

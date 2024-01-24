@@ -4387,36 +4387,40 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       begin
         match typ with
         (* The type of a bitfield must be a constant-width bitvector *)
-        | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _)]), _)
-          when string_of_id v = "bitvector" ->
-            let rec expand_range_synonyms = function
-              | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
-              | BF_aux (BF_range (nexp1, nexp2), l) ->
-                  let nexp1 = Env.expand_nexp_synonyms env nexp1 in
-                  let nexp2 = Env.expand_nexp_synonyms env nexp2 in
-                  BF_aux (BF_range (nexp1, nexp2), l)
-              | BF_aux (BF_concat (r1, r2), l) ->
-                  BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
-            in
-            let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
-            let ranges =
-              List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
-            in
-            let def_annot = add_def_attribute l "bitfield" (Big_int.to_string size) def_annot in
-            let defs =
-              DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
-              :: Bitfield.macro id size (Env.get_default_order env) ranges
-            in
-            let defs, env =
-              try check_defs env defs
-              with Type_error (inner_l, err) ->
-                typ_raise l (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", None, err))
-            in
-            let env = Env.add_bitfield id typ ranges env in
-            if !opt_no_bitfield_expansion then
-              ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
-            else (defs, env)
-        | _ -> typ_error l "Underlying bitfield type must be a constant-width bitvector"
+        | Typ_aux (Typ_app (v, [A_aux (A_nexp nexp, _)]), _) when string_of_id v = "bitvector" -> begin
+            match get_nexp_constant nexp with
+            | Some size ->
+                let rec expand_range_synonyms = function
+                  | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
+                  | BF_aux (BF_range (nexp1, nexp2), l) ->
+                      let nexp1 = Env.expand_nexp_synonyms env nexp1 in
+                      let nexp2 = Env.expand_nexp_synonyms env nexp2 in
+                      BF_aux (BF_range (nexp1, nexp2), l)
+                  | BF_aux (BF_concat (r1, r2), l) ->
+                      BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
+                in
+                let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
+                let ranges =
+                  List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
+                in
+                let def_annot = add_def_attribute l "bitfield" (Big_int.to_string size) def_annot in
+                let defs =
+                  DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
+                  :: Bitfield.macro id size (Env.get_default_order env) ranges
+                in
+                let defs, env =
+                  try check_defs env defs
+                  with Type_error (inner_l, err) ->
+                    typ_raise l
+                      (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", None, err))
+                in
+                let env = Env.add_bitfield id typ ranges env in
+                if !opt_no_bitfield_expansion then
+                  ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
+                else (defs, env)
+            | None -> typ_error l ("Bitvector width " ^ string_of_nexp nexp ^ " for bitfield must be constant")
+          end
+        | typ -> typ_error l ("Underlying bitfield type " ^ string_of_typ typ ^ " must be a constant-width bitvector")
       end
 
 and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def list * Env.t =
