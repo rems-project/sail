@@ -679,7 +679,13 @@ module Make (C : CONFIG) = struct
               | Some (_, poly_ctor_ctyp) ->
                   let instantiated_parts = KBindings.map ctyp_suprema (ctyp_unify l poly_ctor_ctyp pat_ctyp) in
                   (unifiers, subst_poly instantiated_parts poly_ctor_ctyp)
-              | None -> (unifiers, pat_ctyp)
+              | None -> begin
+                  match List.find_opt (fun (id, _) -> Id.compare id ctor = 0) ctors with
+                  | Some (_, ctor_ctyp) -> (unifiers, ctor_ctyp)
+                  | None ->
+                      Reporting.unreachable l __POS__
+                        ("Expected constructor " ^ string_of_id ctor ^ " for " ^ full_string_of_ctyp ctyp)
+                end
             in
             let pre, instrs, cleanup, ctx =
               compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label
