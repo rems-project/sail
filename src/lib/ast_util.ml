@@ -375,6 +375,17 @@ and nexp_simp_aux = function
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
     end
+  | Nexp_app ((Id_aux (Id "mod", _) as id), [n1; n2]) -> begin
+      let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+      let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+      match (n1_simp, n2_simp) with
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.modulus c1 c2)
+      | _, _ -> Nexp_app (id, [n1; n2])
+    end
+  | Nexp_app ((Id_aux (Id "abs", _) as id), [n]) -> begin
+      let n = nexp_simp n in
+      match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Big_int.abs c) | _ -> Nexp_app (id, [n])
+    end
   | Nexp_exp nexp ->
       let nexp = nexp_simp nexp in
       begin
@@ -385,6 +396,15 @@ and nexp_simp_aux = function
         | _ -> Nexp_exp nexp
       end
   | nexp -> nexp
+
+let rec get_nexp_constant (Nexp_aux (n, _)) =
+  match nexp_simp_aux n with
+  | Nexp_constant c -> Some c
+  (* nexp_simp does not always expand large existentials *)
+  | Nexp_exp e -> begin
+      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
+    end
+  | _ -> None
 
 let rec constraint_simp (NC_aux (nc_aux, l)) =
   let nc_aux =
