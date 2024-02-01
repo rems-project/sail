@@ -204,7 +204,7 @@ let register_field_setter typ_name field order range =
     String.concat "\n"
       [
         Printf.sprintf "function %s (r_ref, v) = {" fun_id;
-        "  r = __deref(r_ref);";
+        "  let r = __deref(r_ref);";
         Printf.sprintf "  (*r_ref) = %s(r, v)" update_fun_id;
         "}";
       ]
