@@ -880,39 +880,47 @@ let doc_exp_lem, doc_let_lem =
         | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
             let combinator = String.sub combinator 0 (String.index combinator '#') in
             begin
-              match args with
-              | [cond; varstuple; body] | [cond; varstuple; body; _] ->
-                  (* Ignore termination measures - not used in Lem *)
-                  let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-                  let csuffix, cond, body =
-                    match (effectful (effect_of cond), effectful (effect_of body)) with
-                    | false, false -> ("", cond, body)
-                    | false, true -> ("M", return cond, body)
-                    | true, false -> ("M", cond, return body)
-                    | true, true -> ("M", cond, body)
-                  in
-                  let used_vars_body = find_e_ids body in
-                  let lambda =
-                    (* Work around indentation issues in Lem when translating
-                       tuple or literal unit patterns to Isabelle *)
-                    match fst (uncast_exp varstuple) with
-                    | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
-                        separate space [string "fun varstup"; arrow]
-                        ^^ break 1
-                        ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
-                    | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                        separate space [string "fun unit_var"; arrow]
-                    | _ -> separate space [string "fun"; expY varstuple; arrow]
-                  in
-                  parens
-                    ((prefix 2 1)
-                       ((separate space) [string (combinator ^ csuffix); expY varstuple])
-                       ((prefix 0 1)
-                          (parens (prefix 2 1 (group lambda) (expN cond)))
-                          (parens (prefix 2 1 (group lambda) (expN body)))
-                       )
-                    )
-              | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+              let cond, varstuple, body, measure =
+                match args with
+                | [cond; varstuple; body] -> (cond, varstuple, body, None)
+                | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
+                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+              in
+              let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
+              let csuffix, cond, body =
+                match (effectful (effect_of cond), effectful (effect_of body)) with
+                | false, false -> ("", cond, body)
+                | false, true -> ("M", return cond, body)
+                | true, false -> ("M", cond, return body)
+                | true, true -> ("M", cond, body)
+              in
+              let used_vars_body = find_e_ids body in
+              let lambda =
+                (* Work around indentation issues in Lem when translating
+                    tuple or literal unit patterns to Isabelle *)
+                match fst (uncast_exp varstuple) with
+                | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
+                    separate space [string "fun varstup"; arrow]
+                    ^^ break 1
+                    ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
+                | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                    separate space [string "fun unit_var"; arrow]
+                | _ -> separate space [string "fun"; expY varstuple; arrow]
+              in
+              let msuffix, measure_pp =
+                match measure with
+                | None -> ("", [])
+                | Some exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
+              in
+              parens
+                ((prefix 2 1)
+                   (string (combinator ^ csuffix ^ msuffix))
+                   (separate (break 1)
+                      ((expY varstuple :: measure_pp)
+                      @ [parens (prefix 2 1 (group lambda) (expN cond)); parens (prefix 2 1 (group lambda) (expN body))]
+                      )
+                   )
+                )
             end
         | Id_aux (Id "early_return", _) -> begin
             match args with

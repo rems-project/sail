@@ -133,12 +133,20 @@ let lem_rewrites =
     ("nexp_ids", []);
     ("split", [String_arg "execute"]);
     ("recheck_defs", []);
+    ("move_termination_measures", []);
     ("top_sort_defs", []);
     ("const_prop_mutrec", [String_arg "lem"]);
     ("vector_string_pats_to_bit_list", []);
     ("exp_lift_assign", []);
     ("early_return", []);
     (* early_return currently breaks the types *)
+    ("recheck_defs", []);
+    (* merge funcls before adding the measure argument so that it doesn't
+       disappear into an internal pattern match *)
+    ("merge_function_clauses", []);
+    ("recheck_defs", []);
+    ("rewrite_explicit_measure", []);
+    ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs", []);
     ("remove_blocks", []);
     ("attach_effects", []);
@@ -151,6 +159,7 @@ let lem_rewrites =
     ("merge_function_clauses", []);
     ("bit_lists_to_lits", []);
     ("recheck_defs", []);
+    ("infer_effects", [Bool_arg true]);
     ("attach_effects", []);
   ]
 
@@ -213,7 +222,7 @@ let lem_target _ _ out_file ast effect_info env =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output !opt_libs_lem [(out_file, effect_info, env, ast)]
 
-let _ = Target.register ~name:"lem" ~options:lem_options ~rewrites:lem_rewrites lem_target
+let _ = Target.register ~name:"lem" ~options:lem_options ~rewrites:lem_rewrites ~asserts_termination:true lem_target
 
 (* The code below and in gen_lem_monad.ml was used to generate a first version
    of the monad for the new concurrency interface, but that has since been
