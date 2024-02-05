@@ -1,22 +1,45 @@
-FROM ubuntu
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN DEBIAN_FRONTEND="noninteractive" apt-get install -y opam build-essential libgmp-dev z3 pkg-config zlib1g-dev
-RUN mkdir /etc/sudoers.d/ && \
-  echo 'opam ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/opam && \
-  chmod 440 /etc/sudoers.d/opam && \
-  chown root:root /etc/sudoers.d/opam && \
-  adduser --disabled-password --gecos '' opam && \
-  passwd -l opam && \
-  chown -R opam:opam /home/opam
+FROM ubuntu:22.04
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -y \
+    opam \
+    build-essential \
+    libgmp-dev \
+    z3 \
+    pkg-config \
+    zlib1g-dev \
+    sudo && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Configure sudoers for the 'opam' user without requiring a password
+RUN mkdir -p /etc/sudoers.d/ && \
+    echo 'opam ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/opam && \
+    chmod 440 /etc/sudoers.d/opam && \
+    chown root:root /etc/sudoers.d/opam
+
+# Create and configure the 'opam' user
+RUN adduser --disabled-password --gecos '' opam && \
+    passwd -l opam && \
+    chown -R opam:opam /home/opam
+
+# Switch to the 'opam' user
 USER opam
 ENV HOME /home/opam
-WORKDIR /home/opam
-RUN opam init --disable-sandboxing
-RUN eval `opam env` && \
-  opam repository add rems https://github.com/rems-project/opam-repository.git && \
-  opam install -y sail
+
+# Initialize opam and install packages
+RUN opam init --disable-sandboxing --auto-setup && \
+    eval $(opam env) && \
+    opam repository add rems https://github.com/rems-project/opam-repository.git && \
+    opam install -y sail
+
+# Copy the entry point script and set the correct permissions
 COPY --chown=opam docker_entry_point.sh /home/opam/
-RUN chmod +x docker_entry_point.sh
+RUN chmod +x /home/opam/docker_entry_point.sh
+
+# Set the work directory to /data
 WORKDIR /data
+
+# Define the entry point script
 ENTRYPOINT ["/home/opam/docker_entry_point.sh"]
