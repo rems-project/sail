@@ -120,7 +120,7 @@ let rec fix_id remove_tick name =
   | "non_assoc" | "non_exec" | "special" | "target_rep" | "target_sorts" | "target_type" | "target_const" | "lemma"
   | "theorem" | "do" | "witness" | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try"
   | "match" | "with" | "check" | "field" | "LT" | "lt" | "lteq" | "GT" | "gt" | "gteq" | "EQ" | "eq" | "neq" | "integer"
-  | "union" | "inter" | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" ->
+  | "union" | "inter" | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" | "not" ->
       name ^ "'"
   | _ ->
       if String.contains name '#' then fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
