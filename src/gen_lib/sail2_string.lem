@@ -446,3 +446,20 @@ let hex_bits_64_matches_prefix s =
     else
       Nothing
   end
+
+(* For the hex_bits.sail library *)
+
+val parse_hex_bits : forall 'a. Bitvector 'a => integer -> string -> 'a
+let parse_hex_bits sz s =
+  match maybe_int_of_string s with
+  | Nothing -> of_int sz 0
+  | Just n -> of_int sz n
+  end
+
+val valid_hex_bits : integer -> string -> bool
+let valid_hex_bits sz s =
+  if sz <= 0 then false else
+  match maybe_int_of_string s with
+  | Nothing -> false
+  | Just n -> 0 <= n && n < (2 ** (natFromInteger sz))
+  end
