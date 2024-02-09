@@ -8,8 +8,3 @@
  [91m |[0m    [94m*[0m (0 <= 10 & 10 < 8)
  [91m |[0m [94m*[0m plain_vector_update
  [91m |[0m    Could not unify vector('n, 'a) and bitvector(8)
- [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mpass/vec_length/v2_inc.sail[0m:7.10-25:
- [91m |[0m 7[96m |[0m  let z = [x with 10 = y];
- [91m |[0m  [91m |[0m          [91m^-------------^[0m
- [91m |[0m  [91m |[0m Vector update could not be interpreted as a bitfield update
