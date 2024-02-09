@@ -1,0 +1,7 @@
+[93mType error[0m:
+[96mfail/bv_update_error.sail[0m:13.18-22:
+13[96m |[0m  let _ = [v with FIEL = 0xFF];
+  [91m |[0m                  [91m^--^[0m
+  [91m |[0m No function type found for _update_b_FIEL
+  [91m |[0m 
+  [91m |[0m Did you mean _update_b_FIELD?

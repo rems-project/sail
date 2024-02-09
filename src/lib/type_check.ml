@@ -3274,22 +3274,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
         )
       | exn -> raise exn
     end
-  | E_vector_update (v, n, exp) -> begin
-      try infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, uannot))) with
-      | Type_error (err_l, err) -> (
-          try
-            let inferred_v = infer_exp env v in
-            begin
-              match (typ_of inferred_v, n) with
-              | Typ_aux (Typ_id id, _), E_aux (E_id field, _) ->
-                  let update_id = (Bitfield.field_accessor_ids id field).update in
-                  infer_exp env (mk_exp ~loc:l (E_app (update_id, [v; exp])))
-              | _, _ -> typ_error l "Vector update could not be interpreted as a bitfield update"
-            end
-          with Type_error (err_l', err') -> typ_raise err_l (err_because (err, err_l', err'))
-        )
-      | exn -> raise exn
-    end
+  | E_vector_update (v, n, exp) -> infer_vector_update l env v n exp
   | E_vector_update_subrange (v, n, m, exp) ->
       infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
@@ -3370,6 +3355,33 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
 and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ
+
+and infer_vector_update l env v n exp =
+  let rec nested_updates acc = function
+    | E_aux (E_vector_update (v, n, exp), (l, _)) -> nested_updates ((n, exp, l) :: acc) v
+    | v -> (v, List.rev acc)
+  in
+  let v, updates = nested_updates [(n, exp, l)] v in
+  let inferred_v = infer_exp env v in
+  match typ_of inferred_v with
+  | Typ_aux (Typ_id id, _) when Env.is_bitfield id env ->
+      let update_exp =
+        List.fold_left
+          (fun v (field, exp, l) ->
+            match field with
+            | E_aux (E_id field_id, (field_id_loc, _)) ->
+                let (Id_aux (update_name, _)) = (Bitfield.field_accessor_ids id field_id).update in
+                mk_exp ~loc:l (E_app (Id_aux (update_name, field_id_loc), [v; exp]))
+            | _ -> typ_error l "Vector update could not be interpreted as a bitfield update"
+          )
+          v updates
+      in
+      infer_exp env update_exp
+  | _ ->
+      let update_exp =
+        List.fold_left (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp]))) v updates
+      in
+      infer_exp env update_exp
 
 and instantiation_of (E_aux (_, (l, tannot)) as exp) =
   match fst tannot with
