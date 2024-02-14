@@ -271,18 +271,24 @@ module Make (Ord : OrderedType) = struct
         v
       end
     in
+    let is_on_stack v = List.exists (fun w -> Ord.compare v w = 0) !stack in
 
-    let node_indices = Hashtbl.create (NM.cardinal cg) in
-    let get_index v = (Hashtbl.find node_indices v).index in
-    let get_root v = (Hashtbl.find node_indices v).root in
-    let set_root v r = Hashtbl.replace node_indices v { (Hashtbl.find node_indices v) with root = r } in
+    let node_indices = ref NM.empty in
+    let has_index v = NM.mem v !node_indices in
+    let get_index v = (NM.find v !node_indices).index in
+    let get_root v = (NM.find v !node_indices).root in
+    let set_index v = node_indices := NM.add v { index = !index; root = !index } !node_indices in
+    let set_root v r =
+      node_indices :=
+        NM.update v (function Some i -> Some { i with root = r } | None -> raise Not_found) !node_indices
+    in
 
     let rec visit_node v =
       begin
-        Hashtbl.add node_indices v { index = !index; root = !index };
+        set_index v;
         index := !index + 1;
         push v;
-        if NM.mem v cg then NS.iter (visit_edge v) (NM.find v cg);
+        if NM.mem v cg then NS.iter (visit_edge v) (NM.find v cg) else ();
         if get_root v = get_index v then begin
           (* v is the root of a SCC *)
           let component = ref [] in
@@ -290,23 +296,23 @@ module Make (Ord : OrderedType) = struct
           while not !finished do
             let w = pop () in
             component := w :: !component;
-            if Ord.compare v w = 0 then finished := true
+            if Ord.compare v w = 0 then finished := true else ()
           done;
           components := !component :: !components
         end
       end
     and visit_edge v w =
-      if not (Hashtbl.mem node_indices w) then begin
+      if not (has_index w) then begin
         visit_node w;
-        if Hashtbl.mem node_indices w then set_root v (min (get_root v) (get_root w))
+        if has_index w then set_root v (min (get_root v) (get_root w)) else ()
       end
       else begin
-        if List.mem w !stack then set_root v (min (get_root v) (get_index w))
+        if is_on_stack w then set_root v (min (get_root v) (get_index w)) else ()
       end
     in
 
     let nodes = match original_order with Some nodes -> nodes | None -> List.map fst (NM.bindings cg) in
-    List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
+    List.iter (fun v -> if not (has_index v) then visit_node v else ()) nodes;
     List.rev !components
 
   let edge_list graph =

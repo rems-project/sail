@@ -4422,7 +4422,7 @@ let all_rewriters =
     ( "instantiate_outcomes",
       String_rewriter (fun target -> basic_rewriter (fun _ -> Outcome_rewrites.instantiate target))
     );
-    ("top_sort_defs", basic_rewriter (fun _ -> top_sort_defs));
+    ("top_sort_defs", basic_rewriter (fun _ -> Callgraph.top_sort_defs));
     ( "constant_fold",
       String_rewriter
         (fun target -> basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target)))
