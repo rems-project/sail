@@ -113,6 +113,7 @@ module Node = struct
     lex_ord (compare (node_kind n1) (node_kind n2)) (Id.compare (node_id n1) (node_id n2))
 end
 
+module NS = Set.Make (Node)
 module G = Graph.Make (Node)
 
 let builtins =
@@ -270,7 +271,7 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
         scan_typquant (Type id) typq
     | TD_variant (id, typq, ctors, _) ->
         let ctor_nodes =
-          List.map (fun (Tu_aux (Tu_ty_id (typ, id), _)) -> (typ_ids typ, id)) ctors
+          List.map (fun (Tu_aux (Tu_ty_id (typ, ctor_id), _)) -> (typ_ids typ |> IdSet.remove id, ctor_id)) ctors
           |> List.fold_left
                (fun (ids, ctors) (ids', ctor) -> (IdSet.union ids ids', IdSet.add ctor ctors))
                (IdSet.empty, IdSet.empty)
@@ -351,7 +352,7 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
     | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), _), l), outcome_defs) ->
         graph := G.add_edges (Outcome id) [] !graph;
         scan_typquant (Outcome id) typq;
-        IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ);
+        IdSet.iter (fun typ_id -> graph := G.add_edge (Outcome id) (Type typ_id) !graph) (typ_ids typ);
         List.iter (scan_outcome_def l (Outcome id)) outcome_defs
     | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
         graph := G.add_edges (Function id) [Outcome id] !graph;
@@ -372,7 +373,6 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
   !graph
 
 let rec graph_of_defs defs =
-  let module G = Graph.Make (Node) in
   match defs with
   | def :: defs ->
       let g = graph_of_defs defs in
@@ -385,24 +385,38 @@ let id_of_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
 let id_of_funcl (FCL_aux (FCL_funcl (id, _), _)) = id
 
+let nodes_of_def (DEF_aux (def, _)) =
+  match def with
+  | DEF_fundef fundef -> NS.singleton (Function (id_of_fundef fundef))
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (_, Typ_aux (Typ_bidir _, _)), _), id, _), _)) ->
+      NS.of_list
+        [
+          Function (append_id id "_forwards");
+          Function (append_id id "_forwards_matches");
+          Function (append_id id "_backwards");
+          Function (append_id id "_backwards_matches");
+          Mapping id;
+        ]
+  | DEF_val vs -> NS.singleton (Function (id_of_val_spec vs))
+  | DEF_scattered (SD_aux (SD_funcl funcl, _)) -> NS.singleton (Function (id_of_funcl funcl))
+  | DEF_mapdef mdef -> NS.singleton (Mapping (id_of_mapdef mdef))
+  | DEF_measure (id, _, _) -> NS.singleton (FunctionMeasure id)
+  | DEF_loop_measures (id, _) -> NS.singleton (LoopMeasures id)
+  | DEF_register rdec -> NS.singleton (Register (id_of_reg_dec rdec))
+  | DEF_let (LB_aux (LB_val (pat, _), _)) ->
+      pat_ids pat |> IdSet.elements |> List.map (fun id -> Letbind id) |> NS.of_list
+  | DEF_type tdef -> NS.singleton (Type (id_of_type_def tdef))
+  | DEF_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
+  | DEF_instantiation (IN_aux (IN_id id, _), _) -> NS.singleton (Function id)
+  | _ -> NS.empty
+
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =
-    let module NS = Set.Make (Node) in
     let module NM = Map.Make (Node) in
+    let defines_nodes def = not (NS.is_empty (nodes_of_def def)) in
+    let in_graph def = NS.exists (fun n -> NM.mem n g) (nodes_of_def def) in
+    let is_cut def = NS.subset (nodes_of_def def) cuts in
     function
-    | DEF_aux (DEF_fundef fdef, _) :: defs when NS.mem (Function (id_of_fundef fdef)) cuts -> filter_ast' g defs
-    | DEF_aux (DEF_fundef fdef, def_annot) :: defs when NM.mem (Function (id_of_fundef fdef)) g ->
-        DEF_aux (DEF_fundef fdef, def_annot) :: filter_ast' g defs
-    | DEF_aux (DEF_fundef _, _) :: defs -> filter_ast' g defs
-    | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), _) :: defs when NS.mem (Function (id_of_funcl funcl)) cuts ->
-        filter_ast' g defs
-    | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, a)), def_annot) :: defs
-      when NM.mem (Function (id_of_funcl funcl)) g ->
-        DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, a)), def_annot) :: filter_ast' g defs
-    | DEF_aux (DEF_scattered (SD_aux (SD_funcl _, _)), _) :: defs -> filter_ast' g defs
-    | DEF_aux (DEF_register rdec, def_annot) :: defs when NM.mem (Register (id_of_reg_dec rdec)) g ->
-        DEF_aux (DEF_register rdec, def_annot) :: filter_ast' g defs
-    | DEF_aux (DEF_register _, _) :: defs -> filter_ast' g defs
     | DEF_aux (DEF_overload (id, overloads), def_annot) :: defs -> begin
         let keep_overload overload =
           (NM.mem (Function overload) g || NM.mem (Constructor overload) g || NM.mem (Overload overload) g)
@@ -417,13 +431,6 @@ let filter_ast_extra cuts g ast keep_std =
     | DEF_aux (DEF_val vs, def_annot) :: defs when NM.mem (Function (id_of_val_spec vs)) g ->
         DEF_aux (DEF_val vs, def_annot) :: filter_ast' g defs
     | DEF_aux (DEF_val _, _) :: defs -> filter_ast' g defs
-    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _) as lb), def_annot) :: defs ->
-        let ids = pat_ids pat |> IdSet.elements in
-        if List.exists (fun id -> NM.mem (Letbind id) g) ids then DEF_aux (DEF_let lb, def_annot) :: filter_ast' g defs
-        else filter_ast' g defs
-    | DEF_aux (DEF_type tdef, def_annot) :: defs when NM.mem (Type (id_of_type_def tdef)) g ->
-        DEF_aux (DEF_type tdef, def_annot) :: filter_ast' g defs
-    | DEF_aux (DEF_type _, _) :: defs -> filter_ast' g defs
     | DEF_aux (DEF_measure (id, _, _), _) :: defs when NS.mem (Function id) cuts -> filter_ast' g defs
     | (DEF_aux (DEF_measure (id, _, _), _) as def) :: defs when NM.mem (Function id) g -> def :: filter_ast' g defs
     | DEF_aux (DEF_measure _, _) :: defs -> filter_ast' g defs
@@ -440,6 +447,8 @@ let filter_ast_extra cuts g ast keep_std =
           def :: in_file defs
         )
         else def :: filter_ast' g defs
+    | def :: defs when defines_nodes def ->
+        if in_graph def && not (is_cut def) then def :: filter_ast' g defs else filter_ast' g defs
     | def :: defs -> def :: filter_ast' g defs
     | [] -> []
   in
@@ -448,10 +457,70 @@ let filter_ast_extra cuts g ast keep_std =
 let filter_ast cuts g ast = filter_ast_extra cuts g ast false
 
 let filter_ast_ids roots cuts ast =
-  let module NodeSet = Set.Make (Node) in
-  let module G = Graph.Make (Node) in
   let g = graph_of_ast ast in
-  let roots = roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
-  let cuts = cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+  let roots = roots |> IdSet.elements |> List.map (fun id -> Function id) |> NS.of_list in
+  let cuts = cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NS.of_list in
   let g = G.prune roots cuts g in
   filter_ast cuts g ast
+
+let top_sort_defs ast =
+  let module NM = Map.Make (Node) in
+  (* Build callgraph, and collect definitions per node, so that we can efficiently reorder later *)
+  let g = graph_of_ast ast in
+  let defs_of_nodes =
+    let add defs d =
+      let update_node defs n = NM.update n (function Some ds -> Some (d :: ds) | None -> Some [d]) defs in
+      List.fold_left update_node defs (NS.elements (nodes_of_def d))
+    in
+    List.fold_left add NM.empty ast.defs
+  in
+  (* Determine the original order of callgraph nodes for the stable sort.
+     We have to be careful about forward declarations of functions,
+     i.e. val specs of functions that are defined later.
+     We want the reordering to push those down towards the definitions,
+     rather than pulling the definitions up along with their dependencies.
+     Hence, we only consider the definitions for the original order, not the specs.
+     When rebuilding the AST using `defs_of_nodes`, the specs will be placed right
+     before their corresponding function definitions. *)
+  let fun_id_of_def = function DEF_aux (DEF_fundef fd, _) -> Some (id_of_fundef fd) | _ -> None in
+  let defined_funs = List.filter_map fun_id_of_def ast.defs |> IdSet.of_list in
+  let is_defined_val_spec = function
+    | DEF_aux (DEF_val vs, _) when IdSet.mem (id_of_val_spec vs) defined_funs -> true
+    | _ -> false
+  in
+  let defs = List.filter (fun d -> not (is_defined_val_spec d)) ast.defs in
+  let original_order = List.map nodes_of_def defs |> List.map NS.elements |> List.concat in
+  (* Topologically sort the callgraph *)
+  let components = G.scc ~original_order g |> List.map NS.of_list in
+  (* Stable reordering of definitions, keeping in place definitions that don't
+     belong to a component, e.g. comments or pragmas *)
+  let rec reorder already_seen acc = function
+    | components, d :: defs when NS.is_empty (nodes_of_def d) -> reorder already_seen (d :: acc) (components, defs)
+    | components, d :: defs when NS.subset (nodes_of_def d) already_seen -> reorder already_seen acc (components, defs)
+    | c :: components, defs when NS.subset c already_seen -> reorder already_seen acc (components, defs)
+    | c :: components, defs ->
+        (* Look up the definitions for the nodes in the strongly connected component.
+           Q: Do we need to deduplicate them, e.g. could we end up including a let-binding of
+              multiple variables more than once?
+           A: The nodes of a multi-variable let-binding *should* not depend on each other, so
+              should not be part of the same component, so the code below should work. *)
+        let cdefs = NS.elements c |> List.filter_map (fun n -> NM.find_opt n defs_of_nodes) |> List.concat in
+        let already_seen' = List.fold_left NS.union already_seen (List.map nodes_of_def cdefs) in
+        (* Merge mutually recursive functions *)
+        let cdefs' =
+          let get_fundefs = function
+            | DEF_aux (DEF_fundef fundef, _) -> [fundef]
+            | DEF_aux (DEF_internal_mutrec fundefs, _) -> fundefs
+            | _ -> []
+          in
+          let fundefs = List.map get_fundefs cdefs |> List.concat in
+          let other_defs = List.filter (fun d -> get_fundefs d = []) cdefs in
+          if List.length fundefs > 1 then
+            (* Mutrec definition, then others (including val-specs); will be reversed later *)
+            mk_def (DEF_internal_mutrec fundefs) :: other_defs
+          else cdefs
+        in
+        reorder already_seen' (cdefs' @ acc) (components, defs)
+    | [], defs -> List.rev_append acc defs
+  in
+  { ast with defs = reorder NS.empty [] (components, defs) }
