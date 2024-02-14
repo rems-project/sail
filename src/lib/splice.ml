@@ -107,11 +107,16 @@ let filter_replacements spec_found { defs; _ } =
   in
   List.filter not_found defs
 
+let annotate_ast ast =
+  let annotate_def (DEF_aux (d, a)) = DEF_aux (d, add_def_attribute a.loc "spliced" "" a) in
+  { ast with defs = List.map annotate_def ast.defs }
+
 let splice ast file =
   let parsed_ast = Initial_check.parse_file file |> snd in
   let repl_ast = Initial_check.process_ast ~generate:false (Parse_ast.Defs [(file, parsed_ast)]) in
   let repl_ast = Rewrites.move_loop_measures repl_ast in
   let repl_ast = map_ast_annot (fun (l, _) -> (l, Type_check.empty_tannot)) repl_ast in
+  let repl_ast = annotate_ast repl_ast in
   let repl_ids, repl_specs = scan_ast repl_ast in
   let defs1, specs_found = filter_old_ast repl_ids repl_specs ast in
   let defs2 = filter_replacements specs_found repl_ast in

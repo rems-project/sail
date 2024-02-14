@@ -101,7 +101,7 @@ let empty_ctxt =
     params_to_print = Bindings.empty;
   }
 
-let print_to_from_interp_value = ref false
+let print_to_from_interp_value = ref false (* TODO: Remove? *)
 let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
@@ -1738,6 +1738,19 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_measure _ -> empty (* we might use these in future *)
   | DEF_loop_measures _ -> empty
 
+let doc_defs_lem effect_info params_to_print type_env defs =
+  separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs)
+
+let doc_header_lem top_line imports =
+  concat
+    [
+      string "(*" ^^ string top_line ^^ string "*)";
+      hardline;
+      (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) imports;
+      hardline;
+      hardline;
+    ]
+
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
@@ -1745,9 +1758,29 @@ let find_exc_typ defs =
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env ({ defs; _ } as ast)
-    concurrency_monad_params top_line =
-  (* let regtypes = find_regtypes d in *)
+let group_defs_by_file top_filename defs =
+  let rec group current_filename current_defs groups defs =
+    let is_file_start = function
+      | DEF_aux (DEF_pragma ("file_start", f, _), a) ->
+          (* Ignore file markers from generated blocks and spliced files;
+             we want to preserve the original input file structure *)
+          f <> "" && get_def_attribute "spliced" a = None
+      | _ -> false
+    in
+    match (defs, current_filename) with
+    | (DEF_aux (DEF_pragma ("file_start", f, _), _) as d) :: defs, None when is_file_start d ->
+        group (Some f) current_defs groups defs
+    | DEF_aux (DEF_pragma ("file_end", f, _), _) :: defs, Some f' when f' = f ->
+        if current_defs = [] then group None [] groups defs
+        else group None [] (groups @ [(f', List.rev current_defs)]) defs
+    | d :: defs, _ -> group current_filename (d :: current_defs) groups defs
+    | [], Some f -> groups @ [(f, List.rev current_defs)]
+    | [], None -> groups @ [(top_filename, List.rev current_defs)]
+  in
+  group None [] [] defs
+
+let doc_ast_lem out_filename split_files base_imports extra_imports effect_info type_env ({ defs; _ } as ast) =
+  let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let state_ids = State.generate_regstate_defs type_env ast |> val_spec_ids in
   let is_state_def = function
     | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
@@ -1757,8 +1790,34 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
   let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
   let exc_typ = find_exc_typ defs in
   let params_to_print = type_parameters_to_print type_env defs in
+  let callgraph = Callgraph.graph_of_ast ast in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
+  let module_name f = Filename.basename f |> Filename.remove_extension |> String.capitalize_ascii in
+  let types_basename = out_filename ^ "_types" in
+  let types_filename = types_basename ^ ".lem" in
+  let types_module = module_name types_filename in
+  (* Split definitions into files corresponding to input files, if requested;
+     make sure to check for duplicate names and rename if necessary
+     (for now just by adding a suffix "2", "3", and so on). *)
+  let rec rename_duplicates seen suffix = function
+    | (filename, defs) :: files ->
+        let basename = Filename.remove_extension (Filename.basename filename) in
+        let basename' = basename ^ string_of_int suffix in
+        if not (StringSet.mem basename seen) then
+          (filename, defs) :: rename_duplicates (StringSet.add basename seen) 2 files
+        else if not (StringSet.mem basename' seen) then (
+          let filename' = Filename.remove_extension filename ^ string_of_int suffix ^ Filename.extension filename in
+          (filename', defs) :: rename_duplicates (StringSet.add basename' seen) 2 files
+        )
+        else rename_duplicates seen (suffix + 1) ((filename, defs) :: files)
+    | [] -> []
+  in
+  let out_sail_filename = out_filename ^ ".sail" in
+  let files =
+    (if split_files then group_defs_by_file out_sail_filename defs else [(out_sail_filename, defs)])
+    |> rename_duplicates (StringSet.singleton types_basename) 2
+  in
   let register_ref_tannot typ =
     string " : register_ref regstate register_value " ^^ parens (doc_typ_lem params_to_print type_env typ)
   in
@@ -1782,60 +1841,52 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
                params.arch_ak_type;
              ]
   in
-
-  (print types_file)
-    (concat
-       [
-         string "(*" ^^ string top_line ^^ string "*)";
-         hardline;
-         (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) types_modules;
-         hardline;
-         ( if !print_to_from_interp_value then
-             concat
-               [
-                 (separate_map hardline)
-                   (fun lib -> separate space [string "     import"; string lib])
-                   ["Interp"; "Interp_ast"];
-                 string "open import Deep_shallow_convert";
-                 hardline;
-                 hardline;
-                 string "module SI = Interp";
-                 hardline;
-                 string "module SIA = Interp_ast";
-                 hardline;
-                 hardline;
-               ]
-           else empty
-         );
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) typdefs);
-         hardline;
-         hardline;
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) statedefs);
-         hardline;
-         hardline;
-         State.regval_instance_lem;
-         hardline;
-         register_refs;
-         hardline;
-         concat
-           [
-             string "type MR 'a 'r = base_monadR" ^^ extra_monad_params
-             ^^ string (" register_value regstate 'a 'r " ^ exc_typ);
-             hardline;
-             string "type M 'a = base_monad" ^^ extra_monad_params ^^ string (" register_value regstate 'a " ^ exc_typ);
-             hardline;
-           ];
-       ]
-    );
-  (print defs_file)
-    (concat
-       [
-         string "(*" ^^ string top_line ^^ string "*)";
-         hardline;
-         (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) defs_modules;
-         hardline;
-         hardline;
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs);
-         hardline;
-       ]
+  let types_doc =
+    concat
+      [
+        doc_header_lem "Generated by Sail: types and register state" base_imports;
+        doc_defs_lem effect_info params_to_print type_env (typdefs @ statedefs);
+        hardline;
+        hardline;
+        State.regval_instance_lem;
+        hardline;
+        register_refs;
+        hardline;
+        hardline;
+        string "type MR 'a 'r = base_monadR" ^^ extra_monad_params
+        ^^ string (" register_value regstate 'a 'r " ^ exc_typ);
+        hardline;
+        string "type M 'a = base_monad" ^^ extra_monad_params ^^ string (" register_value regstate 'a " ^ exc_typ);
+        hardline;
+      ]
+  in
+  let doc_file_lem imports (filename, defs) =
+    let base_filename = Filename.basename filename in
+    let lem_filename = Filename.remove_extension base_filename ^ ".lem" in
+    let doc =
+      doc_header_lem ("Generated by Sail from " ^ base_filename) imports
+      ^^ doc_defs_lem effect_info params_to_print type_env defs
+    in
+    (lem_filename, doc)
+  in
+  (* Determine import dependencies for each file *)
+  let module NodeSet = Set.Make (Callgraph.Node) in
+  let module_of_file (f, defs) =
+    (module_name f, List.map Callgraph.nodes_of_def defs |> List.fold_left NodeSet.union NodeSet.empty)
+  in
+  let modules = List.map module_of_file files in
+  let main_imports = base_imports @ [types_module] @ extra_imports in
+  let module_imports i =
+    (* Import files that define nodes that this file uses;
+       except for the last file, where we'd like to import everything else *)
+    if i = List.length modules - 1 then List.map fst (Util.butlast modules)
+    else (
+      let _, nodes = List.nth modules i in
+      let deps = Callgraph.G.prune nodes NodeSet.empty callgraph |> Callgraph.G.nodes |> NodeSet.of_list in
+      List.filter_map
+        (fun (name, nodes) -> if not (NodeSet.disjoint nodes deps) then Some name else None)
+        (Util.take i modules)
     )
+  in
+  let file_imports = List.init (List.length files) (fun i -> main_imports @ module_imports i) in
+  (types_filename, types_doc) :: List.map2 doc_file_lem file_imports files
