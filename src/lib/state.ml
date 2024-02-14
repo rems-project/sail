@@ -566,19 +566,20 @@ let generate_isa_lemmas env defs =
     ^^ hardline
     ^^ string ("  by (auto simp: " ^ of_rv ^ "_def " ^ rv_of ^ "_def)")
   in
-  let register_lemmas (typ, id, _) =
-    let id = remove_leading_underscores (string_of_id id) in
-    separate_map hardline string
-      [
-        "lemma liftS_read_reg_" ^ id ^ "[liftState_simp]:";
-        "  \"\\<lbrakk>read_reg " ^ id ^ "_ref\\<rbrakk>\\<^sub>S = read_regS " ^ id ^ "_ref\"";
-        "  by (intro liftState_read_reg) (auto simp: register_defs)";
-        "";
-        "lemma liftS_write_reg_" ^ id ^ "[liftState_simp]:";
-        "  \"\\<lbrakk>write_reg " ^ id ^ "_ref v\\<rbrakk>\\<^sub>S = write_regS " ^ id ^ "_ref v\"";
-        "  by (intro liftState_write_reg) (auto simp: register_defs)";
-      ]
-  in
+  (* TODO: Broken with new concurrency interface *)
+  (* let register_lemmas (typ, id, _) =
+       let id = remove_leading_underscores (string_of_id id) in
+       separate_map hardline string
+         [
+           "lemma liftS_read_reg_" ^ id ^ "[liftState_simp]:";
+           "  \"\\<lbrakk>read_reg " ^ id ^ "_ref\\<rbrakk>\\<^sub>S = read_regS " ^ id ^ "_ref\"";
+           "  by (intro liftState_read_reg) (auto simp: register_defs)";
+           "";
+           "lemma liftS_write_reg_" ^ id ^ "[liftState_simp]:";
+           "  \"\\<lbrakk>write_reg " ^ id ^ "_ref v\\<rbrakk>\\<^sub>S = write_regS " ^ id ^ "_ref v\"";
+           "  by (intro liftState_write_reg) (auto simp: register_defs)";
+         ]
+     in *)
   let registers_eqs =
     separate hardline
       (List.map string
@@ -665,10 +666,12 @@ let generate_isa_lemmas env defs =
     else string ""
   in
   registers_eqs ^^ hardline ^^ hardline
-  ^^ string
+  (* TODO: Broken with new concurrency interface *)
+  (* ^^ string
        "abbreviation liftS (\"\\<lbrakk>_\\<rbrakk>\\<^sub>S\") where \"liftS \\<equiv> liftState (get_regval, \
-        set_regval)\""
-  ^^ hardline ^^ hardline ^^ register_defs ^^ hardline ^^ hardline
+        set_regval)\"" *)
+  ^^ hardline
+  ^^ hardline ^^ register_defs ^^ hardline ^^ hardline
   ^^ separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids @ regtyp_ids)
   ^^ hardline ^^ hardline
   ^^ separate_map (hardline ^^ hardline) bitfield_conv_lemma bitfield_ids
@@ -697,8 +700,10 @@ let generate_isa_lemmas env defs =
          "qed";
        ]
   ^^ hardline ^^ hardline
-  ^^ separate_map (hardline ^^ hardline) register_lemmas registers
-  ^^ hardline ^^ hardline ^^ set_regval_type_cases ^^ hardline ^^ hardline ^^ get_regval_type_cases
+  (* TODO: Broken with new concurrency interface *)
+  (* ^^ separate_map (hardline ^^ hardline) register_lemmas registers *)
+  ^^ hardline
+  ^^ hardline ^^ set_regval_type_cases ^^ hardline ^^ hardline ^^ get_regval_type_cases
 
 let rec regval_convs_coq env (Typ_aux (t, _) as typ) =
   match t with
