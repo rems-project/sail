@@ -655,7 +655,7 @@ let rec run frame =
 let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names =
   let open Printf in
   prerr_endline ("Checking counterexample: " ^ fname);
-  let in_chan = ksprintf Unix.open_process_in "cvc4 --lang=smt2.6 %s" fname in
+  let in_chan = ksprintf Unix.open_process_in "cvc5 --lang=smt2.6 %s" fname in
   let lines = ref [] in
   begin
     try
@@ -667,7 +667,7 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
   let solver_output = List.rev !lines |> String.concat "\n" |> parse_sexps in
   begin
     match solver_output with
-    | Atom "sat" :: List (Atom "model" :: model) :: _ ->
+    | Atom "sat" :: List model :: _ ->
         let open Value in
         let open Interpreter in
         prerr_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));

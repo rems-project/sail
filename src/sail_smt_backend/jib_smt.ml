@@ -2258,7 +2258,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           let header = smt_header ctx all_cdefs in
 
           if !(ctx.use_string) || !(ctx.use_real) then output_string out_chan "(set-logic ALL)\n"
-          else output_string out_chan "(set-logic QF_AUFBVDT)\n";
+          else output_string out_chan "(set-logic QF_AUFBVFPDT)\n";
 
           List.iter
             (fun def ->
