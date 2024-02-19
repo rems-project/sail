@@ -2218,7 +2218,7 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   (stack, start, cfg)
 
-let smt_cdef props lets name_file ctx all_cdefs = function
+let smt_cdef props lets name_file ctx all_cdefs smt_includes = function
   | CDEF_val (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props -> begin
       match find_function [] function_id all_cdefs with
       | intervening_lets, Some (None, args, instrs) ->
@@ -2267,6 +2267,9 @@ let smt_cdef props lets name_file ctx all_cdefs = function
             )
             header;
 
+          (* Include custom SMT definitions. *)
+          List.iter (fun include_file -> output_string out_chan (Util.read_whole_file include_file)) smt_includes;
+
           let queue = Queue_optimizer.optimize stack in
           Queue.iter
             (fun def ->
@@ -2295,13 +2298,13 @@ let smt_cdef props lets name_file ctx all_cdefs = function
     end
   | _ -> ()
 
-let rec smt_cdefs props lets name_file ctx ast = function
+let rec smt_cdefs props lets name_file ctx ast smt_includes = function
   | CDEF_let (_, vars, setup) :: cdefs ->
       let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
-      smt_cdefs props (lets @ vars @ setup) name_file ctx ast cdefs
+      smt_cdefs props (lets @ vars @ setup) name_file ctx ast smt_includes cdefs
   | cdef :: cdefs ->
-      smt_cdef props lets name_file ctx ast cdef;
-      smt_cdefs props lets name_file ctx ast cdefs
+      smt_cdef props lets name_file ctx ast smt_includes cdef;
+      smt_cdefs props lets name_file ctx ast smt_includes cdefs
   | [] -> ()
 
 (* In order to support register references, we need to build a map
@@ -2352,8 +2355,8 @@ let deserialize_smt_model file =
   close_in in_chan;
   (cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap })
 
-let generate_smt props name_file env effect_info ast =
+let generate_smt props name_file env effect_info smt_includes ast =
   try
     let cdefs, _, ctx = compile env effect_info ast in
-    smt_cdefs props [] name_file ctx cdefs cdefs
+    smt_cdefs props [] name_file ctx cdefs smt_includes cdefs
   with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))

@@ -364,6 +364,13 @@ let same_content_files file1 file2 : bool =
        result
      end
 
+let read_whole_file filename =
+  (* open_in_bin works correctly on Unix and Windows *)
+  let ch = open_in_bin filename in
+  let s = really_input_string ch (in_channel_length ch) in
+  close_in ch;
+  s
+
 (*String formatting *)
 let rec string_of_list sep string_of = function
   | [] -> ""

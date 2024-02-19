@@ -179,5 +179,6 @@ val generate_smt :
   (* Applied to each function name to generate the file name for the smtlib file *)
   Type_check.Env.t ->
   Effects.side_effect_info ->
+  string list ->
   Type_check.tannot ast ->
   unit
