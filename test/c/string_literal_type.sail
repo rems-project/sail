@@ -1,3 +1,5 @@
+default Order dec
+
 $include <prelude.sail>
 
 $option -string_literal_type

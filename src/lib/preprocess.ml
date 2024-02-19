@@ -179,11 +179,25 @@ let wrap_include l file = function
 
 let preprocess dir target opts =
   let module P = Parse_ast in
-  let rec aux acc = function
+  let rec aux includes acc = function
     | [] -> List.rev acc
     | DEF_aux (DEF_pragma ("define", symbol, _), _) :: defs ->
         symbols := StringSet.add symbol !symbols;
-        aux acc defs
+        aux includes acc defs
+    | DEF_aux (DEF_pragma ("include_error", message, _), l) :: defs -> begin
+        match List.rev includes with
+        | [] -> raise (Reporting.err_general (pragma_loc l) message)
+        | (include_root, l) :: ls ->
+            let open Error_format in
+            let b = Buffer.create 20 in
+            let _, message =
+              List.fold_left
+                (fun (includer, msg) (file, l) -> (file, Location ("", Some ("included by " ^ includer), l, msg)))
+                (include_root, Line message) ls
+            in
+            format_message message (buffer_formatter b);
+            raise (Reporting.err_general l (Buffer.contents b))
+      end
     | (DEF_aux (DEF_pragma ("option", command, _), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
         begin
@@ -202,23 +216,27 @@ let preprocess dir target opts =
           | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
           | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
         end;
-        aux (opt_pragma :: acc) defs
+        aux includes (opt_pragma :: acc) defs
     | DEF_aux (DEF_pragma ("ifndef", symbol, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
-        if not (StringSet.mem symbol !symbols) then aux acc (then_defs @ defs) else aux acc (else_defs @ defs)
+        if not (StringSet.mem symbol !symbols) then aux includes acc (then_defs @ defs)
+        else aux includes acc (else_defs @ defs)
     | DEF_aux (DEF_pragma ("ifdef", symbol, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
-        if StringSet.mem symbol !symbols then aux acc (then_defs @ defs) else aux acc (else_defs @ defs)
+        if StringSet.mem symbol !symbols then aux includes acc (then_defs @ defs)
+        else aux includes acc (else_defs @ defs)
     | DEF_aux (DEF_pragma ("iftarget", t, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         begin
-          match target with Some t' when t = t' -> aux acc (then_defs @ defs) | _ -> aux acc (else_defs @ defs)
+          match target with
+          | Some t' when t = t' -> aux includes acc (then_defs @ defs)
+          | _ -> aux includes acc (else_defs @ defs)
         end
     | DEF_aux (DEF_pragma ("include", file, _), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
           Reporting.warn "" (pragma_loc l) "Skipping bad $include. No file argument.";
-          aux acc defs
+          aux includes acc defs
         )
         else if file.[0] = '"' && file.[len - 1] = '"' then (
           let relative =
@@ -230,20 +248,26 @@ let preprocess dir target opts =
           in
           let file = String.sub file 1 (len - 2) in
           let include_file = Filename.concat relative file in
-          let include_defs = Initial_check.parse_file ~loc:l (Filename.concat relative file) |> snd |> aux [] in
-          aux (List.rev (wrap_include l include_file include_defs) @ acc) defs
+          let include_defs =
+            Initial_check.parse_file ~loc:l (Filename.concat relative file)
+            |> snd
+            |> aux ((file, pragma_loc l) :: includes) []
+          in
+          aux includes (List.rev (wrap_include l include_file include_defs) @ acc) defs
         )
         else if file.[0] = '<' && file.[len - 1] = '>' then (
-          let file = String.sub file 1 (len - 2) in
+          let lib_file = String.sub file 1 (len - 2) in
           let sail_dir = Reporting.get_sail_dir dir in
-          let file = Filename.concat sail_dir ("lib/" ^ file) in
-          let include_defs = Initial_check.parse_file ~loc:l file |> snd |> aux [] in
-          aux (List.rev (wrap_include l file include_defs) @ acc) defs
+          let file = Filename.concat sail_dir ("lib/" ^ lib_file) in
+          let include_defs =
+            Initial_check.parse_file ~loc:l file |> snd |> aux ((lib_file, pragma_loc l) :: includes) []
+          in
+          aux includes (List.rev (wrap_include l file include_defs) @ acc) defs
         )
         else (
           let help = "Make sure the filename is surrounded by quotes or angle brackets" in
           Reporting.warn "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
-          aux acc defs
+          aux includes acc defs
         )
     | DEF_aux (DEF_pragma ("suppress_warnings", _, _), l) :: defs ->
         begin
@@ -251,28 +275,29 @@ let preprocess dir target opts =
           | None -> () (* This shouldn't happen, but if it does just continue *)
           | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
         end;
-        aux acc defs
+        aux includes acc defs
     (* Filter file_start and file_end out of the AST so when we
        round-trip files through the compiler we don't end up with
        incorrect start/end annotations *)
     | (DEF_aux (DEF_pragma ("file_start", _, _), _) | DEF_aux (DEF_pragma ("file_end", _, _), _)) :: defs ->
-        aux acc defs
+        aux includes acc defs
     | (DEF_aux (DEF_pragma (p, _, _), l) as pragma_def) :: defs ->
         if not (StringSet.mem p all_pragmas || String.contains p '#') then
           Reporting.warn "" (pragma_loc l) ("Unrecognised directive: " ^ p);
-        aux (pragma_def :: acc) defs
+        aux includes (pragma_def :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
-        aux (DEF_aux (DEF_outcome (outcome_spec, aux [] inner_defs), l) :: acc) defs
+        aux includes (DEF_aux (DEF_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs
     | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> begin
+        symbols := StringSet.add "_DEFAULT_ORDER_SET" !symbols;
         match atyp with
         | Parse_ast.ATyp_inc ->
             symbols := StringSet.add "_DEFAULT_INC" !symbols;
-            aux (def :: acc) defs
+            aux includes (def :: acc) defs
         | Parse_ast.ATyp_dec ->
             symbols := StringSet.add "_DEFAULT_DEC" !symbols;
-            aux (def :: acc) defs
-        | _ -> aux (def :: acc) defs
+            aux includes (def :: acc) defs
+        | _ -> aux includes (def :: acc) defs
       end
-    | def :: defs -> aux (def :: acc) defs
+    | def :: defs -> aux includes (def :: acc) defs
   in
-  aux []
+  aux [] []
