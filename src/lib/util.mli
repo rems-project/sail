@@ -178,7 +178,7 @@ val map_if : ('a -> bool) -> ('a -> 'a) -> 'a list -> 'a list
 val map_exists : ('b -> bool) -> ('a -> 'b) -> 'a list -> bool
 
 (** [list_to_front i l] resorts the list [l] by bringing the element at index [i]
-    to the front. 
+    to the front.
     @throws Failure if [i] is not smaller than the length of [l]*)
 val list_to_front : int -> 'a list -> 'a list
 
@@ -245,6 +245,9 @@ val input_byte_opt : in_channel -> int option
 If at least one of the files does not exist, [false] is returned. [same_content_files] throws an exception,
 if one of the files exists, but cannot be read. *)
 val same_content_files : string -> string -> bool
+
+(** [read_whole_file filename] reads the contents of the file and returns it as a string. *)
+val read_whole_file : string -> string
 
 (** {2 Strings} *)
 

@@ -67,9 +67,11 @@
 
 open Libsail
 
+let opt_includes_smt : string list ref = ref []
+
 let smt_options =
   [
-    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the CVC4 solver");
+    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the CVC5 solver");
     ("-smt_ignore_overflow", Arg.Set Jib_smt.opt_ignore_overflow, " ignore integer overflow in generated SMT");
     ("-smt_propagate_vars", Arg.Set Jib_smt.opt_propagate_vars, " propgate variables through generated SMT");
     ( "-smt_int_size",
@@ -83,6 +85,10 @@ let smt_options =
     ( "-smt_vector_size",
       Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
       "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)"
+    );
+    ( "-smt_include",
+      Arg.String (fun i -> opt_includes_smt := i :: !opt_includes_smt),
+      "<filename> insert additional file in SMT output"
     );
   ]
 
@@ -132,6 +138,6 @@ let smt_target _ _ out_file ast effect_info env =
     match out_file with Some f -> fun str -> f ^ "_" ^ str ^ ".smt2" | None -> fun str -> str ^ ".smt2"
   in
   Reporting.opt_warnings := true;
-  Jib_smt.generate_smt props name_file env effect_info ast_smt
+  Jib_smt.generate_smt props name_file env effect_info !opt_includes_smt ast_smt
 
 let _ = Target.register ~name:"smt" ~options:smt_options ~rewrites:smt_rewrites smt_target
