@@ -68,6 +68,10 @@
 $ifndef _VECTOR
 $define _VECTOR
 
+$ifndef _DEFAULT_ORDER_SET
+$include_error A default order must be set (using `default Order dec` or `default Order inc`) before including this file
+$endif
+
 $include <flow.sail>
 
 type bits('n : Int) = bitvector('n)

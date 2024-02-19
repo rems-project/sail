@@ -1,3 +1,5 @@
+default Order dec
+
 $include <flow.sail>
 $include <vector_inc.sail>
 

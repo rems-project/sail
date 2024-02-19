@@ -1,3 +1,5 @@
+default Order dec
+
 $include <prelude.sail>
 
 val f : list(int) -> int

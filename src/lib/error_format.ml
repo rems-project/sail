@@ -88,6 +88,10 @@ let rec read_lines in_chan = function
 
 let error_tabwidth = 4
 
+let opt_debug_no_filenames = ref false
+
+let format_filename fname = if !opt_debug_no_filenames then "" else Util.(fname |> cyan |> clear)
+
 let unprintable_notation ?(color = fun x -> x) c =
   let n = Char.code c in
   if n = 9 then Some (String.make error_tabwidth ' ')
@@ -133,7 +137,7 @@ let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to content
   let line = input_line in_chan in
   let line_prefix = string_of_int lnum ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
-  format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
+  format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
   let line, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line in
   format_endline (line_prefix ^ line) ppf;
   format_endline
@@ -159,7 +163,7 @@ let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to
   let line_from_prefix = string_of_int lnum_from ^ line_from_padding ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline
-    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to)
+    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix (format_filename fname) lnum_from cnum_from lnum_to cnum_to)
     ppf;
   let cnum_end = String.length line_from in
   let line_from, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line_from in
@@ -172,7 +176,7 @@ let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to
 
 let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf =
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
-  format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
+  format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 
 let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
@@ -191,7 +195,7 @@ let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
 let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline
-    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to)
+    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix (format_filename fname) lnum_from cnum_from lnum_to cnum_to)
     ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 

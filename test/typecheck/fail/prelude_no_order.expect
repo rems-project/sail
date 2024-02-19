@@ -1,0 +1,8 @@
+[93mError[0m:
+:2.0-23:
+2[96m |[0m$include <prelude.sail>
+ [91m |[0m[91m^---------------------^[0m
+ [91m |[0m :72.0-22:
+ [91m |[0m 72[96m |[0m$include <vector.sail>
+ [91m |[0m   [91m |[0m[91m^--------------------^[0m [91mincluded by prelude.sail[0m
+ [91m |[0m   [91m |[0m A default order must be set (using `default Order dec` or `default Order inc`) before including this file
