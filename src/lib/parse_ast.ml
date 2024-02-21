@@ -362,8 +362,9 @@ and mapcl_aux =
   | MCL_attribute of string * string * mapcl
   | MCL_doc of string * mapcl
   | MCL_bidir of mpexp * mpexp
-  | MCL_forwards of mpexp * exp
-  | MCL_backwards of mpexp * exp
+  | MCL_forwards_deprecated of mpexp * exp
+  | MCL_forwards of pexp
+  | MCL_backwards of pexp
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)

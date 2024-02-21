@@ -304,8 +304,8 @@ let rewrite_mapcl rewriters (MCL_aux (aux, def_annot)) =
   let aux =
     match aux with
     | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
-    | MCL_forwards (mpexp, exp) -> MCL_forwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
-    | MCL_backwards (mpexp, exp) -> MCL_backwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
+    | MCL_forwards pexp -> MCL_forwards (rewrite_pexp rewriters pexp)
+    | MCL_backwards pexp -> MCL_backwards (rewrite_pexp rewriters pexp)
   in
   MCL_aux (aux, def_annot)
 

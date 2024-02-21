@@ -154,8 +154,9 @@ let mk_subst ev n m = IS_aux (ev, loc n m)
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
-let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n m)
-let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
+let mk_forwards_mapcl_deprecated mpexp exp n m = MCL_aux (MCL_forwards_deprecated (mpexp, exp), loc n m)
+let mk_forwards_mapcl pexp n m = MCL_aux (MCL_forwards pexp, loc n m)
+let mk_backwards_mapcl pexp n m = MCL_aux (MCL_backwards pexp, loc n m)
 let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
 let qi_id_of_kopt (KOpt_aux (_, l) as kopt) = QI_aux (QI_id kopt, l)
@@ -222,6 +223,9 @@ let old_bitfield_deprecated ?(bitfield = "<bitfield>") l field =
 
 let warn_extern_effect l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
+
+let forwards_mapcl_deprecated l =
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "Single direction mapping clause should be prefixed by a direction, either forwards or backwards"
 
 let set_syntax_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}."
@@ -1138,11 +1142,12 @@ mapcl:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
   | mpexp EqGt exp
-    { mk_forwards_mapcl $1 $3 $startpos $endpos }
-  | Forwards mpexp EqGt exp
-    { mk_forwards_mapcl $2 $4 $startpos $endpos }
-  | Backwards mpexp EqGt exp
-    { mk_backwards_mapcl $2 $4 $startpos $endpos }
+    { forwards_mapcl_deprecated (loc $startpos $endpos);
+      mk_forwards_mapcl_deprecated $1 $3 $startpos $endpos }
+  | Forwards case
+    { mk_forwards_mapcl $2 $startpos $endpos }
+  | Backwards case
+    { mk_backwards_mapcl $2 $startpos $endpos }
 
 mapcl_list:
   | mapcl Comma?

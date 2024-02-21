@@ -531,6 +531,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
   let docinfo_for_mpexp (MPat_aux (aux, _)) =
     match aux with MPat_pat mpat -> pat_of_mpat mpat | MPat_when (mpat, _) -> pat_of_mpat mpat
 
+  let docinfo_for_pexp (Pat_aux (aux, _)) =
+    match aux with Pat_exp (pat, body) -> (pat, body) | Pat_when (pat, _, body) -> (pat, body)
+
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Type_check.strip_mapcl Pretty_print_sail.doc_mapcl clause in
     let wavedrom_attr = find_attribute_opt "wavedrom" def_annot.attrs in
@@ -543,13 +546,13 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           let right = docinfo_for_mpexp right in
           let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
           (Some left, left_wavedrom, Some right, right_wavedrom, None)
-      | MCL_forwards (left, body) ->
-          let left = docinfo_for_mpexp left in
+      | MCL_forwards pexp ->
+          let left, body = docinfo_for_pexp pexp in
           let left_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr left in
           let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
           (Some left, left_wavedrom, None, None, Some body)
-      | MCL_backwards (right, body) ->
-          let right = docinfo_for_mpexp right in
+      | MCL_backwards pexp ->
+          let right, body = docinfo_for_pexp pexp in
           let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
           let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
           (None, None, Some right, right_wavedrom, Some body)

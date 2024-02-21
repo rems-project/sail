@@ -36,7 +36,7 @@
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "monadic" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping" "where" "with" "implicit" "instantiation" "impl"))
+    "mapping" "where" "with" "implicit" "instantiation" "impl" "forwards" "backwards"))
 
 (defconst sail-project-keywords
   '("after" "before" "directory" "else" "file" "files" "if" "default" "module" "optional" "requires" "then" "variable"))

@@ -634,14 +634,8 @@ let doc_mapcl (MCL_aux (cl, (def_annot, _))) =
       let left = doc_mpexp mpexp1 in
       let right = doc_mpexp mpexp2 in
       separate space [left; string "<->"; right]
-  | MCL_forwards (mpexp, exp) ->
-      let left = doc_mpexp mpexp in
-      let right = doc_exp exp in
-      separate space [left; string "=>"; right]
-  | MCL_backwards (mpexp, exp) ->
-      let left = doc_mpexp mpexp in
-      let right = doc_exp exp in
-      separate space [left; string "<-"; right]
+  | MCL_forwards pexp -> string "forwards" ^^ space ^^ doc_pexp pexp
+  | MCL_backwards pexp -> string "backwards" ^^ space ^^ doc_pexp pexp
 
 let doc_mapdef (MD_aux (MD_mapping (id, _, mapcls), _)) =
   match mapcls with

@@ -3985,21 +3985,13 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
           let typed_right_mpexp = check_mpexp left_id_env env right_mpexp typ2 in
           MCL_aux (MCL_bidir (typed_left_mpexp, typed_right_mpexp), (def_annot, mk_expected_tannot env typ (Some typ)))
         end
-      | MCL_forwards (mpexp, exp) -> begin
-          let mpat, _, _ = destruct_mpexp mpexp in
-          ignore (check_pattern_duplicates env (pat_of_mpat mpat));
-          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ1 in
-          let typed_mpexp = check_mpexp Env.empty env mpexp typ1 in
-          let typed_exp = check_exp mpat_env exp typ2 in
-          MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+      | MCL_forwards pexp -> begin
+          let typed_pexp = check_case env typ1 pexp typ2 in
+          MCL_aux (MCL_forwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
         end
-      | MCL_backwards (mpexp, exp) -> begin
-          let mpat, _, _ = destruct_mpexp mpexp in
-          ignore (check_pattern_duplicates env (pat_of_mpat mpat));
-          let _, mpat_env, _ = bind_mpat false Env.empty env mpat typ2 in
-          let typed_mpexp = check_mpexp Env.empty env mpexp typ2 in
-          let typed_exp = check_exp mpat_env exp typ1 in
-          MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (def_annot, mk_expected_tannot env typ (Some typ)))
+      | MCL_backwards pexp -> begin
+          let typed_pexp = check_case env typ2 pexp typ1 in
+          MCL_aux (MCL_backwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
         end
     end
   | _ ->

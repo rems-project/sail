@@ -539,8 +539,8 @@ opt_default :: 'Def_val_' ::=
 pexp :: 'Pat_' ::=
   {{ com pattern match }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | pat -> exp                          :: :: exp
-  | pat when exp1 -> exp                :: :: when
+  | pat => exp                        :: :: exp
+  | pat if exp1 => exp                :: :: when
 % apparently could use -> or => for this.
 
 %% % psexp :: 'Pats' ::=
@@ -647,8 +647,8 @@ mapcl :: 'MCL_' ::=
   {{ com mapping clause (bidirectional pattern-match) }}
   {{ aux _ clause_annot }} {{ auxparam 'a }}
   | mpexp1 <-> mpexp2 :: :: bidir
-  | mpexp   => exp    :: :: forwards
-  | mpexp  <-  exp    :: :: backwards
+  | forwards pexp     :: :: forwards
+  | backwards pexp    :: :: backwards
 
 
 mapdef :: 'MD_' ::=
