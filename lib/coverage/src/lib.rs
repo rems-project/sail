@@ -20,6 +20,7 @@ struct Span {
 lazy_static! {
     static ref FUNCTIONS: Mutex<HashSet<Span>> = Mutex::new(HashSet::new());
     static ref BRANCH_TARGETS: Mutex<HashSet<Span>> = Mutex::new(HashSet::new());
+    static ref BRANCH_REACHED: Mutex<HashSet<Span>> = Mutex::new(HashSet::new());
     static ref OUTPUT_FILE: Mutex<String> = Mutex::new("sail_coverage".to_string());
 }
 
@@ -27,7 +28,9 @@ fn function_entry(_function_id: i32, _function_name: &CStr, span: Span) {
     FUNCTIONS.lock().unwrap().insert(span);
 }
 
-fn branch_reached(_branch_id: i32, _span: Span) {}
+fn branch_reached(_branch_id: i32, span: Span) {
+    BRANCH_REACHED.lock().unwrap().insert(span);
+}
 
 fn branch_target_taken(_branch_id: i32, _branch_target_id: i32, span: Span) {
     BRANCH_TARGETS.lock().unwrap().insert(span);
@@ -59,6 +62,9 @@ pub extern "C" fn sail_coverage_exit() -> c_int {
         .append(true)
         .open(&*OUTPUT_FILE.lock().unwrap())
     {
+        if !write_locations(&mut file, 'B', &BRANCH_REACHED) {
+            return 1;
+        }
         if !write_locations(&mut file, 'F', &FUNCTIONS) {
             return 1;
         }

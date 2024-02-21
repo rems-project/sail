@@ -50,6 +50,12 @@ printf "==========================================\n"
 ./smt/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
+printf "sailcov tests\n"
+printf "==========================================\n"
+
+./sailcov/run_tests.py || returncode=1
+
+printf "\n==========================================\n"
 printf "Formatting tests\n"
 printf "==========================================\n"
 

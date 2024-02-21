@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>simple_if</title></head>
+<body>
+<h1>simple_if.sail (3/4) 75%</h1>
+<code style="display: block">
+default&nbsp;Order&nbsp;dec<br>
+<br>
+$include&nbsp;&lt;prelude.sail&gt;<br>
+<br>
+register&nbsp;R&nbsp;:&nbsp;bool&nbsp;=&nbsp;true<br>
+<br>
+val&nbsp;main&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit<br>
+<br>
+function&nbsp;main()&nbsp;=&nbsp;<span style="background-color: hsl(120, 85%, 80%)">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background-color: hsl(120, 85%, 75%)">if&nbsp;R&nbsp;then&nbsp;<span style="background-color: hsl(120, 85%, 70%)">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print_endline(&quot;taken&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: hsl(0, 85%, 80%)">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print_endline(&quot;not&nbsp;taken&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span></span><br>
+}</span><br>
+</code>
+</body>
+</html>
