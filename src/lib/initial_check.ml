@@ -1162,6 +1162,11 @@ let to_ast_mpexp ctx (P.MPat_aux (mpexp, l)) =
   | P.MPat_pat mpat -> MPat_aux (MPat_pat (to_ast_mpat ctx mpat), (l, empty_uannot))
   | P.MPat_when (mpat, exp) -> MPat_aux (MPat_when (to_ast_mpat ctx mpat, to_ast_exp ctx exp), (l, empty_uannot))
 
+let pexp_of_mpexp (MPat_aux (aux, annot)) exp =
+  match aux with
+  | MPat_pat mpat -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
+  | MPat_when (mpat, guard) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
+
 let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
   match mapcl with
   | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
@@ -1172,10 +1177,12 @@ let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
     end
   | P.MCL_bidir (mpexp1, mpexp2) ->
       MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l, empty_uannot))
-  | P.MCL_forwards (mpexp, exp) ->
-      MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
-  | P.MCL_backwards (mpexp, exp) ->
-      MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
+  | P.MCL_forwards_deprecated (mpexp, exp) ->
+      let mpexp = to_ast_mpexp ctx mpexp in
+      let exp = to_ast_exp ctx exp in
+      MCL_aux (MCL_forwards (pexp_of_mpexp mpexp exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
+  | P.MCL_forwards pexp -> MCL_aux (MCL_forwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
+  | P.MCL_backwards pexp -> MCL_aux (MCL_backwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
 
 let to_ast_mapdef ctx (P.MD_aux (md, l) : P.mapdef) : uannot mapdef =
   match md with

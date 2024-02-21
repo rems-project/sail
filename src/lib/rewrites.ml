@@ -3225,26 +3225,23 @@ let rewrite_ast_realize_mappings effect_info env ast =
     | MPat_aux (MPat_pat mpat, annot) -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
     | MPat_aux (MPat_when (mpat, guard), annot) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
   in
-  let realize_single_mpexp mpexp exp =
-    match mpexp with
-    | MPat_aux (MPat_pat mpat, annot) -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
-    | MPat_aux (MPat_when (mpat, guard), annot) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
+  let true_pexp = function
+    | Pat_aux (Pat_exp (pat, _), annot) -> Pat_aux (Pat_exp (pat, mk_lit_exp L_true), annot)
+    | Pat_aux (Pat_when (pat, guard, _), annot) -> Pat_aux (Pat_when (pat, guard, mk_lit_exp L_true), annot)
   in
   let realize_mapcl forwards id mapcl =
     match mapcl with
     | MCL_aux (MCL_bidir (mpexp1, mpexp2), _) -> [realize_mpexps forwards mpexp1 mpexp2]
-    | MCL_aux (MCL_forwards (mpexp, exp), _) -> if forwards then [realize_single_mpexp mpexp exp] else []
-    | MCL_aux (MCL_backwards (mpexp, exp), _) -> if forwards then [] else [realize_single_mpexp mpexp exp]
+    | MCL_aux (MCL_forwards pexp, _) -> if forwards then [pexp] else []
+    | MCL_aux (MCL_backwards pexp, _) -> if forwards then [] else [pexp]
   in
   let realize_bool_mapcl forwards id mapcl =
     match mapcl with
     | MCL_aux (MCL_bidir (mpexp1, mpexp2), _) ->
         let mpexp = if forwards then mpexp1 else mpexp2 in
         [realize_mpexps true mpexp (mk_mpexp (MPat_pat (mk_mpat (MP_lit (mk_lit L_true)))))]
-    | MCL_aux (MCL_forwards (mpexp, exp), _) ->
-        if forwards then [realize_single_mpexp mpexp (mk_lit_exp L_true)] else []
-    | MCL_aux (MCL_backwards (mpexp, exp), _) ->
-        if forwards then [] else [realize_single_mpexp mpexp (mk_lit_exp L_true)]
+    | MCL_aux (MCL_forwards pexp, _) -> if forwards then [true_pexp pexp] else []
+    | MCL_aux (MCL_backwards pexp, _) -> if forwards then [] else [true_pexp pexp]
   in
   let arg_id = mk_id "arg#" in
   let arg_exp = mk_exp (E_id arg_id) in

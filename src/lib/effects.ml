@@ -229,6 +229,12 @@ let infer_mapdef_extra_direct_effects def =
   let forward_effects = ref EffectSet.empty in
   let backward_effects = ref EffectSet.empty in
 
+  let scan_pat set p_aux annot =
+    begin
+      match p_aux with P_string_append _ -> set := EffectSet.add NonExec !set | _ -> ()
+    end;
+    P_aux (p_aux, annot)
+  in
   let scan_mpat set mp_aux annot =
     match mp_aux with
     | Some (MP_string_append _ as aux) ->
@@ -237,7 +243,11 @@ let infer_mapdef_extra_direct_effects def =
     | Some aux -> Some (MP_aux (aux, annot))
     | None -> None
   in
+  let rw_pat set = fold_pat { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat set p_aux annot) } in
   let rw_mpat set = fold_mpat { id_mpat_alg with p_aux = (fun (mp_aux, annot) -> scan_mpat set mp_aux annot) } in
+  let scan_pexp set (Pat_aux (aux, _)) =
+    match aux with Pat_exp (pat, _) -> ignore (rw_pat set pat) | Pat_when (pat, _, _) -> ignore (rw_pat set pat)
+  in
   let scan_mpexp set (MPat_aux (aux, _)) =
     match aux with MPat_pat mpat -> ignore (rw_mpat set mpat) | MPat_when (mpat, _) -> ignore (rw_mpat set mpat)
   in
@@ -246,8 +256,8 @@ let infer_mapdef_extra_direct_effects def =
     | MCL_bidir (forward, backward) ->
         scan_mpexp forward_effects forward;
         scan_mpexp backward_effects backward
-    | MCL_forwards (forward, _) -> scan_mpexp forward_effects forward
-    | MCL_backwards (backward, _) -> scan_mpexp backward_effects backward
+    | MCL_forwards forward -> scan_pexp forward_effects forward
+    | MCL_backwards backward -> scan_pexp backward_effects backward
   in
 
   begin
