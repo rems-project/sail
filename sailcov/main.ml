@@ -120,7 +120,7 @@ module SpanMap = Map.Make (Span)
 module StringMap = Map.Make (String)
 module IntMap = Map.Make (Int)
 
-let add_span spans _ file l1 c1 l2 c2 =
+let add_span spans file l1 c1 l2 c2 =
   StringMap.update (Filename.basename file)
     (fun x ->
       let file_spans = Option.value x ~default:SpanMap.empty in
@@ -134,7 +134,29 @@ let read_more_coverage filename spans =
   try
     let rec loop () =
       let line = input_line chan in
-      spans := Scanf.sscanf line "%c %S, %d, %d, %d, %d" (add_span !spans);
+      spans :=
+        begin
+          try
+            match Scanf.sscanf line "%c" (fun c -> c) with
+            | 'T' ->
+                Scanf.sscanf line "%c %d, %d, %S, %d, %d, %d, %d" (fun _type _bid _tid file l1 c1 l2 c2 ->
+                    add_span !spans file l1 c1 l2 c2
+                )
+            | 'B' ->
+                Scanf.sscanf line "%c %d, %S, %d, %d, %d, %d" (fun _type _bid file l1 c1 l2 c2 ->
+                    add_span !spans file l1 c1 l2 c2
+                )
+            | 'F' ->
+                Scanf.sscanf line "%c %d, %S, %S, %d, %d, %d, %d" (fun _type _fid _id file l1 c1 l2 c2 ->
+                    add_span !spans file l1 c1 l2 c2
+                )
+            | _ ->
+                Printf.eprintf "Unrecognised span format: %s" line;
+                !spans
+            (* The file produced by the executable does not contain the function ids, so we parse it slightly differently *)
+          with Scanf.Scan_failure _ ->
+            Scanf.sscanf line "%c %S, %d, %d, %d, %d" (fun _type file l1 c1 l2 c2 -> add_span !spans file l1 c1 l2 c2)
+        end;
       loop ()
     in
     loop ()

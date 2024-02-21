@@ -90,6 +90,7 @@ let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
 let opt_branch_coverage = ref None
+let opt_branch_coverage_output = ref "sail_coverage"
 
 let extra_params () = match !opt_extra_params with Some str -> str ^ ", " | _ -> ""
 
@@ -2047,6 +2048,10 @@ let compile_ast env effect_info output_chan c_includes ast =
       separate hardline
         (List.map string
            ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
+           @ ( if Option.is_some !opt_branch_coverage then
+                 [Printf.sprintf "  sail_set_coverage_file(\"%s\");" !opt_branch_coverage_output]
+               else []
+             )
            @ fst exn_boilerplate @ startup cdefs @ letbind_initializers
            @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
            @ (if regs = [] then [] else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))])

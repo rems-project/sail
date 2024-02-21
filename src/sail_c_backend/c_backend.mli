@@ -111,6 +111,8 @@ val opt_extra_arguments : string option ref
 
 val opt_branch_coverage : out_channel option ref
 
+val opt_branch_coverage_output : string ref
+
 (** Optimization flags *)
 
 val optimize_primops : bool ref

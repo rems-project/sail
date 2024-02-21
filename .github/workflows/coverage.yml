@@ -20,7 +20,7 @@ jobs:
 
     - name: System dependencies
       run: |
-        sudo apt install build-essential libgmp-dev z3 cvc4 opam
+        sudo apt install build-essential libgmp-dev z3 cvc4 opam cargo
 
     - name: Restore cached opam
       id: cache-opam-restore
@@ -53,6 +53,17 @@ jobs:
         eval $(opam env)
         dune build --release --instrument-with bisect_ppx
         dune install
+
+    - name: Build sailcov
+      working-directory: sailcov
+      run: |
+        eval $(opam env)
+        make
+
+    - name: Build sailcov library
+      working-directory: lib/coverage
+      run: |
+        make
 
     - name: Test Sail
       run: |
