@@ -71,6 +71,7 @@ let opt_coq_output_dir : string option ref = ref None
 let opt_libs_coq : string list ref = ref []
 let opt_alt_modules_coq : string list ref = ref []
 let opt_alt_modules2_coq : string list ref = ref []
+let opt_coq_isla : string option ref = ref None
 
 let coq_options =
   [
@@ -98,6 +99,10 @@ let coq_options =
     ( "-coq_generate_extern_types",
       Arg.Set Pretty_print_coq.opt_generate_extern_types,
       " generate only extern types rather than suppressing them"
+    );
+    ( "-coq_isla",
+      Arg.String (fun fname -> opt_coq_isla := Some fname),
+      "<filename> generate Coq code for decoding Isla trace values"
     );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
@@ -197,14 +202,22 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs env effect_info as
   in
   let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted opt_dir (types_module ^ ".v") in
   let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (filename ^ ".v") in
+  let oi, ext_oi =
+    match !opt_coq_isla with
+    | None -> (None, None)
+    | Some fname ->
+        let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (fname ^ ".v") in
+        (Some o, Some ext_o)
+  in
   (Pretty_print_coq.pp_ast_coq (ot, base_imports)
      (o, base_imports @ (types_module :: libs) @ alt_modules2)
-     types_module effect_info env ast concurrency_monad_params generated_line
+     types_module oi effect_info env ast concurrency_monad_params generated_line
   )
     (alt_modules2 <> []);
   (* suppress MR and M defns if alt_modules2 present*)
   Util.close_output_with_check ext_ot;
-  Util.close_output_with_check ext_o
+  Util.close_output_with_check ext_o;
+  Option.iter (fun ext -> Util.close_output_with_check ext) ext_oi
 
 let output libs files =
   List.iter
