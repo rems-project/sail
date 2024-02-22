@@ -3356,6 +3356,113 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types effect_i
       unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
   | DEF_constraint _ -> unreachable (def_loc def) __POS__ "Abstract constraint not supported by Coq backend"
 
+(* Definitions to help translate Isla trace values embedded in Coq into directly
+   translated Coq datatypes. *)
+let doc_isla_typ types_mod avoid_target_names (TD_aux (td, _)) =
+  let type_id_pp id = doc_id_type types_mod avoid_target_names None id in
+  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+  match td with
+  | TD_record (id, typq, fs, _) ->
+      let fname fid = doc_id bare_ctxt fid in
+      let full_fname fid = doc_field_name bare_ctxt id fid in
+      separate hardline
+        [
+          string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : FromIslaValu " ^^ type_id_pp id
+          ^^ string " :=";
+          string "  fun v => match v with";
+          string "  | RegVal_Struct fields =>";
+          separate_map hardline
+            (fun (_, f) ->
+              string "    " ^^ fname f ^^ utf8string " ← get_field "
+              ^^ dquotes (fname f)
+              ^^ utf8string " fields ≫= from_isla;"
+            )
+            fs;
+          hang 4
+            (surround_separate_map 2 1 (string "    mret {| |}") (string "    mret {|")
+               (string ";" ^^ break 1)
+               (string "|}")
+               (fun (_, f) -> full_fname f ^^ string " := " ^^ fname f)
+               fs
+            );
+          string "  | _ => mthrow \"get_isla_" ^^ type_id_pp id ^^ string ": unexpected isla value\"";
+          string "  end.";
+          empty;
+          empty;
+        ]
+  | TD_enum (id, enums, _) -> (
+      match id with
+      | Id_aux (Id "read_kind", _) -> empty
+      | Id_aux (Id "write_kind", _) -> empty
+      | Id_aux (Id "a64_barrier_domain", _) -> empty
+      | Id_aux (Id "a64_barrier_type", _) -> empty
+      | Id_aux (Id "barrier_kind", _) -> empty
+      | Id_aux (Id "trans_kind", _) -> empty
+      | Id_aux (Id "instruction_kind", _) -> empty
+      | Id_aux (Id "cache_op_kind", _) -> empty
+      | Id_aux (Id "regfp", _) -> empty
+      | Id_aux (Id "niafp", _) -> empty
+      | Id_aux (Id "diafp", _) -> empty
+      | _ ->
+          hang 2
+            (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
+           ^^ string " :=" ^^ hardline
+            ^^ surround_separate_map 2 1 (brackets empty) lbracket
+                 (string ";" ^^ break 1)
+                 rbracket
+                 (fun id ->
+                   let idpp = doc_id_ctor bare_ctxt id in
+                   parens (dquotes idpp ^^ string ", " ^^ idpp)
+                 )
+                 enums
+            ^^ dot
+            )
+          ^^ hardline ^^ hardline
+    )
+  | TD_variant (id, typq, ar, _) -> (
+      match id with
+      | Id_aux (Id "read_kind", _) -> empty
+      | Id_aux (Id "write_kind", _) -> empty
+      | Id_aux (Id "a64_barrier_domain", _) -> empty
+      | Id_aux (Id "a64_barrier_type", _) -> empty
+      | Id_aux (Id "barrier_kind", _) -> empty
+      | Id_aux (Id "trans_kind", _) -> empty
+      | Id_aux (Id "instruction_kind", _) -> empty
+      (* | Id_aux ((Id "regfp"),_) -> empty
+         | Id_aux ((Id "niafp"),_) -> empty
+         | Id_aux ((Id "diafp"),_) -> empty *)
+      | Id_aux (Id "option", _) -> empty
+      | Id_aux (Id "register_value", _) -> empty
+      | _ ->
+          hang 2
+            (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : FromIslaValu " ^^ type_id_pp id
+           ^^ string " :=" ^^ hardline ^^ string "fun v => match v with" ^^ hardline
+            ^^ hang 2
+                 (string "| RegVal_Constructor c v =>" ^^ hardline
+                 ^^ separate_map hardline
+                      (function
+                        | Tu_aux (Tu_ty_id (_, c_id), _) ->
+                            let c_pp = doc_id_ctor bare_ctxt c_id in
+                            string "if prefix \"" ^^ c_pp ^^ string ">\" c then " ^^ c_pp
+                            ^^ string " <$> from_isla v else"
+                        )
+                      ar
+                 ^^ hardline ^^ string "  mthrow \"get_isla_" ^^ type_id_pp id ^^ string ": unknown constructor\""
+                 )
+            ^^ hardline ^^ string "| _ => mthrow \"get_isla_" ^^ type_id_pp id ^^ string ": unexpected isla value\""
+            ^^ hardline ^^ string "end."
+            )
+          ^^ hardline ^^ hardline
+    )
+  | _ -> empty
+
+let doc_isla types_mod avoid_target_names (DEF_aux (aux, _)) =
+  match aux with
+  | DEF_type t_def ->
+      if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
+      else doc_isla_typ types_mod avoid_target_names t_def
+  | _ -> empty
+
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
@@ -3386,7 +3493,7 @@ let builtin_target_names defs =
   in
   List.fold_left check_def StringSet.empty defs
 
-let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module effect_info type_env
+let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module opt_coq_isla effect_info type_env
     ({ defs; _ } as ast) concurrency_monad_params top_line suppress_MR_M =
   try
     (* let regtypes = find_regtypes d in *)
@@ -3521,7 +3628,34 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
              hardline;
              hardline;
            ]
-        )
+        );
+    match opt_coq_isla with
+    | None -> ()
+    | Some file ->
+        (print file)
+          (concat
+             [
+               string "(*" ^^ string top_line ^^ string "*)";
+               hardline;
+               (separate_map hardline)
+                 (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
+                 (("isla_lang.lang" :: defs_modules) @ ["IslaTranslation"]);
+               hardline;
+               string "Import ListNotations.";
+               hardline;
+               string "Open Scope string.";
+               hardline;
+               string "Open Scope bool.";
+               hardline;
+               string "Open Scope Z.";
+               hardline;
+               hardline;
+               hardline;
+               separate empty (List.map (doc_isla type_defs_module avoid_target_names) typdefs);
+               hardline;
+               hardline;
+             ]
+          )
   with Type_error.Type_error (l, err) ->
     let extra =
       "\nError during Coq printing\n"
