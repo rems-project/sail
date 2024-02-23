@@ -48,12 +48,12 @@ open Ast
 
 type ('a, 'b) lazy_def = Strict_def of ('a, 'b) def | Lazy_fundef of id * ('a, 'b) def Lazy.t
 
-let force_lazy_def = function Strict_def def -> def | Lazy_fundef (_, (lazy def)) -> def
+val force_lazy_def : ('a, 'b) lazy_def -> ('a, 'b) def
 
 type ('a, 'b) ast = { defs : ('a, 'b) def list; comments : (string * Lexer.comment list) list }
 
 type ('a, 'b) lazy_ast = { lazy_defs : ('a, 'b) lazy_def list; comments : (string * Lexer.comment list) list }
 
-let force_lazy_ast { lazy_defs; comments } = { defs = List.map force_lazy_def lazy_defs; comments }
+val force_lazy_ast : ('a, 'b) lazy_ast -> ('a, 'b) ast
 
-let empty_ast = { defs = []; comments = [] }
+val empty_ast : ('a, 'b) ast
