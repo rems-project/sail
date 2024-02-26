@@ -69,9 +69,17 @@ open Libsail
 
 let opt_includes_smt : string list ref = ref []
 
+let set_auto_solver arg =
+  let open Smtlib in
+  match counterexample_solver_from_name arg with Some solver -> opt_auto_solver := solver | None -> ()
+
 let smt_options =
   [
-    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the CVC5 solver");
+    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the smt solver");
+    ( "-smt_auto_solver",
+      Arg.String set_auto_solver,
+      "<cvc4/cvc5/z3> set the solver to use for counterexample checks (default cvc5)"
+    );
     ("-smt_ignore_overflow", Arg.Set Jib_smt.opt_ignore_overflow, " ignore integer overflow in generated SMT");
     ("-smt_propagate_vars", Arg.Set Jib_smt.opt_propagate_vars, " propgate variables through generated SMT");
     ( "-smt_int_size",
