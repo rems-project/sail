@@ -70,6 +70,15 @@ open Libsail
 open Ast
 open Ast_util
 
+type counterexample_solver = Cvc5 | Cvc4 | Z3
+
+let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3"
+
+let counterexample_solver_from_name name =
+  match String.lowercase_ascii name with "cvc4" -> Some Cvc4 | "cvc5" -> Some Cvc5 | "z3" -> Some Z3 | _ -> None
+
+let opt_auto_solver = ref Cvc5
+
 type smt_typ =
   | Bitvec of int
   | Bool
@@ -655,7 +664,7 @@ let rec run frame =
 let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names =
   let open Printf in
   prerr_endline ("Checking counterexample: " ^ fname);
-  let in_chan = ksprintf Unix.open_process_in "cvc5 --lang=smt2.6 %s" fname in
+  let in_chan = ksprintf Unix.open_process_in "%s %s" (counterexample_command !opt_auto_solver) fname in
   let lines = ref [] in
   begin
     try
@@ -667,10 +676,10 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
   let solver_output = List.rev !lines |> String.concat "\n" |> parse_sexps in
   begin
     match solver_output with
-    | Atom "sat" :: List model :: _ ->
+    | Atom "sat" :: (List (Atom "model" :: model) | List model) :: _ ->
         let open Value in
         let open Interpreter in
-        prerr_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
+        print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
         let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
         List.iter (fun (id, v) -> prerr_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
         let istate = initial_state ast env !primops in
@@ -690,10 +699,13 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
         begin
           match result with
           | Some (V_bool false) | None ->
-              ksprintf prerr_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
+              ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
           | _ -> ()
         end
-    | _ -> prerr_endline "Solver could not find counterexample"
+    | _ ->
+        print_endline "Solver could not find counterexample";
+        print_endline "Solver output:";
+        List.iter print_endline !lines
   end;
   let status = Unix.close_process_in in_chan in
   ()
