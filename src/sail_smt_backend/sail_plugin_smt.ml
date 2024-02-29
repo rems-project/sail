@@ -75,7 +75,7 @@ let set_auto_solver arg =
 
 let smt_options =
   [
-    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " generate SMT and automatically call the smt solver");
+    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " automatically call the smt solver on generated SMT");
     ( "-smt_auto_solver",
       Arg.String set_auto_solver,
       "<cvc4/cvc5/z3> set the solver to use for counterexample checks (default cvc5)"

@@ -2257,8 +2257,14 @@ let smt_cdef props lets name_file ctx all_cdefs smt_includes = function
 
           let header = smt_header ctx all_cdefs in
 
-          if !(ctx.use_string) || !(ctx.use_real) then output_string out_chan "(set-logic ALL)\n"
-          else output_string out_chan "(set-logic QF_AUFBVFPDT)\n";
+          (* If the solver is Z3, don't output a logic as Z3 will infer it. *)
+          begin
+            match !opt_auto_solver with
+            | Z3 -> ()
+            | _ ->
+                if !(ctx.use_string) || !(ctx.use_real) then output_string out_chan "(set-logic ALL)\n"
+                else output_string out_chan "(set-logic QF_AUFBVFPDT)\n"
+          end;
 
           List.iter
             (fun def ->

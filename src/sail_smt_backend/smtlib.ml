@@ -624,7 +624,7 @@ let parse_sexps input =
   let tokens = List.filter non_whitespace tokens in
   match plist sexp tokens with Ok (result, _) -> result | Fail -> failwith "Parse failure"
 
-let value_of_sexpr sexpr =
+let rec value_of_sexpr sexpr =
   let open Jib in
   let open Value in
   function
@@ -639,7 +639,34 @@ let value_of_sexpr sexpr =
       | Atom v when String.length v > 2 && String.sub v 0 2 = "#x" ->
           let v = String.sub v 2 (String.length v - 2) in
           mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string ("0x" ^ v), 0))
-      | _ -> failwith ("Cannot parse sexpr as ctyp: " ^ string_of_sexpr sexpr)
+      | _ -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
+    end
+  | CT_struct (_, fields) -> begin
+      match sexpr with
+      | List (Atom name :: smt_fields) ->
+          V_record
+            (List.fold_left2
+               (fun m (field_id, ctyp) sexpr -> StringMap.add (string_of_id field_id) (value_of_sexpr sexpr ctyp) m)
+               StringMap.empty fields smt_fields
+            )
+      | _ -> failwith ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr)
+    end
+  | CT_enum (_, members) -> begin
+      match sexpr with
+      | Atom name -> begin
+          match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
+          | Some member -> V_ctor (string_of_id member, [])
+          | None ->
+              failwith
+                ("Could not find enum member for " ^ name ^ " in " ^ Util.string_of_list ", " string_of_id members)
+        end
+      | _ -> failwith ("Cannot parse sexpr as enum " ^ string_of_sexpr sexpr)
+    end
+  | CT_bool -> begin
+      match sexpr with
+      | Atom "true" -> V_bool true
+      | Atom "false" -> V_bool false
+      | _ -> failwith ("Cannot parse sexpr as bool " ^ string_of_sexpr sexpr)
     end
   | cty -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp cty)
 
