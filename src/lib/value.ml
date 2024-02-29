@@ -97,6 +97,7 @@ type value =
   | V_unit
   | V_string of string
   | V_ref of string
+  | V_member of string
   | V_ctor of string * value list
   | V_record of value StringMap.t
   (* When constant folding we disable reading registers, so a register
@@ -124,10 +125,11 @@ let rec string_of_value = function
   | V_string str -> "\"" ^ str ^ "\""
   | V_ref str -> "ref " ^ str
   | V_real r -> Sail_lib.string_of_real r
+  | V_member str -> str
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
-      "{"
-      ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record)
+      "struct {"
+      ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) (StringMap.bindings record)
       ^ "}"
   | V_attempted_read _ -> assert false
 
@@ -143,10 +145,13 @@ let rec eq_value v1 v2 =
   | V_unit, V_unit -> true
   | V_string str1, V_string str2 -> str1 = str2
   | V_ref str1, V_ref str2 -> str1 = str2
+  | V_member name1, V_member name2 -> name1 = name2
   | V_ctor (name1, fields1), V_ctor (name2, fields2) when List.length fields1 = List.length fields2 ->
       name1 = name2 && List.for_all2 eq_value fields1 fields2
   | V_record fields1, V_record fields2 -> StringMap.equal eq_value fields1 fields2
   | _, _ -> false
+
+let coerce_member = function V_member str -> str | _ -> assert false
 
 let coerce_ctor = function V_ctor (str, vals) -> (str, vals) | _ -> assert false
 
@@ -398,6 +403,8 @@ let value_replicate_bits = function
 let value_count_leading_zeros = function
   | [v1] -> V_int (Sail_lib.count_leading_zeros (coerce_bv v1))
   | _ -> failwith "value count_leading_zeros"
+
+let is_member = function V_member _ -> true | _ -> false
 
 let is_ctor = function V_ctor _ -> true | _ -> false
 

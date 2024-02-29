@@ -90,7 +90,7 @@ and exp_of_value =
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
-  | V_record ctors -> mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings ctors)))
+  | V_record fields -> mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings fields)))
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
@@ -103,7 +103,7 @@ and exp_of_value =
 let rec is_too_large =
   let open Value in
   function
-  | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ -> false
+  | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ -> false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
   | V_record fields -> StringMap.exists (fun _ v -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs
