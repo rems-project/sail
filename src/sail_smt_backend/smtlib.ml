@@ -655,7 +655,7 @@ let rec value_of_sexpr sexpr =
       match sexpr with
       | Atom name -> begin
           match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
-          | Some member -> V_ctor (string_of_id member, [])
+          | Some member -> V_member (string_of_id member)
           | None ->
               failwith
                 ("Could not find enum member for " ^ name ^ " in " ^ Util.string_of_list ", " string_of_id members)

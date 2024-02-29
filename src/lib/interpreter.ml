@@ -468,7 +468,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           get_global_letbinds () >>= fun lbs ->
           let chain = build_letchain id lbs orig_exp in
           return chain
-      | Enum _ -> return (exp_of_value (V_ctor (string_of_id id, [])))
+      | Enum _ -> return (exp_of_value (V_member (string_of_id id)))
       | _ -> fail ("Couldn't find id " ^ string_of_id id)
     end
   | E_struct fexps ->
@@ -651,7 +651,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
       begin
         match Env.lookup_id id env with
         | Enum _ ->
-            if is_ctor value && string_of_id id = fst (coerce_ctor value) then (true, Bindings.empty)
+            if is_member value && string_of_id id = coerce_member value then (true, Bindings.empty)
             else (false, Bindings.empty)
         | _ -> (true, Bindings.singleton id (Complete_binding value))
       end
