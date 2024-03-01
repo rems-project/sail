@@ -690,7 +690,7 @@ let rec run frame =
 
 let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names =
   let open Printf in
-  prerr_endline ("Checking counterexample: " ^ fname);
+  print_endline ("Checking counterexample: " ^ fname);
   let in_chan = ksprintf Unix.open_process_in "%s %s" (counterexample_command !opt_auto_solver) fname in
   let lines = ref [] in
   begin
@@ -700,15 +700,15 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
       done
     with End_of_file -> ()
   end;
-  let solver_output = List.rev !lines |> String.concat "\n" |> parse_sexps in
+  let solver_output = List.rev !lines |> String.concat "\n" in
   begin
-    match solver_output with
+    match solver_output |> parse_sexps with
     | Atom "sat" :: (List (Atom "model" :: model) | List model) :: _ ->
         let open Value in
         let open Interpreter in
         print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
         let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
-        List.iter (fun (id, v) -> prerr_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
+        List.iter (fun (id, v) -> print_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
         let istate = initial_state ast env !primops in
         let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ) in
         let call =
@@ -729,10 +729,13 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
               ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
           | _ -> ()
         end
-    | _ ->
+    | Atom "unsat" :: _ ->
         print_endline "Solver could not find counterexample";
         print_endline "Solver output:";
-        List.iter print_endline !lines
+        print_endline solver_output
+    | _ ->
+        print_endline "Unexpected solver output:";
+        print_endline solver_output
   end;
   let status = Unix.close_process_in in_chan in
   ()
