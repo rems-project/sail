@@ -584,21 +584,29 @@ let fix_early_stack_return ret ret_ctyp instrs =
   rewrite_return instrs
 
 let rec insert_heap_returns ret_ctyps = function
-  | (CDEF_val (id, _, _, ret_ctyp) as cdef) :: cdefs ->
+  | (CDEF_aux (CDEF_val (id, _, _, ret_ctyp), _) as cdef) :: cdefs ->
       cdef :: insert_heap_returns (Bindings.add id ret_ctyp ret_ctyps) cdefs
-  | CDEF_fundef (id, None, args, body) :: cdefs ->
+  | CDEF_aux (CDEF_fundef (id, None, args, body), def_annot) :: cdefs ->
       let gs = gensym () in
       begin
         match Bindings.find_opt id ret_ctyps with
         | None -> raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
         | Some ret_ctyp when not (is_stack_ctyp ret_ctyp) ->
-            CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) body) :: insert_heap_returns ret_ctyps cdefs
+            CDEF_aux (CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) body), def_annot)
+            :: insert_heap_returns ret_ctyps cdefs
         | Some ret_ctyp ->
-            CDEF_fundef
-              (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl (id_loc id) ret_ctyp (name gs) :: body))
+            CDEF_aux
+              ( CDEF_fundef
+                  ( id,
+                    None,
+                    args,
+                    fix_early_stack_return (name gs) ret_ctyp (idecl (id_loc id) ret_ctyp (name gs) :: body)
+                  ),
+                def_annot
+              )
             :: insert_heap_returns ret_ctyps cdefs
       end
-  | CDEF_fundef (id, _, _, _) :: _ ->
+  | CDEF_aux (CDEF_fundef (id, _, _, _), _) :: _ ->
       Reporting.unreachable (id_loc id) __POS__ "Found function with return already re-written in insert_heap_returns"
   | cdef :: cdefs -> cdef :: insert_heap_returns ret_ctyps cdefs
   | [] -> []
@@ -632,8 +640,8 @@ let hoist_id () =
   name id
 
 let hoist_allocations recursive_functions = function
-  | CDEF_fundef (function_id, _, _, _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
-  | CDEF_fundef (function_id, heap_return, args, body) ->
+  | CDEF_aux (CDEF_fundef (function_id, _, _, _), _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
+  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
       let decls = ref [] in
       let cleanups = ref [] in
       let rec hoist = function
@@ -658,12 +666,12 @@ let hoist_allocations recursive_functions = function
         | [] -> []
       in
       let body = hoist body in
-      if !decls = [] then [CDEF_fundef (function_id, heap_return, args, body)]
+      if !decls = [] then [CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot)]
       else
         [
-          CDEF_startup (function_id, List.rev !decls);
-          CDEF_fundef (function_id, heap_return, args, body);
-          CDEF_finish (function_id, !cleanups);
+          CDEF_aux (CDEF_startup (function_id, List.rev !decls), mk_def_annot (gen_loc def_annot.loc));
+          CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot);
+          CDEF_aux (CDEF_finish (function_id, !cleanups), mk_def_annot (gen_loc def_annot.loc));
         ]
   | cdef -> [cdef]
 
@@ -732,7 +740,8 @@ let remove_alias =
     | [] -> []
   in
   function
-  | CDEF_fundef (function_id, heap_return, args, body) -> [CDEF_fundef (function_id, heap_return, args, opt body)]
+  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
+      [CDEF_aux (CDEF_fundef (function_id, heap_return, args, opt body), def_annot)]
   | cdef -> [cdef]
 
 (** This optimization looks for patterns of the form
@@ -798,7 +807,7 @@ module Combine_variables = struct
           end
         | _ -> DoChildren
 
-      method! vcdef = function CDEF_fundef _ -> DoChildren | _ -> SkipChildren
+      method! vcdef = function CDEF_aux (CDEF_fundef _, _) -> DoChildren | _ -> SkipChildren
     end
 end
 
@@ -1821,7 +1830,8 @@ let codegen_alloc = function
   | I_aux (I_decl (ctyp, id), _) -> string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
   | _ -> assert false
 
-let codegen_def' ctx = function
+let codegen_def' ctx (CDEF_aux (aux, _)) =
+  match aux with
   | CDEF_register (id, ctyp, _) ->
       string (Printf.sprintf "// register %s" (string_of_id id))
       ^^ hardline
@@ -1956,18 +1966,18 @@ let codegen_def ctx def =
     separate_map hardline codegen_ctg deps ^^ codegen_def' ctx def
   )
 
-let is_cdef_startup = function CDEF_startup _ -> true | _ -> false
+let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
 
 let sgen_startup = function
-  | CDEF_startup (id, _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
+  | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
   | _ -> assert false
 
 let sgen_instr id ctx instr = Pretty_print_sail.to_string (codegen_instr id ctx instr)
 
-let is_cdef_finish = function CDEF_startup _ -> true | _ -> false
+let is_cdef_finish = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
 
 let sgen_finish = function
-  | CDEF_startup (id, _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
+  | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
   | _ -> assert false
 
 let get_recursive_functions cdefs =

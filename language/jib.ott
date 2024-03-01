@@ -234,7 +234,11 @@ instr :: 'I_' ::=
   | reset ctyp name                                :: :: reset
   | ctyp name = cval                               :: :: reinit
 
+def_annot :: '' ::=
+  {{ phantom }}
+
 cdef :: 'CDEF_' ::=
+  {{ aux _ def_annot }}
   | register id : ctyp = {
       instr0 ; ... ; instrn
     } :: :: register

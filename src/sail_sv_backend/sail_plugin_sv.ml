@@ -321,7 +321,7 @@ end
 
 let register_types cdefs =
   List.fold_left
-    (fun acc cdef -> match cdef with CDEF_register (id, ctyp, _) -> Bindings.add id ctyp acc | _ -> acc)
+    (fun acc cdef -> match cdef with CDEF_aux (CDEF_register (id, ctyp, _), _) -> Bindings.add id ctyp acc | _ -> acc)
     Bindings.empty cdefs
 
 let jib_of_ast make_call_precise env ast effect_info =
@@ -495,7 +495,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
       separate empty
         (List.filter_map
            (function
-             | CDEF_register (id, ctyp, _) ->
+             | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
                  Some (SV.sv_id id ^^ space ^^ equals ^^ space ^^ sv_id id ^^ string "_in" ^^ semi ^^ hardline)
              | _ -> None
              )
@@ -509,7 +509,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
       separate empty
         (List.filter_map
            (function
-             | CDEF_register (id, ctyp, _) ->
+             | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
                  Some (sv_id id ^^ string "_out" ^^ space ^^ equals ^^ space ^^ sv_id id ^^ semi ^^ hardline)
              | _ -> None
              )
@@ -518,7 +518,9 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     else empty
   in
 
-  let main = List.find_opt (function CDEF_fundef (id, _, _, _) -> sv_id_string id = "main" | _ -> false) cdefs in
+  let main =
+    List.find_opt (function CDEF_aux (CDEF_fundef (id, _, _, _), _) -> sv_id_string id = "main" | _ -> false) cdefs
+  in
   let main_args, main_result, module_main_in_out = main_args main fn_ctyps in
 
   let invoke_main_body =
@@ -542,7 +544,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_register (id, ctyp, _) -> Some (string "input" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_in"))
+          | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+              Some (string "input" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_in"))
           | _ -> None
           )
         cdefs
@@ -553,7 +556,8 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_register (id, ctyp, _) -> Some (string "output" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_out"))
+          | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+              Some (string "output" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_out"))
           | _ -> None
           )
         cdefs

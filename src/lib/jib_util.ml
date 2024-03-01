@@ -812,7 +812,7 @@ let rec map_funcall f instrs =
       in
       I_aux (instr, aux) :: map_funcall f tail
 
-let cdef_map_funcall f = function
+let cdef_aux_map_funcall f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, map_funcall f instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, map_funcall f instrs)
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, map_funcall f instrs)
@@ -822,7 +822,9 @@ let cdef_map_funcall f = function
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
-let cdef_concatmap_instr f = function
+let cdef_map_funcall f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_map_funcall f aux, def_annot)
+
+let cdef_aux_concatmap_instr f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_fundef (id, heap_return, args, instrs) ->
@@ -833,13 +835,15 @@ let cdef_concatmap_instr f = function
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
+let cdef_concatmap_instr f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_concatmap_instr f aux, def_annot)
+
 let ctype_def_map_ctyp f = function
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
 
 (* Map over each ctyp in a cdef using map_instr_ctyp *)
-let cdef_map_ctyp f = function
+let cdef_aux_map_ctyp f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, f ctyp, List.map (map_instr_ctyp f) instrs)
   | CDEF_let (n, bindings, instrs) ->
       CDEF_let (n, List.map (fun (id, ctyp) -> (id, f ctyp)) bindings, List.map (map_instr_ctyp f) instrs)
@@ -850,6 +854,8 @@ let cdef_map_ctyp f = function
   | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, List.map f ctyps, f ctyp)
   | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
+
+let cdef_map_ctyp f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_map_ctyp f aux, def_annot)
 
 let cdef_map_cval f = cdef_map_instr (map_instr_cval f)
 
@@ -1039,7 +1045,8 @@ let ctype_def_ctyps = function
   | CTD_struct (_, fields) -> List.map snd fields
   | CTD_variant (_, ctors) -> List.map snd ctors
 
-let cdef_ctyps = function
+let cdef_ctyps (CDEF_aux (aux, _)) =
+  match aux with
   | CDEF_register (_, ctyp, instrs) -> CTSet.add ctyp (instrs_ctyps instrs)
   | CDEF_val (_, _, ctyps, ctyp) -> CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
   | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps instrs
@@ -1049,7 +1056,8 @@ let cdef_ctyps = function
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
 
-let cdef_ctyps_exist pred = function
+let cdef_ctyps_exist pred (CDEF_aux (aux, _)) =
+  match aux with
   | CDEF_register (_, ctyp, instrs) -> pred ctyp || instrs_ctyps_exist pred instrs
   | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
   | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps_exist pred instrs
@@ -1061,7 +1069,7 @@ let cdef_ctyps_exist pred = function
 let cdef_ctyps_has pred cdef = cdef_ctyps_exist (ctyp_has pred) cdef
 
 let rec c_ast_registers = function
-  | CDEF_register (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
+  | CDEF_aux (CDEF_register (id, ctyp, instrs), _) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
   | _ :: ast -> c_ast_registers ast
   | [] -> []
 

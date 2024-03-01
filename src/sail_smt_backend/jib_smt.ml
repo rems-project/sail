@@ -1350,12 +1350,12 @@ let smt_ctype_def ctx = function
       ]
 
 let rec generate_ctype_defs ctx = function
-  | CDEF_type ctd :: cdefs -> smt_ctype_def ctx ctd :: generate_ctype_defs ctx cdefs
+  | CDEF_aux (CDEF_type ctd, _) :: cdefs -> smt_ctype_def ctx ctd :: generate_ctype_defs ctx cdefs
   | _ :: cdefs -> generate_ctype_defs ctx cdefs
   | [] -> []
 
 let rec generate_reg_decs ctx inits = function
-  | CDEF_register (id, ctyp, _) :: cdefs when not (NameMap.mem (Name (id, 0)) inits) ->
+  | CDEF_aux (CDEF_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Name (id, 0)) inits) ->
       Declare_const (zencode_name (Name (id, 0)), smt_ctyp ctx ctyp) :: generate_reg_decs ctx inits cdefs
   | _ :: cdefs -> generate_reg_decs ctx inits cdefs
   | [] -> []
@@ -1894,8 +1894,9 @@ let smt_cfnode all_cdefs ctx ssa_elems =
    keep track of any global letbindings between the spec and the
    fundef, so they can appear in the generated SMT. *)
 let rec find_function lets id = function
-  | CDEF_fundef (id', heap_return, args, body) :: _ when Id.compare id id' = 0 -> (lets, Some (heap_return, args, body))
-  | CDEF_let (_, vars, setup) :: cdefs ->
+  | CDEF_aux (CDEF_fundef (id', heap_return, args, body), _) :: _ when Id.compare id id' = 0 ->
+      (lets, Some (heap_return, args, body))
+  | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
       let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
       find_function (lets @ vars @ setup) id cdefs
   | _ :: cdefs -> find_function lets id cdefs
@@ -2218,7 +2219,8 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   (stack, start, cfg)
 
-let smt_cdef props lets name_file ctx all_cdefs smt_includes = function
+let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, _)) =
+  match aux with
   | CDEF_val (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props -> begin
       match find_function [] function_id all_cdefs with
       | intervening_lets, Some (None, args, instrs) ->
@@ -2305,7 +2307,7 @@ let smt_cdef props lets name_file ctx all_cdefs smt_includes = function
   | _ -> ()
 
 let rec smt_cdefs props lets name_file ctx ast smt_includes = function
-  | CDEF_let (_, vars, setup) :: cdefs ->
+  | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
       let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
       smt_cdefs props (lets @ vars @ setup) name_file ctx ast smt_includes cdefs
   | cdef :: cdefs ->
@@ -2319,7 +2321,7 @@ let rec smt_cdefs props lets name_file ctx ast smt_includes = function
    all the registers that such a reference could be pointing to.
 *)
 let rec build_register_map rmap = function
-  | CDEF_register (reg, ctyp, _) :: cdefs ->
+  | CDEF_aux (CDEF_register (reg, ctyp, _), _) :: cdefs ->
       let rmap =
         match CTMap.find_opt ctyp rmap with
         | Some regs -> CTMap.add ctyp (reg :: regs) rmap
