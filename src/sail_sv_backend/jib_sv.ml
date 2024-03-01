@@ -824,7 +824,7 @@ module Make (Config : CONFIG) = struct
     List.fold_left
       (fun rmap cdef ->
         match cdef with
-        | CDEF_register (id, ctyp, _) ->
+        | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
             CTMap.update ctyp (function Some ids -> Some (id :: ids) | None -> Some [id]) rmap
         | _ -> rmap
       )
@@ -910,7 +910,8 @@ module Make (Config : CONFIG) = struct
 
   let empty_cdef_doc = { outside_module = empty; inside_module_prefix = empty; inside_module = empty }
 
-  let sv_cdef ctx fn_ctyps setup_calls = function
+  let sv_cdef ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
+    match aux with
     | CDEF_register (id, ctyp, setup) ->
         let binding_doc = wrap_type ctyp (sv_id id) ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (sv_id_string id) in
@@ -957,7 +958,7 @@ module Make (Config : CONFIG) = struct
 
   let main_args main fn_ctyps =
     match main with
-    | Some (CDEF_fundef (f, _, params, body)) -> begin
+    | Some (CDEF_aux (CDEF_fundef (f, _, params, body), _)) -> begin
         match Bindings.find_opt f fn_ctyps with
         | Some (param_ctyps, ret_ctyp) -> begin
             let main_args =

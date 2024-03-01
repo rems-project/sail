@@ -119,7 +119,7 @@ let rec flatten_instrs = function
   | instr :: instrs -> instr :: flatten_instrs instrs
   | [] -> []
 
-let flatten_cdef = function
+let flatten_cdef_aux = function
   | CDEF_fundef (function_id, heap_return, args, body) ->
       flat_counter := 0;
       CDEF_fundef (function_id, heap_return, args, flatten_instrs body)
@@ -127,6 +127,8 @@ let flatten_cdef = function
       flat_counter := 0;
       CDEF_let (n, bindings, flatten_instrs instrs)
   | cdef -> cdef
+
+let flatten_cdef (CDEF_aux (aux, def_annot)) = CDEF_aux (flatten_cdef_aux aux, def_annot)
 
 let unique_per_function_ids cdefs =
   let unique_id i = function
@@ -146,7 +148,7 @@ let unique_per_function_ids cdefs =
     | instr :: instrs -> instr :: unique_instrs i instrs
     | [] -> []
   in
-  let unique_cdef i = function
+  let unique_cdef_aux i = function
     | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, unique_instrs i instrs)
     | CDEF_type ctd -> CDEF_type ctd
     | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, unique_instrs i instrs)
@@ -156,6 +158,7 @@ let unique_per_function_ids cdefs =
     | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)
     | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
   in
+  let unique_cdef i (CDEF_aux (aux, def_annot)) = CDEF_aux (unique_cdef_aux i aux, def_annot) in
   List.mapi unique_cdef cdefs
 
 let rec cval_subst id subst = function
@@ -257,7 +260,8 @@ let rec clexp_subst id subst = function
   | CL_rmw _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot substitute into read-modify-write construct"
 
 let rec find_function fid = function
-  | CDEF_fundef (fid', heap_return, args, body) :: _ when Id.compare fid fid' = 0 -> Some (heap_return, args, body)
+  | CDEF_aux (CDEF_fundef (fid', heap_return, args, body), _) :: _ when Id.compare fid fid' = 0 ->
+      Some (heap_return, args, body)
   | cdef :: cdefs -> find_function fid cdefs
   | [] -> None
 
@@ -524,12 +528,15 @@ let remove_tuples cdefs ctx =
         let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
         let fields = List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), ctyp)) ctyps in
         [
-          CDEF_type (CTD_struct (mk_id name, fields));
-          CDEF_pragma
-            ( "tuplestruct",
-              Util.string_of_list " "
-                (fun x -> x)
-                (Util.zencode_string name :: List.map (fun (id, _) -> Util.zencode_string (string_of_id id)) fields)
+          CDEF_aux (CDEF_type (CTD_struct (mk_id name, fields)), mk_def_annot Parse_ast.Unknown);
+          CDEF_aux
+            ( CDEF_pragma
+                ( "tuplestruct",
+                  Util.string_of_list " "
+                    (fun x -> x)
+                    (Util.zencode_string name :: List.map (fun (id, _) -> Util.zencode_string (string_of_id id)) fields)
+                ),
+              mk_def_annot Parse_ast.Unknown
             );
         ]
     | _ -> assert false

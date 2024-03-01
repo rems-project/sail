@@ -237,40 +237,43 @@ and visit_instrs vis outer_instrs =
   do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
 
 let visit_cdef vis outer_cdef =
-  let aux vis no_change =
-    match no_change with
+  let aux vis (CDEF_aux (aux, def_annot) as no_change) =
+    match aux with
     | CDEF_register (id, ctyp, instrs) ->
         let id' = visit_id vis id in
         let ctyp' = visit_ctyp vis ctyp in
         let instrs' = visit_instrs vis instrs in
-        if id == id' && ctyp == ctyp' && instrs == instrs' then no_change else CDEF_register (id', ctyp', instrs')
+        if id == id' && ctyp == ctyp' && instrs == instrs' then no_change
+        else CDEF_aux (CDEF_register (id', ctyp', instrs'), def_annot)
     | CDEF_type ctd ->
         let ctd' = visit_ctype_def vis ctd in
-        if ctd == ctd' then no_change else CDEF_type ctd'
+        if ctd == ctd' then no_change else CDEF_aux (CDEF_type ctd', def_annot)
     | CDEF_let (n, bindings, instrs) ->
         let bindings' = map_no_copy (visit_binding vis) bindings in
         let instrs' = visit_instrs vis instrs in
-        if bindings == bindings' && instrs == instrs' then no_change else CDEF_let (n, bindings', instrs')
+        if bindings == bindings' && instrs == instrs' then no_change
+        else CDEF_aux (CDEF_let (n, bindings', instrs'), def_annot)
     | CDEF_val (id, extern, ctyps, ctyp) ->
         let id' = visit_id vis id in
         let ctyps' = visit_ctyps vis ctyps in
         let ctyp' = visit_ctyp vis ctyp in
-        if id == id' && ctyps == ctyps' && ctyp == ctyp' then no_change else CDEF_val (id', extern, ctyps', ctyp')
+        if id == id' && ctyps == ctyps' && ctyp == ctyp' then no_change
+        else CDEF_aux (CDEF_val (id', extern, ctyps', ctyp'), def_annot)
     | CDEF_fundef (id, ret_id, params, instrs) ->
         let id' = visit_id vis id in
         let ret_id' = map_no_copy_opt (visit_id vis) ret_id in
         let params' = map_no_copy (visit_id vis) params in
         let instrs' = visit_instrs vis instrs in
         if id == id' && ret_id == ret_id' && params == params' && instrs == instrs' then no_change
-        else CDEF_fundef (id', ret_id', params', instrs')
+        else CDEF_aux (CDEF_fundef (id', ret_id', params', instrs'), def_annot)
     | CDEF_startup (id, instrs) ->
         let id' = visit_id vis id in
         let instrs' = visit_instrs vis instrs in
-        if id == id' && instrs == instrs' then no_change else CDEF_startup (id', instrs')
+        if id == id' && instrs == instrs' then no_change else CDEF_aux (CDEF_startup (id', instrs'), def_annot)
     | CDEF_finish (id, instrs) ->
         let id' = visit_id vis id in
         let instrs' = visit_instrs vis instrs in
-        if id == id' && instrs == instrs' then no_change else CDEF_finish (id', instrs')
+        if id == id' && instrs == instrs' then no_change else CDEF_aux (CDEF_finish (id', instrs'), def_annot)
     | CDEF_pragma (_, _) -> no_change
   in
   do_visit vis (vis#vcdef outer_cdef) aux outer_cdef
