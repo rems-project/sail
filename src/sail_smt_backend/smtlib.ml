@@ -624,22 +624,26 @@ let parse_sexps input =
   let tokens = List.filter non_whitespace tokens in
   match plist sexp tokens with Ok (result, _) -> result | Fail -> failwith "Parse failure"
 
+let parse_sexpr_int width = function
+  | List [Atom "_"; Atom v; Atom m] when int_of_string m = width && String.length v > 2 && String.sub v 0 2 = "bv" ->
+      let v = String.sub v 2 (String.length v - 2) in
+      Some (Big_int.of_string v)
+  | Atom v when String.length v > 2 && String.sub v 0 2 = "#b" ->
+      let v = String.sub v 2 (String.length v - 2) in
+      Some (Big_int.of_string ("0b" ^ v))
+  | Atom v when String.length v > 2 && String.sub v 0 2 = "#x" ->
+      let v = String.sub v 2 (String.length v - 2) in
+      Some (Big_int.of_string ("0x" ^ v))
+  | _ -> None
+
 let rec value_of_sexpr sexpr =
   let open Jib in
   let open Value in
   function
-  | CT_fbits n -> begin
-      match sexpr with
-      | List [Atom "_"; Atom v; Atom m] when int_of_string m = n && String.length v > 2 && String.sub v 0 2 = "bv" ->
-          let v = String.sub v 2 (String.length v - 2) in
-          mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string v, 0))
-      | Atom v when String.length v > 2 && String.sub v 0 2 = "#b" ->
-          let v = String.sub v 2 (String.length v - 2) in
-          mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string ("0b" ^ v), 0))
-      | Atom v when String.length v > 2 && String.sub v 0 2 = "#x" ->
-          let v = String.sub v 2 (String.length v - 2) in
-          mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string ("0x" ^ v), 0))
-      | _ -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
+  | CT_fbits width -> begin
+      match parse_sexpr_int width sexpr with
+      | Some value -> mk_vector (Sail_lib.get_slice_int' (width, value, 0))
+      | None -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
     end
   | CT_struct (_, fields) -> begin
       match sexpr with
@@ -668,7 +672,12 @@ let rec value_of_sexpr sexpr =
       | Atom "false" -> V_bool false
       | _ -> failwith ("Cannot parse sexpr as bool " ^ string_of_sexpr sexpr)
     end
-  | cty -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp cty)
+  | CT_fint width -> begin
+      match parse_sexpr_int width sexpr with
+      | Some value -> V_int value
+      | None -> failwith ("Cannot parse sexpr as fixed-width integer: " ^ string_of_sexpr sexpr)
+    end
+  | ctyp -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp ctyp)
 
 let rec find_arg id ctyp arg_smt_names = function
   | List [Atom "define-fun"; Atom str; List []; _; value] :: _
