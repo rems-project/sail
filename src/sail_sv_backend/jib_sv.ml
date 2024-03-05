@@ -185,6 +185,7 @@ module Make (Config : CONFIG) = struct
       (struct
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
+        let max_unknown_generic_vector_length = 32
         let union_ctyp_classify = is_packed
       end)
       (struct
@@ -674,7 +675,7 @@ module Make (Config : CONFIG) = struct
           let name = ctx_get_extern id ctx in
           match Smt.builtin name with
           | Some generator ->
-              let* value = Smt_gen.fmap Smt_exp.simp (generator args (clexp_ctyp clexp)) in
+              let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
               begin
                 (* We can optimize R = store(R, i x) into R[i] = x *)
                 match (clexp, value) with

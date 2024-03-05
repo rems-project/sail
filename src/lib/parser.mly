@@ -386,6 +386,10 @@ typ_no_caret:
                              $endpos) }
 
 typ:
+  | t = infix_typ
+    { t }
+
+infix_typ:
   | prefix = prefix_typ_op;
     x = postfix_typ;
     xs = list(op = op; prefix = prefix_typ_op; y = postfix_typ { (IT_op op, $startpos(op), $endpos(op)) :: prefix @ y })

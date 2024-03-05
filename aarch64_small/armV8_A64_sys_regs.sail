@@ -176,7 +176,7 @@ register SCTLR_EL3 : SCTLR_type /* System Control Register (EL3) */
 
 
 /* CP: added coercion from SCTLR_EL1_type to SCTLR_type for the SCTLR function */
-val cast "SCTLR_EL1_type_to_SCTLR_type" : SCTLR_EL1_type -> SCTLR_type
+val "SCTLR_EL1_type_to_SCTLR_type" : SCTLR_EL1_type -> SCTLR_type
 
 bitfield TCR_EL1_type : bits(64) =
 {

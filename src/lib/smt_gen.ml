@@ -118,6 +118,12 @@ let rec mapM f = function
       let* xs = mapM f xs in
       return (x :: xs)
 
+let rec iterM f = function
+  | [] -> return ()
+  | x :: xs ->
+      let* _ = f x in
+      iterM f xs
+
 let run m l =
   let state = m l in
   (state.value, state.checks)
@@ -216,6 +222,7 @@ let required_width n =
 module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
+  val max_unknown_generic_vector_length : int
   val union_ctyp_classify : ctyp -> bool
 end
 
@@ -256,6 +263,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits sz | CT_sbits sz -> sz
     | CT_lbits -> lbits_size
     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Argument to bv_size must be a bitvector type"
+
+  let generic_vector_length = function
+    | CT_fvector (n, _) -> n
+    | CT_vector _ -> Config.max_unknown_generic_vector_length
+    | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          "Argument to generic_vector_length must be a generic vector type"
 
   let to_fbits ctyp bv =
     match ctyp with
@@ -1099,6 +1113,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let* smt2 = smt_cval v2 in
             return (Fn ("=", [smt1; smt2]))
         )
+    | "eq_string" ->
+        binary_primop_simple (fun v1 v2 ->
+            let* smt1 = smt_cval v1 in
+            let* smt2 = smt_cval v2 in
+            return (Fn ("=", [smt1; smt2]))
+        )
     | "eq_int" -> binary_primop_simple builtin_eq_int
     | "not" ->
         unary_primop_simple (fun v ->
@@ -1152,6 +1172,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "length" -> unary_primop builtin_length
     | "replicate_bits" -> binary_primop builtin_replicate_bits
     | "count_leading_zeros" -> unary_primop builtin_count_leading_zeros
+    | "concat_str" ->
+        binary_primop_simple (fun str1 str2 ->
+            let* str1 = smt_cval str1 in
+            let* str2 = smt_cval str2 in
+            return (Fn ("str.++", [str1; str2]))
+        )
     | "print_bits" ->
         binary_primop_simple (fun str bv ->
             let* l = current_location in

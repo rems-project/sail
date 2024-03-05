@@ -99,7 +99,13 @@ val ( let+ ) : 'a check_writer -> ('a -> 'b) -> 'b check_writer
 
 val mapM : ('a -> 'b check_writer) -> 'a list -> 'b list check_writer
 
+val iterM : ('a -> unit check_writer) -> 'a list -> unit check_writer
+
 val run : 'a check_writer -> Parse_ast.l -> 'a * checks
+
+val string_used : unit check_writer
+
+val real_used : unit check_writer
 
 (** Convert a SMT bitvector expression of size [from] into a SMT
     bitvector expression of size [into] with the same signed
@@ -130,6 +136,11 @@ module type CONFIG = sig
       field. We will generate runtime checks to ensure this length is
       sufficient. *)
   val max_unknown_bitvector_width : int
+
+  (** If we have a generic vector, [vector('n, 'a)], where ['n] is
+      unconstrained, then we represent it as a vector of at most this
+      length. *)
+  val max_unknown_generic_vector_length : int
 
   (** Some SystemVerilog implementations (e.g. Verilator), don't
       support unpacked union types, which forces us to generate
@@ -164,6 +175,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   val int_size : ctyp -> int
 
   val bv_size : ctyp -> int
+
+  val generic_vector_length : ctyp -> int
 
   (** Create an SMT expression that converts an expression of the jib
       type [from] into an SMT expression for the jib type [into]. Note
