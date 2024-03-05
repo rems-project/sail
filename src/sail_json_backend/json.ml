@@ -91,60 +91,60 @@ let string_of_arg = function
 
 let rec string_list_of_mpat x = match x with
   | MP_aux (MP_lit ( l ), _) ->
-      print_endline ("MP_lit " ^ string_of_lit l);
+      prerr_endline ("MP_lit " ^ string_of_lit l);
       [ string_of_lit l ]
   | MP_aux (MP_id ( i ), _) ->
-      print_endline ("MP_id " ^ string_of_id i);
+      prerr_endline ("MP_id " ^ string_of_id i);
       [ string_of_id i ]
   | MP_aux (MP_app ( i, pl ), _) ->
-      print_endline ("MP_app " ^ string_of_id i);
+      prerr_endline ("MP_app " ^ string_of_id i);
       begin match string_of_id i with
       | "spc" -> [ string_of_id i ]
       | "sep" -> []
       | _ -> let b = List.concat (List.map string_list_of_mpat pl) in
           begin
-            print_endline ("<-- MP_app " ^ string_of_id i);
+            prerr_endline ("<-- MP_app " ^ string_of_id i);
             [ (string_of_id i) ^ "(" ^ (String.concat "," b) ^ ")" ]
           end
       end
   | MP_aux (MP_vector_concat ( mpl ), _) ->
-      print_endline "MP_vector_concat";
+      prerr_endline "MP_vector_concat";
       List.concat (List.map string_list_of_mpat mpl)
   | MP_aux (MP_string_append ( pl ), _) ->
-      print_endline "MP_string_append";
+      prerr_endline "MP_string_append";
       List.concat (List.map string_list_of_mpat pl)
   | MP_aux (MP_typ ( mp, at ), _) ->
-      print_endline "MP_typ";
+      prerr_endline "MP_typ";
       begin match at with
       | Typ_aux ( Typ_app (i, _), _ ) ->
-            print_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_typ at));
+            prerr_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_typ at));
             Hashtbl.add types (List.hd (string_list_of_mpat mp)) (string_of_typ at)
       | Typ_aux ( Typ_id i, _ ) ->
-            print_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_id i));
+            prerr_endline ("types-add " ^ (List.hd (string_list_of_mpat mp)) ^ ":" ^ (string_of_id i));
             Hashtbl.add types (List.hd (string_list_of_mpat mp)) (string_of_id i)
-      | _ -> print_endline "Typ_other"
+      | _ -> prerr_endline "Typ_other"
       end;
       string_list_of_mpat mp
   | MP_aux (MP_tuple ( mpl ), _) ->
-      print_endline "MP_tuple";
+      prerr_endline "MP_tuple";
       List.concat (List.map string_list_of_mpat mpl)
   | _ -> assert false
 
 let parse_encdec_mpat mp pb format = match mp with
   | MP_aux (MP_app ( app_id, mpl ), _) ->
-      print_endline ("MP_app " ^ string_of_id app_id);
+      prerr_endline ("MP_app " ^ string_of_id app_id);
       Hashtbl.add formats (string_of_id app_id) format;
       let operandl = List.concat (List.map string_list_of_mpat mpl) in begin
-        List.iter print_endline operandl;
-        print_endline "MCL_bidir (right part)";
+        List.iter prerr_endline operandl;
+        prerr_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
-            print_endline ("MPat_pat ");
-            List.iter print_endline (string_list_of_mpat p);
+            prerr_endline ("MPat_pat ");
+            List.iter prerr_endline (string_list_of_mpat p);
             Hashtbl.add encodings (string_of_id app_id) (string_list_of_mpat p)
         | MPat_aux ( MPat_when (p, e), _ ) ->
-            print_endline ("MPat_when ");
-            List.iter print_endline (string_list_of_mpat p);
+            prerr_endline ("MPat_when ");
+            List.iter prerr_endline (string_list_of_mpat p);
             Hashtbl.add encodings (string_of_id app_id) (string_list_of_mpat p)
       end;
       string_of_id app_id
@@ -154,25 +154,25 @@ let parse_encdec_mpat mp pb format = match mp with
    account for negation. This case should be pretty unlikely, however. *)
 let rec find_extensions e = match e with
     E_aux (E_app (i, el), _) ->
-      print_endline("E_app " ^ (string_of_id i));
+      prerr_endline("E_app " ^ (string_of_id i));
       if String.equal (string_of_id i) "extension" then match List.hd el with
           E_aux (E_lit (extension), _) -> [ string_of_lit extension ]
         | _ -> []
       else List.concat (List.map find_extensions el)
-  | _ -> print_endline "E other"; []
+  | _ -> prerr_endline "E other"; []
 
 let parse_encdec i mc format = match mc with
   | MCL_aux ( MCL_bidir ( pa, pb ), _ ) ->
-      print_endline "MCL_bidir (left part)";
+      prerr_endline "MCL_bidir (left part)";
       begin match pa with
       | MPat_aux ( MPat_pat (p), _ ) ->
           let key = parse_encdec_mpat p pb format in
-            print_endline ("MPat_pat ");
+            prerr_endline ("MPat_pat ");
       | MPat_aux ( MPat_when (p, e), _ ) ->
-          print_endline ("MPat_when ENCDEC " ^ (string_of_exp e));
+          prerr_endline ("MPat_when ENCDEC " ^ (string_of_exp e));
           let key = parse_encdec_mpat p pb format in begin
-            print_endline ("MPat_when ");
-            List.iter print_endline (find_extensions e);
+            prerr_endline ("MPat_when ");
+            List.iter prerr_endline (find_extensions e);
             Hashtbl.add extensions key (find_extensions e)
           end
       end
@@ -181,42 +181,42 @@ let parse_encdec i mc format = match mc with
 let add_assembly app_id p = 
   let x = string_list_of_mpat p in
     begin
-      print_endline ("assembly.add " ^ string_of_id app_id ^ " : " ^ List.hd x);
+      prerr_endline ("assembly.add " ^ string_of_id app_id ^ " : " ^ List.hd x);
       Hashtbl.add assembly (string_of_id app_id) x
     end
 
 let parse_assembly_mpat mp pb = match mp with
   | MP_aux (MP_app ( app_id, mpl ), _) ->
-      print_endline ("MP_app " ^ string_of_id app_id);
+      prerr_endline ("MP_app " ^ string_of_id app_id);
       let operandl = List.concat (List.map string_list_of_mpat mpl) in
       begin
-        List.iter print_endline operandl;
-        print_endline "MCL_bidir (right part)";
+        List.iter prerr_endline operandl;
+        prerr_endline "MCL_bidir (right part)";
         match pb with
         | MPat_aux ( MPat_pat (p), _ ) ->
-            print_endline ("MPat_pat assembly");
+            prerr_endline ("MPat_pat assembly");
             add_assembly app_id p
         | MPat_aux ( MPat_when (p, e), _ ) ->
-            print_endline ("MPat_when assembly");
+            prerr_endline ("MPat_when assembly");
             add_assembly app_id p
       end
   | _ -> assert false
 
 let parse_assembly i mc = match mc with
   | MCL_aux ( MCL_bidir ( pa, pb ), _ ) ->
-      print_endline "MCL_bidir";
+      prerr_endline "MCL_bidir";
       begin match pa with
       | MPat_aux ( MPat_pat (p), _ ) ->
-          print_endline ("MPat_pat ");
+          prerr_endline ("MPat_pat ");
           parse_assembly_mpat p pb
       | MPat_aux ( MPat_when (p, e), _ ) ->
-          print_endline ("MPat_when ");
+          prerr_endline ("MPat_when ");
           parse_assembly_mpat p pb
       end
   | _ -> assert false
 
 let parse_mapcl i mc =
-  print_endline ("mapcl " ^ string_of_id i);
+  prerr_endline ("mapcl " ^ string_of_id i);
   let format = match mc with MCL_aux (_, (annot, _)) ->
       String.concat "-" (List.map (fun attr ->
         match attr with
@@ -226,36 +226,36 @@ let parse_mapcl i mc =
     in begin
       match string_of_id i with
         "encdec" | "encdec_compressed" ->
-          print_endline (string_of_id i);
+          prerr_endline (string_of_id i);
           parse_encdec i mc format
       | "assembly" ->
-          print_endline (string_of_id i);
+          prerr_endline (string_of_id i);
           parse_assembly i mc
       | _ ->
           begin match mc with
             | MCL_aux (MCL_bidir (MPat_aux (MPat_pat mpl, _), MPat_aux (MPat_pat mpr, _)), _) ->
-                print_endline ("MCL_bidir " ^ (string_of_id i));
+                prerr_endline ("MCL_bidir " ^ (string_of_id i));
                 let sl = string_list_of_mpat mpl in
-                  List.iter (fun s -> print_endline ("L: " ^ s)) sl;
+                  List.iter (fun s -> prerr_endline ("L: " ^ s)) sl;
                 let sl = string_list_of_mpat mpr in
-                  List.iter (fun s -> print_endline ("R: " ^ s)) sl;
+                  List.iter (fun s -> prerr_endline ("R: " ^ s)) sl;
                 Hashtbl.add mappings (string_of_id i) ((string_list_of_mpat mpl), (string_list_of_mpat mpr))
-            | _ -> print_endline "MCL other";
+            | _ -> prerr_endline "MCL other";
           end
     end
 
 let parse_type_union i ucl =
-  print_endline ("type_union " ^ string_of_id i);
+  prerr_endline ("type_union " ^ string_of_id i);
   match ucl with
   | Tu_aux ( Tu_ty_id ( c, d ), annot ) ->
-      print_string ("Tu_ty_id " ^ string_of_id d ^ "(");
+      prerr_string ("Tu_ty_id " ^ string_of_id d ^ "(");
       begin match c with
       | Typ_aux ( Typ_tuple ( x ), _ ) ->
           List.iter (fun x0 ->
               let type_name = string_of_typ x0 in
                 let type_type = try Hashtbl.find types (string_of_typ x0)
                   with Not_found -> "None"
-                in print_string (type_name ^ ":" ^ type_type ^ " ")
+                in prerr_string (type_name ^ ":" ^ type_type ^ " ")
           ) x;
           let l = List.map string_of_typ x in
             Hashtbl.add sigs (string_of_id d) l;
@@ -271,36 +271,36 @@ let parse_type_union i ucl =
       | Typ_aux ( Typ_id (i), _ ) ->
           Hashtbl.add sigs (string_of_id d) [string_of_id i]
       | Typ_aux ( Typ_app (i, _), _ ) ->
-          print_endline (string_of_typ c);
+          prerr_endline (string_of_typ c);
           Hashtbl.add sigs (string_of_id d) [string_of_typ c]
-      | _ -> print_endline "Tu_ty_id other"
+      | _ -> prerr_endline "Tu_ty_id other"
       end;
-      print_endline ")"
+      prerr_endline ")"
 
 let parse_DEF_type def =
-  print_endline "DEF_type";
+  prerr_endline "DEF_type";
   match def with
   | TD_aux (TD_abbrev (d, e, f), _) ->
-    print_endline ( "TD_abbrev " ^ string_of_id d ^ ":" ^ string_of_typ_arg f);
+    prerr_endline ( "TD_abbrev " ^ string_of_id d ^ ":" ^ string_of_typ_arg f);
     Hashtbl.add types (string_of_id d) (string_of_typ_arg f);
   | TD_aux ( TD_variant (d, e, f, g), _) ->
-      print_endline ( "TD_variant " ^ string_of_id d );
+      prerr_endline ( "TD_variant " ^ string_of_id d );
       List.iter (parse_type_union d) f
-  | _ -> print_endline "TD other"
+  | _ -> prerr_endline "TD other"
 
 let rec string_list_of_pat p = match p with
     P_aux (P_lit l, _) ->
-        print_endline ("P_lit " ^ (string_of_lit l));
+        prerr_endline ("P_lit " ^ (string_of_lit l));
         [ string_of_lit l ]
   | P_aux (P_id i, _) ->
-        print_endline ("P_id " ^ (string_of_id i));
+        prerr_endline ("P_id " ^ (string_of_id i));
         [ string_of_id i ]
   | P_aux (P_tuple pl, _) ->
-        print_endline "P_tuple ->";
+        prerr_endline "P_tuple ->";
         let l = List.concat (List.map string_list_of_pat pl) in
-          print_endline "<- P_tuple";
+          prerr_endline "<- P_tuple";
           l
-  | _ -> print_endline "pat other"; []
+  | _ -> prerr_endline "pat other"; []
 
 let parse_funcl fcl = match fcl with
     FCL_aux ( FCL_funcl ( Id_aux (Id "execute", _), Pat_aux ( (
@@ -308,13 +308,13 @@ let parse_funcl fcl = match fcl with
         | Pat_when ( P_aux ( P_app (i, pl), _ ) , e, _ )
       ), _ ) ), _ ) ->
       begin
-        print_endline ("FCL_funcl execute " ^ string_of_id i);
+        prerr_endline ("FCL_funcl execute " ^ string_of_id i);
         let operandl = (List.concat (List.map string_list_of_pat pl)) in
           if not (String.equal (List.hd operandl) "()") then
             Hashtbl.add operands (string_of_id i) operandl;
         Hashtbl.add functions (string_of_id i) (string_of_exp e)
       end
-  | _ -> print_endline "FCL_funcl other"
+  | _ -> prerr_endline "FCL_funcl other"
 
 let json_of_key_operand key op t =
   "\n{\n" ^
@@ -341,7 +341,7 @@ let extract_func_arg s =
     List.hd (String.split_on_char ')' (List.hd (List.tl ((String.split_on_char '(' s)))))
 
 let rec string_of_sizeof_field k f =
-  print_endline ("string_of_sizeof_field " ^ k ^ ":" ^ f);
+  prerr_endline ("string_of_sizeof_field " ^ k ^ ":" ^ f);
 
   if String.starts_with ~prefix:"0b" f then
     (* binary literal "0b..." *)
@@ -373,7 +373,7 @@ let rec string_of_sizeof_field k f =
               else if String.starts_with ~prefix:"bits(" bt then
                 extract_func_arg bt
               else begin
-                print_endline ("unfamiliar base type " ^ bt);
+                prerr_endline ("unfamiliar base type " ^ bt);
                 "72" (* TODO: needs work *)
               end
         | None ->
@@ -381,7 +381,7 @@ let rec string_of_sizeof_field k f =
                 Some t ->
                   string_of_sizeof_field k t
               | None ->
-                  print_endline ("not found " ^ f);
+                  prerr_endline ("not found " ^ f);
                   "0" (* TODO: needs work *)
       end
   end
@@ -439,17 +439,17 @@ let json_of_instruction k v =
 
 let rec parse_typ name t = match t with
     Typ_aux (Typ_bidir (tl, tr), _) ->
-      print_endline "Typ_bidir";
+      prerr_endline "Typ_bidir";
       parse_typ name tl; parse_typ name tr
-  | Typ_aux (Typ_app (id, args), _) -> print_endline (string_of_id id);
-      print_endline (string_of_id id ^ "(" ^ (String.concat ", " (List.map string_of_typ_arg args)) ^ ")");
+  | Typ_aux (Typ_app (id, args), _) -> prerr_endline (string_of_id id);
+      prerr_endline (string_of_id id ^ "(" ^ (String.concat ", " (List.map string_of_typ_arg args)) ^ ")");
       begin match string_of_id id with
           "bitvector" ->
-            print_endline (string_of_typ_arg (List.hd args));
+            prerr_endline (string_of_typ_arg (List.hd args));
             Hashtbl.add op_functions name (string_of_typ_arg (List.hd args))
-        | _ -> print_endline "Typ_app other"
+        | _ -> prerr_endline "Typ_app other"
       end
-  | _ -> print_endline "typ other"
+  | _ -> prerr_endline "typ other"
 
 let dequote qs =
   if String.starts_with ~prefix:"\"" qs && String.ends_with ~suffix:"\"" qs then
@@ -463,7 +463,7 @@ let explode_mnemonic heads tails =
       List.map (fun head -> match head with
         (* presuming right side of mapping is a list of a single string *)
         l, r ->
-          print_endline (List.hd l);
+          prerr_endline (List.hd l);
           ((dequote (List.hd r)) ^ (dequote (List.hd tail))) :: List.tl tail
       ) heads
     ) tails
@@ -475,7 +475,7 @@ let rec explode_mnemonics asm =
   else
     let tails = explode_mnemonics (List.tl asm) in
       if String.ends_with ~suffix:")" (List.hd asm) then begin
-        print_endline (extract_func_arg (List.hd asm));
+        prerr_endline (extract_func_arg (List.hd asm));
         let heads = Hashtbl.find_all mappings (List.hd (String.split_on_char '(' (List.hd asm))) in
           let found = List.find_opt (fun head ->
                 match head with
@@ -494,48 +494,48 @@ let defs { defs; _ } =
     | DEF_aux (DEF_val ( VS_aux ( VS_val_spec (TypSchm_aux ( TypSchm_ts ( _, t ), _ ), i, _), _) ), _) ->
         parse_typ (string_of_id i) t
     | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, fl), _)), _) ->
-        print_endline "DEF_fundef";
+        prerr_endline "DEF_fundef";
         List.iter parse_funcl fl
     | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (i, _, ml), _)), _) ->
-        print_endline "DEF_mapdef";
+        prerr_endline "DEF_mapdef";
         List.iter (parse_mapcl i) ml
-    | _ -> print_string ""
+    | _ -> prerr_string ""
   ) defs;
 
-  print_endline "TYPES";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) types;
-  print_endline "SIGS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) sigs;
-  print_endline "NAMES";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) names;
-  print_endline "DESCRIPTIONS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) descriptions;
-  print_endline "OPERANDS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) operands;
-  print_endline "ENCODINGS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) encodings;
-  print_endline "ASSEMBLY";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly;
-  print_endline "FUNCTIONS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) functions;
-  print_endline "OP_FUNCTIONS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) op_functions;
-  print_endline "EXENSIONS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ (String.concat "," v))) extensions;
-  print_endline "FORMATS";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ v)) formats;
-  print_endline "MAPPINGS";
+  prerr_endline "TYPES";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) types;
+  prerr_endline "SIGS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) sigs;
+  prerr_endline "NAMES";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) names;
+  prerr_endline "DESCRIPTIONS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) descriptions;
+  prerr_endline "OPERANDS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) operands;
+  prerr_endline "ENCODINGS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) encodings;
+  prerr_endline "ASSEMBLY";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly;
+  prerr_endline "FUNCTIONS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) functions;
+  prerr_endline "OP_FUNCTIONS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) op_functions;
+  prerr_endline "EXENSIONS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ (String.concat "," v))) extensions;
+  prerr_endline "FORMATS";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ v)) formats;
+  prerr_endline "MAPPINGS";
   Hashtbl.iter (fun k v ->
     match v with (l, r) ->
-      print_endline (k ^ ": " ^ (String.concat "," l) ^ " <-> " ^ (String.concat "," r))) mappings;
+      prerr_endline (k ^ ": " ^ (String.concat "," l) ^ " <-> " ^ (String.concat "," r))) mappings;
 
   Hashtbl.iter (fun k v ->
     let asms = explode_mnemonics v in
       List.iter (fun asm -> Hashtbl.add assembly_clean k asm) asms;
   ) assembly;
 
-  print_endline "ASSEMBLY_CLEAN";
-  Hashtbl.iter (fun k v -> print_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly_clean;
+  prerr_endline "ASSEMBLY_CLEAN";
+  Hashtbl.iter (fun k v -> prerr_endline (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly_clean;
 
   print_endline "{";
   print_endline "  \"instructions\": [";
