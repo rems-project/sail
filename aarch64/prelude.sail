@@ -342,11 +342,6 @@ function coerce_int_nat 'x = {
 val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
   (bits('m), int, atom('n)) -> bits('n)
 
-val pow2_atom = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
-val pow2_int = "pow2" : int -> int
-
-overload pow2 = {pow2_atom, pow2_int}
-
 val break : unit -> unit
 
 function break () = ()
