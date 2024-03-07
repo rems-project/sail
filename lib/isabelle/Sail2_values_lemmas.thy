@@ -91,7 +91,7 @@ proof (use assms in \<open>induction xs n arbitrary: i rule: repeat.induct[case_
   show ?case
     using Step.prems Step.IH[of "i - length xs"]
     unfolding repeat.simps[of xs n]
-    by (auto simp: nth_append mod_geq[symmetric] nat_diff_distrib diff_mult_distrib)
+    by (auto simp: nth_append Divides.mod_geq[symmetric] nat_diff_distrib diff_mult_distrib)
 qed
 
 termination index_list
