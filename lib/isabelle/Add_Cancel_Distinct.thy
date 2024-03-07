@@ -266,14 +266,14 @@ lemma irreflp_less:
 method_setup distinct_nat = \<open>
   Scan.succeed (fn ctxt => Method.SIMPLE_METHOD
     (Distinct_Tac.tac ctxt dest_nat Int.compare
-        (@{term "(<) :: nat \<Rightarrow> _"}, @{thms irreflp_less transp_less})
+        (@{term "(<) :: nat \<Rightarrow> _"}, @{thms irreflp_less transp_on_less})
         1))
 \<close>
 
 method_setup distinct_int = \<open>
   Scan.succeed (fn ctxt => Method.SIMPLE_METHOD
     (Distinct_Tac.tac ctxt (snd o HOLogic.dest_number) Int.compare
-        (@{term "(<) :: int \<Rightarrow> _"}, @{thms irreflp_less transp_less})
+        (@{term "(<) :: int \<Rightarrow> _"}, @{thms irreflp_less transp_on_less})
         1))
 \<close>
 
