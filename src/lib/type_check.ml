@@ -2467,7 +2467,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
     end
   | P_app (f, pats) when Env.is_union_constructor f env || Env.is_mapping f env ->
       (* Treat Ctor(x, y) as Ctor((x, y)), and the same for mappings *)
-      bind_pat env (P_aux (P_app (f, [mk_pat (P_tuple pats)]), (l, uannot))) typ
+      bind_pat env (P_aux (P_app (f, [mk_pat ~loc:l (P_tuple pats)]), (l, uannot))) typ
   | P_app (f, _) when (not (Env.is_union_constructor f env)) && not (Env.is_mapping f env) ->
       typ_error l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
