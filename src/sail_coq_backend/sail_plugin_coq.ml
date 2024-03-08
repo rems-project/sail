@@ -125,7 +125,6 @@ let coq_options =
 let coq_rewrites =
   let open Rewrites in
   [
-    ("prover_regstate", [Bool_arg true]);
     ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
@@ -150,7 +149,11 @@ let coq_rewrites =
     ("nexp_ids", []);
     ("split", [String_arg "execute"]);
     ("minimise_recursive_functions", []);
+    ("remove_bitfield_records", []);
     ("recheck_defs", []);
+    (* Put prover regstate generation after removing bitfield records,
+       which has to be followed by type checking *)
+    ("prover_regstate", [Bool_arg true]);
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("move_termination_measures", []);
     ("top_sort_defs", []);
