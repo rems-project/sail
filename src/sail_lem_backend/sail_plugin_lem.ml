@@ -101,7 +101,6 @@ let lem_options =
 let lem_rewrites =
   let open Rewrites in
   [
-    ("prover_regstate", [Flag_arg Monomorphise.opt_mwords]);
     ("instantiate_outcomes", [String_arg "lem"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
@@ -134,7 +133,11 @@ let lem_rewrites =
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
     ("split", [String_arg "execute"]);
+    ("remove_bitfield_records", []);
     ("recheck_defs", []);
+    (* Put prover regstate generation after removing bitfield records,
+       which has to be followed by type checking *)
+    ("prover_regstate", [Flag_arg Monomorphise.opt_mwords]);
     ("move_termination_measures", []);
     ("top_sort_defs", []);
     ("const_prop_mutrec", [String_arg "lem"]);
