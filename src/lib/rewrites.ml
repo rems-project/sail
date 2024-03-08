@@ -4225,6 +4225,69 @@ let rewrite_truncate_hex_literals _type_env defs =
     { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
     defs
 
+(** Remove bitfield records and turn them into plain bitvectors
+    This can improve performance for Isabelle, because processing record types is slow there
+    (and we don't gain much by having record types with just a `bits` field).
+    This rewrite is assumed to be run after initial type checking, so that accesses to
+    fields other than `bits` have already been rewritten into calls to accessor functions.
+    A type-checking pass is expected to be run after this rewrite. *)
+let remove_bitfield_records type_env =
+  let rewrite_def rewriters = function
+    | DEF_aux (DEF_type (TD_aux (TD_record (id, tq, _, _), t_annot)), def_annot) when Env.is_bitfield id type_env ->
+        let typ, _ = Env.get_bitfield id type_env in
+        DEF_aux (DEF_type (TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)), def_annot)
+    | d -> rewriters_base.rewrite_def rewriters d
+  in
+  let is_bitfield_typ typ =
+    let typ = try Env.expand_synonyms type_env typ with _ -> typ in
+    match unaux_typ typ with Typ_id id -> Env.is_bitfield id type_env | _ -> false
+  in
+  let is_bitfield_exp e = try is_bitfield_typ (typ_of e) with _ -> false in
+  let is_bitfield_lexp (LE_aux (_, a)) = try is_bitfield_typ (typ_of_annot a) with _ -> false in
+  let unsupported l e = raise (Reporting.err_unreachable l __POS__ ("Unsupported expression " ^ e)) in
+  let unsupported_exp e = unsupported (exp_loc e) (string_of_exp e) in
+  let unsupported_lexp (LE_aux (_, (l, _)) as le) = unsupported l (string_of_lexp le) in
+  let rewrite_exp _rewriters =
+    let e_vector_access (exp, field) =
+      if is_bitfield_exp exp then (
+        match field with E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp | _ -> unsupported_exp exp
+      )
+      else E_vector_access (exp, field)
+    in
+    let e_vector_update (exp, field, exp') =
+      if is_bitfield_exp exp then (
+        match field with E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp' | _ -> unsupported_exp exp
+      )
+      else E_vector_update (exp, field, exp')
+    in
+    let e_struct_update (exp, fexps) =
+      if is_bitfield_exp exp then (
+        match fexps with
+        | [FE_aux (FE_fexp (f, exp'), _)] when string_of_id f = "bits" -> unaux_exp exp'
+        | _ -> unsupported_exp exp
+      )
+      else E_struct_update (exp, fexps)
+    in
+    let e_field (exp, field) =
+      if is_bitfield_exp exp then if string_of_id field = "bits" then unaux_exp exp else unsupported_exp exp
+      else E_field (exp, field)
+    in
+    let e_aux (e, a) =
+      let exp = E_aux (e, a) in
+      match e with
+      | E_struct [FE_aux (FE_fexp (f, e'), _)] when is_bitfield_exp exp && string_of_id f = "bits" -> e'
+      | _ -> exp
+    in
+    let le_vector ((LE_aux (le_aux, _) as lexp), field) =
+      if is_bitfield_lexp lexp then (
+        match field with E_aux (E_id f, _) when string_of_id f = "bits" -> le_aux | _ -> unsupported_lexp lexp
+      )
+      else LE_vector (lexp, field)
+    in
+    fold_exp { id_exp_alg with e_vector_access; e_vector_update; e_struct_update; e_field; e_aux; le_vector }
+  in
+  rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_def }
+
 (* Coq's Definition command doesn't allow patterns, so rewrite
    top-level let bindings with complex patterns into a sequence of
    single definitions. *)
@@ -4450,6 +4513,7 @@ let all_rewriters =
     );
     ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
     ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
+    ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
   ]
 
 let rewrites_interpreter =
