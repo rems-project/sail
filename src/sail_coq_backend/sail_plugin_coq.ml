@@ -104,6 +104,10 @@ let coq_options =
       Arg.String (fun fname -> opt_coq_isla := Some fname),
       "<filename> generate Coq code for decoding Isla trace values"
     );
+    ( "-coq_record_update",
+      Arg.Set Pretty_print_coq.opt_coq_record_update,
+      " use coq-record-update package's syntax for record updates"
+    );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
       " (debug) generate axioms for functions that are declared but not defined"

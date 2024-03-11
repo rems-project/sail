@@ -717,7 +717,7 @@ let rec regval_convs_coq env (Typ_aux (t, _) as typ) =
       let id = string_of_id (regval_constr_id typ) in
       ("(fun v => " ^ id ^ "_of_regval v)", "(fun v => regval_of_" ^ id ^ " v)")
 
-let register_refs_coq doc_id env registers =
+let register_refs_coq doc_id coq_record_update env registers =
   let generic_convs =
     separate_map hardline string
       [
@@ -790,9 +790,9 @@ let register_refs_coq doc_id env registers =
         idd;
         string "));";
         hardline;
-        string "  write_to := (fun v s => ({[ s with ";
-        idd;
-        string " := v ]}));";
+        ( if coq_record_update then string "  write_to := (fun v s => (s <| " ^^ idd ^^ string " := v |>));"
+          else string "  write_to := (fun v s => ({[ s with " ^^ idd ^^ string " := v ]}));"
+        );
         hardline;
         string "  of_regval := ";
         string of_regval;
