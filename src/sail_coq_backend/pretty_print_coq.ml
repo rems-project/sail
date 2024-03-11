@@ -97,6 +97,7 @@ let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 let opt_extern_types : string list ref = ref []
 let opt_generate_extern_types : bool ref = ref false
+let opt_coq_record_update : bool ref = ref false
 
 let prefix_recordtype = true
 
@@ -178,7 +179,12 @@ let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
 let enclose_record = enclose (string "{| ") (string " |}")
+
+(* Record updates from the notations we can generate *)
 let enclose_record_update = enclose (string "{[ ") (string " ]}")
+
+(* Record updates using coq-record-updates package *)
+let enclose_coq_record_update = enclose (string "<|") (string "|>")
 let bigarrow = string "=>"
 let comment = enclose (string "(*") (string "*)")
 
@@ -2015,7 +2021,14 @@ let doc_exp, doc_let =
                    ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)
                 )
         in
-        if List.length fexps > 1 then (
+        if !opt_coq_record_update then (
+          let epp =
+            expY e ^^ break 1
+            ^^ separate_map (break 1) (fun fexp -> enclose_coq_record_update (doc_fexp ctxt recordtyp fexp)) fexps
+          in
+          if aexp_needed then parens epp else epp
+        )
+        else if List.length fexps > 1 then (
           let _, fields = Env.get_record recordtyp env in
           let var, let_pp =
             match e with
@@ -2408,6 +2421,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
       in
       let fs_doc = separate_map hardline f_pp fs in
       let type_id_pp = doc_id_type types_mod avoid_target_names None id in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
       let match_parameters =
         match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l
       in
@@ -2441,7 +2455,21 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
             ^^ separate space (List.mapi (pp_field "e") fs)
             ^//^ string "end" ^^ dot
       in
-      let updates_pp = separate hardline (List.map doc_update_field fs) in
+      let updates_pp =
+        if !opt_coq_record_update then (
+          let typq_ids, _ = typquant_names_separate bare_ctxt typq in
+          let name_pp = string "Build_" ^^ type_id_pp in
+          let constructor =
+            match typq_ids with [] -> name_pp | _ -> parens (name_pp ^^ space ^^ separate space typq_ids)
+          in
+          string "#[export] Instance eta_" ^^ type_id_pp
+          ^^ separate space (empty :: typq_pps)
+          ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
+          ^^ separate_map (string "; ") (fun (_, fid) -> fname fid) fs
+          ^^ string ">."
+        )
+        else separate hardline (List.map doc_update_field fs)
+      in
       let numfields = List.length fs in
       let intros_pp s =
         string " intros ["
@@ -2468,7 +2496,6 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
           ^^ hardline ^^ string "Defined." ^^ twice hardline
         else empty
       in
-      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
       let inhabited_pp =
         let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
         let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
@@ -3510,7 +3537,9 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     let unimplemented = find_unimplemented defs in
     let avoid_target_names = builtin_target_names defs in
     let bare_doc_id = doc_id { empty_ctxt with avoid_target_names } in
-    let register_refs = State.register_refs_coq bare_doc_id type_env (State.find_registers defs) in
+    let register_refs =
+      State.register_refs_coq bare_doc_id !opt_coq_record_update type_env (State.find_registers defs)
+    in
     let generic_eq_types = types_used_with_generic_eq defs in
     let interface_defs =
       match concurrency_monad_params with
@@ -3584,6 +3613,11 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
               types_modules;
             hardline;
+            ( if !opt_coq_record_update then
+                string "From RecordUpdate Require Import RecordSet."
+                ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
+              else empty
+            );
             string "Import ListNotations.";
             hardline;
             string "Open Scope string.";
@@ -3614,6 +3648,11 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                defs_modules;
              hardline;
              (if Option.is_some concurrency_monad_params then string "Import Defs." ^^ hardline else empty);
+             ( if !opt_coq_record_update then
+                 string "From RecordUpdate Require Import RecordSet."
+                 ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
+               else empty
+             );
              string "Import ListNotations.";
              hardline;
              string "Open Scope string.";
