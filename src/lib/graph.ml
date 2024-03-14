@@ -85,6 +85,8 @@ module type S = sig
 
   val has_edge : node -> node -> graph -> bool
 
+  val delete_edge : node -> node -> graph -> graph
+
   val add_edges : node -> node list -> graph -> graph
 
   val children : graph -> node -> node list
