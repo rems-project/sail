@@ -222,6 +222,24 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
           | Typ_aux ((Typ_id id | Typ_app (id, _)), _) -> graph := G.add_edge self (Type id) !graph
           | _ -> Reporting.unreachable (fst annot) __POS__ "Struct without struct type"
         end
+      | E_lit (L_aux (L_undef, l)) -> begin
+          (* Make undefined literals depend on the undefined functions generated for the type (if any)
+             to ensure that `rewrite_undefined` works *)
+          try
+            let typ = Env.expand_synonyms env (typ_of_annot annot) in
+            let funcalls_of_exp =
+              let e_app (id, args) =
+                let arg_funcalls = List.fold_left IdSet.union IdSet.empty args in
+                if Bindings.mem id (Env.get_val_specs env) then IdSet.add id arg_funcalls else arg_funcalls
+              in
+              fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_app }
+            in
+            (* The `mwords` parameter of `undefined_of_type` shouldn't change the set of functions called,
+               so just pass `true`. *)
+            funcalls_of_exp (undefined_of_typ true l (fun _ -> empty_uannot) typ)
+            |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
+          with _ -> ()
+        end
       | _ -> ()
     end;
     E_aux (e_aux, annot)
@@ -337,10 +355,11 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
         IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
         IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
     | DEF_type tdef -> add_type_def_to_graph tdef
-    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), _)) ->
-        begin
-          match opt_exp with Some exp -> ignore (fold_exp (rw_exp (Register id)) exp) | None -> ()
-        end;
+    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
+        (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
+           dependencies to `undefined_*` functions) *)
+        let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_lit (mk_lit L_undef), annot) in
+        ignore (fold_exp (rw_exp (Register id)) exp);
         IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
     | DEF_measure (id, pat, exp) ->
         graph := G.add_edges (FunctionMeasure id) [Function id] !graph;
@@ -353,7 +372,11 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
         graph := G.add_edges (Outcome id) [] !graph;
         scan_typquant (Outcome id) typq;
         IdSet.iter (fun typ_id -> graph := G.add_edge (Outcome id) (Type typ_id) !graph) (typ_ids typ);
-        List.iter (scan_outcome_def l (Outcome id)) outcome_defs
+        List.iter (scan_outcome_def l (Outcome id)) outcome_defs;
+        (* Remove dependencies on functions declared within the outcome;  these are parameters of the outcome,
+           and instantiations of these functions (possibly with a more constrained, architecture-specific type)
+           and an `instantiation` declaration normally come later *)
+        IdSet.iter (fun f -> graph := G.delete_edge (Outcome id) (Function f) !graph) (val_spec_ids outcome_defs)
     | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
         graph := G.add_edges (Function id) [Outcome id] !graph;
         List.iter

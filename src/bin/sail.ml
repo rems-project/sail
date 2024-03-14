@@ -437,7 +437,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
           )
   in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
-  let ast, env = List.fold_right (fun file (ast, _) -> Splice.splice ast file) !opt_splice (ast, env) in
+  let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
 
   (* Don't show warnings during re-writing for now *)
