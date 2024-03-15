@@ -295,6 +295,7 @@ let rec size_nvars_nexp (Nexp_aux (ne, _)) =
   | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> size_nvars_nexp n1 @ size_nvars_nexp n2
   | Nexp_exp n | Nexp_neg n -> size_nvars_nexp n
   | Nexp_app (_, args) -> List.concat (List.map size_nvars_nexp args)
+  | Nexp_if (_, t, e) -> size_nvars_nexp t @ size_nvars_nexp e
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
@@ -2018,7 +2019,7 @@ module Analysis = struct
     KidSet.fold check kids dempty
 
   let deps_of_nexp l kid_deps arg_deps nexp =
-    let kids = nexp_frees nexp in
+    let kids = tyvars_of_nexp nexp in
     deps_of_tyvars l kid_deps arg_deps kids
 
   let rec deps_of_nc kid_deps (NC_aux (nc, l)) =
@@ -2614,7 +2615,7 @@ module Analysis = struct
     let qs = match tq with TypQ_no_forall -> [] | TypQ_tq qs -> qs in
     let eqn_instantiations = Type_check.instantiate_simple_equations qs in
     let eqn_kid_deps =
-      KBindings.map (function A_aux (A_nexp nexp, _) -> Some (nexp_frees nexp) | _ -> None) eqn_instantiations
+      KBindings.map (function A_aux (A_nexp nexp, _) -> Some (tyvars_of_nexp nexp) | _ -> None) eqn_instantiations
     in
     let arg i pat =
       let rec aux (P_aux (p, (l, annot))) =
@@ -4385,6 +4386,7 @@ module ToplevelNexpRewrites = struct
       | Nexp_exp n -> "exp_" ^ mangle_nexp n
       | Nexp_neg n -> "neg_" ^ mangle_nexp n
       | Nexp_app (id, args) -> string_of_id id ^ "_" ^ String.concat "_" (List.map mangle_nexp args)
+      | Nexp_if (_, t, e) -> mangle_nexp t ^ "_or_" ^ mangle_nexp e
     in
     (* TODO: I'd like to add a # to distinguish it from user-provided names, but
        the rewriter currently uses them as a hint that they're not printable in

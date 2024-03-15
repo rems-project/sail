@@ -595,6 +595,12 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_neg arg ->
       let arg_chunks = rec_chunk_atyp arg in
       Queue.add (Unary ("-", arg_chunks)) chunks
+  | ATyp_if (i, t, e) ->
+      let if_format = { then_brace = false; else_brace = false } in
+      let i_chunks = rec_chunk_atyp i in
+      let t_chunks = rec_chunk_atyp t in
+      let e_chunks = rec_chunk_atyp e in
+      Queue.add (If_then_else (if_format, i_chunks, t_chunks, e_chunks)) chunks
   | ATyp_inc -> Queue.add (Atom "inc") chunks
   | ATyp_dec -> Queue.add (Atom "dec") chunks
   | ATyp_fn (lhs, rhs, _) ->

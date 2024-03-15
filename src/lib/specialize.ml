@@ -177,9 +177,9 @@ let string_of_instantiation instantiation =
     | Nexp_app (id, nexps) -> string_of_id id ^ "(" ^ Util.string_of_list "," string_of_nexp nexps ^ ")"
     | Nexp_exp n -> "2 ^ " ^ string_of_nexp n
     | Nexp_neg n -> "- " ^ string_of_nexp n
-  in
-
-  let rec string_of_typ = function Typ_aux (typ, l) -> string_of_typ_aux typ
+    | Nexp_if (i, t, e) ->
+        "(if " ^ string_of_n_constraint i ^ " then " ^ string_of_nexp t ^ " else " ^ string_of_nexp e ^ ")"
+  and string_of_typ = function Typ_aux (typ, l) -> string_of_typ_aux typ
   and string_of_typ_aux = function
     | Typ_id id -> string_of_id id
     | Typ_var kid -> kid_name (mk_kopt K_type kid)

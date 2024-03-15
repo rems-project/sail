@@ -418,8 +418,9 @@ let rec count_nexp_vars (Nexp_aux (nexp, _)) =
   | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
       merge_kid_count (count_nexp_vars n1) (count_nexp_vars n2)
   | Nexp_exp n | Nexp_neg n -> count_nexp_vars n
+  | Nexp_if (i, t, e) -> merge_kid_count (count_nc_vars i) (merge_kid_count (count_nexp_vars t) (count_nexp_vars e))
 
-let rec count_nc_vars (NC_aux (nc, _)) =
+and count_nc_vars (NC_aux (nc, _)) =
   let count_arg (A_aux (arg, _)) =
     match arg with A_bool nc -> count_nc_vars nc | A_nexp nexp -> count_nexp_vars nexp | A_typ _ -> KBindings.empty
   in
@@ -659,7 +660,7 @@ let rec doc_typ_fns ctx env =
                     let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
                     let tpp, len_pp = string "mword " ^^ m_pp, string "length_mword" in
                     let length_constraint_pp =
-                      if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
+                      if KidSet.is_empty (KidSet.inter kid_set (tyvars_of_nexp m))
                       then None
                       else Some (separate space [len_pp; doc_var ctx var; string "=?"; doc_nexp ctx m])
                     in
@@ -677,7 +678,7 @@ let rec doc_typ_fns ctx env =
                     let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
                     let tpp, len_pp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ m_pp, string "vec_length" in
                     let length_constraint_pp =
-                      if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
+                      if KidSet.is_empty (KidSet.inter kid_set (tyvars_of_nexp m))
                       then None
                       else Some (separate space [len_pp; doc_var ctx var; string "=?"; doc_nexp ctx m])
                     in
@@ -1857,7 +1858,7 @@ let doc_exp, doc_let =
                    calculating the instantiations. *)
                 let vars_in_env n =
                   let ekids = Env.get_typ_vars env in
-                  let frees = nexp_frees n in
+                  let frees = tyvars_of_nexp n in
                   (not (KidSet.is_empty frees)) && KidSet.for_all (fun kid -> KBindings.mem kid ekids) frees
                 in
                 match (destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn) with

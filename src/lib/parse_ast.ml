@@ -145,6 +145,7 @@ type atyp_aux =
   | ATyp_wild
   | ATyp_tuple of atyp list (* Tuple type *)
   | ATyp_app of id * atyp list (* type constructor application *)
+  | ATyp_if of atyp * atyp * atyp
   | ATyp_exist of kinded_id list * atyp * atyp
   | ATyp_parens of atyp
 
