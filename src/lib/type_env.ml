@@ -679,6 +679,10 @@ module Well_formedness = struct
         wf_nexp exs env nexp2
     | Nexp_exp nexp -> wf_nexp exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
     | Nexp_neg nexp -> wf_nexp exs env nexp
+    | Nexp_if (i, t, e) ->
+        wf_constraint exs env i;
+        wf_nexp exs env t;
+        wf_nexp exs env e
 
   and wf_constraint exs env (NC_aux (nc_aux, l) as nc) =
     wf_debug "constraint" string_of_n_constraint nc exs;
@@ -798,6 +802,8 @@ and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
   | Nexp_neg nexp -> Nexp_aux (Nexp_neg (expand_nexp_synonyms env nexp), l)
   | Nexp_var kid -> Nexp_aux (Nexp_var kid, l)
   | Nexp_constant n -> Nexp_aux (Nexp_constant n, l)
+  | Nexp_if (i, t, e) ->
+      Nexp_aux (Nexp_if (expand_constraint_synonyms env i, expand_nexp_synonyms env t, expand_nexp_synonyms env e), l)
 
 and expand_synonyms env (Typ_aux (typ, l)) =
   match typ with

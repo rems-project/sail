@@ -111,7 +111,7 @@ let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_var kid -> doc_kid kid
   | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-let doc_nexp nexp =
+let rec doc_nexp nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
@@ -125,14 +125,18 @@ let doc_nexp nexp =
     | _ -> parens (nexp0 nexp)
   and nexp0 (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
-    | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp0 n1; string "-"; nexp1 n2]
-    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
-        separate space [nexp0 n1; string "-"; doc_int (Big_int.abs c)]
-    | Nexp_sum (n1, n2) -> separate space [nexp0 n1; string "+"; nexp1 n2]
+    | Nexp_if (i, t, e) -> separate space [string "if"; doc_nc i; string "then"; nexp1 t; string "else"; nexp1 e]
     | _ -> nexp1 nexp
   and nexp1 (Nexp_aux (n_aux, _) as nexp) =
-    match n_aux with Nexp_times (n1, n2) -> separate space [nexp1 n1; string "*"; nexp2 n2] | _ -> nexp2 nexp
+    match n_aux with
+    | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp1 n1; string "-"; nexp2 n2]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
+        separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
+    | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
+    | _ -> nexp2 nexp
   and nexp2 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with Nexp_times (n1, n2) -> separate space [nexp2 n1; string "*"; nexp3 n2] | _ -> nexp3 nexp
+  and nexp3 (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_neg n -> separate space [string "-"; atomic_nexp n]
     | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
@@ -140,7 +144,7 @@ let doc_nexp nexp =
   in
   nexp0 nexp
 
-let rec doc_nc nc =
+and doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
     match nc_aux with

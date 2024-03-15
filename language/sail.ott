@@ -218,16 +218,17 @@ kind :: 'K_' ::=
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}
   {{ aux _ l }}
-  | id                         :: :: id       {{ com abbreviation identifier }}
-  | kid                        :: :: var      {{ com variable }}
-  | num                        :: :: constant {{ com constant }}
-  | id ( nexp1 , ... , nexpn ) :: :: app      {{ com app }}
-  | nexp1 * nexp2              :: :: times    {{ com product }}
-  | nexp1 + nexp2              :: :: sum      {{ com sum }}
-  | nexp1 - nexp2              :: :: minus    {{ com subtraction }}
-  | 2 ^ nexp                   :: :: exp      {{ com exponential }}
-  | - nexp                     :: :: neg      {{ com unary negation}}
-  | ( nexp )                   :: S :: paren  {{ ichlo [[nexp]] }}
+  | id                                    :: :: id       {{ com abbreviation identifier }}
+  | kid                                   :: :: var      {{ com variable }}
+  | num                                   :: :: constant {{ com constant }}
+  | id ( nexp1 , ... , nexpn )            :: :: app      {{ com app }}
+  | if n_constraint then nexp1 else nexp2 :: :: if       {{ com if-then-else }}
+  | nexp1 * nexp2                         :: :: times    {{ com product }}
+  | nexp1 + nexp2                         :: :: sum      {{ com sum }}
+  | nexp1 - nexp2                         :: :: minus    {{ com subtraction }}
+  | 2 ^ nexp                              :: :: exp      {{ com exponential }}
+  | - nexp                                :: :: neg      {{ com unary negation}}
+  | ( nexp )                              :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=
   {{ com vector order specifications, of kind Order }}

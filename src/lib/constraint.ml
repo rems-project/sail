@@ -237,8 +237,8 @@ let to_smt l abstract vars constr =
             sfun "to_int" [sfun "^" [Atom "2"; exp]]
       end
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
-  in
-  let rec smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
+    | Nexp_if (i, t, e) -> sfun "ite" [smt_constraint i; smt_nexp t; smt_nexp e]
+  and smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
     match aux with
     | NC_id id -> Atom (Util.zencode_string (string_of_id id))
     | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]

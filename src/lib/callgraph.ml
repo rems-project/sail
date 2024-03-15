@@ -140,6 +140,7 @@ and nexp_ids' (Nexp_aux (aux, _)) =
   | Nexp_var _ | Nexp_constant _ -> IdSet.empty
   | Nexp_exp n | Nexp_neg n -> nexp_ids' n
   | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> IdSet.union (nexp_ids' n1) (nexp_ids' n2)
+  | Nexp_if (i, t, e) -> IdSet.union (constraint_ids' i) (IdSet.union (nexp_ids' t) (nexp_ids' e))
 
 and typ_ids' (Typ_aux (aux, _)) =
   match aux with

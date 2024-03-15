@@ -108,6 +108,7 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
   | Nexp_minus (n1, n2) -> rewrap (Nexp_minus (orig_nexp n1, orig_nexp n2))
   | Nexp_exp n -> rewrap (Nexp_exp (orig_nexp n))
   | Nexp_neg n -> rewrap (Nexp_neg (orig_nexp n))
+  | Nexp_if (i, t, e) -> rewrap (Nexp_if (i, orig_nexp t, orig_nexp e))
   | _ -> rewrap nexp
 
 let is_list (Typ_aux (typ_aux, _)) =
@@ -459,32 +460,6 @@ let prove pos env nc =
 (* 3. Unification                                                         *)
 (**************************************************************************)
 
-let rec nexp_frees ?(exs = KidSet.empty) (Nexp_aux (nexp, _)) =
-  match nexp with
-  | Nexp_id _ -> KidSet.empty
-  | Nexp_var kid -> KidSet.singleton kid
-  | Nexp_constant _ -> KidSet.empty
-  | Nexp_times (n1, n2) -> KidSet.union (nexp_frees ~exs n1) (nexp_frees ~exs n2)
-  | Nexp_sum (n1, n2) -> KidSet.union (nexp_frees ~exs n1) (nexp_frees ~exs n2)
-  | Nexp_minus (n1, n2) -> KidSet.union (nexp_frees ~exs n1) (nexp_frees ~exs n2)
-  | Nexp_app (_, ns) -> List.fold_left KidSet.union KidSet.empty (List.map (fun n -> nexp_frees ~exs n) ns)
-  | Nexp_exp n -> nexp_frees ~exs n
-  | Nexp_neg n -> nexp_frees ~exs n
-
-let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
-  match (nexp1, nexp2) with
-  | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2 = 0
-  | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Nexp_constant c1, Nexp_constant c2 -> Big_int.equal c1 c2
-  | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
-  | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
-  | Nexp_app (f1, args1), Nexp_app (f2, args2) when List.length args1 = List.length args2 ->
-      Id.compare f1 f2 = 0 && List.for_all2 nexp_identical args1 args2
-  | _, _ -> false
-
 let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   match (nc1, nc2) with
   | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
@@ -656,7 +631,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
       ^ string_of_list ", " string_of_kid (KidSet.elements goals)
       )
       );
-  if KidSet.is_empty (KidSet.inter (nexp_frees nexp1) goals) then begin
+  if KidSet.is_empty (KidSet.inter (tyvars_of_nexp nexp1) goals) then begin
     if prove __POS__ env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown)) then KBindings.empty
     else
       unify_error l ("Integer expressions " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
@@ -671,13 +646,13 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
         | _ -> unify_error l "Unification error"
       end
     | Nexp_sum (n1a, n1b) ->
-        if KidSet.is_empty (nexp_frees n1b) then unify_nexp l env goals n1a (nminus nexp2 n1b)
-        else if KidSet.is_empty (nexp_frees n1a) then unify_nexp l env goals n1b (nminus nexp2 n1a)
+        if KidSet.is_empty (tyvars_of_nexp n1b) then unify_nexp l env goals n1a (nminus nexp2 n1b)
+        else if KidSet.is_empty (tyvars_of_nexp n1a) then unify_nexp l env goals n1b (nminus nexp2 n1a)
         else begin
           match nexp_aux2 with
           | Nexp_sum (n2a, n2b) ->
-              if KidSet.is_empty (nexp_frees n2a) then unify_nexp l env goals n2b (nminus nexp1 n2a)
-              else if KidSet.is_empty (nexp_frees n2a) then unify_nexp l env goals n2a (nminus nexp1 n2b)
+              if KidSet.is_empty (tyvars_of_nexp n2a) then unify_nexp l env goals n2b (nminus nexp1 n2a)
+              else if KidSet.is_empty (tyvars_of_nexp n2a) then unify_nexp l env goals n2a (nminus nexp1 n2b)
               else merge_uvars env l (unify_nexp l env goals n1a n2a) (unify_nexp l env goals n1b n2b)
           | _ ->
               unify_error l
@@ -686,7 +661,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
                 )
         end
     | Nexp_minus (n1a, n1b) ->
-        if KidSet.is_empty (nexp_frees n1b) then unify_nexp l env goals n1a (nsum nexp2 n1b)
+        if KidSet.is_empty (tyvars_of_nexp n1b) then unify_nexp l env goals n1a (nsum nexp2 n1b)
         else
           unify_error l ("Cannot unify minus Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
     | Nexp_times (n1a, n1b) ->
@@ -704,11 +679,11 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
         let valid n c =
           prove __POS__ env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove __POS__ env (nc_neq c (nint 0))
         in
-        (*if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
+        (*if KidSet.is_empty (tyvars_of_nexp n1b) && valid nexp2 n1b then
             unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
-          else if KidSet.is_empty (nexp_frees n1a) && valid nexp2 n1a then
+          else if KidSet.is_empty (tyvars_of_nexp n1a) && valid nexp2 n1a then
             unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a]) *)
-        if KidSet.is_empty (nexp_frees n1a) then begin
+        if KidSet.is_empty (tyvars_of_nexp n1a) then begin
           match nexp_aux2 with
           | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1b n2b
@@ -723,7 +698,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
               unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a])
           | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
         end
-        else if KidSet.is_empty (nexp_frees n1b) then begin
+        else if KidSet.is_empty (tyvars_of_nexp n1b) then begin
           match nexp_aux2 with
           | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1a n2a
@@ -873,29 +848,12 @@ let destruct_atom_bool env typ =
   | Typ_aux (Typ_app (f, [A_aux (A_bool nc, _)]), _) when string_of_id f = "atom_bool" -> Some nc
   | _ -> None
 
-(* The kid_order function takes a set of Int-kinded kids, and returns
-   a list of those kids in the order they appear in a type, as well as
-   a set containing all the kids that did not occur in the type. We
-   only care about Int-kinded kids because those are the only type
-   that can appear in an existential. *)
-
-let rec kid_order_nexp kind_map (Nexp_aux (aux, _)) =
-  match aux with
-  | Nexp_var kid when KBindings.mem kid kind_map ->
-      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
-  | Nexp_var _ | Nexp_id _ | Nexp_constant _ -> ([], kind_map)
-  | Nexp_exp nexp | Nexp_neg nexp -> kid_order_nexp kind_map nexp
-  | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
-      let ord, kids = kid_order_nexp kind_map nexp1 in
-      let ord', kids = kid_order_nexp kids nexp2 in
-      (ord @ ord', kids)
-  | Nexp_app (_, nexps) ->
-      List.fold_left
-        (fun (ord, kids) nexp ->
-          let ord', kids = kid_order_nexp kids nexp in
-          (ord @ ord', kids)
-        )
-        ([], kind_map) nexps
+(* The kid_order function takes a set of Int-kinded type variables,
+   and returns a list of those type variables in the order they appear
+   in a type, as well as a set containing all the kids that did not
+   occur in the type. We only care about Int-kinded and Bool-kinded
+   type variables because those are the only type that can appear in
+   an existential. *)
 
 let rec kid_order kind_map (Typ_aux (aux, l) as typ) =
   match aux with
@@ -925,6 +883,29 @@ and kid_order_arg kind_map (A_aux (aux, _)) =
   | A_typ typ -> kid_order kind_map typ
   | A_nexp nexp -> kid_order_nexp kind_map nexp
   | A_bool nc -> kid_order_constraint kind_map nc
+
+and kid_order_nexp kind_map (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_var kid when KBindings.mem kid kind_map ->
+      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
+  | Nexp_var _ | Nexp_id _ | Nexp_constant _ -> ([], kind_map)
+  | Nexp_exp nexp | Nexp_neg nexp -> kid_order_nexp kind_map nexp
+  | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
+      let ord, kids = kid_order_nexp kind_map nexp1 in
+      let ord', kids = kid_order_nexp kids nexp2 in
+      (ord @ ord', kids)
+  | Nexp_app (_, nexps) ->
+      List.fold_left
+        (fun (ord, kids) nexp ->
+          let ord', kids = kid_order_nexp kids nexp in
+          (ord @ ord', kids)
+        )
+        ([], kind_map) nexps
+  | Nexp_if (i, t, e) ->
+      let ord, kind_map = kid_order_constraint kind_map i in
+      let ord', kind_map = kid_order_nexp kind_map t in
+      let ord'', kind_map = kid_order_nexp kind_map e in
+      (ord @ ord' @ ord'', kind_map)
 
 and kid_order_constraint kind_map (NC_aux (aux, _)) =
   match aux with
@@ -1055,10 +1036,10 @@ let rec subtyp l env typ1 typ2 =
       let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
       let env =
         add_typ_vars l
-          (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))))
+          (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (tyvars_of_nexp nexp2) (KidSet.of_list kids2))))
           env
       in
-      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
+      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (tyvars_of_nexp nexp2)) in
       if not (kids2 = []) then
         typ_error l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2)
       else ();
@@ -1220,10 +1201,40 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
       let exp1 = rewrite_sizeof' l env nexp1 in
       let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "emod_int", [exp1; exp2]))
+  | Nexp_if (i, t, e) ->
+      let i = rewrite_nc env i in
+      let t = rewrite_sizeof' l env t in
+      let e = rewrite_sizeof' l env e in
+      mk_exp (E_if (i, t, e))
   | Nexp_id id when Env.is_abstract_typ id env -> mk_exp (E_sizeof nexp)
   | Nexp_app _ | Nexp_id _ -> typ_error l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
 
-let rewrite_sizeof l env nexp =
+and rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
+
+and rewrite_nc_aux l env = function
+  | NC_bounded_ge (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">=", rewrite_sizeof l env n2)
+  | NC_bounded_gt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">", rewrite_sizeof l env n2)
+  | NC_bounded_le (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<=", rewrite_sizeof l env n2)
+  | NC_bounded_lt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<", rewrite_sizeof l env n2)
+  | NC_equal (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "==", rewrite_sizeof l env n2)
+  | NC_not_equal (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "!=", rewrite_sizeof l env n2)
+  | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
+  | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
+  | NC_false -> E_lit (mk_lit L_false)
+  | NC_true -> E_lit (mk_lit L_true)
+  | NC_set (_, []) -> E_lit (mk_lit L_false)
+  | NC_set (nexp, int :: ints) ->
+      let nexp_eq int = nc_eq nexp (nconstant int) in
+      unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (nexp_eq int)) (nexp_eq int) ints))
+  | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
+  | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
+  | NC_var v ->
+      (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
+      E_id (id_of_kid v)
+  | NC_id id when Env.is_abstract_typ id env -> E_constraint (NC_aux (NC_id id, l))
+  | NC_id id -> typ_error l ("Cannot re-write constraint(" ^ string_of_id id ^ ")")
+
+and rewrite_sizeof l env nexp =
   try rewrite_sizeof' l env nexp
   with No_simple_rewrite ->
     let locals = Env.get_locals env |> Bindings.bindings in
@@ -1241,33 +1252,6 @@ let rewrite_sizeof l env nexp =
           | None -> typ_error l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
         )
     end
-
-let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
-
-and rewrite_nc_aux l env =
-  let mk_exp exp = mk_exp ~loc:l exp in
-  function
-  | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
-  | NC_bounded_gt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">", mk_exp (E_sizeof n2))
-  | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
-  | NC_bounded_lt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<", mk_exp (E_sizeof n2))
-  | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
-  | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
-  | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
-  | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
-  | NC_false -> E_lit (mk_lit L_false)
-  | NC_true -> E_lit (mk_lit L_true)
-  | NC_set (_, []) -> E_lit (mk_lit L_false)
-  | NC_set (nexp, int :: ints) ->
-      let nexp_eq int = nc_eq nexp (nconstant int) in
-      unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (nexp_eq int)) (nexp_eq int) ints))
-  | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
-  | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
-  | NC_var v ->
-      (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
-      E_id (id_of_kid v)
-  | NC_id id when Env.is_abstract_typ id env -> E_constraint (NC_aux (NC_id id, l))
-  | NC_id id -> typ_error l ("Cannot re-write constraint(" ^ string_of_id id ^ ")")
 
 let can_be_undefined ~at:l env typ =
   let rec check (Typ_aux (aux, _)) =
@@ -1376,7 +1360,7 @@ let instantiate_simple_equations =
   let rec find_eqs kid (NC_aux (nc, _)) =
     match nc with
     | NC_equal (Nexp_aux (Nexp_var kid', _), nexp)
-      when Kid.compare kid kid' == 0 && not (KidSet.mem kid (nexp_frees nexp)) ->
+      when Kid.compare kid kid' == 0 && not (KidSet.mem kid (tyvars_of_nexp nexp)) ->
         [arg_nexp nexp]
     | NC_and (nexp1, nexp2) -> find_eqs kid nexp1 @ find_eqs kid nexp2
     | _ -> []

@@ -400,6 +400,7 @@ and to_ast_nexp ctx atyp =
   | P.ATyp_minus (t1, t2) -> Nexp_aux (Nexp_minus (to_ast_nexp ctx t1, to_ast_nexp ctx t2), l)
   | P.ATyp_app (id, ts) -> Nexp_aux (Nexp_app (to_ast_id ctx id, List.map (to_ast_nexp ctx) ts), l)
   | P.ATyp_parens atyp -> to_ast_nexp ctx atyp
+  | P.ATyp_if (i, t, e) -> Nexp_aux (Nexp_if (to_ast_constraint ctx i, to_ast_nexp ctx t, to_ast_nexp ctx e), l)
   | _ -> raise (Reporting.err_typ l "Invalid numeric expression in type")
 
 and to_ast_bitfield_index_nexp ctx atyp =
@@ -1447,6 +1448,7 @@ let initial_ctx =
           ("implicit", [Some K_int]);
           ("itself", [Some K_int]);
           ("not", [Some K_bool]);
+          ("ite", [Some K_bool; Some K_int; Some K_int]);
         ];
     kinds = KBindings.empty;
     scattereds = Bindings.empty;

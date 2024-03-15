@@ -140,6 +140,7 @@ and unloc_nexp_aux = function
   | Nexp_minus (nexp1, nexp2) -> Nexp_minus (unloc_nexp nexp1, unloc_nexp nexp2)
   | Nexp_exp nexp -> Nexp_exp (unloc_nexp nexp)
   | Nexp_neg nexp -> Nexp_neg (unloc_nexp nexp)
+  | Nexp_if (i, t, e) -> Nexp_if (unloc_n_constraint i, unloc_nexp t, unloc_nexp e)
 
 and unloc_nexp = function Nexp_aux (nexp_aux, _) -> Nexp_aux (unloc_nexp_aux nexp_aux, Parse_ast.Unknown)
 
@@ -238,8 +239,10 @@ let rec nexp_power_variables (Nexp_aux (aux, _)) =
   | Nexp_id _ | Nexp_var _ | Nexp_constant _ -> KidSet.empty
   | Nexp_app (_, ns) -> List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables ns)
   | Nexp_exp n -> tyvars_of_nexp n
+  | Nexp_if (i, t, e) ->
+      KidSet.union (constraint_power_variables i) (KidSet.union (nexp_power_variables t) (nexp_power_variables e))
 
-let constraint_power_variables nc =
+and constraint_power_variables nc =
   List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables (constraint_nexps nc))
 
 let ex_counter = ref 0

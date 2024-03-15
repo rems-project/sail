@@ -488,7 +488,6 @@ val prepend_kid : string -> kid -> kid
 
 (** {1 Misc functions} *)
 
-val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
 val int_of_nexp_opt : nexp -> Big_int.num option
