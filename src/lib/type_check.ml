@@ -4013,7 +4013,7 @@ let synthesize_val_spec env id typq typ def_annot =
     ( DEF_val
         (VS_aux
            ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None),
-             (Parse_ast.Unknown, mk_tannot env typ)
+             (Parse_ast.Unknown, mk_tannot (Env.add_typquant (id_loc id) typq env) typ)
            )
         ),
       def_annot
