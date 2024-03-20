@@ -60,11 +60,16 @@ open import Value2
 
 grammar
 
+chan :: 'Chan_' ::=
+  | stdout :: :: stdout
+  | stderr :: :: stderr
+
 name :: '' ::=
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
   | throw_location nat    :: :: throw_location
+  | channel chan nat      :: :: channel
   | return nat            :: :: return
 
 op :: '' ::=
@@ -192,6 +197,10 @@ iannot :: '' ::=
   {{ lem nat * nat * nat }}
   {{ ocaml int * int * int }}
 
+creturn :: 'CR_' ::=
+  | clexp                     :: :: one
+  | ( clexp0 , ... , clexpn ) :: :: multi
+
 instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
@@ -201,7 +210,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
-  | clexp = bool uid ( cval0 , ... , cvaln )       :: :: funcall
+  | creturn = bool uid ( cval0 , ... , cvaln )     :: :: funcall
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined

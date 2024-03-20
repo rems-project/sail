@@ -344,7 +344,7 @@ module Make (Config : CONFIG) = struct
 
      would generate:
 
-     (define-const v/o (ite cond_1 v/n v/m_))
+     (define-const v/o (ite cond_1 v/n v/m))
   *)
   let smt_ssanode cfg preds =
     let open Jib_ssa in
@@ -499,7 +499,7 @@ module Make (Config : CONFIG) = struct
   let smt_instr state ctx (I_aux (aux, (_, l)) as instr) =
     let open Type_check in
     match aux with
-    | I_funcall (CL_id (id, ret_ctyp), extern, (function_id, _), args) ->
+    | I_funcall (CR_one (CL_id (id, ret_ctyp)), extern, (function_id, _), args) ->
         if ctx_is_extern function_id ctx then (
           let name = ctx_get_extern function_id ctx in
           match Smt.builtin name with
@@ -986,6 +986,7 @@ end) : Jib_compile.CONFIG = struct
   let use_real = true
   let branch_coverage = None
   let track_throw = false
+  let use_void = false
 end
 
 (* In order to support register references, we need to build a map

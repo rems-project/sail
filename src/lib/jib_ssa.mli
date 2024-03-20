@@ -65,119 +65,70 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Compile Sail ASTs to Jib intermediate representation *)
+open Array
+open Jib_util
 
-open Anf
-open Ast
-open Ast_defs
-open Ast_util
-open Jib
-open Type_check
+val ssa_name : int -> Jib.name -> Jib.name
 
-(** This forces all integer struct fields to be represented as
-   int64_t. Specifically intended for the various TLB structs in the
-   ARM v8.5 spec. It is unsound in general. *)
-val optimize_aarch64_fast_struct : bool ref
+val unssa_name : Jib.name -> Jib.name * int
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-   the Sail version. This cache can obviously become stale if the Sail
-   changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
+(** A mutable array based graph type, with nodes indexed by integers. *)
+type 'a array_graph
 
-(** {2 Jib context} *)
+(** Create an empty array_graph, specifying the initial size of the
+   underlying array. *)
+val make : initial_size:int -> unit -> 'a array_graph
 
-(** Dynamic context for compiling Sail to Jib. We need to pass a
-   (global) typechecking environment given by checking the full
-   AST. *)
-type ctx = {
-  records : (kid list * ctyp Bindings.t) Bindings.t;
-  enums : IdSet.t Bindings.t;
-  variants : (kid list * ctyp Bindings.t) Bindings.t;
-  valspecs : (string option * ctyp list * ctyp) Bindings.t;
-  quants : ctyp KBindings.t;
-  local_env : Env.t;
-  tc_env : Env.t;
-  effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
-  letbinds : int list;
-  letbind_ids : IdSet.t;
-  no_raw : bool;
-}
+module IntSet = Util.IntSet
 
-val ctx_is_extern : id -> ctx -> bool
+val get_cond : 'a array_graph -> int -> Jib.cval
 
-val ctx_get_extern : id -> ctx -> string
+val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
 
-val ctx_has_val_spec : id -> ctx -> bool
+val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
 
-val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
+(** Add a vertex to a graph, returning the index of the inserted
+   vertex. If the number of vertices exceeds the size of the
+   underlying array, then it is dynamically resized. *)
+val add_vertex : 'a -> 'a array_graph -> int
 
-(** {2 Compilation functions} *)
+(** Add an edge between two existing vertices. Raises Invalid_argument
+   if either of the vertices do not exist. *)
+val add_edge : int -> int -> 'a array_graph -> unit
 
-(** The Config module specifies static configuration for compiling
-   Sail into Jib.  We have to provide a conversion function from Sail
-   types into Jib types, as well as a function that optimizes ANF
-   expressions (which can just be the identity function) *)
-module type CONFIG = sig
-  val convert_typ : ctx -> typ -> ctyp
+exception Not_a_DAG of int
 
-  val optimize_anf : ctx -> typ aexp -> typ aexp
+val topsort : 'a array_graph -> int list
 
-  (** Unroll all for loops a bounded number of times. Used for SMT
-       generation. *)
-  val unroll_loops : int option
+type terminator =
+  | T_undefined of Jib.ctyp
+  | T_exit of string
+  | T_end of Jib.name
+  | T_goto of string
+  | T_jump of int * string
+  | T_label of string
+  | T_none
 
-  (** A call is precise if the function arguments match the function
-      type exactly. Leaving functions imprecise can allow later passes
-      to specialize implementations. *)
-  val make_call_precise : ctx -> id -> bool
+type cf_node =
+  | CF_label of string
+  | CF_block of Jib.instr list * terminator
+  | CF_guard of int
+  | CF_start of Jib.ctyp NameMap.t
 
-  (** If false, will ensure that fixed size bitvectors are
-       specifically less that 64-bits. If true this restriction will
-       be ignored. *)
-  val ignore_64 : bool
+val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
 
-  (** If false we won't generate any V_struct values *)
-  val struct_value : bool
+(** [immediate_dominators graph root] will calculate the immediate
+   dominators for a control flow graph with a specified root node. *)
+val immediate_dominators : 'a array_graph -> int -> int array
 
-  (** If false we won't generate any V_tuple values *)
-  val tuple_value : bool
+type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
 
-  (** Allow real literals *)
-  val use_real : bool
+(** Convert a list of instructions into SSA form *)
+val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 
-  (** Insert branch coverage operations *)
-  val branch_coverage : out_channel option
+(** Output the control-flow graph in graphviz format for
+   debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
+   image of the graph. *)
+val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
 
-  (** If true track the location of the last exception thrown, useful
-     for debugging C but we want to turn it off for SMT generation
-     where we can't use strings *)
-  val track_throw : bool
-
-  val use_void : bool
-end
-
-module IdGraph : sig
-  include Graph.S with type node = id and type node_set = IdSet.t
-end
-
-val callgraph : cdef list -> IdGraph.graph
-
-module Make (C : CONFIG) : sig
-  (** Compile a Sail definition into a Jib definition. The first two
-       arguments are is the current definition number and the total
-       number of definitions, and can be used to drive a progress bar
-       (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
-
-  val compile_ast : ctx -> tannot ast -> cdef list * ctx
-end
-
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info
+val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit

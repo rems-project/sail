@@ -523,6 +523,7 @@ end) : CONFIG = struct
   let use_real = false
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
+  let use_void = false
 end
 
 (** Functions that have heap-allocated return types are implemented by
@@ -549,8 +550,10 @@ let fix_early_heap_return ret instrs =
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
         before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
-    | before, I_aux (I_funcall (CL_id (Return _, ctyp), extern, fid, args), aux) :: after ->
-        before @ [I_aux (I_funcall (CL_addr (CL_id (ret, CT_ref ctyp)), extern, fid, args), aux)] @ rewrite_return after
+    | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
+        before
+        @ [I_aux (I_funcall (CR_one (CL_addr (CL_id (ret, CT_ref ctyp))), extern, fid, args), aux)]
+        @ rewrite_return after
     | before, I_aux (I_copy (CL_id (Return _, ctyp), cval), aux) :: after ->
         before @ [I_aux (I_copy (CL_addr (CL_id (ret, CT_ref ctyp)), cval), aux)] @ rewrite_return after
     | before, I_aux ((I_end _ | I_undefined _), _) :: after ->
@@ -573,8 +576,8 @@ let fix_early_stack_return ret ret_ctyp instrs =
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
         before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
-    | before, I_aux (I_funcall (CL_id (Return _, ctyp), extern, fid, args), aux) :: after ->
-        before @ [I_aux (I_funcall (CL_id (ret, ctyp), extern, fid, args), aux)] @ rewrite_return after
+    | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
+        before @ [I_aux (I_funcall (CR_one (CL_id (ret, ctyp)), extern, fid, args), aux)] @ rewrite_return after
     | before, I_aux (I_copy (CL_id (Return _, ctyp), cval), aux) :: after ->
         before @ [I_aux (I_copy (CL_id (ret, ctyp), cval), aux)] @ rewrite_return after
     | before, I_aux (I_end _, _) :: after -> before @ [ireturn (V_id (ret, ret_ctyp))] @ rewrite_return after
@@ -1063,7 +1066,8 @@ let rec sgen_clexp l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
-  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
+  | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
+  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_id field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
@@ -1075,7 +1079,8 @@ let rec sgen_clexp_pure l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
-  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
+  | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
+  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_id field
   | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
@@ -1194,6 +1199,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
       ^^ jump 2 2 (sq_separate_map hardline (codegen_instr fid ctx) instrs)
       ^^ hardline ^^ string "  }"
   | I_funcall (x, special_extern, f, args) ->
+      let x =
+        match x with
+        | CR_one x -> x
+        | CR_multi _ -> Reporting.unreachable l __POS__ "Multiple returns should not exist in C backend"
+      in
       let c_args = Util.string_of_list ", " sgen_cval args in
       let ctyp = clexp_ctyp x in
       let is_extern = ctx_is_extern (fst f) ctx || special_extern in

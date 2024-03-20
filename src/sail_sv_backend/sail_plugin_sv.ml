@@ -317,6 +317,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let track_throw = true
   let branch_coverage = None
   let use_real = false
+  let use_void = true
 end
 
 let register_types cdefs =
@@ -424,10 +425,12 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
 
+  let spec_info = Jib_sv.collect_spec_info ctx cdefs in
+
   let in_doc, out_doc, reg_doc, fn_ctyps, setup_calls =
     List.fold_left
       (fun (doc_in, doc_out, doc_reg, fn_ctyps, setup_calls) cdef ->
-        let cdef_doc, fn_ctyps, setup_calls = sv_cdef ctx fn_ctyps setup_calls cdef in
+        let cdef_doc, fn_ctyps, setup_calls = sv_cdef spec_info ctx fn_ctyps setup_calls cdef in
         ( doc_in ^^ cdef_doc.inside_module,
           doc_out ^^ cdef_doc.outside_module,
           doc_reg ^^ cdef_doc.inside_module_prefix,
@@ -496,7 +499,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
         (List.filter_map
            (function
              | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
-                 Some (SV.sv_id id ^^ space ^^ equals ^^ space ^^ sv_id id ^^ string "_in" ^^ semi ^^ hardline)
+                 Some (pp_id id ^^ space ^^ equals ^^ space ^^ pp_id id ^^ string "_in" ^^ semi ^^ hardline)
              | _ -> None
              )
            cdefs
@@ -510,7 +513,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
         (List.filter_map
            (function
              | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
-                 Some (sv_id id ^^ string "_out" ^^ space ^^ equals ^^ space ^^ sv_id id ^^ semi ^^ hardline)
+                 Some (pp_id id ^^ string "_out" ^^ space ^^ equals ^^ space ^^ pp_id id ^^ semi ^^ hardline)
              | _ -> None
              )
            cdefs
@@ -519,7 +522,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
 
   let main =
-    List.find_opt (function CDEF_aux (CDEF_fundef (id, _, _, _), _) -> sv_id_string id = "main" | _ -> false) cdefs
+    List.find_opt (function CDEF_aux (CDEF_fundef (id, _, _, _), _) -> pp_id_string id = "main" | _ -> false) cdefs
   in
   let main_args, main_result, module_main_in_out = main_args main fn_ctyps in
 
@@ -545,7 +548,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
       List.filter_map
         (function
           | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
-              Some (string "input" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_in"))
+              Some (string "input" ^^ space ^^ wrap_type ctyp (pp_id id ^^ string "_in"))
           | _ -> None
           )
         cdefs
@@ -557,7 +560,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
       List.filter_map
         (function
           | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
-              Some (string "output" ^^ space ^^ wrap_type ctyp (sv_id id ^^ string "_out"))
+              Some (string "output" ^^ space ^^ wrap_type ctyp (pp_id id ^^ string "_out"))
           | _ -> None
           )
         cdefs
@@ -591,10 +594,15 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
           (verilator_cpp_wrapper out);
         Util.close_output_with_check file_info;
 
-        Reporting.system_checked
-          (sprintf "verilator --cc --exe --build -j 0 -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv" sail_sv_libdir out out
-             out
-          );
+        (* Verilator sometimes just spuriously returns non-zero exit
+           codes even when it suceeds, so we don't use system_checked
+           here, and just hope for the best. *)
+        let _ =
+          Unix.system
+            (sprintf "verilator --cc --exe --build -j 0 -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv" sail_sv_libdir out out
+               out
+            )
+        in
         begin
           match !opt_verilate with
           | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out out)

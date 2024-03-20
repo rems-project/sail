@@ -65,20 +65,31 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Libsail
-
 open Ast_util
 open Jib
 open Jib_util
 
-module IntSet = Set.Make (struct
-  type t = int
-  let compare = compare
-end)
+module IntSet = Util.IntSet
 module IntMap = Map.Make (struct
   type t = int
   let compare = compare
 end)
+
+let ssa_name i = function
+  | Name (id, _) -> Name (id, i)
+  | Have_exception _ -> Have_exception i
+  | Current_exception _ -> Current_exception i
+  | Throw_location _ -> Throw_location i
+  | Channel (c, _) -> Channel (c, i)
+  | Return _ -> Return i
+
+let unssa_name = function
+  | Name (id, n) -> (Name (id, -1), n)
+  | Have_exception n -> (Have_exception (-1), n)
+  | Current_exception n -> (Current_exception (-1), n)
+  | Throw_location n -> (Throw_location (-1), n)
+  | Channel (c, n) -> (Channel (c, -1), n)
+  | Return n -> (Return (-1), n)
 
 (**************************************************************************)
 (* 1. Mutable graph type                                                  *)
@@ -486,14 +497,6 @@ let rename_variables graph root children =
 
   let phi_zeros = ref NameMap.empty in
 
-  let ssa_name i = function
-    | Name (id, _) -> Name (id, i)
-    | Have_exception _ -> Have_exception i
-    | Current_exception _ -> Current_exception i
-    | Throw_location _ -> Throw_location i
-    | Return _ -> Return i
-  in
-
   let get_count id = match NameMap.find_opt id !counts with Some n -> n | None -> 0 in
   let top_stack id = match NameMap.find_opt id !stacks with Some (x :: _) -> x | Some [] -> 0 | None -> 0 in
   let top_stack_phi id ctyp =
@@ -540,13 +543,17 @@ let rename_variables graph root children =
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void -> CL_void
   in
+  let fold_creturn = function
+    | CR_one clexp -> CR_one (fold_clexp false clexp)
+    | CR_multi clexps -> CR_multi (List.map (fold_clexp false) clexps)
+  in
 
   let ssa_instr (I_aux (aux, annot)) =
     let aux =
       match aux with
-      | I_funcall (clexp, extern, id, args) ->
+      | I_funcall (creturn, extern, id, args) ->
           let args = List.map fold_cval args in
-          I_funcall (fold_clexp false clexp, extern, id, args)
+          I_funcall (fold_creturn creturn, extern, id, args)
       | I_copy (clexp, cval) ->
           let cval = fold_cval cval in
           I_copy (fold_clexp false clexp, cval)
@@ -721,7 +728,7 @@ let string_of_node = function
   | phis, CF_block (instrs, terminator) ->
       let string_of_instr instr =
         let buf = Buffer.create 128 in
-        Jib_ir.Flat_ir_formatter.output_instr 0 buf 0 Jib_ir.StringMap.empty instr;
+        (* Jib_ir.Flat_ir_formatter.output_instr 0 buf 0 Jib_ir.StringMap.empty instr; *)
         Buffer.contents buf
       in
       string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (string_of_instr instr)) instrs

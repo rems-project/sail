@@ -83,6 +83,7 @@ val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
 val iif : l -> cval -> instr list -> instr list -> ctyp -> instr
 val ifuncall : l -> clexp -> id * ctyp list -> cval list -> instr
+val ifuncall_multi : l -> clexp list -> id * ctyp list -> cval list -> instr
 val iextern : l -> clexp -> id * ctyp list -> cval list -> instr
 val icopy : l -> clexp -> cval -> instr
 val iclear : ?loc:l -> ctyp -> name -> instr
@@ -185,6 +186,7 @@ val subst_poly : ctyp KBindings.t -> ctyp -> ctyp
 
 val cval_ctyp : cval -> ctyp
 val clexp_ctyp : clexp -> ctyp
+val creturn_ctyp : creturn -> ctyp
 val cdef_ctyps : cdef -> CTSet.t
 
 val cdef_ctyps_has : (ctyp -> bool) -> cdef -> bool

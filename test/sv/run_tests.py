@@ -67,6 +67,7 @@ def test_sv(name, opts, skip_list):
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
+                step('rm -rf {}_obj_dir'.format(basename));
                 if basename.startswith('fail'):
                     step('{} -no_warn -sv ../c/{} -o {} -sv_verilate compile{} > {}.out'.format(sail, filename, basename, opts, basename))
                 else:

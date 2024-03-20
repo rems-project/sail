@@ -73,9 +73,9 @@ open Jib_util
 let optimize_unit instrs =
   let unit_cval cval = match cval_ctyp cval with CT_unit -> V_lit (VL_unit, CT_unit) | _ -> cval in
   let unit_instr = function
-    | I_aux (I_funcall (clexp, extern, id, args), annot) as instr -> begin
+    | I_aux (I_funcall (CR_one clexp, extern, id, args), annot) as instr -> begin
         match clexp_ctyp clexp with
-        | CT_unit -> I_aux (I_funcall (CL_void, extern, id, List.map unit_cval args), annot)
+        | CT_unit -> I_aux (I_funcall (CR_one CL_void, extern, id, List.map unit_cval args), annot)
         | _ -> instr
       end
     | I_aux (I_copy (clexp, cval), annot) as instr -> begin
@@ -259,6 +259,10 @@ let rec clexp_subst id subst = function
   | CL_void -> CL_void
   | CL_rmw _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot substitute into read-modify-write construct"
 
+let creturn_subst id subst = function
+  | CR_one clexp -> CR_one (clexp_subst id subst clexp)
+  | CR_multi clexps -> CR_multi (List.map (clexp_subst id subst) clexps)
+
 let rec find_function fid = function
   | CDEF_aux (CDEF_fundef (fid', heap_return, args, body), _) :: _ when Id.compare fid fid' = 0 ->
       Some (heap_return, args, body)
@@ -277,8 +281,8 @@ let inline cdefs should_inline instrs =
   let label_count = ref (-1) in
 
   let replace_return subst = function
-    | I_aux (I_funcall (clexp, extern, fid, args), aux) ->
-        I_aux (I_funcall (clexp_subst return subst clexp, extern, fid, args), aux)
+    | I_aux (I_funcall (creturn, extern, fid, args), aux) ->
+        I_aux (I_funcall (creturn_subst return subst creturn, extern, fid, args), aux)
     | I_aux (I_copy (clexp, cval), aux) -> I_aux (I_copy (clexp_subst return subst clexp, cval), aux)
     | instr -> instr
   in
@@ -314,7 +318,8 @@ let inline cdefs should_inline instrs =
   in
 
   let inline_instr = function
-    | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) -> begin
+    | I_aux (I_funcall (CR_one clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) ->
+      begin
         match find_function (fst function_id) cdefs with
         | Some (None, ids, body) ->
             incr inlines;
@@ -485,8 +490,12 @@ let remove_tuples cdefs ctx =
     | CL_void -> CL_void
     | CL_rmw (read, write, ctyp) -> CL_rmw (read, write, ctyp)
   in
+  let fix_creturn = function
+    | CR_one clexp -> CR_one (fix_clexp clexp)
+    | CR_multi clexps -> CR_multi (List.map fix_clexp clexps)
+  in
   let rec fix_instr_aux = function
-    | I_funcall (clexp, extern, id, args) -> I_funcall (fix_clexp clexp, extern, id, List.map fix_cval args)
+    | I_funcall (creturn, extern, id, args) -> I_funcall (fix_creturn creturn, extern, id, List.map fix_cval args)
     | I_copy (clexp, cval) -> I_copy (fix_clexp clexp, fix_cval cval)
     | I_init (ctyp, id, cval) -> I_init (ctyp, id, fix_cval cval)
     | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, fix_cval cval)

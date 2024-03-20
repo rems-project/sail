@@ -25,6 +25,7 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
+(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -65,119 +66,84 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Compile Sail ASTs to Jib intermediate representation *)
+(** This file defines an intermediate representation that is roughly
+    equivalent to the subset of SystemVerilog that we target. This
+    enables us to perform SystemVerilog to SystemVerilog rewrites -
+    for this purpose we also define a vistor-pattern rewriter
+    [svir_visitor], much like it's [jib_visitor] equivalent. *)
 
-open Anf
-open Ast
-open Ast_defs
-open Ast_util
-open Jib
-open Type_check
+open Libsail
 
-(** This forces all integer struct fields to be represented as
-   int64_t. Specifically intended for the various TLB structs in the
-   ARM v8.5 spec. It is unsound in general. *)
-val optimize_aarch64_fast_struct : bool ref
+open Jib_visitor
+open Smt_exp
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-   the Sail version. This cache can obviously become stale if the Sail
-   changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
+type sv_module_port = { name : Jib.name; external_name : string; typ : Jib.ctyp }
 
-(** {2 Jib context} *)
-
-(** Dynamic context for compiling Sail to Jib. We need to pass a
-   (global) typechecking environment given by checking the full
-   AST. *)
-type ctx = {
-  records : (kid list * ctyp Bindings.t) Bindings.t;
-  enums : IdSet.t Bindings.t;
-  variants : (kid list * ctyp Bindings.t) Bindings.t;
-  valspecs : (string option * ctyp list * ctyp) Bindings.t;
-  quants : ctyp KBindings.t;
-  local_env : Env.t;
-  tc_env : Env.t;
-  effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
-  letbinds : int list;
-  letbind_ids : IdSet.t;
-  no_raw : bool;
+type sv_module = {
+  name : Ast.id;
+  input_ports : sv_module_port list;
+  output_ports : sv_module_port list;
+  defs : sv_def list;
 }
 
-val ctx_is_extern : id -> ctx -> bool
+and sv_function = {
+  function_name : Ast.id;
+  return_type : Jib.ctyp option;
+  params : (Ast.id * Jib.ctyp) list;
+  body : sv_statement;
+}
 
-val ctx_get_extern : id -> ctx -> string
+and sv_def =
+  | SVD_type of Jib.ctype_def
+  | SVD_module of sv_module
+  | SVD_var of Jib.name * Jib.ctyp
+  | SVD_fundef of sv_function
+  | SVD_instantiate of {
+      module_name : Ast.id;
+      instance_name : Ast.id;
+      input_connections : smt_exp list;
+      output_connections : sv_place list;
+    }
+  | SVD_always_comb of sv_statement
 
-val ctx_has_val_spec : id -> ctx -> bool
+and sv_place =
+  | SVP_id of Jib.name
+  | SVP_index of sv_place * smt_exp
+  | SVP_field of sv_place * Ast.id
+  | SVP_multi of sv_place list
 
-val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
+and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 
-(** {2 Compilation functions} *)
+and sv_statement_aux =
+  | SVS_comment of string
+  | SVS_skip
+  | SVS_var of Jib.name * Jib.ctyp * smt_exp option
+  | SVS_return of smt_exp
+  | SVS_assign of sv_place * smt_exp
+  | SVS_call of sv_place * Ast.id * smt_exp list
+  | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
+  | SVS_if of smt_exp * sv_statement option * sv_statement option
+  | SVS_block of sv_statement list
+  | SVS_raw of string
 
-(** The Config module specifies static configuration for compiling
-   Sail into Jib.  We have to provide a conversion function from Sail
-   types into Jib types, as well as a function that optimizes ANF
-   expressions (which can just be the identity function) *)
-module type CONFIG = sig
-  val convert_typ : ctx -> typ -> ctyp
+class type svir_visitor = object
+  (** Note that despite inheriting from common_visitor, we don't use
+      [vid]. Instead specific types of identifiers should be
+      re-written by matching on their containing node. *)
+  inherit common_visitor
 
-  val optimize_anf : ctx -> typ aexp -> typ aexp
-
-  (** Unroll all for loops a bounded number of times. Used for SMT
-       generation. *)
-  val unroll_loops : int option
-
-  (** A call is precise if the function arguments match the function
-      type exactly. Leaving functions imprecise can allow later passes
-      to specialize implementations. *)
-  val make_call_precise : ctx -> id -> bool
-
-  (** If false, will ensure that fixed size bitvectors are
-       specifically less that 64-bits. If true this restriction will
-       be ignored. *)
-  val ignore_64 : bool
-
-  (** If false we won't generate any V_struct values *)
-  val struct_value : bool
-
-  (** If false we won't generate any V_tuple values *)
-  val tuple_value : bool
-
-  (** Allow real literals *)
-  val use_real : bool
-
-  (** Insert branch coverage operations *)
-  val branch_coverage : out_channel option
-
-  (** If true track the location of the last exception thrown, useful
-     for debugging C but we want to turn it off for SMT generation
-     where we can't use strings *)
-  val track_throw : bool
-
-  val use_void : bool
+  method vsmt_exp : smt_exp -> smt_exp visit_action
+  method vplace : sv_place -> sv_place visit_action
+  method vstatement : sv_statement -> sv_statement visit_action
+  method vdef : sv_def -> sv_def visit_action
 end
 
-module IdGraph : sig
-  include Graph.S with type node = id and type node_set = IdSet.t
-end
+class empty_svir_visitor : svir_visitor
 
-val callgraph : cdef list -> IdGraph.graph
+val visit_smt_exp : svir_visitor -> smt_exp -> smt_exp
 
-module Make (C : CONFIG) : sig
-  (** Compile a Sail definition into a Jib definition. The first two
-       arguments are is the current definition number and the total
-       number of definitions, and can be used to drive a progress bar
-       (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
+val visit_sv_place : svir_visitor -> sv_place -> sv_place
 
-  val compile_ast : ctx -> tannot ast -> cdef list * ctx
-end
+val visit_sv_statement : svir_visitor -> sv_statement -> sv_statement
 
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info
+val visit_sv_def : svir_visitor -> sv_def -> sv_def

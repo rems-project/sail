@@ -118,7 +118,7 @@ let rec fold_smt_exp f = function
   | Store (info, store_fn, arr, index, x) ->
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
   | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
-  | Tl (hd_op, xs) -> f (Tl (hd_op, fold_smt_exp f xs))
+  | Tl (tl_op, xs) -> f (Tl (tl_op, fold_smt_exp f xs))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _ | Empty_list) as exp -> f exp
 
 let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
@@ -231,6 +231,7 @@ let rec simp vars exp =
       | exp -> Extract (n, m, exp)
     end
   | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp vars arr, simp vars i, simp vars x)
+  | Ite (Fn ("not", [cond]), then_exp, else_exp) -> simp vars (Ite (cond, else_exp, then_exp))
   | Ite (cond, then_exp, else_exp) -> Ite (simp vars cond, simp vars then_exp, simp vars else_exp)
   | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
   | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)
