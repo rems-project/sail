@@ -378,6 +378,8 @@ val add_e_typ : Env.t -> typ -> 'a exp -> 'a exp
 
 val add_typs_let : Env.t -> typ -> typ -> 'a exp -> 'a exp
 
+val has_early_return : 'a exp -> bool
+
 (* In-order fold over expressions *)
 val foldin_exp : (('a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp
 val foldin_pexp : (('a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b pexp -> 'a * 'b pexp

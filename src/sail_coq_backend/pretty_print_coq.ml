@@ -1122,14 +1122,6 @@ let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
   | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
 
-let contains_early_return exp =
-  let e_app (f, args) =
-    let rets, args = List.split args in
-    (List.fold_left ( || ) (string_of_id f = "early_return") rets, E_app (f, args))
-  in
-  fst
-    (fold_exp { (Rewriter.compute_exp_alg false ( || )) with e_return = (fun (_, r) -> (true, E_return r)); e_app } exp)
-
 let find_e_ids exp =
   let e_id id = (IdSet.singleton id, E_id id) in
   fst (fold_exp { (compute_exp_alg IdSet.empty IdSet.union) with e_id } exp)
@@ -2925,7 +2917,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   let ctxt =
     {
       ctxt0 with
-      early_ret = (if contains_early_return exp then Some ret_typ else None);
+      early_ret = (if has_early_return exp then Some ret_typ else None);
       ret_typ_pp = doc_typ ctxt0 env ret_typ;
     }
   in

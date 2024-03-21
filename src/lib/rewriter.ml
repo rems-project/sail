@@ -1200,3 +1200,8 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
 
 let rec foldin_exp f x e = f (default_fold_exp (foldin_exp f)) x e
 let foldin_pexp f x e = default_fold_pexp (foldin_exp f) x e
+
+let has_early_return (e : 'a exp) =
+  let e_app (id, args) = string_of_id id = "early_return" || List.fold_left ( || ) false args in
+  let e_return _ = true in
+  fold_exp { (pure_exp_alg false ( || )) with e_app; e_return } e
