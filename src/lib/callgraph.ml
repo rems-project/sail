@@ -537,7 +537,10 @@ let top_sort_defs ast =
           in
           let fundefs = List.map get_fundefs cdefs |> List.concat in
           let other_defs = List.filter (fun d -> get_fundefs d = []) cdefs in
-          if List.length fundefs > 1 then other_defs @ [mk_def (DEF_internal_mutrec fundefs)] else cdefs
+          if List.length fundefs > 1 then
+            (* Mutrec definition, then others (including val-specs); will be reversed later *)
+            mk_def (DEF_internal_mutrec fundefs) :: other_defs
+          else cdefs
         in
         reorder already_seen' (cdefs' @ acc) (components, defs)
     | [], defs -> List.rev_append acc defs
