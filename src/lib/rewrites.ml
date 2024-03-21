@@ -1749,10 +1749,9 @@ let rewrite_ast_early_return effect_info env ast =
   let early_ret_spec =
     fst
       (Type_error.check_defs initial_env
-         [gen_vs ~pure:false ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b")]
+         [gen_vs ~pure:true ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b")]
       )
   in
-  let effect_info = Effects.add_monadic_built_in (mk_id "early_return") effect_info in
 
   let new_ast =
     rewrite_ast_base
@@ -2264,7 +2263,13 @@ let rewrite_ast_letbind_effects effect_info env =
 
   let purify (E_aux (aux, (l, tannot))) = E_aux (aux, (l, add_effect_annot tannot no_effect)) in
 
-  let value (E_aux (exp_aux, _) as exp) = not (effectful exp || updates_vars exp) in
+  let needs_monad exp = effectful exp || has_early_return exp in
+  let pexp_needs_monad pexp =
+    let _, guard, exp, _ = destruct_pexp pexp in
+    let guard_needs_monad = match guard with Some g -> needs_monad g | None -> false in
+    needs_monad exp || guard_needs_monad
+  in
+  let value exp = not (needs_monad exp || updates_vars exp) in
 
   let rec n_exp_name (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
     n_exp exp (fun exp -> if value exp then k exp else monadic (letbind exp k))
@@ -2328,7 +2333,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_app (op_bool, [l; r]) when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
         (* Leave effectful operands of Boolean "and"/"or" in place to allow
            short-circuiting. *)
-        let newreturn = effectful l || effectful r in
+        let newreturn = needs_monad l || needs_monad r in
         let l = n_exp_term ~cast:true newreturn l in
         let r = n_exp_term ~cast:true newreturn r in
         k (rewrap (E_app (op_bool, [l; r])))
@@ -2341,7 +2346,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_tuple exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_tuple exps)))
     | E_if (exp1, exp2, exp3) ->
         let e_if exp1 =
-          let newreturn = effectful exp2 || effectful exp3 in
+          let newreturn = needs_monad exp2 || needs_monad exp3 in
           let exp2 = n_exp_term newreturn exp2 in
           let exp3 = n_exp_term newreturn exp3 in
           k (rewrap (E_if (exp1, exp2, exp3)))
@@ -2351,7 +2356,7 @@ let rewrite_ast_letbind_effects effect_info env =
         n_exp_name start (fun start ->
             n_exp_name stop (fun stop ->
                 n_exp_name by (fun by ->
-                    let body = n_exp_term (effectful body) body in
+                    let body = n_exp_term (needs_monad body) body in
                     k (rewrap (E_for (id, start, stop, by, dir, body)))
                 )
             )
@@ -2362,8 +2367,8 @@ let rewrite_ast_letbind_effects effect_info env =
           | Measure_aux (Measure_none, _) -> measure
           | Measure_aux (Measure_some exp, l) -> Measure_aux (Measure_some (n_exp_term false exp), l)
         in
-        let cond = n_exp_term ~cast:true (effectful cond) cond in
-        let body = n_exp_term (effectful body) body in
+        let cond = n_exp_term ~cast:true (needs_monad cond) cond in
+        let body = n_exp_term (needs_monad body) body in
         k (rewrap (E_loop (loop, measure, cond, body)))
     | E_vector exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_vector exps)))
     | E_vector_access (exp1, exp2) ->
@@ -2398,17 +2403,17 @@ let rewrite_ast_letbind_effects effect_info env =
         n_exp_name exp1 (fun exp1 -> n_fexpL fexps (fun fexps -> k (pure_rewrap (E_struct_update (exp1, fexps)))))
     | E_field (exp1, id) -> n_exp_name exp1 (fun exp1 -> k (pure_rewrap (E_field (exp1, id))))
     | E_match (exp1, pexps) ->
-        let newreturn = List.exists effectful_pexp pexps in
+        let newreturn = List.exists pexp_needs_monad pexps in
         n_exp_name exp1 (fun exp1 -> n_pexpL newreturn pexps (fun pexps -> k (rewrap (E_match (exp1, pexps)))))
     | E_try (exp1, pexps) ->
-        let newreturn = effectful exp1 || List.exists effectful_pexp pexps in
+        let newreturn = needs_monad exp1 || List.exists pexp_needs_monad pexps in
         let exp1 = n_exp_term newreturn exp1 in
         n_pexpL newreturn pexps (fun pexps -> k (rewrap (E_try (exp1, pexps))))
     | E_let (lb, body) -> n_lb lb (fun lb -> rewrap (E_let (lb, n_exp body k)))
     | E_sizeof nexp -> k (rewrap (E_sizeof nexp))
     | E_constraint nc -> k (rewrap (E_constraint nc))
     | E_assign (lexp, exp1) -> n_lexp lexp (fun lexp -> n_exp_name exp1 (fun exp1 -> k (rewrap (E_assign (lexp, exp1)))))
-    | E_exit exp' -> k (E_aux (E_exit (n_exp_term (effectful exp') exp'), annot))
+    | E_exit exp' -> k (E_aux (E_exit (n_exp_term (needs_monad exp') exp'), annot))
     | E_assert (exp1, exp2) ->
         n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (rewrap (E_assert (exp1, exp2)))))
     | E_var (lexp, exp1, exp2) ->
@@ -2416,7 +2421,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_internal_return exp1 ->
         let is_early_return = function E_aux (E_app (id, _), _) -> string_of_id id = "early_return" | _ -> false in
         n_exp_name exp1 (fun exp1 ->
-            k (if effectful exp1 || is_early_return exp1 then exp1 else rewrap (E_internal_return exp1))
+            k (if needs_monad exp1 || is_early_return exp1 then exp1 else rewrap (E_internal_return exp1))
         )
     | E_internal_value v -> k (rewrap (E_internal_value v))
     | E_return exp' -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_return exp')))
@@ -2426,10 +2431,10 @@ let rewrite_ast_letbind_effects effect_info env =
   in
 
   let rewrite_fun _ (FD_aux (FD_function (recopt, tannotopt, funcls), fdannot)) =
-    (* TODO EFFECT *)
-    let effectful_vs = false in
-    let effectful_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = effectful_pexp pexp in
-    let newreturn = effectful_vs || List.exists effectful_funcl funcls in
+    let funcl_needs_monad (FCL_aux (FCL_funcl (id, pexp), _)) =
+      pexp_needs_monad pexp || not (Effects.function_is_pure id effect_info)
+    in
+    let newreturn = List.exists funcl_needs_monad funcls in
     let rewrite_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_funcl (id, n_pexp newreturn pexp (fun x -> x)), annot)
@@ -2442,7 +2447,7 @@ let rewrite_ast_letbind_effects effect_info env =
       | DEF_let (LB_aux (lb, annot)) ->
           let rewrap lb = DEF_let (LB_aux (lb, annot)) in
           begin
-            match lb with LB_val (pat, exp) -> rewrap (LB_val (pat, n_exp_term (effectful exp) exp))
+            match lb with LB_val (pat, exp) -> rewrap (LB_val (pat, n_exp_term (needs_monad exp) exp))
           end
       | DEF_fundef fdef -> DEF_fundef (rewrite_fun rewriters fdef)
       | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewrite_fun rewriters) fdefs)
@@ -2500,7 +2505,7 @@ let rewrite_ast_internal_lets env =
         let rhs = add_e_typ (env_of exp) ltyp (rhs exp) in
         E_let (LB_aux (LB_val (pat_of_local_lexp lhs, rhs), annot), body)
     | LB_aux (LB_val (pat, exp'), annot') ->
-        if effectful exp' then E_internal_plet (pat, exp', body) else E_let (lb, body)
+        if effectful exp' || has_early_return exp' then E_internal_plet (pat, exp', body) else E_let (lb, body)
   in
 
   let e_var (lexp, exp1, exp2) =
@@ -2511,7 +2516,7 @@ let rewrite_ast_internal_lets env =
           (unaux_pat (add_p_typ (env_of_annot annot) typ (P_aux (P_id id, annot))), annot)
       | _ -> failwith "E_var with unexpected lexp"
     in
-    if effectful exp1 then E_internal_plet (P_aux (paux, annot), exp1, exp2)
+    if effectful exp1 || has_early_return exp1 then E_internal_plet (P_aux (paux, annot), exp1, exp2)
     else E_let (LB_aux (LB_val (P_aux (paux, annot), exp1), annot), exp2)
   in
 
@@ -3075,7 +3080,8 @@ let rewrite_ast_remove_superfluous_returns env =
 
   let e_aux (exp, annot) =
     match exp with
-    | (E_let (LB_aux (LB_val (pat, exp1), _), exp2) | E_internal_plet (pat, exp1, exp2)) when effectful exp1 -> begin
+    | (E_let (LB_aux (LB_val (pat, exp1), _), exp2) | E_internal_plet (pat, exp1, exp2))
+      when effectful exp1 || has_early_return exp1 -> begin
         match (untyp_pat pat, uncast_exp exp2) with
         | ( (P_aux (P_lit (L_aux (lit, _)), _), ptyp),
             (E_aux (E_internal_return (E_aux (E_lit (L_aux (lit', _)), _)), a), etyp) )

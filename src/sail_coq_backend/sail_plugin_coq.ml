@@ -171,6 +171,8 @@ let coq_rewrites =
     ("rewrite_explicit_measure", []);
     ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs", []);
+    ("infer_effects", [Bool_arg true]);
+    ("attach_effects", []);
     ("remove_blocks", []);
     ("attach_effects", []);
     ("letbind_effects", []);
