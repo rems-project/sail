@@ -227,7 +227,10 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
           try
             let typ = Env.expand_synonyms env (typ_of_annot annot) in
             let funcalls_of_exp =
-              let e_app (id, _) = if Bindings.mem id (Env.get_val_specs env) then IdSet.singleton id else IdSet.empty in
+              let e_app (id, args) =
+                let arg_funcalls = List.fold_left IdSet.union IdSet.empty args in
+                if Bindings.mem id (Env.get_val_specs env) then IdSet.add id arg_funcalls else arg_funcalls
+              in
               fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_app }
             in
             (* The `mwords` parameter of `undefined_of_type` shouldn't change the set of functions called,
@@ -351,10 +354,11 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
         IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
         IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
     | DEF_type tdef -> add_type_def_to_graph tdef
-    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), _)) ->
-        begin
-          match opt_exp with Some exp -> ignore (fold_exp (rw_exp (Register id)) exp) | None -> ()
-        end;
+    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
+        (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
+           dependencies to `undefined_*` functions) *)
+        let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_lit (mk_lit L_undef), annot) in
+        ignore (fold_exp (rw_exp (Register id)) exp);
         IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
     | DEF_measure (id, pat, exp) ->
         graph := G.add_edges (FunctionMeasure id) [Function id] !graph;
