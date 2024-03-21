@@ -690,14 +690,6 @@ let rec typ_needs_printed params_to_print (Typ_aux (t, _)) =
 and typ_needs_printed_arg params_to_print (A_aux (targ, _)) =
   match targ with A_typ t -> typ_needs_printed params_to_print t | _ -> false
 
-let contains_early_return exp =
-  let e_app (f, args) =
-    let rets, args = List.split args in
-    (List.fold_left ( || ) (string_of_id f = "early_return") rets, E_app (f, args))
-  in
-  fst
-    (fold_exp { (Rewriter.compute_exp_alg false ( || )) with e_return = (fun (_, r) -> (true, E_return r)); e_app } exp)
-
 (* Does the expression have the form of a bitvector cast from the monomorphiser? *)
 type is_bitvector_cast = BVC_yes | BVC_allowed | BVC_not
 let is_bitvector_cast_out exp =
@@ -810,8 +802,10 @@ let doc_exp_lem, doc_let_lem =
     | E_app (f, args) -> begin
         match f with
         | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
-        | (Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)) when effectful (effect_of full_exp) ->
-            let call = doc_id_lem (append_id f "M") in
+        | (Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _))
+          when effectful (effect_of full_exp) || has_early_return full_exp ->
+            let suffix = if effectful (effect_of full_exp) then "M" else "E" in
+            let call = doc_id_lem (append_id f suffix) in
             wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
         (* temporary hack to make the loop body a function of the temporary variables *)
         | Id_aux (Id "foreach#", _) -> begin
@@ -853,7 +847,7 @@ let doc_exp_lem, doc_let_lem =
                 in
                 let combinator =
                   if ctxt.monadic && effectful (effect_of body) then "foreachM"
-                  else if effectful (effect_of body) then "foreachE"
+                  else if has_early_return body then "foreachE"
                   else "foreach"
                 in
                 let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
@@ -887,12 +881,14 @@ let doc_exp_lem, doc_let_lem =
                 | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
               in
               let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-              let csuffix, cond, body =
-                match (effectful (effect_of cond), effectful (effect_of body)) with
-                | false, false -> ("", cond, body)
-                | false, true -> ("M", return cond, body)
-                | true, false -> ("M", cond, return body)
-                | true, true -> ("M", cond, body)
+              let effectful_exp e = effectful (effect_of e) in
+              let csuffix = if effectful_exp full_exp then "M" else if has_early_return full_exp then "E" else "" in
+              let needs_monad e = effectful_exp e || has_early_return e in
+              let cond, body =
+                match (needs_monad cond, needs_monad body) with
+                | false, true -> (return cond, body)
+                | true, false -> (cond, return body)
+                | _, _ -> (cond, body)
               in
               let used_vars_body = find_e_ids body in
               let lambda =
@@ -910,7 +906,8 @@ let doc_exp_lem, doc_let_lem =
               let msuffix, measure_pp =
                 match measure with
                 | None -> ("", [])
-                | Some exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
+                | Some exp when effectful_exp full_exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
+                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected combinator for pure loop")
               in
               parens
                 ((prefix 2 1)
@@ -1554,7 +1551,7 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
   let pat, guard, exp, (l, _) = destruct_pexp pexp in
   let ctxt =
     {
-      early_ret = contains_early_return exp;
+      early_ret = has_early_return exp;
       monadic;
       bound_nexps = NexpSet.union (lem_nexps_of_typ params_to_print typ) (typeclass_nexps params_to_print typ);
       top_env = type_env;
@@ -1563,10 +1560,6 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
   in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
-  let wrap_monadic =
-    if monadic && not (effectful (effect_of exp)) then fun doc -> string "return" ^^ space ^^ parens doc
-    else fun doc -> doc
-  in
   let _ =
     match guard with
     | None -> ()
@@ -1576,7 +1569,7 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
              "guarded pattern expression should have been rewritten before pretty-printing"
           )
   in
-  group (prefix 3 1 (separate space [doc_id_lem id; patspp; equals]) (wrap_monadic (doc_fun_body_lem ctxt (bind exp))))
+  group (prefix 3 1 (separate space [doc_id_lem id; patspp; equals]) (doc_fun_body_lem ctxt (bind exp)))
 
 let get_id = function [] -> failwith "FD_function with empty list" | FCL_aux (FCL_funcl (id, _), _) :: _ -> id
 

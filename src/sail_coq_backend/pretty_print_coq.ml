@@ -1128,14 +1128,6 @@ let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
   | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
   | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
 
-let contains_early_return exp =
-  let e_app (f, args) =
-    let rets, args = List.split args in
-    (List.fold_left ( || ) (string_of_id f = "early_return") rets, E_app (f, args))
-  in
-  fst
-    (fold_exp { (Rewriter.compute_exp_alg false ( || )) with e_return = (fun (_, r) -> (true, E_return r)); e_app } exp)
-
 let find_e_ids exp =
   let e_id id = (IdSet.singleton id, E_id id) in
   fst (fold_exp { (compute_exp_alg IdSet.empty IdSet.union) with e_id } exp)
@@ -1526,6 +1518,7 @@ let doc_exp, doc_let =
         begin
           match f with
           | (Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)) when effectful (effect_of full_exp) ->
+              (* TODO: Pure early return? *)
               let suffix = "M" in
               let call = doc_id ctxt (append_id f suffix) in
               debug ctxt (lazy ("Effectful boolean op: " ^ string_of_id f));
@@ -1576,7 +1569,9 @@ let doc_exp, doc_let =
                   in
                   let effects = effectful (effect_of body) in
                   let combinator =
-                    if effects then if ctxt.is_monadic then "foreach_ZM" else "foreach_ZE" else "foreach_Z"
+                    if ctxt.is_monadic && effectful (effect_of body) then "foreach_ZM"
+                    else if has_early_return body then "foreach_ZE"
+                    else "foreach_Z"
                   in
                   let combinator = combinator ^ dir in
                   let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
@@ -1614,13 +1609,16 @@ let doc_exp, doc_let =
                   let a' = mk_tannot (env_of_annot (l, a)) bool_typ in
                   E_aux (E_typ (bool_typ, exp), (l, a'))
                 in
-                let monad = if ctxt.is_monadic then "M" else "E" in
-                let csuffix, cond, body, body_effectful =
-                  match (effectful (effect_of cond), effectful (effect_of body)) with
-                  | false, false -> ("", cond, body, false)
-                  | false, true -> (monad, return cond, body, true)
-                  | true, false -> (monad, simple_bool cond, return body, true)
-                  | true, true -> (monad, simple_bool cond, body, true)
+                let needs_monad e = effectful (effect_of e) || has_early_return e in
+                let csuffix =
+                  if needs_monad full_exp then if effectful (effect_of full_exp) then "M" else "E" else ""
+                in
+                let cond, body, body_effectful =
+                  match (needs_monad cond, needs_monad body) with
+                  | false, false -> (cond, body, false)
+                  | false, true -> (return cond, body, true)
+                  | true, false -> (simple_bool cond, return body, true)
+                  | true, true -> (simple_bool cond, body, true)
                 in
                 (* If rewrite_loops_with_escape_effect added a dummy assertion to
                    ensure that the loop can escape when it reaches the limit, omit
@@ -1984,18 +1982,18 @@ let doc_exp, doc_let =
         let cast_ex, _, cast_typ' = classify_ex_type ctxt env ~rawbools:true cast_typ in
         let inner_ex, _, inner_typ' = classify_ex_type ctxt env inner_typ in
         let autocast_out = autocast_req ctxt env outer_typ cast_typ outer_typ' cast_typ' in
-        let effects = effectful (effect_of e) in
+        let needs_monad = effectful (effect_of e) || has_early_return e in
         let () =
           debug ctxt
             ( lazy
-              (" effectful: " ^ string_of_bool effects ^ " outer_ex: " ^ string_of_ex_kind outer_ex ^ " cast_ex: "
+              (" effectful: " ^ string_of_bool needs_monad ^ " outer_ex: " ^ string_of_ex_kind outer_ex ^ " cast_ex: "
              ^ string_of_ex_kind cast_ex ^ " inner_ex: " ^ string_of_ex_kind inner_ex ^ " autocast_out: "
              ^ string_of_auto_t autocast_out
               )
               )
         in
-        let epp = epp ^/^ doc_tannot ctxt (env_of e) effects typ in
-        let autocast_name = if effects then "autocast_m" else "autocast" in
+        let epp = epp ^/^ doc_tannot ctxt (env_of e) needs_monad typ in
+        let autocast_name = if effectful (effect_of e) then "autocast_m" else "autocast" in
         let epp =
           match autocast_out with
           | No -> epp
@@ -2254,7 +2252,9 @@ let doc_exp, doc_let =
        across if expressions in complex situations, so provide an
        annotation for monadic expressions. *)
     let add_type_pp pp =
-      if effectful (effect_of t) then pp ^/^ string "return" ^/^ doc_tannot_core ctxt full_env true full_typ else pp
+      if effectful (effect_of t) || has_early_return t then
+        pp ^/^ string "return" ^/^ doc_tannot_core ctxt full_env true full_typ
+      else pp
     in
     let t_pp = top_exp ctxt false t in
     let else_pp =
@@ -2984,7 +2984,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
   let ctxt =
     {
       ctxt0 with
-      early_ret = (if contains_early_return exp then Some ret_typ else None);
+      early_ret = (if has_early_return exp then Some ret_typ else None);
       ret_typ_pp = doc_typ ctxt0 env ret_typ;
     }
   in
@@ -3095,15 +3095,6 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
 
 let doc_funcl_body ctxt (exp, is_monadic, fixupspp) =
   let bodypp = doc_fun_body ctxt is_monadic exp in
-  let bodypp =
-    if is_monadic then
-      (* Sometimes a function is marked effectful by effect inference
-         when it's not (especially mappings)...  TODO: this seems
-         bad!? *)
-      if not (effectful (effect_of exp)) then string "returnM" ^/^ parens bodypp else bodypp
-    else if Option.is_some ctxt.early_ret then bodypp
-    else bodypp
-  in
   let bodypp = separate (break 1) (fixupspp @ [bodypp]) in
   group bodypp
 

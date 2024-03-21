@@ -488,7 +488,6 @@ let rewrite_attach_effects effect_info =
     let env = env_of_tannot tannot in
     let eff =
       match e_aux with
-      | E_app (f, _) when string_of_id f = "early_return" -> monadic_effect
       | E_app (f, _) -> begin
           match Bindings.find_opt f effect_info.functions with
           | Some side_effects -> if pure side_effects then no_effect else monadic_effect

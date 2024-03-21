@@ -87,11 +87,17 @@ val and_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
 let and_boolM l r = l >>= (fun l -> if l then r else return false)
 
+val and_boolE : forall 'e. either 'e bool -> either 'e bool -> either 'e bool
+let and_boolE l r = l >>$= (fun l -> if l then r else Right false)
+
 val or_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
 let or_boolM l r = l >>= (fun l -> if l then return true else r)
+
+val or_boolE : forall 'e. either 'e bool -> either 'e bool -> either 'e bool
+let or_boolE l r = l >>$= (fun l -> if l then Right true else r)
 
 val bool_of_bitU_fail : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
   bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
@@ -144,6 +150,13 @@ let rec whileM vars cond body =
     body vars >>= fun vars -> whileM vars cond body
   else return vars
 
+val whileE : forall 'vars 'e. 'vars -> ('vars -> either 'e bool) -> ('vars -> either 'e 'vars) -> either 'e 'vars
+let rec whileE vars cond body =
+  cond vars >>$= fun cond_val ->
+  if cond_val then
+    body vars >>$= fun vars -> whileE vars cond body
+  else Right vars
+
 val whileMT_aux : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
   nat
   -> 'vars
@@ -178,6 +191,12 @@ let rec untilM vars cond body =
   body vars >>= fun vars ->
   cond vars >>= fun cond_val ->
   if cond_val then return vars else untilM vars cond body
+
+val untilE : forall 'e 'vars. 'vars -> ('vars -> either 'e bool) -> ('vars -> either 'e 'vars) -> either 'e 'vars
+let rec untilE vars cond body =
+  body vars >>$= fun vars ->
+  cond vars >>$= fun cond_val ->
+  if cond_val then Right vars else untilE vars cond body
 
 val untilMT_aux : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
   nat
