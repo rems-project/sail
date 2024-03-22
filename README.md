@@ -13,10 +13,12 @@ Sail is a language for describing the instruction-set architecture
 engineer-friendly, vendor-pseudocode-like language for describing
 instruction semantics. It is essentially a first-order imperative
 language, but with lightweight dependent typing for numeric types and
-bitvector lengths, which are automatically checked using Z3. It has
+bitvector lengths, which are automatically checked using <a href="https://github.com/Z3Prover/z3">Z3</a>. It has
 been used for several papers, available from
 <http://www.cl.cam.ac.uk/~pes20/sail/>.
 <p>
+
+
 
 Given a Sail definition, the tool will type-check it and generate
 documentation, executable emulators (in C and OCaml), theorem-prover definitions (for
