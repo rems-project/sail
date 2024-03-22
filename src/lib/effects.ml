@@ -363,13 +363,21 @@ let infer_side_effects asserts_termination ast =
   let mapping_effects = ref Bindings.empty in
 
   let all_nodes = Callgraph.G.nodes cg in
+  let register_nodes =
+    List.filter (function Callgraph.Register _ -> true | _ -> false) all_nodes |> NodeSet.of_list
+  in
   let total = List.length all_nodes in
   List.iteri
     (fun i node ->
       Util.progress "Effects (transitive) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       match node with
       | Callgraph.Function id | Callgraph.Letbind id | Callgraph.Mapping id ->
-          let reachable = Callgraph.G.reachable (NodeSet.singleton node) NodeSet.empty cg in
+          (* Compute dependencies of this node, i.e., the reachable nodes in the callgraph, but cut at registers;
+             we don't want to transitively include the dependencies of registers here, otherwise a let-binding
+             using a reference to a register, for example, would inherit the effects of all functions used for
+             initialising the register.  The register nodes themselves will still be included in `reachable`,
+             however, so the effects of directly accessing registers will be included in `side_effects` below. *)
+          let reachable = Callgraph.G.reachable (NodeSet.singleton node) register_nodes cg in
           (* First, a function has any side effects it directly causes *)
           let side_effects =
             match Bindings.find_opt id !direct_effects with Some effs -> effs | None -> EffectSet.empty
@@ -480,7 +488,6 @@ let rewrite_attach_effects effect_info =
     let env = env_of_tannot tannot in
     let eff =
       match e_aux with
-      | E_app (f, _) when string_of_id f = "early_return" -> monadic_effect
       | E_app (f, _) -> begin
           match Bindings.find_opt f effect_info.functions with
           | Some side_effects -> if pure side_effects then no_effect else monadic_effect

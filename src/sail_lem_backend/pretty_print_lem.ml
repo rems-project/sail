@@ -101,7 +101,7 @@ let empty_ctxt =
     params_to_print = Bindings.empty;
   }
 
-let print_to_from_interp_value = ref false
+let print_to_from_interp_value = ref false (* TODO: Remove? *)
 let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
@@ -690,14 +690,6 @@ let rec typ_needs_printed params_to_print (Typ_aux (t, _)) =
 and typ_needs_printed_arg params_to_print (A_aux (targ, _)) =
   match targ with A_typ t -> typ_needs_printed params_to_print t | _ -> false
 
-let contains_early_return exp =
-  let e_app (f, args) =
-    let rets, args = List.split args in
-    (List.fold_left ( || ) (string_of_id f = "early_return") rets, E_app (f, args))
-  in
-  fst
-    (fold_exp { (Rewriter.compute_exp_alg false ( || )) with e_return = (fun (_, r) -> (true, E_return r)); e_app } exp)
-
 (* Does the expression have the form of a bitvector cast from the monomorphiser? *)
 type is_bitvector_cast = BVC_yes | BVC_allowed | BVC_not
 let is_bitvector_cast_out exp =
@@ -810,8 +802,10 @@ let doc_exp_lem, doc_let_lem =
     | E_app (f, args) -> begin
         match f with
         | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
-        | (Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)) when effectful (effect_of full_exp) ->
-            let call = doc_id_lem (append_id f "M") in
+        | (Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _))
+          when effectful (effect_of full_exp) || has_early_return full_exp ->
+            let suffix = if effectful (effect_of full_exp) then "M" else "E" in
+            let call = doc_id_lem (append_id f suffix) in
             wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
         (* temporary hack to make the loop body a function of the temporary variables *)
         | Id_aux (Id "foreach#", _) -> begin
@@ -853,7 +847,7 @@ let doc_exp_lem, doc_let_lem =
                 in
                 let combinator =
                   if ctxt.monadic && effectful (effect_of body) then "foreachM"
-                  else if effectful (effect_of body) then "foreachE"
+                  else if has_early_return body then "foreachE"
                   else "foreach"
                 in
                 let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
@@ -880,39 +874,50 @@ let doc_exp_lem, doc_let_lem =
         | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
             let combinator = String.sub combinator 0 (String.index combinator '#') in
             begin
-              match args with
-              | [cond; varstuple; body] | [cond; varstuple; body; _] ->
-                  (* Ignore termination measures - not used in Lem *)
-                  let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-                  let csuffix, cond, body =
-                    match (effectful (effect_of cond), effectful (effect_of body)) with
-                    | false, false -> ("", cond, body)
-                    | false, true -> ("M", return cond, body)
-                    | true, false -> ("M", cond, return body)
-                    | true, true -> ("M", cond, body)
-                  in
-                  let used_vars_body = find_e_ids body in
-                  let lambda =
-                    (* Work around indentation issues in Lem when translating
-                       tuple or literal unit patterns to Isabelle *)
-                    match fst (uncast_exp varstuple) with
-                    | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
-                        separate space [string "fun varstup"; arrow]
-                        ^^ break 1
-                        ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
-                    | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                        separate space [string "fun unit_var"; arrow]
-                    | _ -> separate space [string "fun"; expY varstuple; arrow]
-                  in
-                  parens
-                    ((prefix 2 1)
-                       ((separate space) [string (combinator ^ csuffix); expY varstuple])
-                       ((prefix 0 1)
-                          (parens (prefix 2 1 (group lambda) (expN cond)))
-                          (parens (prefix 2 1 (group lambda) (expN body)))
-                       )
-                    )
-              | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+              let cond, varstuple, body, measure =
+                match args with
+                | [cond; varstuple; body] -> (cond, varstuple, body, None)
+                | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
+                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+              in
+              let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
+              let effectful_exp e = effectful (effect_of e) in
+              let csuffix = if effectful_exp full_exp then "M" else if has_early_return full_exp then "E" else "" in
+              let needs_monad e = effectful_exp e || has_early_return e in
+              let cond, body =
+                match (needs_monad cond, needs_monad body) with
+                | false, true -> (return cond, body)
+                | true, false -> (cond, return body)
+                | _, _ -> (cond, body)
+              in
+              let used_vars_body = find_e_ids body in
+              let lambda =
+                (* Work around indentation issues in Lem when translating
+                    tuple or literal unit patterns to Isabelle *)
+                match fst (uncast_exp varstuple) with
+                | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
+                    separate space [string "fun varstup"; arrow]
+                    ^^ break 1
+                    ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
+                | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                    separate space [string "fun unit_var"; arrow]
+                | _ -> separate space [string "fun"; expY varstuple; arrow]
+              in
+              let msuffix, measure_pp =
+                match measure with
+                | None -> ("", [])
+                | Some exp when effectful_exp full_exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
+                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected combinator for pure loop")
+              in
+              parens
+                ((prefix 2 1)
+                   (string (combinator ^ csuffix ^ msuffix))
+                   (separate (break 1)
+                      ((expY varstuple :: measure_pp)
+                      @ [parens (prefix 2 1 (group lambda) (expN cond)); parens (prefix 2 1 (group lambda) (expN body))]
+                      )
+                   )
+                )
             end
         | Id_aux (Id "early_return", _) -> begin
             match args with
@@ -1546,7 +1551,7 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
   let pat, guard, exp, (l, _) = destruct_pexp pexp in
   let ctxt =
     {
-      early_ret = contains_early_return exp;
+      early_ret = has_early_return exp;
       monadic;
       bound_nexps = NexpSet.union (lem_nexps_of_typ params_to_print typ) (typeclass_nexps params_to_print typ);
       top_env = type_env;
@@ -1555,10 +1560,6 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
   in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
-  let wrap_monadic =
-    if monadic && not (effectful (effect_of exp)) then fun doc -> string "return" ^^ space ^^ parens doc
-    else fun doc -> doc
-  in
   let _ =
     match guard with
     | None -> ()
@@ -1568,7 +1569,7 @@ let doc_funcl_lem monadic params_to_print type_env (FCL_aux (FCL_funcl (id, pexp
              "guarded pattern expression should have been rewritten before pretty-printing"
           )
   in
-  group (prefix 3 1 (separate space [doc_id_lem id; patspp; equals]) (wrap_monadic (doc_fun_body_lem ctxt (bind exp))))
+  group (prefix 3 1 (separate space [doc_id_lem id; patspp; equals]) (doc_fun_body_lem ctxt (bind exp)))
 
 let get_id = function [] -> failwith "FD_function with empty list" | FCL_aux (FCL_funcl (id, _), _) :: _ -> id
 
@@ -1730,6 +1731,19 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_measure _ -> empty (* we might use these in future *)
   | DEF_loop_measures _ -> empty
 
+let doc_defs_lem effect_info params_to_print type_env defs =
+  separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs)
+
+let doc_header_lem top_line imports =
+  concat
+    [
+      string "(*" ^^ string top_line ^^ string "*)";
+      hardline;
+      (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) imports;
+      hardline;
+      hardline;
+    ]
+
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
@@ -1737,9 +1751,29 @@ let find_exc_typ defs =
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info type_env ({ defs; _ } as ast)
-    concurrency_monad_params top_line =
-  (* let regtypes = find_regtypes d in *)
+let group_defs_by_file top_filename defs =
+  let rec group current_filename current_defs groups defs =
+    let is_file_start = function
+      | DEF_aux (DEF_pragma ("file_start", f, _), a) ->
+          (* Ignore file markers from generated blocks and spliced files;
+             we want to preserve the original input file structure *)
+          f <> "" && get_def_attribute "spliced" a = None
+      | _ -> false
+    in
+    match (defs, current_filename) with
+    | (DEF_aux (DEF_pragma ("file_start", f, _), _) as d) :: defs, None when is_file_start d ->
+        group (Some f) current_defs groups defs
+    | DEF_aux (DEF_pragma ("file_end", f, _), _) :: defs, Some f' when f' = f ->
+        if current_defs = [] then group None [] groups defs
+        else group None [] (groups @ [(f', List.rev current_defs)]) defs
+    | d :: defs, _ -> group current_filename (d :: current_defs) groups defs
+    | [], Some f -> groups @ [(f, List.rev current_defs)]
+    | [], None -> groups @ [(top_filename, List.rev current_defs)]
+  in
+  group None [] [] defs
+
+let doc_ast_lem out_filename split_files base_imports extra_imports effect_info type_env ({ defs; _ } as ast) =
+  let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let state_ids = State.generate_regstate_defs type_env ast |> val_spec_ids in
   let is_state_def = function
     | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
@@ -1749,8 +1783,34 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
   let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
   let exc_typ = find_exc_typ defs in
   let params_to_print = type_parameters_to_print type_env defs in
+  let callgraph = Callgraph.graph_of_ast ast in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
+  let module_name f = Filename.basename f |> Filename.remove_extension |> String.capitalize_ascii in
+  let types_basename = out_filename ^ "_types" in
+  let types_filename = types_basename ^ ".lem" in
+  let types_module = module_name types_filename in
+  (* Split definitions into files corresponding to input files, if requested;
+     make sure to check for duplicate names and rename if necessary
+     (for now just by adding a suffix "2", "3", and so on). *)
+  let rec rename_duplicates seen suffix = function
+    | (filename, defs) :: files ->
+        let basename = Filename.remove_extension (Filename.basename filename) in
+        let basename' = basename ^ string_of_int suffix in
+        if not (StringSet.mem basename seen) then
+          (filename, defs) :: rename_duplicates (StringSet.add basename seen) 2 files
+        else if not (StringSet.mem basename' seen) then (
+          let filename' = Filename.remove_extension filename ^ string_of_int suffix ^ Filename.extension filename in
+          (filename', defs) :: rename_duplicates (StringSet.add basename' seen) 2 files
+        )
+        else rename_duplicates seen (suffix + 1) ((filename, defs) :: files)
+    | [] -> []
+  in
+  let out_sail_filename = out_filename ^ ".sail" in
+  let files =
+    (if split_files then group_defs_by_file out_sail_filename defs else [(out_sail_filename, defs)])
+    |> rename_duplicates (StringSet.singleton types_basename) 2
+  in
   let register_ref_tannot typ =
     string " : register_ref regstate register_value " ^^ parens (doc_typ_lem params_to_print type_env typ)
   in
@@ -1774,60 +1834,52 @@ let pp_ast_lem (types_file, types_modules) (defs_file, defs_modules) effect_info
                params.arch_ak_type;
              ]
   in
-
-  (print types_file)
-    (concat
-       [
-         string "(*" ^^ string top_line ^^ string "*)";
-         hardline;
-         (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) types_modules;
-         hardline;
-         ( if !print_to_from_interp_value then
-             concat
-               [
-                 (separate_map hardline)
-                   (fun lib -> separate space [string "     import"; string lib])
-                   ["Interp"; "Interp_ast"];
-                 string "open import Deep_shallow_convert";
-                 hardline;
-                 hardline;
-                 string "module SI = Interp";
-                 hardline;
-                 string "module SIA = Interp_ast";
-                 hardline;
-                 hardline;
-               ]
-           else empty
-         );
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) typdefs);
-         hardline;
-         hardline;
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) statedefs);
-         hardline;
-         hardline;
-         State.regval_instance_lem;
-         hardline;
-         register_refs;
-         hardline;
-         concat
-           [
-             string "type MR 'a 'r = base_monadR" ^^ extra_monad_params
-             ^^ string (" register_value regstate 'a 'r " ^ exc_typ);
-             hardline;
-             string "type M 'a = base_monad" ^^ extra_monad_params ^^ string (" register_value regstate 'a " ^ exc_typ);
-             hardline;
-           ];
-       ]
-    );
-  (print defs_file)
-    (concat
-       [
-         string "(*" ^^ string top_line ^^ string "*)";
-         hardline;
-         (separate_map hardline) (fun lib -> separate space [string "open import"; string lib]) defs_modules;
-         hardline;
-         hardline;
-         separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs);
-         hardline;
-       ]
+  let types_doc =
+    concat
+      [
+        doc_header_lem "Generated by Sail: types and register state" base_imports;
+        doc_defs_lem effect_info params_to_print type_env (typdefs @ statedefs);
+        hardline;
+        hardline;
+        State.regval_instance_lem;
+        hardline;
+        register_refs;
+        hardline;
+        hardline;
+        string "type MR 'a 'r = base_monadR" ^^ extra_monad_params
+        ^^ string (" register_value regstate 'a 'r " ^ exc_typ);
+        hardline;
+        string "type M 'a = base_monad" ^^ extra_monad_params ^^ string (" register_value regstate 'a " ^ exc_typ);
+        hardline;
+      ]
+  in
+  let doc_file_lem imports (filename, defs) =
+    let base_filename = Filename.basename filename in
+    let lem_filename = Filename.remove_extension base_filename ^ ".lem" in
+    let doc =
+      doc_header_lem ("Generated by Sail from " ^ base_filename) imports
+      ^^ doc_defs_lem effect_info params_to_print type_env defs
+    in
+    (lem_filename, doc)
+  in
+  (* Determine import dependencies for each file *)
+  let module NodeSet = Set.Make (Callgraph.Node) in
+  let module_of_file (f, defs) =
+    (module_name f, List.map Callgraph.nodes_of_def defs |> List.fold_left NodeSet.union NodeSet.empty)
+  in
+  let modules = List.map module_of_file files in
+  let main_imports = base_imports @ [types_module] @ extra_imports in
+  let module_imports i =
+    (* Import files that define nodes that this file uses;
+       except for the last file, where we'd like to import everything else *)
+    if i = List.length modules - 1 then List.map fst (Util.butlast modules)
+    else (
+      let _, nodes = List.nth modules i in
+      let deps = Callgraph.G.prune nodes NodeSet.empty callgraph |> Callgraph.G.nodes |> NodeSet.of_list in
+      List.filter_map
+        (fun (name, nodes) -> if not (NodeSet.disjoint nodes deps) then Some name else None)
+        (Util.take i modules)
     )
+  in
+  let file_imports = List.init (List.length files) (fun i -> main_imports @ module_imports i) in
+  (types_filename, types_doc) :: List.map2 doc_file_lem file_imports files

@@ -87,11 +87,17 @@ val and_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
 let and_boolM l r = l >>= (fun l -> if l then r else return false)
 
+val and_boolE : forall 'e. either 'e bool -> either 'e bool -> either 'e bool
+let and_boolE l r = l >>$= (fun l -> if l then r else Right false)
+
 val or_boolM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
 let or_boolM l r = l >>= (fun l -> if l then return true else r)
+
+val or_boolE : forall 'e. either 'e bool -> either 'e bool -> either 'e bool
+let or_boolE l r = l >>$= (fun l -> if l then Right true else r)
 
 val bool_of_bitU_fail : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e.
   bitU -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e
@@ -144,19 +150,37 @@ let rec whileM vars cond body =
     body vars >>= fun vars -> whileM vars cond body
   else return vars
 
-val whileMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+val whileE : forall 'vars 'e. 'vars -> ('vars -> either 'e bool) -> ('vars -> either 'e 'vars) -> either 'e 'vars
+let rec whileE vars cond body =
+  cond vars >>$= fun cond_val ->
+  if cond_val then
+    body vars >>$= fun vars -> whileE vars cond body
+  else Right vars
+
+val whileMT_aux : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
   nat
   -> 'vars
   -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
   -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
-let rec whileMT limit vars cond body =
+let rec whileMT_aux (limit+1) vars cond body =
   cond vars >>= fun cond_val ->
-  if cond_val && limit > 0 then
-    body vars >>= fun vars -> whileMT (limit - 1) vars cond body
-  else return vars
+  if not(cond_val) then return vars else
+  body vars >>= fun vars -> whileMT_aux limit vars cond body
+and whileMT_aux 0 _ _ _ =
+  Fail "whileMT: termination limit reached"
 
-declare {isabelle} termination_argument whileMT = automatic
+declare {isabelle} termination_argument whileMT_aux = automatic
+
+val whileMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  'vars
+  -> ('vars -> integer)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let whileMT vars measure cond body =
+  (* whileMT in coq-sail keeps executing one more iteration when the measure reaches 0, so add 1 for our whileMT_aux above *)
+  whileMT_aux (natFromInteger (measure vars + 1)) vars cond body
 
 val untilM : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
   'vars
@@ -168,18 +192,36 @@ let rec untilM vars cond body =
   cond vars >>= fun cond_val ->
   if cond_val then return vars else untilM vars cond body
 
-val untilMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+val untilE : forall 'e 'vars. 'vars -> ('vars -> either 'e bool) -> ('vars -> either 'e 'vars) -> either 'e 'vars
+let rec untilE vars cond body =
+  body vars >>$= fun vars ->
+  cond vars >>$= fun cond_val ->
+  if cond_val then Right vars else untilE vars cond body
+
+val untilMT_aux : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
   nat
   -> 'vars
   -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
   -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
   -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
-let rec untilMT limit vars cond body =
+let rec untilMT_aux (limit+1) vars cond body =
   body vars >>= fun vars ->
   cond vars >>= fun cond_val ->
-  if cond_val || limit = 0 then return vars else untilMT (limit - 1) vars cond body
+  if cond_val then return vars else untilMT_aux limit vars cond body
+and untilMT_aux 0 _ _ _ =
+  Fail "untilMT: termination limit reached"
 
-declare {isabelle} termination_argument untilMT = automatic
+declare {isabelle} termination_argument untilMT_aux = automatic
+
+val untilMT : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e.
+  'vars
+  -> ('vars -> integer)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv bool 'e)
+  -> ('vars -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e)
+  -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'vars 'e
+let untilMT vars measure cond body =
+  (* untilMT in coq-sail keeps executing one more iteration when the measure reaches 0, so add 1 for our untilMT_aux above *)
+  untilMT_aux (natFromInteger (measure vars + 1)) vars cond body
 
 val choose_bools : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'e. Register_Value 'rv =>
   string -> nat -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list bool) 'e

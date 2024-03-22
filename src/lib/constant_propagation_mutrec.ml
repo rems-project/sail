@@ -251,5 +251,6 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
         rewrite (List.rev (mutrecs' @ fdefs) @ acc) ds
     | d :: ds -> rewrite (d :: acc) ds
   in
-  let new_ast = Spec_analysis.top_sort_defs { ast with defs = rewrite [] defs } in
+  let has_mutrecs = List.exists (function DEF_aux (DEF_internal_mutrec _, _) -> true | _ -> false) ast.defs in
+  let new_ast = if has_mutrecs then Callgraph.top_sort_defs { ast with defs = rewrite [] defs } else ast in
   (new_ast, !effect_info, env)
