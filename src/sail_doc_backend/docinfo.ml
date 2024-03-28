@@ -85,23 +85,7 @@ let docinfo_version = 1
 
 let same_file f1 f2 = Filename.basename f1 = Filename.basename f2 && Filename.dirname f1 = Filename.dirname f2
 
-let process_file f filename =
-  let chan = open_in filename in
-  let buf = Buffer.create 4096 in
-  try
-    let rec loop () =
-      let line = input_line chan in
-      Buffer.add_string buf line;
-      Buffer.add_char buf '\n';
-      loop ()
-    in
-    loop ()
-  with End_of_file ->
-    close_in chan;
-    f (Buffer.contents buf)
-
-let read_source (p1 : Lexing.position) (p2 : Lexing.position) =
-  process_file (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) p1.pos_fname
+let process_file f filename = f (Util.read_whole_file filename)
 
 let hash_file filename = process_file Digest.string filename |> Digest.to_hex
 
@@ -394,9 +378,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let embedding_format () = match Config.embedding_mode with Some Plain | None -> Plain | Some Base64 -> Base64
 
-  let doc_lexing_pos p1 p2 =
+  let doc_lexing_pos (p1 : Lexing.position) (p2 : Lexing.position) =
     match Config.embedding_mode with
-    | Some _ -> Raw (read_source p1 p2 |> encode)
+    | Some _ -> Raw (Reporting.loc_range_to_src p1 p2 |> encode)
     | None -> Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
 
   let doc_loc l g f x =
