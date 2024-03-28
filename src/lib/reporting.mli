@@ -97,6 +97,9 @@ val loc_file : Parse_ast.l -> string option
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
+(** [loc_range_to_src] returns the source code text of a range **)
+val loc_range_to_src : Lexing.position -> Lexing.position -> string
+
 (** Adjust the range of a location. Note that only the primary
     location is adjusted. Hint locations are unaffected. *)
 val map_loc_range :
