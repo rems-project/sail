@@ -96,6 +96,12 @@ let debug_print ?(printer=prerr_endline) message =
   else
     ()
 
+let dequote qs =
+  if String.starts_with ~prefix:"\"" qs && String.ends_with ~suffix:"\"" qs then
+    List.hd (List.tl (String.split_on_char '"' qs))
+  else
+    qs
+
 let string_of_arg = function
   | E_aux (E_id id, _) -> "\"" ^ string_of_id id ^ "\""
   | exp -> ("exp " ^ string_of_exp exp)
@@ -103,7 +109,7 @@ let string_of_arg = function
 let rec string_list_of_mpat x = match x with
   | MP_aux (MP_lit ( l ), _) ->
       debug_print ("MP_lit " ^ string_of_lit l);
-      [ string_of_lit l ]
+      [ dequote (string_of_lit l) ]
   | MP_aux (MP_id ( i ), _) ->
       debug_print ("MP_id " ^ string_of_id i);
       [ string_of_id i ]
@@ -111,7 +117,7 @@ let rec string_list_of_mpat x = match x with
       debug_print ("MP_app " ^ string_of_id i);
       begin match string_of_id i with
       | "spc" -> [ string_of_id i ]
-      | "sep" -> []
+      | "sep" -> [ string_of_id i ]
       | _ -> let b = List.concat (List.map string_list_of_mpat pl) in
           begin
             debug_print ("<-- MP_app " ^ string_of_id i);
@@ -335,14 +341,83 @@ let json_of_key_operand key op t =
 
 let json_of_mnemonic m = "\"" ^ m ^ "\""
 
-let json_of_operands k =
-  let ops = Hashtbl.find_opt operands k
-  and types = Hashtbl.find_opt sigs k in
-    match (ops, types) with
-      (Some opslist, Some typeslist) ->
-        let fk = json_of_key_operand k in
-          String.concat ", " (List.map2 fk opslist typeslist)
-    | (_, _) -> ""
+(* For stripping the wrapper functions from the operand names
+   reg_name(rd) -> rd
+   Note that this is not ideal, as it would be far preferable for this parser
+   to know nothing about specific function names in the Sail code.  :-/
+*)
+
+let identity_funcs = [
+  "csr_name_map";
+  "fence_bits";
+  "frm_mnemonic";
+  "hex_bits_2";
+  "hex_bits_4";
+  "hex_bits_5";
+  "hex_bits_6";
+  "hex_bits_7";
+  "hex_bits_8";
+  "hex_bits_10";
+  "hex_bits_11";
+  "hex_bits_12";
+  "hex_bits_13";
+  "hex_bits_16";
+  "hex_bits_20";
+  "hex_bits_21";
+  "hex_bits_32";
+  "reg_name";
+  "creg_name";
+  "freg_name";
+  "freg_or_reg_name";
+  "vreg_name";
+  "maybe_vmask"
+]
+
+let defunction f n =
+  if String.starts_with ~prefix:(n ^ "(") f then
+    String.sub f (String.length n + 1) (String.length f - String.length n - 2)
+  else
+    f
+
+let remove_identity_funcs op =
+  List.fold_left (fun accum f ->
+    let op = defunction accum f in
+      if String.equal accum op then accum
+      else op
+  ) op identity_funcs
+
+let json_of_operand k op =
+  debug_print ("json_of_operand " ^ k ^ ":" ^ op);
+  let opmap = List.combine (Hashtbl.find operands k) (Hashtbl.find sigs k) in
+    let opplus = remove_identity_funcs op in
+      let opname = List.hd (String.split_on_char ',' opplus) in
+        match List.find_opt (fun (name, t) -> String.equal name opname) opmap with
+            Some (name, t) -> "{ \"name\": \"" ^ name ^ "\", \"type\": \"" ^ t ^ "\" }"
+          | None -> "{ \"name\": \"" ^ opname ^ "\", \"type\": \"unknown\" }"
+
+let json_of_operands k ops =
+  String.concat "," (
+    List.map (fun op -> json_of_operand k op) (
+      List.filter (
+        fun s -> not (
+          (String.equal s "(") ||
+          (String.equal s ")") ||
+          (String.equal s "spc") ||
+          (String.equal s "sep")
+        )
+      )
+      ops
+    )
+  )
+
+let json_of_syntax ops =
+  let l = List.map (fun s ->
+    if String.equal s "sep" then ","
+    else if String.equal s "\"(\"" then "("
+    else if String.equal s "\")\"" then ")"
+    else (remove_identity_funcs s)) ops in
+      if List.length l > 0 then ("\"" ^ (String.concat "" l) ^ "\"")
+      else "\"\""
 
 let rec basetype t =
   match Hashtbl.find_opt types t with
@@ -441,7 +516,8 @@ let json_of_instruction k v =
     "{\n" ^
     "  \"mnemonic\": " ^ (json_of_mnemonic (List.hd v)) ^ ",\n" ^
     "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
-    "  \"operands\": [ " ^ (json_of_operands k) ^ " ],\n" ^
+    "  \"operands\": [ " ^ (json_of_operands k (List.tl v)) ^ " ],\n" ^
+    "  \"syntax\": " ^ (json_of_syntax (List.tl v)) ^ ",\n" ^
     "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
     "  \"fields\": [ " ^ (json_of_fields k) ^ " ],\n" ^
     "  \"extensions\": [ " ^ (json_of_extensions k) ^ " ],\n" ^
@@ -462,12 +538,6 @@ let rec parse_typ name t = match t with
         | _ -> debug_print "Typ_app other"
       end
   | _ -> debug_print "typ other"
-
-let dequote qs =
-  if String.starts_with ~prefix:"\"" qs && String.ends_with ~suffix:"\"" qs then
-    List.hd (List.tl (String.split_on_char '"' qs))
-  else
-    qs
 
 let explode_mnemonic heads tails =
   List.concat(
@@ -543,7 +613,9 @@ let defs { defs; _ } =
 
   Hashtbl.iter (fun k v ->
     let asms = explode_mnemonics v in
-      List.iter (fun asm -> Hashtbl.add assembly_clean k asm) asms;
+      List.iter (fun asm ->
+        Hashtbl.add assembly_clean k (List.filter (fun s -> not (String.equal s "opt_spc(())")) asm)
+      ) asms;
   ) assembly;
 
   debug_print "ASSEMBLY_CLEAN";
