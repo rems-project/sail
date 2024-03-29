@@ -1,3 +1,4 @@
+default Order dec
 $include <prelude.sail>
 
 /* We currently produce a rich type for the guard of the if that's

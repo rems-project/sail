@@ -1,3 +1,4 @@
+default Order dec
 $include <prelude.sail>
 
 val test : (range(2,3), range(1,8)) -> {'n, 'n <= 13. atom('n)}

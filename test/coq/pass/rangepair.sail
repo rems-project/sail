@@ -1,18 +1,19 @@
 /* Check that tuples of values that should be accompanied by a Coq proof are
    handled properly. */
 
+default Order dec
 $include <prelude.sail>
 
 /* Monadic version */
 
-val getpair_eff : unit -> (range(1,2),range(3,4)) effect {escape}
+val getpair_eff : unit -> (range(1,2),range(3,4))
 
 function getpair_eff () = {
   assert(true);
   return (2,3)
 }
 
-val test_eff : unit -> range (4,6) effect {escape}
+val test_eff : unit -> range (4,6)
 
 function test_eff () =
   let (x,y) = getpair_eff() in
