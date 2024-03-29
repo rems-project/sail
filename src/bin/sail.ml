@@ -71,6 +71,7 @@ let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
+let opt_just_parse_project : bool ref = ref false
 let opt_auto_interpreter_rewrites : bool ref = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
@@ -334,6 +335,7 @@ let rec options =
         Arg.Int (fun l -> Reporting.opt_backtrace_length := l),
         "<length> (debug) length of backtrace to show when reporting unreachable code"
       );
+      ("-just_parse_project", Arg.Set opt_just_parse_project, "");
       ( "-infer_effects",
         Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
         " (deprecated) ignored for compatibility with older versions; effects are always inferred now"
@@ -424,6 +426,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
               frees
         in
         Profile.finish "parsing project" t;
+        if !opt_just_parse_project then exit 0;
         let env = Type_check.initial_env_with_modules proj in
         Frontend.load_modules ~target:tgt Manifest.dir !options env proj mod_ids
     | _, _ ->

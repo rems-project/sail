@@ -30,7 +30,7 @@ sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
 	sail -no_color -doc -doc_file $< -doc_embed plain -doc_bundle $(notdir $@) $< 2> $(basename $@).warning
 
-lib_sail_doc/%.json: ../../lib/%.sail
+lib_sail_doc/%.json: ../examples/order_dec.sail ../../lib/%.sail
 	mkdir -p lib_sail_doc
 	mkdir -p lib_sail_doc/concurrency_interface
 	sail -doc -doc_file $< -doc_embed plain -doc_bundle $(patsubst lib_sail_doc/%,%,$@) -o lib_sail_doc $<
@@ -47,7 +47,7 @@ module_sail_doc/%.error: ../examples/%.sail_project $$(shell sail ../examples/%.
 
 module_sail_doc/%.sail_project: ../examples/%.sail_project
 	mkdir -p module_sail_doc
-	sail $< -list_files 1>/dev/null
+	sail $< -just_parse_project 1>/dev/null
 	cp $< $@
 
 ordering-tikz.pdf: latex_figures/ordering.tex
