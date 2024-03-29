@@ -270,41 +270,6 @@ let simple_num l n =
 let is_regtyp (Typ_aux (typ, _)) env =
   match typ with Typ_app (id, _) when string_of_id id = "register" -> true | _ -> false
 
-let doc_nexp ctx ?(skip_vars = KidSet.empty) nexp =
-  (* Print according to Coq's precedence rules *)
-  let rec plussub (Nexp_aux (n, l) as nexp) =
-    match n with
-    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
-    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; mul n2]
-    | _ -> mul nexp
-  and mul (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
-  and uneg (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
-  and exp (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
-  and app (Nexp_aux (n, l) as nexp) =
-    match n with
-    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [string "ZEuclid.div"; atomic n1; atomic n2]
-    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [string "ZEuclid.modulo"; atomic n1; atomic n2]
-    | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate space [string "Z.abs"; atomic n1]
-    | _ -> atomic nexp
-  and atomic (Nexp_aux (n, l) as nexp) =
-    match n with
-    | Nexp_constant i ->
-        let d = string (Big_int.to_string i) in
-        if Big_int.less i Big_int.zero then parens d else d
-    | Nexp_var v when KidSet.mem v skip_vars -> string "_"
-    | Nexp_var v -> doc_var ctx v
-    | Nexp_id id -> doc_id ctx id
-    | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _
-    | Nexp_app (Id_aux (Id ("div" | "mod"), _), [_; _])
-    | Nexp_app (Id_aux (Id "abs", _), [_]) ->
-        parens (plussub nexp)
-    | _ -> raise (Reporting.err_unreachable l __POS__ ("cannot pretty-print nexp \"" ^ string_of_nexp nexp ^ "\""))
-  in
-  atomic nexp
-
 (* Rewrite mangled names of type variables to the original names *)
 let rec orig_nexp (Nexp_aux (nexp, l)) =
   let rewrap nexp = Nexp_aux (nexp, l) in
@@ -588,11 +553,11 @@ let rec doc_typ_fns ctx env =
     match t with
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         (* TODO: remove duplication with exists, below *)
-        let tpp = string "mword " ^^ doc_nexp ctx m in
+        let tpp = string "mword " ^^ doc_nexp ctx env m in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
         (* TODO: remove duplication with exists, below *)
-        let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx m in
+        let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx env m in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
         let tpp = string "register_ref regstate register_value " ^^ typ etyp in
@@ -756,7 +721,10 @@ let rec doc_typ_fns ctx env =
     | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   and doc_typ_arg ?(prop_vars = false) (A_aux (t, _)) =
-    match t with A_typ t -> app_typ true t | A_nexp n -> doc_nexp ctx n | A_bool nc -> parens (doc_nc_exp ctx env nc)
+    match t with
+    | A_typ t -> app_typ true t
+    | A_nexp n -> doc_nexp ctx env n
+    | A_bool nc -> parens (doc_nc_exp ctx env nc)
   in
   (typ', atomic_typ, doc_typ_arg)
 
@@ -771,6 +739,43 @@ and doc_atomic_typ ctx env =
 and doc_typ_arg ctx env =
   let _, _, f = doc_typ_fns ctx env in
   f
+
+and doc_nexp ctx env ?(skip_vars = KidSet.empty) nexp =
+  (* Print according to Coq's precedence rules *)
+  let rec plussub (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
+    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; mul n2]
+    | _ -> mul nexp
+  and mul (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
+  and uneg (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
+  and exp (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
+  and app (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_if (i, t, e) ->
+        separate space [string "if"; doc_nc_exp ctx env i; string "then"; atomic t; string "else"; atomic e]
+    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [string "ZEuclid.div"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [string "ZEuclid.modulo"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate space [string "Z.abs"; atomic n1]
+    | _ -> atomic nexp
+  and atomic (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_constant i ->
+        let d = string (Big_int.to_string i) in
+        if Big_int.less i Big_int.zero then parens d else d
+    | Nexp_var v when KidSet.mem v skip_vars -> string "_"
+    | Nexp_var v -> doc_var ctx v
+    | Nexp_id id -> doc_id ctx id
+    | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _ | Nexp_if _
+    | Nexp_app (Id_aux (Id ("div" | "mod"), _), [_; _])
+    | Nexp_app (Id_aux (Id "abs", _), [_]) ->
+        parens (plussub nexp)
+    | _ -> raise (Reporting.err_unreachable l __POS__ ("cannot pretty-print nexp \"" ^ string_of_nexp nexp ^ "\""))
+  in
+  atomic nexp
 
 and doc_arithfact ctxt env ?(exists = []) ?extra nc =
   let prop = doc_nc_exp ctxt env nc in
@@ -810,11 +815,11 @@ and doc_nc_exp ctx env nc =
     | [] -> f nc
   and l70 (NC_aux (nc, _) as nc_full) =
     match nc with
-    | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_gt (ne1, ne2) -> doc_op (string ">?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_lt (ne1, ne2) -> doc_op (string "<?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_bounded_gt (ne1, ne2) -> doc_op (string ">?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_bounded_lt (ne1, ne2) -> doc_op (string "<?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
     | _ -> l50 nc_full
   and l50 (NC_aux (nc, _) as nc_full) =
     match nc with NC_or (nc1, nc2) -> doc_op (string "||") (newnc l50 nc1) (newnc l40 nc2) | _ -> l40 nc_full
@@ -823,12 +828,12 @@ and doc_nc_exp ctx env nc =
   and l10 (NC_aux (nc, _) as nc_full) =
     match nc with
     | NC_not_equal (ne1, ne2) ->
-        string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
+        string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2))
     | NC_set (nexp, is) ->
         separate space
           [
             string "member_Z_list";
-            doc_nexp ctx nexp;
+            doc_nexp ctx env nexp;
             brackets (separate (string "; ") (List.map (fun i -> string (Nat_big_num.to_string i)) is));
           ]
     | NC_app (f, args) -> separate space (doc_nc_fn ctx f :: List.map doc_typ_arg_exp args)
@@ -838,13 +843,13 @@ and doc_nc_exp ctx env nc =
     | NC_id id -> doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id
     | NC_true -> string "true"
     | NC_false -> string "false"
-    | NC_var kid -> doc_nexp ctx (nvar kid)
+    | NC_var kid -> doc_nexp ctx env (nvar kid)
     | NC_not_equal _ | NC_set _ | NC_app _ | NC_equal _ | NC_bounded_ge _ | NC_bounded_gt _ | NC_bounded_le _
     | NC_bounded_lt _ | NC_or _ | NC_and _ ->
         parens (l70 nc_full)
   and doc_typ_arg_exp (A_aux (arg, l)) =
     match arg with
-    | A_nexp nexp -> doc_nexp ctx nexp
+    | A_nexp nexp -> doc_nexp ctx env nexp
     | A_bool nc -> newnc l0 nc
     | A_typ _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type kind to SMT function")
   in
@@ -1176,6 +1181,8 @@ let similar_nexps ctxt env n1 n2 =
         || prove __POS__ env (nc_eq (nvar k1) (nvar k2))
            && ((not (KidSet.mem k1 ctxt.bound_nvars)) || not (KidSet.mem k2 ctxt.bound_nvars))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
+    | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
+        NC.compare i1 i2 == 0 && same_nexp_shape t1 t2 && same_nexp_shape e1 e2
     | Nexp_app (f1, args1), Nexp_app (f2, args2) -> Id.compare f1 f2 == 0 && List.for_all2 same_nexp_shape args1 args2
     | Nexp_times (n1, n2), Nexp_times (n3, n4)
     | Nexp_sum (n1, n2), Nexp_sum (n3, n4)
@@ -2390,7 +2397,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types (TD_aux (td, (l, an
         (separate space
            ([string "Definition"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "Z"])
         )
-        (doc_nexp bare_ctxt nexp)
+        (doc_nexp bare_ctxt Env.empty nexp)
       ^^ dot ^^ hardline
       ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
       ^^ twice hardline
@@ -2757,7 +2764,7 @@ let rec atom_constraint ctxt (pat, typ) =
         when try Id.compare (Util.option_get_exn Not_found (KBindings.find kid ctxt.kid_id_renames)) id == 0
              with _ -> false ->
           None
-      | _ -> Some (comment (doc_op (string "=?") (doc_id ctxt id) (doc_nexp ctxt nexp)))
+      | _ -> Some (comment (doc_op (string "=?") (doc_id ctxt id) (doc_nexp ctxt (env_of_pat pat) nexp)))
     )
   | P_aux (P_typ (_, p), _), _ -> atom_constraint ctxt (p, typ)
   | _ -> None
