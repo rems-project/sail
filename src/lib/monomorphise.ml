@@ -2701,7 +2701,14 @@ module Analysis = struct
     let kid_deps = List.fold_left note_no_arg kid_deps top_kids in
     let merge_kid_deps_eqns k kdeps eqn_kids =
       match (kdeps, eqn_kids) with
-      | _, Some (Some kids) -> Some (KidSet.fold (fun kid deps -> dmerge deps (KBindings.find kid kid_deps)) kids dempty)
+      | _, Some (Some kids) ->
+          Some
+            (KidSet.fold
+               (* Allow failures for non-Int type variables *)
+                 (fun kid deps -> try dmerge deps (KBindings.find kid kid_deps) with Not_found -> deps
+               )
+               kids dempty
+            )
       | Some deps, _ -> Some deps
       | _, _ -> None
     in
