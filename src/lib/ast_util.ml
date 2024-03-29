@@ -994,7 +994,7 @@ and string_of_nexp_aux = function
   | Nexp_exp n -> "2 ^ " ^ string_of_nexp n
   | Nexp_neg n -> "- " ^ string_of_nexp n
   | Nexp_if (i, t, e) ->
-      "(if" ^ string_of_n_constraint i ^ " then " ^ string_of_nexp t ^ " else " ^ string_of_nexp e ^ ")"
+      "(if " ^ string_of_n_constraint i ^ " then " ^ string_of_nexp t ^ " else " ^ string_of_nexp e ^ ")"
 
 and string_of_typ = function Typ_aux (typ, _) -> string_of_typ_aux typ
 
