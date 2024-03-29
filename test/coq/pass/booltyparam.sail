@@ -1,6 +1,7 @@
 /* Test a boolean type parameter.  Not sure that this is terribly useful,
    but it fills a gap in coverage... */
 
+default Order dec
 $include <prelude.sail>
 
 union perhaps('b : Bool) = {No : unit, Yes : {'n, 'b. atom('n)}}

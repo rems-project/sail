@@ -1,3 +1,4 @@
+default Order dec
 $include <prelude.sail>
 
 val f : forall 'n, 'n in {8,16}. atom('n) -> atom('n)

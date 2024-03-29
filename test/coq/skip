@@ -1,3 +1,7 @@
+XXXXX -abstract_types not supported (yet?)
+abstract_bool.sail
+abstract_bool2.sail
+constraint_syn.sail
 XXXXX tests with deliberate redundant pattern match clause
 option_tuple.sail
 pat_completeness.sail
@@ -26,6 +30,7 @@ while_MM_terminating.sail
 XXXXX TODO, add termination measure
 floor_pow2.sail
 try_while_try.sail
+no_val_recur.sail
 XXXXX not yet supported existential type (probably quite easy?)
 existential_constraint_synonym.sail
 XXXXX Type variables that need to be filled in
