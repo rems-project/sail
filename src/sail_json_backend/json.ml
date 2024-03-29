@@ -320,6 +320,11 @@ let rec string_list_of_pat p = match p with
           l
   | _ -> debug_print "pat other"; []
 
+let extract_source_code l =
+   match Reporting.simp_loc l with
+   | Some(p1, p2) -> (Reporting.loc_range_to_src p1 p2)
+   | None -> "Error - couldn't locate func"
+
 let parse_funcl fcl = match fcl with
     FCL_aux ( FCL_funcl ( Id_aux (Id "execute", _), Pat_aux ( (
           Pat_exp ( P_aux ( P_app (i, pl), _ ) , e )
@@ -330,7 +335,7 @@ let parse_funcl fcl = match fcl with
         let operandl = (List.concat (List.map string_list_of_pat pl)) in
           if not (String.equal (List.hd operandl) "()") then
             Hashtbl.add operands (string_of_id i) operandl;
-        Hashtbl.add functions (string_of_id i) (string_of_exp e)
+        Hashtbl.add functions (string_of_id i) (extract_source_code (Ast_util.exp_loc e))
       end
   | _ -> debug_print "FCL_funcl other"
 
