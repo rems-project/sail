@@ -1224,6 +1224,39 @@ let is_mapping id env = Bindings.mem id env.global.mappings
 let add_enum' is_scattered id ids env =
   if bound_typ_id env id then already_bound "enum" id env
   else (
+    List.iter
+      (fun member ->
+        match Bindings.find_opt member env.global.letbinds with
+        | Some item ->
+            typ_error
+              (Hint ("Previously bound here ", item.loc, id_loc member))
+              ("Enumeration member " ^ string_of_id member ^ " is already bound as a global let-binding")
+        | None -> (
+            match Bindings.find_opt member env.global.registers with
+            | Some item ->
+                typ_error
+                  (Hint ("Register defined here ", item.loc, id_loc member))
+                  ("Enumeration member " ^ string_of_id member ^ " is already bound as a register")
+            | None -> (
+                match
+                  List.find_opt
+                    (fun (_, { item = _, members; _ }) -> IdSet.mem member members)
+                    (Bindings.bindings env.global.enums)
+                with
+                | Some (previous_enum_id, item) ->
+                    typ_error
+                      (Hint
+                         ( "Previously defined as part of enum " ^ string_of_id previous_enum_id ^ " here",
+                           item.loc,
+                           id_loc member
+                         )
+                      )
+                      ("Enum member " ^ string_of_id member ^ " is already part of another enum")
+                | None -> ()
+              )
+          )
+      )
+      ids;
     typ_print (lazy (adding ^ "enum " ^ string_of_id id)) [@coverage off];
     update_global
       (fun global ->
