@@ -400,20 +400,22 @@ let json_of_operand k op =
             Some (name, t) -> "{ \"name\": \"" ^ name ^ "\", \"type\": \"" ^ t ^ "\" }"
           | None -> "{ \"name\": \"" ^ opname ^ "\", \"type\": \"unknown\" }"
 
-let json_of_operands k ops =
-  String.concat "," (
-    List.map (fun op -> json_of_operand k op) (
-      List.filter (
-        fun s -> not (
-          (String.equal s "(") ||
-          (String.equal s ")") ||
-          (String.equal s "spc") ||
-          (String.equal s "sep")
+let json_of_operands k = match Hashtbl.find_opt operands k with
+  | Some ops ->
+      String.concat "," (
+        List.map (fun op -> json_of_operand k op) (
+          List.filter (
+            fun s -> not (
+              (String.equal s "(") ||
+              (String.equal s ")") ||
+              (String.equal s "spc") ||
+              (String.equal s "sep")
+            )
+          )
+          ops
         )
       )
-      ops
-    )
-  )
+  | None -> ""
 
 let json_of_syntax k =
   let l = List.map (fun s ->
@@ -521,7 +523,7 @@ let json_of_instruction k v =
     "{\n" ^
     "  \"mnemonic\": " ^ (json_of_mnemonic (List.hd v)) ^ ",\n" ^
     "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
-    "  \"operands\": [ " ^ (json_of_operands k (List.tl v)) ^ " ],\n" ^
+    "  \"operands\": [ " ^ (json_of_operands k) ^ " ],\n" ^
     "  \"syntax\": " ^ "\"" ^ (json_of_syntax k) ^ "\",\n" ^
     "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
     "  \"fields\": [ " ^ (json_of_fields k) ^ " ],\n" ^
