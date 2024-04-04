@@ -415,14 +415,14 @@ let json_of_operands k ops =
     )
   )
 
-let json_of_syntax ops =
+let json_of_syntax k =
   let l = List.map (fun s ->
     if String.equal s "sep" then ","
     else if String.equal s "\"(\"" then "("
     else if String.equal s "\")\"" then ")"
-    else (remove_identity_funcs s)) ops in
-      if List.length l > 0 then ("\"" ^ (String.concat "" l) ^ "\"")
-      else "\"\""
+    else (remove_identity_funcs s)) (List.tl (Hashtbl.find assembly_clean k)) in
+      if List.length l > 0 then (String.concat "" l)
+      else ""
 
 let rec basetype t =
   match Hashtbl.find_opt types t with
@@ -522,7 +522,7 @@ let json_of_instruction k v =
     "  \"mnemonic\": " ^ (json_of_mnemonic (List.hd v)) ^ ",\n" ^
     "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
     "  \"operands\": [ " ^ (json_of_operands k (List.tl v)) ^ " ],\n" ^
-    "  \"syntax\": " ^ (json_of_syntax (List.tl v)) ^ ",\n" ^
+    "  \"syntax\": " ^ "\"" ^ (json_of_syntax k) ^ "\",\n" ^
     "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
     "  \"fields\": [ " ^ (json_of_fields k) ^ " ],\n" ^
     "  \"extensions\": [ " ^ (json_of_extensions k) ^ " ],\n" ^
@@ -629,18 +629,11 @@ let defs { defs; _ } =
   print_endline "{";
   print_endline "  \"instructions\": [";
 
-(*
   (* Join keys and mnemonics, then sort by mnemonic, then use the keys in that order to emit instructions *)
-  let keys_sorted_by_mnemonic =
-    let key_mnemonic_sorted =
-      let key_mnemonic_map = Hashtbl.fold (fun k v init -> [k; List.hd v] :: init) assembly [] in
-        List.sort (fun l r -> String.compare (List.hd (List.tl l)) (List.hd (List.tl r))) key_mnemonic_map in
-          List.map List.hd key_mnemonic_sorted in
-            print_endline (String.concat ",\n" (List.map json_of_instruction keys_sorted_by_mnemonic));
-*)
-
-  let instructions = Hashtbl.fold (fun k v accum -> (json_of_instruction k v) :: accum) assembly_clean [] in
-     print_endline (String.concat ",\n" instructions);
+  let key_mnemonic_sorted =
+    let key_mnemonic_map = Hashtbl.fold (fun k v init -> [k; List.hd v] :: init) assembly_clean [] in
+      List.sort (fun l r -> String.compare (List.hd (List.tl l)) (List.hd (List.tl r))) key_mnemonic_map in
+        print_endline (String.concat ",\n" (List.map (fun a -> json_of_instruction (List.hd a) (List.tl a)) key_mnemonic_sorted));
 
   print_endline "  ],";
 
