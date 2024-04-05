@@ -250,13 +250,20 @@ let parse_mapcl i mc =
           parse_assembly i mc
       | _ ->
           begin match mc with
-            | MCL_aux (MCL_bidir (MPat_aux (MPat_pat mpl, _), MPat_aux (MPat_pat mpr, _)), _) ->
+            | MCL_aux (MCL_bidir (MPat_aux (MPat_pat mpl, _), MPat_aux (MPat_pat mpr, _)), (annot, _)) ->
                 debug_print ("MCL_bidir " ^ (string_of_id i));
                 let sl = string_list_of_mpat mpl in
                   List.iter (fun s -> debug_print ("L: " ^ s)) sl;
                 let sl = string_list_of_mpat mpr in
                   List.iter (fun s -> debug_print ("R: " ^ s)) sl;
-                Hashtbl.add mappings (string_of_id i) ((string_list_of_mpat mpl), (string_list_of_mpat mpr))
+                Hashtbl.add mappings (string_of_id i) ((string_list_of_mpat mpl), (string_list_of_mpat mpr));
+                let sl = string_list_of_mpat mpr in
+                  List.iter (fun mnemonic ->
+                      List.iter (fun attr -> match attr with
+                          (_, "name", name) -> Hashtbl.add names mnemonic name
+                        | _ -> ()
+                      ) annot.attrs
+                    ) sl;
             | _ -> debug_print "MCL other";
           end
     end
@@ -494,10 +501,15 @@ let json_of_function k =
     | Some (f) -> String.escaped f
   in "\"" ^ fspec ^ "\""
 
-let json_of_name k =
+let json_of_name k mnemonic =
   let name = match Hashtbl.find_opt names k with
-      None -> "TBD"
-    | Some (f) -> String.escaped f
+      None ->
+        begin
+          match Hashtbl.find_opt names mnemonic with
+            None -> "TBD"
+          | Some (s) -> String.escaped s
+        end
+    | Some (s) -> String.escaped s
   in "\"" ^ name ^ "\""
 
 let json_of_description k =
@@ -522,7 +534,7 @@ let json_of_extensions k =
 let json_of_instruction k v =
     "{\n" ^
     "  \"mnemonic\": " ^ (json_of_mnemonic (List.hd v)) ^ ",\n" ^
-    "  \"name\": " ^ (json_of_name k) ^ ",\n" ^
+    "  \"name\": " ^ (json_of_name k (List.hd v)) ^ ",\n" ^
     "  \"operands\": [ " ^ (json_of_operands k) ^ " ],\n" ^
     "  \"syntax\": " ^ "\"" ^ (json_of_syntax k) ^ "\",\n" ^
     "  \"format\": " ^ (json_of_format k) ^ ",\n" ^
