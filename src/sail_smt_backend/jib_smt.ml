@@ -1503,19 +1503,19 @@ end) : Jib_compile.CONFIG = struct
     | L_false -> Some (V_lit (VL_bool false, CT_bool))
     | _ -> None
 
-  let c_literals ctx =
-    let rec c_literal env l = function
+  let smt_literals ctx =
+    let rec smt_literal annot = function
       | AV_lit (lit, typ) as v -> begin match literal_to_cval lit with Some cval -> AV_cval (cval, typ) | None -> v end
-      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
+      | AV_tuple avals -> AV_tuple (List.map (smt_literal annot) avals)
       | v -> v
     in
-    map_aval c_literal
+    map_aval smt_literal
 
   (* If we know the loop variables exactly (especially after
      specialization), we can unroll the exact number of times required,
      and omit any comparisons. *)
   let unroll_static_foreach ctx = function
-    | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), env, l) as aexp -> begin
+    | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), annot) as aexp -> begin
         match
           ( convert_typ ctx (aexp_typ from_aexp),
             convert_typ ctx (aexp_typ to_aexp),
@@ -1524,28 +1524,30 @@ end) : Jib_compile.CONFIG = struct
           )
         with
         | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
+            let new_annot = { annot with loc = gen_loc annot.loc; uannot = empty_uannot } in
             let i = ref f in
             let unrolled = ref [] in
             while Big_int.less_equal !i t do
               let current_index =
-                AE_aux (AE_val (AV_lit (L_aux (L_num !i, gen_loc l), atom_typ (nconstant !i))), env, gen_loc l)
+                AE_aux (AE_val (AV_lit (L_aux (L_num !i, gen_loc annot.loc), atom_typ (nconstant !i))), new_annot)
               in
               let iteration =
-                AE_aux (AE_let (Immutable, id, atom_typ (nconstant !i), current_index, body, unit_typ), env, gen_loc l)
+                AE_aux (AE_let (Immutable, id, atom_typ (nconstant !i), current_index, body, unit_typ), new_annot)
               in
               unrolled := iteration :: !unrolled;
               i := Big_int.add !i b
             done;
             begin
               match !unrolled with
-              | last :: iterations -> AE_aux (AE_block (List.rev iterations, last, unit_typ), env, gen_loc l)
-              | [] -> AE_aux (AE_val (AV_lit (L_aux (L_unit, gen_loc l), unit_typ)), env, gen_loc l)
+              | last :: iterations ->
+                  AE_aux (AE_block (List.rev iterations, last, unit_typ), { annot with loc = gen_loc annot.loc })
+              | [] -> AE_aux (AE_val (AV_lit (L_aux (L_unit, gen_loc annot.loc), unit_typ)), new_annot)
             end
         | _ -> aexp
       end
     | aexp -> aexp
 
-  let optimize_anf ctx aexp = aexp |> c_literals ctx |> fold_aexp (unroll_static_foreach ctx)
+  let optimize_anf ctx aexp = aexp |> smt_literals ctx |> fold_aexp (unroll_static_foreach ctx)
 
   let make_call_precise _ _ = false
   let ignore_64 = true

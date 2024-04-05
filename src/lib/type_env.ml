@@ -1251,7 +1251,7 @@ let add_enum' is_scattered id ids env =
                            id_loc member
                          )
                       )
-                      ("Enum member " ^ string_of_id member ^ " is already part of another enum")
+                      ("Enumeration member " ^ string_of_id member ^ " is already part of another enumeration")
                 | None -> ()
               )
           )

@@ -294,11 +294,11 @@ end) : CONFIG = struct
   (**************************************************************************)
 
   let c_literals ctx =
-    let rec c_literal env l = function
-      | AV_lit (lit, typ) as v when is_stack_ctyp (convert_typ { ctx with local_env = env } typ) -> begin
+    let rec c_literal annot = function
+      | AV_lit (lit, typ) as v when is_stack_ctyp (convert_typ { ctx with local_env = annot.env } typ) -> begin
           match literal_to_fragment lit with Some cval -> AV_cval (cval, typ) | None -> v
         end
-      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
+      | AV_tuple avals -> AV_tuple (List.map (c_literal annot) avals)
       | v -> v
     in
     map_aval c_literal
@@ -356,7 +356,7 @@ end) : CONFIG = struct
     | aval -> aval
 
   (* Map over all the functions in an aexp. *)
-  let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
+  let rec analyze_functions ctx f (AE_aux (aexp, ({ env; loc = l; _ } as annot))) =
     let ctx = { ctx with local_env = env } in
     let aexp =
       match aexp with
@@ -364,7 +364,7 @@ end) : CONFIG = struct
       | AE_typ (aexp, typ) -> AE_typ (analyze_functions ctx f aexp, typ)
       | AE_assign (alexp, aexp) -> AE_assign (alexp, analyze_functions ctx f aexp)
       | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
-      | AE_let (mut, id, typ1, aexp1, (AE_aux (_, env2, _) as aexp2), typ2) ->
+      | AE_let (mut, id, typ1, aexp1, (AE_aux (_, { env = env2; _ }) as aexp2), typ2) ->
           let aexp1 = analyze_functions ctx f aexp1 in
           (* Use aexp2's environment because it will contain constraints for id *)
           let ctyp1 = convert_typ { ctx with local_env = env2 } typ1 in
@@ -406,7 +406,7 @@ end) : CONFIG = struct
             )
       | (AE_field _ | AE_struct_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _) as v -> v
     in
-    AE_aux (aexp, env, l)
+    AE_aux (aexp, annot)
 
   let analyze_primop' ctx id args typ =
     let no_change = AE_app (id, args, typ) in
