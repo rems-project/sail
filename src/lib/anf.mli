@@ -98,7 +98,9 @@ open Type_check
    See Flanagan et al's {e The Essence of Compiling with Continuations}.
    *)
 
-type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
+type aexp_annot = { loc : l; env : Env.t; uannot : uannot }
+
+type 'a aexp = AE_aux of 'a aexp_aux * aexp_annot
 
 and 'a aexp_aux =
   | AE_val of 'a aval
@@ -161,10 +163,10 @@ val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
 
 (** Map over all values in an ANF expression *)
-val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
+val map_aval : (aexp_annot -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
 (** Map over all function calls in an ANF expression *)
-val map_functions : (Env.t -> Ast.l -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+val map_functions : (aexp_annot -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 

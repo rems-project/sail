@@ -303,7 +303,7 @@ module Make (C : CONFIG) = struct
 
   let append_into_block instrs instr = match instrs with [] -> instr | _ -> iblock (instrs @ [instr])
 
-  let rec find_aexp_loc (AE_aux (e, _, l)) =
+  let rec find_aexp_loc (AE_aux (e, { loc = l; _ })) =
     match Reporting.simp_loc l with
     | Some _ -> l
     | None -> (
@@ -726,10 +726,10 @@ module Make (C : CONFIG) = struct
         CL_addr (CL_id (name id, ctyp))
     | AL_field (alexp, field_id) -> CL_field (compile_alexp ctx alexp, field_id)
 
-  let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
+  let rec compile_aexp ctx (AE_aux (aexp_aux, { env; loc = l; _ })) =
     let ctx = { ctx with local_env = env } in
     match aexp_aux with
-    | AE_let (mut, id, binding_typ, binding, (AE_aux (_, body_env, _) as body), body_typ) ->
+    | AE_let (mut, id, binding_typ, binding, (AE_aux (_, { env = body_env; _ }) as body), body_typ) ->
         let binding_ctyp = ctyp_of_typ { ctx with local_env = body_env } binding_typ in
         let setup, call, cleanup = compile_aexp ctx binding in
         let letb_setup, letb_cleanup =
@@ -760,8 +760,8 @@ module Make (C : CONFIG) = struct
           else (
             let trivial_guard =
               match guard with
-              | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
-              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) ->
+              | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
+              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
                   true
               | _ -> false
             in
@@ -808,8 +808,8 @@ module Make (C : CONFIG) = struct
         let compile_case (apat, guard, body) =
           let trivial_guard =
             match guard with
-            | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
-            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) ->
+            | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
+            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
                 true
             | _ -> false
           in
@@ -930,7 +930,7 @@ module Make (C : CONFIG) = struct
         )
     (* This is a faster assignment rule for updating fields of a
        struct. *)
-    | AE_assign (AL_id (id, assign_typ), AE_aux (AE_struct_update (AV_id (rid, _), fields, typ), _, _))
+    | AE_assign (AL_id (id, assign_typ), AE_aux (AE_struct_update (AV_id (rid, _), fields, typ), _))
       when Id.compare id rid = 0 ->
         let compile_fields (field_id, aval) =
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
@@ -1112,7 +1112,7 @@ module Make (C : CONFIG) = struct
 
   and compile_block ctx = function
     | [] -> []
-    | (AE_aux (_, _, l) as exp) :: exps ->
+    | (AE_aux (_, { loc = l; _ }) as exp) :: exps ->
         let setup, call, cleanup = compile_aexp ctx exp in
         let rest = compile_block ctx exps in
         let gs = ngensym () in
@@ -1405,7 +1405,7 @@ module Make (C : CONFIG) = struct
     let guard_instrs =
       match guard with
       | Some guard ->
-          let (AE_aux (_, _, l) as guard) = anf guard in
+          let (AE_aux (_, { loc = l; _ }) as guard) = anf guard in
           guard_bindings := aexp_bindings guard;
           let guard_aexp = C.optimize_anf ctx (no_shadow known_ids guard) in
           let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in

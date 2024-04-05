@@ -5,4 +5,4 @@
 [96mfail/enum_shadow.sail[0m:5.10-11:
 5[96m |[0menum Y = {A, D}
  [91m |[0m          [91m^[0m
- [91m |[0m Enum member A is already part of another enum
+ [91m |[0m Enumeration member A is already part of another enumeration
