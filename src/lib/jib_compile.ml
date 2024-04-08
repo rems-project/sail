@@ -148,6 +148,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  coverage_override : bool;
 }
 
 let ctx_is_extern id ctx =
@@ -187,7 +188,17 @@ let initial_ctx env effect_info =
     letbinds = [];
     letbind_ids = IdSet.empty;
     no_raw = false;
+    coverage_override = true;
   }
+
+let update_coverage_override' ctx = function
+  | Some (_, "on") -> { ctx with coverage_override = true }
+  | Some (_, "off") -> { ctx with coverage_override = false }
+  | _ -> ctx
+
+let update_coverage_override uannot ctx = update_coverage_override' ctx (get_attribute "coverage" uannot)
+
+let update_coverage_override_def def_annot ctx = update_coverage_override' ctx (get_def_attribute "coverage" def_annot)
 
 let rec mangle_string_of_ctyp ctx = function
   | CT_lint -> "i"
@@ -290,9 +301,9 @@ module Make (C : CONFIG) = struct
   (* A branch is a `match` (including `mapping`), `if` or short-circuiting and/or.
      This returns a new ID for the branch, and the C code to call. It also
      writes the static branch info to C.branch_coverage. *)
-  let coverage_branch_reached l =
+  let coverage_branch_reached ctx l =
     match C.branch_coverage with
-    | Some out -> begin
+    | Some out when ctx.coverage_override -> begin
         let branch_id = !coverage_branch_count in
         incr coverage_branch_count;
         let args = coverage_loc_args l in
@@ -315,29 +326,29 @@ module Make (C : CONFIG) = struct
      For `if` without `else` then it may not be called at all. Same for
      short-circuiting boolean expressions. `branch_id` is the ID for the entire
      conditional expression (the whole `match` etc.). *)
-  let coverage_branch_target_taken branch_id aexp =
+  let coverage_branch_target_taken ctx branch_id aexp =
     match C.branch_coverage with
-    | None -> []
-    | Some out -> begin
+    | Some out when ctx.coverage_override -> begin
         let branch_target_id = !coverage_branch_target_count in
         incr coverage_branch_target_count;
         let args = coverage_loc_args (find_aexp_loc aexp) in
         Printf.fprintf out "%s\n" ("T " ^ string_of_int branch_id ^ ", " ^ string_of_int branch_target_id ^ ", " ^ args);
         [iraw (Printf.sprintf "sail_branch_target_taken(%d, %d, %s);" branch_id branch_target_id args)]
       end
+    | _ -> []
 
   (* Generate code and static branch info for function entry coverage.
      `id` is the name of the function. *)
-  let coverage_function_entry id l =
+  let coverage_function_entry ctx id l =
     match C.branch_coverage with
-    | None -> []
-    | Some out -> begin
+    | Some out when ctx.coverage_override -> begin
         let function_id = !coverage_function_count in
         incr coverage_function_count;
         let args = coverage_loc_args l in
         Printf.fprintf out "%s\n" ("F " ^ string_of_int function_id ^ ", \"" ^ string_of_id id ^ "\", " ^ args);
         [iraw (Printf.sprintf "sail_function_entry(%d, \"%s\", %s);" function_id (string_of_id id) args)]
       end
+    | _ -> []
 
   let rec compile_aval l ctx = function
     | AV_cval (cval, typ) ->
@@ -726,7 +737,7 @@ module Make (C : CONFIG) = struct
         CL_addr (CL_id (name id, ctyp))
     | AL_field (alexp, field_id) -> CL_field (compile_alexp ctx alexp, field_id)
 
-  let rec compile_aexp ctx (AE_aux (aexp_aux, { env; loc = l; _ })) =
+  let rec compile_aexp ctx (AE_aux (aexp_aux, { env; loc = l; uannot })) =
     let ctx = { ctx with local_env = env } in
     match aexp_aux with
     | AE_let (mut, id, binding_typ, binding, (AE_aux (_, { env = body_env; _ }) as body), body_typ) ->
@@ -746,12 +757,13 @@ module Make (C : CONFIG) = struct
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
     (* Compile case statements *)
     | AE_match (aval, cases, typ) ->
+        let ctx = update_coverage_override uannot ctx in
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
         (* Get the number of cases, because we don't want to check branch
            coverage for matches with only a single case. *)
         let num_cases = List.length cases in
-        let branch_id, on_reached = coverage_branch_reached l in
+        let branch_id, on_reached = coverage_branch_reached ctx l in
         let case_return_id = ngensym () in
         let finish_match_label = label "finish_match_" in
         let compile_case (apat, guard, body) =
@@ -780,7 +792,7 @@ module Make (C : CONFIG) = struct
                       ]
                   else []
                 )
-              @ (if num_cases > 1 then coverage_branch_target_taken branch_id body else [])
+              @ (if num_cases > 1 then coverage_branch_target_taken ctx branch_id body else [])
               @ body_setup
               @ [body_call (CL_id (case_return_id, ctyp))]
               @ body_cleanup @ destructure_cleanup
@@ -852,14 +864,15 @@ module Make (C : CONFIG) = struct
           []
         )
     | AE_if (aval, then_aexp, else_aexp, if_typ) ->
+        let ctx = update_coverage_override uannot ctx in
         if is_dead_aexp then_aexp then compile_aexp ctx else_aexp
         else if is_dead_aexp else_aexp then compile_aexp ctx then_aexp
         else (
           let if_ctyp = ctyp_of_typ ctx if_typ in
-          let branch_id, on_reached = coverage_branch_reached l in
+          let branch_id, on_reached = coverage_branch_reached ctx l in
           let compile_branch aexp =
             let setup, call, cleanup = compile_aexp ctx aexp in
-            fun clexp -> coverage_branch_target_taken branch_id aexp @ setup @ [call clexp] @ cleanup
+            fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
           in
           let setup, cval, cleanup = compile_aval l ctx aval in
           ( setup,
@@ -893,10 +906,11 @@ module Make (C : CONFIG) = struct
           [iclear ctyp gs]
         )
     | AE_short_circuit (SC_and, aval, aexp) ->
-        let branch_id, on_reached = coverage_branch_reached l in
+        let ctx = update_coverage_override uannot ctx in
+        let branch_id, on_reached = coverage_branch_reached ctx l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_target_taken branch_id aexp in
+        let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
         let gs = ngensym () in
         ( left_setup @ on_reached
           @ [
@@ -911,10 +925,11 @@ module Make (C : CONFIG) = struct
           []
         )
     | AE_short_circuit (SC_or, aval, aexp) ->
-        let branch_id, on_reached = coverage_branch_reached l in
+        let ctx = update_coverage_override uannot ctx in
+        let branch_id, on_reached = coverage_branch_reached ctx l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_target_taken branch_id aexp in
+        let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
         let gs = ngensym () in
         ( left_setup @ on_reached
           @ [
@@ -1387,6 +1402,7 @@ module Make (C : CONFIG) = struct
     let orig_ctx = ctx in
     (* The context must be updated before we call ctyp_of_typ on the argument types. *)
     let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
+    let ctx = update_coverage_override_def def_annot ctx in
 
     let arg_ctyps = List.map (ctyp_of_typ ctx) arg_typs in
     let ret_ctyp = ctyp_of_typ ctx ret_typ in
@@ -1439,7 +1455,7 @@ module Make (C : CONFIG) = struct
     let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
     let instrs = unique_names instrs in
     let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
-    let instrs = coverage_function_entry id (exp_loc exp) @ instrs in
+    let instrs = coverage_function_entry ctx id (exp_loc exp) @ instrs in
 
     ([CDEF_aux (CDEF_fundef (id, None, List.map fst compiled_args, instrs), def_annot)], orig_ctx)
 

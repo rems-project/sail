@@ -443,7 +443,13 @@ let rec pp_alexp = function
   | AL_addr (id, typ) -> string "*" ^^ parens (pp_annot typ (pp_id id))
   | AL_field (alexp, field) -> pp_alexp alexp ^^ dot ^^ pp_id field
 
-let rec pp_aexp (AE_aux (aexp, _)) =
+let rec pp_aexp (AE_aux (aexp, annot)) =
+  ( match get_attributes annot.uannot with
+  | [] -> empty
+  | attrs ->
+      concat_map (fun (_, attr, arg) -> string (Printf.sprintf "$[%s %s]" attr arg |> Util.magenta |> Util.clear)) attrs
+  )
+  ^^
   match aexp with
   | AE_val v -> pp_aval v
   | AE_typ (aexp, typ) -> pp_annot typ (string "$" ^^ pp_aexp aexp)
