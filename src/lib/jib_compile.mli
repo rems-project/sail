@@ -106,6 +106,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  coverage_override : bool;
 }
 
 val ctx_is_extern : id -> ctx -> bool
