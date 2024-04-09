@@ -20,7 +20,14 @@ skip_tests = {
     'assembly_mapping_sat': { 'z3', 'cvc4' }, # This test using unsupported CVC4 features
     'arith_unsat': { 'z3', 'cvc4' },
     'arith_LFL_unsat' : { 'z3', 'cvc4' },
-    'revrev_endianness2_unsat' : { 'z3', 'cvc4' }, # There is some bug in this test
+    'store_load_sat' : { 'z3', 'cvc4' },
+    'load_store_dep_sat' : { 'z3', 'cvc4' },
+    'store_load_scattered_sat' : { 'z3', 'cvc4' },
+    'mem_builtins_unsat' : { 'z3', 'cvc4' },
+    'rv_add_1_unsat' : { 'z3', 'cvc4' },
+    'rv_add_0_unsat' : { 'z3', 'cvc4' },
+    'rv_add_1_sat' : { 'z3', 'cvc4' },
+    'rv_add_0_sat' : { 'z3', 'cvc4' },
 }
 
 print("Sail is {}".format(sail))

@@ -65,48 +65,71 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Libsail
-
-open Ast
-open Ast_defs
-open Ast_util
-open Jib
+open Array
 open Jib_util
 
-val opt_debug_graphs : bool ref
+val ssa_name : int -> Jib.name -> Jib.name
 
-module type CONFIG = sig
-  val max_unknown_integer_width : int
-  val max_unknown_bitvector_width : int
-  val max_unknown_generic_vector_length : int
-  val register_map : id list CTMap.t
-  val ignore_overflow : bool
-end
+val unssa_name : Jib.name -> Jib.name * int
 
-module Make (Config : CONFIG) : sig
-  type generated_smt_info = {
-    file_name : string;
-    function_id : id;
-    args : id list;
-    arg_ctyps : ctyp list;
-    arg_smt_names : (id * string option) list;
-  }
+(** A mutable array based graph type, with nodes indexed by integers. *)
+type 'a array_graph
 
-  (** Generate SMT for all the $property and $counterexample pragmas
-      provided, and write the generated SMT to appropriately named
-      files. *)
-  val generate_smt :
-    properties:(string * string * l * 'a val_spec) Bindings.t (** See Property.find_properties *) ->
-    name_file:(string -> string) (** Applied to each function name to generate the file name for the smtlib file *) ->
-    smt_includes:string list (** Extra files to include in each generated SMT problem *) ->
-    Jib_compile.ctx ->
-    cdef list ->
-    generated_smt_info list
-end
+(** Create an empty array_graph, specifying the initial size of the
+   underlying array. *)
+val make : initial_size:int -> unit -> 'a array_graph
 
-val compile :
-  unroll_limit:int ->
-  Type_check.Env.t ->
-  Effects.side_effect_info ->
-  Type_check.typed_ast ->
-  cdef list * Jib_compile.ctx * id list CTMap.t
+module IntSet = Util.IntSet
+
+val get_cond : 'a array_graph -> int -> Jib.cval
+
+val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
+
+val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
+
+(** Add a vertex to a graph, returning the index of the inserted
+   vertex. If the number of vertices exceeds the size of the
+   underlying array, then it is dynamically resized. *)
+val add_vertex : 'a -> 'a array_graph -> int
+
+(** Add an edge between two existing vertices. Raises Invalid_argument
+   if either of the vertices do not exist. *)
+val add_edge : int -> int -> 'a array_graph -> unit
+
+exception Not_a_DAG of int
+
+val topsort : 'a array_graph -> int list
+
+type terminator =
+  | T_undefined of Jib.ctyp
+  | T_exit of string
+  | T_end of Jib.name
+  | T_goto of string
+  | T_jump of int * string
+  | T_label of string
+  | T_none
+
+type cf_node =
+  | CF_label of string
+  | CF_block of Jib.instr list * terminator
+  | CF_guard of int
+  | CF_start of Jib.ctyp NameMap.t
+  | CF_end
+
+val control_flow_graph : Jib.instr list -> int * int * ('a list * cf_node) array_graph
+
+(** [immediate_dominators graph root] will calculate the immediate
+   dominators for a control flow graph with a specified root node. *)
+val immediate_dominators : ?post:bool -> 'a array_graph -> int -> int array
+
+type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
+
+(** Convert a list of instructions into SSA form *)
+val ssa : ?debug_prefix:string -> Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
+
+(** Output the control-flow graph in graphviz format for
+   debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
+   image of the graph. *)
+val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
+
+val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit

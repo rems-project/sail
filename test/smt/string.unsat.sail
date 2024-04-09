@@ -2,10 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-val "concat_str" : (string, string) -> string
-
-val "eq_string" : (string, string) -> bool
-
 overload operator == = {eq_string}
 
 $property

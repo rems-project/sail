@@ -72,11 +72,16 @@ type iannot = int * ocaml_l
 
 grammar
 
+chan :: 'Chan_' ::=
+  | stdout :: :: stdout
+  | stderr :: :: stderr
+
 name :: '' ::=
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
   | throw_location nat    :: :: throw_location
+  | channel chan nat      :: :: channel
   | return nat            :: :: return
 
 op :: '' ::=
@@ -121,6 +126,7 @@ uid :: 'UId_' ::=
 
 cval :: 'V_' ::=
   | name : ctyp                                     :: :: id
+  | id : ctyp                                       :: :: member
   | value : ctyp                                    :: :: lit
   | ( cval0 , ... , cvaln ) ctyp                    :: :: tuple
   | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
@@ -205,6 +211,10 @@ iannot :: '' ::=
   {{ lem iannot }}
   {{ ocaml iannot }}
 
+creturn :: 'CR_' ::=
+  | clexp                     :: :: one
+  | ( clexp0 , ... , clexpn ) :: :: multi
+
 instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
@@ -214,7 +224,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
-  | clexp = bool uid ( cval0 , ... , cvaln )       :: :: funcall
+  | creturn = bool uid ( cval0 , ... , cvaln )     :: :: funcall
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined

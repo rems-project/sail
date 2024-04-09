@@ -12,14 +12,22 @@ type 'a visit_action =
      node if any of the children has changed and then apply the
      function on the node *)
 
+val do_visit : 'v -> 'a visit_action -> ('v -> 'a -> 'a) -> 'a -> 'a
+
 val change_do_children : 'a -> 'a visit_action
 
 val map_no_copy : ('a -> 'a) -> 'a list -> 'a list
 
-class type jib_visitor = object
+val map_no_copy_opt : ('a -> 'a) -> 'a option -> 'a option
+
+class type common_visitor = object
   method vid : Ast.id -> Ast.id option
   method vname : name -> name option
   method vctyp : ctyp -> ctyp visit_action
+end
+
+class type jib_visitor = object
+  inherit common_visitor
   method vcval : cval -> cval visit_action
   method vclexp : clexp -> clexp visit_action
   method vinstrs : instr list -> instr list visit_action
@@ -29,7 +37,9 @@ end
 
 class empty_jib_visitor : jib_visitor
 
-val visit_ctyp : jib_visitor -> ctyp -> ctyp
+val visit_name : common_visitor -> name -> name
+
+val visit_ctyp : common_visitor -> ctyp -> ctyp
 
 val visit_cval : jib_visitor -> cval -> cval
 

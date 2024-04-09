@@ -1,10 +1,14 @@
 open Jib
 include Visitor
 
-class type jib_visitor = object
+class type common_visitor = object
   method vid : Ast.id -> Ast.id option
   method vname : name -> name option
   method vctyp : ctyp -> ctyp visit_action
+end
+
+class type jib_visitor = object
+  inherit common_visitor
   method vcval : cval -> cval visit_action
   method vclexp : clexp -> clexp visit_action
   method vinstrs : instr list -> instr list visit_action
@@ -100,6 +104,15 @@ let rec visit_clexp vis outer_clexp =
   in
   do_visit vis (vis#vclexp outer_clexp) aux outer_clexp
 
+let visit_creturn vis no_change =
+  match no_change with
+  | CR_one clexp ->
+      let clexp' = visit_clexp vis clexp in
+      if clexp == clexp' then no_change else CR_one clexp'
+  | CR_multi clexps ->
+      let clexps' = map_no_copy (visit_clexp vis) clexps in
+      if clexps == clexps' then no_change else CR_multi clexps'
+
 let rec visit_cval vis outer_cval =
   let aux vis no_change =
     match no_change with
@@ -107,6 +120,9 @@ let rec visit_cval vis outer_cval =
         let name' = visit_name vis name in
         let ctyp' = visit_ctyp vis ctyp in
         if name == name' && ctyp == ctyp' then no_change else V_id (name', ctyp')
+    | V_member (id, ctyp) ->
+        let ctyp' = visit_ctyp vis ctyp in
+        if ctyp == ctyp' then no_change else V_member (id, ctyp')
     | V_lit (value, ctyp) ->
         let ctyp' = visit_ctyp vis ctyp in
         if ctyp == ctyp' then no_change else V_lit (value, ctyp')
@@ -169,13 +185,13 @@ let rec visit_instr vis outer_instr =
         if cval == cval' then no_change else I_aux (I_jump (cval', label), aux)
     | I_aux (I_goto _, aux) -> no_change
     | I_aux (I_label _, aux) -> no_change
-    | I_aux (I_funcall (clexp, extern, (id, ctyps), cvals), aux) ->
-        let clexp' = visit_clexp vis clexp in
+    | I_aux (I_funcall (creturn, extern, (id, ctyps), cvals), aux) ->
+        let creturn' = visit_creturn vis creturn in
         let id' = visit_id vis id in
         let ctyps' = visit_ctyps vis ctyps in
         let cvals' = visit_cvals vis cvals in
-        if clexp == clexp' && id == id' && ctyps == ctyps' && cvals == cvals' then no_change
-        else I_aux (I_funcall (clexp', extern, (id', ctyps'), cvals'), aux)
+        if creturn == creturn' && id == id' && ctyps == ctyps' && cvals == cvals' then no_change
+        else I_aux (I_funcall (creturn', extern, (id', ctyps'), cvals'), aux)
     | I_aux (I_copy (clexp, cval), aux) ->
         let clexp' = visit_clexp vis clexp in
         let cval' = visit_cval vis cval in

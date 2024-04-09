@@ -25,6 +25,7 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
+(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -65,48 +66,106 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
+(** This file defines an intermediate representation that is roughly
+    equivalent to the subset of SystemVerilog that we target. This
+    enables us to perform SystemVerilog to SystemVerilog rewrites -
+    for this purpose we also define a vistor-pattern rewriter
+    [svir_visitor], much like it's [jib_visitor] equivalent. *)
+
 open Libsail
 
-open Ast
-open Ast_defs
-open Ast_util
-open Jib
-open Jib_util
+open Jib_visitor
+open Smt_exp
 
-val opt_debug_graphs : bool ref
+type sv_name = SVN_id of Ast.id | SVN_string of string
 
-module type CONFIG = sig
-  val max_unknown_integer_width : int
-  val max_unknown_bitvector_width : int
-  val max_unknown_generic_vector_length : int
-  val register_map : id list CTMap.t
-  val ignore_overflow : bool
+module SVName : sig
+  type t = sv_name
+  val compare : sv_name -> sv_name -> int
 end
 
-module Make (Config : CONFIG) : sig
-  type generated_smt_info = {
-    file_name : string;
-    function_id : id;
-    args : id list;
-    arg_ctyps : ctyp list;
-    arg_smt_names : (id * string option) list;
-  }
-
-  (** Generate SMT for all the $property and $counterexample pragmas
-      provided, and write the generated SMT to appropriately named
-      files. *)
-  val generate_smt :
-    properties:(string * string * l * 'a val_spec) Bindings.t (** See Property.find_properties *) ->
-    name_file:(string -> string) (** Applied to each function name to generate the file name for the smtlib file *) ->
-    smt_includes:string list (** Extra files to include in each generated SMT problem *) ->
-    Jib_compile.ctx ->
-    cdef list ->
-    generated_smt_info list
+module SVNameMap : sig
+  include Map.S with type key = sv_name
 end
 
-val compile :
-  unroll_limit:int ->
-  Type_check.Env.t ->
-  Effects.side_effect_info ->
-  Type_check.typed_ast ->
-  cdef list * Jib_compile.ctx * id list CTMap.t
+val modify_sv_name : ?prefix:string -> ?suffix:string -> sv_name -> sv_name
+
+val string_of_sv_name : sv_name -> string
+
+type sv_module_port = { name : Jib.name; external_name : string; typ : Jib.ctyp }
+
+val mk_port : Jib.name -> Jib.ctyp -> sv_module_port
+
+type sv_module = {
+  name : sv_name;
+  input_ports : sv_module_port list;
+  output_ports : sv_module_port list;
+  defs : sv_def list;
+}
+
+and sv_function = {
+  function_name : sv_name;
+  return_type : Jib.ctyp option;
+  params : (Ast.id * Jib.ctyp) list;
+  body : sv_statement;
+}
+
+and sv_def =
+  | SVD_type of Jib.ctype_def
+  | SVD_module of sv_module
+  | SVD_var of Jib.name * Jib.ctyp
+  | SVD_fundef of sv_function
+  | SVD_instantiate of {
+      module_name : sv_name;
+      instance_name : string;
+      input_connections : smt_exp list;
+      output_connections : sv_place list;
+    }
+  | SVD_always_comb of sv_statement
+
+and sv_place =
+  | SVP_id of Jib.name
+  | SVP_index of sv_place * smt_exp
+  | SVP_field of sv_place * Ast.id
+  | SVP_multi of sv_place list
+  | SVP_void
+
+and sv_statement = SVS_aux of sv_statement_aux * Ast.l
+
+and sv_statement_aux =
+  | SVS_comment of string
+  | SVS_skip
+  | SVS_var of Jib.name * Jib.ctyp * smt_exp option
+  | SVS_return of smt_exp
+  | SVS_assign of sv_place * smt_exp
+  | SVS_call of sv_place * sv_name * smt_exp list
+  | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
+  | SVS_if of smt_exp * sv_statement option * sv_statement option
+  | SVS_block of sv_statement list
+  | SVS_raw of string * Jib.name list * Jib.name list
+
+val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_statement_aux
+
+val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
+
+class type svir_visitor = object
+  (** Note that despite inheriting from common_visitor, we don't use
+      [vid]. Instead specific types of identifiers should be
+      re-written by matching on their containing node. *)
+  inherit common_visitor
+
+  method vsmt_exp : smt_exp -> smt_exp visit_action
+  method vplace : sv_place -> sv_place visit_action
+  method vstatement : sv_statement -> sv_statement visit_action
+  method vdef : sv_def -> sv_def visit_action
+end
+
+class empty_svir_visitor : svir_visitor
+
+val visit_smt_exp : svir_visitor -> smt_exp -> smt_exp
+
+val visit_sv_place : svir_visitor -> sv_place -> sv_place
+
+val visit_sv_statement : svir_visitor -> sv_statement -> sv_statement
+
+val visit_sv_def : svir_visitor -> sv_def -> sv_def

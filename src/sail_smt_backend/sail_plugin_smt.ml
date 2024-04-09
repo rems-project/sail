@@ -67,35 +67,43 @@
 
 open Libsail
 
-let opt_includes_smt : string list ref = ref []
+open Jib_smt
 
-let set_auto_solver arg =
-  let open Smtlib in
-  match counterexample_solver_from_name arg with Some solver -> opt_auto_solver := solver | None -> ()
+let opt_smt_auto = ref false
+let opt_smt_auto_solver = ref Smt_exp.Cvc5
+let opt_smt_includes : string list ref = ref []
+let opt_smt_ignore_overflow = ref false
+let opt_smt_unknown_integer_width = ref 128
+let opt_smt_unknown_bitvector_width = ref 64
+let opt_smt_unknown_generic_vector_width = ref 32
+
+let set_smt_auto_solver arg =
+  let open Smt_exp in
+  match counterexample_solver_from_name arg with Some solver -> opt_smt_auto_solver := solver | None -> ()
 
 let smt_options =
   [
-    ("-smt_auto", Arg.Tuple [Arg.Set Jib_smt.opt_auto], " automatically call the smt solver on generated SMT");
+    ("-smt_auto", Arg.Tuple [Arg.Set opt_smt_auto], " automatically call the smt solver on generated SMT");
     ( "-smt_auto_solver",
-      Arg.String set_auto_solver,
+      Arg.Tuple [Arg.Set opt_smt_auto; Arg.String set_smt_auto_solver],
       "<cvc4/cvc5/z3> set the solver to use for counterexample checks (default cvc5)"
     );
-    ("-smt_ignore_overflow", Arg.Set Jib_smt.opt_ignore_overflow, " ignore integer overflow in generated SMT");
-    ("-smt_propagate_vars", Arg.Set Jib_smt.opt_propagate_vars, " propgate variables through generated SMT");
+    ("-smt_ignore_overflow", Arg.Set opt_smt_ignore_overflow, " ignore integer overflow in generated SMT");
     ( "-smt_int_size",
-      Arg.String (fun n -> Jib_smt.opt_default_lint_size := int_of_string n),
+      Arg.String (fun n -> opt_smt_unknown_integer_width := int_of_string n),
       "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)"
     );
+    ("-smt_propagate_vars", Arg.Unit (fun () -> ()), " (deprecated) propgate variables through generated SMT");
     ( "-smt_bits_size",
-      Arg.String (fun n -> Jib_smt.opt_default_lbits_index := int_of_string n),
-      "<n> set a bound of 2 ^ n for bitvector bitwidth in generated SMT (default 8)"
+      Arg.String (fun n -> opt_smt_unknown_bitvector_width := int_of_string n),
+      "<n> set a size bound of n for unknown-length bitvectors in generated SMT (default 64)"
     );
     ( "-smt_vector_size",
-      Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
+      Arg.String (fun n -> opt_smt_unknown_generic_vector_width := int_of_string n),
       "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)"
     );
     ( "-smt_include",
-      Arg.String (fun i -> opt_includes_smt := i :: !opt_includes_smt),
+      Arg.String (fun i -> opt_smt_includes := i :: !opt_smt_includes),
       "<filename> insert additional file in SMT output"
     );
   ]
@@ -134,8 +142,8 @@ let smt_rewrites =
 
 let smt_target _ _ out_file ast effect_info env =
   let open Ast_util in
-  let props = Property.find_properties ast in
-  let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in
+  let properties = Property.find_properties ast in
+  let prop_ids = Bindings.bindings properties |> List.map fst |> IdSet.of_list in
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
   Specialize.add_initial_calls prop_ids;
   let ast_smt, env, effect_info = Specialize.(specialize typ_specialization env ast effect_info) in
@@ -146,6 +154,25 @@ let smt_target _ _ out_file ast effect_info env =
     match out_file with Some f -> fun str -> f ^ "_" ^ str ^ ".smt2" | None -> fun str -> str ^ ".smt2"
   in
   Reporting.opt_warnings := true;
-  Jib_smt.generate_smt props name_file env effect_info !opt_includes_smt ast_smt
+  let cdefs, ctx, register_map = Jib_smt.compile ~unroll_limit:10 env effect_info ast_smt in
+  let module SMTGen = Jib_smt.Make (struct
+    let max_unknown_integer_width = !opt_smt_unknown_integer_width
+    let max_unknown_bitvector_width = !opt_smt_unknown_bitvector_width
+    let max_unknown_generic_vector_length = !opt_smt_unknown_generic_vector_width
+    let register_map = register_map
+    let ignore_overflow = !opt_smt_ignore_overflow
+  end) in
+  let module Counterexample = Smt_exp.Counterexample (struct
+    let max_unknown_integer_width = !opt_smt_unknown_integer_width
+  end) in
+  let generated_smt = SMTGen.generate_smt ~properties ~name_file ~smt_includes:!opt_smt_includes ctx cdefs in
+  if !opt_smt_auto then
+    List.iter
+      (fun ({ file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
+        Counterexample.check ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id ~args ~arg_ctyps
+          ~arg_smt_names
+      )
+      generated_smt;
+  ()
 
 let _ = Target.register ~name:"smt" ~options:smt_options ~rewrites:smt_rewrites smt_target

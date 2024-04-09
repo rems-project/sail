@@ -33,10 +33,6 @@ function automatic bit sail_eq_string(sail_unit s1, sail_unit s2);
    return 0;
 endfunction
 
-function automatic sail_unit sail_concat_str(sail_unit s1, sail_unit s2);
-   return SAIL_UNIT;
-endfunction
-
 `else
 
 function automatic sail_unit sail_print_endline(string s);
@@ -68,10 +64,6 @@ endfunction // sail_assert
 
 function automatic bit sail_eq_string(string s1, string s2);
    return s1 == s2;
-endfunction
-
-function automatic string sail_concat_str(string s1, string s2);
-   return {s1, s2};
 endfunction
 
 `endif

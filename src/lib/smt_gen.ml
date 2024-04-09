@@ -80,6 +80,8 @@ let zencode_uid (id, ctyps) =
 
 type checks = { overflows : smt_exp list; strings_used : bool; reals_used : bool }
 
+let get_overflows c = c.overflows
+
 let empty_checks = { overflows = []; strings_used = false; reals_used = false }
 
 let append_checks c1 c2 =
@@ -117,6 +119,12 @@ let rec mapM f = function
       let* x = f x in
       let* xs = mapM f xs in
       return (x :: xs)
+
+let rec iterM f = function
+  | [] -> return ()
+  | x :: xs ->
+      let* _ = f x in
+      iterM f xs
 
 let run m l =
   let state = m l in
@@ -216,7 +224,9 @@ let required_width n =
 module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
+  val max_unknown_generic_vector_length : int
   val union_ctyp_classify : ctyp -> bool
+  val register_ref : string -> smt_exp
 end
 
 module type PRIMOP_GEN = sig
@@ -241,10 +251,14 @@ let builtin_type_error fn cvals ret_ctyp_opt =
       raise (Reporting.err_todo l message)
   | None -> raise (Reporting.err_todo l (Printf.sprintf "%s : (%s)" fn args))
 
+type undefined_mode = Undefined_zeros | Undefined_bits | Undefined_disable
+
+let undefined_enabled = function Undefined_disable -> false | _ -> true
+
 module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let lint_size = Config.max_unknown_integer_width
   let lbits_size = Config.max_unknown_bitvector_width
-  let lbits_index = required_width (Big_int.of_int (lbits_size - 1))
+  let lbits_index = required_width (Big_int.of_int lbits_size)
 
   let int_size = function
     | CT_constant n -> required_width n
@@ -256,6 +270,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits sz | CT_sbits sz -> sz
     | CT_lbits -> lbits_size
     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Argument to bv_size must be a bitvector type"
+
+  let generic_vector_length = function
+    | CT_fvector (n, _) -> n
+    | CT_vector _ -> Config.max_unknown_generic_vector_length
+    | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          "Argument to generic_vector_length must be a generic vector type"
 
   let to_fbits ctyp bv =
     match ctyp with
@@ -281,7 +302,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | VL_real str, _ ->
         let* _ = real_used in
         return (if str.[0] = '-' then Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))]) else Real_lit str)
-    | VL_ref str, _ -> return (Fn ("reg_ref", [String_lit str]))
+    | VL_ref str, _ -> return (Config.register_ref str)
     | _ ->
         let* l = current_location in
         Reporting.unreachable l __POS__
@@ -291,9 +312,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     match (op, args) with
     | Bnot, [arg] -> Fn ("not", [arg])
     | Bor, [arg] -> arg
-    | Bor, args -> Fn ("or", args)
+    | Bor, args -> smt_disj args
     | Band, [arg] -> arg
-    | Band, args -> Fn ("and", args)
+    | Band, args -> smt_conj args
     | Eq, args -> Fn ("=", args)
     | Neq, args -> Fn ("not", [Fn ("=", args)])
     | Ilt, [lhs; rhs] -> Fn ("bvslt", [lhs; rhs])
@@ -325,6 +346,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         match cval with
         | V_lit (vl, ctyp) -> literal vl ctyp
         | V_id (id, _) -> return (Var id)
+        | V_member (id, _) -> return (Var (Name (id, -1)))
         | V_call (List_hd, [arg]) ->
             let* l = current_location in
             let op = Primop_gen.hd l (cval_ctyp arg) in
@@ -466,10 +488,30 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             else if sz1 > sz2 then Fn (fn, [sv1; SignExtend (sz1, sz1 - sz2, sv2)])
             else Fn (fn, [SignExtend (sz2, sz2 - sz1, sv1); sv2])
           )
-    | CT_constant c, CT_fint sz -> return (Fn (fn, [bvint sz c; sv2]))
-    | CT_fint sz, CT_constant c -> return (Fn (fn, [sv1; bvint sz c]))
-    | CT_constant c, CT_lint -> return (Fn (fn, [bvint lint_size c; sv2]))
-    | CT_lint, CT_constant c -> return (Fn (fn, [sv1; bvint lint_size c]))
+    | CT_constant c, CT_fint sz ->
+        let constant_sz = required_width c in
+        if constant_sz <= sz then return (Fn (fn, [bvint sz c; sv2]))
+        else
+          let* sv2 = signed_size ~checked:false ~into:constant_sz ~from:sz sv2 in
+          return (Fn (fn, [bvint constant_sz c; sv2]))
+    | CT_fint sz, CT_constant c ->
+        let constant_sz = required_width c in
+        if constant_sz <= sz then return (Fn (fn, [sv1; bvint sz c]))
+        else
+          let* sv1 = signed_size ~checked:false ~into:constant_sz ~from:sz sv1 in
+          return (Fn (fn, [sv1; bvint constant_sz c]))
+    | CT_constant c, CT_lint ->
+        let constant_sz = required_width c in
+        if constant_sz <= lint_size then return (Fn (fn, [bvint lint_size c; sv2]))
+        else
+          let* sv2 = signed_size ~checked:false ~into:constant_sz ~from:lint_size sv2 in
+          return (Fn (fn, [bvint constant_sz c; sv2]))
+    | CT_lint, CT_constant c ->
+        let constant_sz = required_width c in
+        if constant_sz <= lint_size then return (Fn (fn, [sv1; bvint lint_size c]))
+        else
+          let* sv1 = signed_size ~checked:false ~into:constant_sz ~from:lint_size sv1 in
+          return (Fn (fn, [sv1; bvint constant_sz c]))
     | CT_fint sz, CT_lint when sz < lint_size -> return (Fn (fn, [SignExtend (lint_size, lint_size - sz, sv1); sv2]))
     | CT_lint, CT_fint sz when sz < lint_size -> return (Fn (fn, [sv1; SignExtend (lint_size, lint_size - sz, sv2)]))
     | _, _ -> builtin_type_error fn [v1; v2] None
@@ -510,6 +552,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     let all_ones = bvones lbits_size in
     let shift = Fn ("concat", [bvzero (lbits_size - lbits_index); len]) in
     bvnot (bvshl all_ones shift)
+
+  let wf_lbits bv =
+    let mask = bvnot (bvmask (Fn ("len", [bv]))) in
+    Fn ("=", [bvand mask (Fn ("contents", [bv])); bvzero lbits_size])
 
   let builtin_shift shiftop vbits vshift ret_ctyp =
     match cval_ctyp vbits with
@@ -575,22 +621,19 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits n, _, CT_fbits m ->
         let* bv = smt_cval vbits in
         return (Fn ("concat", [bvzero (m - n); bv]))
-    | CT_fbits n, CT_fint m, CT_lbits ->
-        let* bv = smt_cval vbits in
-        return (Fn ("concat", [bvzero (m - n); bv]))
     | CT_lbits, _, CT_fbits m ->
         let* bv = smt_cval vbits in
         return (Extract (m - 1, 0, Fn ("contents", [bv])))
-        (*
-    | CT_fbits n, CT_lbits ->
-      assert (lbits_size ctx >= n);
-      let vbits =
-        if lbits_size ctx = n then smt_cval ctx vbits
-        else if lbits_size ctx > n then Fn ("concat", [bvzero (lbits_size ctx - n); smt_cval ctx vbits])
-        else assert false
-      in
-      Fn ("Bits", [bvzeint ctx ctx.lbits_index vlen; vbits])
-           *)
+    | CT_fbits n, _, CT_lbits ->
+        let* bits =
+          if lbits_size = n then smt_cval vbits
+          else if lbits_size > n then
+            let* unextended = smt_cval vbits in
+            return (Fn ("concat", [bvzero (lbits_size - n); unextended]))
+          else assert false
+        in
+        let* len = bvzeint lbits_index vlen in
+        return (Fn ("Bits", [len; bits]))
     | CT_lbits, CT_lint, CT_lbits ->
         let* len = smt_cval vlen in
         let* bv = smt_cval vbits in
@@ -746,13 +789,17 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
     | CT_fbits n, CT_fbits m, CT_fbits o ->
         assert (n + m = o);
-        let* smt1 = smt_cval v1 in
-        let* smt2 = smt_cval v2 in
-        return (Fn ("concat", [smt1; smt2]))
+        if n = 0 then smt_cval v2
+        else if m = 0 then smt_cval v1
+        else
+          let* smt1 = smt_cval v1 in
+          let* smt2 = smt_cval v2 in
+          return (Fn ("concat", [smt1; smt2]))
+    | CT_fbits n, CT_lbits, CT_lbits when n = 0 -> smt_cval v2
     | CT_fbits n, CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
-        let x = Fn ("concat", [bvzero (lbits_size - n); smt1]) in
+        let x = if lbits_size = n then smt1 else Fn ("concat", [bvzero (lbits_size - n); smt1]) in
         let shift = Fn ("concat", [bvzero (lbits_size - lbits_index); Fn ("len", [smt2])]) in
         return
           (Fn
@@ -767,28 +814,23 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
         return (Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2])))
-        (*
     | CT_lbits, CT_fbits n, CT_lbits ->
-      let smt1 = smt_cval ctx v1 in
-      let smt2 = smt_cval ctx v2 in
-      Fn
-        ( "Bits",
-          [
-            bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt1]));
-            Extract (lbits_size ctx - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]));
-          ]
-        )
+        let* smt1 = smt_cval v1 in
+        let* smt2 = smt_cval v2 in
+        return
+          (Fn
+             ( "Bits",
+               [
+                 bvadd (bvint lbits_index (Big_int.of_int n)) (Fn ("len", [smt1]));
+                 Extract (lbits_size - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]));
+               ]
+             )
+          )
     | CT_fbits n, CT_fbits m, CT_lbits ->
-      let smt1 = smt_cval ctx v1 in
-      let smt2 = smt_cval ctx v2 in
-      Fn
-        ( "Bits",
-          [
-            bvint ctx.lbits_index (Big_int.of_int (n + m));
-            unsigned_size ctx (lbits_size ctx) (n + m) (Fn ("concat", [smt1; smt2]));
-          ]
-        )
-           *)
+        let* smt1 = smt_cval v1 in
+        let* smt2 = smt_cval v2 in
+        let* appended = unsigned_size ~into:lbits_size ~from:(n + m) (Fn ("concat", [smt1; smt2])) in
+        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int (n + m)); appended]))
     | CT_lbits, CT_lbits, CT_lbits ->
         let* smt1 = smt_cval v1 in
         let* smt2 = smt_cval v2 in
@@ -797,14 +839,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         return
           (Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
           )
-        (*
     | CT_lbits, CT_lbits, CT_fbits n ->
-      let smt1 = smt_cval ctx v1 in
-      let smt2 = smt_cval ctx v2 in
-      let x = Fn ("contents", [smt1]) in
-      let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
-      unsigned_size ctx n (lbits_size ctx) (bvor (bvshl x shift) (Fn ("contents", [smt2])))
-           *)
+        let* smt1 = smt_cval v1 in
+        let* smt2 = smt_cval v2 in
+        let x = Fn ("contents", [smt1]) in
+        let shift = Fn ("concat", [bvzero (lbits_size - lbits_index); Fn ("len", [smt2])]) in
+        unsigned_size ~into:n ~from:lbits_size (bvor (bvshl x shift) (Fn ("contents", [smt2])))
     | _ -> builtin_type_error "append" [v1; v2] (Some ret_ctyp)
 
   let builtin_sail_truncate v1 v2 ret_ctyp =
@@ -878,7 +918,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* vec = smt_cval vec in
         let* i =
           bind (smt_cval i)
-            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1))) ~from:(int_size i_ctyp))
         in
         return (Fn ("select", [vec; i]))
         (*
@@ -957,7 +997,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* x = smt_cval x in
         let* i =
           bind (smt_cval i)
-            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1))) ~from:(int_size i_ctyp))
         in
         return (Store (Fixed len, store_fn, vec, i, x))
     (*
@@ -1052,24 +1092,69 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         return (bvshl (bvone lint_size) v)
     | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
-  (* Technically, there's no bvclz in SMTLIB, but we can't generate
-     anything nice, so leave it in case a backend like SystemVerilog
-     can do better *)
   let builtin_count_leading_zeros v ret_ctyp =
-    let* l = current_location in
+    let ret_sz = int_size ret_ctyp in
+    let rec lzcnt sz smt =
+      if sz == 1 then
+        Ite
+          ( Fn ("=", [Extract (0, 0, smt); Bitvec_lit [Sail2_values.B0]]),
+            bvint ret_sz (Big_int.of_int 1),
+            bvint ret_sz Big_int.zero
+          )
+      else (
+        assert (sz land (sz - 1) = 0);
+        let hsz = sz / 2 in
+        Ite
+          ( Fn ("=", [Extract (sz - 1, hsz, smt); bvzero hsz]),
+            Fn ("bvadd", [bvint ret_sz (Big_int.of_int hsz); lzcnt hsz (Extract (hsz - 1, 0, smt))]),
+            lzcnt hsz (Extract (sz - 1, hsz, smt))
+          )
+      )
+    in
+    let smallest_greater_power_of_two n =
+      let m = ref 1 in
+      while !m < n do
+        m := !m lsl 1
+      done;
+      assert (!m land (!m - 1) = 0);
+      !m
+    in
+    let* smt = smt_cval v in
     match cval_ctyp v with
+    | CT_fbits sz when sz land (sz - 1) = 0 -> return (lzcnt sz smt)
     | CT_fbits sz ->
-        let bvclz = Primop_gen.count_leading_zeros l sz in
-        let* bv = smt_cval v in
-        unsigned_size ~max_value:sz ~into:(int_size ret_ctyp) ~from:sz (Fn (bvclz, [bv]))
+        let padded_sz = smallest_greater_power_of_two sz in
+        let padding = bvzero (padded_sz - sz) in
+        return
+          (Fn
+             ("bvsub", [lzcnt padded_sz (Fn ("concat", [padding; smt])); bvint ret_sz (Big_int.of_int (padded_sz - sz))])
+          )
     | CT_lbits ->
-        let bvclz = Primop_gen.count_leading_zeros l lbits_size in
-        let* bv = smt_cval v in
-        let contents_clz = Fn (bvclz, [Fn ("contents", [bv])]) in
-        let* len = unsigned_size ~into:lbits_size ~from:lbits_index (Fn ("len", [bv])) in
-        let lz = bvsub contents_clz (bvsub (bvpint lbits_size (Big_int.of_int lbits_size)) len) in
-        unsigned_size ~max_value:lbits_size ~into:(int_size ret_ctyp) ~from:lbits_size lz
+        return
+          (Fn
+             ( "bvsub",
+               [
+                 lzcnt lbits_size (Fn ("contents", [smt]));
+                 Fn
+                   ( "bvsub",
+                     [
+                       bvint ret_sz (Big_int.of_int lbits_size);
+                       Fn ("concat", [bvzero (ret_sz - lbits_index); Fn ("len", [smt])]);
+                     ]
+                   );
+               ]
+             )
+          )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
+
+  let unary_smt op v _ =
+    let* smt = smt_cval v in
+    return (Fn (op, [smt]))
+
+  let binary_smt op v1 v2 _ =
+    let* smt1 = smt_cval v1 in
+    let* smt2 = smt_cval v2 in
+    return (Fn (op, [smt1; smt2]))
 
   let arity_error =
     let* l = current_location in
@@ -1086,25 +1171,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let ternary_primop f =
     Some (fun args ret_ctyp -> match args with [v1; v2; v3] -> f v1 v2 v3 ret_ctyp | _ -> arity_error)
 
-  let builtin = function
-    | "eq_bit" ->
-        binary_primop_simple (fun v1 v2 ->
-            let* smt1 = smt_cval v1 in
-            let* smt2 = smt_cval v2 in
-            return (Fn ("=", [smt1; smt2]))
-        )
-    | "eq_bool" ->
-        binary_primop_simple (fun v1 v2 ->
-            let* smt1 = smt_cval v1 in
-            let* smt2 = smt_cval v2 in
-            return (Fn ("=", [smt1; smt2]))
-        )
+  let builtin ?(allow_io = true) ?(undefined = Undefined_disable) = function
+    | "eq_bit" -> binary_primop (binary_smt "=")
+    | "eq_bool" -> binary_primop (binary_smt "=")
+    | "eq_string" -> binary_primop (binary_smt "=")
     | "eq_int" -> binary_primop_simple builtin_eq_int
-    | "not" ->
-        unary_primop_simple (fun v ->
-            let* v = smt_cval v in
-            return (Fn ("not", [v]))
-        )
+    | "not" -> unary_primop (unary_smt "not")
     | "lt" -> binary_primop_simple builtin_lt
     | "lteq" -> binary_primop_simple builtin_lteq
     | "gt" -> binary_primop_simple builtin_gt
@@ -1152,7 +1224,23 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "length" -> unary_primop builtin_length
     | "replicate_bits" -> binary_primop builtin_replicate_bits
     | "count_leading_zeros" -> unary_primop builtin_count_leading_zeros
-    | "print_bits" ->
+    | "eq_real" -> binary_primop (binary_smt "=")
+    | "neg_real" -> unary_primop (unary_smt "-")
+    | "add_real" -> binary_primop (binary_smt "+")
+    | "sub_real" -> binary_primop (binary_smt "-")
+    | "mult_real" -> binary_primop (binary_smt "*")
+    | "div_real" -> binary_primop (binary_smt "/")
+    | "lt_real" -> binary_primop (binary_smt "<")
+    | "gt_real" -> binary_primop (binary_smt ">")
+    | "lteq_real" -> binary_primop (binary_smt "<=")
+    | "gteq_real" -> binary_primop (binary_smt ">=")
+    | "concat_str" ->
+        binary_primop_simple (fun str1 str2 ->
+            let* str1 = smt_cval str1 in
+            let* str2 = smt_cval str2 in
+            return (Fn ("str.++", [str1; str2]))
+        )
+    | "print_bits" when allow_io ->
         binary_primop_simple (fun str bv ->
             let* l = current_location in
             let op = Primop_gen.print_bits l (cval_ctyp bv) in
@@ -1188,13 +1276,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let* bv = smt_cval bv in
             return (Fn (op, [bv]))
         )
-    | "sail_assert" ->
+    | "sail_assert" when allow_io ->
         binary_primop_simple (fun b msg ->
             let* b = smt_cval b in
             let* msg = smt_cval msg in
             return (Fn ("sail_assert", [b; msg]))
         )
-    | "reg_deref" ->
+    | "reg_deref" when allow_io ->
         unary_primop_simple (fun reg_ref ->
             match cval_ctyp reg_ref with
             | CT_ref ctyp ->

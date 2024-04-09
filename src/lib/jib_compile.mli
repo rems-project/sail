@@ -158,10 +158,12 @@ module type CONFIG = sig
      for debugging C but we want to turn it off for SMT generation
      where we can't use strings *)
   val track_throw : bool
+
+  val use_void : bool
 end
 
 module IdGraph : sig
-  include Graph.S with type node = id
+  include Graph.S with type node = id and type node_set = IdSet.t
 end
 
 val callgraph : cdef list -> IdGraph.graph
