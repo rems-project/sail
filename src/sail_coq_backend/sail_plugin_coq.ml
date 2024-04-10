@@ -231,8 +231,16 @@ let output libs files =
     )
     files
 
+let ignore_grouped_regstate () =
+  if !State.opt_type_grouped_regstate then begin
+    Reporting.simple_warn "-grouped-regstate option not supported in the Coq back-end, ignoring";
+    State.opt_type_grouped_regstate := false
+  end
+
 let coq_target _ _ out_file ast effect_info env =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output !opt_libs_coq [(out_file, effect_info, env, ast)]
 
-let _ = Target.register ~name:"coq" ~options:coq_options ~rewrites:coq_rewrites ~asserts_termination:true coq_target
+let _ =
+  Target.register ~name:"coq" ~options:coq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
+    ~asserts_termination:true coq_target
