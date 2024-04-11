@@ -398,14 +398,102 @@ let remove_identity_funcs op =
       else op
   ) op identity_funcs
 
+let extract_captured_operand pattern s =
+  if Str.string_match pattern s 0 then
+    let captured_group = Str.matched_group 0 s in
+    let optional_operand_parts = String.split_on_char '(' captured_group in
+    let captured_op = List.hd optional_operand_parts in
+    debug_print ("Captured operand: " ^ captured_op);
+    Some captured_op
+  else
+    None
+
+let extract_opt_operands_fn pattern op_list =
+    (*
+       This extracts the optional operands function names from the captured regex:
+       eg: maybe_vmask(vm) -> maybe_vmask
+       This is further used as key to the mappings table to extract the optional
+       operands.
+    *)
+  let captured_operand = List.find_map (fun s -> extract_captured_operand pattern s) op_list in
+  match captured_operand with
+  | Some op -> Some true, op
+  | None -> None, ""
+
+let optional_operand k op =
+    (*
+        The current regex pattern targets a specific function name pattern
+        that starts with "maybe_*", such as "maybe_vmask", "maybe_lmul_flag", and "maybe_ta_flag".
+        Since those kinds are the most prevalent ones as of now.
+
+        TODO: come up with a more robust implementation, that doesn't involve
+        specifying function names explicitly.
+    *)
+  let pattern = Str.regexp_case_fold ("maybe[a-z0-9_]+\\(" ^ "(" ^ op ^ ")" ^ "\\)") in
+    match Hashtbl.find_opt assembly_clean k with
+    | Some op_list -> extract_opt_operands_fn pattern op_list
+    | None -> None, ""
+
+let find_operand zero_bit_pattern (l, r) =
+  match l, r with
+  | [], _ | _, [] -> None
+  | last_l :: _, last_r :: _ when zero_bit_pattern last_r ->
+      let default_value = List.hd (List.rev l) in
+      debug_print ("Found default operand: " ^ default_value);
+      Some default_value
+  | _ -> None
+
+(*
+    This examines zero-bit patterns like 0b0, 0b00, 0b000, etc.,
+    retrieved from the mappings Hashtbl to deduce the default operands.
+
+    The function expects mappings where a null value will be associated with an
+    all-zero bit string on the right side of the mapping.
+    The left most element of the list associated with the corresponding mappings is then
+    extracted to get the default operands.
+
+    Example mapping:
+    ```
+    mapping maybe_ta_flag : string <-> bits(1) = {
+      ""           <-> 0b0, (* tu by default *)
+      sep() ^ "ta" <-> 0b1,
+      sep() ^ "tu" <-> 0b0
+    }
+    ```
+    Sample hastable representation can be seen by printing the mappings table.
+    ```
+    maybe_ta_flag: sep,tu <-> 0b0
+    maybe_ta_flag: sep,ta <-> 0b1
+    ```
+    In the above case, "tu" is extracted.
+
+    TODO: Come up with a more robust implementation to parse the operands.
+*)
+let default_operand optional opt_operand =
+  let values = Hashtbl.find_all mappings opt_operand in
+  let zero_bit_pattern s = Str.string_match (Str.regexp "0b0+$") s 0 in
+  match optional with
+  | Some true -> List.find_map (find_operand zero_bit_pattern) values
+  | _ -> None
+
 let json_of_operand k op =
   debug_print ("json_of_operand " ^ k ^ ":" ^ op);
   let opmap = List.combine (Hashtbl.find operands k) (Hashtbl.find sigs k) in
-    let opplus = remove_identity_funcs op in
-      let opname = List.hd (String.split_on_char ',' opplus) in
-        match List.find_opt (fun (name, t) -> String.equal name opname) opmap with
-            Some (name, t) -> "{ \"name\": \"" ^ name ^ "\", \"type\": \"" ^ t ^ "\" }"
-          | None -> "{ \"name\": \"" ^ opname ^ "\", \"type\": \"unknown\" }"
+      let opplus = remove_identity_funcs op in
+          let opname = List.hd (String.split_on_char ',' opplus) in
+              let optional, opt_operand = optional_operand k op in
+                  let default = default_operand optional opt_operand in
+                      let optional_str = match optional with
+                        | Some b ->  string_of_bool b
+                        | None -> "false" in
+                        let name, t =
+                            match List.find_opt (fun (name, t) -> String.equal name opname) opmap with
+                            | Some (n, t) -> n, t
+                            | None -> opname, "unknown" in
+                        let default_str = match default with
+                            | Some d -> ", \"default\": \"" ^ d ^ "\""
+                            | None -> "" in
+                        "{ \"name\": \"" ^ name ^ "\", \"type\": \"" ^ t ^ "\", \"optional\": " ^ optional_str ^ default_str ^ " }"
 
 let json_of_operands k = match Hashtbl.find_opt operands k with
   | Some ops ->
