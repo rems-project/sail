@@ -188,6 +188,10 @@ val sail_ignore_write_to : forall ('a: Type). register('a) -> unit
 
 function sail_ignore_write_to(reg) = sail_mark_register(reg, "ignore_write")
 
+val sail_pick_dependency : forall ('a: Type). register('a) -> unit
+
+function sail_pick_dependency(reg) = sail_mark_register(reg, "pick")
+
 $ifdef SYMBOLIC
 val __monomorphize = pure "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
 $else
