@@ -71,6 +71,9 @@
 #include <sys/types.h>
 
 #include "sail.h"
+#ifdef HAVE_COVERAGE
+#include "sail_coverage.h"
+#endif
 #include "rts.h"
 #include "elf.h"
 
@@ -723,10 +726,10 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'c':
-#ifdef SAIL_COVERAGE_H
+#ifdef HAVE_COVERAGE
       sail_set_coverage_file(optarg);
 #else
-      fprintf(stderr, "Ignoring flag -c %s. Requires sail arg: -c_include sail_coverage.h", optarg);
+      fprintf(stderr, "Ignoring flag -c %s. Requires sail arg: -c_include sail_coverage.h\n", optarg);
 #endif
       break;
 
