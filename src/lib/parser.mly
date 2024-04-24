@@ -859,7 +859,7 @@ vector_update:
     { VU_single (mk_exp (E_id $1) $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)}
 
 vector_update_list:
-  | vector_update
+  | vector_update Comma?
     { [$1] }
   | vector_update Comma vector_update_list
     { $1 :: $3 }
