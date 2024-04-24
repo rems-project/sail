@@ -319,8 +319,6 @@ let latex_of_markdown str =
 
   replace_this (format (of_string str))
 
-let docstring _ = empty
-
 let add_links str =
   let r = Str.regexp {|\([a-zA-Z0-9_]+\)\([ ]*\)(|} in
   let subst s =
@@ -370,7 +368,7 @@ let rec read_lines in_chan = function
       let ls = read_lines in_chan (n - 1) in
       l :: ls
 
-let latex_loc no_loc l =
+let latex_loc ?(docstring = empty) no_loc l =
   match Reporting.simp_loc l with
   | Some (p1, p2) -> begin
       let open Lexing in
@@ -384,21 +382,21 @@ let latex_loc no_loc l =
           doc ^^ hardline
         with _ ->
           close_in_noerr in_chan;
-          docstring l ^^ no_loc
-      with _ -> docstring l ^^ no_loc
+          docstring ^^ no_loc
+      with _ -> docstring ^^ no_loc
     end
-  | None -> docstring l ^^ no_loc
+  | None -> docstring ^^ no_loc
 
 let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
   Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ~simple:true ts
 
-let latex_command cat id no_loc l =
+let latex_command ~docstring cat id no_loc l =
   state.this <- Some id;
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
   let chan = open_out (Filename.concat !opt_directory code_file) in
-  let doc = if cat = Val then no_loc else latex_loc no_loc l in
+  let doc = if cat = Val then no_loc else latex_loc ~docstring no_loc l in
   output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
   let command = sprintf "\\%s" (latex_cat_id cat id) in
@@ -411,9 +409,12 @@ let latex_command cat id no_loc l =
 
     ksprintf string "\\newcommand{%s}{\\saildoclabelled{%s}{\\saildoc%s{" command (refcode_cat_id cat id)
       (category_name_simple cat)
-    ^^ docstring l ^^ string "}{"
+    ^^ docstring ^^ string "}{"
     ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
   end
+
+let latex_docstring (def_annot : Ast.def_annot) =
+  match def_annot.doc_comment with Some contents -> string (latex_of_markdown contents) | None -> empty
 
 let latex_funcls def =
   let module StringMap = Map.Make (String) in
@@ -440,9 +441,11 @@ let latex_funcls def =
           (FunclNum (!counter + 64), id)
     in
     function
-    | (FCL_aux (funcl_aux, annot) as funcl) :: funcls ->
+    | (FCL_aux (funcl_aux, (def_annot, _)) as funcl) :: funcls ->
         let cat, id = funcl_command funcl_aux in
-        let first = latex_command cat id (Pretty_print_sail.doc_funcl funcl) (fst annot).loc in
+        let first =
+          latex_command ~docstring:(latex_docstring def_annot) cat id (Pretty_print_sail.doc_funcl funcl) def_annot.loc
+        in
         first ^^ next funcls
     | [] -> empty
   in
@@ -502,7 +505,8 @@ let defs { defs; _ } =
   let regdefs = ref Bindings.empty in
   let outcomedefs = ref Bindings.empty in
 
-  let latex_def (DEF_aux (aux, _) as def) =
+  let latex_def (DEF_aux (aux, def_annot) as def) =
+    let docstring = latex_docstring def_annot in
     match aux with
     | DEF_overload (id, ids) ->
         let doc =
@@ -510,14 +514,14 @@ let defs { defs; _ } =
         in
         overload_counters := Bindings.update id (function None -> Some 0 | Some n -> Some (n + 1)) !overload_counters;
         let count = Bindings.find id !overload_counters in
-        Some (latex_command (Overload count) id doc (id_loc id))
+        Some (latex_command ~docstring (Overload count) id doc (id_loc id))
     | DEF_val (VS_aux (VS_val_spec (_, id, _), annot) as vs) ->
         valspecs := Bindings.add id id !valspecs;
-        if !opt_simple_val then Some (latex_command Val id (doc_spec_simple vs) (fst annot))
-        else Some (latex_command Val id (Pretty_print_sail.doc_spec vs) (fst annot))
+        if !opt_simple_val then Some (latex_command ~docstring Val id (doc_spec_simple vs) (fst annot))
+        else Some (latex_command ~docstring Val id (Pretty_print_sail.doc_spec vs) (fst annot))
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
         fundefs := Bindings.add id id !fundefs;
-        Some (latex_command Function id (Pretty_print_sail.doc_def def) (fst annot))
+        Some (latex_command ~docstring Function id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_let (LB_aux (LB_val (pat, _), annot)) ->
         let ids = pat_ids pat in
         begin
@@ -525,21 +529,21 @@ let defs { defs; _ } =
           | None -> None
           | Some base_id ->
               letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
-              Some (latex_command Let base_id (Pretty_print_sail.doc_def def) (fst annot))
+              Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) (fst annot))
         end
     | DEF_type (TD_aux (tdef, annot)) ->
         let id = tdef_id tdef in
         typedefs := Bindings.add id id !typedefs;
-        Some (latex_command Type id (Pretty_print_sail.doc_def def) (fst annot))
+        Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
     | DEF_pragma ("latex", command, l) -> process_pragma l command
     | DEF_register (DEC_aux (_, annot) as dec) ->
         let id = id_of_dec_spec dec in
         regdefs := Bindings.add id id !regdefs;
-        Some (latex_command Register id (Pretty_print_sail.doc_def def) (fst annot))
+        Some (latex_command ~docstring Register id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_outcome (OV_aux (OV_outcome (id, _, _), l), _) ->
         outcomedefs := Bindings.add id id !outcomedefs;
-        Some (latex_command Outcome id (Pretty_print_sail.doc_def def) l)
+        Some (latex_command ~docstring Outcome id (Pretty_print_sail.doc_def def) l)
     | _ -> None
   in
 
