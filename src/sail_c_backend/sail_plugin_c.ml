@@ -104,10 +104,6 @@ let c_options =
       Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
       "<file> Turn on coverage tracking and output information about all branches and functions to a file"
     );
-    ( "-c_coverage_output",
-      Arg.String (fun str -> C_backend.opt_branch_coverage_output := str),
-      "<file> The generated C will output coverage at runtime to the filename provided (default sail_coverage)"
-    );
     ( "-O",
       Arg.Tuple
         [

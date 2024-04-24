@@ -631,6 +631,7 @@ static struct option options[] = {
   {"elf",        required_argument, 0, 'e'},
   {"entry",      required_argument, 0, 'n'},
   {"image",      required_argument, 0, 'i'},
+  {"coverage",   required_argument, 0, 'c'},
   {"verbosity",  required_argument, 0, 'v'},
   {"help",       no_argument,       0, 'h'},
   {0, 0, 0, 0}
@@ -654,7 +655,7 @@ int process_arguments(int argc, char *argv[])
 
   while (true) {
     int option_index = 0;
-    c = getopt_long(argc, argv, "e:n:i:b:l:C:v:h", options, &option_index);
+    c = getopt_long(argc, argv, "e:n:i:b:l:C:c:v:h", options, &option_index);
 
     if (c == -1) break;
 
@@ -719,6 +720,14 @@ int process_arguments(int argc, char *argv[])
 	fprintf(stderr, "Could not parse cycle limit %s\n", optarg);
 	return -1;
       }
+      break;
+
+    case 'c':
+#ifdef SAIL_COVERAGE_H
+      sail_set_coverage_file(optarg);
+#else
+      fprintf(stderr, "Ignoring flag -c %s. Requires sail arg: -c_include sail_coverage.h", optarg);
+#endif
       break;
 
     case 'v':
