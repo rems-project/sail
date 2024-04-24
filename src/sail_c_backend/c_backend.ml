@@ -2005,11 +2005,24 @@ let compile_ast env effect_info output_chan c_includes ast =
 
     let docs = separate_map (hardline ^^ hardline) (codegen_def ctx) cdefs in
 
+    let coverage_include =
+      let header = string "#include \"sail_coverage.h\"" in
+      (* Generate a hook for the RTS to call if we have coverage
+         enabled, so it can set the output file with an option. *)
+      let coverage_hook =
+        string "void sail_rts_set_coverage_file(char *output_file) { sail_set_coverage_file(output_file); }"
+      in
+      let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(char *) = NULL;" in
+      match !opt_branch_coverage with
+      | Some _ -> if !opt_no_rts then [header] else [header; coverage_hook]
+      | None -> if !opt_no_rts then [] else [no_coverage_hook]
+    in
+
     let preamble =
       separate hardline
         ((if !opt_no_lib then [] else [string "#include \"sail.h\""])
         @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
-        @ (if Option.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
+        @ coverage_include
         @ List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes
         @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
         )

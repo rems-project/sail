@@ -71,15 +71,14 @@
 #include <sys/types.h>
 
 #include "sail.h"
-#ifdef HAVE_COVERAGE
-#include "sail_coverage.h"
-#endif
 #include "rts.h"
 #include "elf.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+extern void sail_rts_set_coverage_file(char *output_file);
 
 static uint64_t g_elf_entry;
 uint64_t g_cycle_count = 0;
@@ -726,11 +725,11 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'c':
-#ifdef HAVE_COVERAGE
-      sail_set_coverage_file(optarg);
-#else
-      fprintf(stderr, "Ignoring flag -c %s. Requires sail arg: -c_include sail_coverage.h\n", optarg);
-#endif
+      if (&sail_rts_set_coverage_file) {
+        sail_rts_set_coverage_file(optarg);
+      } else {
+        fprintf(stderr, "Ignoring flag -c %s. Requires the model to be compiled with coverage\n", optarg);
+      }
       break;
 
     case 'v':
