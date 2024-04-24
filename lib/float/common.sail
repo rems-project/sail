@@ -47,37 +47,34 @@ val ones  : forall 'n, 'n >= 0. implicit('n) -> bits('n)
 /* The operator declarations */
 val operator << = pure "shiftl" : forall 'n. (bits('n), int) -> bits('n)
 
+/* Floating point struct */
+struct float_bits('e : Int, 'm : Int) = {
+  sign     : bits(1),
+  exp      : bits('e),
+  mantissa : bits('m),
+}
+
 /* The val func implementations */
 val      float_decompose : forall 'n, 'n in { 16, 32, 64 }.
-  bits('n) -> (
-    bits(1),
-    bits(if   'n == 16
-         then 5
-         else (if   'n == 32
-               then 8
-               else 11)
-    ),
-    bits(if   'n == 16
-         then 10
-         else (if   'n == 32
-               then 23
-               else 52)
-    ),
-  )
+  bits('n) -> (float_bits(if 'n == 16 then 5 else (if 'n == 32 then 8 else 11),
+                          if 'n == 16 then 10 else (if 'n == 32 then 23 else 52)))
 function float_decompose(op) = {
   match 'n {
-    16 => (op[15..15],
-           op[14..10],
-           op[9..0],
-    ),
-    32 => (op[31..31],
-           op[30..23],
-           op[22..0]
-    ),
-    64 => (op[63..63],
-           op[62..52],
-           op[51..0],
-    )
+    16 => struct {
+            sign     = op[15..15],
+            exp      = op[14..10],
+            mantissa = op[9..0],
+    },
+    32 => struct {
+            sign     = op[31..31],
+            exp      = op[30..23],
+            mantissa = op[22..0],
+    },
+    64 => struct {
+           sign      = op[63..63],
+           exp       = op[62..52],
+           mantissa  = op[51..0],
+    }
   }
 }
 

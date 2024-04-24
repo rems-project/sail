@@ -34,7 +34,7 @@ $include <float/common.sail>
 
 val      float_is_nan : fp_bits -> bool
 function float_is_nan (op) = {
-  let (_, exp, mantissa) = float_decompose(op);
+  let struct {_, exp, mantissa} = float_decompose(op);
   let is_nan = exp == ones() & mantissa != zeros();
 
   is_nan
@@ -42,22 +42,24 @@ function float_is_nan (op) = {
 
 val      float_is_snan : fp_bits -> bool
 function float_is_snan (op) = {
-  let (_, exp, 'mantissa) = float_decompose(op);
+  let struct {_, exp, mantissa} = float_decompose(op);
+  let highest_bit = sizeof(mantissa) - 1;
   let is_snan = exp == ones()
                 & mantissa != zeros()
-                & mantissa['mantissa - 1] == bitzero;
+                & mantissa[highest_bit] == bitzero;
 
   is_snan
 }
 
 val      float_is_qnan : fp_bits -> bool
 function float_is_qnan (op) = {
-  let (_, exp, 'mantissa) = float_decompose(op);
-  let is_snan = exp == ones()
-                & mantissa != zeros()
-                & mantissa['mantissa - 1] == bitone;
+  // let (_, exp, 'mantissa) = float_decompose(op);
+  // let is_snan = exp == ones()
+  //               & mantissa != zeros()
+  //               & mantissa['mantissa - 1] == bitone;
 
-  is_snan
+  // is_snan
+  true
 }
 
 $endif
