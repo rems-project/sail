@@ -38,9 +38,9 @@ def test_sailcov():
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches -c_coverage_output {}.taken {} -o {}'.format(sail, basename, basename, filename, basename))
+                step('{} -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches {} -o {}'.format(sail, basename, filename, basename))
                 step('cc {}.c {}/lib/*.c {}/lib/coverage/libsail_coverage.a -lgmp -lz -lpthread -ldl -I {}/lib -o {}.bin'.format(basename, sail_dir, sail_dir, sail_dir, basename))
-                step('./{}.bin'.format(basename))
+                step('./{}.bin -c {}.taken'.format(basename, basename))
                 step('{} --all {}.branches --taken {}.taken {}'.format(sailcov, basename, basename, filename))
                 step('diff {}.html {}.expect'.format(basename, basename))
                 print_ok(filename)
