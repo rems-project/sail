@@ -11,6 +11,12 @@ jobs:
       matrix:
         version: [4.08.1, 5.0.0]
         os: [ubuntu-latest, macOS-latest]
+        include:
+        - os: macos-12
+          version: 4.08.1
+        exclude:
+        - os: macos-latest
+          version: 4.08.1
 
     runs-on: ${{ matrix.os }}
 
