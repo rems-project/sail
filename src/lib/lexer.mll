@@ -297,6 +297,12 @@ and doc_comment pos b depth lstart = parse
                                             doc_comment pos b (depth - 1) false lexbuf
 					  ) }
   | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth true lexbuf }
+  | wsc+ "*\n" as prefix                { if lstart then (
+                                            Buffer.add_string b "\n";
+                                            doc_comment pos b depth true lexbuf
+                                          ) else (
+                                            Buffer.add_string b prefix; doc_comment pos b depth true lexbuf
+                                          ) }
   | wsc+ "*" wsc as prefix              { if lstart then (
                                             Buffer.add_string b (String.make (String.length prefix - 3) ' ');
                                             doc_comment pos b depth false lexbuf
