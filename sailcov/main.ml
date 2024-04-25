@@ -21,6 +21,8 @@ let opt_bad_color = ref { hue = 0; saturation = 85 }
 let opt_good_color = ref { hue = 120; saturation = 85 }
 let opt_darken = ref 5
 
+let opt_werror = ref false
+
 let clamp_degree n = max 0 (min n 360)
 let clamp_percent n = max 0 (min n 100)
 
@@ -94,7 +96,25 @@ let options =
         Arg.Set opt_colour_count,
         " colour by number of files a span appears in (instead of nesting depth)"
       );
+      ("--werror", Arg.Set opt_werror, " turn warnings into errors");
     ]
+
+let warn message =
+  if !opt_werror then (
+    prerr_endline ("Error: " ^ message);
+    exit 1
+  )
+  else prerr_endline ("Warning: " ^ message)
+
+let warn_assert where b =
+  if b then (
+    let message = "assertion failed at " ^ where in
+    if !opt_werror then (
+      prerr_endline ("Error: " ^ message);
+      exit 1
+    )
+    else prerr_endline ("Warning: " ^ message)
+  )
 
 type span = { l1 : int; c1 : int; l2 : int; c2 : int }
 
@@ -219,7 +239,7 @@ let file_info file all taken =
     | Some _, Some _ -> None
     | Some n, None -> Some n
     | None, Some _ -> begin
-        Printf.eprintf "Warning: span not in all branches file: %s\n" (string_of_span file span);
+        Printf.ksprintf warn "span not in all branches file: %s\n" (string_of_span file span);
         None
       end
     | None, None -> None
@@ -362,7 +382,7 @@ let get_file_spans filename all taken =
   let all =
     match StringMap.find_opt file all with
     | None ->
-        Printf.eprintf "Warning: %s not found in coverage files\n" file;
+        Printf.ksprintf warn "%s not found in coverage files\n" file;
         SpanMap.empty
     | Some s -> s
   in
@@ -514,7 +534,7 @@ let main () =
                   done
                 )
                 else if loc.goodness < 0 then (
-                  assert (loc.badness >= 0);
+                  warn_assert __LOC__ (loc.badness >= 0);
                   output_html_char chan loc.char;
                   current_goodness := !current_goodness + loc.goodness;
                   for _ = 1 to abs loc.goodness do
@@ -522,7 +542,7 @@ let main () =
                   done
                 )
                 else if loc.badness < 0 then (
-                  assert (loc.goodness >= 0);
+                  warn_assert __LOC__ (loc.goodness >= 0);
                   output_html_char chan loc.char;
                   current_badness := !current_badness + loc.badness;
                   for _ = 1 to abs loc.badness do
@@ -530,7 +550,7 @@ let main () =
                   done
                 )
                 else if loc.badness > 0 then (
-                  assert (loc.goodness <= 0);
+                  warn_assert __LOC__ (loc.goodness <= 0);
                   current_badness := !current_badness + loc.badness;
                   for _ = 1 to loc.badness do
                     output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (bad_color ()))
@@ -538,7 +558,7 @@ let main () =
                   output_html_char chan loc.char
                 )
                 else if loc.goodness > 0 then (
-                  assert (!current_badness == 0);
+                  warn_assert __LOC__ (!current_badness <= 0);
                   current_goodness := !current_goodness + loc.goodness;
                   for _ = 1 to loc.goodness do
                     output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (good_color ()))
@@ -553,8 +573,8 @@ let main () =
                   output_string chan "</span>"
                 );
 
-                assert (!current_goodness >= 0);
-                assert (!current_badness >= 0)
+                warn_assert __LOC__ (!current_goodness >= 0);
+                warn_assert __LOC__ (!current_badness >= 0)
               )
               line;
             output_string chan "<br>\n"
