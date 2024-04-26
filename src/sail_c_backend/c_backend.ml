@@ -2009,10 +2009,8 @@ let compile_ast env effect_info output_chan c_includes ast =
       let header = string "#include \"sail_coverage.h\"" in
       (* Generate a hook for the RTS to call if we have coverage
          enabled, so it can set the output file with an option. *)
-      let coverage_hook =
-        string "void sail_rts_set_coverage_file(char *output_file) { sail_set_coverage_file(output_file); }"
-      in
-      let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(char *) = NULL;" in
+      let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
+      let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
       match !opt_branch_coverage with
       | Some _ -> if !opt_no_rts then [header] else [header; coverage_hook]
       | None -> if !opt_no_rts then [] else [no_coverage_hook]
