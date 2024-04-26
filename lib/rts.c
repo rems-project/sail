@@ -78,7 +78,7 @@
 extern "C" {
 #endif
 
-extern void sail_rts_set_coverage_file(char *output_file);
+extern void (*sail_rts_set_coverage_file)(const char *);
 
 static uint64_t g_elf_entry;
 uint64_t g_cycle_count = 0;
@@ -725,7 +725,7 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'c':
-      if (&sail_rts_set_coverage_file) {
+      if (sail_rts_set_coverage_file != NULL) {
         sail_rts_set_coverage_file(optarg);
       } else {
         fprintf(stderr, "Ignoring flag -c %s. Requires the model to be compiled with coverage\n", optarg);

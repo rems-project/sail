@@ -43,7 +43,7 @@ def test_sailcov():
                 step('./{}.bin -c {}.taken'.format(basename, basename))
                 step('{} --all {}.branches --taken {}.taken {}'.format(sailcov, basename, basename, filename))
                 step('diff {}.html {}.expect'.format(basename, basename))
-                step('rm {}.taken {}.bin'.format(basename, basename))
+                step('rm {}.taken {}.bin {}.branches'.format(basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
