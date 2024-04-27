@@ -23,7 +23,7 @@ Given a Sail ISA specification, the tool can:
 and 
 [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem), to compute the allowed behaviour of concurrent litmus tests with respect to architectural relaxed memory models
 - support automated instruction-sequence test generation from the specification in ways that get good specification coverage, using the [Isla](https://github.com/rems-project/isla) SMT-based symbolic evaluation engine for Sail
-- generate theorem-prover-definition versions of the ISA specification, in Coq, Isabelle, or HOL4, that support interactive proof in those systems, e.g. that the ISA satisfies intended security properties
+- generate theorem-prover-definition versions of the ISA specification, in Coq, Isabelle, or HOL4, that support interactive proof in those systems, e.g. that the ISA satisfies intended security properties, such as our [proofs for the Arm Morello ISA](http://www.cl.cam.ac.uk/~pes20/morello-proofs-esop2022.pdf)
 - (in progress) generate a reference ISA model in SystemVerilog, that can be used as a reference for hardware verification (e.g. using JasperGold)
 - support interactive proof about sequential binary code, integrating the Isla symbolic evaluator and the Iris program logic in [Islaris](https://github.com/rems-project/islaris).
 
