@@ -32,7 +32,7 @@ Not all models are integrated with all tools - see the most recent papers and mo
 descriptions of the current state.
 <p>
 
-![Sail overview](https://github.com/rems-project/sail/blob/sail2/etc/overview/overview-sail.svg?raw=true)
+![Sail overview](https://github.com/rems-project/sail/blob/sail2/etc/overview/overview-sail.png?raw=true)
 
   <img width="800" src="https://www.cl.cam.ac.uk/~pes20/sail/overview-sail.png?">
 <p>
