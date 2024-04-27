@@ -16,13 +16,13 @@ Given a Sail ISA specification, the tool can:
 
 - type-check it, to check e.g. that there are no mismatches of bitvector lengths
 - generate documentation snippets, using either LaTeX or AsciiDoc, that can be included directly in ISA documents
-(see e.g. the [CHERI ISAv9](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-987.pdf#page=176) spec p176 for CHERI RISC-V, the [CHERIoT](https://www.microsoft.com/en-us/research/uploads/prod/2023/02/cheriot-63e11a4f1e629.pdf#page=91) spec p91, and the [Sail AsciiDoctor documentation for RISC-V](https://github.com/Alasdair/asciidoctor-sail/blob/master/doc/built/sail_to_asciidoc.pdf))
+(see e.g. the [CHERI ISAv9](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-987.pdf#page=176) spec from p176 for CHERI RISC-V, the [CHERIoT](https://www.microsoft.com/en-us/research/uploads/prod/2023/02/cheriot-63e11a4f1e629.pdf#page=91) spec from p91, and the [Sail AsciiDoctor documentation for RISC-V](https://github.com/Alasdair/asciidoctor-sail/blob/master/doc/built/sail_to_asciidoc.pdf))
 - generate executable emulators, in C or OCaml, that can be used as an authoritative reference in sequential-code testing and for early software bring-up
 - show specification coverage, of tests running in that generated C emulator
 - generate versions of the ISA in the form needed by relaxed memory model tools, 
 [isla-axiomatic](https://github.com/rems-project/isla)
 and 
-[RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem), to compute the allowed behaviour of concurrent litmus tests with respect to architectural relaxed memory models
+[RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem), to compute the allowed behaviour of concurrent litmus tests with respect to architectural relaxed memory models, as an authoritative reference for the concurrency behaviour
 - support automated instruction-sequence test generation from the specification in ways that get good specification coverage, using the [Isla](https://github.com/rems-project/isla) SMT-based symbolic evaluation engine for Sail
 - generate theorem-prover-definition versions of the ISA specification, in Coq, Isabelle, or HOL4, that support interactive proof in those systems, e.g. that the ISA satisfies intended security properties, such as our [proofs for the Arm Morello ISA](http://www.cl.cam.ac.uk/~pes20/morello-proofs-esop2022.pdf)
 - (in progress) generate a reference ISA model in SystemVerilog, that can be used as a reference for hardware verification (e.g. using JasperGold)
