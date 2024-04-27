@@ -359,6 +359,7 @@ The best starting point is the [POPL 2019 paper](http://www.cl.cam.ac.uk/users/p
 <a href="topic.ISA_semantics_abstracts.html#DBLP:conf/micro/GrayKMPSS15">abstract</a>&nbsp;]
 </li>
 
+</ul>
 
 Funding 
 -------
