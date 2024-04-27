@@ -166,7 +166,8 @@ and a `syntax` directory to provide the actual syntax highlighting.<
 Logo
 ----
 
-[etc/logo](etc/logo) contains the Sail logo
+[etc/logo](etc/logo) contains the Sail logo (thanks to Jean Pichon, [CC0](https://creativecommons.org/publicdomain/zero/1.0/))
+)
 
 Licensing
 ----------
