@@ -199,6 +199,8 @@ Many others have worked on specific Sail models, including in the [CHERI](https:
 Papers
 ======
 
+The best starting point is the [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf).
+
 <ul>
 
 <li>
@@ -366,7 +368,8 @@ Papers
 </li>
 
 
-## Funding 
+Funding 
+=======
 
 This work was partially supported by the UK Government Industrial Strategy Challenge Fund (ISCF) under the Digital Security by Design (DSbD) Programme, to deliver a DSbDtech enabled digital platform (grant 105694).
 This project has received funding from the European Research Council
