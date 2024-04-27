@@ -106,21 +106,17 @@ to install Sail using opam.
 Editor support
 --------------
 
-### Emacs Mode
-
+**Emacs Mode**
 [editors/sail-mode.el](editors/sail-mode.el) contains an Emacs mode
 for the most recent version of Sail which provides some basic syntax
 highlighting.
 
-### VSCode Mode
-
+**VSCode Mode**
 [editors/vscode](editors/vscode) contains a Visual Studio Code mode
 which provides some basic syntax highlighting. It is also available
 on the VSCode Marketplace.
 
-### CLion/PyCharm Syntax highlighting
-
-
+**CLion/PyCharm Syntax highlighting**
 [editors/vscode/sail](editors/vscode/sail) contains a Visual Studio Code
 mode which provides some basic syntax highlighting. CLion/PyCharm can also
 parse the [editors/vscode/sail/syntax/sail.tmLanguage.json](sail.tmLanguage.json)
@@ -128,11 +124,9 @@ file and use it to provide basic syntax highlighting.
 To install open `Preferences > Editor > TextMate Bundles`. On that settings
 page press the `+` icon and locate the [editors/vscode/sail](editors/vscode/sail)
 directory.
-
 This requires the [TextMate Bundles plugin](https://plugins.jetbrains.com/plugin/7221-textmate-bundles).
 
-### Vim
-
+**Vim**
 [editors/vim](editors/vim) contains support for syntax highlighting in the vim
 editor, in vim's usual format of an `ftdetect` directory to detect Sail files
 and a `syntax` directory to provide the actual syntax highlighting.<
