@@ -79,7 +79,7 @@ Example
 -------
 
 For example, below are excerpts from the Sail RISC-V specification defining the "ITYPE" instructions, for addition, subtraction, etc. 
-First there is the assembly abstract syntax tree (AST) clause for the ITYPE instructions, that are parameterised on a 12-bit immediate values, the source and destination register IDs, and the integer operation:
+First there is the assembly abstract syntax tree (AST) clause for the ITYPE instructions, that are parameterised on a 12-bit immediate value, the source and destination register IDs, and the integer operation:
 ```
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 ```
@@ -92,9 +92,9 @@ and finally the execution semantics for the ITYPE instructions:
 function clause execute (ITYPE (imm, rs1, rd, op)) = {
   let rs1_val = X(rs1);                      // read the source register rs1
   let immext : xlenbits = EXTS(imm);         // sign-extend the immediate argument imm
-  let result : xlenbits = match op {         // compute the result
+  let result : xlenbits = match op {         // compute the result, case-splitting on op
     RISCV_ADDI  => rs1_val + immext,         // ...for ADDI, do a bitvector addition
-    RISCV_SLTI  => EXTZ(rs1_val <_s immext),
+    RISCV_SLTI  => EXTZ(rs1_val <_s immext), // ...etc
     RISCV_SLTIU => EXTZ(rs1_val <_u immext),
     RISCV_ANDI  => rs1_val & immext,
     RISCV_ORI   => rs1_val | immext,
