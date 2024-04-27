@@ -1,0 +1,665 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Creator: fig2dev Version 3.2.8b -->
+<!-- CreationDate: 2024-04-27 08:28:15 -->
+<!-- Magnification: 1.05 -->
+<svg	xmlns="http://www.w3.org/2000/svg"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	width="735pt" height="371pt"
+	viewBox="-5754 258 11666 5881">
+<g fill="none">
+<!-- Ellipse -->
+<ellipse cx="-2115" cy="2790" rx="630" ry="225" fill="#d10000"
+	stroke="#d10000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="-540" y="3555" width="675" height="450" fill="#ffd600"/>
+<!-- Text -->
+<text xml:space="preserve" x="-180" y="3825" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Coq</text>
+<!-- Line -->
+<rect x="-540" y="4095" width="675" height="450" fill="#ffd600"/>
+<!-- Text -->
+<text xml:space="preserve" x="-180" y="4365" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Isabelle</text>
+<!-- Line -->
+<rect x="-540" y="4635" width="675" height="450" fill="#ffd600"/>
+<!-- Text -->
+<text xml:space="preserve" x="-225" y="4905" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">HOL4</text>
+<!-- Line -->
+<rect x="-585" y="3510" width="765" height="1620"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="-5400" y="4275" width="1215" height="450" fill="#ffd600"/>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="4455" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Test</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="4635" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Generation</text>
+<!-- Line -->
+<polyline points=" 5085,2565 5310,2565 5310,5085 5085,5085"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Text -->
+<g transform="translate(5445,3780) rotate(-270)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="180" text-anchor="middle">Generated Artifacts</text>
+</g><!-- Line -->
+<rect x="1125" y="3600" width="1845" height="1035"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="1170" y="3645" width="1755" height="450" fill="#ffd600"/>
+<!-- Line -->
+<rect x="1170" y="4140" width="1755" height="450" fill="#008f00"/>
+<!-- Text -->
+<text xml:space="preserve" x="2070" y="3510" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="middle">Hardware verification</text>
+<!-- Text -->
+<text xml:space="preserve" x="2070" y="3825" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Reference ISA model</text>
+<!-- Text -->
+<text xml:space="preserve" x="2070" y="4005" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">System Verilog</text>
+<!-- Text -->
+<text xml:space="preserve" x="2070" y="4320" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Hardware Model Checking</text>
+<!-- Text -->
+<text xml:space="preserve" x="2070" y="4500" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Jasper Gold</text>
+<!-- Line -->
+<defs>
+<clipPath id="cp0">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2085,2339 -2145,2339 -2122,2482 -2108,2482z"/>
+</clipPath>
+</defs>
+<polyline points=" -2115,2250 -2115,2475" clip-path="url(#cp0)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -2115,2475 -->
+<polygon points=" -2145,2339 -2115,2459 -2085,2339 -2145,2339"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp1">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -1530,2486 -1557,2432 -1674,2517 -1668,2529z"/>
+</clipPath>
+</defs>
+<polyline points=" -1125,2250 -1665,2520" clip-path="url(#cp1)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1665,2520 -->
+<polygon points=" -1557,2432 -1651,2513 -1530,2486 -1557,2432"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp2">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -1346,2613 -1357,2554 -1493,2605 -1490,2618z"/>
+</clipPath>
+</defs>
+<polyline points=" 360,2250 -1485,2610" clip-path="url(#cp2)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1485,2610 -->
+<polygon points=" -1357,2554 -1469,2607 -1346,2613 -1357,2554"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp3">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2677,2432 -2704,2486 -2566,2529 -2560,2517z"/>
+</clipPath>
+</defs>
+<polyline points=" -3109,2250 -2569,2520" clip-path="url(#cp3)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -2569,2520 -->
+<polygon points=" -2704,2486 -2583,2513 -2677,2432 -2704,2486"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp4">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2874,2558 -2884,2617 -2739,2618 -2737,2604z"/>
+</clipPath>
+</defs>
+<polyline points=" -4590,2295 -2745,2610" clip-path="url(#cp4)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -2745,2610 -->
+<polygon points=" -2884,2617 -2761,2607 -2874,2558 -2884,2617"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp5">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2874,2558 -2884,2617 -2739,2618 -2737,2604z
+		M -3958,3577 -3980,3521 -4104,3596 -4099,3609z"/>
+</clipPath>
+</defs>
+<polyline points=" -4095,3600 -2655,3015" clip-path="url(#cp5)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Backward arrow to point -4095,3600 -->
+<polygon points=" -3980,3521 -4080,3594 -3958,3577 -3980,3521"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp6">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2874,2558 -2884,2617 -2739,2618 -2737,2604z
+		M -3957,3077 -3962,3017 -4102,3054 -4101,3067z"/>
+</clipPath>
+</defs>
+<polyline points=" -4095,3060 -2745,2930" clip-path="url(#cp6)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Backward arrow to point -4095,3060 -->
+<polygon points=" -3962,3017 -4079,3058 -3957,3077 -3962,3017"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp7">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -2940,3575 -2980,3531 -3070,3645 -3060,3655z
+		M -3957,3077 -3962,3017 -4102,3054 -4101,3067z"/>
+</clipPath>
+</defs>
+<polyline points=" -2475,3105 -3060,3645" clip-path="url(#cp7)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -3060,3645 -->
+<polygon points=" -2980,3531 -3048,3634 -2940,3575 -2980,3531"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp8">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -3977,4380 -4020,4337 -4105,4455 -4095,4465z
+		M -3957,3077 -3962,3017 -4102,3054 -4101,3067z"/>
+</clipPath>
+</defs>
+<polyline points=" -3825,4185 -4095,4455" clip-path="url(#cp8)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -4095,4455 -->
+<polygon points=" -4020,4337 -4084,4444 -3977,4380 -4020,4337"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp9">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -708,4119 -724,4176 -580,4193 -577,4180z
+		M -3957,3077 -3962,3017 -4102,3054 -4101,3067z"/>
+</clipPath>
+</defs>
+<polyline points=" -1215,4005 -585,4185" clip-path="url(#cp9)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -585,4185 -->
+<polygon points=" -724,4176 -601,4181 -708,4119 -724,4176"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp10">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -674,4482 -711,4529 -584,4599 -576,4589z
+		M -3957,3077 -3962,3017 -4102,3054 -4101,3067z"/>
+</clipPath>
+</defs>
+<polyline points=" -1215,4095 -585,4590" clip-path="url(#cp10)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -585,4590 -->
+<polygon points=" -711,4529 -598,4580 -674,4482 -711,4529"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp11">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -674,4482 -711,4529 -584,4599 -576,4589z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1620,3690 -1800,3150" clip-path="url(#cp11)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Backward arrow to point -1620,3690 -->
+<polygon points=" -1692,3570 -1625,3675 -1635,3551 -1692,3570"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp12">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -3180,5248 -3120,5248 -3143,5105 -3157,5105z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -3150,5337 -3150,5292 -3150,5247 -3150,5202 -3150,5157 -3150,5112" clip-path="url(#cp12)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -3150,5112 -->
+<polygon points=" -3120,5248 -3150,5128 -3180,5248 -3120,5248"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp13">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -1605,5244 -1545,5244 -1568,5101 -1582,5101z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1575,5333 -1575,5288 -1575,5243 -1575,5198 -1575,5153 -1575,5108" clip-path="url(#cp13)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1575,5108 -->
+<polygon points=" -1545,5244 -1575,5124 -1605,5244 -1545,5244"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp14">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -693,3422 -720,3476 -582,3519 -576,3507z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1485,3060 -585,3510" clip-path="url(#cp14)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -585,3510 -->
+<polygon points=" -720,3476 -599,3503 -693,3422 -720,3476"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp15">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -799,5136 -768,5084 -902,5031 -909,5042z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -675,5175 -900,5040" clip-path="url(#cp15)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -900,5040 -->
+<polygon points=" -768,5084 -886,5048 -799,5136 -768,5084"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-1935" y="3780" width="675" height="450" fill="#ffd600"/>
+<!-- Line -->
+<rect x="-2205" y="4500" width="1295" height="585" fill="#ffd600"/>
+<!-- Line -->
+<polyline points=" 225,5220"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp16">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -1545,4340 -1605,4340 -1582,4483 -1568,4483z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1575,4251 -1575,4476" clip-path="url(#cp16)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1575,4476 -->
+<polygon points=" -1605,4340 -1575,4460 -1545,4340 -1605,4340"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-3780" y="5355" width="1305" height="450" fill="#00d1d1"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp17">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -4226,5117 -4277,5087 -4329,5222 -4318,5229z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -3757,4252 -4320,5220" clip-path="url(#cp17)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -4320,5220 -->
+<polygon points=" -4277,5087 -4312,5206 -4226,5117 -4277,5087"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp18">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -941,2760 -948,2701 -1088,2741 -1086,2755z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 2970,2250 -1080,2747" clip-path="url(#cp18)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1080,2747 -->
+<polygon points=" -948,2701 -1064,2745 -941,2760 -948,2701"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp19">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -1121,2709 -1130,2650 -1268,2694 -1266,2708z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 1665,2250 -1260,2700" clip-path="url(#cp19)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -1260,2700 -->
+<polygon points=" -1130,2650 -1244,2698 -1121,2709 -1130,2650"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp20">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -405,2890 -407,2950 -264,2932 -263,2919z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1395,2880 -270,2925" clip-path="url(#cp20)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -270,2925 -->
+<polygon points=" -407,2950 -286,2924 -405,2890 -407,2950"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-630" y="5220" width="945" height="450" fill="#e3bfe3"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp21">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M 956,3582 941,3640 1085,3653 1088,3640z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -1449,2988 1080,3645" clip-path="url(#cp21)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point 1080,3645 -->
+<polygon points=" 941,3640 1064,3641 956,3582 941,3640"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-270" y="2745" width="990" height="450" fill="#ffd600"/>
+<!-- Line -->
+<rect x="-315" y="2700" width="1080" height="540"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="3735" y="1755" width="1215" height="450" fill="#ffd0d0"/>
+<!-- Line -->
+<rect x="-3825" y="4455" width="2970" height="1395"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="585" y="5175" width="1935" height="540" fill="#008f00"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp22">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -3802,1559 -3847,1559 -3832,1672 -3818,1672z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -3825,1485 -3825,1665" clip-path="url(#cp22)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -3825,1665 -->
+<polygon points=" -3847,1559 -3825,1649 -3802,1559 -3847,1559"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-4095" y="900" width="1215" height="540" fill="#466bb0"/>
+<!-- Line -->
+<rect x="-2790" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-180" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-180" y="900" width="1215" height="540" fill="#a14000"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp23">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M 113,1559 68,1559 83,1672 97,1672z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 90,1485 90,1665" clip-path="url(#cp23)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point 90,1665 -->
+<polygon points=" 68,1559 90,1649 113,1559 68,1559"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="1125" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="2430" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="2430" y="900" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-5400" y="2790" width="1215" height="450" fill="#ffd600"/>
+<!-- Line -->
+<rect x="-5400" y="3375" width="1215" height="450" fill="#ffd600"/>
+<!-- Line -->
+<rect x="-3780" y="3735" width="1305" height="495" fill="#ffd600"/>
+<!-- Line -->
+<rect x="-5445" y="4230" width="1305" height="540"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="-5445" y="5310" width="1305" height="540"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="-5400" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp24">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -5107,1559 -5152,1559 -5137,1672 -5123,1672z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -5130,1485 -5130,1665" clip-path="url(#cp24)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -5130,1665 -->
+<polygon points=" -5152,1559 -5130,1649 -5107,1559 -5152,1559"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-4095" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-2790" y="900" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-1485" y="1665" width="1215" height="540" fill="#ffa1a1"/>
+<!-- Line -->
+<rect x="-2205" y="5355" width="1305" height="450" fill="#00d1d1"/>
+<!-- Line -->
+<rect x="-5445" y="2745" width="1305" height="1125"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<rect x="-5400" y="5355" width="1215" height="450" fill="#008f00"/>
+<!-- Line -->
+<rect x="-5400" y="900" width="1215" height="540" fill="#466bb0"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp25">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M -3120,4345 -3180,4345 -3157,4488 -3143,4488z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" -3150,4256 -3150,4481" clip-path="url(#cp25)"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Forward arrow to point -3150,4481 -->
+<polygon points=" -3180,4345 -3150,4465 -3120,4345 -3180,4345"
+	stroke="#000000" stroke-width="8px" stroke-miterlimit="8" fill="#000000"/>
+<!-- Line -->
+<rect x="-3780" y="4500" width="1305" height="585" fill="#ffd600"/>
+<!-- Line -->
+<rect x="3690" y="270" width="1305" height="1980"
+	stroke="#000000" stroke-width="8px" stroke-dasharray="10 20"/>
+<!-- Line -->
+<polyline points=" 5085,315 5310,315 5310,2205 5085,2205"
+	stroke="#000000" stroke-width="8px"/>
+<!-- Line -->
+<rect x="3735" y="315" width="1215" height="450" fill="#d0daeb"/>
+<!-- Line -->
+<rect x="3735" y="990" width="1215" height="450" fill="#d0daeb"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp26">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M 3758,884 3713,884 3728,997 3742,997z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 3735,810 3735,990" clip-path="url(#cp26)"
+	stroke="#c8c8c8" stroke-width="8px"/>
+<!-- Forward arrow to point 3735,990 -->
+<polygon points=" 3713,884 3735,974 3758,884 3713,884"
+	stroke="#c8c8c8" stroke-width="8px" stroke-miterlimit="8" fill="#c8c8c8"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp27">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M 3758,1649 3713,1649 3728,1762 3742,1762z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 3735,1485 3735,1755" clip-path="url(#cp27)"
+	stroke="#c8c8c8" stroke-width="8px"/>
+<!-- Forward arrow to point 3735,1755 -->
+<polygon points=" 3713,1649 3735,1739 3758,1649 3713,1649"
+	stroke="#c8c8c8" stroke-width="8px" stroke-miterlimit="8" fill="#c8c8c8"/>
+<!-- Line -->
+<defs>
+<clipPath id="cp28">
+	<path clip-rule="evenodd" d="M -5754,258 H 5912 V 6139 H -5754 z
+		M 3758,1649 3713,1649 3728,1762 3742,1762z
+		M -1635,3551 -1692,3570 -1624,3699 -1611,3694z"/>
+</clipPath>
+</defs>
+<polyline points=" 180,4275 181,4275 184,4276 189,4277 196,4279 207,4281 220,4285 237,4289 257,4294
+ 280,4300 305,4307 332,4315 362,4323 392,4333 424,4343 457,4354 491,4365 526,4378
+ 562,4392 599,4407 637,4423 677,4441 718,4461 761,4482 805,4506 851,4532 898,4560
+ 945,4590 994,4623 1041,4657 1085,4690 1125,4722 1161,4754 1195,4784 1226,4813
+ 1255,4842 1281,4870 1306,4897 1329,4923 1351,4949 1371,4974 1390,4998 1407,5021
+ 1423,5042 1437,5062 1450,5079 1460,5094 1469,5106 1475,5115 1485,5130" clip-path="url(#cp28)"
+	stroke="#000000" stroke-width="8px" stroke-linejoin="bevel"/>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="6075" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="middle">Proofs above Iris+Coq</text>
+<!-- Text -->
+<text xml:space="preserve" x="-5085" y="1620" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="start">asl_to_sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-180" y="5580" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Lem</text>
+<!-- Text -->
+<text xml:space="preserve" x="-180" y="5445" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">ELF model</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="2655" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="middle">Sequential Execution</text>
+<!-- Text -->
+<text xml:space="preserve" x="180" y="2925" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">LaTeX</text>
+<!-- Text -->
+<text xml:space="preserve" x="180" y="3105" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">AsciiDoc</text>
+<!-- Text -->
+<text xml:space="preserve" x="855" y="2790" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="start">Documentation</text>
+<!-- Text -->
+<text xml:space="preserve" x="855" y="3105" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="96" text-anchor="start">CHERIoT, RISC-V</text>
+<!-- Text -->
+<text xml:space="preserve" x="270" y="4050" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="start">Prover</text>
+<!-- Text -->
+<text xml:space="preserve" x="4320" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="4320" y="675" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Framemaker</text>
+<!-- Text -->
+<text xml:space="preserve" x="4320" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">XML</text>
+<!-- Text -->
+<text xml:space="preserve" x="4320" y="1215" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Power 2.06B</text>
+<!-- Text -->
+<text xml:space="preserve" x="4320" y="540" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Power 2.06B</text>
+<!-- Text -->
+<text xml:space="preserve" x="5805" y="450" fill="#000000" font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start"></text>
+<!-- Text -->
+<text xml:space="preserve" x="-2340" y="6075" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="middle">Concurrent Execution</text>
+<!-- Text -->
+<text xml:space="preserve" x="855" y="2970" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="96" text-anchor="start">CHERI-RISC-V</text>
+<!-- Text -->
+<text xml:space="preserve" x="1890" y="2970" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="96" text-anchor="start">CHERIoT</text>
+<!-- Text -->
+<text xml:space="preserve" x="1890" y="3105" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="96" text-anchor="start">CHERI-MIPS</text>
+<!-- Text -->
+<text xml:space="preserve" x="270" y="4230" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="start">Defns</text>
+<!-- Text -->
+<text xml:space="preserve" x="1575" y="5580" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Machine-checked proofs</text>
+<!-- Text -->
+<text xml:space="preserve" x="1575" y="5355" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="120" text-anchor="middle">ISA Security Properties</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3780" y="1620" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="start">asl_to_sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="1980" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">(CHERI ARM)</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="1845" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Morello</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="1215" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">(CHERI ARM)</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">ASL</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3510" y="1080" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Morello</text>
+<!-- Text -->
+<text xml:space="preserve" x="-2205" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-900" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-900" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">CHERIoT</text>
+<!-- Text -->
+<text xml:space="preserve" x="-2205" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="405" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="405" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">x86</text>
+<!-- Text -->
+<text xml:space="preserve" x="405" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">ACL2</text>
+<!-- Text -->
+<text xml:space="preserve" x="405" y="1170" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">x86</text>
+<!-- Text -->
+<text xml:space="preserve" x="1710" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="3015" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="3015" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="2970" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sequential</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="3150" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Emulator (C)</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="3555" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sequential</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="3735" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Emulator (OCaml)</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="4140" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="132" text-anchor="middle">ISA Tests</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="5535" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Islaris</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4770" y="5715" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Proof Tool</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4815" y="1350" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">ASL</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4815" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Arm-A</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4815" y="1170" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Arm-A</text>
+<!-- Text -->
+<text xml:space="preserve" x="-4815" y="2115" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="3915" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Isla SMT</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1620" y="4050" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Lem</text>
+<!-- Text -->
+<text xml:space="preserve" x="3870" y="2430" fill="#c8c8c8" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="start">In legacy Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-810" y="585" fill="#1a1a9a" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="264" text-anchor="middle">Sail ISA models and tooling</text>
+<!-- Text -->
+<g transform="translate(5445,1260) rotate(-270)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="180" text-anchor="middle">ISA Definitions</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="3780" y="900" fill="#c8c8c8" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="start">Framemaker export</text>
+<!-- Text -->
+<text xml:space="preserve" x="3780" y="1620" fill="#c8c8c8" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="start">parse and patch</text>
+<!-- Text -->
+<text xml:space="preserve" x="-2115" y="2835" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Sail</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="4860" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">concurrency</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1582" y="4860" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">concurrency</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="5535" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Concurrency models</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="4680" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Isla-axiomatic</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1582" y="4680" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">RMEM</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1582" y="5040" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">tool</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1575" y="5535" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Concurrency models</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="5715" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Axiomatic, Cat</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="5040" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">tool</text>
+<!-- Text -->
+<text xml:space="preserve" x="4365" y="1980" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">Power (core)</text>
+<!-- Text -->
+<text xml:space="preserve" x="-2205" y="1170" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="120" text-anchor="middle">CHERI RISC-V</text>
+<!-- Text -->
+<text xml:space="preserve" x="-2205" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">RISC-V</text>
+<!-- Text -->
+<text xml:space="preserve" x="1710" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">CHERI x86</text>
+<!-- Text -->
+<text xml:space="preserve" x="3015" y="1935" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="144" text-anchor="middle">MIPS</text>
+<!-- Text -->
+<text xml:space="preserve" x="3015" y="1170" fill="#ffffff" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="120" text-anchor="middle">CHERI-MIPS</text>
+<!-- Text -->
+<text xml:space="preserve" x="-3150" y="4140" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">symbolic evaluator</text>
+<!-- Text -->
+<text xml:space="preserve" x="-1575" y="5715" fill="#000000" font-family="AvantGarde" font-style="normal" font-weight="normal" font-size="108" text-anchor="middle">Operational, Lem</text>
+</g>
+</svg>
