@@ -74,6 +74,38 @@ There is also an older  [handwritten Sail Armv8-A ISA model](https://github.com/
 -->
 
 
+
+Example
+-------
+
+For example, below are excerpts from the Sail RISC-V specification defining the "ITYPE" instructions, for addition, subtraction, etc. 
+First there is the assembly abstract syntax tree (AST) clause for the ITYPE instructions:
+```
+union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
+```
+then the definition of the encode/decode functions between 32-bit opcodes and the AST for these instructions:
+```
+mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
+```
+and finally the execution semantics for the ITYPE instructions:
+```
+function clause execute (ITYPE (imm, rs1, rd, op)) = {
+  let rs1_val = X(rs1);                      // read the source register rs1
+  let immext : xlenbits = EXTS(imm);         // sign-extend the immediate argument imm
+  let result : xlenbits = match op {         // compute the result
+    RISCV_ADDI  => rs1_val + immext,         // ...for ADDI, do a bitvector addition
+    RISCV_SLTI  => EXTZ(rs1_val <_s immext),
+    RISCV_SLTIU => EXTZ(rs1_val <_u immext),
+    RISCV_ANDI  => rs1_val & immext,
+    RISCV_ORI   => rs1_val | immext,
+    RISCV_XORI  => rs1_val ^ immext
+  };
+  X(rd) = result;                            // write the result to the destination register
+  true                                       // successful termination
+}
+```
+
+
 This repository
 ----------------
 
