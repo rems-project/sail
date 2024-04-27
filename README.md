@@ -11,20 +11,20 @@ Overview
 Sail is a language for defining the instruction-set architecture
 (ISA) semantics of processors: the architectural specification of the behaviour of machine instructions.
 Sail is an engineer-friendly language, much like earlier vendor pseudocode, 
-with tooling to support a wide range of use-cases.
+but more precisely defined and with tooling to support a wide range of use-cases.
 Given a Sail ISA specification, the tool can:
 
-- type-check it, to check e.g. that there are no mismatches of bitvector lengths;
-- generate documentation snippets, using either LaTeX or AsciiDoc, that can be included directly in ISA documents;
-- generate executable emulators, in C or OCaml, that can be used as an authoritative reference in sequential-code testing and for early software bring-up;
-- show specification coverage, of tests running in that generated C emulator;
+- type-check it, to check e.g. that there are no mismatches of bitvector lengths
+- generate documentation snippets, using either LaTeX or AsciiDoc, that can be included directly in ISA documents
+- generate executable emulators, in C or OCaml, that can be used as an authoritative reference in sequential-code testing and for early software bring-up
+- show specification coverage, of tests running in that generated C emulator
 - generate versions of the ISA in the form needed by relaxed memory model tools, 
 [isla-axiomatic](https://github.com/rems-project/isla)
 and 
-[RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem), to compute the allowed behaviour of concurrent litmus tests with respect to architectural relaxed memory models;
-- support automated instruction-sequence test generation from the specification in ways that get good specification coverage, using the [Isla](https://github.com/rems-project/isla) SMT-based symbolic evaluation engine for Sail;
-- generate theorem-prover-definition versions of the ISA specification, in Coq, Isabelle, or HOL4, that support interactive proof in those systems, e.g. that the ISA satisfies intended security properties;
-- (in progress) generate a reference ISA model in SystemVerilog, that can be used as a reference for hardware verification (e.g. using JasperGold); and
+[RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem), to compute the allowed behaviour of concurrent litmus tests with respect to architectural relaxed memory models
+- support automated instruction-sequence test generation from the specification in ways that get good specification coverage, using the [Isla](https://github.com/rems-project/isla) SMT-based symbolic evaluation engine for Sail
+- generate theorem-prover-definition versions of the ISA specification, in Coq, Isabelle, or HOL4, that support interactive proof in those systems, e.g. that the ISA satisfies intended security properties
+- (in progress) generate a reference ISA model in SystemVerilog, that can be used as a reference for hardware verification (e.g. using JasperGold)
 - support interactive proof about sequential binary code, integrating the Isla symbolic evaluator and the Iris program logic in [Islaris](https://github.com/rems-project/islaris).
 
 (Not all of these are currently supported for all models - check the current status as needed.)
@@ -58,8 +58,7 @@ There is also an older  [handwritten Sail Armv8-A ISA model](https://github.com/
 * [Sail CHERIoT](https://github.com/microsoft/cheriot-sail). This is the Microsoft specification of their [CHERIoT](https://www.microsoft.com/en-us/research/publication/cheriot-rethinking-security-for-low-cost-embedded-systems/)  ISA design for small embedded cores with CHERI protection. 
 
 * [Sail x86 (from ACL2)](https://github.com/rems-project/sail-x86-from-acl2). This is a version of the 
-[X86isa](https://www.cs.utexas.edu/users/moore/acl2/manuals/cur
-rent/manual/index-seo.php/ACL2____X86ISA) formal model of a substantial part of the x86 ISA in ACL2, by Shilpi Goel, Warren A. Hunt, Jr., and Matt Kaufmann, automatically translated into Sail.
+[X86isa](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/ACL2____X86ISA) formal model of a substantial part of the x86 ISA in ACL2, by Shilpi Goel, Warren A. Hunt, Jr., and Matt Kaufmann, automatically translated into Sail.
 
 * [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips). These are specifications of MIPS and CHERI MIPS developed in the first realisation of the CHERI architecture extensions in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project.
 
@@ -204,21 +203,16 @@ Papers
 
 <li>
 <a name="acs-2020"></a>
-
-
 <a href="https://www.cl.cam.ac.uk/~pes20/slides-acs-2022.pdf">Multicore Semantics: Making Sense of Relaxed Memory (MPhil
   slides)</a>, Peter Sewell, Christopher Pulte, Shaked Flur, Mark
   Batty, Luc Maranget, and Alasdair Armstrong, October 2022.
 [&nbsp;<a href="topic.ISA_semantics_bib.html#acs-2020">bib</a>&nbsp;| 
 <a href="https://www.cl.cam.ac.uk/~pes20/slides-acs-2022.pdf">.pdf</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="2022-pldi-islaris"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/2022-pldi-islaris.pdf">Islaris: Verification of Machine Code Against Authoritative
   ISA Semantics</a>.
  Michael Sammler, Angus Hammond, Rodolphe Lepigre, Brian Campbell,
@@ -229,14 +223,11 @@ Papers
 <a href="https://github.com/rems-project/islaris">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/2022-pldi-islaris.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#2022-pldi-islaris">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="morello-proofs-esop2022"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/morello-proofs-esop2022.pdf">Verified Security for the Morello Capability-enhanced
   Prototype Arm Architecture</a>.
  Thomas Bauereiss, Brian Campbell, Thomas Sewell, Alasdair Armstrong,
@@ -249,14 +240,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/~pes20/morello-proofs-esop2022.pdf">pdf</a>&nbsp;| 
 <a href="https://doi.org/10.1007/978-3-030-99336-8\_7">http</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#morello-proofs-esop2022">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="isla-cav"></a>
-
-
 <a href="https://www.cl.cam.ac.uk/~pes20/isla/isla-cav2021-extended.pdf">Isla: Integrating full-scale ISA semantics and axiomatic
   concurrency models</a>.
  Alasdair Armstrong, Brian Campbell, Ben Simner, Christopher Pulte,
@@ -267,14 +255,11 @@ Papers
 <a href="https://www.cl.cam.ac.uk/~pes20/isla/isla-cav2021-extended.pdf">pdf</a>&nbsp;| 
 <a href="https://doi.org/10.1007/978-3-030-81685-8\_14">http</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#isla-cav">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="sail-popl2019"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf">ISA Semantics for ARMv8-A, RISC-V, and
   CHERI-MIPS</a>.
  Alasdair Armstrong, Thomas Bauereiss, Brian Campbell, Alastair Reid,
@@ -288,14 +273,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#sail-popl2019">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="sail-arw18-minisail"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/arw18_mpew2.pdf">Formalisation of MiniSail in the Isabelle Theorem
   Prover</a>.
  Alasdair Armstrong, Neel Krishnaswami, Peter Sewell, and Mark
@@ -305,14 +287,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/arw18_mpew2.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#sail-arw18-minisail">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="sail-arw18"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/2018-04-12-arw-paper.pdf">Detailed Models of Instruction Set Architectures: From
   Pseudocode to Formal Semantics</a>.
  Alasdair Armstrong, Thomas Bauereiss, Brian Campbell, Shaked Flur,
@@ -323,14 +302,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/sail/2018-04-12-arw-paper.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#sail-arw18">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="armv8-mca"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/armv8-mca/armv8-mca-draft.pdf">Simplifying ARM Concurrency: Multicopy-atomic Axiomatic and
   Operational Models for ARMv8</a>.
  Christopher Pulte, Shaked Flur, Will Deacon, Jon French, Susmit
@@ -342,14 +318,11 @@ Papers
 <a href="https://www.cl.cam.ac.uk/~pes20/armv8-mca/errata.html">errata</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/armv8-mca/armv8-mca-draft.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#armv8-mca">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="mixed17"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/popl17/mixed-size.pdf">Mixed-size Concurrency: ARM, POWER, C/C++11, and
   SC</a>.
  Shaked Flur, Susmit Sarkar, Christopher Pulte, Kyndylan Nienhuis, Luc
@@ -360,14 +333,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/users/pes20/popl17/">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/popl17/mixed-size.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#mixed17">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="DBLP:conf/popl/FlurGPSSMDS16"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/popl16-armv8/top.pdf">Modelling the ARMv8 architecture, operationally: concurrency
   and ISA</a>.
  Shaked Flur, Kathryn&nbsp;E. Gray, Christopher Pulte, Susmit Sarkar, Ali
@@ -378,14 +348,11 @@ Papers
 <a href="http://www.cl.cam.ac.uk/~sf502/popl16/index.html">project page</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/popl16-armv8/top.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#DBLP:conf/popl/FlurGPSSMDS16">abstract</a>&nbsp;]
-
 </li>
 
 
 <li>
 <a name="DBLP:conf/micro/GrayKMPSS15"></a>
-
-
 <a href="http://www.cl.cam.ac.uk/~pes20/micro-48-2015.pdf">An integrated concurrency and core-ISA architectural envelope
   definition, and test oracle, for IBM POWER multiprocessors</a>
   .
@@ -396,7 +363,6 @@ Papers
 <a href="http://dx.doi.org/10.1145/2830772.2830775">doi</a>&nbsp;| 
 <a href="http://www.cl.cam.ac.uk/~pes20/micro-48-2015.pdf">pdf</a>&nbsp;| 
 <a href="topic.ISA_semantics_abstracts.html#DBLP:conf/micro/GrayKMPSS15">abstract</a>&nbsp;]
-
 </li>
 
 
