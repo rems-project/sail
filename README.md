@@ -16,7 +16,7 @@ Given a Sail ISA specification, the tool can:
 
 - type-check it, to check e.g. that there are no mismatches of bitvector lengths
 - generate documentation snippets, using either LaTeX or AsciiDoc, that can be included directly in ISA documents
-(see e.g. the [CHERI ISAv9](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-987.pdf#page=176) spec for CHERI RISC-V, and the [CHERIoT](https://www.microsoft.com/en-us/research/uploads/prod/2023/02/cheriot-63e11a4f1e629.pdf#page=91) spec)
+(see e.g. the [CHERI ISAv9](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-987.pdf#page=176) spec p176 for CHERI RISC-V, the [CHERIoT](https://www.microsoft.com/en-us/research/uploads/prod/2023/02/cheriot-63e11a4f1e629.pdf#page=91) spec p91, and the [Sail AsciiDoctor documentation for RISC-V](https://github.com/Alasdair/asciidoctor-sail/blob/master/doc/built/sail_to_asciidoc.pdf))
 - generate executable emulators, in C or OCaml, that can be used as an authoritative reference in sequential-code testing and for early software bring-up
 - show specification coverage, of tests running in that generated C emulator
 - generate versions of the ISA in the form needed by relaxed memory model tools, 
