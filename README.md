@@ -14,7 +14,7 @@ Sail is an engineer-friendly language, much like earlier vendor pseudocode,
 but more precisely defined and with tooling to support a wide range of use-cases.
 Given a Sail ISA specification, the tool can:
 
-- type-check it, to check e.g. that there are no mismatches of bitvector lengths
+- type-check it, to check e.g. that there are no unintended mismatches of bitvector lengths
 - generate documentation snippets, using either LaTeX or AsciiDoc, that can be included directly in ISA documents
 (see e.g. the [CHERI ISAv9](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-987.pdf#page=176) spec from p176 for CHERI RISC-V, the [CHERIoT](https://www.microsoft.com/en-us/research/uploads/prod/2023/02/cheriot-63e11a4f1e629.pdf#page=91) spec from p91, and the [Sail AsciiDoctor documentation for RISC-V](https://github.com/Alasdair/asciidoctor-sail/blob/master/doc/built/sail_to_asciidoc.pdf))
 - generate executable emulators, in C or OCaml, that can be used as an authoritative reference in sequential-code testing and for early software bring-up
