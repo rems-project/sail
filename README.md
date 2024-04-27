@@ -6,7 +6,7 @@ The Sail ISA specification language
 [![Build and Test](https://github.com/rems-project/sail/actions/workflows/build.yml/badge.svg)](https://github.com/rems-project/sail/actions/workflows/build.yml)
 
 Overview
-========
+--------
 
 Sail is a language for defining the instruction-set architecture
 (ISA) semantics of processors: the architectural specification of the behaviour of machine instructions.
@@ -39,7 +39,7 @@ lengths, which are automatically checked using the Z3 SMT solver.
 
 
 Sail ISA Models
-===============
+---------------
 
 Sail has been used for Arm-A, Morello (CHERI-Arm), RISC-V, CHERI-RISC-V, CHERIoT, x86, CHERI x86, MIPS, CHERI-MIPS, and IBM Power.  In most cases these are full definitions (e.g. able to boot an OS in the Sail-generated emulator), but x86, CHERI x86 and IBM Power are core user-mode fragments, and the last is in an older legacy version of Sail. 
 
@@ -75,7 +75,7 @@ There is also an older  [handwritten Sail Armv8-A ISA model](https://github.com/
 
 
 This repository
-===============
+----------------
 
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
@@ -97,31 +97,29 @@ The support library for Coq models is in [a separate repository](https://github.
 
 
 Installation
-============
+------------
 
 See [INSTALL.md](INSTALL.md) for how
 to install Sail using opam.
 
 
 Editor support
-===============
+--------------
 
-Emacs Mode
-----------
+### Emacs Mode
 
 [editors/sail-mode.el](editors/sail-mode.el) contains an Emacs mode
 for the most recent version of Sail which provides some basic syntax
 highlighting.
 
-VSCode Mode
------------
+### VSCode Mode
 
 [editors/vscode](editors/vscode) contains a Visual Studio Code mode
 which provides some basic syntax highlighting. It is also available
 on the VSCode Marketplace.
 
-CLion/PyCharm Syntax highlighting
----------------------------------
+### CLion/PyCharm Syntax highlighting
+
 
 [editors/vscode/sail](editors/vscode/sail) contains a Visual Studio Code
 mode which provides some basic syntax highlighting. CLion/PyCharm can also
@@ -133,20 +131,19 @@ directory.
 
 This requires the [TextMate Bundles plugin](https://plugins.jetbrains.com/plugin/7221-textmate-bundles).
 
-Vim
----
+### Vim
 
 [editors/vim](editors/vim) contains support for syntax highlighting in the vim
 editor, in vim's usual format of an `ftdetect` directory to detect Sail files
 and a `syntax` directory to provide the actual syntax highlighting.<
 
 Logo
-====
+----
 
 [etc/logo](etc/logo) contains the Sail logo
 
 Licensing
-=========
+----------
 
 The Sail implementation, in src/, as well as its tests in test/ and
 other supporting files in lib/ and language/, is distributed under the
@@ -169,7 +166,7 @@ The models in separate repositories are licensed as described in each.
 
 
 People
-======
+------
 
 Sail itself is developed by
 
@@ -198,7 +195,7 @@ Many others have worked on specific Sail models, including in the [CHERI](https:
 
 
 Papers
-======
+------
 
 The best starting point is the [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf).
 
@@ -370,7 +367,7 @@ The best starting point is the [POPL 2019 paper](http://www.cl.cam.ac.uk/users/p
 
 
 Funding 
-=======
+-------
 
 This work was partially supported by the UK Government Industrial Strategy Challenge Fund (ISCF) under the Digital Security by Design (DSbD) Programme, to deliver a DSbDtech enabled digital platform (grant 105694).
 This project has received funding from the European Research Council
