@@ -79,7 +79,7 @@ Example
 -------
 
 For example, below are excerpts from the Sail RISC-V specification defining the "ITYPE" instructions, for addition, subtraction, etc. 
-First there is the assembly abstract syntax tree (AST) clause for the ITYPE instructions:
+First there is the assembly abstract syntax tree (AST) clause for the ITYPE instructions, that are parameterised on a 12-bit immediate values, the source and destination register IDs, and the integer operation:
 ```
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 ```
