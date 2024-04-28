@@ -43,22 +43,24 @@ function float_is_nan (op) = {
 val      float_is_snan : fp_bits -> bool
 function float_is_snan (op) = {
   let struct {_, exp, mantissa} = float_decompose(op);
-  let highest_bit = sizeof(mantissa) - 1;
+  let highest_bit = float_mantissa_bitsize(op);
+  let tmp_1 = mantissa[highest_bit - 1];
   let is_snan = exp == ones()
-                & mantissa != zeros()
-                & mantissa[highest_bit] == bitzero;
+                & mantissa != zeros();
+                // & mantissa[highest_bit - 1] == bitzero;
 
   is_snan
 }
 
 val      float_is_qnan : fp_bits -> bool
 function float_is_qnan (op) = {
-  // let (_, exp, 'mantissa) = float_decompose(op);
-  // let is_snan = exp == ones()
+  // let (_, exp, mantissa) = float_decompose(op);
+  // let highest_bit = float_mantissa_bitsize(op) - 1;
+  // let is_qnan = exp == ones()
   //               & mantissa != zeros()
-  //               & mantissa['mantissa - 1] == bitone;
+  //               & mantissa[highest_bit] == bitone;
 
-  // is_snan
+  // is_qnan
   true
 }
 

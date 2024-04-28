@@ -35,7 +35,6 @@ infix 2 <<
 /* Floating point types definition */
 type fp_exception_flags = bits(5) /* Floating-point exception flags. */
 type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. */
-type fp_bits_x2 = { 'n, 'n in {16, 32, 64}. (bits('n), bits('n)) } /* Floating-point in bits. */
 
 /* Floating point constants */
 let fp_eflag_invalid : fp_exception_flags = 0b00001
@@ -48,16 +47,22 @@ val ones  : forall 'n, 'n >= 0. implicit('n) -> bits('n)
 val operator << = pure "shiftl" : forall 'n. (bits('n), int) -> bits('n)
 
 /* Floating point struct */
-struct float_bits('e : Int, 'm : Int) = {
+struct float_bits('n : Int) = {
   sign     : bits(1),
-  exp      : bits('e),
-  mantissa : bits('m),
+  exp      : bits(if  'n == 16
+                  then 5
+                  else (if   'n == 32
+                        then 8
+                        else 11)),
+  mantissa : bits(if  'n == 16
+                  then 10
+                  else (if   'n == 32
+                        then 23
+                        else 52)),
 }
 
 /* The val func implementations */
-val      float_decompose : forall 'n, 'n in { 16, 32, 64 }.
-  bits('n) -> (float_bits(if 'n == 16 then 5 else (if 'n == 32 then 8 else 11),
-                          if 'n == 16 then 10 else (if 'n == 32 then 23 else 52)))
+val      float_decompose : forall 'n, 'n in { 16, 32, 64 }. bits('n) -> float_bits('n)
 function float_decompose(op) = {
   match 'n {
     16 => struct {
@@ -75,6 +80,15 @@ function float_decompose(op) = {
            exp       = op[62..52],
            mantissa  = op[51..0],
     }
+  }
+}
+
+val      float_mantissa_bitsize: forall 'n, 'n in { 16, 32, 64 }. bits('n) -> int
+function float_mantissa_bitsize(op) = {
+  match 'n {
+    16 => 10,
+    32 => 23,
+    64 => 52,
   }
 }
 
