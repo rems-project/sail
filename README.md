@@ -87,7 +87,7 @@ then the definition of the encode/decode functions between 32-bit opcodes and th
 ```
 mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
 ```
-Finally the execution semantics for the ITYPE instructions defines how they behave in terms of architectural register reads and writes. This uses local immutable variables for clarity, e.g. `immext` is the sign-extended immediate value, of type `xlenbits` - a bitvector `xlen` wide.
+Finally the execution semantics for the ITYPE instructions defines how they behave in terms of architectural register reads and writes. This uses local immutable variables for clarity, e.g. `immext` is the sign-extended immediate value, of type `xlenbits`, which is a synonym for `xlen`-wide bitvectors.
 ```
 function clause execute (ITYPE (imm, rs1, rd, op)) = {
   let rs1_val = X(rs1);                      // read the source register rs1
