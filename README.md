@@ -44,28 +44,28 @@ Sail ISA Models
 Sail has been used for Arm-A, Morello (CHERI-Arm), RISC-V, CHERI-RISC-V, CHERIoT, x86, CHERI x86, MIPS, CHERI-MIPS, and IBM Power.  In most cases these are full definitions (e.g. able to boot an OS in the Sail-generated emulator), but x86, CHERI x86 and IBM Power are core user-mode fragments, and the last is in an older legacy version of Sail. 
 
 * [Sail Arm-A (from ASL)](https://github.com/rems-project/sail-arm).
-These are complete ISA models for Armv9.4-A, Armv9.3-A, and Armv8.5-A,  automatically generated from the Arm-internal ASL reference (as used in the Arm reference manual). They are provided under a BSD 3-Clause Clear license, by agreement with Arm. 
+These are complete ISA specifications for Armv9.4-A, Armv9.3-A, and Armv8.5-A,  automatically translated from the Arm-internal ASL reference (as used in the Arm reference manual). They are provided under a BSD 3-Clause Clear license, by agreement with Arm. 
 The older  [Sail Armv8.3-A](https://github.com/rems-project/sail/tree/sail2/aarch64)
 model, the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), is still available but is largely superseded. 
 There is also an older  [handwritten Sail Armv8-A ISA model](https://github.com/rems-project/sail/tree/sail2/aarch64_small)
      for a user-mode fragment.
 
-* [Sail Morello (CHERI-Arm) ISA model (from ASL)](https://github.com/CTSRD-CHERI/sail-morello), for the Arm Morello CHERI-enabled prototype architecture. This is similarly  automatically generated from the complete Arm-internal ASL definition.  This was the basis for our [Morello security proofs](https://github.com/CTSRD-CHERI/sail-morello-proofs/blob/public/README.md).
+* [Sail Morello (CHERI-Arm) (from ASL)](https://github.com/CTSRD-CHERI/sail-morello), for the Arm Morello CHERI-enabled prototype architecture. This is similarly  automatically translated from the complete Arm-internal ASL definition.  It was the basis for our [Morello security proofs](https://github.com/CTSRD-CHERI/sail-morello-proofs/blob/public/README.md).
 
-* [Sail RISC-V ISA model](https://github.com/riscv/sail-riscv). This has been adopted by the RISC-V Foundation.
+* [Sail RISC-V](https://github.com/riscv/sail-riscv). This has been adopted by the RISC-V Foundation.
 
-* [Sail CHERI RISC-V model](https://github.com/CTSRD-CHERI/sail-cheri-riscv). This is the specification of the CHERI extensions to RISC-V, developed in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project. 
+* [Sail CHERI RISC-V](https://github.com/CTSRD-CHERI/sail-cheri-riscv). This is the specification of the CHERI extensions to RISC-V, developed in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project. 
 
 * [Sail CHERIoT](https://github.com/microsoft/cheriot-sail). This is the Microsoft specification of their [CHERIoT](https://www.microsoft.com/en-us/research/publication/cheriot-rethinking-security-for-low-cost-embedded-systems/)  ISA design for small embedded cores with CHERI protection. 
 
 * [Sail x86 (from ACL2)](https://github.com/rems-project/sail-x86-from-acl2). This is a version of the 
 [X86isa](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/ACL2____X86ISA) formal model of a substantial part of the x86 ISA in ACL2, by Shilpi Goel, Warren A. Hunt, Jr., and Matt Kaufmann, automatically translated into Sail.
 
-* [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips). These are specifications of MIPS and CHERI MIPS developed in the first realisation of the CHERI architecture extensions in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project.
+* [Sail MIPS and CHERI-MIPS](https://github.com/CTSRD-CHERI/sail-cheri-mips). These are specifications of MIPS and CHERI MIPS developed in the first realisation of the CHERI architecture extensions in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project.
 
-* [Sail IBM POWER ISA model (from IBM XML)](https://github.com/rems-project/sail/tree/sail2/old/power).  This is a specification for a user-mode fragment of the IBM Power ISA, semi-automatically translated from their documentation; it is currently in a legacy version of Sail.
+* [Sail IBM POWER (from IBM XML)](https://github.com/rems-project/sail/tree/sail2/old/power).  This is a specification for a user-mode fragment of the IBM Power ISA, semi-automatically translated from their documentation; it is currently in a legacy version of Sail.
 
-* [Sail x86 ISA model (legacy)](https://github.com/rems-project/sail/tree/sail2/old/x86). This is a handwritten user-mode fragment of x86, also in a legacy version of Sail. 
+* [Sail x86 (legacy)](https://github.com/rems-project/sail/tree/sail2/old/x86). This is a handwritten user-mode fragment of x86, also in a legacy version of Sail. 
 
 <!--
 
