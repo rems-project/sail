@@ -83,11 +83,11 @@ First there is the assembly abstract syntax tree (AST) clause for the ITYPE inst
 ```
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 ```
-then the definition of the encode/decode functions between 32-bit opcodes and the AST for these instructions:
+then the definition of the encode/decode functions between 32-bit opcodes and the AST for these instructions: an `ITYPE` with immediate `imm`, source register `rs1`, destination register `rd`, and operation `op` is encoded as the bitvector concatenation on the right.
 ```
 mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ rs1 @ encdec_iop(op) @ rd @ 0b0010011
 ```
-and finally the execution semantics for the ITYPE instructions:
+Finally the execution semantics for the ITYPE instructions defines how they behave in terms of architectural register reads and writes. This uses local immutable variables for clarity, e.g. `immext` is the sign-extended immediate value, of type `xlenbits` - a bitvector `xlen` wide.
 ```
 function clause execute (ITYPE (imm, rs1, rd, op)) = {
   let rs1_val = X(rs1);                      // read the source register rs1
