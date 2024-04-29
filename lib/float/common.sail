@@ -39,13 +39,6 @@ type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. *
 /* Floating point constants */
 let fp_eflag_invalid : fp_exception_flags = 0b00001
 
-/* The val func declarations */
-val zeros : forall 'n, 'n >= 0. implicit('n) -> bits('n)
-val ones  : forall 'n, 'n >= 0. implicit('n) -> bits('n)
-
-/* The operator declarations */
-val operator << = pure "shiftl" : forall 'n. (bits('n), int) -> bits('n)
-
 /* Floating point struct */
 struct float_bits('n : Int) = {
   sign     : bits(1),
@@ -80,15 +73,6 @@ function float_decompose(op) = {
            exp       = op[62..52],
            mantissa  = op[51..0],
     }
-  }
-}
-
-val      float_mantissa_bitsize: forall 'n, 'n in { 16, 32, 64 }. bits('n) -> int
-function float_mantissa_bitsize(op) = {
-  match 'n {
-    16 => 10,
-    32 => 23,
-    64 => 52,
   }
 }
 
