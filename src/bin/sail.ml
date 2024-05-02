@@ -352,6 +352,10 @@ let rec options =
         " explain all type variables in type error messages"
       );
       ("-explain_constraints", Arg.Set Type_error.opt_explain_constraints, " explain constraints in type error messages");
+      ( "-explain_all_overloads",
+        Arg.Set Type_error.opt_explain_all_overloads,
+        " explain all possible overloading failures in type errors"
+      );
       ( "-explain_verbose",
         Arg.Tuple [Arg.Set Type_error.opt_explain_all_variables; Arg.Set Type_error.opt_explain_constraints],
         " add the maximum amount of explanation to type errors"

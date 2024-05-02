@@ -75,6 +75,7 @@ include Type_internal
 
 let opt_explain_all_variables = ref false
 let opt_explain_constraints = ref false
+let opt_explain_all_overloads = ref false
 
 type suggestion = Suggest_add_constraint of n_constraint | Suggest_none
 
@@ -232,6 +233,26 @@ let simp_typ =
     | arg -> arg
   )
 
+let rank_overload_errors errs =
+  let others, with_instantiation_info =
+    Util.map_split
+      (function id, Err_instantiation_info (heuristic, err) -> Error (id, heuristic, err) | id, err -> Ok (id, err))
+      errs
+  in
+  match List.stable_sort (fun (_, h1, _) (_, h2, _) -> Int.compare h1 h2) with_instantiation_info with
+  | (id, heuristic, err) :: rest ->
+      let same, worse = Util.take_drop (fun (_, h, _) -> heuristic = h) rest in
+      ( others @ ((id, err) :: List.map (fun (id, _, err) -> (id, err)) same),
+        Some (List.map (fun (id, _, _) -> id) worse)
+      )
+  | [] -> (others, None)
+
+let rec innermost_function_arg_error l typ err =
+  match err with
+  | Err_instantiation_info (_, err) -> innermost_function_arg_error l typ err
+  | Err_function_arg (l, typ, err) -> innermost_function_arg_error l typ err
+  | _ -> (l, typ, err)
+
 let message_of_type_error =
   let open Error_format in
   let rec msg = function
@@ -239,12 +260,33 @@ let message_of_type_error =
         let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
         Seq [msg err; Line ""; Location (prefix, hint, l', msg err')]
     | Err_other str -> if str = "" then Seq [] else Line str
+    | Err_function_arg (l, typ, err) ->
+        let l, typ, err = innermost_function_arg_error l typ err in
+        Seq [msg err; Location ("", Some ("when checking this argument has type " ^ string_of_typ typ), l, Seq [])]
     | Err_no_overloading (id, errs) ->
-        Seq
-          [
-            Line ("No overloading for " ^ string_of_id id ^ ", tried:");
-            List (List.map (fun (id, err) -> (string_of_id id, msg err)) errs);
-          ]
+        let overload_errs = List.map (fun (id, err) -> (string_of_id id, msg err)) errs in
+        if messages_all_same overload_errs then snd (List.hd overload_errs)
+        else (
+          let likely, others = if !opt_explain_all_overloads then (errs, None) else rank_overload_errors errs in
+          let other_msg =
+            match others with
+            | None | Some [] -> []
+            | Some ids ->
+                [
+                  Line "";
+                  Line ("Also tried: " ^ Util.string_of_list ", " string_of_id ids);
+                  Line "These seem less likely, use --explain-all-overloads to see full details";
+                ]
+          in
+          Seq
+            ([
+               Line ("No overloading for " ^ string_of_id id ^ ", tried:");
+               List (List.map (fun (id, err) -> (string_of_id id, msg err)) likely);
+             ]
+            @ other_msg
+            )
+        )
+    | Err_instantiation_info (_, err) -> msg err
     | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->
         Seq
           [
@@ -319,8 +361,8 @@ let message_of_type_error =
           | [info] -> format_var_constraint info
           | infos -> Seq (List.map format_var_constraint infos)
         in
-        With
-          ( (fun ppf -> { ppf with loc_color = Util.yellow }),
+        Severity
+          ( Sev_warn,
             Seq
               (Line (error_string_of_typ substs typ1 ^ " is not a subtype of " ^ error_string_of_typ substs typ2)
                ::

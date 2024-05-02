@@ -573,7 +573,7 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
       merge_uvars env l
         (List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ l env goals) arg_typs1 arg_typs2))
         (unify_typ l env goals ret_typ1 ret_typ2)
-  | _, _ -> unify_error l ("Could not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
+  | _, _ -> unify_error l ("Type mismatch between " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
 
 and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as typ_arg2) =
   match (aux1, aux2) with
@@ -3483,39 +3483,58 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   (* We now iterate throught the function arguments, checking them and
      instantiating quantifiers. *)
   let instantiate env arg typ remaining_typs =
-    if KidSet.for_all (is_bound env) (tyvars_of_typ typ) then (crule check_exp env arg typ, remaining_typs, env)
+    if KidSet.for_all (is_bound env) (tyvars_of_typ typ) then (
+      try
+        let checked_exp = crule check_exp env arg typ in
+        Ok (checked_exp, remaining_typs, env)
+      with Type_error (l, err) -> Error (l, 0, Err_function_arg (exp_loc arg, typ, err))
+    )
     else (
       let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
       typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
-      let inferred_arg = irule infer_exp env arg in
-      let inferred_arg, unifiers, env =
-        try can_unify_with env goals inferred_arg typ with Unification_error (l, m) -> typ_error l m
-      in
-      record_unifiers unifiers;
-      let unifiers = KBindings.bindings unifiers in
-      typ_debug
-        ( lazy
-          (Util.("Unifiers " |> magenta |> clear)
-          ^ Util.string_of_list ", " (fun (v, arg) -> string_of_kid v ^ " => " ^ string_of_typ_arg arg) unifiers
-          )
-          );
-      List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
-      List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
-      let remaining_typs =
-        List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) remaining_typs
-      in
-      (inferred_arg, remaining_typs, env)
+      (* We want to track how many unification and type errors we see,
+         as it provides a heuristic for how likely any error is in a
+         function overloading *)
+      match can_unify_with env goals (irule infer_exp env arg) typ with
+      | exception Unification_error (l, m) -> Error (l, 1, Err_function_arg (exp_loc arg, typ, Err_other m))
+      | exception Type_error (l, err) -> Error (l, 0, Err_function_arg (exp_loc arg, typ, err))
+      | inferred_arg, unifiers, env ->
+          record_unifiers unifiers;
+          let unifiers = KBindings.bindings unifiers in
+          typ_debug
+            ( lazy
+              (Util.("Unifiers " |> magenta |> clear)
+              ^ Util.string_of_list ", " (fun (v, arg) -> string_of_kid v ^ " => " ^ string_of_typ_arg arg) unifiers
+              )
+              );
+          List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
+          List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
+          let remaining_typs =
+            List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) remaining_typs
+          in
+          Ok (inferred_arg, remaining_typs, env)
     )
   in
   let fold_instantiate (xs, args, env) x =
     match args with
-    | arg :: remaining_args ->
-        let x, remaining_args, env = instantiate env x arg remaining_args in
-        (x :: xs, remaining_args, env)
+    | arg :: remaining_args -> (
+        match instantiate env x arg remaining_args with
+        | Ok (x, remaining_args, env) -> (Ok x :: xs, remaining_args, env)
+        | Error (l, h, m) -> (Error (l, h, m) :: xs, remaining_args, env)
+      )
     | [] -> raise (Reporting.err_unreachable l __POS__ "Empty arguments during instantiation")
   in
   let xs, _, env = List.fold_left fold_instantiate ([], typ_args, env) xs in
-  let xs = List.rev xs in
+  let xs, instantiate_errors =
+    List.fold_left
+      (fun (acc, errs) x -> match x with Ok x -> (x :: acc, errs) | Error (l, h, m) -> (acc, (l, h, m) :: errs))
+      ([], []) xs
+  in
+  begin
+    match instantiate_errors with
+    | [] -> ()
+    | (l, heuristic, m) :: others -> typ_raise l (Err_instantiation_info (heuristic + List.length others, m))
+  end;
 
   let solve_implicit impl =
     match KBindings.find_opt impl !all_unifiers with

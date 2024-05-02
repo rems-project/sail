@@ -235,12 +235,19 @@ let rec format_loc prefix hint l contents =
         format_endline "Code generated nearby:" ppf;
         format_loc prefix hint l contents ppf
 
+type severity = Sev_warn | Sev_error
+
 type message =
   | Location of string * string option * Parse_ast.l * message
   | Line of string
   | List of (string * message) list
   | Seq of message list
-  | With of (formatter -> formatter) * message
+  | Severity of severity * message
+
+let rec messages_all_same = function
+  | (_, m1) :: (id2, m2) :: rest -> m1 = m2 && messages_all_same ((id2, m2) :: rest)
+  | [(_, m1)] -> true
+  | [] -> false
 
 let bullet = Util.(clear (blue "*"))
 
@@ -255,4 +262,5 @@ let rec format_message msg ppf =
         format_message msg { ppf with indent = ppf.indent ^ "   " }
       in
       List.iter (format_list_item ppf) list
-  | With (f, msg) -> format_message msg (f ppf)
+  | Severity (Sev_error, msg) -> format_message msg { ppf with loc_color = Util.red }
+  | Severity (Sev_warn, msg) -> format_message msg { ppf with loc_color = Util.yellow }

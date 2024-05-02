@@ -10,3 +10,6 @@ Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}.
   [91m |[0m             [91m^^[0m
   [91m |[0m int(64) is not a subtype of int('size)
   [91m |[0m as 64 == 'size could not be proven
+  [91m |[0m [96mpass/global_type_var/v2.sail[0m:21.13-15:
+  [91m |[0m 21[96m |[0mlet _ = test(64)
+  [91m |[0m   [91m |[0m             [91m^^[0m [91mwhen checking this argument has type int('size)[0m

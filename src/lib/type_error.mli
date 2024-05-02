@@ -83,6 +83,11 @@ val opt_explain_all_variables : bool ref
    into detail about how they were derived *)
 val opt_explain_constraints : bool ref
 
+(** If false (default), we will try to pick the most likely error to
+    have caused an overload to fail, and only show those. If true, we
+    will show all type errors that caused an overload to fail. *)
+val opt_explain_all_overloads : bool ref
+
 type constraint_reason = (l * string) option
 
 type type_error =
@@ -96,6 +101,8 @@ type type_error =
   | Err_inner of type_error * Parse_ast.l * string * string option * type_error
   | Err_not_in_scope of
       string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool
+  | Err_instantiation_info of int * type_error
+  | Err_function_arg of Parse_ast.l * typ * type_error
 
 exception Type_error of Parse_ast.l * type_error
 
