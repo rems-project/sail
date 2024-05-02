@@ -386,7 +386,7 @@ typ_no_caret:
                              $endpos) }
 
 typ:
-  | If_; cond_t = infix_typ; Then; then_t = infix_typ; Else; else_t = infix_typ
+  | If_; cond_t = infix_typ; Then; then_t = infix_typ; Else; else_t = typ
     { mk_typ (ATyp_if (cond_t, then_t, else_t)) $startpos $endpos }
   | t = infix_typ
     { t }

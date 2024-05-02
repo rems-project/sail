@@ -3060,7 +3060,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
   | E_sizeof nexp -> begin
       match nexp with
       | Nexp_aux (Nexp_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
-      | _ -> irule infer_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp))
+      | _ -> crule check_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp)) (atom_typ nexp)
     end
   | E_constraint nc ->
       Env.wf_constraint ~at:l env nc;
