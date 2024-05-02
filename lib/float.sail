@@ -79,10 +79,10 @@ val round_toward_positive = pure "round_toward_positive" : unit -> rounding_mode
 val round_toward_negative = pure "round_toward_negative" : unit -> rounding_mode
 val round_toward_zero = pure "round_toward_zero" : unit -> rounding_mode
 
-val undefined_float16 = monadic "fp16_undefined" : unit -> float16
-val undefined_float32 = monadic "fp32_undefined" : unit -> float32
-val undefined_float64 = monadic "fp64_undefined" : unit -> float64
-val undefined_float128 = monadic "fp128_undefined" : unit -> float128
+val undefined_float16 = impure "fp16_undefined" : unit -> float16
+val undefined_float32 = impure "fp32_undefined" : unit -> float32
+val undefined_float64 = impure "fp64_undefined" : unit -> float64
+val undefined_float128 = impure "fp128_undefined" : unit -> float128
 
 val fp16_nan = pure "fp16_nan" : unit -> float16
 val fp32_nan = pure "fp32_nan" : unit -> float32

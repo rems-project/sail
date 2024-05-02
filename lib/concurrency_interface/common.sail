@@ -87,7 +87,7 @@ $include <concurrency_interface/emulator_memory.sail>
 
 $ifdef SYMBOLIC
 val sail_instr_announce
-  = monadic "instr_announce"
+  = impure "instr_announce"
   : forall 'n, 'n > 0.
   bits('n) -> unit
 $else
@@ -101,7 +101,7 @@ $endif
 
 $ifdef SYMBOLIC
 val sail_branch_announce
-  = monadic "branch_announce"
+  = impure "branch_announce"
   : forall 'addrsize, 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
 $else
@@ -117,10 +117,10 @@ $endif
   call [sail_end_cycle], to increment the cycle count and indicate the
   end of the current instruction. Cycle 0 is reserved for
   initialisation before executing the first instruction. */
-val sail_end_cycle = monadic "cycle_count" : unit -> unit
+val sail_end_cycle = impure "cycle_count" : unit -> unit
 
 /*! Returns the current cycle count */
-val sail_get_cycle_count = monadic "get_cycle_count" : unit -> int
+val sail_get_cycle_count = impure "get_cycle_count" : unit -> int
 
 $ifdef SYMBOLIC
 val sail_reset_registers = pure "reset_registers" : unit -> unit

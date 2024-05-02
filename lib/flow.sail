@@ -128,6 +128,6 @@ function __id forall 'n. (x: int('n)) -> int('n) = x
 
 overload __size = {__id}
 
-val __deref = monadic "reg_deref" : forall ('a : Type). register('a) -> 'a
+val __deref = impure "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 $endif

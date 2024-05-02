@@ -93,14 +93,14 @@ $endif
 
 //! Read memory
 $iftarget isla
-val read_mem# = monadic "read_mem" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val read_mem# = impure "read_mem" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 $else
 val read_mem# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
-val __read_mem# = monadic "emulator_read_mem" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val __read_mem# = impure "emulator_read_mem" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 function read_mem#(_, addrsize, addr, n) = __read_mem#(addrsize, addr, n)
@@ -109,14 +109,14 @@ $endif
 
 //! Read memory, but signal to the emulator that this is an ifetch read
 $iftarget isla
-val read_mem_ifetch# = monadic "read_mem_ifetch" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val read_mem_ifetch# = impure "read_mem_ifetch" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 $else
 val read_mem_ifetch# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
-val __read_mem_ifetch# = monadic "emulator_read_mem_ifetch" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val __read_mem_ifetch# = impure "emulator_read_mem_ifetch" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 function read_mem_ifetch#(_, addrsize, addr, n) = __read_mem_ifetch#(addrsize, addr, n)
@@ -125,14 +125,14 @@ $endif
 
 //! Read memory, and signal to the emulator that this read should be treated as an exclusive access
 $iftarget isla
-val read_mem_exclusive# = monadic "read_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val read_mem_exclusive# = impure "read_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 $else
 val read_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
-val __read_mem_exclusive# = monadic "emulator_read_mem_exclusive" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
+val __read_mem_exclusive# = impure "emulator_read_mem_exclusive" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 function read_mem_exclusive#(_, addrsize, addr, n) = __read_mem_exclusive#(addrsize, addr, n)
@@ -141,14 +141,14 @@ $endif
 
 //! Write memory
 $iftarget isla
-val write_mem# = monadic "write_mem" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+val write_mem# = impure "write_mem" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 $else
 val write_mem# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
-val __write_mem# = monadic "emulator_write_mem" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+val __write_mem# = impure "emulator_write_mem" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 function write_mem#(_, addrsize, addr, n, value) = __write_mem#(addrsize, addr, n, value)
@@ -157,22 +157,22 @@ $endif
 
 //! Write memory, and signal to the emulator that this read should be treated as an exclusive access
 $iftarget isla
-val write_mem_exclusive# = monadic "write_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+val write_mem_exclusive# = impure "write_mem_exclusive" : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 $else
 val write_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
-val __write_mem_exclusive# = monadic "emulator_write_mem_exclusive" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+val __write_mem_exclusive# = impure "emulator_write_mem_exclusive" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 function write_mem_exclusive#(_, addrsize, addr, n, value) = __write_mem_exclusive#(addrsize, addr, n, value)
 $endif
 $endif
 
-val read_tag# = monadic "emulator_read_tag"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
+val read_tag# = impure "emulator_read_tag"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
 
-val write_tag# = monadic "emulator_write_tag" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
+val write_tag# = impure "emulator_write_tag" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
 
 $endif

@@ -271,7 +271,7 @@ with
 
 // Used when we want a non memory read/write to appear in Isla's addr relation
 $iftarget isla
-val sail_address_announce = monadic "address_announce" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
+val sail_address_announce = impure "address_announce" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
 $else
 val sail_address_announce : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
 

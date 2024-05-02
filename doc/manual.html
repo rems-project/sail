@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="generator" content="Asciidoctor 2.0.20">
+<meta name="generator" content="Asciidoctor 2.0.18">
 <meta name="author" content="Alasdair Armstrong, Thomas Bauereiss, Brian Campbell, Shaked Flur, Kathryn E. Gray, Robert Norton-Wright, Christopher Pulte, Peter Sewell">
 <title>The Sail instruction-set semantics specification language</title>
 <style>
@@ -2656,14 +2656,14 @@ suggestive, while in others it is close to a complete description of
 the envelope of architecturally allowed behaviour for sequential code.</p>
 </div>
 <div class="paragraph">
-<p>For x86[<a href="#Intel61">1</a>], the Intel pseudocode is just suggestive,
-with embedded prose, while the AMD descriptions[<a href="#AMD_3_21">2</a>]
-are prose alone. For IBM Power[<a href="#Power3.0B">3</a>], there is
+<p>For x86[.citation]<mark>[<a href="#Intel61">1</a>]</mark>, the Intel pseudocode is just suggestive,
+with embedded prose, while the AMD descriptions[.citation]<mark>[<a href="#AMD_3_21">2</a>]</mark>
+are prose alone. For IBM Power[.citation]<mark>[<a href="#Power3.0B">3</a>]</mark>, there is
 detailed pseudocode which has recently become
-machine-processed[<a href="#Leighton21">4</a>]. For
-Arm[<a href="#armarmv8">5</a>], there is detailed pseudocode, which has
-recently become machine-processed[<a href="#Reid16">6</a>]. For
-MIPS[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>] there is also reasonably detailed
+machine-processed[.citation]<mark>[<a href="#Leighton21">4</a>]</mark>. For
+Arm[.citation]<mark>[<a href="#armarmv8">5</a>]</mark>, there is detailed pseudocode, which has
+recently become machine-processed[.citation]<mark>[<a href="#Reid16">6</a>]</mark>. For
+MIPS[.citation]<mark>[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</mark> there is also reasonably detailed
 pseudocode.</p>
 </div>
 <div class="paragraph">
@@ -2721,7 +2721,7 @@ and generate:</p>
 <p>An internal representation of the fully type-annotated
 definition (a deep embedding of the definition) in a form that can
 be executed by the Sail interpreter.  These are both expressed in
-Lem[<a href="#Lem-icfp2014">9</a>, <a href="#Lemcode">10</a>], a language of type, function, and
+Lem[.citation]<mark>[<a href="#Lem-icfp2014">9</a>, <a href="#Lemcode">10</a>]</mark>, a language of type, function, and
 relation definitions that can be compiled into OCaml and various
 theorem provers. The Sail interpreter can also be used to analyse
 instruction definitions (or partially executed instructions) to
@@ -2783,14 +2783,14 @@ ARM&#8217;s specification.</p>
 </div>
 <div class="paragraph">
 <p>The MIPS model is hand-written based on the MIPS64 manual version
-2.5[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>],
+2.5[.citation]<mark>[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</mark>,
 but covering only the features in the BERI hardware
-reference[<a href="#UCAM-CL-TR-868">11</a>],
-which in turn drew on MIPS4000 and MIPS32[<a href="#MIPS4000">12</a>, <a href="#MIPS32-I">13</a>].</p>
+reference[.citation]<mark>[<a href="#UCAM-CL-TR-868">11</a>]</mark>,
+which in turn drew on MIPS4000 and MIPS32[.citation]<mark>[<a href="#MIPS4000">12</a>, <a href="#MIPS32-I">13</a>]</mark>.</p>
 </div>
 <div class="paragraph">
 <p>The CHERI model is based on that and the CHERI ISA reference manual
-version&#160;5[<a href="#UCAM-CL-TR-891">14</a>]. These two are both
+version&#160;5[.citation]<mark>[<a href="#UCAM-CL-TR-891">14</a>]</mark>. These two are both
 principally by Norton-Wright; they cover all basic user
 and kernel mode MIPS features sufficient to boot FreeBSD, including a
 TLB, exceptions and a basic UART for console interaction. ISA
@@ -2905,7 +2905,7 @@ a simpler <code>read_mem</code> function.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sail"><span class="k">val</span><span class="w"> </span><span class="nf">MEMr</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">monadic</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">lem</span><span class="p">:</span><span class="w"> </span><span class="s">"MEMr"</span><span class="p">,</span><span class="w"> </span><span class="n">coq</span><span class="p">:</span><span class="w"> </span><span class="s">"MEMr"</span><span class="p">,</span><span class="w"> </span><span class="mi">_</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s">"read_ram"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">forall</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="nv">'m</span><span class="p">,</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="o">.</span><span class="w">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">val</span><span class="w"> </span><span class="nf">MEMr</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">impure</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">lem</span><span class="p">:</span><span class="w"> </span><span class="s">"MEMr"</span><span class="p">,</span><span class="w"> </span><span class="n">coq</span><span class="p">:</span><span class="w"> </span><span class="s">"MEMr"</span><span class="p">,</span><span class="w"> </span><span class="mi">_</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s">"read_ram"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">forall</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="nv">'m</span><span class="p">,</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="o">.</span><span class="w">
    </span><span class="p">(</span><span class="kt">int</span><span class="p">(</span><span class="nv">'m</span><span class="p">),</span><span class="w"> </span><span class="kt">int</span><span class="p">(</span><span class="nv">'n</span><span class="p">),</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'m</span><span class="p">),</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'m</span><span class="p">))</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">'n</span><span class="p">)</span><span class="w">
 
 </span><span class="k">val</span><span class="w"> </span><span class="nf">read_mem</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">forall</span><span class="w"> </span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="nv">'n</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="o">.</span><span class="w"> </span><span class="p">(</span><span class="n">xlenbits</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="p">(</span><span class="nv">'n</span><span class="p">))</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">'n</span><span class="p">)</span><span class="w">
@@ -5127,11 +5127,9 @@ down to the value level, for example:</p>
 support. This is because exceptions as a language feature do sometimes
 appear in vendor ISA pseudocode (they are a feature in Arm&#8217;s ASL
 language), and such code would be very difficult to translate into
-Sail if Sail did not itself support exceptions. We already translate
-Sail to monadic theorem prover code, so working with a monad that
-supports exceptions is fairly natural. In practice Sail language-level
-exceptions end up being quite a nice tool for implementing processor
-exceptions in ISA specifications.</p>
+Sail if Sail did not itself support exceptions. In practice Sail
+language-level exceptions end up being quite a nice tool for
+implementing processor exceptions in ISA specifications.</p>
 </div>
 <div class="paragraph">
 <p>For exceptions we have two language features: <code>throw</code> statements
@@ -5629,7 +5627,10 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 
 </span><span class="o">&lt;</span><span class="n">typ_no_caret</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&lt;</span><span class="n">op_no_caret</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
 
-</span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&lt;</span><span class="n">op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
+</span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="o">&lt;</span><span class="n">infix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="o">&lt;</span><span class="n">infix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="o">&lt;</span><span class="n">infix_typ</span><span class="o">&gt;</span><span class="w">
+        </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">infix_typ</span><span class="o">&gt;</span><span class="w">
+
+</span><span class="o">&lt;</span><span class="n">infix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&lt;</span><span class="n">op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">prefix_typ_op</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">postfix_typ</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">atomic_typ</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="mi">_</span><span class="w">
@@ -5775,7 +5776,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
                </span><span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="o">&lt;</span><span class="n">fexp_exp_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="p">]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">]</span><span class="w">
-               </span><span class="o">|</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w"> </span><span class="p">]</span><span class="w">
+               </span><span class="o">|</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="p">[|</span><span class="w"> </span><span class="p">|]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="p">[|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">|]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">)</span><span class="w">
@@ -5794,6 +5795,9 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </span><span class="o">&lt;</span><span class="n">vector_update</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
                   </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w">
+
+</span><span class="o">&lt;</span><span class="n">vector_update_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[,]</span><span class="w">
+                       </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update</span><span class="o">&gt;</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">vector_update_list</span><span class="o">&gt;</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">funcl_annotation</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="n">Private</span><span class="w">
                      </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w">
@@ -5842,6 +5846,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typaram</span><span class="o">&gt;</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
+             </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typaram</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">enum</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
@@ -5905,8 +5910,8 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w">
           </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w">
           </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="k">forwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="k">backwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
+          </span><span class="o">|</span><span class="w"> </span><span class="k">forwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
+          </span><span class="o">|</span><span class="w"> </span><span class="k">backwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">mapcl_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[,]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl_list</span><span class="o">&gt;</span><span class="w">
@@ -5917,7 +5922,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </span><span class="o">&lt;</span><span class="n">let_def</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="k">let</span><span class="w"> </span><span class="o">&lt;</span><span class="n">letbind</span><span class="o">&gt;</span><span class="w">
 
 
-</span><span class="o">&lt;</span><span class="n">pure_opt</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="k">monadic</span><span class="w">
+             </span><span class="o">|</span><span class="w"> </span><span class="n">impure</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">pure</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">extern_binding</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">STRING_LITERAL</span><span class="w">
@@ -5974,6 +5979,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
             </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">overload_def</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">scattered_def</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">default_def</span><span class="o">&gt;</span><span class="w">
+            </span><span class="o">|</span><span class="w"> </span><span class="nb">constraint</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="cp">$LINE_DIRECTIVE</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
@@ -6045,7 +6051,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2023-12-06 21:54:14 UTC
+Last updated 2024-04-29 16:29:17 +0100
 </div>
 </div>
 </body>
