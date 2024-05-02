@@ -2,18 +2,7 @@
 [96mpass/poly_vector/v1.sail[0m:17.5-24:
 17[96m |[0m  if my_length(xs) == 32 then {
   [91m |[0m     [91m^-----------------^[0m
-  [91m |[0m No overloading for (operator ==), tried:
-  [91m |[0m [94m*[0m eq_int
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_bit
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_bool
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_unit
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_bit
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_bits
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
-  [91m |[0m [94m*[0m eq_string
-  [91m |[0m    Could not unify vector('n, 'a) and bitvector(32)
+  [91m |[0m Type mismatch between vector('n, 'a) and bitvector(32)
+  [91m |[0m [96mpass/poly_vector/v1.sail[0m:17.15-17:
+  [91m |[0m 17[96m |[0m  if my_length(xs) == 32 then {
+  [91m |[0m   [91m |[0m               [91m^^[0m [91mwhen checking this argument has type vector('n, 'a)[0m

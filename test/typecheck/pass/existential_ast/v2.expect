@@ -9,3 +9,6 @@ Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}.
 39[96m |[0m  Some(Ctor2(y, x, c))
   [91m |[0m       [91m^------------^[0m
   [91m |[0m range(0, 30) is not contained within range(0, 30)
+  [91m |[0m [96mpass/existential_ast/v2.sail[0m:39.7-21:
+  [91m |[0m 39[96m |[0m  Some(Ctor2(y, x, c))
+  [91m |[0m   [91m |[0m       [91m^------------^[0m [91mwhen checking this argument has type (range(0, 30), int('ex262#), bitvector(4))[0m
