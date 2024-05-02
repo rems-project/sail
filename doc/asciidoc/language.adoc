@@ -1070,11 +1070,9 @@ Perhaps surprisingly for a specification language, Sail has exception
 support. This is because exceptions as a language feature do sometimes
 appear in vendor ISA pseudocode (they are a feature in Arm's ASL
 language), and such code would be very difficult to translate into
-Sail if Sail did not itself support exceptions. We already translate
-Sail to monadic theorem prover code, so working with a monad that
-supports exceptions is fairly natural. In practice Sail language-level
-exceptions end up being quite a nice tool for implementing processor
-exceptions in ISA specifications.
+Sail if Sail did not itself support exceptions. In practice Sail
+language-level exceptions end up being quite a nice tool for
+implementing processor exceptions in ISA specifications.
 
 For exceptions we have two language features: `throw` statements
 and `try`--`catch` blocks. The throw keyword takes a value of

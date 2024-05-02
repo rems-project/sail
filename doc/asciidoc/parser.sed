@@ -11,6 +11,7 @@
 /Mutual/d
 /Impl/d
 /LcurlyBar/d
+/Monadic/d
 
 s/Pragma/$LINE_DIRECTIVE/g
 s/Fixity/FIXITY_DEF/g
@@ -22,6 +23,7 @@ s/End/end/g
 s/Default/default/g
 s/Scattered/scattered/g
 s/Monadic/monadic/g
+s/Impure/impure/g
 s/Typedef/type/g
 s/Enum/enum/g
 s/With/with/g

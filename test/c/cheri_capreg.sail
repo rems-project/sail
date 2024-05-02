@@ -9,7 +9,7 @@ $include <vector_dec.sail>
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a
 /* sneaky deref with no effect necessary for bitfield writes */
-val _reg_deref = monadic "reg_deref" : forall ('a : Type). register('a) -> 'a
+val _reg_deref = impure "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 val zeros_0 = pure "zeros" : forall 'n. int('n) -> bits('n)
 

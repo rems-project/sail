@@ -2,7 +2,7 @@
 27[96m |[0mval my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> not('q). bool('q)}
   [91m |[0m           [91m^-----------------------^[0m
   [91m |[0m 
-All external bindings should be marked as either monadic or pure
+All external bindings should be marked as either pure or impure
 
 [93mType error[0m:
 [96mpass/bool_constraint/v2.sail[0m:38.4-32:

@@ -559,7 +559,7 @@ module Make (Config : CONFIG) = struct
              ( match vs.extern_opt with
              | Some extern ->
                  space ^^ char '=' ^^ space
-                 ^^ string (if extern.pure then "pure" else "monadic")
+                 ^^ string (if extern.pure then "pure" else "impure")
                  ^^ space
                  ^^ surround indent 1 (char '{')
                       (separate_map (char ',' ^^ break 1) doc_binding extern.bindings)

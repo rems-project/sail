@@ -222,7 +222,7 @@ let old_bitfield_deprecated ?(bitfield = "<bitfield>") l field =
     ("Old bitfield syntax, use '" ^ replace ^ "' instead")
 
 let warn_extern_effect l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either pure or impure"
 
 let forwards_mapcl_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Single direction mapping clause should be prefixed by a direction, either forwards or backwards"
@@ -236,7 +236,7 @@ let set_syntax_deprecated l =
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
-%token Pure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
+%token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
 %token InternalPLet InternalReturn InternalAssume
@@ -1177,6 +1177,8 @@ outcome_spec_def:
 
 pure_opt:
   | Monadic
+    { false }
+  | Impure
     { false }
   | Pure
     { true }

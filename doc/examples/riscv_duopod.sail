@@ -116,7 +116,7 @@ overload X = {rX, wX}
 $span end
 
 /* Accessors for memory */
-val MEMr = monadic { lem: "MEMr", coq: "MEMr", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
+val MEMr = impure { lem: "MEMr", coq: "MEMr", _ : "read_ram" } : forall 'n 'm, 'n >= 0.
    (int('m), int('n), bits('m), bits('m)) -> bits(8 * 'n)
 
 val read_mem : forall 'n, 'n >= 0. (xlenbits, int('n)) -> bits(8 * 'n)

@@ -222,55 +222,55 @@ union instruction_kind = {
 }
 
 val __read_mem
-  = monadic { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
+  = impure { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 val __read_memt
-  = monadic { ocaml: "Platform.read_memt", c: "platform_read_memt", _: "read_memt" }
+  = impure { ocaml: "Platform.read_memt", c: "platform_read_memt", _: "read_memt" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (read_kind, bits('addrsize), int('n)) -> (bits(8 * 'n), bit)
 
 val __write_mem_ea
-  = monadic { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
+  = impure { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit
 
 val __write_mem
-  = monadic { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
+  = impure { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 val __write_memt
-  = monadic { ocaml: "Platform.write_memt", c: "platform_write_memt", _: "write_memt" }
+  = impure { ocaml: "Platform.write_memt", c: "platform_write_memt", _: "write_memt" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, bits('addrsize), int('n), bits(8 * 'n), bit) -> bool
 
 val __write_tag
-  = monadic { ocaml: "Platform.write_tag", c: "platform_write_tag", _: "write_tag" }
+  = impure { ocaml: "Platform.write_tag", c: "platform_write_tag", _: "write_tag" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (write_kind, bits('addrsize), bit) -> bool
 
 val __excl_res
-  = monadic { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
+  = impure { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
   : unit -> bool
 
 val __barrier
-  = monadic { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
+  = impure { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
   : barrier_kind -> unit
 
 val __branch_announce
-  = monadic { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  = impure { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
 
 val __cache_maintenance
-  = monadic { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
+  = impure { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
 val __instr_announce
-  = monadic { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  = impure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
   : forall 'n, 'n > 0.
   bits('n) -> unit
 
