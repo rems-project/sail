@@ -38,7 +38,6 @@ type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. *
 let fp_eflag_invalid : fp_exception_flags = 0b00001
 
 /* Floating point struct */
-$[undefined_gen forbid] /* Todo: temporarlly workaround a type check error. */
 struct float_bits('n : Int) = {
   sign     : bits(1),
   exp      : bits(if  'n == 16
