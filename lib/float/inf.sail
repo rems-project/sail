@@ -27,11 +27,18 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_NAN
+$define _FLOAT_NAN
 
 $include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
+
+val      float_is_inf : fp_bits -> bool
+function float_is_inf (op) = {
+  let struct {_, exp, mantissa} = float_decompose(op);
+  let is_nan = exp == sail_ones(length(exp))
+               & mantissa == sail_zeros(length(mantissa));
+
+  is_nan
+}
 
 $endif
