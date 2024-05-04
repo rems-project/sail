@@ -1542,7 +1542,7 @@ let check_function_instantiation l id env bind1 bind2 =
   try direction (fun check_env typ1 typ2 -> subtyp l check_env typ1 typ2) bind1 bind2
   with Type_error (l1, err1) -> (
     try direction (fun check_env typ1 typ2 -> subtyp l check_env typ2 typ1) bind2 bind1
-    with Type_error (l2, err2) -> typ_raise l2 (Err_inner (err2, l1, "Also tried", None, err1))
+    with Type_error (l2, err2) -> typ_raise l2 (Err_inner (err2, l1, "Also tried", err1))
   )
 
 type pattern_duplicate = Pattern_singleton of l | Pattern_duplicate of l * l
@@ -1752,8 +1752,7 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
                      ),
                    l_u,
                    "",
-                   Some "existing variable",
-                   Err_other ""
+                   Err_hint "existing variable"
                  )
               )
         | None, _ -> Declaration
@@ -1957,7 +1956,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           );
       begin
         try crule check_exp env (E_aux (E_app (forwards_id, xs), (l, uannot))) typ
-        with Type_error (_, err1) ->
+        with Type_error (err1_loc, err1) ->
           typ_print
             ( lazy
               ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "("
@@ -1966,8 +1965,8 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
               );
           begin
             try crule check_exp env (E_aux (E_app (backwards_id, xs), (l, uannot))) typ
-            with Type_error (_, err2) ->
-              typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
+            with Type_error (err2_loc, err2) ->
+              typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1_loc, err1); (backwards_id, err2_loc, err2)]))
           end
       end
   | E_app (f, xs), _ when Env.is_overload f env ->
@@ -1978,9 +1977,9 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | errs, f :: fs -> begin
             typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
             try crule check_exp env (E_aux (E_app (f, xs), (l, uannot))) typ
-            with Type_error (_, err) ->
+            with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
-              try_overload (errs @ [(f, err)], fs)
+              try_overload (errs @ [(f, err_l, err)], fs)
           end
       in
       try_overload ([], overloads)
@@ -3048,12 +3047,8 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Register typ -> annot_exp (E_id v) typ
       | Unbound _ -> (
           match Bindings.find_opt v (Env.get_val_specs env) with
-          | Some _ ->
-              typ_error l
-                ("Identifier " ^ string_of_id v ^ " is unbound (Did you mean to call the " ^ string_of_id v
-               ^ " function?)"
-                )
-          | None -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
+          | Some _ -> typ_raise l (Err_unbound_id { id = v; locals = Env.get_locals env; have_function = true })
+          | None -> typ_raise l (Err_unbound_id { id = v; locals = Env.get_locals env; have_function = false })
         )
     end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
@@ -3140,7 +3135,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
           );
       begin
         try irule infer_exp env (E_aux (E_app (forwards_id, xs), (l, uannot)))
-        with Type_error (_, err1) ->
+        with Type_error (err1_loc, err1) ->
           (* typ_print (lazy ("Error in forwards direction: " ^ string_of_type_error err1)); *)
           typ_print
             ( lazy
@@ -3150,9 +3145,9 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
               );
           begin
             try irule infer_exp env (E_aux (E_app (backwards_id, xs), (l, uannot)))
-            with Type_error (_, err2) ->
+            with Type_error (err2_loc, err2) ->
               (* typ_print (lazy ("Error in backwards direction: " ^ string_of_type_error err2)); *)
-              typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
+              typ_raise l (Err_no_overloading (mapping, [(forwards_id, err1_loc, err1); (backwards_id, err2_loc, err2)]))
           end
       end
   | E_app (f, xs) when Env.is_overload f env ->
@@ -3163,9 +3158,9 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
         | errs, f :: fs -> begin
             typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
             try irule infer_exp env (E_aux (E_app (f, xs), (l, uannot)))
-            with Type_error (_, err) ->
+            with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
-              try_overload (errs @ [(f, err)], fs)
+              try_overload (errs @ [(f, err_l, err)], fs)
           end
       in
       try_overload ([], overloads)
@@ -4436,8 +4431,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
                 let defs, env =
                   try check_defs env defs
                   with Type_error (inner_l, err) ->
-                    typ_raise l
-                      (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", None, err))
+                    typ_raise l (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", err))
                 in
                 let env = Env.add_bitfield id typ ranges env in
                 if !opt_no_bitfield_expansion then

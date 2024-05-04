@@ -1,13 +1,16 @@
 [93mType error[0m:
 [96mpass/vec_length/v2_inc.sail[0m:7.10-25:
 7[96m |[0m  let z = [x with 10 = y];
- [91m |[0m          [91m^-------------^[0m
+ [91m |[0m          [91m^-------------^[0m [91mvector_update[0m
  [91m |[0m No overloading for vector_update, tried:
  [91m |[0m [94m*[0m bitvector_update
- [91m |[0m    Could not resolve quantifiers for bitvector_update
- [91m |[0m    [94m*[0m (0 <= 10 & 10 < 8)
+ [91m |[0m   [96mpass/vec_length/v2_inc.sail[0m:7.10-25:
+ [91m |[0m   7[96m |[0m  let z = [x with 10 = y];
+ [91m |[0m    [91m |[0m          [91m^-------------^[0m
+ [91m |[0m    [91m |[0m Could not resolve quantifiers for bitvector_update
+ [91m |[0m    [91m |[0m [94m*[0m (0 <= 10 & 10 < 8)
  [91m |[0m [94m*[0m plain_vector_update
- [91m |[0m    Type mismatch between vector('n, 'a) and bitvector(8)
- [91m |[0m    [96mpass/vec_length/v2_inc.sail[0m:7.11-12:
- [91m |[0m    7[96m |[0m  let z = [x with 10 = y];
- [91m |[0m     [91m |[0m           [91m^[0m [91mwhen checking this argument has type vector('n, 'a)[0m
+ [91m |[0m   [96mpass/vec_length/v2_inc.sail[0m:7.11-12:
+ [91m |[0m   7[96m |[0m  let z = [x with 10 = y];
+ [91m |[0m    [91m |[0m           [91m^[0m [91mchecking function argument has type vector('n, 'a)[0m
+ [91m |[0m    [91m |[0m Type mismatch between vector('n, 'a) and bitvector(8)

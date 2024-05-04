@@ -406,8 +406,7 @@ let already_bound str id env =
            ( Err_other ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound"),
              l,
              "",
-             Some "previous binding",
-             Err_other ""
+             Err_hint "previous binding"
            )
         )
   | None ->
@@ -432,8 +431,7 @@ let already_bound_ctor_fn str id env =
                ),
              l,
              "",
-             Some "previous binding",
-             Err_other ""
+             Err_hint "previous binding"
            )
         )
   | None ->
@@ -984,9 +982,11 @@ let add_typ_synonym id typq arg env =
       env
   )
 
+let get_val_specs env = filter_items env env.global.val_specs
+
 let get_val_spec_orig id env =
   try get_item (id_loc id) env (Bindings.find id env.global.val_specs)
-  with Not_found -> typ_error (id_loc id) ("No function type found for " ^ string_of_id id)
+  with Not_found -> typ_raise (id_loc id) (Err_no_function_type { id; functions = get_val_specs env })
 
 let get_val_spec_opt id env =
   match Bindings.find_opt id env.global.val_specs with
@@ -1010,24 +1010,7 @@ let get_val_spec_opt id env =
 let get_val_spec id env =
   match get_val_spec_opt id env with
   | Some (bind, _) -> bind
-  | None ->
-      (* Try to find the most similar function name, within reason, to include in the error *)
-      let closest = ref (Int.max_int, None) in
-      Bindings.iter
-        (fun other_id item ->
-          let id_str = string_of_id id in
-          let other_str = string_of_id other_id in
-          if abs (String.length id_str - String.length other_str) <= 2 then (
-            let distance = Util.levenshtein_distance ~osa:true id_str other_str in
-            let max_distance = min 4 (max 1 (String.length id_str - 3)) in
-            if distance <= max_distance && distance < fst !closest then closest := (distance, Some other_str)
-          )
-        )
-        env.global.val_specs;
-      let hint_msg = match snd !closest with Some other_str -> "\n\nDid you mean " ^ other_str ^ "?" | None -> "" in
-      typ_error (id_loc id) ("No function type found for " ^ string_of_id id ^ hint_msg)
-
-let get_val_specs env = filter_items env env.global.val_specs
+  | None -> typ_raise (id_loc id) (Err_no_function_type { id; functions = get_val_specs env })
 
 let add_union_id ?in_module id bind env =
   if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env

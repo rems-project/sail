@@ -3785,4 +3785,5 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
       "\nError during Coq printing\n"
       ^ if Printexc.backtrace_status () then "\n" ^ Printexc.get_backtrace () else "(backtracing unavailable)"
     in
-    raise (Reporting.err_typ l (Type_error.string_of_type_error err ^ extra))
+    let msg, hint = Type_error.string_of_type_error err in
+    raise (Reporting.err_typ ?hint l (msg ^ extra))

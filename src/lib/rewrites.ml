@@ -2149,7 +2149,7 @@ let rewrite_vector_concat_assignments env defs =
           in
           begin
             try check_exp env full_exp unit_typ
-            with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+            with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
           end
         )
         else E_aux (e_aux, annot)
@@ -2176,7 +2176,7 @@ let rewrite_tuple_assignments env defs =
         let let_exp = mk_exp (E_let (mk_letbind pat (strip_exp exp'), block)) in
         begin
           try check_exp env let_exp unit_typ
-          with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+          with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
         end
     | _ -> E_aux (e_aux, annot)
   in
@@ -4576,7 +4576,7 @@ let rewrite effect_info env rewriters ast =
          (1, (ast, effect_info, env))
          rewriters
       )
-  with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
 
 let () =
   let open Interactive in

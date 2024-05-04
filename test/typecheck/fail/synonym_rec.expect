@@ -12,4 +12,4 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/synonym_rec.sail[0m:2.9-10:
  [91m |[0m  [91m |[0m 2[96m |[0mtype T = T
  [91m |[0m  [91m |[0m  [91m |[0m         [91m^[0m
- [91m |[0m  [91m |[0m Undefined type T
+ [91m |[0m  [91m |[0m  [91m |[0m Undefined type T

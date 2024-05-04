@@ -14,4 +14,4 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/union_rec.sail[0m:3.9-10:
  [91m |[0m  [91m |[0m 3[96m |[0m  Ctor : U
  [91m |[0m  [91m |[0m  [91m |[0m         [91m^[0m
- [91m |[0m  [91m |[0m Undefined type U
+ [91m |[0m  [91m |[0m  [91m |[0m Undefined type U

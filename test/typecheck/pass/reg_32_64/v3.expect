@@ -7,18 +7,15 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [93mType error[0m:
 [96mpass/reg_32_64/v3.sail[0m:29.2-27:
 29[96m |[0m  reg_deref(R)['d - 1 .. 0]
-  [91m |[0m  [91m^-----------------------^[0m
+  [91m |[0m  [91m^-----------------------^[0m [91mchecking function argument has type int('m)[0m
   [91m |[0m No overloading for (operator -), tried:
   [91m |[0m [94m*[0m sub_atom
-  [91m |[0m    Cannot re-write sizeof('d)
-  [91m |[0m    [96mpass/reg_32_64/v3.sail[0m:29.15-17:
-  [91m |[0m    29[96m |[0m  reg_deref(R)['d - 1 .. 0]
-  [91m |[0m      [91m |[0m               [91m^^[0m [91mwhen checking this argument has type int('n)[0m
+  [91m |[0m   [96mpass/reg_32_64/v3.sail[0m:29.15-17:
+  [91m |[0m   29[96m |[0m  reg_deref(R)['d - 1 .. 0]
+  [91m |[0m     [91m |[0m               [91m^^[0m [91mchecking function argument has type int('n)[0m
+  [91m |[0m     [91m |[0m Cannot re-write sizeof('d)
   [91m |[0m [94m*[0m sub_int
-  [91m |[0m    Cannot re-write sizeof('d)
-  [91m |[0m    [96mpass/reg_32_64/v3.sail[0m:29.15-17:
-  [91m |[0m    29[96m |[0m  reg_deref(R)['d - 1 .. 0]
-  [91m |[0m      [91m |[0m               [91m^^[0m [91mwhen checking this argument has type int('ex174#)[0m
-  [91m |[0m [96mpass/reg_32_64/v3.sail[0m:29.15-21:
-  [91m |[0m 29[96m |[0m  reg_deref(R)['d - 1 .. 0]
-  [91m |[0m   [91m |[0m               [91m^----^[0m [91mwhen checking this argument has type int('m)[0m
+  [91m |[0m   [96mpass/reg_32_64/v3.sail[0m:29.15-17:
+  [91m |[0m   29[96m |[0m  reg_deref(R)['d - 1 .. 0]
+  [91m |[0m     [91m |[0m               [91m^^[0m [91mchecking function argument has type int('ex174#)[0m
+  [91m |[0m     [91m |[0m Cannot re-write sizeof('d)

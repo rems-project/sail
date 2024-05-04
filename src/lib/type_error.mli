@@ -91,18 +91,23 @@ val opt_explain_all_overloads : bool ref
 type constraint_reason = (l * string) option
 
 type type_error =
-  | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
-  | Err_no_overloading of id * (id * type_error) list
+  | Err_no_overloading of id * (id * Parse_ast.l * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * type_variables
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_inner of type_error * Parse_ast.l * string * string option * type_error
+  | Err_inner of type_error * Parse_ast.l * string * type_error
   | Err_not_in_scope of
       string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool
   | Err_instantiation_info of int * type_error
   | Err_function_arg of Parse_ast.l * typ * type_error
+  | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
+      (** Takes the name of the function and the set of functions in scope *)
+  | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
+      (** Takes the name of the identifier, the set of local bindings, and
+          whether we have a function of the same name in scope. *)
+  | Err_hint of string  (** A short error that only appears attached to a location *)
 
 exception Type_error of Parse_ast.l * type_error
 
@@ -112,9 +117,9 @@ type suggestion = Suggest_add_constraint of Ast.n_constraint | Suggest_none
 val analyze_unresolved_quant :
   (Ast_util.mut * Ast.typ) Ast_util.Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
 
-val collapse_errors : type_error -> type_error
+val string_of_type_error : type_error -> string * string option
 
-val string_of_type_error : type_error -> string
+val to_reporting_exn : Parse_ast.l -> type_error -> exn
 
 val check_defs : Type_check.Env.t -> uannot Ast.def list -> Type_check.tannot Ast.def list * Type_check.Env.t
 
