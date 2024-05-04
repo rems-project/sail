@@ -14,4 +14,4 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/struct_rec.sail[0m:3.10-11:
  [91m |[0m  [91m |[0m 3[96m |[0m  field : S
  [91m |[0m  [91m |[0m  [91m |[0m          [91m^[0m
- [91m |[0m  [91m |[0m Undefined type S
+ [91m |[0m  [91m |[0m  [91m |[0m Undefined type S

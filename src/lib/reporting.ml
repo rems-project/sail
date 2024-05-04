@@ -119,13 +119,13 @@ type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
 let fix_endline str = if str.[String.length str - 1] = '\n' then String.sub str 0 (String.length str - 1) else str
 
-let print_err_internal p_l m1 m2 =
+let print_err_internal hint p_l m1 m2 =
   let open Error_format in
   prerr_endline (m1 ^ ":");
   begin
     match p_l with
-    | Loc l -> format_message (Location ("", None, l, Line (fix_endline m2))) err_formatter
-    | Pos p -> format_message (Location ("", None, Parse_ast.Range (p, p), Line (fix_endline m2))) err_formatter
+    | Loc l -> format_message (Location ("", hint, l, Line (fix_endline m2))) err_formatter
+    | Pos p -> format_message (Location ("", hint, Parse_ast.Range (p, p), Line (fix_endline m2))) err_formatter
   end
 
 let loc_to_string l =
@@ -174,7 +174,7 @@ let short_loc_to_string l =
       Printf.sprintf "%s:%d.%d-%d.%d" p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum
         (p2.pos_cnum - p2.pos_bol)
 
-let print_err l m1 m2 = print_err_internal (Loc l) m1 m2
+let print_err l m1 m2 = print_err_internal None (Loc l) m1 m2
 
 type error =
   | Err_general of Parse_ast.l * string
@@ -188,19 +188,20 @@ type error =
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
 let dest_err ?(interactive = false) = function
-  | Err_general (l, m) -> (Util.("Error" |> yellow |> clear), Loc l, m)
+  | Err_general (l, m) -> (Util.("Error" |> yellow |> clear), None, Loc l, m)
   | Err_unreachable (l, (file, line, _, _), backtrace, m) ->
-      if interactive then ("Error", Loc l, m)
+      if interactive then ("Error", None, Loc l, m)
       else
         ( Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line,
+          None,
           Loc l,
           m ^ "\n\n" ^ Printexc.raw_backtrace_to_string backtrace ^ issues
         )
-  | Err_todo (l, m) -> ("Todo", Loc l, m)
-  | Err_syntax (p, m) -> (Util.("Syntax error" |> yellow |> clear), Pos p, m)
-  | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), Loc l, m)
-  | Err_lex (p, s) -> (Util.("Lexical error" |> yellow |> clear), Pos p, s)
-  | Err_type (l, _, m) -> (Util.("Type error" |> yellow |> clear), Loc l, m)
+  | Err_todo (l, m) -> ("Todo", None, Loc l, m)
+  | Err_syntax (p, m) -> (Util.("Syntax error" |> yellow |> clear), None, Pos p, m)
+  | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), None, Loc l, m)
+  | Err_lex (p, s) -> (Util.("Lexical error" |> yellow |> clear), None, Pos p, s)
+  | Err_type (l, hint, m) -> (Util.("Type error" |> yellow |> clear), hint, Loc l, m)
 
 exception Fatal_error of error
 
@@ -227,8 +228,8 @@ let forbid_errors ocaml_pos f x =
   | Fatal_error (Err_type (l, _, m)) -> raise (err_unreachable l ocaml_pos m)
 
 let print_error ?(interactive = false) e =
-  let m1, pos_l, m2 = dest_err ~interactive e in
-  print_err_internal pos_l m1 m2
+  let m1, hint, pos_l, m2 = dest_err ~interactive e in
+  print_err_internal hint pos_l m1 m2
 
 (* Warnings *)
 

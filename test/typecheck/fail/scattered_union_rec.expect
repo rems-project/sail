@@ -12,7 +12,7 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/scattered_union_rec.sail[0m:6.24-25:
  [91m |[0m  [91m |[0m 6[96m |[0munion clause U = Ctor : E
  [91m |[0m  [91m |[0m  [91m |[0m                        [91m^[0m
- [91m |[0m  [91m |[0m Undefined type E
+ [91m |[0m  [91m |[0m  [91m |[0m Undefined type E
  [91m |[0m 
  [91m |[0m [93mCaused by [0m[96mfail/scattered_union_rec.sail[0m:6.13-14:
  [91m |[0m 6[96m |[0munion clause U = Ctor : E

@@ -1,9 +1,6 @@
 [93mType error[0m:
 [96mpass/shadow_let/v1.sail[0m:13.6-7:
 13[96m |[0m  bar(y);
-  [91m |[0m      [91m^[0m
+  [91m |[0m      [91m^[0m [91mchecking function argument has type int(2)[0m
   [91m |[0m int('y) is not a subtype of int(2)
   [91m |[0m as 'y == 2 could not be proven
-  [91m |[0m [96mpass/shadow_let/v1.sail[0m:13.6-7:
-  [91m |[0m 13[96m |[0m  bar(y);
-  [91m |[0m   [91m |[0m      [91m^[0m [91mwhen checking this argument has type int(2)[0m
