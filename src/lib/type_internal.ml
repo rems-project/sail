@@ -98,23 +98,22 @@ type constraint_reason = (Ast.l * string) option
 type type_variables = { vars : (Ast.l * kind_aux) KBindings.t; shadows : int KBindings.t }
 
 type type_error =
-  (* First parameter is the error that caused us to start doing type
-     coercions, the second is the errors encountered by all possible
-     coercions *)
-  | Err_no_casts of uannot exp * typ * typ * type_error * type_error list
-  | Err_no_overloading of id * (id * type_error) list
+  | Err_no_overloading of id * (id * Parse_ast.l * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * type_variables
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_inner of type_error * Parse_ast.l * string * string option * type_error
+  | Err_inner of type_error * Parse_ast.l * string * type_error
   | Err_not_in_scope of
       string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool
   | Err_instantiation_info of int * type_error
   | Err_function_arg of Parse_ast.l * typ * type_error
+  | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
+  | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
+  | Err_hint of string
 
-let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", None, error2)
+let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", error2)
 
 exception Type_error of l * type_error
 

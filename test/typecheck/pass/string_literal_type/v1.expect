@@ -1,8 +1,5 @@
 [93mType error[0m:
 [96mpass/string_literal_type/v1.sail[0m:16.7-23:
 16[96m |[0m  test(concat_str(x, z))
-  [91m |[0m       [91m^--------------^[0m
+  [91m |[0m       [91m^--------------^[0m [91mchecking function argument has type string_literal[0m
   [91m |[0m string is not a subtype of string_literal
-  [91m |[0m [96mpass/string_literal_type/v1.sail[0m:16.7-23:
-  [91m |[0m 16[96m |[0m  test(concat_str(x, z))
-  [91m |[0m   [91m |[0m       [91m^--------------^[0m [91mwhen checking this argument has type string_literal[0m

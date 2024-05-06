@@ -128,7 +128,7 @@ let fallthrough =
     check_case env exc_typ
       (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn")))))))
       unit_typ
-  with Type_error (l, err) -> Reporting.unreachable l __POS__ (string_of_type_error err)
+  with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
 (**************************************************************************)
 (* 1. Interpreter Monad                                                   *)
@@ -864,8 +864,7 @@ let rec eval_frame' = function
     )
 
 let eval_frame frame =
-  try eval_frame' frame
-  with Type_error.Type_error (l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  try eval_frame' frame with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
 
 let default_effect_interp state eff =
   let lstate, gstate = state in

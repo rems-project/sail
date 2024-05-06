@@ -664,7 +664,7 @@ let handle_input istate input =
       print_endline ("Error: " ^ str);
       istate
   | Type_error.Type_error (_, err) ->
-      print_endline (Type_error.string_of_type_error err);
+      print_endline (fst (Type_error.string_of_type_error err));
       istate
   | Reporting.Fatal_error err ->
       Reporting.print_error ~interactive:true err;

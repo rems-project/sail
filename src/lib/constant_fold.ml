@@ -226,7 +226,8 @@ let rw_exp fixed target ok not_ok istate =
             Reporting.warn "" l
               ("Type error when folding constants in "
               ^ string_of_exp (E_aux (e_aux, annot))
-              ^ "\n" ^ Type_error.string_of_type_error err
+              ^ "\n"
+              ^ fst (Type_error.string_of_type_error err)
               );
             not_ok ();
             E_aux (e_aux, annot)
