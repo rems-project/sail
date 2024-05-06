@@ -143,7 +143,7 @@ let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to content
   format_endline
     (blank_prefix ^ underline_single ppf.loc_color (adjust cnum_from) (adjust cnum_to) ^ format_hint ppf.loc_color hint)
     ppf;
-  contents { ppf with indent = blank_prefix ^ " " }
+  contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let underline_double_from color cnum_from eol =
   Util.(String.make cnum_from ' ' ^ clear (color ("^" ^ String.make (eol - cnum_from - 1) '-')))
@@ -172,12 +172,12 @@ let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to
   let line_to, adjust = unprintable_escape ~color:Util.(fun e -> e |> magenta |> clear) line_to in
   format_endline (line_to_prefix ^ line_to) ppf;
   format_endline (blank_prefix ^ underline_double_to ppf.loc_color (adjust cnum_to)) ppf;
-  contents { ppf with indent = blank_prefix ^ " " }
+  contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf =
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
-  contents { ppf with indent = blank_prefix ^ " " }
+  contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
   try
@@ -197,7 +197,7 @@ let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to
   format_endline
     (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix (format_filename fname) lnum_from cnum_from lnum_to cnum_to)
     ppf;
-  contents { ppf with indent = blank_prefix ^ " " }
+  contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let format_code_double prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
@@ -244,11 +244,6 @@ type message =
   | Seq of message list
   | Severity of severity * message
 
-let rec messages_all_same = function
-  | (_, m1) :: (id2, m2) :: rest -> m1 = m2 && messages_all_same ((id2, m2) :: rest)
-  | [(_, m1)] -> true
-  | [] -> false
-
 let bullet = Util.(clear (blue "*"))
 
 let rec format_message msg ppf =
@@ -259,7 +254,7 @@ let rec format_message msg ppf =
   | List list ->
       let format_list_item ppf (header, msg) =
         format_endline (Util.(clear (blue "*")) ^ " " ^ header) ppf;
-        format_message msg { ppf with indent = ppf.indent ^ "   " }
+        format_message msg { ppf with indent = ppf.indent ^ "  " }
       in
       List.iter (format_list_item ppf) list
   | Severity (Sev_error, msg) -> format_message msg { ppf with loc_color = Util.red }

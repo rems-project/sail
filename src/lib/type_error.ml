@@ -233,19 +233,27 @@ let simp_typ =
     | arg -> arg
   )
 
+(* If we have a sequence of overloading errors this function rates
+   them based on a heuristic score stored in the
+   [Err_instantiation_info] constructor. The aim of the heuristic is
+   to figure out which overloading is most likely intended by the
+   user. Any error not wrapped in [Err_instantiation_info] is treated
+   as likely. *)
 let rank_overload_errors errs =
-  let others, with_instantiation_info =
+  let with_heuristic, without_heuristic =
     Util.map_split
-      (function id, Err_instantiation_info (heuristic, err) -> Error (id, heuristic, err) | id, err -> Ok (id, err))
+      (function
+        | id, l, Err_instantiation_info (heuristic, err) -> Ok (id, heuristic, l, err) | id, l, err -> Error (id, l, err)
+        )
       errs
   in
-  match List.stable_sort (fun (_, h1, _) (_, h2, _) -> Int.compare h1 h2) with_instantiation_info with
-  | (id, heuristic, err) :: rest ->
-      let same, worse = Util.take_drop (fun (_, h, _) -> heuristic = h) rest in
-      ( others @ ((id, err) :: List.map (fun (id, _, err) -> (id, err)) same),
-        Some (List.map (fun (id, _, _) -> id) worse)
+  match List.stable_sort (fun (_, h1, _, _) (_, h2, _, _) -> Int.compare h1 h2) with_heuristic with
+  | (id, heuristic, l, err) :: rest ->
+      let same, worse = Util.take_drop (fun (_, h, _, _) -> heuristic = h) rest in
+      ( without_heuristic @ ((id, l, err) :: List.map (fun (id, _, l, err) -> (id, l, err)) same),
+        Some (List.map (fun (id, _, _, _) -> id) worse)
       )
-  | [] -> (others, None)
+  | [] -> (without_heuristic, None)
 
 let rec innermost_function_arg_error l typ err =
   match err with
@@ -253,48 +261,121 @@ let rec innermost_function_arg_error l typ err =
   | Err_function_arg (l, typ, err) -> innermost_function_arg_error l typ err
   | _ -> (l, typ, err)
 
-let message_of_type_error =
+let rec overload_messages_all_same = function
+  | (_, l1, m1) :: (id2, l2, m2) :: rest ->
+      if l1 = l2 && m1 = m2 then overload_messages_all_same ((id2, l2, m2) :: rest) else None
+  | [(_, l1, m1)] -> Some m1
+  | [] -> None
+
+let find_closest name f =
+  let closest = ref (Int.max_int, None) in
+  let distance_callback other_id =
+    let other_name = string_of_id other_id in
+    if abs (String.length name - String.length other_name) <= 2 then (
+      let distance = Util.levenshtein_distance ~osa:true name other_name in
+      let max_distance = min 4 (max 1 (String.length name - 3)) in
+      if distance <= max_distance && distance < fst !closest then closest := (distance, Some other_name)
+    )
+  in
+  f distance_callback;
+  snd !closest
+
+let message_of_type_error type_error =
   let open Error_format in
-  let rec msg = function
-    | Err_inner (err, l', prefix, hint, err') ->
+  let have_shown_overload_help = ref false in
+  let preserve var f x =
+    let preserved = !var in
+    var := true;
+    let result = f x in
+    var := preserved;
+    result
+  in
+  let rec to_message = function
+    | Err_hint h -> (Seq [], Some h)
+    | Err_inner (err, l', prefix, err') ->
         let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
-        Seq [msg err; Line ""; Location (prefix, hint, l', msg err')]
-    | Err_other str -> if str = "" then Seq [] else Line str
-    | Err_function_arg (l, typ, err) ->
-        let l, typ, err = innermost_function_arg_error l typ err in
-        Seq [msg err; Location ("", Some ("when checking this argument has type " ^ string_of_typ typ), l, Seq [])]
+        let msg, hint = to_message err in
+        let msg', hint' = to_message err' in
+        (Seq [msg; Line ""; Location (prefix, hint', l', msg')], hint)
+    | Err_other str -> ((if str = "" then Seq [] else Line str), None)
+    | Err_function_arg (_, typ, err) ->
+        let msg, _ = to_message err in
+        (msg, Some ("checking function argument has type " ^ string_of_typ typ))
+    | Err_unbound_id { id; locals; have_function } ->
+        let name = string_of_id id in
+        let closest = find_closest name (fun callback -> Bindings.iter (fun other_id _ -> callback other_id) locals) in
+        let hint_msg = match closest with Some other_name -> ". Did you mean " ^ other_name ^ "?" | None -> "" in
+        if have_function then
+          ( Seq
+              [
+                Line ("Identifier " ^ name ^ " is unbound" ^ hint_msg);
+                Line "";
+                Line ("There is a also a function " ^ name ^ " in scope.");
+              ],
+            None
+          )
+        else (Line ("Identifier " ^ name ^ " is unbound" ^ hint_msg), None)
+    | Err_no_function_type { id; functions } ->
+        let name = string_of_id id in
+        let closest =
+          find_closest name (fun callback -> Bindings.iter (fun other_id _ -> callback other_id) functions)
+        in
+        let hint_msg = match closest with Some other_name -> ". Did you mean " ^ other_name ^ "?" | None -> "" in
+        (Line ("Function " ^ name ^ " not found" ^ hint_msg), None)
     | Err_no_overloading (id, errs) ->
-        let overload_errs = List.map (fun (id, err) -> (string_of_id id, msg err)) errs in
-        if messages_all_same overload_errs then snd (List.hd overload_errs)
-        else (
-          let likely, others = if !opt_explain_all_overloads then (errs, None) else rank_overload_errors errs in
-          let other_msg =
-            match others with
-            | None | Some [] -> []
-            | Some ids ->
-                [
-                  Line "";
-                  Line ("Also tried: " ^ Util.string_of_list ", " string_of_id ids);
-                  Line "These seem less likely, use --explain-all-overloads to see full details";
-                ]
-          in
-          Seq
-            ([
-               Line ("No overloading for " ^ string_of_id id ^ ", tried:");
-               List (List.map (fun (id, err) -> (string_of_id id, msg err)) likely);
-             ]
-            @ other_msg
-            )
-        )
-    | Err_instantiation_info (_, err) -> msg err
+        let overload_errs =
+          List.map (fun (id, l, err) -> (id, l, preserve have_shown_overload_help to_message err)) errs
+        in
+        let extra_help s =
+          if !have_shown_overload_help then []
+          else (
+            have_shown_overload_help := true;
+            [Line s]
+          )
+        in
+        begin
+          match overload_messages_all_same overload_errs with
+          | Some msg -> msg
+          | None ->
+              let likely, others = if !opt_explain_all_overloads then (errs, None) else rank_overload_errors errs in
+              let other_msg =
+                match others with
+                | None | Some [] -> []
+                | Some [id] ->
+                    [Line ""; Line ("Also tried " ^ string_of_id id)]
+                    @ extra_help "This seems less likely, use --explain-all-overloads to see full details"
+                | Some ids ->
+                    [Line ""; Line ("Also tried: " ^ Util.string_of_list ", " string_of_id ids)]
+                    @ extra_help "These seem less likely, use --explain-all-overloads to see full details"
+              in
+              ( Seq
+                  ([
+                     Line ("No overloading for " ^ string_of_id id ^ ", tried:");
+                     List
+                       (List.map
+                          (fun (id, l, err) ->
+                            let msg, hint = to_message err in
+                            (string_of_id id, Location ("", hint, l, msg))
+                          )
+                          likely
+                       );
+                   ]
+                  @ other_msg
+                  ),
+                Some (string_of_id id)
+              )
+        end
+    | Err_instantiation_info (_, err) -> to_message err
     | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->
-        Seq
-          [
-            Line ("Could not resolve quantifiers for " ^ string_of_id id);
-            Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
-          ]
+        ( Seq
+            [
+              Line ("Could not resolve quantifiers for " ^ string_of_id id);
+              Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
+            ],
+          None
+        )
     | Err_failed_constraint (check, locals, _, ncs) ->
-        Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check))
+        (Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check)), None)
     | Err_subtype (typ1, typ2, nc, all_constraints, tyvars) ->
         let nc = Option.map constraint_simp nc in
         let typ1, typ2 = (simp_typ typ1, simp_typ typ2) in
@@ -361,39 +442,30 @@ let message_of_type_error =
           | [info] -> format_var_constraint info
           | infos -> Seq (List.map format_var_constraint infos)
         in
-        Severity
-          ( Sev_warn,
-            Seq
-              (Line (error_string_of_typ substs typ1 ^ " is not a subtype of " ^ error_string_of_typ substs typ2)
-               ::
-               ( match nc with
-               | Some nc -> [Line ("as " ^ error_string_of_nc substs nc ^ " could not be proven")]
-               | None -> []
-               )
-              @ List.map
-                  (fun (v, l, ncs) ->
-                    Seq
-                      [
-                        Line "";
-                        Line ("type variable " ^ error_string_of_kid substs v ^ ":");
-                        Location ("", Some "bound here", l, format_var_constraints ncs);
-                      ]
-                  )
-                  var_constraints
-              )
-          )
-    | Err_no_num_ident id -> Line ("No num identifier " ^ string_of_id id)
-    | Err_no_casts (exp, typ_from, typ_to, trigger, reasons) ->
-        let coercion =
-          Line
-            ("Tried performing type coercion from " ^ string_of_typ typ_from ^ " to " ^ string_of_typ typ_to ^ " on "
-           ^ string_of_exp exp
-            )
-        in
-        Seq
-          ([coercion; Line "Coercion failed because:"; msg trigger]
-          @ if not (reasons = []) then Line "Possible reasons:" :: List.map msg reasons else []
-          )
+        ( Severity
+            ( Sev_warn,
+              Seq
+                (Line (error_string_of_typ substs typ1 ^ " is not a subtype of " ^ error_string_of_typ substs typ2)
+                 ::
+                 ( match nc with
+                 | Some nc -> [Line ("as " ^ error_string_of_nc substs nc ^ " could not be proven")]
+                 | None -> []
+                 )
+                @ List.map
+                    (fun (v, l, ncs) ->
+                      Seq
+                        [
+                          Line "";
+                          Line ("type variable " ^ error_string_of_kid substs v ^ ":");
+                          Location ("", Some "bound here", l, format_var_constraints ncs);
+                        ]
+                    )
+                    var_constraints
+                )
+            ),
+          None
+        )
+    | Err_no_num_ident id -> (Line ("No num identifier " ^ string_of_id id), None)
     | Err_not_in_scope (explanation, Some l, item_scope, into_scope, priv) ->
         let suggest, in_mod, add_requires_here =
           match (item_scope, into_scope) with
@@ -419,63 +491,43 @@ let message_of_type_error =
               )
         in
         if not priv then
-          Seq
-            ([
-               Line (Option.value ~default:"Not in scope" explanation);
-               Line "";
-               Line suggest;
-               Location ("", Some ("definition here" ^ in_mod), l, Seq []);
-             ]
-            @ add_requires_here
-            )
+          ( Seq
+              ([
+                 Line (Option.value ~default:"Not in scope" explanation);
+                 Line "";
+                 Line suggest;
+                 Location ("", Some ("definition here" ^ in_mod), l, Seq []);
+               ]
+              @ add_requires_here
+              ),
+            None
+          )
         else
-          Seq
-            [
-              Line (Option.value ~default:"Cannot use private definition" explanation);
-              Line "";
-              Location ("", Some ("private definition here" ^ in_mod), l, Seq []);
-            ]
-    | Err_not_in_scope (explanation, None, _, _, _) -> Line (Option.value ~default:"Not in scope" explanation)
+          ( Seq
+              [
+                Line (Option.value ~default:"Cannot use private definition" explanation);
+                Line "";
+                Location ("", Some ("private definition here" ^ in_mod), l, Seq []);
+              ],
+            None
+          )
+    | Err_not_in_scope (explanation, None, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
   in
-  msg
+  to_message type_error
 
 let string_of_type_error err =
   let open Error_format in
   let b = Buffer.create 20 in
-  format_message (message_of_type_error err) (buffer_formatter b);
-  Buffer.contents b
+  let msg, hint = message_of_type_error err in
+  format_message msg (buffer_formatter b);
+  (Buffer.contents b, hint)
 
-let rec collapse_errors = function
-  | Err_no_overloading (_, errs) as no_collapse ->
-      let errs = List.map (fun (_, err) -> collapse_errors err) errs in
-      let interesting = function Err_other _ -> false | Err_no_casts _ -> false | _ -> true in
-      begin
-        match List.filter interesting errs with
-        | err :: errs ->
-            let fold_equal msg err =
-              match (msg, err) with
-              | Some msg, Err_no_overloading _ -> Some msg
-              | Some msg, Err_no_casts _ -> Some msg
-              | Some msg, err when msg = string_of_type_error err -> Some msg
-              | _, _ -> None
-            in
-            begin
-              match List.fold_left fold_equal (Some (string_of_type_error err)) errs with
-              | Some _ -> err
-              | None -> no_collapse
-            end
-        | [] -> no_collapse
-      end
-  | Err_inner (err1, l, prefix, hint, err2) ->
-      let err1 = collapse_errors err1 in
-      let err2 = collapse_errors err2 in
-      if string_of_type_error err1 = string_of_type_error err2 then err1 else Err_inner (err1, l, prefix, hint, err2)
-  | err -> err
+let to_reporting_exn l err =
+  let str, hint = string_of_type_error err in
+  Reporting.err_typ ?hint l str
 
 let check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
- fun env defs ->
-  try Type_check.check_defs env defs with Type_error (l, err) -> raise (Reporting.err_typ l (string_of_type_error err))
+ fun env defs -> try Type_check.check_defs env defs with Type_error (l, err) -> raise (to_reporting_exn l err)
 
 let check : Env.t -> uannot ast -> tannot ast * Env.t =
- fun env defs ->
-  try Type_check.check env defs with Type_error (l, err) -> raise (Reporting.err_typ l (string_of_type_error err))
+ fun env defs -> try Type_check.check env defs with Type_error (l, err) -> raise (to_reporting_exn l err)

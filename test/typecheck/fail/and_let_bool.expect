@@ -1,7 +1,7 @@
 [93mType error[0m:
 [96mfail/and_let_bool.sail[0m:6.11-42:
 6[96m |[0m  and_bool(let y : bool = x in not_bool(y), x)
- [91m |[0m           [91m^-----------------------------^[0m
+ [91m |[0m           [91m^-----------------------------^[0m [91mchecking function argument has type bool('p)[0m
  [91m |[0m The type variable 'ex16# would leak into an outer scope.
  [91m |[0m 
  [91m |[0m Try adding a type annotation to this expression.
@@ -10,6 +10,3 @@
  [91m |[0m 6[96m |[0m  and_bool(let y : bool = x in not_bool(y), x)
  [91m |[0m  [91m |[0m               [91m^[0m
  [91m |[0m  [91m |[0m Type variable 'ex16# was introduced here
- [91m |[0m [96mfail/and_let_bool.sail[0m:6.11-42:
- [91m |[0m 6[96m |[0m  and_bool(let y : bool = x in not_bool(y), x)
- [91m |[0m  [91m |[0m           [91m^-----------------------------^[0m [91mwhen checking this argument has type bool('p)[0m

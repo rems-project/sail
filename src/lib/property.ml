@@ -124,7 +124,8 @@ let add_property_guards props ast =
                          would cause the runtime check x <= 100 to be added to the function body.\n\
                          To fix this error, ensure that all quantifiers have corresponding function arguments.\n"
                       in
-                      raise (Reporting.err_typ pragma_l (Type_error.string_of_type_error err ^ msg))
+                      let original_msg, hint = Type_error.string_of_type_error err in
+                      raise (Reporting.err_typ ?hint pragma_l (original_msg ^ msg))
                   in
                   let mk_funcl p = FCL_aux (FCL_funcl (id, Pat_aux (p, pexp_aux)), fcl_aux) in
                   match pexp with
