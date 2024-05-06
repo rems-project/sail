@@ -1600,7 +1600,7 @@ let check_pattern_duplicates env pat =
                      Err_other "Regular binding is here"
                    )
                 )
-          | None -> ()
+          | None -> ids := Bindings.add subrange_id (Pattern_singleton l) !ids
         )
         !subrange_ids;
       !ids
