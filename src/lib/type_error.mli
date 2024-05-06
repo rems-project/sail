@@ -119,6 +119,7 @@ val analyze_unresolved_quant :
 
 val string_of_type_error : type_error -> string * string option
 
+(** Convert a type error into a general purpose error from the Reporting file *)
 val to_reporting_exn : Parse_ast.l -> type_error -> exn
 
 val check_defs : Type_check.Env.t -> uannot Ast.def list -> Type_check.tannot Ast.def list * Type_check.Env.t
