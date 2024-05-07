@@ -7,15 +7,5 @@ Cast annotations are deprecated. They will be removed in a future version of the
 [93mType error[0m:
 [96mfail/add_vec_lit_old.sail[0m:14.23-32:
 14[96m |[0mlet x : range(0, 30) = 0xF + 0x2
-  [91m |[0m                       [91m^-------^[0m [91m(operator +)[0m
-  [91m |[0m No overloading for (operator +), tried:
-  [91m |[0m [94m*[0m add_vec
-  [91m |[0m   [96mfail/add_vec_lit_old.sail[0m:14.23-32:
-  [91m |[0m   14[96m |[0mlet x : range(0, 30) = 0xF + 0x2
-  [91m |[0m     [91m |[0m                       [91m^-------^[0m
-  [91m |[0m     [91m |[0m Type mismatch between int('ex5#) and bitvector(4)
-  [91m |[0m [94m*[0m add_range
-  [91m |[0m   [96mfail/add_vec_lit_old.sail[0m:14.23-26:
-  [91m |[0m   14[96m |[0mlet x : range(0, 30) = 0xF + 0x2
-  [91m |[0m     [91m |[0m                       [91m^-^[0m [91mchecking function argument has type int('ex1#)[0m
-  [91m |[0m     [91m |[0m Type mismatch between int('ex1#) and bitvector(4)
+  [91m |[0m                       [91m^-------^[0m
+  [91m |[0m Type mismatch between int('ex5#) and bitvector(4)
