@@ -1,19 +1,9 @@
 [93mType error[0m:
 [96mpass/vec_length/v1_inc.sail[0m:6.10-15:
 6[96m |[0m  let y = x[10];
- [91m |[0m          [91m^---^[0m [91mvector_access[0m
- [91m |[0m No overloading for vector_access, tried:
- [91m |[0m [94m*[0m bitvector_access
- [91m |[0m   [96mpass/vec_length/v1_inc.sail[0m:6.10-15:
- [91m |[0m   6[96m |[0m  let y = x[10];
- [91m |[0m    [91m |[0m          [91m^---^[0m
- [91m |[0m    [91m |[0m Could not resolve quantifiers for bitvector_access
- [91m |[0m    [91m |[0m [94m*[0m (0 <= 10 & 10 < 8)
- [91m |[0m [94m*[0m plain_vector_access
- [91m |[0m   [96mpass/vec_length/v1_inc.sail[0m:6.10-11:
- [91m |[0m   6[96m |[0m  let y = x[10];
- [91m |[0m    [91m |[0m          [91m^[0m [91mchecking function argument has type vector('n, 'a)[0m
- [91m |[0m    [91m |[0m Type mismatch between vector('n, 'a) and bitvector(8)
+ [91m |[0m          [91m^---^[0m
+ [91m |[0m Could not resolve quantifiers for bitvector_access
+ [91m |[0m [94m*[0m (0 <= 10 & 10 < 8)
  [91m |[0m 
  [91m |[0m [93mCaused by [0m[96mpass/vec_length/v1_inc.sail[0m:6.10-15:
  [91m |[0m 6[96m |[0m  let y = x[10];

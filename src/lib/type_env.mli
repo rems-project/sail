@@ -215,6 +215,11 @@ val is_overload : id -> t -> bool
 val get_overload_locs : id -> t -> Ast.l list
 val add_overloads : l -> id -> id list -> t -> t
 val get_overloads : id -> t -> id list
+val get_overloads_recursive : id -> t -> id list
+
+val is_filtered_overload : id -> t -> bool
+val get_filtered_overloads : at:l -> id -> t -> id * id list
+val add_filtered_overload : id -> id list -> t -> id * t
 
 val is_extern : id -> t -> string -> bool
 val add_extern : id -> extern -> t -> t

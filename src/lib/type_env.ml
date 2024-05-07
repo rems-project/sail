@@ -156,6 +156,7 @@ type env = {
   open_all : bool;
   opened : Project.ModSet.t;
   locals : (mut * typ) Bindings.t;
+  filtered_overloads : (id * id list) Bindings.t;
   typ_vars : (Ast.l * kind_aux) KBindings.t;
   shadow_vars : int KBindings.t;
   allow_bindings : bool;
@@ -257,6 +258,7 @@ let empty =
     open_all = false;
     opened = Project.ModSet.empty;
     locals = Bindings.empty;
+    filtered_overloads = Bindings.empty;
     typ_vars = KBindings.empty;
     shadow_vars = KBindings.empty;
     allow_bindings = true;
@@ -463,6 +465,11 @@ let get_overloads id env =
       let ids = get_item_with_loc hd_opt (id_loc id) env item in
       List.filter (overload_item_in_scope env) ids
 
+let get_overloads_recursive id env =
+  let overloads = get_overloads id env in
+  List.map (fun overload -> if is_overload overload env then get_overloads overload env else [overload]) overloads
+  |> List.concat
+
 let add_overloads l id ids env =
   typ_print
     (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"))
@@ -505,6 +512,18 @@ let add_overloads l id ids env =
           }
         )
         env
+
+let is_filtered_overload id env = Bindings.mem id env.filtered_overloads
+
+let get_filtered_overloads ~at:l id env =
+  match Bindings.find_opt id env.filtered_overloads with
+  | None -> Reporting.unreachable l __POS__ "Failed to get filtered overload"
+  | Some overloads -> overloads
+
+let add_filtered_overload original_id ids env =
+  let n = Bindings.cardinal env.filtered_overloads in
+  let id = mk_id ("filtered_overload#" ^ string_of_int n) in
+  (id, { env with filtered_overloads = Bindings.add id (original_id, ids) env.filtered_overloads })
 
 let infer_kind env id =
   let l = id_loc id in
