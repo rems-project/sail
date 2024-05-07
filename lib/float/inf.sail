@@ -27,8 +27,8 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_NAN
-$define _FLOAT_NAN
+$ifndef _FLOAT_INF
+$define _FLOAT_INF
 
 $include <float/common.sail>
 
