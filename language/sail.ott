@@ -77,6 +77,7 @@ open Value
 type text = string
 
 type l = Parse_ast.l
+type config = Parse_ast.Config.config
 
 type 'a annot = l * 'a
 
@@ -88,7 +89,7 @@ type visibility = Public | Private of  l
 
 type def_annot = {
     doc_comment : string option;
-    attrs : (l * string * string) list;
+    attrs : (l * string * config) list;
     visibility : visibility;
     loc : l
 }
@@ -100,9 +101,18 @@ type 'a clause_annot = def_annot * 'a
 embed
 {{ lem
 
-type l = | Unknown
+type ocaml_l
+declare ocaml target_rep type ocaml_l = `Parse_ast.l`
 
-type value = | Val
+type l = ocaml_l
+
+type ocaml_config
+declare ocaml target_rep type ocaml_config = `Parse_ast.Config.config`
+
+type config = ocaml_config
+
+type value
+declare ocaml target_rep type value = `Value.value`
 
 type loop = While | Until
 
@@ -114,7 +124,7 @@ type visibility = Public | Private of l
 
 type def_annot = <|
     doc_comment : maybe string;
-    attrs : list (l * string * string);
+    attrs : list (l * string * maybe config);
     visibility : visibility;
     loc : l
 |>
@@ -568,7 +578,6 @@ E_match <= E_field
 E_let <= E_field
 
 E_app left E_app
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function definitions                                         %

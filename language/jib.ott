@@ -51,10 +51,22 @@ metavar alpha ::=
   {{ lem 'a }}
 
 embed
+{{ ocaml
+
+open Ast
+open Value2
+
+type iannot = int * Parse_ast.l
+
+}}
+
+embed
 {{ lem
 
 open import Ast
 open import Value2
+
+type iannot = int * ocaml_l
 
 }}
 
@@ -189,8 +201,9 @@ ctype_def :: 'CTD_' ::=
   | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
 
 iannot :: '' ::=
-  {{ lem nat * nat * nat }}
-  {{ ocaml int * int * int }}
+  {{ phantom }}
+  {{ lem iannot }}
+  {{ ocaml iannot }}
 
 instr :: 'I_' ::=
   {{ aux _ iannot }}

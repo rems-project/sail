@@ -67,11 +67,24 @@
 
 open Ast
 open Ast_defs
+open Parse_ast.Config
 open Util
 module Big_int = Nat_big_num
 
 (* The type of annotations for untyped AST nodes *)
-type uannot = { attrs : (l * string * string) list }
+type uannot = { attrs : (l * string * config option) list }
+
+let rec string_of_config (Conf_aux (aux, _)) =
+  match aux with
+  | Conf_object kvs ->
+      "{ " ^ Util.string_of_list ", " (fun (k, v) -> Printf.sprintf "%s = %s" k (string_of_config v)) kvs ^ " }"
+  | Conf_string s -> "\"" ^ s ^ "\""
+  | Conf_num n -> Big_int.to_string n
+  | Conf_list cs -> "[" ^ Util.string_of_list ", " string_of_config cs ^ "]"
+
+let string_of_attribute attr = function
+  | None -> Printf.sprintf "$[%s]" attr
+  | Some config -> Printf.sprintf "$[%s %s]" attr (string_of_config config)
 
 let empty_uannot = { attrs = [] }
 

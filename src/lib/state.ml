@@ -145,7 +145,9 @@ let generate_regstate env registers =
   [
     DEF_aux
       ( DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
-        add_def_attribute Unknown "undefined_gen" "forbid" (mk_def_annot Unknown)
+        add_def_attribute Unknown "undefined_gen"
+          (Some (Conf_aux (Conf_string "forbid", Unknown)))
+          (mk_def_annot Unknown)
       );
   ]
 

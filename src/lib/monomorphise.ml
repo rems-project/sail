@@ -4159,8 +4159,7 @@ module BitvectorSizeCasts = struct
                     | P_aux (P_wild, (_, annot)), None -> begin
                         (* Similar to the literal case *)
                         match (body, untyped_annot annot |> get_attribute "int_wildcard") with
-                        | _, Some (_, s) ->
-                            let i = Big_int.of_string s in
+                        | _, Some (_, Some (Conf_aux (Conf_num i, _))) ->
                             let src_typ =
                               fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ
                             in

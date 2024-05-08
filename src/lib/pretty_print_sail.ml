@@ -81,8 +81,7 @@ let doc_id (Id_aux (id_aux, _)) = string (match id_aux with Id v -> v | Operator
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
-let doc_attr attr arg =
-  if arg = "" then Printf.ksprintf string "$[%s]" attr ^^ space else Printf.ksprintf string "$[%s %s]" attr arg ^^ space
+let doc_attr attr arg = string (string_of_attribute attr arg) ^^ space
 
 let doc_def_annot def_annot =
   (match def_annot.doc_comment with Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline | _ -> empty)

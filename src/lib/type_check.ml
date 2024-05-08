@@ -70,6 +70,7 @@ open Ast_defs
 open Ast_util
 open Util
 open Lazy
+open Parse_ast.Config
 
 module Big_int = Nat_big_num
 
@@ -1918,8 +1919,8 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
   | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
   | _ -> false
 
-let forwards_attr l uannot = add_attribute l "forwards" "" (remove_attribute "forwards" uannot)
-let backwards_attr l uannot = add_attribute l "backwards" "" (remove_attribute "backwards" uannot)
+let forwards_attr l uannot = add_attribute l "forwards" None (remove_attribute "forwards" uannot)
+let backwards_attr l uannot = add_attribute l "backwards" None (remove_attribute "backwards" uannot)
 
 let tc_assume nc (E_aux (aux, annot)) = E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
 
@@ -1969,8 +1970,8 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           let completeness_typ, env = bind_existential (exp_loc exp) None inferred_typ env in
           let ctx = pattern_completeness_ctx env in
           match PC.is_complete_wildcarded l ctx checked_cases completeness_typ with
-          | Some wildcarded -> (wildcarded, add_attribute (gen_loc l) "complete" "")
-          | None -> (checked_cases, add_attribute (gen_loc l) "incomplete" "")
+          | Some wildcarded -> (wildcarded, add_attribute (gen_loc l) "complete" None)
+          | None -> (checked_cases, add_attribute (gen_loc l) "incomplete" None)
         )
       in
       annot_exp (E_match (inferred_exp, checked_cases)) typ |> update_uannot attr_update
@@ -2451,13 +2452,11 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
   | P_wild ->
       let env =
         match get_attribute "int_wildcard" uannot with
-        | Some (_, arg) ->
+        | Some (_, Some (Conf_aux (Conf_num arg, _))) ->
             (* If the patterh completeness checker replaced an numeric pattern, modify the environment as if it hadn't *)
-            let _, env, _ =
-              bind_pat env (P_aux (P_lit (L_aux (L_num (Big_int.of_string arg), gen_loc l)), (l, uannot))) typ
-            in
+            let _, env, _ = bind_pat env (P_aux (P_lit (L_aux (L_num arg, gen_loc l)), (l, uannot))) typ in
             env
-        | None -> env
+        | _ -> env
       in
       (annot_pat P_wild typ, env, [])
   | P_or (pat1, pat2) ->
@@ -4210,8 +4209,8 @@ let check_funcls_complete l env funcls typ =
   let typ_arg, _, env = bind_funcl_arg_typ l env typ in
   let ctx = pattern_completeness_ctx env in
   match PC.is_complete_funcls_wildcarded ~keyword:"function" l ctx funcls typ_arg with
-  | Some funcls -> (funcls, add_def_attribute (gen_loc l) "complete" "")
-  | None -> (funcls, add_def_attribute (gen_loc l) "incomplete" "")
+  | Some funcls -> (funcls, add_def_attribute (gen_loc l) "complete" None)
+  | None -> (funcls, add_def_attribute (gen_loc l) "incomplete" None)
 
 let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
 
@@ -4411,14 +4410,18 @@ let forbid_recursive_types type_l f =
 let extension_def_attribute env def_annot =
   match get_def_attribute "extension" def_annot with
   | Some (l, name) -> begin
-      match Env.get_current_visibility env with
-      | Private vis_l ->
-          raise
-            (Reporting.err_general
-               (Hint ("private scope started here", vis_l, l))
-               "extension attribute within private scope"
-            )
-      | Public -> Env.get_module_id_opt env name
+      match name with
+      | Some (Conf_aux (Conf_string name, _)) -> begin
+          match Env.get_current_visibility env with
+          | Private vis_l ->
+              raise
+                (Reporting.err_general
+                   (Hint ("private scope started here", vis_l, l))
+                   "extension attribute within private scope"
+                )
+          | Public -> Env.get_module_id_opt env name
+        end
+      | _ -> raise (Reporting.err_general l "Malformed extension attribute, expected a string argument")
     end
   | None -> None
 
@@ -4440,8 +4443,8 @@ let check_record l env def_annot id typq fields =
   let env =
     try
       match get_def_attribute "bitfield" def_annot with
-      | Some (_, size) when not (Env.is_bitfield id env) ->
-          Env.add_bitfield id (bitvector_typ (nconstant (Big_int.of_string size))) Bindings.empty env
+      | Some (_, Some (Conf_aux (Conf_num size, _))) when not (Env.is_bitfield id env) ->
+          Env.add_bitfield id (bitvector_typ (nconstant size)) Bindings.empty env
       | _ -> env
     with _ -> env
   in
@@ -4452,6 +4455,9 @@ let check_global_constraint env def_annot nc =
   if prove __POS__ env nc_false then
     typ_error def_annot.loc "Global constraint appears inconsistent with previous global constraints";
   ([DEF_aux (DEF_constraint nc, def_annot)], env)
+
+let undefined_skip l = Some (Conf_aux (Conf_string "skip", gen_loc l))
+let undefined_forbid l = Some (Conf_aux (Conf_string "forbid", gen_loc l))
 
 let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
@@ -4470,10 +4476,11 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       let env = check_record l env def_annot id typq fields in
       begin
         match get_def_attribute "undefined_gen" def_annot with
-        | Some (_, "forbid") -> ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
-        | Some (_, "skip") ->
+        | Some (_, Some (Conf_aux (Conf_string "forbid", _))) ->
+            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+        | Some (_, Some (Conf_aux (Conf_string "skip", _))) ->
             ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
-        | (Some (_, "generate") | None) as attr ->
+        | (Some (_, Some (Conf_aux (Conf_string "generate", _))) | None) as attr ->
             let field_env = Env.add_typquant l typq env in
             let field_env =
               List.fold_left
@@ -4486,7 +4493,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             in
             if (not gen_undefined) && Option.is_none attr then (
               (* If we cannot generate an undefined value, and we weren't explicitly asked to *)
-              let def_annot = add_def_attribute (gen_loc l) "undefined_gen" "forbid" def_annot in
+              let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
               ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
             )
             else if not gen_undefined then
@@ -4499,21 +4506,23 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
                 let undefined_defs, env = check_defs env undefined_defs in
                 let def_annot =
                   def_annot |> remove_def_attribute "undefined_gen"
-                  |> add_def_attribute (gen_loc l) "undefined_gen" "skip"
+                  |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
                 in
                 ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
                   Env.allow_user_undefined id env
                 )
               with
               | Type_error _ when Option.is_none attr ->
-                  let def_annot = add_def_attribute (gen_loc l) "undefined_gen" "forbid" def_annot in
+                  let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
                   ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
               | Type_error _ -> typ_error l ("Cannot generate undefined function for struct " ^ string_of_id id)
             )
-        | Some (attr_l, arg) ->
+        | Some (attr_l, Some arg) ->
             typ_error
               (Hint ("When checking this struct", l, attr_l))
-              ("Unrecognized argument to undefined attribute: " ^ arg)
+              ("Unrecognized argument to undefined attribute: " ^ string_of_config arg)
+        | Some (attr_l, None) ->
+            typ_error (Hint ("When checking this struct", l, attr_l)) "No argument for undefined attribute"
       end
   | TD_variant (id, typq, arms, _) ->
       let rec_env = Env.add_variant id (typq, arms) env in
@@ -4528,22 +4537,26 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
       let env = Env.add_enum id ids env in
       begin
         match get_def_attribute "undefined_gen" def_annot with
-        | Some (_, "forbid") -> ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
-        | Some (_, "skip") ->
+        | Some (_, Some (Conf_aux (Conf_string "forbid", _))) ->
+            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+        | Some (_, Some (Conf_aux (Conf_string "skip", _))) ->
             ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
-        | Some (_, "generate") | None ->
+        | Some (_, Some (Conf_aux (Conf_string "generate", _))) | None ->
             let undefined_defs = Initial_check.generate_undefined_enum id ids in
             let undefined_defs, env = check_defs env undefined_defs in
             let def_annot =
-              def_annot |> remove_def_attribute "undefined_gen" |> add_def_attribute (gen_loc l) "undefined_gen" "skip"
+              def_annot |> remove_def_attribute "undefined_gen"
+              |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
             in
             ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
               Env.allow_user_undefined id env
             )
-        | Some (attr_l, arg) ->
+        | Some (attr_l, Some arg) ->
             typ_error
               (Hint ("When checking this enum", l, attr_l))
-              ("Unrecognized argument to undefined attribute: " ^ arg)
+              ("Unrecognized argument to undefined attribute: " ^ string_of_config arg)
+        | Some (attr_l, None) ->
+            typ_error (Hint ("When checking this enum", l, attr_l)) "No argument for undefined attribute"
       end
   | TD_bitfield (id, typ, ranges) as unexpanded ->
       let typ = Env.expand_synonyms env typ in
@@ -4566,7 +4579,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
                 let ranges =
                   List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
                 in
-                let def_annot = add_def_attribute l "bitfield" (Big_int.to_string size) def_annot in
+                let def_annot = add_def_attribute l "bitfield" (Some (Conf_aux (Conf_num size, l))) def_annot in
                 let defs =
                   DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
                   :: Bitfield.macro id size (Env.get_default_order env) ranges

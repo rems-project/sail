@@ -80,6 +80,10 @@ type uannot
 
 val empty_uannot : uannot
 
+val string_of_attribute : string -> config option -> string
+
+val string_of_config : config -> string
+
 (** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
     {@sail[
     $[attribute argument] expression
@@ -87,21 +91,21 @@ val empty_uannot : uannot
     The location argument should be a span that corresponds to the attribute itself, and not
     include the expression.
 *)
-val add_attribute : l -> string -> string -> uannot -> uannot
+val add_attribute : l -> string -> config option -> uannot -> uannot
 
 val remove_attribute : string -> uannot -> uannot
 
-val get_attribute : string -> uannot -> (l * string) option
+val get_attribute : string -> uannot -> (l * config option) option
 
-val get_attributes : uannot -> (l * string * string) list
+val get_attributes : uannot -> (l * string * config option) list
 
-val find_attribute_opt : string -> (l * string * string) list -> string option
+val find_attribute_opt : string -> (l * string * config option) list -> config option option
 
-val mk_def_annot : ?doc:string -> ?attrs:(l * string * string) list -> ?visibility:visibility -> l -> def_annot
+val mk_def_annot : ?doc:string -> ?attrs:(l * string * config option) list -> ?visibility:visibility -> l -> def_annot
 
-val add_def_attribute : l -> string -> string -> def_annot -> def_annot
+val add_def_attribute : l -> string -> config option -> def_annot -> def_annot
 
-val get_def_attribute : string -> def_annot -> (l * string) option
+val get_def_attribute : string -> def_annot -> (l * config option) option
 
 val remove_def_attribute : string -> def_annot -> def_annot
 
