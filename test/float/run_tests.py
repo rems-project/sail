@@ -31,7 +31,7 @@ def test_float(name, sail_opts, compiler, c_opts):
                 step('{} {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
 
-                step('diff {}.err_result no_error'.format(basename))
+                step('diff {}.err_result no_error && rm {}.err_result'.format(basename, basename))
                 step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
 
                 print_ok(filename)
