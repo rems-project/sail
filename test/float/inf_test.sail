@@ -32,8 +32,8 @@ default Order dec
 $include <prelude.sail>
 $include <float/inf.sail>
 
-function test_float_is_inf() -> unit = {
-  /* Half flating point */
+function test_float_is_inf () -> unit = {
+  /* Half floating point */
   assert(float_is_inf(0x7c00));
   assert(float_is_inf(0xfc00));
 
@@ -44,7 +44,7 @@ function test_float_is_inf() -> unit = {
   assert(float_is_inf(0xdb00) == false);
   assert(float_is_inf(0xfe00) == false);
 
-  /* Single flating point */
+  /* Single floating point */
   assert(float_is_inf(0x7f800000));
   assert(float_is_inf(0xff800000));
 
@@ -55,7 +55,7 @@ function test_float_is_inf() -> unit = {
   assert(float_is_inf(0xff000001) == false);
   assert(float_is_inf(0xfe800000) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_inf(0x7ff0000000000000));
   assert(float_is_inf(0xfff0000000000000));
 
@@ -67,6 +67,6 @@ function test_float_is_inf() -> unit = {
   assert(float_is_inf(0xffc0000000000000) == false);
 }
 
-function main() -> unit = {
-  test_float_is_inf ();
+function main () -> unit = {
+  test_float_is_inf();
 }
