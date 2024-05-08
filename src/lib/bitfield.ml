@@ -94,7 +94,7 @@ let range_loc (BF_aux (_, l)) = l
 let fix_locations l defs =
   let rec go acc = function
     | DEF_aux (def, def_annot) :: defs ->
-        go (DEF_aux (def, add_def_attribute (gen_loc l) "fix_location" "" def_annot) :: acc) defs
+        go (DEF_aux (def, add_def_attribute (gen_loc l) "fix_location" None def_annot) :: acc) defs
     | [] -> acc
   in
   List.rev (go [] defs)

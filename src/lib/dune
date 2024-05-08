@@ -44,12 +44,10 @@
 (rule
  (target ast.ml)
  (deps
-  (:ast ast.lem)
-  (:sed ast.sed))
+  (:ast ast.lem))
  (action
   (progn
-   (run lem -ocaml %{ast})
-   (run sed -i.bak -f %{sed} %{target}))))
+   (run lem -ocaml %{ast}))))
 
 (copy_files ../gen_lib/*.lem)
 
@@ -86,13 +84,11 @@
  (target jib.ml)
  (deps
   (:jib jib.lem)
-  (:sed ast.sed)
   value2.ml
   (glob_files lem/*.lem))
  (action
   (progn
-   (run lem -ocaml %{jib} -lib . -lib lem/)
-   (run sed -i.bak -f %{sed} %{target}))))
+   (run lem -ocaml %{jib} -lib . -lib lem/))))
 
 (menhir
  (modules parser project_parser))

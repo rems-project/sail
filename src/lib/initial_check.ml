@@ -1576,7 +1576,7 @@ let undefined_builtin_val_specs =
   ]
 
 let make_global (DEF_aux (def, def_annot)) =
-  DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" "" def_annot)
+  DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
 
 let generate_undefineds vs_ids defs =
   let undefined_builtins =

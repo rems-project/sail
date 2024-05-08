@@ -447,7 +447,7 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
   ( match get_attributes annot.uannot with
   | [] -> empty
   | attrs ->
-      concat_map (fun (_, attr, arg) -> string (Printf.sprintf "$[%s %s]" attr arg |> Util.magenta |> Util.clear)) attrs
+      concat_map (fun (_, attr, arg) -> string (string_of_attribute attr arg |> Util.magenta |> Util.clear)) attrs
   )
   ^^
   match aexp with

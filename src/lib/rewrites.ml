@@ -1446,7 +1446,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
     ->
       let add_mapping_match (E_aux (e, (l, a)) as exp) =
         if Option.is_some (get_attribute "mapping_match" (untyped_annot annot)) then
-          E_aux (e, (l, map_uannot (add_attribute Parse_ast.Unknown "mapping_match" "") a))
+          E_aux (e, (l, map_uannot (add_attribute Parse_ast.Unknown "mapping_match" None) a))
         else exp
       in
       let clause = function

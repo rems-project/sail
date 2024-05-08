@@ -75,6 +75,7 @@ open Libsail
 open Ast
 open Ast_defs
 open Ast_util
+open Parse_ast.Config
 
 (** In the case of latex, we generate files containing a sequence of
    commands that can simply be included. For other documentation
@@ -430,7 +431,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     in
     match find_attribute_opt "split" attrs with
     | None -> None
-    | Some split_id -> (
+    | Some (Some (Conf_aux (Conf_string split_id, _))) -> (
         let split_id = mk_id split_id in
         let env = Type_check.env_of exp in
         match Type_check.Env.lookup_id split_id env with
@@ -452,6 +453,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             Some splits
         | _ -> raise (Reporting.err_general l ("Could not split on variable " ^ string_of_id split_id))
       )
+    | Some _ -> raise (Reporting.err_general l "Invalid argument for split attribute")
 
   let docinfo_for_funcl ~ast ?outer_annot n (FCL_aux (FCL_funcl (_, pexp), annot) as clause) =
     (* If we have just a single clause, we use the annotation for the
@@ -520,7 +522,8 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Type_check.strip_mapcl Pretty_print_sail.doc_mapcl clause in
-    let wavedrom_attr = find_attribute_opt "wavedrom" def_annot.attrs in
+    let parse_wavedrom_attr = function Some (Conf_aux (Conf_string s, _)) -> Some s | Some _ | None -> None in
+    let wavedrom_attr = Option.bind (find_attribute_opt "wavedrom" def_annot.attrs) parse_wavedrom_attr in
 
     let left, left_wavedrom, right, right_wavedrom, body =
       match aux with
