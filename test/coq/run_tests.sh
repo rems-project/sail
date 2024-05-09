@@ -9,7 +9,7 @@ EXTRATESTSDIR="$DIR/pass"
 
 printf "\$SAIL is $SAIL\n"
 
-if opam config var coq-sail:share >/dev/null 2>/dev/null; then
+if opam config var coq-sail:share >/dev/null 2>/dev/null && [ -z "$COQSAIL" ]; then
   COQOPTS=""
 else
   if [ -z "$COQSAIL" ]; then
