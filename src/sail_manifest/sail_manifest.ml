@@ -79,7 +79,8 @@ let git_command args =
   with _ -> None
 
 let gen_manifest () =
-  ksprintf print_endline "let dir = \"%s\"" (Sys.getcwd ());
+  (* See manifest.ml.in for more information about `dir`. *)
+  ksprintf print_endline "let dir = None";
   ksprintf print_endline "let commit = \"%s\"" (Option.value (git_command "rev-parse HEAD") ~default:"unknown commit");
   ksprintf print_endline "let branch = \"%s\""
     (Option.value (git_command "rev-parse --abbrev-ref HEAD") ~default:"unknown branch")

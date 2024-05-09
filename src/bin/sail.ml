@@ -420,7 +420,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
     | [], [] ->
         (* If there are no provided project files, we concatenate all
            the free file arguments into one big blob like before *)
-        Frontend.load_files ~target:tgt Manifest.dir !options Type_check.initial_env frees
+        Frontend.load_files ~target:tgt Locations.sail_dir !options Type_check.initial_env frees
     (* Allows project files from either free arguments via suffix, or
        from -project, but not both as the ordering between them would
        be unclear. *)
@@ -458,7 +458,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
         Profile.finish "parsing project" t;
         if !opt_just_parse_project then exit 0;
         let env = Type_check.initial_env_with_modules proj in
-        Frontend.load_modules ~target:tgt Manifest.dir !options env proj mod_ids
+        Frontend.load_modules ~target:tgt Locations.sail_dir !options env proj mod_ids
     | _, _ ->
         raise
           (Reporting.err_general Parse_ast.Unknown
@@ -477,7 +477,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
   Target.run_pre_rewrites_hook tgt ast effect_info env;
   let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
 
-  Target.action tgt config Manifest.dir !opt_file_out ast effect_info env;
+  Target.action tgt config Locations.sail_dir !opt_file_out ast effect_info env;
 
   (ast, env, effect_info)
 
@@ -603,7 +603,7 @@ let main () =
     exit 0
   );
   if !opt_show_sail_dir then (
-    print_endline (Reporting.get_sail_dir Manifest.dir);
+    print_endline (Reporting.get_sail_dir Locations.sail_dir);
     exit 0
   );
 
