@@ -880,6 +880,10 @@ attribute_data:
     { AD_aux (AD_string s, loc $startpos $endpos) }
   | id = Id
     { AD_aux (AD_string id, loc $startpos $endpos) }
+  | True
+    { AD_aux (AD_bool true, loc $startpos $endpos) }
+  | False
+    { AD_aux (AD_bool false, loc $startpos $endpos) }
   | Lsquare; xs = separated_list(Comma, attribute_data) Rsquare
     { AD_aux (AD_list xs, loc $startpos $endpos) }
 
