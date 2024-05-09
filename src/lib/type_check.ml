@@ -1767,6 +1767,12 @@ let rec filter_overload_tree env =
       (OT_overloads (f, overloads, List.map fst args, annot), returns)
   | OT_leaf (_, leaf_type) as tree -> (tree, [leaf_type])
 
+let add_overload_attribute l f =
+  let l = gen_loc l in
+  let name, is_infix = match f with Id_aux (Id v, _) -> (v, false) | Id_aux (Operator v, _) -> (v, true) in
+  add_attribute l "overloaded"
+    (Some (AD_aux (AD_object [("name", AD_aux (AD_string name, l)); ("is_infix", AD_aux (AD_bool is_infix, l))], l)))
+
 let rec overload_tree_to_exp env = function
   | OT_overloads (f, overloads, args, annot) ->
       let id, env = Env.add_filtered_overload f overloads env in
@@ -2112,7 +2118,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | errs, [] -> typ_raise l (Err_no_overloading (orig_f, errs))
         | errs, f :: fs -> begin
             typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-            try crule check_exp env (E_aux (E_app (f, xs), (l, uannot))) typ
+            try crule check_exp env (E_aux (E_app (f, xs), (l, add_overload_attribute l orig_f uannot))) typ
             with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
               try_overload (errs @ [(f, err_l, err)], fs)
@@ -2133,17 +2139,17 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
          short-circuiting. *)
       match destruct_exist (typ_of (irule infer_exp env y)) with
       | None | Some (_, NC_aux (NC_true, _), _) ->
-          let inferred_exp = infer_funapp l env f [x; y] (Some typ) in
+          let inferred_exp = infer_funapp l env f [x; y] uannot (Some typ) in
           expect_subtype env inferred_exp typ
       | Some _ ->
-          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] (Some typ) in
+          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot (Some typ) in
           expect_subtype env inferred_exp typ
       | exception Type_error _ ->
-          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] (Some typ) in
+          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot (Some typ) in
           expect_subtype env inferred_exp typ
     end
   | E_app (f, xs), _ ->
-      let inferred_exp = infer_funapp l env f xs (Some typ) in
+      let inferred_exp = infer_funapp l env f xs uannot (Some typ) in
       expect_subtype env inferred_exp typ
   | E_return exp, _ ->
       let checked_exp =
@@ -3202,7 +3208,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Accessing a field of a record *)
       | Typ_aux (Typ_id rectyp, _) when Env.is_record rectyp env -> begin
           let inferred_acc =
-            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None
+            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] uannot None
           in
           match inferred_acc with
           | E_aux (E_app (field, [inferred_exp]), _) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
@@ -3211,7 +3217,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Not sure if we need to do anything different with args here. *)
       | Typ_aux (Typ_app (rectyp, _), _) when Env.is_record rectyp env -> begin
           let inferred_acc =
-            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] None
+            infer_funapp' l env field (Env.get_accessor_fn rectyp field env) [strip_exp inferred_exp] uannot None
           in
           match inferred_acc with
           | E_aux (E_app (field, [inferred_exp]), _) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
@@ -3292,7 +3298,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
         | errs, [] -> typ_raise l (Err_no_overloading (orig_f, errs))
         | errs, f :: fs -> begin
             typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-            try irule infer_exp env (E_aux (E_app (f, xs), (l, uannot)))
+            try irule infer_exp env (E_aux (E_app (f, xs), (l, add_overload_attribute l orig_f uannot)))
             with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
               try_overload (errs @ [(f, err_l, err)], fs)
@@ -3308,11 +3314,11 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       infer_exp env exp
   | E_app (f, [x; y]) when string_of_id f = "and_bool" || string_of_id f = "or_bool" -> begin
       match destruct_exist (typ_of (irule infer_exp env y)) with
-      | None | Some (_, NC_aux (NC_true, _), _) -> infer_funapp l env f [x; y] None
-      | Some _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] None
-      | exception Type_error _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] None
+      | None | Some (_, NC_aux (NC_true, _), _) -> infer_funapp l env f [x; y] uannot None
+      | Some _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None
+      | exception Type_error _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None
     end
-  | E_app (f, xs) -> infer_funapp l env f xs None
+  | E_app (f, xs) -> infer_funapp l env f xs uannot None
   | E_loop (loop_type, measure, cond, body) ->
       let checked_cond = crule check_exp env cond bool_typ in
       let checked_measure =
@@ -3484,7 +3490,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       annot_exp (E_internal_assume (nc, exp')) (typ_of exp')
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
-and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ
+and infer_funapp l env f xs uannot ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs uannot ret_ctx_typ
 
 and infer_vector_update l env v n exp =
   let rec nested_updates acc = function
@@ -3522,20 +3528,19 @@ and instantiation_of (E_aux (_, (l, tannot)) as exp) =
     end
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
-and instantiation_of_without_type (E_aux (exp_aux, (l, _)) as exp) =
+and instantiation_of_without_type (E_aux (exp_aux, (l, (_, uannot))) as exp) =
   let env = env_of exp in
   match exp_aux with
-  | E_app (f, xs) -> instantiation_of (infer_funapp' l env f (Env.get_val_spec f env) (List.map strip_exp xs) None)
+  | E_app (f, xs) ->
+      instantiation_of (infer_funapp' l env f (Env.get_val_spec f env) (List.map strip_exp xs) uannot None)
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
-and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
+and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
   typ_print (lazy (Util.("Function " |> cyan |> clear) ^ string_of_id f));
   let annot_exp exp typ inst =
     E_aux
       ( exp,
-        ( l,
-          (Some { env; typ; monadic = no_effect; expected = expected_ret_typ; instantiation = Some inst }, empty_uannot)
-        )
+        (l, (Some { env; typ; monadic = no_effect; expected = expected_ret_typ; instantiation = Some inst }, uannot))
       )
   in
   let is_bound env kid = KBindings.mem kid (Env.get_typ_vars env) in

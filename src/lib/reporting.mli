@@ -143,12 +143,12 @@ val err_lex : Lexing.position -> string -> exn
 
 (** Raise an unreachable exception.
 
-This should always be used over an assert false or a generic OCaml failwith exception when appropriate *)
+This should always be used over an assert false or a generic OCaml failwith exception when appropriate. *)
 val unreachable : Parse_ast.l -> string * int * int * int -> string -> 'a
 
 (** Print an error to stdout.
 
-@param interactive If this is true (default false) then unreachable errors are reported as general errors. 
+@param interactive If this is true (default false) then unreachable errors are reported as general errors.
 This is used by the interactive read-eval-print loop. The interactive mode exposes a lot of internal features, so
 it's possible to excute code paths from the interactive mode that would otherwise be unreachable during normal execution. *)
 val print_error : ?interactive:bool -> error -> unit

@@ -76,16 +76,19 @@ type l =
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
 
-(* Put the config type in it's own module, so other modules can import
-   it unqualified. *)
+(** We put the attribute data type in it's own module, so other
+    modules can import it unqualified. The parse AST and the main AST
+    share this type, so modules that wouldn't normally import this
+    module will want to use it. *)
 module Attribute_data = struct
   type attribute_data_aux =
-    (* JSON-style data structure for attributes *)
     | AD_object of (string * attribute_data) list
     | AD_list of attribute_data list
     | AD_num of Big_int.num
     | AD_string of string
+    | AD_bool of bool
 
+  (** JSON-style data structure for attributes *)
   and attribute_data = AD_aux of attribute_data_aux * l
 end
 

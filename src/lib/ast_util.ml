@@ -77,10 +77,13 @@ type uannot = { attrs : (l * string * attribute_data option) list }
 let rec string_of_attribute_data (AD_aux (aux, _)) =
   match aux with
   | AD_object kvs ->
-      "{ " ^ Util.string_of_list ", " (fun (k, v) -> Printf.sprintf "%s = %s" k (string_of_attribute_data v)) kvs ^ " }"
+      "{ "
+      ^ Util.string_of_list ", " (fun (k, v) -> Printf.sprintf "\"%s\" = %s" k (string_of_attribute_data v)) kvs
+      ^ " }"
   | AD_string s -> "\"" ^ s ^ "\""
   | AD_num n -> Big_int.to_string n
   | AD_list cs -> "[" ^ Util.string_of_list ", " string_of_attribute_data cs ^ "]"
+  | AD_bool b -> string_of_bool b
 
 let string_of_attribute attr = function
   | None -> Printf.sprintf "$[%s]" attr
