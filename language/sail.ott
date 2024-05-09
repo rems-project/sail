@@ -77,7 +77,7 @@ open Value
 type text = string
 
 type l = Parse_ast.l
-type config = Parse_ast.Config.config
+type attribute_data = Parse_ast.Attribute_data.attribute_data
 
 type 'a annot = l * 'a
 
@@ -106,10 +106,10 @@ declare ocaml target_rep type ocaml_l = `Parse_ast.l`
 
 type l = ocaml_l
 
-type ocaml_config
-declare ocaml target_rep type ocaml_config = `Parse_ast.Config.config`
+type ocaml_attribute_data
+declare ocaml target_rep type ocaml_attribute_data = `Parse_ast.Attribute_data.attribute_data`
 
-type config = ocaml_config
+type attribute_data = ocaml_attribute_data
 
 type value
 declare ocaml target_rep type value = `Value.value`
@@ -124,7 +124,7 @@ type visibility = Public | Private of l
 
 type def_annot = <|
     doc_comment : maybe string;
-    attrs : list (l * string * maybe config);
+    attrs : list (l * string * maybe attribute_data);
     visibility : visibility;
     loc : l
 |>
