@@ -570,7 +570,7 @@ let rec doc_typ_fns ctx env =
         let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx env m in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
-        let tpp = string "register_ref regstate register_value " ^^ typ etyp in
+        let tpp = string "register_ref register " ^^ typ etyp in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "range", _), _)
     | Typ_id (Id_aux (Id "nat", _))
@@ -1451,7 +1451,7 @@ let doc_exp, doc_let =
                 string "set_field"*)
             in
             liftR ((prefix 2 1) (string "write_reg_field") (doc_lexp_deref ctxt le ^^ space ^^ field_ref ^/^ expY e))
-        | LE_deref re -> liftR ((prefix 2 1) (string "write_reg") (expY re ^/^ expY e))
+        | LE_deref re -> liftR ((prefix 2 1) (string "write_reg_ref") (expY re ^/^ expY e))
         | _ -> liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref ctxt le ^/^ expY e))
       )
     | E_vector_append (le, re) ->
@@ -1944,7 +1944,7 @@ let doc_exp, doc_let =
         let eff = effect_of full_exp in
         let base_typ = Env.base_typ_of env typ in
         if Env.is_register id env && match e with E_id _ -> true | _ -> false then (
-          let epp = separate space [string "read_reg"; doc_id ctxt id ^^ string "_ref"] in
+          let epp = separate space [string "read_reg"; doc_id ctxt id] in
           if is_bitvector_typ base_typ then
             wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
           else liftR epp
@@ -2301,8 +2301,9 @@ let doc_exp, doc_let =
   and doc_lexp_deref ctxt (LE_aux (lexp, (l, annot))) =
     match lexp with
     | LE_field (le, id) -> parens (separate empty [doc_lexp_deref ctxt le; dot; doc_id ctxt id])
-    | LE_id id -> doc_id ctxt id ^^ string "_ref"
-    | LE_typ (typ, id) -> doc_id ctxt id ^^ string "_ref"
+    | LE_id id -> doc_id ctxt id ^^ if Env.is_register id (env_of_annot (l, annot)) then empty else string "_ref"
+    | LE_typ (typ, id) ->
+        doc_id ctxt id ^^ if Env.is_register id (env_of_annot (l, annot)) then empty else string "_ref"
     | LE_tuple lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
     | _ -> raise (Reporting.err_unreachable l __POS__ "doc_lexp_deref: Unsupported lexp")
     (* expose doc_exp and doc_let *)
@@ -2374,6 +2375,52 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ctxt ir1) ^^ comma ^^ (doc_range ctxt ir2)
  *)
 
+(* Setup code for record field update notations, either directly or
+   using the coq-record-updates package. *)
+let doc_field_updates ctxt typq record_id fields =
+  let type_id_pp = doc_id ctxt record_id in
+  let typq_pps = doc_typquant_items ctxt Env.empty braces typq in
+  let match_parameters =
+    match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l
+  in
+  let build_parameters =
+    let kopts, _ = quant_split typq in
+    match kopts with [] -> empty | _ -> space ^^ separate_map space (fun _ -> underscore) kopts
+  in
+  let doc_update_field (_, fid) =
+    let idpp = doc_field_name ctxt record_id fid in
+    let pp_field alt i (_, fid') =
+      if Id.compare fid fid' == 0 then string alt
+      else (
+        let id = "f" ^ string_of_int i in
+        string id
+      )
+    in
+    (* Use level 1 to match stdpp *)
+    match fields with
+    | [_] ->
+        string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "{| " ^^ idpp
+        ^^ string " := e |} (at level 1, only parsing)."
+    | _ ->
+        string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "match r with Build_"
+        ^^ type_id_pp ^^ match_parameters ^^ space
+        ^^ separate space (List.mapi (pp_field "_") fields)
+        ^^ string " =>" ^//^ string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space
+        ^^ separate space (List.mapi (pp_field "e") fields)
+        ^//^ string "end (at level 1)" ^^ dot
+  in
+  if !opt_coq_record_update then (
+    let typq_ids, _ = typquant_names_separate ctxt typq in
+    let name_pp = string "Build_" ^^ type_id_pp in
+    let constructor = match typq_ids with [] -> name_pp | _ -> parens (name_pp ^^ space ^^ separate space typq_ids) in
+    string "#[export] Instance eta_" ^^ type_id_pp
+    ^^ separate space (empty :: typq_pps)
+    ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
+    ^^ separate_map (string "; ") (fun (_, fid) -> doc_field_name ctxt record_id fid) fields
+    ^^ string ">."
+  )
+  else separate hardline (List.map doc_update_field fields)
+
 (* TODO: check use of empty_ctxt below doesn't cause problems due to missing info *)
 let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
   let bare_ctxt = { empty_ctxt with global } in
@@ -2428,55 +2475,12 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
       let fs_doc = separate_map hardline f_pp fs in
       let type_id_pp = doc_id_type global None id in
       let typq_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
-      let match_parameters =
-        match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l
-      in
-      let build_parameters =
-        let kopts, _ = quant_split typq in
-        match kopts with [] -> empty | _ -> space ^^ separate_map space (fun _ -> underscore) kopts
-      in
       let doc_inhabited_req = function
         | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
             Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
         | _ -> None
       in
-      let doc_update_field (_, fid) =
-        let idpp = fname fid in
-        let pp_field alt i (_, fid') =
-          if Id.compare fid fid' == 0 then string alt
-          else (
-            let id = "f" ^ string_of_int i in
-            string id
-          )
-        in
-        (* Use level 1 to match stdpp *)
-        match fs with
-        | [_] ->
-            string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "{| " ^^ idpp
-            ^^ string " := e |} (at level 1, only parsing)."
-        | _ ->
-            string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "match r with Build_"
-            ^^ type_id_pp ^^ match_parameters ^^ space
-            ^^ separate space (List.mapi (pp_field "_") fs)
-            ^^ string " =>" ^//^ string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space
-            ^^ separate space (List.mapi (pp_field "e") fs)
-            ^//^ string "end (at level 1)" ^^ dot
-      in
-      let updates_pp =
-        if !opt_coq_record_update then (
-          let typq_ids, _ = typquant_names_separate bare_ctxt typq in
-          let name_pp = string "Build_" ^^ type_id_pp in
-          let constructor =
-            match typq_ids with [] -> name_pp | _ -> parens (name_pp ^^ space ^^ separate space typq_ids)
-          in
-          string "#[export] Instance eta_" ^^ type_id_pp
-          ^^ separate space (empty :: typq_pps)
-          ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
-          ^^ separate_map (string "; ") (fun (_, fid) -> fname fid) fs
-          ^^ string ">."
-        )
-        else separate hardline (List.map doc_update_field fs)
-      in
+      let updates_pp = doc_field_updates bare_ctxt typq id fs in
       let numfields = List.length fs in
       let intros_pp s =
         string " intros ["
@@ -3503,6 +3507,167 @@ let doc_isla global (DEF_aux (aux, _)) =
       else doc_isla_typ global t_def
   | _ -> empty
 
+module NewRegisters : sig
+  val doc_reg_info : global_context -> Env.t -> (typ * id * bool) list -> PPrint.document
+end = struct
+  let opt_cons v = function None -> Some [v] | Some t -> Some (v :: t)
+
+  let reg_type_name typ_id = prepend_id "register_" typ_id
+  let reg_case_name typ_id = prepend_id "R_" typ_id
+  let state_field_name typ_id = append_id typ_id "_s"
+  let ref_name reg = append_id reg "_ref"
+
+  (* The per-type register enums are named register_<type> *)
+
+  let per_type_register_enum ctxt typ_id registers =
+    separate hardline
+      [
+        string "Variant " ^^ doc_id ctxt (reg_type_name typ_id) ^^ string " :=";
+        separate_map hardline (fun r -> string "  | " ^^ doc_id ctxt r) registers;
+        string ".";
+        string "Scheme Equality for " ^^ doc_id ctxt (reg_type_name typ_id) ^^ string ".";
+        empty;
+      ]
+
+  (* The overall register type is called register, the cases are
+     R_<type>, and uses coercions so that the raw register names
+     work. *)
+
+  let type_enum ctxt env type_map =
+    string "Variant register : Type -> Type :="
+    ^^ hardline
+    ^^ separate_map hardline
+         (fun (typ_id, typ) ->
+           string "  | "
+           ^^ doc_id ctxt (reg_case_name typ_id)
+           ^^ string " :> "
+           ^^ doc_id ctxt (reg_type_name typ_id)
+           ^^ string " -> register " ^^ doc_atomic_typ ctxt env true typ
+         )
+         type_map
+    ^^ hardline ^^ string "." ^^ hardline
+
+  let regstate ctxt env type_map =
+    separate hardline
+      [
+        string "Record regstate := {";
+        separate_map hardline
+          (fun (typ_id, typ) ->
+            string "  "
+            ^^ doc_id ctxt (state_field_name typ_id)
+            ^^ string " : "
+            ^^ doc_id ctxt (reg_type_name typ_id)
+            ^^ string " -> " ^^ doc_typ ctxt env typ ^^ string ";"
+          )
+          type_map;
+        string "}.";
+        doc_field_updates ctxt (mk_typquant []) (mk_id "regstate")
+          (List.map (fun (typ_id, typ) -> (typ, state_field_name typ_id)) type_map);
+        empty;
+        (* A record literal can cause problems with record type inference (e.g., if there are no registers) *)
+        string "Definition init_regstate : regstate := Build_regstate";
+        separate_map hardline (fun _ -> string "  inhabitant") type_map;
+        string ".";
+        empty;
+      ]
+
+  let reg_accessors ctxt env type_map =
+    separate hardline
+      [
+        string "Definition register_lookup {T : Type} (reg : register T) (rs : regstate) : T :=";
+        string "  match reg with";
+        separate_map hardline
+          (fun (typ_id, _typ) ->
+            string "  | "
+            ^^ doc_id ctxt (reg_case_name typ_id)
+            ^^ string " r => rs.("
+            ^^ doc_id ctxt (state_field_name typ_id)
+            ^^ string ") r"
+          )
+          type_map;
+        string "  end.";
+        empty;
+        string "Definition register_set {T : Type} (reg : register T) : T -> regstate -> regstate :=";
+        string "  match reg with";
+        separate_map hardline
+          (fun (typ_id, _typ) ->
+            string "  | "
+            ^^ doc_id ctxt (reg_case_name typ_id)
+            ^^ string " r => fun v rs => "
+            ^^
+            let eqb = doc_id ctxt (append_id (reg_type_name typ_id) "_beq") in
+            let field = doc_id ctxt (state_field_name typ_id) in
+            let fexp =
+              field ^^ string " := fun r' => if " ^^ eqb ^^ string " r' r then v else rs.(" ^^ field ^^ string ") r'"
+            in
+            if !opt_coq_record_update then string "rs " ^^ enclose_coq_record_update fexp
+            else enclose_record_update (string "rs with " ^^ fexp)
+          )
+          type_map;
+        string "  end.";
+      ]
+    ^^ hardline
+
+  let register_refs ctxt env register_map =
+    separate_map hardline
+      (fun (typ_id, regs) ->
+        separate_map hardline
+          (fun reg ->
+            separate hardline
+              [
+                (* Coq seems to have a problem with the register coercions
+                   if I use the record literal syntax, but is fine with
+                   Build_... *)
+                string "Definition " ^^ doc_id ctxt (ref_name reg) ^^ string " : register_ref register _ :=";
+                string "  Build_register_ref register _ "
+                ^^ dquotes (string_of_id reg |> string)
+                ^^ string " " ^^ doc_id ctxt reg ^^ string ".";
+              ]
+          )
+          regs
+        ^^
+        match regs with
+        | [] -> assert false
+        | example :: _ ->
+            hardline ^^ string "Instance "
+            ^^ doc_id ctxt (prepend_id "dummy_" (reg_type_name typ_id))
+            ^^ string " : Inhabited (register_ref register _) := populate _ "
+            ^^ doc_id ctxt (ref_name example)
+            ^^ string "." ^^ hardline
+      )
+      register_map
+
+  let add_reg_typ env (typ_map, regs_map) (typ, id, has_init) =
+    let typ_id = State.id_of_regtyp IdSet.empty typ in
+    (Bindings.add typ_id typ typ_map, Bindings.update typ_id (opt_cons id) regs_map)
+
+  let doc_reg_info global env registers =
+    let bare_ctxt = { empty_ctxt with global } in
+
+    let type_map, type_regs_map = List.fold_left (add_reg_typ env) (Bindings.empty, Bindings.empty) registers in
+    let type_map = Bindings.bindings type_map in
+    let type_regs_map = Bindings.bindings type_regs_map in
+
+    let reg_enums =
+      List.fold_left (fun pp (t, rs) -> pp ^^ per_type_register_enum bare_ctxt t rs) empty type_regs_map
+    in
+
+    separate hardline
+      [
+        reg_enums;
+        type_enum bare_ctxt env type_map;
+        register_refs bare_ctxt env type_regs_map;
+        empty;
+        string "(* Definitions to support the lifting to the sequential monad *)";
+        regstate bare_ctxt env type_map;
+        reg_accessors bare_ctxt env type_map;
+        string
+          "Definition register_accessors : register_accessors regstate register := (@register_lookup, @register_set).";
+        empty;
+        empty;
+      ]
+end
+
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
@@ -3536,34 +3701,30 @@ let builtin_target_names defs =
 let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_modules) type_defs_module opt_coq_isla ctx
     effect_info type_env ({ defs; _ } as ast) concurrency_monad_params top_line suppress_MR_M =
   try
-    (* let regtypes = find_regtypes d in *)
-    let state_ids = fst (State.generate_regstate_defs ctx type_env ast) |> val_spec_ids in
-    let is_state_def = function
-      | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
-      | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
-      | _ -> false
-    in
     let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
     let exc_typ = find_exc_typ defs in
     let unimplemented = find_unimplemented defs in
     let avoid_target_names = builtin_target_names defs in
     let global = { types_mod = type_defs_module; avoid_target_names; effect_info; library_style } in
     let bare_doc_id = doc_id { empty_ctxt with global } in
-    let register_refs =
-      State.register_refs_coq bare_doc_id !opt_coq_record_update type_env (State.find_registers defs)
-    in
+    let registers = State.find_registers defs in
     let generic_eq_types = types_used_with_generic_eq defs in
     let interface_defs =
       match concurrency_monad_params with
       | None ->
+          string "Definition read_reg {A E} := @read_reg register A E."
+          ^^ hardline
+          ^^ string "Definition write_reg {A E} := @write_reg register A E."
+          ^^ hardline
+          ^^
           if suppress_MR_M then empty
           else
             separate hardline
               [
-                string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ ".");
-                string ("Definition M a := monad register_value a " ^ exc_typ ^ ".");
-                string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ ".");
-                string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
+                string ("Definition MR a r := monadR register a r " ^ exc_typ ^ ".");
+                string ("Definition M a := monad register a " ^ exc_typ ^ ".");
+                string ("Definition returnM {A:Type} := @returnm register A " ^ exc_typ ^ ".");
+                string ("Definition returnR {A:Type} (R:Type) := @returnm register A (R + " ^ exc_typ ^ ").");
               ]
       | Some params ->
           let pp_typ = doc_typ { empty_ctxt with global } type_env in
@@ -3582,6 +3743,10 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
           in
           separate hardline
             ([
+               string "Definition read_reg {A E} := @read_reg register A E.";
+               string "Definition write_reg {A E} := @write_reg register A E.";
+               empty;
+               (* TODO: update once we've revised the interface. *)
                string "Module Arch <: Arch.";
                string "  Definition reg := string.";
                (* string "  Definition reg_eq : EqDecision reg := _.";
@@ -3637,7 +3802,6 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
     in
 
     let typdefs, defs = List.partition is_typ_def defs in
-    let statedefs, defs = List.partition is_state_def defs in
 
     let doc_def = doc_def global unimplemented generic_eq_types enum_number_defs in
     let () =
@@ -3649,7 +3813,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
           )
     in
     (print types_file)
-      (concat
+      (separate hardline
          ([
             string "(*" ^^ string top_line ^^ string "*)";
             hardline;
@@ -3657,29 +3821,28 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             (separate_map hardline)
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
               types_modules;
-            hardline;
             ( if !opt_coq_record_update then
                 string "From RecordUpdate Require Import RecordSet."
                 ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
               else empty
             );
             string "Import ListNotations.";
-            hardline;
             string "Open Scope string.";
-            hardline;
             string "Open Scope bool.";
-            hardline;
             string "Open Scope Z.";
-            hardline;
-            hardline;
+            empty;
             separate empty (List.map doc_def typdefs);
-            hardline;
-            hardline;
+            empty;
           ]
          @
          if !opt_generate_extern_types then []
          else
-           [separate empty (List.map doc_def statedefs); hardline; hardline; register_refs; hardline] @ [interface_defs]
+           [
+             NewRegisters.doc_reg_info global type_env registers;
+             string "(* Instantiate library definitions with types. *)";
+             empty;
+             interface_defs;
+           ]
          )
       );
     if not !opt_generate_extern_types then
