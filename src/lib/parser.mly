@@ -71,7 +71,7 @@
 
 module Big_int = Nat_big_num
 open Parse_ast
-open Parse_ast.Config
+open Parse_ast.Attribute_data
 
 let loc n m = Range (n, m)
 
@@ -272,13 +272,13 @@ let set_syntax_deprecated l =
 %start typ_eof
 %start exp_eof
 %start def_eof
-%start config_eof
+%start attribute_data_eof
 %type <Parse_ast.typschm> typschm_eof
 %type <Parse_ast.atyp> typ_eof
 %type <Parse_ast.exp> exp_eof
 %type <Parse_ast.def> def_eof
 %type <Parse_ast.def list> file
-%type <Parse_ast.Config.config> config_eof
+%type <Parse_ast.Attribute_data.attribute_data> attribute_data_eof
 
 %%
 
@@ -867,31 +867,31 @@ vector_update_list:
   | vector_update Comma vector_update_list
     { $1 :: $3 }
 
-config_key_value:
-  | key = String; Eq; value = config
+attribute_data_key_value:
+  | key = String; Eq; value = attribute_data
     { (key, value) }
 
-config:
-  | Lcurly; kvs = separated_list(Comma, config_key_value) Rcurly
-    { Conf_aux (Conf_object kvs, loc $startpos $endpos) }
+attribute_data:
+  | Lcurly; kvs = separated_list(Comma, attribute_data_key_value) Rcurly
+    { AD_aux (AD_object kvs, loc $startpos $endpos) }
   | n = Num
-    { Conf_aux (Conf_num n, loc $startpos $endpos) }
+    { AD_aux (AD_num n, loc $startpos $endpos) }
   | s = String
-    { Conf_aux (Conf_string s, loc $startpos $endpos) }
+    { AD_aux (AD_string s, loc $startpos $endpos) }
   | id = Id
-    { Conf_aux (Conf_string id, loc $startpos $endpos) }
-  | Lsquare; xs = separated_list(Comma, config) Rsquare
-    { Conf_aux (Conf_list xs, loc $startpos $endpos) }
+    { AD_aux (AD_string id, loc $startpos $endpos) }
+  | Lsquare; xs = separated_list(Comma, attribute_data) Rsquare
+    { AD_aux (AD_list xs, loc $startpos $endpos) }
 
 attribute:
   | attr = Attribute; Rsquare
     { (attr, None) }
-  | attr = Attribute; c = config; Rsquare
-    { (attr, Some c) }
+  | attr = Attribute; d = attribute_data; Rsquare
+    { (attr, Some d) }
 
-config_eof:
-  | c = config; Eof
-    { c }
+attribute_data_eof:
+  | d = attribute_data; Eof
+    { d }
 
 funcl_annotation:
   | visibility = Private

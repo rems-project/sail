@@ -78,16 +78,18 @@ type l =
 
 (* Put the config type in it's own module, so other modules can import
    it unqualified. *)
-module Config = struct
-  type config_aux =
-    (* JSON-style configuration structure *)
-    | Conf_object of (string * config) list
-    | Conf_list of config list
-    | Conf_num of Big_int.num
-    | Conf_string of string
+module Attribute_data = struct
+  type attribute_data_aux =
+    (* JSON-style data structure for attributes *)
+    | AD_object of (string * attribute_data) list
+    | AD_list of attribute_data list
+    | AD_num of Big_int.num
+    | AD_string of string
 
-  and config = Conf_aux of config_aux * l
+  and attribute_data = AD_aux of attribute_data_aux * l
 end
+
+open Attribute_data
 
 type 'a annot = l * 'a
 
@@ -203,7 +205,7 @@ type pat_aux =
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
   | P_struct of fpat list (* struct pattern *)
-  | P_attribute of string * Config.config option * pat
+  | P_attribute of string * attribute_data option * pat
 
 and pat = P_aux of pat_aux * l
 
@@ -258,7 +260,7 @@ and exp_aux =
   | E_return of exp
   | E_assert of exp * exp
   | E_var of exp * exp * exp
-  | E_attribute of string * Config.config option * exp
+  | E_attribute of string * attribute_data option * exp
   | E_internal_plet of pat * exp * exp
   | E_internal_return of exp
   | E_internal_assume of atyp * exp
@@ -306,7 +308,7 @@ type funcl = FCL_aux of funcl_aux * l
 and funcl_aux =
   (* Function clause *)
   | FCL_private of funcl
-  | FCL_attribute of string * Config.config option * funcl
+  | FCL_attribute of string * attribute_data option * funcl
   | FCL_doc of string * funcl
   | FCL_funcl of id * pexp
 
@@ -315,7 +317,7 @@ type type_union = Tu_aux of type_union_aux * l
 and type_union_aux =
   (* Type union constructors *)
   | Tu_private of type_union
-  | Tu_attribute of string * Config.config option * type_union
+  | Tu_attribute of string * attribute_data option * type_union
   | Tu_doc of string * type_union
   | Tu_ty_id of atyp * id
   | Tu_ty_anon_rec of (atyp * id) list * id
@@ -371,7 +373,7 @@ type mapcl = MCL_aux of mapcl_aux * l
 
 and mapcl_aux =
   (* mapping clause (bidirectional pattern-match) *)
-  | MCL_attribute of string * Config.config option * mapcl
+  | MCL_attribute of string * attribute_data option * mapcl
   | MCL_doc of string * mapcl
   | MCL_bidir of mpexp * mpexp
   | MCL_forwards_deprecated of mpexp * exp
@@ -458,7 +460,7 @@ type def_aux =
   | DEF_register of dec_spec (* register declaration *)
   | DEF_pragma of string * string * int
   | DEF_private of def
-  | DEF_attribute of string * Config.config option * def
+  | DEF_attribute of string * attribute_data option * def
   | DEF_doc of string * def
   | DEF_internal_mutrec of fundef list
 

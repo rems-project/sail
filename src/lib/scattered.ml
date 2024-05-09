@@ -197,7 +197,7 @@ let rec descatter' accumulator funcls mapcls = function
             let def_annot =
               def_annot
               |> add_def_attribute (gen_loc l) "no_enum_functions" None
-              |> add_def_attribute (gen_loc l) "undefined_gen" (Some (Conf_aux (Conf_string "forbid", gen_loc l)))
+              |> add_def_attribute (gen_loc l) "undefined_gen" (Some (AD_aux (AD_string "forbid", gen_loc l)))
             in
             let accumulator =
               DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)

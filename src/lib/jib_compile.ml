@@ -68,7 +68,7 @@
 open Ast
 open Ast_defs
 open Ast_util
-open Parse_ast.Config
+open Parse_ast.Attribute_data
 open Jib
 open Jib_util
 open Jib_visitor
@@ -193,8 +193,8 @@ let initial_ctx env effect_info =
   }
 
 let update_coverage_override' ctx = function
-  | Some (_, Some (Conf_aux (Conf_string "on", _))) -> { ctx with coverage_override = true }
-  | Some (_, Some (Conf_aux (Conf_string "off", _))) -> { ctx with coverage_override = false }
+  | Some (_, Some (AD_aux (AD_string "on", _))) -> { ctx with coverage_override = true }
+  | Some (_, Some (AD_aux (AD_string "off", _))) -> { ctx with coverage_override = false }
   | _ -> ctx
 
 let update_coverage_override uannot ctx = update_coverage_override' ctx (get_attribute "coverage" uannot)

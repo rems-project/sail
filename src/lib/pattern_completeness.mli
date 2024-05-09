@@ -85,7 +85,7 @@ type ctx = {
 module type Config = sig
   type t
   val typ_of_t : t -> typ
-  val add_attribute : l -> string -> config option -> t -> t
+  val add_attribute : l -> string -> attribute_data option -> t -> t
 end
 
 module Make (C : Config) : sig
