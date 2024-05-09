@@ -1,4 +1,13 @@
-let dir = "%{sail:share}%"
+(*
+This file is used to generate manifest.ml when you use OPAM to install Sail.
+If instead you use Dune then manifest.ml will not exist and Dune will use
+sail_manifest.ml to generate it.
+
+So in this file we use OPAM to find the share directory. In sail_manifest.ml
+we set `dir` to `None` so that Sail will look relative to the `sail` binary.
+*)
+
+let dir = Some "%{sail:share}%"
 
 let commit = "opam-v%{opam-version}% %{sail:version}%"
 

@@ -105,13 +105,13 @@ let initial_istate config options env effect_info ast =
     ast;
     effect_info;
     env;
-    ref_state = ref (Interactive.initial_istate config Manifest.dir);
+    ref_state = ref (Interactive.initial_istate config Locations.sail_dir);
     vs_ids = ref (val_spec_ids ast.defs);
     options;
     mode = Normal;
     clear = true;
     state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops;
-    default_sail_dir = Manifest.dir;
+    default_sail_dir = Locations.sail_dir;
     config;
   }
 
