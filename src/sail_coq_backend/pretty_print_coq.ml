@@ -3531,18 +3531,32 @@ end = struct
      work. *)
 
   let type_enum ctxt env type_map =
-    string "Variant register : Type -> Type :="
-    ^^ hardline
-    ^^ separate_map hardline
-         (fun (typ_id, typ) ->
-           string "  | "
-           ^^ doc_id ctxt (reg_case_name typ_id)
-           ^^ string " :> "
-           ^^ doc_id ctxt (reg_type_name typ_id)
-           ^^ string " -> register " ^^ doc_atomic_typ ctxt env true typ
-         )
-         type_map
-    ^^ hardline ^^ string "." ^^ hardline
+    separate hardline
+      [
+        string "Variant register : Type -> Type :=";
+        separate_map hardline
+          (fun (typ_id, typ) ->
+            string "  | "
+            ^^ doc_id ctxt (reg_case_name typ_id)
+            ^^ string " :> "
+            ^^ doc_id ctxt (reg_type_name typ_id)
+            ^^ string " -> register " ^^ doc_atomic_typ ctxt env true typ
+          )
+          type_map;
+        string ".";
+        empty;
+        string "Definition register_beq {T T'} (r : register T) (r' : register T') : bool :=";
+        string "  match r, r' with";
+        separate_map hardline
+          (fun (typ_id, _typ) ->
+            let id = doc_id ctxt (reg_case_name typ_id) in
+            string "  | " ^^ id ^^ string ", " ^^ id ^^ string " => true"
+          )
+          type_map;
+        string "  | _, _ => false";
+        string "  end.";
+        empty;
+      ]
 
   let regstate ctxt env type_map =
     separate hardline
