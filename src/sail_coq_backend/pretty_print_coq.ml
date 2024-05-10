@@ -2389,11 +2389,11 @@ let doc_field_updates ctxt typq record_id fields =
   in
   let doc_update_field (_, fid) =
     let idpp = doc_field_name ctxt record_id fid in
-    let pp_field alt i (_, fid') =
+    let pp_field bind alt i (_, fid') =
       if Id.compare fid fid' == 0 then string alt
       else (
         let id = "f" ^ string_of_int i in
-        string id
+        if bind then parens (string ("_ as " ^ id)) else string id
       )
     in
     (* Use level 1 to match stdpp *)
@@ -2404,9 +2404,9 @@ let doc_field_updates ctxt typq record_id fields =
     | _ ->
         string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "match r with Build_"
         ^^ type_id_pp ^^ match_parameters ^^ space
-        ^^ separate space (List.mapi (pp_field "_") fields)
+        ^^ separate space (List.mapi (pp_field true "_") fields)
         ^^ string " =>" ^//^ string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space
-        ^^ separate space (List.mapi (pp_field "e") fields)
+        ^^ separate space (List.mapi (pp_field false "e") fields)
         ^//^ string "end (at level 1)" ^^ dot
   in
   if !opt_coq_record_update then (
