@@ -120,6 +120,11 @@ let rec last_opt = function [x] -> Some x | _ :: xs -> last_opt xs | [] -> None
 
 let rec butlast = function [_] -> [] | x :: xs -> x :: butlast xs | [] -> []
 
+module Option_monad = struct
+  let ( let* ) = Option.bind
+  let ( let+ ) = Option.map
+end
+
 module Duplicate (S : Set.S) = struct
   type dups = No_dups of S.t | Has_dups of S.elt
 

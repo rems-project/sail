@@ -388,7 +388,7 @@ let latex_loc ?(docstring = empty) no_loc l =
   | None -> docstring ^^ no_loc
 
 let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
-  Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ~simple:true ts
+  Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ts
 
 let latex_command ~docstring cat id no_loc l =
   state.this <- Some id;
