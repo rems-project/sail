@@ -2535,13 +2535,10 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
         ^^ hardline
       in
       let reset_implicits_pp = doc_reset_implicits type_id_pp typq in
-      prefix 2 1
-        (nest 2
-           (flow (break 1) ((string "Record" ^^ space ^^ type_id_pp) :: typq_pps) ^^ space ^^ coloneq ^^ space ^^ lbrace)
-        )
-        fs_doc
-      ^^ hardline ^^ rbrace ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline
-      ^^ inhabited_pp ^^ twice hardline
+      surround 2 1
+        (flow (break 1) ((string "Record" ^^ space ^^ type_id_pp) :: typq_pps) ^^ space ^^ coloneq ^^ space ^^ lbrace)
+        fs_doc (rbrace ^^ dot)
+      ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
       | Id_aux (Id "option", _) -> empty
