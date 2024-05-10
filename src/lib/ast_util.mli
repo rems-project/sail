@@ -78,11 +78,24 @@ module Big_int = Nat_big_num
    annotations {!Type_check.tannot}. *)
 type uannot
 
+(** The empty annotation *)
 val empty_uannot : uannot
+
+(** {2 Attributes} *)
 
 val string_of_attribute : string -> attribute_data option -> string
 
 val string_of_attribute_data : attribute_data -> string
+
+val json_of_attribute : string -> attribute_data option -> Yojson.Basic.t
+
+val json_of_attribute_data : attribute_data -> Yojson.Basic.t
+
+val attribute_data_object : attribute_data -> (string * attribute_data) list option
+
+val attribute_data_bool : attribute_data -> bool option
+
+val attribute_data_string : attribute_data -> string option
 
 (** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
     {@sail[
@@ -117,6 +130,8 @@ val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
    a common pattern is generating code with [no_annot], then adding location
    information with the various [locate_] functions in this module. *)
 val no_annot : l * uannot
+
+(** {1 Generated locations} *)
 
 (** [gen_loc l] takes a location l and generates a location which
    means 'generated/derived from location l'. This is useful for debugging

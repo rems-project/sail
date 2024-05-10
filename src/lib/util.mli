@@ -77,6 +77,11 @@ val last_opt : 'a list -> 'a option
 
 val butlast : 'a list -> 'a list
 
+module Option_monad : sig
+  val ( let* ) : 'a option -> ('a -> 'b option) -> 'b option
+  val ( let+ ) : ('a -> 'b) -> 'a option -> 'b option
+end
+
 (** Mixed useful things *)
 module Duplicate (S : Set.S) : sig
   type dups = No_dups of S.t | Has_dups of S.elt

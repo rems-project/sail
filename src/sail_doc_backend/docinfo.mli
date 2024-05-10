@@ -77,12 +77,20 @@ type 'a docinfo
 
 val hyperlinks_from_def : string list -> Type_check.tannot def -> hyperlink list
 
-val docinfo_to_json : 'a docinfo -> Yojson.t
+val json_of_hyperlink : hyperlink -> Yojson.Basic.t
+
+val json_of_docinfo : 'a docinfo -> Yojson.Basic.t
 
 type embedding = Plain | Base64
 
 module type CONFIG = sig
+  (** If [Some] then the source code will be directly included in the
+      documentation info. *)
   val embedding_mode : embedding option
+
+  (** If true, then we include both the source directly and a
+      reference using the location information. *)
+  val embed_with_location : bool
 end
 
 module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) : sig

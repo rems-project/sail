@@ -82,12 +82,32 @@ let rec string_of_attribute_data (AD_aux (aux, _)) =
       ^ " }"
   | AD_string s -> "\"" ^ s ^ "\""
   | AD_num n -> Big_int.to_string n
-  | AD_list cs -> "[" ^ Util.string_of_list ", " string_of_attribute_data cs ^ "]"
+  | AD_list vs -> "[" ^ Util.string_of_list ", " string_of_attribute_data vs ^ "]"
   | AD_bool b -> string_of_bool b
 
 let string_of_attribute attr = function
   | None -> Printf.sprintf "$[%s]" attr
   | Some data -> Printf.sprintf "$[%s %s]" attr (string_of_attribute_data data)
+
+let rec json_of_attribute_data (AD_aux (aux, _)) =
+  match aux with
+  | AD_object kvs -> `Assoc (List.map (fun (k, v) -> (k, json_of_attribute_data v)) kvs)
+  | AD_string s -> `String s
+  | AD_num n when Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) ->
+      `Int (Big_int.to_int n)
+  | AD_num n -> `String (Big_int.to_string n)
+  | AD_list vs -> `List (List.map json_of_attribute_data vs)
+  | AD_bool b -> `Bool b
+
+let attribute_data_object = function AD_aux (AD_object kvs, _) -> Some kvs | _ -> None
+
+let attribute_data_bool = function AD_aux (AD_bool b, _) -> Some b | _ -> None
+
+let attribute_data_string = function AD_aux (AD_string s, _) -> Some s | _ -> None
+
+let json_of_attribute attr = function
+  | None -> `String attr
+  | Some data -> `List [`String attr; json_of_attribute_data data]
 
 let empty_uannot = { attrs = [] }
 
