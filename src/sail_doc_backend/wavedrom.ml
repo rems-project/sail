@@ -103,7 +103,7 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
   | P_id id ->
       let name = string_of_id id in
-      if String.starts_with ~prefix:"imm" name then
+      if Util.starts_with ~prefix:"imm" name then
         Printf.sprintf "    { bits: %d, name: '%s'%s, type: 6 }" size (string_of_id id) (wavedrom_label size label)
       else Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
   | P_lit (L_aux (L_bin bin, _)) ->

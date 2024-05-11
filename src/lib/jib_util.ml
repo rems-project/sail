@@ -71,6 +71,7 @@ open Jib
 open Jib_visitor
 open Value2
 open PPrint
+module Document = Pretty_print_sail.Document
 
 let symbol_generator str =
   let counter = ref 0 in
@@ -377,7 +378,7 @@ let rec doc_instr (I_aux (aux, _)) =
       ^^ nest 2 (hardline ^^ separate_map hardline doc_instr else_instrs)
       ^^ hardline ^^ twice space ^^ char '}'
 
-let string_of_instr i = Pretty_print_sail.to_string (doc_instr i)
+let string_of_instr i = Document.to_string (doc_instr i)
 
 let rec map_ctyp f = function
   | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit

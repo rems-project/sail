@@ -702,7 +702,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         let clauses = separate_map sep doc_mapcl mapcls in
         string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ surround 2 0 lbrace clauses rbrace
 
-  let doc_dec (DEC_aux (reg, _)) =
+  let doc_register (DEC_aux (reg, _)) =
     match reg with
     | DEC_reg (typ, id, opt_exp) -> (
         match opt_exp with
@@ -727,7 +727,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
     | A_typ _ -> empty
 
-  let doc_typdef (TD_aux (td, _)) =
+  let doc_type_def (TD_aux (td, _)) =
     match td with
     | TD_abstract (id, kind) -> begin doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) end
     | TD_abbrev (id, typq, typ_arg) -> begin
@@ -844,7 +844,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     match aux with
     | DEF_default df -> doc_default df
     | DEF_val v_spec -> doc_spec v_spec
-    | DEF_type t_def -> doc_typdef t_def
+    | DEF_type t_def -> doc_type_def t_def
     | DEF_fundef f_def -> doc_fundef f_def
     | DEF_mapdef m_def -> doc_mapdef m_def
     | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
@@ -868,7 +868,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | DEF_let lbind -> string "let" ^^ space ^^ doc_letbind lbind
     | DEF_internal_mutrec fundefs ->
         (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs) ^^ hardline ^^ string "}"
-    | DEF_register dec -> doc_dec dec
+    | DEF_register dec -> doc_register dec
     | DEF_scattered sdef -> doc_scattered sdef
     | DEF_measure (id, pat, exp) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^ space ^^ equals ^/^ doc_exp exp
@@ -889,10 +889,7 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_ast { defs; _ } = separate_map hardline doc_def (List.filter doc_filter defs)
 end
 
-(* This function is intended to reformat machine-generated Sail into
-   something a bit more readable, it is not intended to be used as a
-   general purpose formatter *)
-let reformat dir { defs; _ } =
+let reformat ~into_directory:dir { defs; _ } =
   let module Reformatter = Printer (struct
     let insert_braces = true
     let resugar = true
@@ -952,11 +949,14 @@ end
 
 include Printer (Default_print_config)
 
-let pp_ast f d = ToChannel.pretty 1. 80 f (doc_ast d)
+let output_ast ?(line_width = 80) f d = ToChannel.pretty 1. line_width f (doc_ast d)
 
-let pretty_sail f doc = ToChannel.pretty 1. 120 f doc
+module Document = struct
+  let to_channel ?(line_width = 120) f doc = ToChannel.pretty 1. line_width f doc
 
-let to_string doc =
-  let b = Buffer.create 120 in
-  ToBuffer.pretty 1. 120 b doc;
-  Buffer.contents b
+  let to_string ?(line_width = 120) doc =
+    (* Allocate at least one line up front *)
+    let b = Buffer.create line_width in
+    ToBuffer.pretty 1. line_width b doc;
+    Buffer.contents b
+end

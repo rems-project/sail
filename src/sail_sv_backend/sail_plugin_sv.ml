@@ -565,7 +565,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
 
   let sv_output =
-    Pretty_print_sail.to_string
+    Pretty_print_sail.Document.to_string
       (wrap_module out_doc ("sail_" ^ out)
          (inputs @ outputs @ wire_fun_ports @ module_main_in_out)
          (in_doc ^^ wire_funs ^^ setup_function ^^ invoke_main)

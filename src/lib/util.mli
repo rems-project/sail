@@ -224,6 +224,11 @@ val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> '
 
 val list_init : int -> (int -> 'a) -> 'a list
 
+(** {2 String utilities} *)
+
+(** Alternative to String.starts_with for OCaml < 4.13 *)
+val starts_with : prefix:string -> string -> bool
+
 (** Compute the levenshtein distance between two strings using the
     Wagner–Fischer algorithm. If [~osa] is true computes the optimal
     string alignment distance, which is similar but allows swaps as a

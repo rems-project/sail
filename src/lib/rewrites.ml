@@ -4558,7 +4558,7 @@ let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
     | Some (f, i) ->
         let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
         let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted None filename in
-        Pretty_print_sail.pp_ast ot (strip_ast ast);
+        Pretty_print_sail.output_ast ot (strip_ast ast);
         Util.close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
     | _ -> ()
