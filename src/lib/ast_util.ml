@@ -997,6 +997,8 @@ let def_loc (DEF_aux (_, annot)) = annot.loc
 
 let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
 
+let infix_swap = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Id v, l)
+
 let id_of_kid = function Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let kid_of_id = function Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l) | Id_aux (Operator _, _) -> assert false

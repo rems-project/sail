@@ -102,7 +102,10 @@ let binary_to_hex str =
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
   | P_id id ->
-      Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
+      let name = string_of_id id in
+      if String.starts_with ~prefix:"imm" name then
+        Printf.sprintf "    { bits: %d, name: '%s'%s, type: 6 }" size (string_of_id id) (wavedrom_label size label)
+      else Printf.sprintf "    { bits: %d, name: '%s'%s, type: 2 }" size (string_of_id id) (wavedrom_label size label)
   | P_lit (L_aux (L_bin bin, _)) ->
       Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
@@ -112,6 +115,10 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   | P_vector_subrange (id, n, m) ->
       Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Big_int.to_string n)
         (Big_int.to_string m) (wavedrom_label size label)
+  | P_app (id, [P_aux (P_id arg, _)]) ->
+      Printf.sprintf "    { bits: %d, name: '%s'%s, type: 4 }" size (string_of_id arg) (wavedrom_label size label)
+  | P_app (id, _) ->
+      Printf.sprintf "    { bits: %d, name: '%s'%s, type: 7 }" size (string_of_id id) (wavedrom_label size label)
   | P_as (pat, _) | P_typ (_, pat) -> wavedrom_elem_string size label pat
   | _ -> raise Invalid_wavedrom
 

@@ -80,6 +80,7 @@ open Parse_ast.Attribute_data
 module Reformatter = Pretty_print_sail.Printer (struct
   let insert_braces = true
   let resugar = true
+  let hide_attributes = true
 end)
 
 (** In the case of latex, we generate files containing a sequence of

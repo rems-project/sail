@@ -75,6 +75,7 @@ module Big_int = Nat_big_num
 module type PRINT_CONFIG = sig
   val insert_braces : bool
   val resugar : bool
+  val hide_attributes : bool
 end
 
 module Printer (Config : PRINT_CONFIG) = struct
@@ -401,6 +402,7 @@ module Printer (Config : PRINT_CONFIG) = struct
       if Config.resugar && Option.is_some (get_attribute "setter" uannot) then (remove_attribute "setter" uannot, true)
       else (uannot, false)
     in
+    let uannot = if Config.hide_attributes then empty_uannot else uannot in
     concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
     ^^
     match e_aux with
@@ -503,7 +505,13 @@ module Printer (Config : PRINT_CONFIG) = struct
         match (overloaded, exps) with
         | Some (name, true), [x; y] -> doc_exp (E_aux (E_app_infix (x, mk_id name, y), (l, uannot)))
         | Some (name, false), _ ->
-            handle_setter (mk_id name) (lazy (doc_atomic_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
+            handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
+        | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
+            doc_exp (E_aux (E_app_infix (x, infix_swap id, y), (l, uannot)))
+        | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
+            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
+        | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->
+            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
         | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
       end
     | _ -> doc_atomic_exp exp
@@ -888,6 +896,7 @@ let reformat dir { defs; _ } =
   let module Reformatter = Printer (struct
     let insert_braces = true
     let resugar = true
+    let hide_attributes = false
   end) in
   let file_stack = ref [] in
 
@@ -938,6 +947,7 @@ let reformat dir { defs; _ } =
 module Default_print_config : PRINT_CONFIG = struct
   let insert_braces = false
   let resugar = false
+  let hide_attributes = false
 end
 
 include Printer (Default_print_config)
