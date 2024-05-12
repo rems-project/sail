@@ -1654,7 +1654,7 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
 
 void parse_hex_bits(lbits *res, const mpz_t n, const_sail_string hex)
 {
-  if (strncmp(hex, "0x", 2) != 0) {
+  if (!valid_hex_bits(n, hex)) {
     goto failure;
   }
 
@@ -1675,11 +1675,48 @@ failure:
 }
 
 bool valid_hex_bits(const mpz_t n, const_sail_string hex) {
+  // The string must be prefixed by '0x'
   if (strncmp(hex, "0x", 2) != 0) {
     return false;
   }
 
-  for (int i = 2; i < strlen(hex); i++) {
+  size_t len = strlen(hex);
+
+  // There must be at least one character after the '0x'
+  if (len < 3) {
+    return false;
+  }
+
+  // Ignore any leading zeros
+  int non_zero = 2;
+  while (hex[non_zero] == '0' && non_zero < len - 1) {
+    non_zero++;
+  }
+
+  // Check how many bits we need for the first-non-zero (fnz) character.
+  int fnz_width;
+  char fnz = hex[non_zero];
+  if (fnz == '0') {
+    fnz_width = 0;
+  } else if (fnz == '1') {
+    fnz_width = 1;
+  } else if (fnz >= '2' && fnz <= '3') {
+    fnz_width = 2;
+  } else if (fnz >= '4' && fnz <= '7') {
+    fnz_width = 3;
+  } else {
+    fnz_width = 4;
+  }
+
+  // The width of the hex string is the width of the first non zero,
+  // plus 4 times the remaining hex digits
+  int hex_width = fnz_width + ((len - (non_zero + 1)) * 4);
+  if (mpz_cmp_si(n, hex_width) < 0) {
+    return false;
+  }
+
+  // All the non-zero characters must be valid hex digits
+  for (int i = non_zero; i < len; i++) {
     char c = hex[i];
     if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
       return false;

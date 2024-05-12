@@ -1115,15 +1115,33 @@ let is_hex_char ch =
   || (Char.code 'a' <= c && c <= Char.code 'f')
   || (Char.code 'A' <= c && c <= Char.code 'F')
 
-let valid_hex_bits (_, s) =
+let hex_char_width c =
+  if c = '0' then 0
+  else if c = '1' then 1
+  else if c = '2' || c = '3' then 2
+  else if c = '4' || c = '5' || c = '6' || c = '7' then 3
+  else 4
+
+let valid_hex_bits (n, s) =
   let len = String.length s in
   (* We must have at least the 0x prefix, then one character *)
   if len < 3 || String.sub s 0 2 <> "0x" then false
   else (
     let hex = String.sub s 2 (len - 2) in
     let is_valid = ref true in
-    String.iter (fun c -> is_valid := !is_valid && is_hex_char c) hex;
-    !is_valid
+    let actual_len = ref 0 in
+    let seen_non_zero = ref false in
+    String.iter
+      (fun c ->
+        if !seen_non_zero then actual_len := !actual_len + 4
+        else if c <> '0' then (
+          actual_len := !actual_len + hex_char_width c;
+          seen_non_zero := true
+        );
+        is_valid := !is_valid && is_hex_char c
+      )
+      hex;
+    !actual_len <= Big_int.to_int n && !is_valid
   )
 
 let parse_hex_bits (n, s) =
