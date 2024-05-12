@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/encdec_unknown_and_error.sail[0m:13.30-31:
+13[96m |[0mmapping clause encdec = X(y @ x @ Z() : bits(1))
+  [91m |[0m                              [91m^[0m
+  [91m |[0m Cannot infer width here, as there are multiple subpatterns with unclear width in vector concatenation pattern
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/encdec_unknown_and_error.sail[0m:13.26-27:
+  [91m |[0m 13[96m |[0mmapping clause encdec = X(y @ x @ Z() : bits(1))
+  [91m |[0m   [91m |[0m                          [91m^[0m
+  [91m |[0m   [91m |[0m A previous subpattern is here
