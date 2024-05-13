@@ -3550,10 +3550,27 @@ end = struct
         separate_map hardline
           (fun (typ_id, _typ) ->
             let id = doc_id ctxt (reg_case_name typ_id) in
-            string "  | " ^^ id ^^ string ", " ^^ id ^^ string " => true"
+            string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => "
+            ^^ doc_id ctxt (reg_type_name typ_id)
+            ^^ string "_beq r r'"
           )
           type_map;
         string "  | _, _ => false";
+        string "  end.";
+        empty;
+        string
+          "Definition register_eq_cast {T T'} (P : Type -> Type) (r : register T) (r' : register T') : P T -> option \
+           (P T') :=";
+        string "  match r, r' with";
+        separate_map hardline
+          (fun (typ_id, _typ) ->
+            let id = doc_id ctxt (reg_case_name typ_id) in
+            string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => fun p => if "
+            ^^ doc_id ctxt (reg_type_name typ_id)
+            ^^ string "_beq r r' then Some p else None"
+          )
+          type_map;
+        string "  | _, _ => fun _ => None";
         string "  end.";
         empty;
       ]
