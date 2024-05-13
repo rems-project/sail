@@ -3573,6 +3573,17 @@ end = struct
         string "  | _, _ => fun _ => None";
         string "  end.";
         empty;
+        string
+          "Instance Decidable_eq_register_values {T : Type} `(r : register T) : forall x y : T, Decidable (x = y) :=";
+        string "match r with";
+        separate_map hardline
+          (fun (typ_id, _typ) ->
+            let id = doc_id ctxt (reg_case_name typ_id) in
+            string "  | " ^^ id ^^ string " _ => _"
+          )
+          type_map;
+        string "end.";
+        empty;
       ]
 
   let regstate ctxt env type_map =
