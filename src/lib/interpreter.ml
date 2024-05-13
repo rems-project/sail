@@ -69,6 +69,13 @@ open Ast
 open Ast_defs
 open Ast_util
 open Value
+module Document = Pretty_print_sail.Document
+
+module Printer = Pretty_print_sail.Printer (struct
+  let insert_braces = false
+  let resugar = false
+  let hide_attributes = true
+end)
 
 type gstate = {
   registers : value Bindings.t;
@@ -791,7 +798,7 @@ let rec eval_frame' = function
       | Pure v, head :: stack' when is_value v ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
       | Pure exp', _ ->
-          let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp exp'))) in
+          let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
           Step (out', state, step exp', stack)
       | Yield (Call (id, vals, cont)), _ when string_of_id id = "break" -> begin
           let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
@@ -1001,12 +1008,7 @@ let analyse_instruction state ast =
          [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"]
       )
   in
-  Step
-    ( lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp typed))),
-      state,
-      return typed,
-      []
-    )
+  Step (lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp typed))), state, return typed, [])
 
 let execute_instruction state ast =
   let env = (snd state).typecheck_env in
@@ -1014,9 +1016,4 @@ let execute_instruction state ast =
   let typed =
     annot_exp (E_app (mk_id "execute", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env unit_typ
   in
-  Step
-    ( lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp typed))),
-      state,
-      return typed,
-      []
-    )
+  Step (lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp typed))), state, return typed, [])

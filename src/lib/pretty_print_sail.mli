@@ -65,52 +65,88 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Libsail
+open Ast
+open Ast_util
 
-let latex_options =
-  [
-    ( "-latex_prefix",
-      Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-      "<prefix> set a custom prefix for generated LaTeX labels and macro commands (default sail)"
-    );
-    ("-latex_full_valspecs", Arg.Clear Latex.opt_simple_val, " print full valspecs in LaTeX output");
-    ( "-latex_abbrevs",
-      Arg.String
-        (fun s ->
-          let abbrevs = String.split_on_char ';' s in
-          let filtered = List.filter (fun abbrev -> not (String.equal "" abbrev)) abbrevs in
-          match
-            List.find_opt
-              (fun abbrev -> not (String.equal "." (String.sub abbrev (String.length abbrev - 1) 1)))
-              filtered
-          with
-          | None -> Latex.opt_abbrevs := filtered
-          | Some abbrev -> raise (Arg.Bad (abbrev ^ " does not end in a '.'"))
-        ),
-      " semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')"
-    );
-  ]
+(** The [PRINT_CONFIG] module type can be used to customise the
+    behavior of the pretty-printer *)
+module type PRINT_CONFIG = sig
+  (** If true, then the printer will insert additional braces into the
+      source (essentially creating additional E_block nodes). This
+      will give the code a more normal imperative look, especially
+      after re-writing passes that are on the path to the theorem
+      prover targets that use a more functional style. *)
+  val insert_braces : bool
 
-let latex_target _ _ out_file ast effect_info env =
-  Reporting.opt_warnings := true;
-  let latex_dir = match out_file with None -> "sail_latex" | Some s -> s in
-  begin
-    try
-      if not (Sys.is_directory latex_dir) then begin
-        prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
-        exit 1
-      end
-    with Sys_error _ -> Unix.mkdir latex_dir 0o755
-  end;
-  Latex.opt_directory := latex_dir;
-  let chan = open_out (Filename.concat latex_dir "commands.tex") in
-  output_string chan (Pretty_print_sail.Document.to_string (Latex.defs (Type_check.strip_ast ast)));
-  close_out chan
+  (** If true, the printer will attempt to reverse some
+      transformations that are done to the source. It can do this
+      where passes insert attributes into the AST that it can use to
+      revert various changes. It will do the following:
 
-let _ =
-  Target.register ~name:"latex" ~options:latex_options
-    ~pre_parse_hook:(fun () ->
-      Type_check.opt_expand_valspec := false;
-      Type_check.opt_no_bitfield_expansion := true
-    )
-    latex_target
+      - Reintroduce [v[n]] for vector_access and [v[n..m]] for vector_subrange
+      - Undo overloading
+      - Turn [operator OP(x, y)] back into [x OP y]
+      - Reintroduce setters [setter(x, y)] into [setter(x) = y]
+  *)
+  val resugar : bool
+
+  (** If true, all attributes [$[attr ...]] will be hidden in the
+      output. Note that [resugar] will remove any attributes it uses
+      as hints for resugaring even when this is false. *)
+  val hide_attributes : bool
+end
+
+(** The [Printer] functor defines the printing function based on the
+    supplied printing configuration *)
+module Printer (Config : PRINT_CONFIG) : sig
+  val doc_id : id -> PPrint.document
+
+  val doc_typ : typ -> PPrint.document
+
+  val doc_binding : typquant * typ -> PPrint.document
+
+  val doc_typschm : typschm -> PPrint.document
+
+  val doc_exp : uannot exp -> PPrint.document
+
+  val doc_block : uannot exp list -> PPrint.document
+
+  val doc_letbind : uannot letbind -> PPrint.document
+
+  val doc_funcl : uannot funcl -> PPrint.document
+
+  val doc_mapcl : uannot mapcl -> PPrint.document
+
+  val doc_spec : uannot val_spec -> PPrint.document
+
+  val doc_type_def : uannot type_def -> PPrint.document
+
+  val doc_register : uannot dec_spec -> PPrint.document
+
+  val doc_def : uannot def -> PPrint.document
+end
+
+(** This function is intended to reformat machine-generated Sail into
+    something a bit more readable, it is not intended to be used as a
+    general purpose code formatter. The output will be dumped as
+    multiple files into the directory argument. *)
+val reformat : into_directory:string -> uannot Ast_defs.ast -> unit
+
+(** The default [PRINT_CONFIG] sets all the options to false, so it
+    prints the AST 'as is' without modifications. *)
+module Default_print_config : PRINT_CONFIG
+
+(** For convenience, other modules can get the default behavior by
+    just importing this module. *)
+include module type of Printer (Default_print_config)
+
+(** This function is primarly used to dump the AST by debug options,
+    such as [--ddump-tc-ast]. *)
+val output_ast : ?line_width:int -> out_channel -> uannot Ast_defs.ast -> unit
+
+(** Some convenience functions for outputting PPrint documents *)
+module Document : sig
+  val to_channel : ?line_width:int -> out_channel -> PPrint.document -> unit
+
+  val to_string : ?line_width:int -> PPrint.document -> string
+end

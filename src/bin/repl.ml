@@ -430,7 +430,7 @@ let handle_input' istate input =
         | ":n" | ":normal" -> { istate with mode = Normal }
         | ":t" | ":type" ->
             let typq, typ = Type_check.Env.get_val_spec (mk_id arg) istate.env in
-            pretty_sail stdout (doc_binding (typq, typ));
+            Document.to_channel stdout (doc_binding (typq, typ));
             print_newline ();
             istate
         | ":q" | ":quit" ->
@@ -439,7 +439,7 @@ let handle_input' istate input =
         | ":i" | ":infer" ->
             let exp = Initial_check.exp_of_string arg in
             let exp = Type_check.infer_exp istate.env exp in
-            pretty_sail stdout (doc_typ (Type_check.typ_of exp));
+            Document.to_channel stdout (doc_typ (Type_check.typ_of exp));
             print_newline ();
             istate
         | ":prove" ->
@@ -497,7 +497,7 @@ let handle_input' istate input =
            *)
         | ":ast" ->
             let chan = open_out arg in
-            Pretty_print_sail.pp_ast chan (Type_check.strip_ast istate.ast);
+            Pretty_print_sail.output_ast chan (Type_check.strip_ast istate.ast);
             close_out chan;
             istate
         | ":output" ->

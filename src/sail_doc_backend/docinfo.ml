@@ -80,7 +80,10 @@ open Parse_ast.Attribute_data
 module Reformatter = Pretty_print_sail.Printer (struct
   let insert_braces = true
   let resugar = true
+  let hide_attributes = true
 end)
+
+module Document = Pretty_print_sail.Document
 
 (** In the case of latex, we generate files containing a sequence of
    commands that can simply be included. For other documentation
@@ -446,7 +449,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     | Some (p1, p2)
       when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname && Sys.file_exists p1.pos_fname ->
         doc_lexing_pos p1 p2
-    | _ -> Raw (g x |> f |> Pretty_print_sail.to_string |> encode)
+    | _ -> Raw (g x |> f |> Document.to_string |> encode)
 
   let get_doc_comment def_annot =
     Option.map
@@ -464,11 +467,11 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     }
 
   let docinfo_for_type_def (TD_aux (_, annot) as td) =
-    doc_loc (fst annot) Type_check.strip_typedef Reformatter.doc_typdef td
+    doc_loc (fst annot) Type_check.strip_typedef Reformatter.doc_type_def td
 
   let docinfo_for_register def_annot (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) =
     {
-      source = doc_loc (fst rd_annot) Type_check.strip_register Reformatter.doc_dec rd;
+      source = doc_loc (fst rd_annot) Type_check.strip_register Reformatter.doc_register rd;
       type_source = doc_loc typ_l (fun typ -> typ) Reformatter.doc_typ typ;
       exp_source =
         Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Reformatter.doc_exp exp) exp;
@@ -504,7 +507,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                   let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
                   let propagated, _ = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
                   let propagated_doc =
-                    Raw (pretty_printer (Type_check.strip_exp propagated) |> Pretty_print_sail.to_string |> encode)
+                    Raw (pretty_printer (Type_check.strip_exp propagated) |> Document.to_string |> encode)
                   in
                   Bindings.add member propagated_doc splits
                 )
@@ -547,7 +550,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                 doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
             | _, _ ->
                 let block = Type_check.strip_exp exp :: List.map Type_check.strip_exp exps in
-                Raw (Reformatter.doc_block block |> Pretty_print_sail.to_string |> encode)
+                Raw (Reformatter.doc_block block |> Document.to_string |> encode)
           end
       | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp
     in

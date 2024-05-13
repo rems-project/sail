@@ -75,6 +75,7 @@ module Big_int = Nat_big_num
 module type PRINT_CONFIG = sig
   val insert_braces : bool
   val resugar : bool
+  val hide_attributes : bool
 end
 
 module Printer (Config : PRINT_CONFIG) = struct
@@ -401,6 +402,7 @@ module Printer (Config : PRINT_CONFIG) = struct
       if Config.resugar && Option.is_some (get_attribute "setter" uannot) then (remove_attribute "setter" uannot, true)
       else (uannot, false)
     in
+    let uannot = if Config.hide_attributes then empty_uannot else uannot in
     concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
     ^^
     match e_aux with
@@ -503,7 +505,13 @@ module Printer (Config : PRINT_CONFIG) = struct
         match (overloaded, exps) with
         | Some (name, true), [x; y] -> doc_exp (E_aux (E_app_infix (x, mk_id name, y), (l, uannot)))
         | Some (name, false), _ ->
-            handle_setter (mk_id name) (lazy (doc_atomic_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
+            handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
+        | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
+            doc_exp (E_aux (E_app_infix (x, infix_swap id, y), (l, uannot)))
+        | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
+            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
+        | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->
+            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
         | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
       end
     | _ -> doc_atomic_exp exp
@@ -694,7 +702,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         let clauses = separate_map sep doc_mapcl mapcls in
         string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ surround 2 0 lbrace clauses rbrace
 
-  let doc_dec (DEC_aux (reg, _)) =
+  let doc_register (DEC_aux (reg, _)) =
     match reg with
     | DEC_reg (typ, id, opt_exp) -> (
         match opt_exp with
@@ -719,7 +727,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
     | A_typ _ -> empty
 
-  let doc_typdef (TD_aux (td, _)) =
+  let doc_type_def (TD_aux (td, _)) =
     match td with
     | TD_abstract (id, kind) -> begin doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) end
     | TD_abbrev (id, typq, typ_arg) -> begin
@@ -836,7 +844,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     match aux with
     | DEF_default df -> doc_default df
     | DEF_val v_spec -> doc_spec v_spec
-    | DEF_type t_def -> doc_typdef t_def
+    | DEF_type t_def -> doc_type_def t_def
     | DEF_fundef f_def -> doc_fundef f_def
     | DEF_mapdef m_def -> doc_mapdef m_def
     | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
@@ -860,7 +868,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | DEF_let lbind -> string "let" ^^ space ^^ doc_letbind lbind
     | DEF_internal_mutrec fundefs ->
         (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs) ^^ hardline ^^ string "}"
-    | DEF_register dec -> doc_dec dec
+    | DEF_register dec -> doc_register dec
     | DEF_scattered sdef -> doc_scattered sdef
     | DEF_measure (id, pat, exp) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^ space ^^ equals ^/^ doc_exp exp
@@ -881,13 +889,11 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_ast { defs; _ } = separate_map hardline doc_def (List.filter doc_filter defs)
 end
 
-(* This function is intended to reformat machine-generated Sail into
-   something a bit more readable, it is not intended to be used as a
-   general purpose formatter *)
-let reformat dir { defs; _ } =
+let reformat ~into_directory:dir { defs; _ } =
   let module Reformatter = Printer (struct
     let insert_braces = true
     let resugar = true
+    let hide_attributes = false
   end) in
   let file_stack = ref [] in
 
@@ -938,15 +944,19 @@ let reformat dir { defs; _ } =
 module Default_print_config : PRINT_CONFIG = struct
   let insert_braces = false
   let resugar = false
+  let hide_attributes = false
 end
 
 include Printer (Default_print_config)
 
-let pp_ast f d = ToChannel.pretty 1. 80 f (doc_ast d)
+let output_ast ?(line_width = 80) f d = ToChannel.pretty 1. line_width f (doc_ast d)
 
-let pretty_sail f doc = ToChannel.pretty 1. 120 f doc
+module Document = struct
+  let to_channel ?(line_width = 120) f doc = ToChannel.pretty 1. line_width f doc
 
-let to_string doc =
-  let b = Buffer.create 120 in
-  ToBuffer.pretty 1. 120 b doc;
-  Buffer.contents b
+  let to_string ?(line_width = 120) doc =
+    (* Allocate at least one line up front *)
+    let b = Buffer.create line_width in
+    ToBuffer.pretty 1. line_width b doc;
+    Buffer.contents b
+end

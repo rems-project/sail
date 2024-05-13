@@ -74,6 +74,7 @@ open Jib_util
 open Jib_visitor
 open Type_check
 open Value2
+module Document = Pretty_print_sail.Document
 
 open Anf
 
@@ -553,7 +554,7 @@ module Make (C : CONFIG) = struct
     | AV_vector _ as aval ->
         raise
           (Reporting.err_general l
-             ("Have AVL_vector: " ^ Pretty_print_sail.to_string (pp_aval aval) ^ " which is not a vector type")
+             ("Have AVL_vector: " ^ Document.to_string (pp_aval aval) ^ " which is not a vector type")
           )
     | AV_list (avals, Typ_aux (typ, _)) ->
         let ctyp =
@@ -1464,7 +1465,7 @@ module Make (C : CONFIG) = struct
   let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
     match aux with
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)) when !opt_memo_cache ->
-        let digest = strip_def def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string in
+        let digest = strip_def def |> Pretty_print_sail.doc_def |> Document.to_string |> Digest.string in
         let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
         let cached =
           if Sys.file_exists cachefile then (
@@ -1577,7 +1578,7 @@ module Make (C : CONFIG) = struct
     (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
     | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
         Reporting.unreachable (def_loc def) __POS__
-          ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def (strip_def def)))
+          ("Could not compile:\n" ^ Document.to_string (Pretty_print_sail.doc_def (strip_def def)))
     | DEF_constraint _ -> Reporting.unreachable (def_loc def) __POS__ "Toplevel constraint not supported"
 
   let mangle_mono_id id ctx ctyps = append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
