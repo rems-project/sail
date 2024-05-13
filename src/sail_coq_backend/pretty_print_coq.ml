@@ -2425,6 +2425,18 @@ let doc_field_updates ctxt typq record_id fields =
 (* TODO: check use of empty_ctxt below doesn't cause problems due to missing info *)
 let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
   let bare_ctxt = { empty_ctxt with global } in
+  let doc_dec_eq_req = function
+    | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+        let class_pp =
+          match global.library_style with
+          | BBV ->
+              (* TODO: collision avoidance for x y *)
+              string "forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)"
+          | Stdpp -> string "EqDecision " ^^ doc_var bare_ctxt kid
+        in
+        Some (string "`{" ^^ class_pp ^^ string "}")
+    | _ -> None
+  in
   match td with
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
       let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
@@ -2488,21 +2500,28 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
         ^^ separate space (list_init numfields (fun n -> string (s ^ string_of_int n)))
         ^^ string "]." ^^ hardline
       in
+      let full_type_pps = type_id_pp :: (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
+      let full_type_pp = separate space full_type_pps in
       let eq_pp =
         if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
+          let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
           let class_pp, final_pp =
             match global.library_style with
             | BBV ->
-                ( string "forall (x y : " ^^ type_id_pp ^^ string "), Decidable (x = y).",
+                ( string "forall (x y : " ^^ full_type_pp ^^ string "), Decidable (x = y).",
                   string "refine (Build_Decidable _ true _). subst. split; reflexivity."
                 )
-            | Stdpp -> (string "EqDecision " ^^ type_id_pp ^^ string ".", string "left; subst; reflexivity.")
+            | Stdpp -> (string "EqDecision " ^^ (if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp) ^^ string ".", string "left; subst; reflexivity.")
           in
           string "#[export]" ^^ hardline
           ^^ group
                (nest 2
-                  (string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^ class_pp ^^ hardline
-                 ^^ intros_pp "x" ^^ intros_pp "y"
+                  (flow (break 1)
+                     (((string "Instance Decidable_eq_" ^^ type_id_pp) :: typq_pps)
+                     @ eq_req_pps
+                     @ [colon; class_pp]
+                     )
+                  ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
                   ^^ separate hardline
                        (list_init numfields (fun n ->
                             let ns = string_of_int n in
@@ -2511,13 +2530,14 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                        )
                   )
                )
-          ^^ hardline ^^ final_pp ^^ hardline ^^ string "Defined." ^^ twice hardline
+          ^^ hardline
+          ^^ final_pp
+          ^^ hardline ^^ string "Defined." ^^ twice hardline
         )
         else empty
       in
       let inhabited_pp =
         let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
-        let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
         let field_pp (_, fid) = fname fid ^^ string " := inhabitant" in
         string "#[export]" ^^ hardline
         ^^ group
@@ -2526,7 +2546,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                    (flow (break 1)
                       (((string "Instance dummy_" ^^ type_id_pp) :: typq_pps)
                       @ req_pps
-                      @ [colon; string "Inhabited (" ^^ type_id_pp ^^ space ^^ params_pp ^^ string ") := {"]
+                      @ [colon; string "Inhabited (" ^^ full_type_pp ^^ string ") := {"]
                       )
                    )
                 )
@@ -2551,18 +2571,6 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
             string "Inductive" ^^ space ^^ id_pp ^^ separate_in space q_pps ^^ space ^^ coloneq ^^ hardline ^^ ar_doc
           in
           let reset_implicits_pp = doc_reset_implicits id_pp typq in
-          let doc_dec_eq_req = function
-            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
-                let class_pp =
-                  match global.library_style with
-                  | BBV ->
-                      (* TODO: collision avoidance for x y *)
-                      string "forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)"
-                  | Stdpp -> string "EqDecision " ^^ doc_var bare_ctxt kid
-                in
-                Some (string "`{" ^^ class_pp ^^ string "}")
-            | _ -> None
-          in
           let doc_inhabited_req = function
             | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
                 Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
