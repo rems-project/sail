@@ -108,6 +108,7 @@ type type_error =
       (** Takes the name of the identifier, the set of local bindings, and
           whether we have a function of the same name in scope. *)
   | Err_hint of string  (** A short error that only appears attached to a location *)
+  | Err_with_hint of string * type_error
 
 exception Type_error of Parse_ast.l * type_error
 

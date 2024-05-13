@@ -292,6 +292,9 @@ let message_of_type_error type_error =
   in
   let rec to_message = function
     | Err_hint h -> (Seq [], Some h)
+    | Err_with_hint (h, err) ->
+        let msg, _ = to_message err in
+        (msg, Some h)
     | Err_inner (err, l', prefix, err') ->
         let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
         let msg, hint = to_message err in
