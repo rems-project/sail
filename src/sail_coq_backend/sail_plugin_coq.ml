@@ -102,6 +102,10 @@ let coq_options =
       Arg.Set Pretty_print_coq.opt_undef_axioms,
       "generate axioms for functions that are declared but not defined"
     );
+    ( Flag.create ~prefix:["coq"] "all_eq_dec",
+      Arg.Set Pretty_print_coq.opt_coq_all_eq_dec,
+      " generate decidable equality instances for all types"
+    );
     ( Flag.create ~prefix:["coq"] ~debug:true "warn_nonex",
       Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
       "generate warnings for non-exhaustive pattern matches in the Coq backend"
