@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/mapping_length_mismatch.sail[0m:9.21-48:
+9[96m |[0mmapping clause foo = x : bits(1) <-> x : bits(2)
+ [91m |[0m                     [91m^-------------------------^[0m
+ [91m |[0m 'x' must have the same type on both sides of the mapping
+ [91m |[0m 
+ [91m |[0m [96mfail/mapping_length_mismatch.sail[0m:9.21-22:
+ [91m |[0m 9[96m |[0mmapping clause foo = x : bits(1) <-> x : bits(2)
+ [91m |[0m  [92m |[0m                     [92m^[0m [92mhas type bits(1)[0m
+ [91m |[0m [96mfail/mapping_length_mismatch.sail[0m:9.37-38:
+ [91m |[0m 9[96m |[0mmapping clause foo = x : bits(1) <-> x : bits(2)
+ [91m |[0m  [91m |[0m                                     [91m^[0m [91mhas type bits(2)[0m
+ [91m |[0m  [91m |[0m Integer expressions 1 and 2 are not equal

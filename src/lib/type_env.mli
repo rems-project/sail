@@ -115,6 +115,7 @@ val with_global_scope : t -> t * module_state
 
 val restore_scope : module_state -> t -> t
 
+val fresh_kid : ?kid:kid -> env -> kid
 val freshen_bind : t -> typquant * typ -> typquant * typ
 
 val get_default_order : t -> order
