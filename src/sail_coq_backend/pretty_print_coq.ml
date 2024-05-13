@@ -98,6 +98,7 @@ let opt_debug_on : string list ref = ref []
 let opt_extern_types : string list ref = ref []
 let opt_generate_extern_types : bool ref = ref false
 let opt_coq_record_update : bool ref = ref false
+let opt_coq_all_eq_dec : bool ref = ref false
 
 let prefix_recordtype = true
 
@@ -2488,7 +2489,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
         ^^ string "]." ^^ hardline
       in
       let eq_pp =
-        if IdSet.mem id generic_eq_types then (
+        if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
           let class_pp, final_pp =
             match global.library_style with
             | BBV ->
@@ -2570,7 +2571,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
           let typ_use_pps = id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
           let typ_use_pp = separate space typ_use_pps in
           let eq_pp =
-            if IdSet.mem id generic_eq_types then (
+            if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
               let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
               let class_pp =
                 match global.library_style with
@@ -3573,18 +3574,24 @@ end = struct
         string "  | _, _ => fun _ => None";
         string "  end.";
         empty;
-        string
-          "Instance Decidable_eq_register_values {T : Type} `(r : register T) : forall x y : T, Decidable (x = y) :=";
-        string "match r with";
-        separate_map hardline
-          (fun (typ_id, _typ) ->
-            let id = doc_id ctxt (reg_case_name typ_id) in
-            string "  | " ^^ id ^^ string " _ => _"
-          )
-          type_map;
-        string "end.";
-        empty;
       ]
+    ^^
+    if !opt_coq_all_eq_dec then
+      separate hardline
+        [
+          string
+            "Instance Decidable_eq_register_values {T : Type} `(r : register T) : forall x y : T, Decidable (x = y) :=";
+          string "match r with";
+          separate_map hardline
+            (fun (typ_id, _typ) ->
+              let id = doc_id ctxt (reg_case_name typ_id) in
+              string "  | " ^^ id ^^ string " _ => _"
+            )
+            type_map;
+          string "end.";
+          empty;
+        ]
+    else empty
 
   let regstate ctxt env type_map =
     separate hardline
