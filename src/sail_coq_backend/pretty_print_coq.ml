@@ -2431,7 +2431,7 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
         ^^ string " : " ^^ of_num_id_pp ^^ space
         ^^ parens (num_of_id_pp ^^ string " x")
         ^^ string " = x.";
-        string "destruct x; reflexivity.";
+        string "  destruct x; reflexivity.";
         string "Qed.";
       ]
   in
@@ -2441,10 +2441,10 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
         string "Lemma " ^^ num_of_id_pp ^^ string "_injective "
         ^^ parens (string "x y : " ^^ typ_id_pp)
         ^^ string " : " ^^ num_of_id_pp ^^ string " x = " ^^ num_of_id_pp ^^ string " y -> x = y.";
-        string "intro.";
-        string "rewrite <- (" ^^ typ_id_pp ^^ string "_num_of_roundtrip x).";
-        string "rewrite <- (" ^^ typ_id_pp ^^ string "_num_of_roundtrip y).";
-        string "congruence.";
+        string "  intro.";
+        string "  rewrite <- (" ^^ typ_id_pp ^^ string "_num_of_roundtrip x).";
+        string "  rewrite <- (" ^^ typ_id_pp ^^ string "_num_of_roundtrip y).";
+        string "  congruence.";
         string "Qed.";
       ]
   in
@@ -2452,11 +2452,11 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
     separate hardline
       [
         string "Definition " ^^ typ_id_pp ^^ string "_eq_dec (x y : " ^^ typ_id_pp ^^ string ") : {x = y} + {x <> y}.";
-        string "refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp ^^ string " y) with";
-        string "| left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
-        string "| right ne => right _";
-        string "end).";
-        string "congruence.";
+        string "  refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp ^^ string " y) with";
+        string "  | left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
+        string "  | right ne => right _";
+        string "  end).";
+        string "  congruence.";
         string "Defined.";
       ]
   in
@@ -2466,9 +2466,9 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
         string "Definition " ^^ typ_id_pp ^^ string "_beq (x y : " ^^ typ_id_pp ^^ string ") : bool :=";
         string "  Z.eqb (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp ^^ string " y).";
         string "Lemma " ^^ typ_id_pp ^^ string "_beq_iff x y : " ^^ typ_id_pp ^^ string "_beq x y = true <-> x = y.";
-        string "unfold " ^^ typ_id_pp ^^ string "_beq.";
-        string "rewrite Z.eqb_eq.";
-        string "split; [apply " ^^ num_of_id_pp ^^ string "_injective | congruence].";
+        string "  unfold " ^^ typ_id_pp ^^ string "_beq.";
+        string "  rewrite Z.eqb_eq.";
+        string "  split; [apply " ^^ num_of_id_pp ^^ string "_injective | congruence].";
         string "Qed.";
       ]
   in
@@ -3561,6 +3561,7 @@ end = struct
         string "  | _ => " ^^ doc_id ctxt (List.hd registers);
         string "  end.";
         separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
+        empty;
         empty;
       ]
 
