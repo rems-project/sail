@@ -3570,6 +3570,8 @@ end = struct
      work. *)
 
   let type_enum ctxt env type_map =
+    (* A model with a single type of registers is unusual, but handy for testing. *)
+    let is_single = match type_map with [_] -> true | _ -> false in
     separate hardline
       [
         string "Variant register : Type -> Type :=";
@@ -3594,7 +3596,7 @@ end = struct
             ^^ string "_beq r r'"
           )
           type_map;
-        string "  | _, _ => false";
+        (if is_single then empty else string "  | _, _ => false");
         string "  end.";
         empty;
         string
@@ -3609,7 +3611,7 @@ end = struct
             ^^ string "_beq r r' then Some p else None"
           )
           type_map;
-        string "  | _, _ => fun _ => None";
+        (if is_single then empty else string "  | _, _ => fun _ => None");
         string "  end.";
         empty;
       ]
