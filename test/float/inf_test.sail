@@ -27,11 +27,46 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+default Order dec
 
-$include <float/common.sail>
-$include <float/nan.sail>
+$include <prelude.sail>
 $include <float/inf.sail>
 
-$endif
+function test_float_is_inf () -> unit = {
+  /* Half floating point */
+  assert(float_is_inf(0x7c00));
+  assert(float_is_inf(0xfc00));
+
+  assert(float_is_inf(0x7a00) == false);
+  assert(float_is_inf(0x7b00) == false);
+  assert(float_is_inf(0x7e00) == false);
+  assert(float_is_inf(0xca00) == false);
+  assert(float_is_inf(0xdb00) == false);
+  assert(float_is_inf(0xfe00) == false);
+
+  /* Single floating point */
+  assert(float_is_inf(0x7f800000));
+  assert(float_is_inf(0xff800000));
+
+  assert(float_is_inf(0x7fc00000) == false);
+  assert(float_is_inf(0x7f000001) == false);
+  assert(float_is_inf(0x7e800000) == false);
+  assert(float_is_inf(0xffc00000) == false);
+  assert(float_is_inf(0xff000001) == false);
+  assert(float_is_inf(0xfe800000) == false);
+
+  /* Double floating point */
+  assert(float_is_inf(0x7ff0000000000000));
+  assert(float_is_inf(0xfff0000000000000));
+
+  assert(float_is_inf(0x7ff8000000000000) == false);
+  assert(float_is_inf(0x7ff0000000000001) == false);
+  assert(float_is_inf(0x7fc0000000000000) == false);
+  assert(float_is_inf(0xfff8000000000000) == false);
+  assert(float_is_inf(0xfff0000000000001) == false);
+  assert(float_is_inf(0xffc0000000000000) == false);
+}
+
+function main () -> unit = {
+  test_float_is_inf();
+}
