@@ -2470,6 +2470,9 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
         string "  rewrite Z.eqb_eq.";
         string "  split; [apply " ^^ num_of_id_pp ^^ string "_injective | congruence].";
         string "Qed.";
+        string "Lemma " ^^ typ_id_pp ^^ string "_beq_refl x : " ^^ typ_id_pp ^^ string "_beq x x = true.";
+        string "apply " ^^ typ_id_pp ^^ string "_beq_iff; reflexivity.";
+        string "Qed.";
       ]
   in
   [lemma1; lemma2; eq_pp; beq_pp]
@@ -3561,6 +3564,7 @@ end = struct
         string "  | _ => " ^^ doc_id ctxt (List.hd registers);
         string "  end.";
         separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
+        string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_refl : register_beq_refls.";
         string "Definition "
         ^^ doc_id ctxt (append_id reg_type_id "_list")
         ^^ string " : list (string * " ^^ reg_type_pp ^^ string ") := [";
@@ -3725,8 +3729,18 @@ end = struct
           )
           type_map;
         string "  end.";
+        empty;
+        string "Lemma register_lookup_set {T} (r : register T) regs v: register_lookup r (register_set r v regs) = v.";
+        string "destruct regs, r; simpl; autorewrite with register_beq_refls; reflexivity.";
+        string "Qed.";
+        empty;
+        string "Lemma irrelevant_register_set {T T'} (r : register T) (r' : register T') regs v:";
+        string "  register_beq r r' = false ->";
+        string "  register_lookup r (register_set r' v regs) = register_lookup r regs.";
+        string "destruct regs, r, r'; simpl; intro EQ; rewrite ?EQ; reflexivity.";
+        string "Qed.";
+        empty;
       ]
-    ^^ hardline
 
   let register_refs ctxt env register_map =
     separate_map hardline
