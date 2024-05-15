@@ -32,8 +32,8 @@ default Order dec
 $include <prelude.sail>
 $include <float/sign.sail>
 
-function test_float_is_positive() -> unit = {
-  /* Half flating point */
+function test_float_is_positive () -> unit = {
+  /* Half floating point */
   assert(float_is_positive(0x7e00));
   assert(float_is_positive(0x0011));
   assert(float_is_positive(0x7fff));
@@ -43,7 +43,7 @@ function test_float_is_positive() -> unit = {
   assert(float_is_positive(0xdb00) == false);
   assert(float_is_positive(0x802f) == false);
 
-  /* Single flating point */
+  /* Single floating point */
   assert(float_is_positive(0x7fc00000));
   assert(float_is_positive(0x00003001));
   assert(float_is_positive(0x7fffffff));
@@ -53,7 +53,7 @@ function test_float_is_positive() -> unit = {
   assert(float_is_positive(0xdf000000) == false);
   assert(float_is_positive(0x8003f000) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_positive(0x7f080000f0f00000));
   assert(float_is_positive(0x00000fedc0000001));
   assert(float_is_positive(0x7fffffffffffffff));
@@ -65,7 +65,7 @@ function test_float_is_positive() -> unit = {
 }
 
 function test_float_is_negative () -> unit = {
-  /* Half flating point */
+  /* Half floating point */
   assert(float_is_negative(0xfe00));
   assert(float_is_negative(0x8011));
   assert(float_is_negative(0xffff));
@@ -75,7 +75,7 @@ function test_float_is_negative () -> unit = {
   assert(float_is_negative(0x4b00) == false);
   assert(float_is_negative(0x002f) == false);
 
-  /* Single flating point */
+  /* Single floating point */
   assert(float_is_negative(0xffc00000));
   assert(float_is_negative(0x80003001));
   assert(float_is_negative(0xffffffff));
@@ -85,7 +85,7 @@ function test_float_is_negative () -> unit = {
   assert(float_is_negative(0x5f000000) == false);
   assert(float_is_negative(0x0003f000) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_negative(0xff080000f0f00000));
   assert(float_is_negative(0x80000fedc0000001));
   assert(float_is_negative(0xffffffffffffffff));
@@ -96,7 +96,7 @@ function test_float_is_negative () -> unit = {
   assert(float_is_negative(0x68c0000000000000) == false);
 }
 
-function main() -> unit = {
+function main () -> unit = {
   test_float_is_positive();
   test_float_is_negative();
 }
