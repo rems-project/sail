@@ -78,7 +78,24 @@ module Big_int = Nat_big_num
    annotations {!Type_check.tannot}. *)
 type uannot
 
+(** The empty annotation *)
 val empty_uannot : uannot
+
+(** {2 Attributes} *)
+
+val string_of_attribute : string -> attribute_data option -> string
+
+val string_of_attribute_data : attribute_data -> string
+
+val json_of_attribute : string -> attribute_data option -> Yojson.Basic.t
+
+val json_of_attribute_data : attribute_data -> Yojson.Basic.t
+
+val attribute_data_object : attribute_data -> (string * attribute_data) list option
+
+val attribute_data_bool : attribute_data -> bool option
+
+val attribute_data_string : attribute_data -> string option
 
 (** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
     {@sail[
@@ -87,21 +104,22 @@ val empty_uannot : uannot
     The location argument should be a span that corresponds to the attribute itself, and not
     include the expression.
 *)
-val add_attribute : l -> string -> string -> uannot -> uannot
+val add_attribute : l -> string -> attribute_data option -> uannot -> uannot
 
 val remove_attribute : string -> uannot -> uannot
 
-val get_attribute : string -> uannot -> (l * string) option
+val get_attribute : string -> uannot -> (l * attribute_data option) option
 
-val get_attributes : uannot -> (l * string * string) list
+val get_attributes : uannot -> (l * string * attribute_data option) list
 
-val find_attribute_opt : string -> (l * string * string) list -> string option
+val find_attribute_opt : string -> (l * string * attribute_data option) list -> attribute_data option option
 
-val mk_def_annot : ?doc:string -> ?attrs:(l * string * string) list -> ?visibility:visibility -> l -> def_annot
+val mk_def_annot :
+  ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> def_annot
 
-val add_def_attribute : l -> string -> string -> def_annot -> def_annot
+val add_def_attribute : l -> string -> attribute_data option -> def_annot -> def_annot
 
-val get_def_attribute : string -> def_annot -> (l * string) option
+val get_def_attribute : string -> def_annot -> (l * attribute_data option) option
 
 val remove_def_attribute : string -> def_annot -> def_annot
 
@@ -112,6 +130,8 @@ val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
    a common pattern is generating code with [no_annot], then adding location
    information with the various [locate_] functions in this module. *)
 val no_annot : l * uannot
+
+(** {1 Generated locations} *)
 
 (** [gen_loc l] takes a location l and generates a location which
    means 'generated/derived from location l'. This is useful for debugging
@@ -478,6 +498,7 @@ val id_of_dec_spec : 'a dec_spec -> id
 (** {2 Functions for manipulating identifiers} *)
 
 val deinfix : id -> id
+val infix_swap : id -> id
 
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid

@@ -75,6 +75,15 @@ open Libsail
 open Ast
 open Ast_defs
 open Ast_util
+open Parse_ast.Attribute_data
+
+module Reformatter = Pretty_print_sail.Printer (struct
+  let insert_braces = true
+  let resugar = true
+  let hide_attributes = true
+end)
+
+module Document = Pretty_print_sail.Document
 
 (** In the case of latex, we generate files containing a sequence of
    commands that can simply be included. For other documentation
@@ -93,13 +102,23 @@ type embedding = Plain | Base64
 
 let embedding_string = function Plain -> "plain" | Base64 -> "base64"
 
-let bindings_to_json b f =
+let json_of_bindings b f =
   Bindings.bindings b |> List.map (fun (key, elem) -> (string_of_id key, f elem)) |> fun elements -> `Assoc elements
 
-type location_or_raw = Raw of string | Location of string * int * int * int * int * int * int
+type location_or_raw =
+  | Raw of string
+  | RawWithLocation of string * string * int * int * int * int * int * int
+  | Location of string * int * int * int * int * int * int
 
-let location_or_raw_to_json = function
+let json_of_location_or_raw = function
   | Raw s -> `String s
+  | RawWithLocation (s, fname, line1, bol1, char1, line2, bol2, char2) ->
+      `Assoc
+        [
+          ("contents", `String s);
+          ("file", `String fname);
+          ("loc", `List [`Int line1; `Int bol1; `Int char1; `Int line2; `Int bol2; `Int char2]);
+        ]
   | Location (fname, line1, bol1, char1, line2, bol2, char2) ->
       `Assoc
         [("file", `String fname); ("loc", `List [`Int line1; `Int bol1; `Int char1; `Int line2; `Int bol2; `Int char2])]
@@ -119,7 +138,7 @@ let hyper_loc l =
 
 type hyperlink = Function of id * hyper_location | Register of id * hyper_location
 
-let hyperlink_to_json = function
+let json_of_hyperlink = function
   | Function (id, (file, c1, c2)) ->
       `Assoc
         [
@@ -137,7 +156,7 @@ let hyperlink_to_json = function
           ("loc", `List [`Int c1; `Int c2]);
         ]
 
-let hyperlinks_to_json = function [] -> `Null | links -> `List (List.map hyperlink_to_json links)
+let json_of_hyperlinks = function [] -> `Null | links -> `List (List.map json_of_hyperlink links)
 
 let hyperlinks_from_def files def =
   let open Rewriter in
@@ -189,18 +208,22 @@ let hyperlinks_from_def files def =
 
   !links
 
-let rec pat_to_json (P_aux (aux, _)) =
+let json_of_attributes = function
+  | [] -> []
+  | attrs -> [("attributes", `List (List.map (fun (attr, data) -> json_of_attribute attr data) attrs))]
+
+let rec json_of_pat (P_aux (aux, _)) =
   let pat_type t = ("type", `String t) in
-  let seq_pat_json t pats = `Assoc [pat_type t; ("patterns", `List (List.map pat_to_json pats))] in
+  let seq_pat_json t pats = `Assoc [pat_type t; ("patterns", `List (List.map json_of_pat pats))] in
   match aux with
   | P_lit lit -> `Assoc [pat_type "literal"; ("value", `String (string_of_lit lit))]
   | P_wild -> `Assoc [pat_type "wildcard"]
-  | P_as (pat, id) -> `Assoc [pat_type "as"; ("pattern", pat_to_json pat); ("id", `String (string_of_id id))]
-  | P_typ (_, pat) -> pat_to_json pat
+  | P_as (pat, id) -> `Assoc [pat_type "as"; ("pattern", json_of_pat pat); ("id", `String (string_of_id id))]
+  | P_typ (_, pat) -> json_of_pat pat
   | P_id id -> `Assoc [pat_type "id"; ("id", `String (string_of_id id))]
-  | P_var (pat, _) -> `Assoc [pat_type "var"; ("pattern", pat_to_json pat)]
+  | P_var (pat, _) -> `Assoc [pat_type "var"; ("pattern", json_of_pat pat)]
   | P_app (id, pats) ->
-      `Assoc [pat_type "app"; ("id", `String (string_of_id id)); ("patterns", `List (List.map pat_to_json pats))]
+      `Assoc [pat_type "app"; ("id", `String (string_of_id id)); ("patterns", `List (List.map json_of_pat pats))]
   | P_vector pats -> seq_pat_json "vector" pats
   | P_vector_concat pats -> seq_pat_json "vector_concat" pats
   | P_vector_subrange (id, n, m) ->
@@ -213,13 +236,13 @@ let rec pat_to_json (P_aux (aux, _)) =
         ]
   | P_tuple pats -> seq_pat_json "tuple" pats
   | P_list pats -> seq_pat_json "list" pats
-  | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", pat_to_json pat_hd); ("tl", pat_to_json pat_tl)]
+  | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", json_of_pat pat_hd); ("tl", json_of_pat pat_tl)]
   | P_string_append pats -> seq_pat_json "string_append" pats
   | P_struct (fpats, fwild) ->
       `Assoc
         [
           pat_type "struct";
-          ("fields", `Assoc (List.map (fun (field, pat) -> (string_of_id field, pat_to_json pat)) fpats));
+          ("fields", `Assoc (List.map (fun (field, pat) -> (string_of_id field, json_of_pat pat)) fpats));
           ("wildcard", `Bool (match fwild with FP_wild _ -> true | FP_no_wild -> false));
         ]
   | P_or _ | P_not _ -> `Null
@@ -233,27 +256,29 @@ type 'a function_clause_doc = {
   body_source : location_or_raw;
   comment : string option;
   splits : location_or_raw Bindings.t option;
+  attributes : (string * attribute_data option) list;
 }
 
-let function_clause_doc_to_json docinfo =
+let json_of_function_clause_doc docinfo =
   `Assoc
     ([
        ("number", `Int docinfo.number);
-       ("source", location_or_raw_to_json docinfo.source);
-       ("pattern", pat_to_json docinfo.pat);
+       ("source", json_of_location_or_raw docinfo.source);
+       ("pattern", json_of_pat docinfo.pat);
      ]
     @ (match docinfo.wavedrom with Some w -> [("wavedrom", `String w)] | None -> [])
     @ (match docinfo.comment with Some s -> [("comment", `String s)] | None -> [])
-    @ (match docinfo.guard_source with Some s -> [("guard", location_or_raw_to_json s)] | None -> [])
-    @ [("body", location_or_raw_to_json docinfo.body_source)]
-    @ match docinfo.splits with Some s -> [("splits", bindings_to_json s location_or_raw_to_json)] | None -> []
+    @ (match docinfo.guard_source with Some s -> [("guard", json_of_location_or_raw s)] | None -> [])
+    @ [("body", json_of_location_or_raw docinfo.body_source)]
+    @ (match docinfo.splits with Some s -> [("splits", json_of_bindings s json_of_location_or_raw)] | None -> [])
+    @ json_of_attributes docinfo.attributes
     )
 
 type 'a function_doc = Multiple_clauses of 'a function_clause_doc list | Single_clause of 'a function_clause_doc
 
-let function_doc_to_json = function
-  | Multiple_clauses docinfos -> `List (List.map function_clause_doc_to_json docinfos)
-  | Single_clause docinfo -> function_clause_doc_to_json docinfo
+let json_of_function_doc = function
+  | Multiple_clauses docinfos -> `List (List.map json_of_function_clause_doc docinfos)
+  | Single_clause docinfo -> json_of_function_clause_doc docinfo
 
 type 'a mapping_clause_doc = {
   number : int;
@@ -263,45 +288,67 @@ type 'a mapping_clause_doc = {
   right : 'a pat option;
   right_wavedrom : string option;
   body : location_or_raw option;
+  attributes : (string * attribute_data option) list;
 }
 
-let mapping_clause_doc_to_json docinfo =
+let json_of_mapping_clause_doc docinfo =
   `Assoc
-    ([("number", `Int docinfo.number); ("source", location_or_raw_to_json docinfo.source)]
-    @ (match docinfo.left with Some p -> [("left", pat_to_json p)] | None -> [])
+    ([("number", `Int docinfo.number); ("source", json_of_location_or_raw docinfo.source)]
+    @ (match docinfo.left with Some p -> [("left", json_of_pat p)] | None -> [])
     @ (match docinfo.left_wavedrom with Some w -> [("left_wavedrom", `String w)] | None -> [])
-    @ (match docinfo.right with Some p -> [("right", pat_to_json p)] | None -> [])
+    @ (match docinfo.right with Some p -> [("right", json_of_pat p)] | None -> [])
     @ (match docinfo.right_wavedrom with Some w -> [("right_wavedrom", `String w)] | None -> [])
-    @ match docinfo.body with Some s -> [("body", location_or_raw_to_json s)] | None -> []
+    @ (match docinfo.body with Some s -> [("body", json_of_location_or_raw s)] | None -> [])
+    @ json_of_attributes docinfo.attributes
     )
 
 type 'a mapping_doc = 'a mapping_clause_doc list
 
-let mapping_doc_to_json docinfos = `List (List.map mapping_clause_doc_to_json docinfos)
+let json_of_mapping_doc docinfos = `List (List.map json_of_mapping_clause_doc docinfos)
 
-type valspec_doc = { source : location_or_raw; type_source : location_or_raw }
+type valspec_doc = {
+  source : location_or_raw;
+  type_source : location_or_raw;
+  attributes : (string * attribute_data option) list;
+}
 
-let valspec_doc_to_json docinfo =
-  `Assoc [("source", location_or_raw_to_json docinfo.source); ("type", location_or_raw_to_json docinfo.type_source)]
-
-type typdef_doc = location_or_raw
-
-let typdef_doc_to_json = location_or_raw_to_json
-
-type register_doc = { source : location_or_raw; type_source : location_or_raw; exp_source : location_or_raw option }
-
-let register_doc_to_json docinfo =
+let json_of_valspec_doc docinfo =
   `Assoc
-    ([("source", location_or_raw_to_json docinfo.source); ("type", location_or_raw_to_json docinfo.type_source)]
-    @ match docinfo.exp_source with None -> [] | Some source -> [("exp", location_or_raw_to_json source)]
+    ([("source", json_of_location_or_raw docinfo.source); ("type", json_of_location_or_raw docinfo.type_source)]
+    @ json_of_attributes docinfo.attributes
     )
 
-type let_doc = { source : location_or_raw; exp_source : location_or_raw }
+type type_def_doc = location_or_raw
 
-let let_doc_to_json docinfo =
-  `Assoc [("source", location_or_raw_to_json docinfo.source); ("exp", location_or_raw_to_json docinfo.exp_source)]
+let json_of_type_def_doc = json_of_location_or_raw
 
-let pair_to_json x_label f y_label g (x, y) =
+type register_doc = {
+  source : location_or_raw;
+  type_source : location_or_raw;
+  exp_source : location_or_raw option;
+  attributes : (string * attribute_data option) list;
+}
+
+let json_of_register_doc docinfo =
+  `Assoc
+    ([("source", json_of_location_or_raw docinfo.source); ("type", json_of_location_or_raw docinfo.type_source)]
+    @ (match docinfo.exp_source with None -> [] | Some source -> [("exp", json_of_location_or_raw source)])
+    @ json_of_attributes docinfo.attributes
+    )
+
+type let_doc = {
+  source : location_or_raw;
+  exp_source : location_or_raw;
+  attributes : (string * attribute_data option) list;
+}
+
+let json_of_let_doc docinfo =
+  `Assoc
+    ([("source", json_of_location_or_raw docinfo.source); ("exp", json_of_location_or_raw docinfo.exp_source)]
+    @ json_of_attributes docinfo.attributes
+    )
+
+let json_of_pair x_label f y_label g (x, y) =
   match (f x, g y) with
   | `Null, `Null -> `Null
   | x, `Null -> `Assoc [(x_label, x)]
@@ -310,9 +357,9 @@ let pair_to_json x_label f y_label g (x, y) =
 
 type anchor_doc = { source : location_or_raw; comment : string option }
 
-let anchor_doc_to_json docinfo =
+let json_of_anchor_doc docinfo =
   `Assoc
-    ([("source", location_or_raw_to_json docinfo.source)]
+    ([("source", json_of_location_or_raw docinfo.source)]
     @ match docinfo.comment with Some c -> [("comment", `String c)] | None -> []
     )
 
@@ -323,16 +370,16 @@ type 'a docinfo = {
   functions : ('a function_doc * hyperlink list) Bindings.t;
   mappings : ('a mapping_doc * hyperlink list) Bindings.t;
   valspecs : (valspec_doc * hyperlink list) Bindings.t;
-  typdefs : (typdef_doc * hyperlink list) Bindings.t;
+  type_defs : (type_def_doc * hyperlink list) Bindings.t;
   registers : (register_doc * hyperlink list) Bindings.t;
   lets : (let_doc * hyperlink list) Bindings.t;
   anchors : (anchor_doc * hyperlink list) Bindings.t;
   spans : location_or_raw Bindings.t;
 }
 
-let span_to_json loc = `Assoc [("span", location_or_raw_to_json loc)]
+let json_of_span loc = `Assoc [("span", json_of_location_or_raw loc)]
 
-let docinfo_to_json docinfo =
+let json_of_docinfo docinfo =
   let assoc =
     [("version", `Int docinfo_version)]
     @ ( match docinfo.git with
@@ -343,21 +390,23 @@ let docinfo_to_json docinfo =
         ("embedding", `String (embedding_string docinfo.embedding));
         ("hashes", `Assoc (List.map (fun (key, hash) -> (key, `Assoc [("md5", `String hash)])) docinfo.hashes));
         ( "functions",
-          bindings_to_json docinfo.functions (pair_to_json "function" function_doc_to_json "links" hyperlinks_to_json)
+          json_of_bindings docinfo.functions (json_of_pair "function" json_of_function_doc "links" json_of_hyperlinks)
         );
         ( "mappings",
-          bindings_to_json docinfo.mappings (pair_to_json "mapping" mapping_doc_to_json "links" hyperlinks_to_json)
+          json_of_bindings docinfo.mappings (json_of_pair "mapping" json_of_mapping_doc "links" json_of_hyperlinks)
         );
-        ("vals", bindings_to_json docinfo.valspecs (pair_to_json "val" valspec_doc_to_json "links" hyperlinks_to_json));
-        ("types", bindings_to_json docinfo.typdefs (pair_to_json "type" typdef_doc_to_json "links" hyperlinks_to_json));
+        ("vals", json_of_bindings docinfo.valspecs (json_of_pair "val" json_of_valspec_doc "links" json_of_hyperlinks));
+        ( "types",
+          json_of_bindings docinfo.type_defs (json_of_pair "type" json_of_type_def_doc "links" json_of_hyperlinks)
+        );
         ( "registers",
-          bindings_to_json docinfo.registers (pair_to_json "register" register_doc_to_json "links" hyperlinks_to_json)
+          json_of_bindings docinfo.registers (json_of_pair "register" json_of_register_doc "links" json_of_hyperlinks)
         );
-        ("lets", bindings_to_json docinfo.lets (pair_to_json "let" let_doc_to_json "links" hyperlinks_to_json));
+        ("lets", json_of_bindings docinfo.lets (json_of_pair "let" json_of_let_doc "links" json_of_hyperlinks));
         ( "anchors",
-          bindings_to_json docinfo.anchors (pair_to_json "anchor" anchor_doc_to_json "links" hyperlinks_to_json)
+          json_of_bindings docinfo.anchors (json_of_pair "anchor" json_of_anchor_doc "links" json_of_hyperlinks)
         );
-        ("spans", bindings_to_json docinfo.spans span_to_json);
+        ("spans", json_of_bindings docinfo.spans json_of_span);
       ]
   in
   `Assoc assoc
@@ -371,6 +420,7 @@ let git_command args =
 
 module type CONFIG = sig
   val embedding_mode : embedding option
+  val embed_with_location : bool
 end
 
 module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
@@ -380,6 +430,17 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let doc_lexing_pos (p1 : Lexing.position) (p2 : Lexing.position) =
     match Config.embedding_mode with
+    | Some _ when Config.embed_with_location ->
+        RawWithLocation
+          ( Reporting.loc_range_to_src p1 p2 |> encode,
+            p1.pos_fname,
+            p1.pos_lnum,
+            p1.pos_bol,
+            p1.pos_cnum,
+            p2.pos_lnum,
+            p2.pos_bol,
+            p2.pos_cnum
+          )
     | Some _ -> Raw (Reporting.loc_range_to_src p1 p2 |> encode)
     | None -> Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
 
@@ -388,7 +449,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     | Some (p1, p2)
       when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname && Sys.file_exists p1.pos_fname ->
         doc_lexing_pos p1 p2
-    | _ -> Raw (g x |> f |> Pretty_print_sail.to_string |> encode)
+    | _ -> Raw (g x |> f |> Document.to_string |> encode)
 
   let get_doc_comment def_annot =
     Option.map
@@ -398,39 +459,42 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       )
       def_annot.doc_comment
 
-  let docinfo_for_valspec (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _), vs_annot) as vs) =
+  let docinfo_for_valspec def_annot (VS_aux (VS_val_spec ((TypSchm_aux (_, ts_l) as ts), _, _), vs_annot) as vs) =
     {
-      source = doc_loc (fst vs_annot) Type_check.strip_val_spec Pretty_print_sail.doc_spec vs;
-      type_source = doc_loc ts_l (fun ts -> ts) Pretty_print_sail.doc_typschm ts;
+      source = doc_loc (fst vs_annot) Type_check.strip_val_spec Reformatter.doc_spec vs;
+      type_source = doc_loc ts_l (fun ts -> ts) Reformatter.doc_typschm ts;
+      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
     }
 
-  let docinfo_for_typdef (TD_aux (_, annot) as td) =
-    doc_loc (fst annot) Type_check.strip_typedef Pretty_print_sail.doc_typdef td
+  let docinfo_for_type_def (TD_aux (_, annot) as td) =
+    doc_loc (fst annot) Type_check.strip_typedef Reformatter.doc_type_def td
 
-  let docinfo_for_register (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) =
+  let docinfo_for_register def_annot (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) =
     {
-      source = doc_loc (fst rd_annot) Type_check.strip_register Pretty_print_sail.doc_dec rd;
-      type_source = doc_loc typ_l (fun typ -> typ) Pretty_print_sail.doc_typ typ;
+      source = doc_loc (fst rd_annot) Type_check.strip_register Reformatter.doc_register rd;
+      type_source = doc_loc typ_l (fun typ -> typ) Reformatter.doc_typ typ;
       exp_source =
-        Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Pretty_print_sail.doc_exp exp) exp;
+        Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Reformatter.doc_exp exp) exp;
+      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
     }
 
-  let docinfo_for_let (LB_aux (LB_val (_, exp), annot) as lbind) =
+  let docinfo_for_let def_annot (LB_aux (LB_val (_, exp), annot) as lbind) =
     {
-      source = doc_loc (fst annot) Type_check.strip_letbind Pretty_print_sail.doc_letbind lbind;
-      exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp;
+      source = doc_loc (fst annot) Type_check.strip_letbind Reformatter.doc_letbind lbind;
+      exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp;
+      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
     }
 
   let funcl_splits ~ast ~error_loc:l attrs exp =
     (* The constant propagation tends to strip away block formatting, so put it back to make the pretty_printed output a bit nicer. *)
     let pretty_printer =
       match exp with
-      | E_aux (E_block _, _) -> fun exp -> Pretty_print_sail.doc_block [exp]
-      | _ -> fun exp -> Pretty_print_sail.doc_exp exp
+      | E_aux (E_block _, _) -> fun exp -> Reformatter.doc_block [exp]
+      | _ -> fun exp -> Reformatter.doc_exp exp
     in
     match find_attribute_opt "split" attrs with
     | None -> None
-    | Some split_id -> (
+    | Some (Some (AD_aux (AD_string split_id, _))) -> (
         let split_id = mk_id split_id in
         let env = Type_check.env_of exp in
         match Type_check.Env.lookup_id split_id env with
@@ -443,7 +507,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                   let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
                   let propagated, _ = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
                   let propagated_doc =
-                    Raw (pretty_printer (Type_check.strip_exp propagated) |> Pretty_print_sail.to_string |> encode)
+                    Raw (pretty_printer (Type_check.strip_exp propagated) |> Document.to_string |> encode)
                   in
                   Bindings.add member propagated_doc splits
                 )
@@ -452,6 +516,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             Some splits
         | _ -> raise (Reporting.err_general l ("Could not split on variable " ^ string_of_id split_id))
       )
+    | Some _ -> raise (Reporting.err_general l "Invalid argument for split attribute")
 
   let docinfo_for_funcl ~ast ?outer_annot n (FCL_aux (FCL_funcl (_, pexp), annot) as clause) =
     (* If we have just a single clause, we use the annotation for the
@@ -464,14 +529,14 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     (* Try to use the inner attributes if we have no outer attributes. *)
     let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
 
-    let source = doc_loc (fst annot).loc Type_check.strip_funcl Pretty_print_sail.doc_funcl clause in
+    let source = doc_loc (fst annot).loc Type_check.strip_funcl Reformatter.doc_funcl clause in
     let pat, guard, exp =
       match pexp with
       | Pat_aux (Pat_exp (pat, exp), _) -> (pat, None, exp)
       | Pat_aux (Pat_when (pat, guard, exp), _) -> (pat, Some guard, exp)
     in
     let guard_source =
-      Option.map (fun exp -> doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp) guard
+      Option.map (fun exp -> doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp) guard
     in
     let body_source =
       match exp with
@@ -485,9 +550,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                 doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
             | _, _ ->
                 let block = Type_check.strip_exp exp :: List.map Type_check.strip_exp exps in
-                Raw (Pretty_print_sail.doc_block block |> Pretty_print_sail.to_string |> encode)
+                Raw (Reformatter.doc_block block |> Document.to_string |> encode)
           end
-      | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Pretty_print_sail.doc_exp exp
+      | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp
     in
 
     let splits = funcl_splits ~ast ~error_loc:(pat_loc pat) attrs exp in
@@ -501,6 +566,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       body_source;
       comment = Option.map encode comment;
       splits;
+      attributes = List.map (fun (_, attr, data) -> (attr, data)) attrs;
     }
 
   let included_clause files (FCL_aux (_, (clause_annot, _))) = included_loc files clause_annot.loc
@@ -519,8 +585,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     match aux with Pat_exp (pat, body) -> (pat, body) | Pat_when (pat, _, body) -> (pat, body)
 
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
-    let source = doc_loc def_annot.loc Type_check.strip_mapcl Pretty_print_sail.doc_mapcl clause in
-    let wavedrom_attr = find_attribute_opt "wavedrom" def_annot.attrs in
+    let source = doc_loc def_annot.loc Type_check.strip_mapcl Reformatter.doc_mapcl clause in
+    let parse_wavedrom_attr = function Some (AD_aux (AD_string s, _)) -> Some s | Some _ | None -> None in
+    let wavedrom_attr = Option.bind (find_attribute_opt "wavedrom" def_annot.attrs) parse_wavedrom_attr in
 
     let left, left_wavedrom, right, right_wavedrom, body =
       match aux with
@@ -533,12 +600,12 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       | MCL_forwards pexp ->
           let left, body = docinfo_for_pexp pexp in
           let left_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr left in
-          let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
+          let body = doc_loc (exp_loc body) Type_check.strip_exp Reformatter.doc_exp body in
           (Some left, left_wavedrom, None, None, Some body)
       | MCL_backwards pexp ->
           let right, body = docinfo_for_pexp pexp in
           let right_wavedrom = Wavedrom.of_pattern ~labels:wavedrom_attr right in
-          let body = doc_loc (exp_loc body) Type_check.strip_exp Pretty_print_sail.doc_exp body in
+          let body = doc_loc (exp_loc body) Type_check.strip_exp Reformatter.doc_exp body in
           (None, None, Some right, right_wavedrom, Some body)
     in
 
@@ -550,6 +617,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       right;
       right_wavedrom = Option.map encode right_wavedrom;
       body;
+      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
     }
 
   let included_mapping_clause files (MCL_aux (_, (def_annot, _))) = included_loc files def_annot.loc
@@ -572,7 +640,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
         functions = Bindings.empty;
         mappings = Bindings.empty;
         valspecs = Bindings.empty;
-        typdefs = Bindings.empty;
+        type_defs = Bindings.empty;
         registers = Bindings.empty;
         lets = Bindings.empty;
         anchors = Bindings.empty;
@@ -612,17 +680,21 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       | _ when skipping skips -> (docinfo, skips)
       | DEF_val vs ->
           let id = id_of_val_spec vs in
-          ({ docinfo with valspecs = Bindings.add id (docinfo_for_valspec vs, links) docinfo.valspecs }, skips)
+          ({ docinfo with valspecs = Bindings.add id (docinfo_for_valspec def_annot vs, links) docinfo.valspecs }, skips)
       | DEF_type td ->
           let id = id_of_type_def td in
-          ({ docinfo with typdefs = Bindings.add id (docinfo_for_typdef td, links) docinfo.typdefs }, skips)
+          ({ docinfo with type_defs = Bindings.add id (docinfo_for_type_def td, links) docinfo.type_defs }, skips)
       | DEF_register rd ->
           let id = id_of_dec_spec rd in
-          ({ docinfo with registers = Bindings.add id (docinfo_for_register rd, links) docinfo.registers }, skips)
+          ( { docinfo with registers = Bindings.add id (docinfo_for_register def_annot rd, links) docinfo.registers },
+            skips
+          )
       | DEF_let (LB_aux (LB_val (pat, _), _) as letbind) ->
           let ids = pat_ids pat in
           ( IdSet.fold
-              (fun id docinfo -> { docinfo with lets = Bindings.add id (docinfo_for_let letbind, links) docinfo.lets })
+              (fun id docinfo ->
+                { docinfo with lets = Bindings.add id (docinfo_for_let def_annot letbind, links) docinfo.lets }
+              )
               ids docinfo,
             skips
           )
@@ -639,10 +711,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           | DEF_pragma ("anchor", arg, _) ->
               let links = hyperlinks files def in
               let anchor_info =
-                {
-                  source = doc_loc l Type_check.strip_def Pretty_print_sail.doc_def def;
-                  comment = def_annot.doc_comment;
-                }
+                { source = doc_loc l Type_check.strip_def Reformatter.doc_def def; comment = def_annot.doc_comment }
               in
               anchored := Bindings.add (mk_id arg) (anchor_info, links) !anchored
           | _ -> ()

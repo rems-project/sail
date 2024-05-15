@@ -581,7 +581,7 @@ let pp_smt_def =
         ]
   | Assert exp -> pp_sfun "assert" [pp_smt_exp exp]
 
-let string_of_smt_def def = Pretty_print_sail.to_string (pp_smt_def def)
+let string_of_smt_def def = Pretty_print_sail.Document.to_string (pp_smt_def def)
 
 let output_smt_defs out_chan smt = List.iter (fun def -> output_string out_chan (string_of_smt_def def ^ "\n")) smt
 

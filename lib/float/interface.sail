@@ -32,5 +32,6 @@ $define _FLOAT_INTERFACE
 
 $include <float/common.sail>
 $include <float/nan.sail>
+$include <float/inf.sail>
 
 $endif

@@ -71,6 +71,7 @@
 
 module Big_int = Nat_big_num
 open Parse_ast
+open Parse_ast.Attribute_data
 
 let loc n m = Range (n, m)
 
@@ -262,7 +263,7 @@ let set_syntax_deprecated l =
 %token <string> OpId
 
 %token <string * string> Pragma
-%token <string * string> Attribute
+%token <string> Attribute
 
 %token <Parse_ast.fixity_token> Fixity
 
@@ -271,11 +272,13 @@ let set_syntax_deprecated l =
 %start typ_eof
 %start exp_eof
 %start def_eof
+%start attribute_data_eof
 %type <Parse_ast.typschm> typschm_eof
 %type <Parse_ast.atyp> typ_eof
 %type <Parse_ast.exp> exp_eof
 %type <Parse_ast.def> def_eof
 %type <Parse_ast.def list> file
+%type <Parse_ast.Attribute_data.attribute_data> attribute_data_eof
 
 %%
 
@@ -547,7 +550,7 @@ pat1:
 pat:
   | pat1
     { $1 }
-  | Attribute pat
+  | attribute pat
     { mk_pat (P_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
   | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
@@ -639,7 +642,7 @@ internal_loop_measure:
 exp:
   | exp0
     { $1 }
-  | Attribute exp
+  | attribute exp
     { mk_exp (E_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
   | exp0 Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
@@ -864,10 +867,40 @@ vector_update_list:
   | vector_update Comma vector_update_list
     { $1 :: $3 }
 
+attribute_data_key_value:
+  | key = String; Eq; value = attribute_data
+    { (key, value) }
+
+attribute_data:
+  | Lcurly; kvs = separated_list(Comma, attribute_data_key_value) Rcurly
+    { AD_aux (AD_object kvs, loc $startpos $endpos) }
+  | n = Num
+    { AD_aux (AD_num n, loc $startpos $endpos) }
+  | s = String
+    { AD_aux (AD_string s, loc $startpos $endpos) }
+  | id = Id
+    { AD_aux (AD_string id, loc $startpos $endpos) }
+  | True
+    { AD_aux (AD_bool true, loc $startpos $endpos) }
+  | False
+    { AD_aux (AD_bool false, loc $startpos $endpos) }
+  | Lsquare; xs = separated_list(Comma, attribute_data) Rsquare
+    { AD_aux (AD_list xs, loc $startpos $endpos) }
+
+attribute:
+  | attr = Attribute; Rsquare
+    { (attr, None) }
+  | attr = Attribute; d = attribute_data; Rsquare
+    { (attr, Some d) }
+
+attribute_data_eof:
+  | d = attribute_data; Eof
+    { d }
+
 funcl_annotation:
   | visibility = Private
     { (fun funcl -> FCL_aux (FCL_private funcl, loc $startpos(visibility) $endpos(visibility))) }
-  | attr = Attribute
+  | attr = attribute
     { (fun funcl -> FCL_aux (FCL_attribute (fst attr, snd attr, funcl), loc $startpos(attr) $endpos(attr))) }
   | doc = Doc
     { (fun funcl -> FCL_aux (FCL_doc (doc, funcl), loc $startpos(doc) $endpos(doc))) }
@@ -1036,7 +1069,7 @@ struct_fields:
 type_union:
   | visibility = Private; tu = type_union
     { Tu_aux (Tu_private tu, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = Attribute; tu = type_union
+  | attr = attribute; tu = type_union
     { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; tu = type_union
     { Tu_aux (Tu_doc (doc, tu), loc $startpos(doc) $endpos(doc)) }
@@ -1141,7 +1174,7 @@ fmpat:
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
 mapcl:
-  | attr = Attribute; mcl = mapcl
+  | attr = attribute; mcl = mapcl
     { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; mcl = mapcl
     { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
@@ -1336,7 +1369,7 @@ def_aux:
 def:
   | visibility = Private; def = def
     { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = Attribute; def = def
+  | attr = attribute; def = def
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; def = def
     { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }

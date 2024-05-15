@@ -211,7 +211,7 @@ let none_pexp exp = mk_pexp (Pat_exp (mk_pat (P_app (mk_id "None", [mk_pat (P_li
 
 let match_completeness c (E_aux (aux, (l, uannot))) =
   let uannot =
-    uannot |> remove_attribute "incomplete" |> remove_attribute "complete" |> add_attribute (gen_loc l) c ""
+    uannot |> remove_attribute "incomplete" |> remove_attribute "complete" |> add_attribute (gen_loc l) c None
   in
   match aux with
   | E_match _ -> E_aux (aux, (l, uannot))
@@ -297,7 +297,7 @@ and rewrite_arms is_mapping subst msa (l, uannot) =
   let outer_match =
     match msa.after_arms with
     | [] ->
-        E_aux (E_match (new_head_exp, [unwrap_some]), (l, add_attribute Parse_ast.Unknown "mapping_match" "" uannot))
+        E_aux (E_match (new_head_exp, [unwrap_some]), (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot))
         |> match_incomplete
     | _ ->
         let after_match =
@@ -305,7 +305,7 @@ and rewrite_arms is_mapping subst msa (l, uannot) =
         in
         E_aux
           ( E_match (new_head_exp, [unwrap_some; none_pexp after_match]),
-            (l, add_attribute Parse_ast.Unknown "mapping_match" "" uannot)
+            (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot)
           )
         |> match_complete
   in

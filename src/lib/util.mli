@@ -77,6 +77,11 @@ val last_opt : 'a list -> 'a option
 
 val butlast : 'a list -> 'a list
 
+module Option_monad : sig
+  val ( let* ) : 'a option -> ('a -> 'b option) -> 'b option
+  val ( let+ ) : ('a -> 'b) -> 'a option -> 'b option
+end
+
 (** Mixed useful things *)
 module Duplicate (S : Set.S) : sig
   type dups = No_dups of S.t | Has_dups of S.elt
@@ -218,6 +223,11 @@ val fold_left_index : (int -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 
 val list_init : int -> (int -> 'a) -> 'a list
+
+(** {2 String utilities} *)
+
+(** Alternative to String.starts_with for OCaml < 4.13 *)
+val starts_with : prefix:string -> string -> bool
 
 (** Compute the levenshtein distance between two strings using the
     Wagner–Fischer algorithm. If [~osa] is true computes the optimal

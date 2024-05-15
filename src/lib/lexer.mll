@@ -219,10 +219,7 @@ rule token comments = parse
   | "/*"        { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token comments lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
-    { let startpos = Lexing.lexeme_start_p lexbuf in
-      let attr = attribute 0 (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in
-      lexbuf.lex_start_p <- startpos;
-      Attribute(i, String.trim attr) }
+    { Attribute i }
   | "$" (ident+ as i)
     { let startpos = Lexing.lexeme_start_p lexbuf in
       let arg = pragma comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in

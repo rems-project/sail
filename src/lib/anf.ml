@@ -328,7 +328,7 @@ let rec no_shadow ids (AE_aux (aexp, annot)) =
         let ids = IdSet.add shadow_id ids in
         AE_let (mut, shadow_id, typ1, aexp1, no_shadow ids (aexp_rename id shadow_id aexp2), typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) ->
-        AE_let (mut, id, typ1, no_shadow ids aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
+        AE_let (mut, id, typ1, no_shadow (IdSet.add id ids) aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (no_shadow ids) aexps, no_shadow ids aexp, typ)
     | AE_return (aval, typ) -> AE_return (aval, typ)
     | AE_exit (aval, typ) -> AE_exit (aval, typ)
@@ -447,7 +447,7 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
   ( match get_attributes annot.uannot with
   | [] -> empty
   | attrs ->
-      concat_map (fun (_, attr, arg) -> string (Printf.sprintf "$[%s %s]" attr arg |> Util.magenta |> Util.clear)) attrs
+      concat_map (fun (_, attr, arg) -> string (string_of_attribute attr arg |> Util.magenta |> Util.clear)) attrs
   )
   ^^
   match aexp with

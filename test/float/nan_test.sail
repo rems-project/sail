@@ -32,8 +32,8 @@ default Order dec
 $include <prelude.sail>
 $include <float/nan.sail>
 
-function test_float_is_nan() -> unit = {
-  /* Half flating point */
+function test_float_is_nan () -> unit = {
+  /* Half floating point */
   assert(float_is_nan(0x7e00));
   assert(float_is_nan(0x7c01));
   assert(float_is_nan(0x7c10));
@@ -51,7 +51,7 @@ function test_float_is_nan() -> unit = {
   assert(float_is_nan(0xdb00) == false);
   assert(float_is_nan(0xfc00) == false);
 
-  /* Single flating point */
+  /* Single floating point */
   assert(float_is_nan(0x7fc00000));
   assert(float_is_nan(0x7f800001));
   assert(float_is_nan(0x7fc00100));
@@ -69,7 +69,7 @@ function test_float_is_nan() -> unit = {
   assert(float_is_nan(0xdf000000) == false);
   assert(float_is_nan(0xfe800000) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_nan(0x7ff8000000000000));
   assert(float_is_nan(0x7ff0000000000001));
   assert(float_is_nan(0x7ff8000000000100));
@@ -89,7 +89,7 @@ function test_float_is_nan() -> unit = {
 }
 
 function test_float_is_snan () -> unit = {
-  /* Half flating point */
+  /* Half floating point */
   assert(float_is_snan(0x7d00));
   assert(float_is_snan(0x7d01));
 
@@ -100,7 +100,7 @@ function test_float_is_snan () -> unit = {
   assert(float_is_snan(0xde01) == false);
   assert(float_is_snan(0xff01) == false);
 
-  /* Single flating point */
+  /* Single floating point */
   assert(float_is_snan(0x7fa00000));
   assert(float_is_snan(0x7fa00001));
 
@@ -111,7 +111,7 @@ function test_float_is_snan () -> unit = {
   assert(float_is_snan(0xffc00001) == false);
   assert(float_is_snan(0xfec00001) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_snan(0x7ff7000000000000));
   assert(float_is_snan(0x7ff7000000000001));
 
@@ -124,7 +124,7 @@ function test_float_is_snan () -> unit = {
 }
 
 function test_float_is_qnan () -> unit = {
-  /* Half flating point */
+  /* Half floating point */
   assert(float_is_qnan(0x7e00));
   assert(float_is_qnan(0x7e01));
 
@@ -135,7 +135,7 @@ function test_float_is_qnan () -> unit = {
   assert(float_is_qnan(0xdc01) == false);
   assert(float_is_qnan(0xfc01) == false);
 
-  /* Single flating pont */
+  /* Single floating pont */
   assert(float_is_qnan(0x7fc00000));
   assert(float_is_qnan(0x7fc00001));
 
@@ -146,7 +146,7 @@ function test_float_is_qnan () -> unit = {
   assert(float_is_qnan(0xffa00001) == false);
   assert(float_is_qnan(0xfea00001) == false);
 
-  /* Double flating point */
+  /* Double floating point */
   assert(float_is_qnan(0x7ff8000000000000));
   assert(float_is_qnan(0x7ff8000000000001));
 
@@ -158,8 +158,8 @@ function test_float_is_qnan () -> unit = {
   assert(float_is_qnan(0xfef7000000000001) == false);
 }
 
-function main() -> unit = {
-  test_float_is_nan ();
-  test_float_is_snan ();
-  test_float_is_qnan ();
+function main () -> unit = {
+  test_float_is_nan();
+  test_float_is_snan();
+  test_float_is_qnan();
 }

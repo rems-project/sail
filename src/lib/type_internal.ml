@@ -112,6 +112,7 @@ type type_error =
   | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
   | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
   | Err_hint of string
+  | Err_with_hint of string * type_error
 
 let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", error2)
 

@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/poly_ab_mapping.sail[0m:9.21-38:
+9[96m |[0mmapping clause foo = x : 'a <-> x : 'b
+ [91m |[0m                     [91m^---------------^[0m
+ [91m |[0m 'x' must have the same type on both sides of the mapping
+ [91m |[0m 
+ [91m |[0m [96mfail/poly_ab_mapping.sail[0m:9.21-22:
+ [91m |[0m 9[96m |[0mmapping clause foo = x : 'a <-> x : 'b
+ [91m |[0m  [92m |[0m                     [92m^[0m [92mhas type 'a[0m
+ [91m |[0m [96mfail/poly_ab_mapping.sail[0m:9.32-33:
+ [91m |[0m 9[96m |[0mmapping clause foo = x : 'a <-> x : 'b
+ [91m |[0m  [91m |[0m                                [91m^[0m [91mhas type 'b[0m
+ [91m |[0m  [91m |[0m Type mismatch between 'a and 'b

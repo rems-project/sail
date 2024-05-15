@@ -145,7 +145,7 @@ let generate_regstate env registers =
   [
     DEF_aux
       ( DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
-        add_def_attribute Unknown "undefined_gen" "forbid" (mk_def_annot Unknown)
+        add_def_attribute Unknown "undefined_gen" (Some (AD_aux (AD_string "forbid", Unknown))) (mk_def_annot Unknown)
       );
   ]
 
@@ -295,7 +295,9 @@ let register_bitfield_types env typs =
   List.fold_left add_bitfield_typs Bindings.empty typs
 
 let generate_regval_typ env typs =
-  let constr (constr_id, typ) = Printf.sprintf "Regval_%s : %s" (string_of_id constr_id) (to_string (doc_typ typ)) in
+  let constr (constr_id, typ) =
+    Printf.sprintf "Regval_%s : %s" (string_of_id constr_id) (Document.to_string (doc_typ typ))
+  in
   let builtins =
     "Regval_vector : list(register_value), " ^ "Regval_list : list(register_value), "
     ^ "Regval_option : option(register_value), " ^ "Regval_bool : bool, " ^ "Regval_int : int, "
@@ -336,7 +338,7 @@ let regval_base_convs typ =
   else (id ^ "_of_regval", "regval_of_" ^ id)
 
 let add_regval_conv env id typ defs =
-  let typ_str = to_string (doc_typ typ) in
+  let typ_str = Document.to_string (doc_typ typ) in
   let v_exp = mk_exp (E_id (mk_id "v")) in
   let base_typ = regval_base_typ env typ in
   (* Create a function that converts from regval to the target type. *)

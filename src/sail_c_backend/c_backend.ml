@@ -76,6 +76,7 @@ open Jib_visitor
 open Type_check
 open PPrint
 open Value2
+module Document = Pretty_print_sail.Document
 
 open Anf
 
@@ -2031,7 +2032,7 @@ let sgen_startup = function
   | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
   | _ -> assert false
 
-let sgen_instr id ctx instr = Pretty_print_sail.to_string (codegen_instr id ctx instr)
+let sgen_instr id ctx instr = Document.to_string (codegen_instr id ctx instr)
 
 let is_cdef_finish = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
 
@@ -2191,7 +2192,7 @@ let compile_ast env effect_info output_chan c_includes ast =
     let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
     let hlhl = hardline ^^ hardline in
 
-    Pretty_print_sail.to_string
+    Document.to_string
       (preamble ^^ hlhl ^^ docs ^^ hlhl
       ^^ ( if not !opt_no_rts then
              model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl

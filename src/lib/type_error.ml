@@ -292,6 +292,9 @@ let message_of_type_error type_error =
   in
   let rec to_message = function
     | Err_hint h -> (Seq [], Some h)
+    | Err_with_hint (h, err) ->
+        let msg, _ = to_message err in
+        (msg, Some h)
     | Err_inner (err, l', prefix, err') ->
         let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
         let msg, hint = to_message err in
@@ -348,22 +351,26 @@ let message_of_type_error type_error =
                     [Line ""; Line ("Also tried: " ^ Util.string_of_list ", " string_of_id ids)]
                     @ extra_help "These seem less likely, use --explain-all-overloads to see full details"
               in
-              ( Seq
-                  ([
-                     Line ("No overloading for " ^ string_of_id id ^ ", tried:");
-                     List
-                       (List.map
-                          (fun (id, l, err) ->
-                            let msg, hint = to_message err in
-                            (string_of_id id, Location ("", hint, l, msg))
-                          )
-                          likely
-                       );
-                   ]
-                  @ other_msg
-                  ),
-                Some (string_of_id id)
-              )
+              let no_overloading_msg =
+                match likely with
+                | [] -> Line ("No possible overloading for " ^ string_of_id id)
+                | _ ->
+                    Seq
+                      ([
+                         Line ("No overloading for " ^ string_of_id id ^ ", tried:");
+                         List
+                           (List.map
+                              (fun (id, l, err) ->
+                                let msg, hint = to_message err in
+                                (string_of_id id, Location ("", hint, l, msg))
+                              )
+                              likely
+                           );
+                       ]
+                      @ other_msg
+                      )
+              in
+              (no_overloading_msg, Some (string_of_id id))
         end
     | Err_instantiation_info (_, err) -> to_message err
     | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->

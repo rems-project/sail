@@ -120,6 +120,11 @@ let rec last_opt = function [x] -> Some x | _ :: xs -> last_opt xs | [] -> None
 
 let rec butlast = function [_] -> [] | x :: xs -> x :: butlast xs | [] -> []
 
+module Option_monad = struct
+  let ( let* ) = Option.bind
+  let ( let+ ) = Option.map
+end
+
 module Duplicate (S : Set.S) = struct
   type dups = No_dups of S.t | Has_dups of S.elt
 
@@ -448,6 +453,10 @@ let rec drop n xs = match (n, xs) with 0, xs -> xs | _, [] -> [] | n, _ :: xs ->
 let list_init len f =
   let rec list_init' len f acc = if acc >= len then [] else f acc :: list_init' len f (acc + 1) in
   list_init' len f 0
+
+let starts_with ~prefix s =
+  let prefix_len = String.length prefix in
+  prefix_len <= String.length s && String.sub s 0 prefix_len = prefix
 
 let levenshtein_distance ?(osa = false) str1 str2 =
   let dist = Array.make_matrix (String.length str1 + 1) (String.length str2 + 1) 0 in

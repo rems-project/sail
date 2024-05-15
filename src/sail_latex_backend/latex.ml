@@ -388,7 +388,7 @@ let latex_loc ?(docstring = empty) no_loc l =
   | None -> docstring ^^ no_loc
 
 let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
-  Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ~simple:true ts
+  Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ts
 
 let latex_command ~docstring cat id no_loc l =
   state.this <- Some id;
@@ -397,7 +397,7 @@ let latex_command ~docstring cat id no_loc l =
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
   let chan = open_out (Filename.concat !opt_directory code_file) in
   let doc = if cat = Val then no_loc else latex_loc ~docstring no_loc l in
-  output_string chan (Pretty_print_sail.to_string doc);
+  output_string chan (Pretty_print_sail.Document.to_string doc);
   close_out chan;
   let command = sprintf "\\%s" (latex_cat_id cat id) in
   if StringSet.mem command state.commands then (

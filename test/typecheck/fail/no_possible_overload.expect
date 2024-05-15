@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/no_possible_overload.sail[0m:12.18-25:
+12[96m |[0mfunction main() = h(1, 2)
+  [91m |[0m                  [91m^-----^[0m [91mh[0m
+  [91m |[0m No possible overloading for h

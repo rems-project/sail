@@ -124,7 +124,7 @@ let move_replacement_fundefs ast =
   { ast with defs = aux [] ast.defs }
 
 let annotate_ast ast =
-  let annotate_def (DEF_aux (d, a)) = DEF_aux (d, add_def_attribute a.loc "spliced" "" a) in
+  let annotate_def (DEF_aux (d, a)) = DEF_aux (d, add_def_attribute a.loc "spliced" None a) in
   { ast with defs = List.map annotate_def ast.defs }
 
 let splice ast file =

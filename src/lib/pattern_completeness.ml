@@ -84,7 +84,7 @@ type ctx = {
 module type Config = sig
   type t
   val typ_of_t : t -> typ
-  val add_attribute : l -> string -> string -> t -> t
+  val add_attribute : l -> string -> attribute_data option -> t -> t
 end
 
 type row_index = { loc : l; num : int }
@@ -298,7 +298,7 @@ module Make (C : Config) = struct
         | P_struct (fps, fwild) -> P_struct (List.map (fun (field, p) -> (field, go wild p)) fps, fwild)
         | P_id id -> P_id id
         | P_lit (L_aux (L_num n, _)) when wild ->
-            t := C.add_attribute (gen_loc l) "int_wildcard" (Big_int.to_string n) !t;
+            t := C.add_attribute (gen_loc l) "int_wildcard" (Some (AD_aux (AD_num n, gen_loc l))) !t;
             P_wild
         | P_lit _ when wild ->
             let typ = typ_of_pat full_pat in

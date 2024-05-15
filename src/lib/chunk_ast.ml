@@ -707,7 +707,7 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let fpats = chunk_delimit ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments fpats in
       Queue.add (Tuple ("struct {", "}", 1, fpats)) chunks
   | P_attribute (attr, arg, pat) ->
-      Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
+      Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
       Queue.add (Spacer (false, 1)) chunks;
       chunk_pat comments chunks pat
 
@@ -773,7 +773,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_ref id -> Queue.add (Atom ("ref " ^ string_of_id id)) chunks
   | E_lit lit -> Queue.add (chunk_of_lit lit) chunks
   | E_attribute (attr, arg, exp) ->
-      Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
+      Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
       Queue.add (Spacer (false, 1)) chunks;
       chunk_exp comments chunks exp
   | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> Queue.add (App (id, [])) chunks
@@ -1074,7 +1074,7 @@ let chunk_funcl comments funcl =
         Queue.add (Spacer (false, 1)) chunks;
         chunk_funcl' comments funcl
     | FCL_attribute (attr, arg, funcl) ->
-        Queue.add (Atom (Printf.sprintf "$[%s %s]" attr arg)) chunks;
+        Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
         Queue.add (Spacer (false, 1)) chunks;
         chunk_funcl' comments funcl
     | FCL_doc (_, funcl) -> chunk_funcl' comments funcl

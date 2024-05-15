@@ -81,7 +81,7 @@ let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : uanno
   let ast = Scattered.descatter ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   Effects.check_side_effects side_effects ast;
-  let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout (Type_check.strip_ast ast) else () in
+  let () = if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) else () in
   (ast, env, side_effects)
 
 let instantiate_abstract_types insts ast =
@@ -125,12 +125,12 @@ let wrap_module proj parsed_module =
   |> Util.update_last (fun (f, (comments, defs)) -> (f, (comments, defs @ [bracket_pragma "end_module#"])))
 
 let process_ast target type_envs ast =
-  if !opt_ddump_initial_ast then Pretty_print_sail.pp_ast stdout ast;
+  if !opt_ddump_initial_ast then Pretty_print_sail.output_ast stdout ast;
 
   begin
     match !opt_reformat with
     | Some dir ->
-        Pretty_print_sail.reformat dir ast;
+        Pretty_print_sail.reformat ~into_directory:dir ast;
         exit 0
     | None -> ()
   end;

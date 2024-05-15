@@ -1446,7 +1446,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
     ->
       let add_mapping_match (E_aux (e, (l, a)) as exp) =
         if Option.is_some (get_attribute "mapping_match" (untyped_annot annot)) then
-          E_aux (e, (l, map_uannot (add_attribute Parse_ast.Unknown "mapping_match" "") a))
+          E_aux (e, (l, map_uannot (add_attribute Parse_ast.Unknown "mapping_match" None) a))
         else exp
       in
       let clause = function
@@ -4558,7 +4558,7 @@ let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
     | Some (f, i) ->
         let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
         let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted None filename in
-        Pretty_print_sail.pp_ast ot (strip_ast ast);
+        Pretty_print_sail.output_ast ot (strip_ast ast);
         Util.close_output_with_check ext_ot;
         opt_ddump_rewrite_ast := Some (f, i + 1)
     | _ -> ()

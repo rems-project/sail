@@ -77,6 +77,7 @@ open Value
 type text = string
 
 type l = Parse_ast.l
+type attribute_data = Parse_ast.Attribute_data.attribute_data
 
 type 'a annot = l * 'a
 
@@ -88,7 +89,7 @@ type visibility = Public | Private of  l
 
 type def_annot = {
     doc_comment : string option;
-    attrs : (l * string * string) list;
+    attrs : (l * string * config) list;
     visibility : visibility;
     loc : l
 }
@@ -100,9 +101,18 @@ type 'a clause_annot = def_annot * 'a
 embed
 {{ lem
 
-type l = | Unknown
+type ocaml_l
+declare ocaml target_rep type ocaml_l = `Parse_ast.l`
 
-type value = | Val
+type l = ocaml_l
+
+type ocaml_attribute_data
+declare ocaml target_rep type ocaml_attribute_data = `Parse_ast.Attribute_data.attribute_data`
+
+type attribute_data = ocaml_attribute_data
+
+type value
+declare ocaml target_rep type value = `Value.value`
 
 type loop = While | Until
 
@@ -114,7 +124,7 @@ type visibility = Public | Private of l
 
 type def_annot = <|
     doc_comment : maybe string;
-    attrs : list (l * string * string);
+    attrs : list (l * string * maybe attribute_data);
     visibility : visibility;
     loc : l
 |>
@@ -126,7 +136,7 @@ type clause_annot 'a = def_annot * 'a
 embed
 {{ isa
 
-datatype "l" = Unknown 
+datatype "l" = Unknown
 
 datatype "value" = Val
 
@@ -247,7 +257,7 @@ typ :: 'Typ_' ::=
   | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tuple {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
-  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
+  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }}
   | { kinded_id1 ...  kinded_idn , n_constraint . typ }
     :: :: exist
 
@@ -330,7 +340,7 @@ type_union :: 'Tu_' ::=
   {{ aux _ def_annot }}
   | typ id                                              :: :: ty_id
 
-index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
+index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}}
   {{ aux _ l }}
   | nexp :: :: 'single'  {{ com single index }}
   | nexp1 '..' nexp2 :: :: range {{ com index range }}
@@ -384,8 +394,8 @@ typ_pat :: 'TP_' ::=
   | id ( typ_pat1 , .. , typ_patn ) :: :: app
 
 field_pat_wildcard :: 'FP_' ::=
-  | '..' l :: :: wild
-  |        :: :: no_wild
+  | _ l :: :: wild
+  |     :: :: no_wild
 
 pat :: 'P_' ::=
   {{ com pattern }}
@@ -438,8 +448,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
-  | while ::   :: while 
-  | until ::  :: until 
+  | while ::   :: while
+  | until ::  :: until
 
 internal_loop_measure :: 'Measure_' ::=
   {{ com internal syntax for an optional termination measure for a loop }}
@@ -532,7 +542,7 @@ fexp :: 'FE_' ::=
   | id = exp                  :: :: fexp
 
 opt_default :: 'Def_val_' ::=
-  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
+  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map
   {{ aux _ annot }} {{ auxparam 'a }}
   |                           :: :: empty
   | ; default = exp           :: :: dec
@@ -568,7 +578,6 @@ E_match <= E_field
 E_let <= E_field
 
 E_app left E_app
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function definitions                                         %
@@ -611,7 +620,7 @@ funcl :: 'FCL_' ::=
 fundef :: 'FD_' ::=
   {{ com function definition}}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | function rec_opt tannot_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
+  | function rec_opt tannot_opt funcl1 and ... and funcln :: :: function {{ texlong }}
 % Note that the typ in the tannot_opt is
 % the *result* type, not the type of the whole function.  The argument
 % type comes from the pattern in the funcl
@@ -678,7 +687,7 @@ outcome_spec :: 'OV_' ::=
 
 instantiation_spec :: 'IN_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id :: :: id  
+  | id :: :: id
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
@@ -689,7 +698,7 @@ val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * extern option }}
   {{ lem VS_val_spec of typschm * id * maybe extern }}
-  {{ isa  typschm * id  * (string => string option) }}  
+  {{ isa  typschm * id  * (string => string option) }}
   | val id : typschm                           :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
     {{ ocaml (VS_val_spec [[typschm]] [[id]] []) }} {{ lem }} {{ isa }}
@@ -850,7 +859,7 @@ terminals :: '' ::=
   | lt                                  :: :: mathlt
     {{ tex < }}
   | gt                                  :: :: mathgt
-    {{ tex > }} 
+    {{ tex > }}
   | ~=                                  :: :: alphaeq
     {{ tex \ensuremath{\approx} }}
   | ~< 	   			:: :: consist
@@ -892,10 +901,10 @@ terminals :: '' ::=
   | == :: :: equiv
     {{ tex \equiv }}
 %   | [| :: :: range_start
-%     {{ tex \mbox{$\ottsym{[\textbar}$} }}       
-%   | |] :: :: range_end       
-%     {{ tex \mbox{$\ottsym{\textbar]}$} }}       
+%     {{ tex \mbox{$\ottsym{[\textbar}$} }}
+%   | |] :: :: range_end
+%     {{ tex \mbox{$\ottsym{\textbar]}$} }}
 %   | [|| :: :: list_start
-%     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
-%   | ||] :: :: list_end       
-%     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
+%     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}
+%   | ||] :: :: list_end
+%     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}
