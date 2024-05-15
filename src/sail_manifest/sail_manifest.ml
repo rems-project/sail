@@ -84,7 +84,7 @@ let gen_manifest () =
   ksprintf print_endline "let branch = \"%s\""
     (Option.value (git_command "rev-parse --abbrev-ref HEAD") ~default:"unknown branch")
 
-let usage = "sail_install_tool <options>"
+let usage = "sail_manifest <options>"
 
 let main () =
   Arg.parse options (fun _ -> ()) usage;
