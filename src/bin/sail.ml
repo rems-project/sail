@@ -67,6 +67,12 @@
 
 open Libsail
 
+type version = { major : int; minor : int; patch : int }
+
+(* Current version of Sail. Must be updated manually. CI checks this matches
+   the tag given by `git describe`. *)
+let version = { major = 0; minor = 17; patch = 1 }
+
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
@@ -76,6 +82,7 @@ let opt_auto_interpreter_rewrites : bool ref = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
+let opt_require_version : string option ref = ref None
 let opt_memo_z3 = ref true
 let opt_have_feature = ref None
 let opt_all_modules = ref false
@@ -163,15 +170,30 @@ let load_plugin opts plugin =
     opts := add_target_header plugin !opts @ plugin_opts
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
-let version =
-  let open Manifest in
-  let default = Printf.sprintf "Sail %s @ %s" branch commit in
-  (* version is parsed from the output of git describe *)
-  match String.split_on_char '-' version with
-  | vnum :: _ -> Printf.sprintf "Sail %s (%s @ %s)" vnum branch commit
-  | _ -> default
+(* Version as a string, e.g. "1.2.3". *)
+let version_string = Printf.sprintf "%d.%d.%d" version.major version.minor version.patch
 
-let usage_msg = version ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
+(* Full version string including Git branch & commit. *)
+let version_full =
+  let open Manifest in
+  Printf.sprintf "Sail %s (%s @ %s)" version_string branch commit
+
+(* Convert a string like "1.2.3" to a list [1; 2; 3] *)
+let parse_version dotted_version =
+  let open Util.Option_monad in
+  let* version = String.split_on_char '.' dotted_version |> List.map int_of_string_opt |> Util.option_all in
+  match version with
+  | [major; minor; patch] -> Some { major; minor; patch }
+  | [major; minor] -> Some { major; minor; patch = 0 }
+  | [major] -> Some { major; minor = 0; patch = 0 }
+  | _ -> None
+
+let version_check ~required =
+  required.major < version.major
+  || (required.major = version.major && required.minor < version.minor)
+  || (required.major = version.major && required.minor = version.minor && required.patch <= version.patch)
+
+let usage_msg = version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let help options = raise (Arg.Help (Arg.usage_string options usage_msg))
 
@@ -346,6 +368,10 @@ let rec options =
       );
       ("-v", Arg.Set opt_print_version, " print version");
       ("-version", Arg.Set opt_print_version, " print version");
+      ( "-require_version",
+        Arg.String (fun ver -> opt_require_version := Some ver),
+        "<min_version> exit with non-zero status if Sail version requirement is not met"
+      );
       ("-verbose", Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity), "<verbosity> produce verbose output");
       ( "-explain_all_variables",
         Arg.Set Type_error.opt_explain_all_variables,
@@ -557,11 +583,25 @@ let main () =
 
   feature_check ();
 
+  begin
+    match !opt_require_version with
+    | Some required_version ->
+        let required_version_parsed =
+          match parse_version required_version with
+          | Some v -> v
+          | None -> raise (Reporting.err_general Unknown ("Couldn't parse required version '" ^ required_version ^ "'"))
+        in
+        if not (version_check ~required:required_version_parsed) then (
+          Printf.eprintf "Sail version %s is older than requested version %s" version_string required_version;
+          exit 1
+        )
+    | None -> ()
+  end;
+
   if !opt_print_version then (
-    print_endline version;
+    print_endline version_full;
     exit 0
   );
-
   if !opt_show_sail_dir then (
     print_endline (Reporting.get_sail_dir Manifest.dir);
     exit 0

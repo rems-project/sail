@@ -75,16 +75,16 @@ let git_command args =
   try
     let git_out, git_in, git_err = Unix.open_process_full ("git " ^ args) (Unix.environment ()) in
     let res = input_line git_out in
-    match Unix.close_process_full (git_out, git_in, git_err) with Unix.WEXITED 0 -> res | _ -> "unknown"
-  with _ -> "unknown"
+    match Unix.close_process_full (git_out, git_in, git_err) with Unix.WEXITED 0 -> Some res | _ -> None
+  with _ -> None
 
 let gen_manifest () =
   ksprintf print_endline "let dir = \"%s\"" (Sys.getcwd ());
-  ksprintf print_endline "let commit = \"%s\"" (git_command "rev-parse HEAD");
-  ksprintf print_endline "let branch = \"%s\"" (git_command "rev-parse --abbrev-ref HEAD");
-  ksprintf print_endline "let version = \"%s\"" (git_command "describe")
+  ksprintf print_endline "let commit = \"%s\"" (Option.value (git_command "rev-parse HEAD") ~default:"unknown commit");
+  ksprintf print_endline "let branch = \"%s\""
+    (Option.value (git_command "rev-parse --abbrev-ref HEAD") ~default:"unknown branch")
 
-let usage = "sail_install_tool <options>"
+let usage = "sail_manifest <options>"
 
 let main () =
   Arg.parse options (fun _ -> ()) usage;
