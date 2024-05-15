@@ -2328,15 +2328,34 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       in
       let checked_body = crule check_exp env body typ in
       annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
-  | E_vector vec, _ ->
-      let len, vtyp =
-        match destruct_any_vector_typ l env typ with
-        | Destruct_vector (len, vtyp) -> (len, vtyp)
-        | Destruct_bitvector len -> (len, bit_typ)
+  | E_vector vec, orig_typ -> begin
+      let literal_len = List.length vec in
+      let tyvars, nc, typ =
+        match destruct_exist_plain typ with Some (tyvars, nc, typ) -> (tyvars, nc, typ) | None -> ([], nc_true, typ)
       in
-      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-      if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
-      else typ_error l "Vector literal with incorrect length" (* FIXME: improve error message *)
+      let len, elem_typ, is_generic =
+        match destruct_any_vector_typ l env typ with
+        | Destruct_vector (len, elem_typ) -> (len, elem_typ, true)
+        | Destruct_bitvector len -> (len, bit_typ, false)
+      in
+      let tyvars = List.fold_left (fun set kopt -> KidSet.add (kopt_kid kopt) set) KidSet.empty tyvars in
+      let tyvars, nc, elem_typ =
+        if not (KidSet.is_empty (KidSet.inter tyvars (tyvars_of_nexp len))) then (
+          let unifiers = unify_nexp l env tyvars len (nint literal_len) in
+          let elem_typ = subst_unifiers unifiers elem_typ in
+          let nc = KBindings.fold (fun v arg nc -> constraint_subst v arg nc) unifiers nc in
+          let tyvars = KBindings.fold (fun v _ tyvars -> KidSet.remove v tyvars) unifiers tyvars in
+          (tyvars, nc, elem_typ)
+        )
+        else if prove __POS__ env (nc_eq (nint literal_len) (nexp_simp len)) then (tyvars, nc, elem_typ)
+        else typ_error l "Vector literal with incorrect length"
+      in
+      match check_or_infer_sequence ~at:l env vec tyvars nc elem_typ with
+      | Some (vec, elem_typ) ->
+          annot_exp (E_vector vec)
+            (if is_generic then vector_typ (nint literal_len) elem_typ else bitvector_typ (nint literal_len))
+      | None -> typ_error l ("This vector literal does not satisfy the constraint in " ^ string_of_typ (mk_typ orig_typ))
+    end
   | E_lit (L_aux (L_undef, _) as lit), _ ->
       if can_be_undefined ~at:l env typ then
         if is_typ_inhabited env (Env.expand_synonyms env typ) then annot_exp (E_lit lit) typ
@@ -2350,6 +2369,36 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
   | _, _ ->
       let inferred_exp = irule infer_exp env exp in
       expect_subtype env inferred_exp typ
+
+(* This function will check that a sequence of expressions all have
+   the same type, where that type can have additional type variables
+   and constraints that must be instantiated (usually these
+   variables/constraints come from an existential). *)
+and check_or_infer_sequence ~at:l env xs tyvars nc typ =
+  let tyvars, nc, typ, xs =
+    List.fold_left
+      (fun (tyvars, nc, typ, xs) x ->
+        let goals = KidSet.inter tyvars (tyvars_of_typ typ) in
+        if not (KidSet.is_empty goals) then (
+          match irule infer_exp env x with
+          | exception Type_error _ -> (tyvars, nc, typ, Error x :: xs)
+          | x ->
+              let unifiers = unify l env goals typ (typ_of x) in
+              let typ = subst_unifiers unifiers typ in
+              let nc = KBindings.fold (fun v arg nc -> constraint_subst v arg nc) unifiers nc in
+              let tyvars = KBindings.fold (fun v _ tyvars -> KidSet.remove v tyvars) unifiers tyvars in
+              (tyvars, nc, typ, Ok x :: xs)
+        )
+        else (
+          let x = crule check_exp env x typ in
+          (tyvars, nc, typ, Ok x :: xs)
+        )
+      )
+      (tyvars, nc, typ, []) xs
+  in
+  if KidSet.is_empty tyvars && prove __POS__ env nc then
+    Some (List.rev_map (function Ok x -> x | Error x -> crule check_exp env x typ) xs, typ)
+  else None
 
 and check_block l env exps ret_typ =
   let final env exp = match ret_typ with Some typ -> crule check_exp env exp typ | None -> irule infer_exp env exp in
