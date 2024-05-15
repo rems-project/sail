@@ -67,9 +67,11 @@
 
 open Libsail
 
+type version = { major : int; minor : int; patch : int }
+
 (* Current version of Sail. Must be updated manually. CI checks this matches
-   `git describe`. *)
-let version = [0; 15]
+   the tag given by `git describe`. *)
+let version = { major = 0; minor = 17; patch = 1 }
 
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
@@ -169,12 +171,27 @@ let load_plugin opts plugin =
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
 (* Version as a string, e.g. "1.2.3". *)
-let version_string = String.concat "." (List.map string_of_int version)
+let version_string = Printf.sprintf "%d.%d.%d" version.major version.minor version.patch
 
 (* Full version string including Git branch & commit. *)
 let version_full =
   let open Manifest in
   Printf.sprintf "Sail %s (%s @ %s)" version_string branch commit
+
+(* Convert a string like "1.2.3" to a list [1; 2; 3] *)
+let parse_version dotted_version =
+  let open Util.Option_monad in
+  let* version = String.split_on_char '.' dotted_version |> List.map int_of_string_opt |> Util.option_all in
+  match version with
+  | [major; minor; patch] -> Some { major; minor; patch }
+  | [major; minor] -> Some { major; minor; patch = 0 }
+  | [major] -> Some { major; minor = 0; patch = 0 }
+  | _ -> None
+
+let version_check ~required =
+  required.major < version.major
+  || (required.major = version.major && required.minor < version.minor)
+  || (required.major = version.major && required.minor = version.minor && required.patch <= version.patch)
 
 let usage_msg = version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
@@ -539,10 +556,6 @@ let parse_config_file file =
     Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
     None
 
-(* Convert a string like "1.2.3" to a list [1; 2; 3] *)
-let parse_version dotted_version =
-  String.split_on_char '.' dotted_version |> List.map int_of_string_opt |> Util.option_all
-
 let main () =
   if Option.is_some (Sys.getenv_opt "SAIL_NEW_CLI") then opt_new_cli := true;
 
@@ -578,9 +591,8 @@ let main () =
           | Some v -> v
           | None -> raise (Reporting.err_general Unknown ("Couldn't parse required version '" ^ required_version ^ "'"))
         in
-        if version < required_version_parsed then (
-          print_endline
-            ("Sail compiler version " ^ version_string ^ " is older than requested version " ^ required_version);
+        if not (version_check ~required:required_version_parsed) then (
+          Printf.eprintf "Sail version %s is older than requested version %s" version_string required_version;
           exit 1
         )
     | None -> ()
