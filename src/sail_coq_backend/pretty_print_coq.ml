@@ -3561,6 +3561,14 @@ end = struct
         string "  | _ => " ^^ doc_id ctxt (List.hd registers);
         string "  end.";
         separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
+        string "Definition "
+        ^^ doc_id ctxt (append_id reg_type_id "_list")
+        ^^ string " : list (string * " ^^ reg_type_pp ^^ string ") := [";
+        separate_map
+          (string ";" ^^ hardline)
+          (fun r -> string "  (" ^^ dquotes (string_of_id r |> string) ^^ string ", " ^^ doc_id ctxt r ^^ string ")")
+          registers;
+        string "].";
         empty;
         empty;
       ]
@@ -3612,6 +3620,32 @@ end = struct
           )
           type_map;
         (if is_single then empty else string "  | _, _ => fun _ => None");
+        string "  end.";
+        empty;
+        string "Definition register_list : list (string * sigT register) := List.concat [";
+        (* NB: use @existT below because ordinary and stdpp contexts have different implicit arguments *)
+        separate_map
+          (string ";" ^^ hardline)
+          (fun (typ_id, _typ) ->
+            let constr_id = doc_id ctxt (reg_case_name typ_id) in
+            let list_id = doc_id ctxt (append_id (reg_type_name typ_id) "_list") in
+            string "  List.map (fun '(s, r) => (s, @existT _ _ _ "
+            ^^ parens (constr_id ^^ string " r")
+            ^^ string ")) " ^^ list_id
+          )
+          type_map;
+        string "].";
+        empty;
+        string "Definition string_of_register {T} (r : register T) : string :=";
+        string "  match List.find (fun '(_s, @existT _ _ _ r') => register_beq r r') register_list with";
+        string "  | Some (s, _r) => s";
+        string "  | None => \"<impossible>\"";
+        string "  end.";
+        empty;
+        string "Definition register_of_string (s : string) : option (sigT register) :=";
+        string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
+        string "  | Some (_s, r) => Some r";
+        string "  | None => None";
         string "  end.";
         empty;
       ]
