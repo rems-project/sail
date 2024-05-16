@@ -27,12 +27,40 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+default Order dec
 
-$include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
+$include <prelude.sail>
 $include <float/zero.sail>
 
-$endif
+function test_float_is_zero () -> unit = {
+  /* Half floating point */
+  assert(float_is_zero(0x8000));
+  assert(float_is_zero(0x0000));
+
+  assert(float_is_zero(0x7a00) == false);
+  assert(float_is_zero(0x7b00) == false);
+  assert(float_is_zero(0xca00) == false);
+  assert(float_is_zero(0xfe00) == false);
+
+  /* Single floating point */
+  assert(float_is_zero(0x80000000));
+  assert(float_is_zero(0x00000000));
+
+  assert(float_is_zero(0x7fc00000) == false);
+  assert(float_is_zero(0x7e800000) == false);
+  assert(float_is_zero(0xffc00000) == false);
+  assert(float_is_zero(0xfe800000) == false);
+
+  /* Double floating point */
+  assert(float_is_zero(0x8000000000000000));
+  assert(float_is_zero(0x0000000000000000));
+
+  assert(float_is_zero(0x7ff8000000000000) == false);
+  assert(float_is_zero(0x7ff0000000000001) == false);
+  assert(float_is_zero(0xfff8000000000000) == false);
+  assert(float_is_zero(0xfff0000000000001) == false);
+}
+
+function main () -> unit = {
+  test_float_is_zero();
+}
