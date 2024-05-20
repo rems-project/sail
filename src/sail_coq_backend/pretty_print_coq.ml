@@ -3564,6 +3564,7 @@ end = struct
         string "  | _ => " ^^ doc_id ctxt (List.hd registers);
         string "  end.";
         separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
+        string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_iff : register_beq_iffs.";
         string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_refl : register_beq_refls.";
         string "Definition "
         ^^ doc_id ctxt (append_id reg_type_id "_list")
@@ -3611,6 +3612,10 @@ end = struct
         (if is_single then empty else string "  | _, _ => false");
         string "  end.";
         empty;
+        string "Lemma register_beq_refl {T} (r : register T) : register_beq r r = true.";
+        string "destruct r; simpl; autorewrite with register_beq_refls; reflexivity.";
+        string "Qed.";
+        empty;
         string
           "Definition register_eq_cast {T T'} (P : Type -> Type) (r : register T) (r' : register T') : P T -> option \
            (P T') :=";
@@ -3651,6 +3656,34 @@ end = struct
         string "  | Some (_s, r) => Some r";
         string "  | None => None";
         string "  end.";
+        empty;
+        string "Lemma string_of_register_roundtrip {T} (r : register T) s :";
+        string "  string_of_register r = s ->";
+        string "  register_of_string s = Some (@existT _ _ _ r).";
+        string "case r; intro r'; destruct r'; unfold string_of_register; simpl; intro; subst; unfold register_of_string; simpl; reflexivity.";
+        string "Qed.";
+        empty;
+        string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
+        string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
+        string "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
+        string "* rewrite H, String.eqb_refl.";
+        string "  specialize (string_of_register_roundtrip r (string_of_register r) eq_refl) as H1.";
+        string "  specialize (string_of_register_roundtrip r' (string_of_register r') eq_refl) as H2.";
+        string "  rewrite H in H1.";
+        string "  rewrite H2 in H1.";
+        string "  injection H1.";
+        string "  intros; subst.";
+        string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
+        string "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) T r')).";
+        string "  rewrite <- H0.";
+        string "  unfold f.";
+        string "  apply register_beq_refl.";
+        string "* apply String.eqb_neq in H as H'.";
+        string "  rewrite H'.";
+        string "  apply Bool.not_true_is_false.";
+        string "  contradict H.";
+        string "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
+        string "  Qed.";
         empty;
       ]
     ^^
