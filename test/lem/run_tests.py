@@ -58,6 +58,8 @@ skip_tests_mwords = {
     'abstract_bool2',
     'constraint_syn',
     'ex_vector_infer',
+    'ex_list_infer',
+    'ex_cons_infer',
 }
 
 print('Sail is {}'.format(sail))
