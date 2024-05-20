@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/list_infer/v1.sail[0m:8.25-30:
+8[96m |[0m  let _ = [| 0b00, 0b11, 0b111 |];
+ [91m |[0m                         [91m^---^[0m
+ [91m |[0m Failed to prove constraint: 3 == 2
