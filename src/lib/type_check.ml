@@ -4799,6 +4799,16 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
                 let ranges =
                   List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
                 in
+                (* This would cause us to fail later, but with a potentially confusing error message *)
+                Bindings.iter
+                  (fun f _ ->
+                    if Id.compare f (mk_id "bits") = 0 then
+                      typ_error (id_loc f)
+                        "Field with name 'bits' found in bitfield definition.\n\n\
+                         This is used as the default name for all the bits in the bitfield, so should not be \
+                         overridden."
+                  )
+                  ranges;
                 let def_annot = add_def_attribute l "bitfield" (Some (AD_aux (AD_num size, l))) def_annot in
                 let defs =
                   DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
