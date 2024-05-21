@@ -77,7 +77,7 @@ let rec map_last f = function
       let x = f false x in
       x :: map_last f xs
 
-let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents) -> Some contents | _ -> None
+let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents, _tralling) -> Some contents | _ -> None
 
 (* Remove additional (> 1) trailing newlines at the end of a string *)
 let discard_extra_trailing_newlines s =
@@ -522,7 +522,7 @@ module Make (Config : CONFIG) = struct
         surround indent 1 (char '{')
           (doc_chunks opts exp ^^ space ^^ string "with" ^^ break 1 ^^ separate_map (break 1) (doc_chunks opts) fexps)
           (char '}')
-    | Comment (comment_type, n, col, contents) -> begin
+    | Comment (comment_type, n, col, contents, _) -> begin
         match comment_type with
         | Lexer.Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
         | Lexer.Comment_block -> (
@@ -696,23 +696,31 @@ module Make (Config : CONFIG) = struct
      In this case a hardline must be inserted by the block formatter, so
      we return and additional boolean to indicate this. *)
   and doc_block_exp_chunks opts no_semi chunks =
-    let chunks = Queue.to_seq chunks |> List.of_seq in
     let requires_hardline = ref false in
     let terminator = if no_semi then empty else char ';' in
-    let doc =
-      concat_map_last
-        (fun last chunk ->
-          if last then (
-            match line_comment_opt chunk with
-            | Some contents ->
-                requires_hardline := true;
-                terminator ^^ space ^^ string "//" ^^ string contents ^^ require_hardline
-            | None -> doc_chunk opts chunk ^^ terminator
-          )
-          else doc_chunk opts chunk
-        )
-        chunks
+    let rec splice_into_doc chunks doc_acc =
+      match Queue.peek_opt chunks with
+      | Some chunk ->
+          let _ = Queue.pop chunks in
+          let doc_acc = ref (doc_acc ^^ doc_chunk opts chunk) in
+          let doc_acc =
+            match (chunk, Queue.peek_opt chunks) with
+            | Comment _, _ -> !doc_acc
+            | Spacer _, _ -> !doc_acc
+            | _, Some (Comment (_, _, _, _, tralling)) ->
+                doc_acc := !doc_acc ^^ terminator;
+                (* if current is not a Comment or Spacer, and next is not tralling, then insert a hardline *)
+                if not tralling then doc_acc := !doc_acc ^^ hardline;
+                doc_acc := !doc_acc ^^ doc_chunk opts (Queue.pop chunks);
+                if Queue.peek_opt chunks = None then requires_hardline := true;
+                !doc_acc
+            | _, None -> !doc_acc ^^ terminator
+            | _, _ -> !doc_acc
+          in
+          splice_into_doc chunks doc_acc
+      | None -> doc_acc
     in
+    let doc = splice_into_doc chunks empty in
     (group doc, !requires_hardline)
 
   and doc_chunks ?(ungroup_tuple = false) opts chunks =

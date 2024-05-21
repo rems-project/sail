@@ -95,7 +95,7 @@ let comment_type_delimiters = function Lexer.Comment_line -> ("//", "") | Lexer.
 type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
 
 and chunk =
-  | Comment of Lexer.comment_type * int * int * string
+  | Comment of Lexer.comment_type * int * int * string * bool
   | Spacer of bool * int
   | Function of {
       id : id;
@@ -152,9 +152,9 @@ let add_chunk q chunk = Queue.add chunk q
 
 [@@@coverage off]
 let rec prerr_chunk indent = function
-  | Comment (comment_type, n, col, contents) ->
+  | Comment (comment_type, n, col, contents, tralling) ->
       let s, e = comment_type_delimiters comment_type in
-      Printf.eprintf "%sComment: blank=%d col=%d %s%s%s\n" indent n col s contents e
+      Printf.eprintf "%sComment: blank=%d col=%d tralling=%b %s%s%s\n" indent n col tralling s contents e
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
@@ -409,7 +409,9 @@ let rec pop_header_comments comments chunks l lnum =
       match Reporting.simp_loc l with
       | Some (s, _) when e.pos_cnum < s.pos_cnum && comment_s.pos_lnum = lnum ->
           let _ = Stack.pop comments in
-          Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents)) chunks;
+          Queue.add
+            (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, e.pos_lnum == lnum))
+            chunks;
           Queue.add (Spacer (true, 1)) chunks;
           pop_header_comments comments chunks l (lnum + 1)
       | _ -> ()
@@ -423,13 +425,33 @@ let chunk_header_comments comments chunks = function
 let rec pop_comments ?(spacer = true) comments chunks l =
   match Stack.top_opt comments with
   | None -> ()
-  | Some (Lexer.Comment (comment_type, comment_s, e, contents)) -> begin
+  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> begin
       match Reporting.simp_loc l with
-      | Some (s, _) when e.pos_cnum <= s.pos_cnum ->
+      | Some (s, e) when comment_e.pos_cnum <= s.pos_cnum ->
           let _ = Stack.pop comments in
-          Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents)) chunks;
-          if spacer && e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
+          Queue.add
+            (Comment
+               (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, comment_s.pos_lnum == e.pos_lnum)
+            )
+            chunks;
+          if spacer && comment_e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
           pop_comments comments chunks l
+      | _ -> ()
+    end
+
+let rec pop_comments_until_loc_end comments chunks l =
+  match Stack.top_opt comments with
+  | None -> ()
+  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> begin
+      match Reporting.simp_loc l with
+      | Some (_, e) when comment_s.pos_cnum <= e.pos_cnum ->
+          let _ = Stack.pop comments in
+          Queue.add
+            (Comment
+               (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, comment_s.pos_lnum == e.pos_lnum)
+            )
+            chunks;
+          pop_comments_until_loc_end comments chunks l
       | _ -> ()
     end
 
@@ -449,7 +471,7 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
       match Stack.top_opt comments with
       | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum ->
           let _ = Stack.pop comments in
-          Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents)) chunks;
+          Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents, true)) chunks;
           begin
             match comment_type with Lexer.Comment_line -> true | _ -> false
           end
@@ -869,11 +891,16 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
                   Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
             end;
 
-            (* TODO: Do we need to do something different for multiple trailing comments at end of a block? *)
             let next_line_num = Option.bind next (fun bexp -> block_exp_locs bexp |> fst |> starting_line_num) in
             if have_linebreak (ending_line_num e_l) next_line_num || Option.is_none next then
               ignore (pop_trailing_comment comments chunks (ending_line_num e_l));
-
+            begin
+              match next with
+              | Some next ->
+                  let next_s_l, _ = block_exp_locs block_exp in
+                  pop_comments comments chunks next_s_l
+              | _ -> pop_comments_until_loc_end comments chunks l
+            end;
             (chunks, have_blank_linebreak (ending_line_num e_l) next_line_num)
           )
           false block_exps
@@ -915,6 +942,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let i_chunks = rec_chunk_exp i in
       pop_comments ~spacer:false comments i_chunks keywords.then_loc;
       let t_chunks = rec_chunk_exp t in
+      ignore (pop_trailing_comment comments t_chunks (ending_line_num keywords.then_loc));
       (match keywords.else_loc with Some l -> pop_comments comments t_chunks l | None -> ());
       let e_chunks = rec_chunk_exp e in
       Queue.add (If_then_else (if_format, i_chunks, t_chunks, e_chunks)) chunks
@@ -1323,4 +1351,14 @@ let chunk_defs source comments defs =
   let chunks = Queue.create () in
   chunk_header_comments comments chunks defs;
   let _ = List.fold_left (fun last_span def -> chunk_def source last_span comments chunks def) (None, Some 0) defs in
+
+  (* pop remaining comments *)
+  if not (Stack.is_empty comments) then Queue.add (Spacer (true, 1)) chunks;
+  Stack.iter
+    (fun c ->
+      match c with
+      | Lexer.Comment (comment_type, comment_s, e, contents) ->
+          Queue.add (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, false)) chunks
+    )
+    comments;
   chunks

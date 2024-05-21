@@ -1,0 +1,81 @@
+function a () -> int = {
+    *R = baz; // comment
+
+    // comment
+    1 // comment
+    // comment
+    // comment
+    /* com-
+    ment */
+}
+
+// comment
+function b () -> int = {
+    let a = {
+        1
+        // comment
+    };
+
+    let b = {
+        1 // comment
+    };
+
+    let c = {
+        1 // comment
+        // comment
+    };
+
+    let d = {
+        1 // comment
+        // comment
+    }; // comment
+
+    let f = {
+        let g1 = {
+            1 // comment
+        };
+
+        let g2 = {
+            1
+            // comment
+        };
+
+        let g3 = {
+            1
+            // comment
+            // comment
+        }
+    };
+
+    1
+    // comment
+}
+
+let c = 1
+
+// comment
+let c2 =
+    1 // comment
+let d =
+    {
+        1
+        // comment
+    }
+
+// comment
+// comment
+// comment
+function block_return_with_tralling_space () -> int = {
+    1 // comment
+    // comment
+}
+
+function block_return_without_tralling_space () -> int = {
+    1
+    // comment
+}
+
+// comment
+// comment
+// comment
+// comment

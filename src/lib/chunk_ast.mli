@@ -87,7 +87,7 @@ val comment_type_delimiters : Lexer.comment_type -> string * string
 type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
 
 and chunk =
-  | Comment of Lexer.comment_type * int * int * string
+  | Comment of Lexer.comment_type * int * int * string * bool
   | Spacer of bool * int
   | Function of {
       id : Parse_ast.id;
