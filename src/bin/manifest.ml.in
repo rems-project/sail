@@ -1,7 +1,5 @@
 let dir = "%{sail:share}%"
 
-let commit = "opam-v%{opam-version}%"
+let commit = "opam-v%{opam-version}% %{sail:version}%"
 
 let branch = "%{sail:name}%"
-
-let version = "%{sail:version}%"

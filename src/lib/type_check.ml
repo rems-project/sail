@@ -112,7 +112,7 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
   | Nexp_if (i, t, e) -> rewrap (Nexp_if (i, orig_nexp t, orig_nexp e))
   | _ -> rewrap nexp
 
-let is_list (Typ_aux (typ_aux, _)) =
+let destruct_list (Typ_aux (typ_aux, _)) =
   match typ_aux with Typ_app (f, [A_aux (A_typ typ, _)]) when string_of_id f = "list" -> Some typ | _ -> None
 
 let is_unknown_type = function Typ_aux (Typ_internal_unknown, _) -> true | _ -> false
@@ -2007,6 +2007,18 @@ let backwards_attr l uannot = add_attribute l "backwards" None (remove_attribute
 
 let tc_assume nc (E_aux (aux, annot)) = E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
 
+let rec unroll_cons = function
+  | E_aux (E_cons (h, t), annot) ->
+      let elems, annots, last_tail = unroll_cons t in
+      (h :: elems, annot :: annots, last_tail)
+  | exp -> ([], [], exp)
+
+let rec reroll_cons ~at:l elems annots last_tail =
+  match (elems, annots) with
+  | elem :: elems, annot :: annots -> E_aux (E_cons (elem, reroll_cons ~at:l elems annots last_tail), annot)
+  | [], [] -> last_tail
+  | _, _ -> Reporting.unreachable l __POS__ "Could not recreate cons list due to element and annotation length mismatch"
+
 type ('a, 'b) pattern_functions = {
   infer : Env.t -> 'a -> 'b * Env.t * uannot exp list;
   bind : Env.t -> 'a -> typ -> 'b * Env.t * uannot exp list;
@@ -2071,21 +2083,6 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
   | E_try (exp, cases), _ ->
       let checked_exp = crule check_exp env exp typ in
       annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
-  | E_cons (x, xs), _ -> begin
-      match is_list (Env.expand_synonyms env typ) with
-      | Some elem_typ ->
-          let checked_xs = crule check_exp env xs typ in
-          let checked_x = crule check_exp env x elem_typ in
-          annot_exp (E_cons (checked_x, checked_xs)) typ
-      | None -> typ_error l ("Cons " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
-    end
-  | E_list xs, _ -> begin
-      match is_list (Env.expand_synonyms env typ) with
-      | Some elem_typ ->
-          let checked_xs = List.map (fun x -> crule check_exp env x elem_typ) xs in
-          annot_exp (E_list checked_xs) typ
-      | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
-    end
   | E_struct_update (exp, fexps), _ ->
       let checked_exp = crule check_exp env exp typ in
       let rectyp_id =
@@ -2328,15 +2325,69 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       in
       let checked_body = crule check_exp env body typ in
       annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
-  | E_vector vec, _ ->
-      let len, vtyp =
-        match destruct_any_vector_typ l env typ with
-        | Destruct_vector (len, vtyp) -> (len, vtyp)
-        | Destruct_bitvector len -> (len, bit_typ)
+  | E_vector vec, orig_typ -> begin
+      let literal_len = List.length vec in
+      let tyvars, nc, typ =
+        match destruct_exist_plain typ with Some (tyvars, nc, typ) -> (tyvars, nc, typ) | None -> ([], nc_true, typ)
       in
-      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-      if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
-      else typ_error l "Vector literal with incorrect length" (* FIXME: improve error message *)
+      let len, elem_typ, is_generic =
+        match destruct_any_vector_typ l env typ with
+        | Destruct_vector (len, elem_typ) -> (len, elem_typ, true)
+        | Destruct_bitvector len -> (len, bit_typ, false)
+      in
+      let tyvars = List.fold_left (fun set kopt -> KidSet.add (kopt_kid kopt) set) KidSet.empty tyvars in
+      let tyvars, nc, elem_typ =
+        if not (KidSet.is_empty (KidSet.inter tyvars (tyvars_of_nexp len))) then (
+          let unifiers = unify_nexp l env tyvars len (nint literal_len) in
+          let elem_typ = subst_unifiers unifiers elem_typ in
+          let nc = KBindings.fold (fun v arg nc -> constraint_subst v arg nc) unifiers nc in
+          let tyvars = KBindings.fold (fun v _ tyvars -> KidSet.remove v tyvars) unifiers tyvars in
+          (tyvars, nc, elem_typ)
+        )
+        else if prove __POS__ env (nc_eq (nint literal_len) (nexp_simp len)) then (tyvars, nc, elem_typ)
+        else typ_error l "Vector literal with incorrect length"
+      in
+      match check_or_infer_sequence ~at:l env vec tyvars nc (Some elem_typ) with
+      | Some (vec, elem_typ) ->
+          annot_exp (E_vector vec)
+            (if is_generic then vector_typ (nint literal_len) elem_typ else bitvector_typ (nint literal_len))
+      | None -> typ_error l ("This vector literal does not satisfy the constraint in " ^ string_of_typ (mk_typ orig_typ))
+    end
+  | E_cons (x, xs), orig_typ -> begin
+      let xs, annots, last_tail = unroll_cons xs in
+      let tyvars, nc, typ =
+        match destruct_exist_plain typ with Some (tyvars, nc, typ) -> (tyvars, nc, typ) | None -> ([], nc_true, typ)
+      in
+      let tyvars = List.fold_left (fun set kopt -> KidSet.add (kopt_kid kopt) set) KidSet.empty tyvars in
+      match destruct_list (Env.expand_synonyms env typ) with
+      | Some elem_typ -> begin
+          match check_or_infer_sequence ~at:l env (x :: xs) tyvars nc (Some elem_typ) with
+          | Some (xs, elem_typ) ->
+              let checked_last_tail = crule check_exp env last_tail (list_typ elem_typ) in
+              let annots =
+                List.map
+                  (fun (l, uannot) -> (l, mk_expected_tannot ~uannot env (list_typ elem_typ) (Some (mk_typ orig_typ))))
+                  ((l, uannot) :: annots)
+              in
+              reroll_cons ~at:l xs annots checked_last_tail
+          | _ -> typ_error l ("This list does not satisfy the constraint in " ^ string_of_typ (mk_typ orig_typ))
+        end
+      | None -> typ_error l ("Cons " ^ string_of_exp exp ^ " must have list type")
+    end
+  | E_list xs, orig_typ -> begin
+      let tyvars, nc, typ =
+        match destruct_exist_plain typ with Some (tyvars, nc, typ) -> (tyvars, nc, typ) | None -> ([], nc_true, typ)
+      in
+      let tyvars = List.fold_left (fun set kopt -> KidSet.add (kopt_kid kopt) set) KidSet.empty tyvars in
+      match destruct_list (Env.expand_synonyms env typ) with
+      | Some elem_typ -> begin
+          match check_or_infer_sequence ~at:l env xs tyvars nc (Some elem_typ) with
+          | Some (xs, elem_typ) -> annot_exp (E_list xs) (list_typ elem_typ)
+          | None ->
+              typ_error l ("This list literal does not satisfy the constraint in " ^ string_of_typ (mk_typ orig_typ))
+        end
+      | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
+    end
   | E_lit (L_aux (L_undef, _) as lit), _ ->
       if can_be_undefined ~at:l env typ then
         if is_typ_inhabited env (Env.expand_synonyms env typ) then annot_exp (E_lit lit) typ
@@ -2350,6 +2401,46 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
   | _, _ ->
       let inferred_exp = irule infer_exp env exp in
       expect_subtype env inferred_exp typ
+
+(* This function will check that a sequence of expressions all have
+   the same type, where that type can have additional type variables
+   and constraints that must be instantiated (usually these
+   variables/constraints come from an existential). *)
+and check_or_infer_sequence ~at:l env xs tyvars nc typ_opt =
+  let tyvars, nc, typ_opt, xs =
+    List.fold_left
+      (fun (tyvars, nc, typ_opt, xs) x ->
+        match typ_opt with
+        | Some typ ->
+            let goals = KidSet.inter tyvars (tyvars_of_typ typ) in
+            if not (KidSet.is_empty goals) then (
+              match irule infer_exp env x with
+              | exception Type_error _ -> (tyvars, nc, Some typ, Error x :: xs)
+              | x ->
+                  let unifiers = unify l env goals typ (typ_of x) in
+                  let typ = subst_unifiers unifiers typ in
+                  let nc = KBindings.fold (fun v arg nc -> constraint_subst v arg nc) unifiers nc in
+                  let tyvars = KBindings.fold (fun v _ tyvars -> KidSet.remove v tyvars) unifiers tyvars in
+                  (tyvars, nc, Some typ, Ok x :: xs)
+            )
+            else (
+              let x = crule check_exp env x typ in
+              (tyvars, nc, Some typ, Ok x :: xs)
+            )
+        | None -> (
+            match irule infer_exp env x with
+            | exception Type_error _ -> (tyvars, nc, None, Error x :: xs)
+            | x -> (tyvars, nc, Some (typ_of x), Ok x :: xs)
+          )
+      )
+      (tyvars, nc, typ_opt, []) xs
+  in
+  match typ_opt with
+  | Some typ ->
+      if KidSet.is_empty tyvars && prove __POS__ env nc then
+        Some (List.rev_map (function Ok x -> x | Error x -> crule check_exp env x typ) xs, typ)
+      else None
+  | None -> None
 
 and check_block l env exps ret_typ =
   let final env exp = match ret_typ with Some typ -> crule check_exp env exp typ | None -> irule infer_exp env exp in
@@ -3552,6 +3643,11 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
             let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
             annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
       end
+  | E_list xs -> begin
+      match check_or_infer_sequence ~at:l env xs KidSet.empty nc_true None with
+      | Some (xs, elem_typ) -> annot_exp (E_list xs) (list_typ elem_typ)
+      | None -> typ_error l "Could not infer type of list literal"
+    end
   | E_assert (test, msg) ->
       let msg = assert_msg msg in
       let checked_test = crule check_exp env test bool_typ in
