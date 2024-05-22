@@ -85,6 +85,7 @@ let encodings = Hashtbl.create 997
 let assembly = Hashtbl.create 997
 let assembly_clean = Hashtbl.create 997
 let executes = Hashtbl.create 997
+let functions = Hashtbl.create 997
 let op_functions = Hashtbl.create 997
 let formats = Hashtbl.create 997
 let extensions = Hashtbl.create 997
@@ -333,16 +334,22 @@ let extract_source_code l =
    | None -> "Error - couldn't locate func"
 
 let parse_funcl fcl = match fcl with
-    FCL_aux ( FCL_funcl ( Id_aux (Id "execute", _), Pat_aux ( (
-          Pat_exp ( P_aux ( P_app (i, pl), _ ) , e )
-        | Pat_when ( P_aux ( P_app (i, pl), _ ) , e, _ )
-      ), _ ) ), _ ) ->
+  | FCL_aux (FCL_funcl (Id_aux (Id id, _), Pat_aux ( ( pat ) , _) ), _) ->
       begin
-        debug_print ("FCL_funcl execute " ^ string_of_id i);
-        let operandl = (List.concat (List.map string_list_of_pat pl)) in
-          if not (String.equal (List.hd operandl) "()") then
-            Hashtbl.add operands (string_of_id i) operandl;
-        Hashtbl.add executes (string_of_id i) (extract_source_code (Ast_util.exp_loc e))
+        match pat with
+        | Pat_exp (P_aux (P_tuple pl, _), e)
+        | Pat_when (P_aux (P_tuple pl, _), e, _) ->
+            debug_print ("id_of_dependent: " ^ id);
+            let source_code = extract_source_code (Ast_util.exp_loc e) in
+            Hashtbl.add functions id source_code;
+        | Pat_exp (P_aux (P_app (i, pl), _), e)
+        | Pat_when (P_aux (P_app (i, pl), _), e, _) ->
+            debug_print ("FCL_funcl execute " ^ string_of_id i);
+            let operandl = List.concat (List.map string_list_of_pat pl) in
+            if not (String.equal (List.hd operandl) "()") then
+              Hashtbl.add operands (string_of_id i) operandl;
+            Hashtbl.add executes (string_of_id i) (extract_source_code (Ast_util.exp_loc e))
+        | _ -> ();
       end
   | _ -> debug_print "FCL_funcl other"
 
@@ -707,6 +714,8 @@ let defs { defs; _ } =
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly;
   debug_print "EXECUTES";
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) executes;
+  debug_print "FUNCTIONS";
+  Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) functions;
   debug_print "OP_FUNCTIONS";
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) op_functions;
   debug_print "EXENSIONS";
@@ -747,5 +756,12 @@ let defs { defs; _ } =
   print_endline "  \"extensions\": [";
   let extension_list = Hashtbl.fold (fun k v accum -> v :: accum) extensions [] in
     print_endline (String.concat ",\n" (List.sort_uniq String.compare (List.concat extension_list)));
+  print_endline "  ],";
+
+  print_endline "  \"functions\": [";
+  Hashtbl.iter (fun name source ->
+    print_endline ("  {\n    \"name\": \"" ^ name ^ "\",");
+    print_endline ("    \"source\": \"" ^ String.escaped source ^ "\"\n  },")
+  ) functions;
   print_endline "  ]";
   print_endline "}";
