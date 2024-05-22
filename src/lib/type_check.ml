@@ -1449,25 +1449,48 @@ let expected_typ_of (l, tannot) =
 
 (* Flow typing *)
 
-type simple_numeric = Equal of nexp | Constraint of (kid -> n_constraint) | Anything
+type simple_numeric =
+  | Equal of nexp
+  | Constraint of (kid -> n_constraint)
+  | Existential of kid list * n_constraint * nexp
 
-let to_simple_numeric l kids nc (Nexp_aux (aux, _) as n) =
+let to_simple_numeric kids nc (Nexp_aux (aux, _) as nexp) =
   match (aux, kids) with
   | Nexp_var v, [v'] when Kid.compare v v' = 0 -> Constraint (fun subst -> constraint_subst v (arg_nexp (nvar subst)) nc)
-  | _, [] -> Equal n
-  | _ -> typ_error l "Numeric type is non-simple"
+  | _, [] -> Equal nexp
+  | _ -> Existential (kids, nc, nexp)
 
-let union_simple_numeric ex1 ex2 =
-  match (ex1, ex2) with
-  | Equal nexp1, Equal nexp2 -> Constraint (fun kid -> nc_or (nc_eq (nvar kid) nexp1) (nc_eq (nvar kid) nexp2))
-  | Equal nexp, Constraint c -> Constraint (fun kid -> nc_or (nc_eq (nvar kid) nexp) (c kid))
-  | Constraint c, Equal nexp -> Constraint (fun kid -> nc_or (c kid) (nc_eq (nvar kid) nexp))
-  | _, _ -> Anything
+let rec union_simple_numeric cond ex1 ex2 =
+  match (cond, ex1, ex2) with
+  | Some nc, Equal nexp1, Equal nexp2 -> Equal (nite nc nexp1 nexp2)
+  | None, Equal nexp1, Equal nexp2 -> Constraint (fun kid -> nc_or (nc_eq (nvar kid) nexp1) (nc_eq (nvar kid) nexp2))
+  | _, Equal nexp, Constraint _ -> union_simple_numeric cond (Constraint (fun kid -> nc_eq (nvar kid) nexp)) ex2
+  | _, Constraint _, Equal nexp -> union_simple_numeric cond ex1 (Constraint (fun kid -> nc_eq (nvar kid) nexp))
+  | Some nc, Constraint c1, Constraint c2 ->
+      Constraint (fun kid -> nc_or (nc_and nc (c1 kid)) (nc_and (nc_not nc) (c2 kid)))
+  | None, Constraint c1, Constraint c2 -> Constraint (fun kid -> nc_or (c1 kid) (c2 kid))
+  | _, Existential _, Equal nexp -> union_simple_numeric cond ex1 (Existential ([], nc_true, nexp))
+  | _, Equal nexp, Existential _ -> union_simple_numeric cond (Existential ([], nc_true, nexp)) ex2
+  | _, Existential _, Constraint c ->
+      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
+      union_simple_numeric cond ex1 (Existential ([fresh], c fresh, nvar fresh))
+  | _, Constraint c, Existential _ ->
+      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
+      union_simple_numeric cond (Existential ([fresh], c fresh, nvar fresh)) ex2
+  | Some nc, Existential (kids1, nc1, nexp1), Existential (kids2, nc2, nexp2) ->
+      Existential (kids1 @ kids2, nc_and nc1 nc2, nite nc nexp1 nexp2)
+  | None, Existential (kids1, nc1, nexp1), Existential (kids2, nc2, nexp2) ->
+      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
+      Existential
+        ( (fresh :: kids1) @ kids2,
+          nc_and (nc_and nc1 nc2) (nc_or (nc_eq (nvar fresh) nexp1) (nc_eq (nvar fresh) nexp2)),
+          nvar fresh
+        )
 
 let typ_of_simple_numeric = function
-  | Anything -> int_typ
   | Equal nexp -> atom_typ nexp
   | Constraint c -> exist_typ Parse_ast.Unknown c (fun kid -> atom_typ (nvar kid))
+  | Existential (kids, nc, nexp) -> mk_typ (Typ_exist (List.map (mk_kopt K_int) kids, nc, atom_typ nexp))
 
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with
@@ -3568,7 +3591,8 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | _, _ -> typ_error l "Ranges in foreach overlap"
     end
   | E_if (cond, then_branch, else_branch) ->
-      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+      let cond' = try irule infer_exp env cond with Type_error _ -> crule check_exp env cond bool_typ in
+      let cond_constraint = destruct_atom_bool env (typ_of cond') in
       let then_branch' =
         irule infer_exp (add_opt_constraint l "then branch" (assert_constraint env true cond') env) then_branch
       in
@@ -3576,7 +3600,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       begin
         match destruct_numeric (Env.expand_synonyms env (typ_of then_branch')) with
         | Some (kids, nc, then_nexp) ->
-            let then_sn = to_simple_numeric l kids nc then_nexp in
+            let then_sn = to_simple_numeric kids nc then_nexp in
             let else_branch' =
               irule infer_exp
                 (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
@@ -3585,8 +3609,8 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
             begin
               match destruct_numeric (Env.expand_synonyms env (typ_of else_branch')) with
               | Some (kids, nc, else_nexp) ->
-                  let else_sn = to_simple_numeric l kids nc else_nexp in
-                  let typ = typ_of_simple_numeric (union_simple_numeric then_sn else_sn) in
+                  let else_sn = to_simple_numeric kids nc else_nexp in
+                  let typ = typ_of_simple_numeric (union_simple_numeric cond_constraint then_sn else_sn) in
                   annot_exp (E_if (cond', then_branch', else_branch')) typ
               | None -> typ_error l ("Could not infer type of " ^ string_of_exp else_branch)
             end

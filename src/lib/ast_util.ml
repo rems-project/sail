@@ -674,6 +674,7 @@ let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 let napp id args = Nexp_aux (Nexp_app (id, args), Parse_ast.Unknown)
+let nite nc n1 n2 = Nexp_aux (Nexp_if (nc, n1, n2), Parse_ast.Unknown)
 
 let nc_set kid nums = mk_nc (NC_set (kid, nums))
 let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
