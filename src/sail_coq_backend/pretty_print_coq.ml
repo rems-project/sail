@@ -3657,18 +3657,17 @@ end = struct
         string "  | None => None";
         string "  end.";
         empty;
-        string "Lemma string_of_register_roundtrip {T} (r : register T) s :";
-        string "  string_of_register r = s ->";
-        string "  register_of_string s = Some (@existT _ _ _ r).";
-        string "case r; intro r'; destruct r'; unfold string_of_register; simpl; intro; subst; unfold register_of_string; simpl; reflexivity.";
+        string "Lemma string_of_register_roundtrip {T} (r : register T) :";
+        string "  register_of_string (string_of_register r) = Some (@existT _ _ _ r).";
+        string "case r; intro r'; destruct r'; reflexivity.";
         string "Qed.";
         empty;
         string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
         string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
         string "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
         string "* rewrite H, String.eqb_refl.";
-        string "  specialize (string_of_register_roundtrip r (string_of_register r) eq_refl) as H1.";
-        string "  specialize (string_of_register_roundtrip r' (string_of_register r') eq_refl) as H2.";
+        string "  specialize (string_of_register_roundtrip r) as H1.";
+        string "  specialize (string_of_register_roundtrip r') as H2.";
         string "  rewrite H in H1.";
         string "  rewrite H2 in H1.";
         string "  injection H1.";
@@ -3683,7 +3682,7 @@ end = struct
         string "  apply Bool.not_true_is_false.";
         string "  contradict H.";
         string "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
-        string "  Qed.";
+        string "Qed.";
         empty;
       ]
     ^^
