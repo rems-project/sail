@@ -46,8 +46,6 @@ function b () -> int = {
         }// comment
     };
 
-    };
-
     1
     // comment
 }

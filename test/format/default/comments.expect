@@ -41,10 +41,9 @@ function b () -> int = {
         };
 
         let g3 = {
-            1
+            1 // comment
             // comment
-            // comment
-        }
+        } // comment
     };
 
     1
@@ -60,22 +59,7 @@ let d =
     {
         1
         // comment
-    }
-
-// comment
-// comment
-// comment
-function block_return_with_tralling_space () -> int = {
-    1 // comment
-    // comment
-}
-
-function block_return_without_tralling_space () -> int = {
-    1
-    // comment
-}
-
-// comment
+    } // comment
 // comment
 // comment
 // comment

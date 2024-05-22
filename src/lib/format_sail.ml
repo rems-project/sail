@@ -77,7 +77,7 @@ let rec map_last f = function
       let x = f false x in
       x :: map_last f xs
 
-let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents, _tralling) -> Some contents | _ -> None
+let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents, _trailing) -> Some contents | _ -> None
 
 (* Remove additional (> 1) trailing newlines at the end of a string *)
 let discard_extra_trailing_newlines s =
@@ -707,10 +707,10 @@ module Make (Config : CONFIG) = struct
             match (chunk, Queue.peek_opt chunks) with
             | Comment _, _ -> !doc_acc
             | Spacer _, _ -> !doc_acc
-            | _, Some (Comment (_, _, _, _, tralling)) ->
+            | _, Some (Comment (_, _, _, _, trailing)) ->
                 doc_acc := !doc_acc ^^ terminator;
-                (* if current is not a Comment or Spacer, and next is not tralling, then insert a hardline *)
-                if not tralling then doc_acc := !doc_acc ^^ hardline;
+                (* if current is not a Comment or Spacer, and next is not trailing, then insert a hardline *)
+                if not trailing then doc_acc := !doc_acc ^^ hardline;
                 doc_acc := !doc_acc ^^ doc_chunk opts (Queue.pop chunks);
                 if Queue.peek_opt chunks = None then requires_hardline := true;
                 !doc_acc

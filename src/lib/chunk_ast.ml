@@ -152,9 +152,9 @@ let add_chunk q chunk = Queue.add chunk q
 
 [@@@coverage off]
 let rec prerr_chunk indent = function
-  | Comment (comment_type, n, col, contents, tralling) ->
+  | Comment (comment_type, n, col, contents, trailing) ->
       let s, e = comment_type_delimiters comment_type in
-      Printf.eprintf "%sComment: blank=%d col=%d tralling=%b %s%s%s\n" indent n col tralling s contents e
+      Printf.eprintf "%sComment: blank=%d col=%d trailing=%b %s%s%s\n" indent n col trailing s contents e
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
@@ -444,7 +444,7 @@ let rec pop_comments_until_loc_end comments chunks l =
   | None -> ()
   | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> begin
       match Reporting.simp_loc l with
-      | Some (_, e) when comment_s.pos_cnum <= e.pos_cnum ->
+      | Some (_, e) when comment_s.pos_cnum < e.pos_cnum ->
           let _ = Stack.pop comments in
           Queue.add
             (Comment
