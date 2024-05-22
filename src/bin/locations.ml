@@ -14,4 +14,4 @@ let sail_dir =
   | Some opam_dir -> opam_dir
   | None ->
       let open Filename in
-      concat (concat (dirname Sys.executable_name) parent_dir_name) "share"
+      concat (concat (concat (dirname Sys.executable_name) parent_dir_name) "share") "sail"
