@@ -1322,7 +1322,8 @@ let get_record id env =
 let get_records env = filter_items env env.global.records
 
 let add_record id typq fields env =
-  let fields = List.map (fun (typ, id) -> (expand_synonyms env typ, id)) fields in
+  let field_env = add_typquant (id_loc id) typq env in
+  let fields = List.map (fun (typ, id) -> (expand_synonyms field_env typ, id)) fields in
   if bound_typ_id env id then already_bound "struct" id env
   else (
     typ_print (lazy (adding ^ "struct " ^ string_of_id id)) [@coverage off];

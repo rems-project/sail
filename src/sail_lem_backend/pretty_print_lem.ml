@@ -1259,7 +1259,8 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
   | TD_abbrev _ -> empty
   | TD_record (id, typq, fs, _) ->
       let f_pp (typ, fid) =
-        concat [doc_fieldname_lem id fid; space; colon; space; doc_typ_lem params_to_print env typ; semi]
+        let field_env = Env.add_typquant (id_loc id) typq env in
+        concat [doc_fieldname_lem id fid; space; colon; space; doc_typ_lem params_to_print field_env typ; semi]
       in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
       let typq_to_print = typq_to_print params_to_print id typq in
