@@ -1153,36 +1153,14 @@ and add_mapping id (typq, typ1, typ2) env =
   let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ), Parse_ast.Unknown) in
   let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1), Parse_ast.Unknown) in
   let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), Parse_ast.Unknown) in
-  let env =
-    env
-    |> update_global (fun global ->
-           { global with mappings = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
-       )
-    |> add_val_spec ~ignore_duplicate:true forwards_id (typq, forwards_typ)
-    |> add_val_spec ~ignore_duplicate:true backwards_id (typq, backwards_typ)
-    |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)
-    |> add_val_spec ~ignore_duplicate:true backwards_matches_id (typq, backwards_matches_typ)
-  in
-  let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
-  if unloc_typ typ1 = string_typ then (
-    let forwards_prefix_typ =
-      Typ_aux
-        ( Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]),
-          Parse_ast.Unknown
-        )
-    in
-    add_val_spec ~ignore_duplicate:true prefix_id (typq, forwards_prefix_typ) env
-  )
-  else if unloc_typ typ2 = string_typ then (
-    let backwards_prefix_typ =
-      Typ_aux
-        ( Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]),
-          Parse_ast.Unknown
-        )
-    in
-    add_val_spec ~ignore_duplicate:true prefix_id (typq, backwards_prefix_typ) env
-  )
-  else env
+  env
+  |> update_global (fun global ->
+         { global with mappings = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
+     )
+  |> add_val_spec ~ignore_duplicate:true forwards_id (typq, forwards_typ)
+  |> add_val_spec ~ignore_duplicate:true backwards_id (typq, backwards_typ)
+  |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)
+  |> add_val_spec ~ignore_duplicate:true backwards_matches_id (typq, backwards_matches_typ)
 
 let get_outcome_instantiation env = env.global.outcome_instantiation
 
