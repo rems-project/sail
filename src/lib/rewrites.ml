@@ -3286,44 +3286,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
         let forwards_matches_spec, env = Type_check.check_val_spec env def_annot forwards_matches_spec in
         let backwards_matches_spec, env = Type_check.check_val_spec env def_annot backwards_matches_spec in
 
-        let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
-        let string_defs =
-          begin
-            if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then begin
-              effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
-              let forwards_prefix_typ =
-                Typ_aux
-                  ( Typ_fn
-                      ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]),
-                    Parse_ast.Unknown
-                  )
-              in
-              let forwards_prefix_spec =
-                VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None), no_annot)
-              in
-              let forwards_prefix_spec, env = Type_check.check_val_spec env def_annot forwards_prefix_spec in
-              forwards_prefix_spec
-            end
-            else if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then begin
-              effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
-              let backwards_prefix_typ =
-                Typ_aux
-                  ( Typ_fn
-                      ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]),
-                    Parse_ast.Unknown
-                  )
-              in
-              let backwards_prefix_spec =
-                VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None), no_annot)
-              in
-              let backwards_prefix_spec, env = Type_check.check_val_spec env def_annot backwards_prefix_spec in
-              backwards_prefix_spec
-            end
-            else []
-          end
-        in
-
-        forwards_spec @ backwards_spec @ forwards_matches_spec @ backwards_matches_spec @ string_defs
+        forwards_spec @ backwards_spec @ forwards_matches_spec @ backwards_matches_spec
     | vs -> [DEF_aux (DEF_val vs, def_annot)]
   in
   let realize_mapdef def_annot (MD_aux (MD_mapping (id, _, mapcls), (l, (tannot : tannot)))) =
