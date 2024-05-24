@@ -104,10 +104,6 @@ let simple_num l n =
   E_aux (E_lit (L_aux (L_num n, gen_loc l)), simple_annot (gen_loc l) (atom_typ (Nexp_aux (Nexp_constant n, gen_loc l))))
 
 let effectful eaux = Ast_util.effectful (effect_of eaux)
-let effectful_pexp pexp =
-  let pat, guard, exp, _ = destruct_pexp pexp in
-  let guard_eff = match guard with Some g -> effect_of g | None -> no_effect in
-  Ast_util.effectful (union_effects guard_eff (effect_of exp))
 
 let rec small (E_aux (exp, _)) =
   match exp with
