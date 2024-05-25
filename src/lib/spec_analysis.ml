@@ -97,7 +97,7 @@ let rec assigned_vars_in_lexp (LE_aux (le, _)) =
       List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
   | LE_app (_, es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
   | LE_vector (le, e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
-  | LE_vector_range (le, e1, e2) ->
+  | LE_vector_range (le, e1, _, e2) ->
       IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
   | LE_field (le, _) -> assigned_vars_in_lexp le
   | LE_deref e -> assigned_vars e
@@ -129,7 +129,7 @@ let bindings_from_pat p =
     | P_not p -> aux_pat p
     | P_as (p, id) -> id :: aux_pat p
     | P_typ (_, p) -> aux_pat p
-    | P_vector_subrange (id, _, _) -> [id]
+    | P_vector_subrange (id, _, _, _) -> [id]
     | P_id id -> if pat_id_is_variable env id then [id] else []
     | P_var (p, kid) -> aux_pat p
     | P_vector ps | P_vector_concat ps | P_string_append ps | P_app (_, ps) | P_tuple ps | P_list ps ->
@@ -216,9 +216,9 @@ let nexp_subst_fns substs =
     | E_loop (loop, m, e1, e2) -> re (E_loop (loop, s_measure m, s_exp e1, s_exp e2))
     | E_vector es -> re (E_vector (List.map s_exp es))
     | E_vector_access (e1, e2) -> re (E_vector_access (s_exp e1, s_exp e2))
-    | E_vector_subrange (e1, e2, e3) -> re (E_vector_subrange (s_exp e1, s_exp e2, s_exp e3))
+    | E_vector_subrange (e1, e2, ival, e3) -> re (E_vector_subrange (s_exp e1, s_exp e2, ival, s_exp e3))
     | E_vector_update (e1, e2, e3) -> re (E_vector_update (s_exp e1, s_exp e2, s_exp e3))
-    | E_vector_update_subrange (e1, e2, e3, e4) -> re (E_vector_update_subrange (s_exp e1, s_exp e2, s_exp e3, s_exp e4))
+    | E_vector_update_subrange (e1, e2, ival, e3, e4) -> re (E_vector_update_subrange (s_exp e1, s_exp e2, ival, s_exp e3, s_exp e4))
     | E_vector_append (e1, e2) -> re (E_vector_append (s_exp e1, s_exp e2))
     | E_list es -> re (E_list (List.map s_exp es))
     | E_cons (e1, e2) -> re (E_cons (s_exp e1, s_exp e2))
@@ -254,7 +254,7 @@ let nexp_subst_fns substs =
     | LE_app (id, es) -> re (LE_app (id, List.map s_exp es))
     | LE_tuple les -> re (LE_tuple (List.map s_lexp les))
     | LE_vector (le, e) -> re (LE_vector (s_lexp le, s_exp e))
-    | LE_vector_range (le, e1, e2) -> re (LE_vector_range (s_lexp le, s_exp e1, s_exp e2))
+    | LE_vector_range (le, e1, ival, e2) -> re (LE_vector_range (s_lexp le, s_exp e1, ival, s_exp e2))
     | LE_vector_concat les -> re (LE_vector_concat (List.map s_lexp les))
     | LE_field (le, id) -> re (LE_field (s_lexp le, id))
     | LE_deref e -> re (LE_deref (s_exp e))

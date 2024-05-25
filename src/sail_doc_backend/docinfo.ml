@@ -226,7 +226,8 @@ let rec json_of_pat (P_aux (aux, _)) =
       `Assoc [pat_type "app"; ("id", `String (string_of_id id)); ("patterns", `List (List.map json_of_pat pats))]
   | P_vector pats -> seq_pat_json "vector" pats
   | P_vector_concat pats -> seq_pat_json "vector_concat" pats
-  | P_vector_subrange (id, n, m) ->
+  (* TODO: Use ival. *)
+  | P_vector_subrange (id, n, _ival, m) ->
       `Assoc
         [
           pat_type "vector_subrange";

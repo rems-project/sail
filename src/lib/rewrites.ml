@@ -123,14 +123,14 @@ let rec lexp_is_local (LE_aux (lexp, _)) env =
   | LE_app _ | LE_deref _ -> false
   | LE_id id | LE_typ (_, id) -> id_is_local_var id env
   | LE_tuple lexps | LE_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
-  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) | LE_field (lexp, _) -> lexp_is_local lexp env
+  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _, _) | LE_field (lexp, _) -> lexp_is_local lexp env
 
 let rec lexp_is_local_intro (LE_aux (lexp, _)) env =
   match lexp with
   | LE_app _ | LE_deref _ -> false
   | LE_id id | LE_typ (_, id) -> id_is_unbound id env
   | LE_tuple lexps | LE_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
-  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) | LE_field (lexp, _) -> lexp_is_local_intro lexp env
+  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _, _) | LE_field (lexp, _) -> lexp_is_local_intro lexp env
 
 let lexp_is_effectful (LE_aux (_, (_, tannot))) = Ast_util.effectful (effect_of_annot tannot)
 
@@ -266,7 +266,8 @@ let rewrite_ast_remove_vector_subrange_pats env ast =
           (fun (aux, annot) ->
             let typ = typ_of_annot annot in
             match aux with
-            | P_vector_subrange (id, n, m) ->
+            (* TODO: Use ival. *)
+            | P_vector_subrange (id, n, ival, m) ->
                 let range_id =
                   Printf.ksprintf mk_id "%s_%s_%s#" (string_of_id id) (Big_int.to_string n) (Big_int.to_string m)
                 in
@@ -358,7 +359,7 @@ let remove_vector_concat_pat pat =
       p_app = (fun (id, ps) -> P_app (id, List.map (fun p -> p false) ps));
       p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps));
       p_vector_concat = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps));
-      p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m));
+      p_vector_subrange = (fun (id, n, ival, m) -> P_vector_subrange (id, n, ival, m));
       p_tuple = (fun ps -> P_tuple (List.map (fun p -> p false) ps));
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
       p_cons = (fun (p, ps) -> P_cons (p false, ps false));
@@ -420,7 +421,8 @@ let remove_vector_concat_pat pat =
       let index_i = simple_num l i in
       let index_j = simple_num l j in
 
-      let subv = E_aux (E_vector_subrange (root, index_i, index_j), cannot) in
+      (* TODO: Support >.. and ..< *)
+      let subv = E_aux (E_vector_subrange (root, index_i, Ival_closed, index_j), cannot) in
 
       let id_pat =
         match typ_opt with
@@ -515,7 +517,7 @@ let remove_vector_concat_pat pat =
           let ps, decls = List.split ps in
           (P_vector_concat ps, List.flatten decls)
         );
-      p_vector_subrange = (fun (id, n, m) -> (P_vector_subrange (id, n, m), []));
+      p_vector_subrange = (fun (id, n, ival, m) -> (P_vector_subrange (id, n, ival, m), []));
       p_tuple =
         (fun ps ->
           let ps, decls = List.split ps in
@@ -864,8 +866,8 @@ let rec pat_to_exp (P_aux (pat, (l, annot)) as p_aux) =
   | P_var (pat, _) -> pat_to_exp pat
   | P_typ (_, pat) -> pat_to_exp pat
   | P_id id -> rewrap (E_id id)
-  | P_vector_subrange (id, n, m) ->
-      let subrange = mk_exp (E_vector_subrange (mk_exp (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m))) in
+  | P_vector_subrange (id, n, ival, m) ->
+      let subrange = mk_exp (E_vector_subrange (mk_exp (E_id id), mk_lit_exp (L_num n), ival, mk_lit_exp (L_num m))) in
       check_exp env subrange typ
   | P_app (id, pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
@@ -1088,7 +1090,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       p_app = (fun (id, ps) -> P_app (id, List.map (fun p -> p false) ps));
       p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps));
       p_vector_concat = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps));
-      p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m));
+      p_vector_subrange = (fun (id, n, ival, m) -> P_vector_subrange (id, n, ival, m));
       p_string_append = (fun ps -> P_string_append (List.map (fun p -> p false) ps));
       p_tuple = (fun ps -> P_tuple (List.map (fun p -> p false) ps));
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
@@ -1132,7 +1134,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
         when Big_int.equal s i && Big_int.equal l (Big_int.of_int (List.length lits)) ->
           mk_exp (E_id rootid)
-      | _ -> mk_exp (E_vector_subrange (mk_exp (E_id rootid), mk_num_exp i, mk_num_exp j))
+          (* TODO: Support >.. and ..< *)
+      | _ -> mk_exp (E_vector_subrange (mk_exp (E_id rootid), mk_num_exp i, Ival_closed, mk_num_exp j))
     in
     check_eq_exp subvec_exp (mk_exp (E_vector (List.map strip_exp lits)))
   in
@@ -1244,7 +1247,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
           let ps, gdls = List.split ps in
           (P_vector_concat ps, flatten_guards_decls gdls)
         );
-      p_vector_subrange = (fun (id, n, m) -> (P_vector_subrange (id, n, m), (None, (fun b -> b), [])));
+      p_vector_subrange = (fun (id, n, ival, m) -> (P_vector_subrange (id, n, ival, m), (None, (fun b -> b), [])));
       p_string_append =
         (fun ps ->
           let ps, gdls = List.split ps in
@@ -1524,9 +1527,9 @@ let rec rewrite_lexp_to_rhs (LE_aux (lexp, ((l, _) as annot)) as le) =
   | LE_vector (lexp, e) ->
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
       (lhs, fun exp -> rhs (E_aux (E_vector_update (lexp_to_exp lexp, e, exp), annot)))
-  | LE_vector_range (lexp, e1, e2) ->
+  | LE_vector_range (lexp, e1, ival, e2) ->
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
-      (lhs, fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, e2, exp), annot)))
+      (lhs, fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, ival, e2, exp), annot)))
   | LE_field (lexp, id) -> begin
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
       let (LE_aux (_, lannot)) = lexp in
@@ -2134,7 +2137,8 @@ let rewrite_vector_concat_assignments env defs =
           let exp' = if small exp then strip_exp exp else mk_exp (E_id vec_id) in
           let lexp_to_exp (i, exps) lexp =
             let j, i' = next i (len lexp) in
-            let sub = mk_exp (E_vector_subrange (exp', i, j)) in
+            (* TODO: Support >.. and ..< *)
+            let sub = mk_exp (E_vector_subrange (exp', i, Ival_closed, j)) in
             (i', exps @ [sub])
           in
           let _, exps = List.fold_left lexp_to_exp (i, []) lexps in
@@ -2296,9 +2300,9 @@ let rewrite_ast_letbind_effects effect_info env =
     | LE_tuple es -> n_lexpL es (fun es -> k (LE_aux (LE_tuple es, annot)))
     | LE_typ (typ, id) -> k (LE_aux (LE_typ (typ, id), annot))
     | LE_vector (lexp, e) -> n_lexp lexp (fun lexp -> n_exp_name e (fun e -> k (LE_aux (LE_vector (lexp, e), annot))))
-    | LE_vector_range (lexp, e1, e2) ->
+    | LE_vector_range (lexp, e1, ival, e2) ->
         n_lexp lexp (fun lexp ->
-            n_exp_name e1 (fun e1 -> n_exp_name e2 (fun e2 -> k (LE_aux (LE_vector_range (lexp, e1, e2), annot))))
+            n_exp_name e1 (fun e1 -> n_exp_name e2 (fun e2 -> k (LE_aux (LE_vector_range (lexp, e1, ival, e2), annot))))
         )
     | LE_vector_concat es -> n_lexpL es (fun es -> k (LE_aux (LE_vector_concat es, annot)))
     | LE_field (lexp, id) -> n_lexp lexp (fun lexp -> k (LE_aux (LE_field (lexp, id), annot)))
@@ -2369,10 +2373,10 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_vector exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_vector exps)))
     | E_vector_access (exp1, exp2) ->
         n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (pure_rewrap (E_vector_access (exp1, exp2)))))
-    | E_vector_subrange (exp1, exp2, exp3) ->
+    | E_vector_subrange (exp1, exp2, ival, exp3) ->
         n_exp_name exp1 (fun exp1 ->
             n_exp_name exp2 (fun exp2 ->
-                n_exp_name exp3 (fun exp3 -> k (pure_rewrap (E_vector_subrange (exp1, exp2, exp3))))
+                n_exp_name exp3 (fun exp3 -> k (pure_rewrap (E_vector_subrange (exp1, exp2, ival, exp3))))
             )
         )
     | E_vector_update (exp1, exp2, exp3) ->
@@ -2381,11 +2385,11 @@ let rewrite_ast_letbind_effects effect_info env =
                 n_exp_name exp3 (fun exp3 -> k (pure_rewrap (E_vector_update (exp1, exp2, exp3))))
             )
         )
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
+    | E_vector_update_subrange (exp1, exp2, ival, exp3, exp4) ->
         n_exp_name exp1 (fun exp1 ->
             n_exp_name exp2 (fun exp2 ->
                 n_exp_name exp3 (fun exp3 ->
-                    n_exp_name exp4 (fun exp4 -> k (pure_rewrap (E_vector_update_subrange (exp1, exp2, exp3, exp4))))
+                    n_exp_name exp4 (fun exp4 -> k (pure_rewrap (E_vector_update_subrange (exp1, exp2, ival, exp3, exp4))))
                 )
             )
         )
@@ -2879,9 +2883,9 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
               let vexp = annot_exp (E_vector_update (eid, i, vexp)) l1 env (typ_of_annot annot) in
               let pat = annot_pat (P_id id) pl env (typ_of vexp) in
               Added_vars (vexp, pat)
-          | LE_aux (LE_vector_range (LE_aux (LE_id id, ((l2, _) as annot2)), i, j), ((l, _) as annot)) ->
+          | LE_aux (LE_vector_range (LE_aux (LE_id id, ((l2, _) as annot2)), i, ival, j), ((l, _) as annot)) ->
               let eid = annot_exp (E_id id) l2 env (typ_of_annot annot2) in
-              let vexp = annot_exp (E_vector_update_subrange (eid, i, j, vexp)) l env (typ_of_annot annot) in
+              let vexp = annot_exp (E_vector_update_subrange (eid, i, ival, j, vexp)) l env (typ_of_annot annot) in
               let pat = annot_pat (P_id id) pl env (typ_of vexp) in
               Added_vars (vexp, pat)
           | _ -> Same_vars (E_aux (E_assign (lexp, vexp), annot))
@@ -3185,9 +3189,9 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   | MP_app (id, args) -> E_aux (E_app (id, List.map exp_of_mpat args), (l, annot))
   | MP_vector mpats -> E_aux (E_vector (List.map exp_of_mpat mpats), (l, annot))
   | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> exp_of_mpat m) mpats) empty_vec
-  | MP_vector_subrange (id, n, m) ->
+  | MP_vector_subrange (id, n, ival, m) ->
       E_aux
-        (E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m)), (l, annot))
+        (E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), ival, mk_lit_exp (L_num m)), (l, annot))
   | MP_tuple mpats -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l, annot))
   | MP_list mpats -> E_aux (E_list (List.map exp_of_mpat mpats), (l, annot))
   | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l, annot))

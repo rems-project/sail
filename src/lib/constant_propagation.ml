@@ -460,15 +460,15 @@ let const_props target ast =
       | E_vector_access (e1, e2) ->
           let e1', e2', assigns = non_det_exp_2 e1 e2 in
           re (E_vector_access (e1', e2')) assigns
-      | E_vector_subrange (e1, e2, e3) ->
+      | E_vector_subrange (e1, e2, ival, e3) ->
           let e1', e2', e3', assigns = non_det_exp_3 e1 e2 e3 in
-          re (E_vector_subrange (e1', e2', e3')) assigns
+          re (E_vector_subrange (e1', e2', ival, e3')) assigns
       | E_vector_update (e1, e2, e3) ->
           let e1', e2', e3', assigns = non_det_exp_3 e1 e2 e3 in
           re (E_vector_update (e1', e2', e3')) assigns
-      | E_vector_update_subrange (e1, e2, e3, e4) ->
+      | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
           let e1', e2', e3', e4', assigns = non_det_exp_4 e1 e2 e3 e4 in
-          re (E_vector_update_subrange (e1', e2', e3', e4')) assigns
+          re (E_vector_update_subrange (e1', e2', ival, e3', e4')) assigns
       | E_vector_append (e1, e2) ->
           let e1', e2', assigns = non_det_exp_2 e1 e2 in
           re (E_vector_append (e1', e2')) assigns
@@ -640,11 +640,12 @@ let const_props target ast =
       | LE_tuple les -> re (LE_tuple (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
       | LE_vector (le, e) ->
           re (LE_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))
-      | LE_vector_range (le, e1, e2) ->
+      | LE_vector_range (le, e1, ival, e2) ->
           re
             (LE_vector_range
                ( fst (const_prop_lexp substs assigns le),
                  fst (const_prop_exp substs assigns e1),
+                 ival,
                  fst (const_prop_exp substs assigns e2)
                )
             )

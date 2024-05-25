@@ -310,9 +310,9 @@ module Printer (Config : PRINT_CONFIG) = struct
       | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
       | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
       | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
-      | P_vector_subrange (id, n, m) ->
+      | P_vector_subrange (id, n, ival, m) ->
           if Big_int.equal n m then doc_id id ^^ brackets (string (Big_int.to_string n))
-          else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
+          else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string (string_of_ival ival) ^^ string (Big_int.to_string m))
       | P_wild -> string "_"
       | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
       | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
@@ -359,16 +359,16 @@ module Printer (Config : PRINT_CONFIG) = struct
     in
     ref (fixities' : (prec * int) Bindings.t)
 
-  type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
+  type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * interval * 'a exp * 'a exp
 
   let rec get_vector_updates (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_vector_update (exp1, exp2, exp3) ->
         let input, updates = get_vector_updates exp1 in
         (input, updates @ [VU_single (exp2, exp3)])
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
+    | E_vector_update_subrange (exp1, exp2, ival, exp3, exp4) ->
         let input, updates = get_vector_updates exp1 in
-        (input, updates @ [VU_range (exp2, exp3, exp4)])
+        (input, updates @ [VU_range (exp2, ival, exp3, exp4)])
     | _ -> (exp, [])
 
   let get_overloaded_info uannot =
@@ -509,6 +509,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
         | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->
+            (* TODO: get ival here *)
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
         | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
       end
@@ -560,8 +561,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
     | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
     | E_vector_access (exp1, exp2) -> doc_atomic_exp exp1 ^^ brackets (doc_exp exp2)
-    | E_vector_subrange (exp1, exp2, exp3) ->
-        doc_atomic_exp exp1 ^^ brackets (separate space [doc_exp exp2; string ".."; doc_exp exp3])
+    | E_vector_subrange (exp1, exp2, ival, exp3) ->
+        doc_atomic_exp exp1 ^^ brackets (separate space [doc_exp exp2; string (string_of_ival ival); doc_exp exp3])
     | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
     | E_vector_update _ | E_vector_update_subrange _ ->
         let input, updates = get_vector_updates exp in
@@ -602,8 +603,9 @@ module Printer (Config : PRINT_CONFIG) = struct
     | LE_tuple lexps -> lparen ^^ separate_map (comma ^^ space) doc_lexp lexps ^^ rparen
     | LE_field (lexp, id) -> doc_atomic_lexp lexp ^^ dot ^^ doc_id id
     | LE_vector (lexp, exp) -> doc_atomic_lexp lexp ^^ brackets (doc_exp exp)
-    | LE_vector_range (lexp, exp1, exp2) ->
-        doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string ".."; doc_exp exp2])
+    | LE_vector_range (lexp, exp1, ival, exp2) ->
+      (* TODO: ival to string *)
+        doc_atomic_lexp lexp ^^ brackets (separate space [doc_exp exp1; string (string_of_ival ival); doc_exp exp2])
     | LE_vector_concat lexps -> parens (separate_map (string " @ ") doc_lexp lexps)
     | LE_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
     | _ -> parens (doc_lexp lexp)
@@ -630,8 +632,9 @@ module Printer (Config : PRINT_CONFIG) = struct
         | E_id id, E_id id' when Id.compare id id' == 0 -> doc_atomic_exp idx
         | _, _ -> separate space [doc_atomic_exp idx; equals; doc_exp value]
       end
-    | VU_range (high, low, value) ->
-        separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
+    | VU_range (high, ival, low, value) ->
+      (* TODO: ival to string *)
+        separate space [doc_atomic_exp high; string (string_of_ival ival); doc_atomic_exp low; equals; doc_exp value]
 
   let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, _)), (def_annot, _))) =
     doc_def_annot def_annot
@@ -716,7 +719,7 @@ module Printer (Config : PRINT_CONFIG) = struct
   let rec doc_index_range (BF_aux (ir, _)) =
     match ir with
     | BF_single i -> doc_nexp i
-    | BF_range (i, j) -> doc_nexp i ^^ string ".." ^^ doc_nexp j
+    | BF_range (i, ival, j) -> doc_nexp i ^^ string (string_of_ival ival) ^^ doc_nexp j
     | BF_concat (i, j) -> parens (doc_index_range i ^^ space ^^ at ^^ space ^^ doc_index_range j)
 
   let doc_typ_arg_kind sep (A_aux (aux, _)) =

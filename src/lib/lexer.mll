@@ -192,6 +192,8 @@ rule token comments = parse
   | "::"                                { ColonColon }
   | ":"                                 { Colon ":" }
   | ","                                 { Comma }
+  | ">.."                               { GreaterDotDot }
+  | "..<"                               { DotDotLess }
   | ".."                                { DotDot }
   | "."                                 { Dot }
   | "="                                 { Eq "=" }

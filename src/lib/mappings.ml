@@ -154,7 +154,7 @@ let rec extract_mapping_pats map_uannot is_mapping subst (P_aux (aux, annot)) =
   | P_id id -> (P_aux (P_id id, annot), [])
   | P_wild -> (P_aux (P_wild, annot), [])
   | P_lit lit -> (P_aux (P_lit lit, annot), [])
-  | P_vector_subrange (id, n, m) -> (P_aux (P_vector_subrange (id, n, m), annot), [])
+  | P_vector_subrange (id, n, ival, m) -> (P_aux (P_vector_subrange (id, n, ival, m), annot), [])
   | P_struct (fpats, fwild) ->
       let fields, pats = List.split fpats in
       let pats, found_mapping = extract_mapping_pats_list map_uannot is_mapping subst pats in

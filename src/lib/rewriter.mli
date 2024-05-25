@@ -123,7 +123,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_app : id * 'pat list -> 'pat_aux;
   p_vector : 'pat list -> 'pat_aux;
   p_vector_concat : 'pat list -> 'pat_aux;
-  p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux;
+  p_vector_subrange : id * Big_int.num * interval * Big_int.num -> 'pat_aux;
   p_tuple : 'pat list -> 'pat_aux;
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
@@ -163,9 +163,9 @@ type ( 'a,
   e_loop : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux;
   e_vector : 'exp list -> 'exp_aux;
   e_vector_access : 'exp * 'exp -> 'exp_aux;
-  e_vector_subrange : 'exp * 'exp * 'exp -> 'exp_aux;
+  e_vector_subrange : 'exp * 'exp * interval * 'exp -> 'exp_aux;
   e_vector_update : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux;
+  e_vector_update_subrange : 'exp * 'exp * interval * 'exp * 'exp -> 'exp_aux;
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
@@ -194,7 +194,7 @@ type ( 'a,
   le_typ : Ast.typ * id -> 'lexp_aux;
   le_tuple : 'lexp list -> 'lexp_aux;
   le_vector : 'lexp * 'exp -> 'lexp_aux;
-  le_vector_range : 'lexp * 'exp * 'exp -> 'lexp_aux;
+  le_vector_range : 'lexp * 'exp * interval * 'exp -> 'lexp_aux;
   le_vector_concat : 'lexp list -> 'lexp_aux;
   le_field : 'lexp * id -> 'lexp_aux;
   le_aux : 'lexp_aux * 'a annot -> 'lexp;

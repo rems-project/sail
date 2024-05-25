@@ -281,9 +281,10 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           | xs -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
         end
     end
-  | E_vector_subrange (exp1, exp2, exp3) -> begin
+  | E_vector_subrange (exp1, exp2, ival, exp3) -> begin
       match Env.get_default_order_opt (env_of exp) with
       | Some (Ord_aux (Ord_inc, _)) ->
+          (* TODO: Use ival. *)
           string "subrange_inc" ^^ space
           ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
       | _ ->

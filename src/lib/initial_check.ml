@@ -164,6 +164,12 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_order -> None
   | P.K_bool -> Some (K_aux (K_bool, l))
 
+let to_ast_ival (ival) =
+  match ival with
+  | P.Ival_closed -> Ival_closed
+  | P.Ival_open_dec -> Ival_open_dec
+  | P.Ival_open_inc -> Ival_open_inc
+
 let to_ast_id ctx (P.Id_aux (id, l)) =
   let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
   if string_contains (string_of_parse_id_aux id) '#' then begin
@@ -585,7 +591,7 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
             else P_app (to_ast_id ctx id, List.map (to_ast_pat ctx) pats)
         | P.P_vector pats -> P_vector (List.map (to_ast_pat ctx) pats)
         | P.P_vector_concat pats -> P_vector_concat (List.map (to_ast_pat ctx) pats)
-        | P.P_vector_subrange (id, n, m) -> P_vector_subrange (to_ast_id ctx id, n, m)
+        | P.P_vector_subrange (id, n, ival, m) -> P_vector_subrange (to_ast_id ctx id, n, to_ast_ival ival, m)
         | P.P_tuple pats -> P_tuple (List.map (to_ast_pat ctx) pats)
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
@@ -673,12 +679,12 @@ and to_ast_exp ctx exp =
         | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_vector exps -> E_vector (List.map (to_ast_exp ctx) exps)
         | P.E_vector_access (vexp, exp) -> E_vector_access (to_ast_exp ctx vexp, to_ast_exp ctx exp)
-        | P.E_vector_subrange (vex, exp1, exp2) ->
-            E_vector_subrange (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+        | P.E_vector_subrange (vex, exp1, ival, exp2) ->
+            E_vector_subrange (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_ival ival, to_ast_exp ctx exp2)
         | P.E_vector_update (vex, exp1, exp2) ->
             E_vector_update (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_vector_update_subrange (vex, e1, e2, e3) ->
-            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
+        | P.E_vector_update_subrange (vex, e1, ival, e2, e3) ->
+            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_ival ival, to_ast_exp ctx e2, to_ast_exp ctx e3)
         | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
         | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
@@ -756,8 +762,8 @@ and to_ast_lexp ctx exp =
       end
     | P.E_vector_append (exp1, exp2) -> LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
     | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
-    | P.E_vector_subrange (vexp, exp1, exp2) ->
-        LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+    | P.E_vector_subrange (vexp, exp1, ival, exp2) ->
+        LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_ival ival, to_ast_exp ctx exp2)
     | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
     | _ ->
         raise
@@ -854,7 +860,7 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
   BF_aux
     ( ( match r with
       | P.BF_single i -> BF_single (to_ast_bitfield_index_nexp ctx i)
-      | P.BF_range (i1, i2) -> BF_range (to_ast_bitfield_index_nexp ctx i1, to_ast_bitfield_index_nexp ctx i2)
+      | P.BF_range (i1, ival, i2) -> BF_range (to_ast_bitfield_index_nexp ctx i1, to_ast_ival ival, to_ast_bitfield_index_nexp ctx i2)
       | P.BF_concat (ir1, ir2) -> BF_concat (to_ast_range ctx ir1, to_ast_range ctx ir2)
       ),
       l
@@ -1146,7 +1152,7 @@ let rec to_ast_mpat ctx (P.MP_aux (mpat, l)) =
           if mpats = [] then MP_id (to_ast_id ctx id) else MP_app (to_ast_id ctx id, List.map (to_ast_mpat ctx) mpats)
       | P.MP_vector mpats -> MP_vector (List.map (to_ast_mpat ctx) mpats)
       | P.MP_vector_concat mpats -> MP_vector_concat (List.map (to_ast_mpat ctx) mpats)
-      | P.MP_vector_subrange (id, n, m) -> MP_vector_subrange (to_ast_id ctx id, n, m)
+      | P.MP_vector_subrange (id, n, ival, m) -> MP_vector_subrange (to_ast_id ctx id, n, to_ast_ival ival, m)
       | P.MP_tuple mpats -> MP_tuple (List.map (to_ast_mpat ctx) mpats)
       | P.MP_list mpats -> MP_list (List.map (to_ast_mpat ctx) mpats)
       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)

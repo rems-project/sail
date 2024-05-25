@@ -1587,7 +1587,7 @@ let check_pattern_duplicates env pat =
     in
     match aux with
     | P_id id when not (is_enum_member id env) -> ids := Bindings.update id update_id !ids
-    | P_vector_subrange (id, _, _) -> subrange_ids := Bindings.add id l !subrange_ids
+    | P_vector_subrange (id, _, _, _) -> subrange_ids := Bindings.add id l !subrange_ids
     | P_as (p, id) ->
         ids := Bindings.update id update_id !ids;
         collect_duplicates p
@@ -1976,7 +1976,7 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
       | Update -> Update
       | Declaration -> typ_error l "Field assignment can only be done to a variable that has already been declared"
     end
-  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) -> begin
+  | LE_vector (lexp, _) | LE_vector_range (lexp, _, _, _) -> begin
       match lexp_assignment_type env lexp with
       | Update -> Update
       | Declaration -> typ_error l "Vector assignment can only be done to a variable that has already been declared"
@@ -2914,9 +2914,9 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
       List.iter (fun pat -> typ_equality l env etyp (typ_of_pat pat)) pats;
       (annot_pat (P_vector pats) (bitvector_typ len), env, guards)
   | P_vector_concat (pat :: pats) -> bind_vector_concat_pat l env uannot pat pats None
-  | P_vector_subrange (id, n, m) ->
+  | P_vector_subrange (id, n, ival, m) ->
       let typ = bitvector_typ_from_range l env n m in
-      (annot_pat (P_vector_subrange (id, n, m)) typ, env, [])
+      (annot_pat (P_vector_subrange (id, n, ival, m)) typ, env, [])
   | P_string_append pats ->
       let fold_pats (pats, env, guards) pat =
         let inferred_pat, env, guards' = infer_pat env pat in
@@ -3290,7 +3290,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
       | Unbound _ -> typ_error l ("Cannot create a new identifier in this l-expression " ^ string_of_lexp lexp)
     end
-  | LE_vector_range (v_lexp, exp1, exp2) -> begin
+  | LE_vector_range (v_lexp, exp1, ival, exp2) -> begin
       let inferred_v_lexp = infer_lexp env v_lexp in
       let (Typ_aux (v_typ_aux, _)) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
       match v_typ_aux with
@@ -3311,7 +3311,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
                 )
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
-            annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len)
+            annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, ival, inferred_exp2)) (bitvector_typ slice_len)
           else
             typ_raise l
               (Err_failed_constraint (check, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
@@ -3649,11 +3649,13 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | exn -> raise exn
     end
   | E_vector_update (v, n, exp) -> infer_vector_update l env v n exp
-  | E_vector_update_subrange (v, n, m, exp) ->
+  (* TODO: Pass ival here. *)
+  | E_vector_update_subrange (v, n, ival, m, exp) ->
       infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot)))
-  | E_vector_subrange (v, n, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
+  (* TODO: Pass ival here. *)
+  | E_vector_subrange (v, n, ival, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"
   | E_vector (item :: items as vec) ->
       let inferred_item = irule infer_exp env item in
@@ -4193,7 +4195,8 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
           typ_error l ("Cannot shadow mutable local or register in mapping-pattern " ^ string_of_mpat mpat)
       | Enum enum -> (annot_mpat (MP_id v) enum, env, [])
     end
-  | MP_vector_subrange (id, n, m) ->
+  | MP_vector_subrange (id, n, ival, m) ->
+    (* TODO: Definitely use ival here. *)
       let len =
         match Env.get_default_order env with
         | Ord_aux (Ord_dec, _) ->
@@ -4213,14 +4216,14 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
             match Env.lookup_id id other_env with
             | Unbound _ ->
                 if allow_unknown then
-                  (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len)), env, [])
+                  (annot_mpat (MP_vector_subrange (id, n, ival, m)) (bitvector_typ (nconstant len)), env, [])
                 else typ_error l "Cannot infer identifier type in vector subrange pattern"
             | Local (Immutable, other_typ) ->
                 let id_len = destruct_bitvector_typ l env other_typ in
                 begin
                   match id_len with
                   | Nexp_aux (Nexp_constant id_len, _) when Big_int.greater_equal id_len len ->
-                      (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len)), env, [])
+                      (annot_mpat (MP_vector_subrange (id, n, ival, m)) (bitvector_typ (nconstant len)), env, [])
                   | _ ->
                       typ_error l
                         (Printf.sprintf "%s must have a constant length greater than or equal to %s" (string_of_id id)
@@ -4812,10 +4815,10 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
             | Some size ->
                 let rec expand_range_synonyms = function
                   | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
-                  | BF_aux (BF_range (nexp1, nexp2), l) ->
+                  | BF_aux (BF_range (nexp1, ival, nexp2), l) ->
                       let nexp1 = Env.expand_nexp_synonyms env nexp1 in
                       let nexp2 = Env.expand_nexp_synonyms env nexp2 in
-                      BF_aux (BF_range (nexp1, nexp2), l)
+                      BF_aux (BF_range (nexp1, ival, nexp2), l)
                   | BF_aux (BF_concat (r1, r2), l) ->
                       BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
                 in

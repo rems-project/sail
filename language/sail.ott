@@ -340,10 +340,15 @@ type_union :: 'Tu_' ::=
   {{ aux _ def_annot }}
   | typ id                                              :: :: ty_id
 
+interval :: 'Ival_' ::=
+  | '..'   :: :: closed
+  | '>..'  :: :: open_dec
+  | '..<'  :: :: open_inc
+
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}}
   {{ aux _ l }}
   | nexp :: :: 'single'  {{ com single index }}
-  | nexp1 '..' nexp2 :: :: range {{ com index range }}
+  | nexp1 interval nexp2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -422,7 +427,7 @@ pat :: 'P_' ::=
     {{ com vector pattern }}
   | pat1 @ ... @ patn                        :: :: vector_concat
     {{ com concatenated vector pattern }}
-  | id [ num1 '..' num2 ]                    :: :: vector_subrange
+  | id [ num1 interval num2 ]                :: :: vector_subrange
     {{ com vector subrange pattern }}
   | ( pat1 , .... , patn )                   :: :: tuple
     {{ com tuple pattern }}
@@ -483,9 +488,9 @@ exp :: 'E_' ::=
   % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
   | exp [ exp' ]                                      :: :: vector_access {{ com vector access }}
-  | exp [ exp1 '..' exp2 ]                            :: :: vector_subrange {{ com subvector extraction }}
+  | exp [ exp1 interval exp2 ]                        :: :: vector_subrange {{ com subvector extraction }}
   | [ exp with exp1 = exp2 ]                          :: :: vector_update {{ com vector functional update }}
-  | [ exp with exp1 '..' exp2 = exp3 ]                :: :: vector_update_subrange {{ com vector subrange update, with vector}}
+  | [ exp with exp1 interval exp2 = exp3 ]            :: :: vector_update_subrange {{ com vector subrange update, with vector}}
   | exp1 @ exp2                                       :: :: vector_append {{ com vector concatenation }}
 
   % lists
@@ -526,15 +531,15 @@ exp :: 'E_' ::=
 
 lexp :: 'LE_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
-    | id                      :: :: id {{ com identifier }}
-    | deref exp               :: :: deref
-    | id ( exp1 , .. , expn ) :: :: app {{ com memory or register write via function call }}
-    | ( typ ) id	      :: :: typ
-    | ( lexp0 , .. , lexpn )  :: :: tuple {{ com multiple (non-memory) assignment }}
-    | lexp1 @ ... @ lexpn     :: :: vector_concat {{ com vector concatenation L-exp }}
-    | lexp [ exp ]            :: :: vector  {{ com vector element }}
-    | lexp [ exp1 '..' exp2 ] :: :: vector_range {{ com subvector }}
-    | lexp . id               :: :: field {{ com struct field }}
+    | id                          :: :: id {{ com identifier }}
+    | deref exp                   :: :: deref
+    | id ( exp1 , .. , expn )     :: :: app {{ com memory or register write via function call }}
+    | ( typ ) id	                :: :: typ
+    | ( lexp0 , .. , lexpn )      :: :: tuple {{ com multiple (non-memory) assignment }}
+    | lexp1 @ ... @ lexpn         :: :: vector_concat {{ com vector concatenation L-exp }}
+    | lexp [ exp ]                :: :: vector  {{ com vector element }}
+    | lexp [ exp1 interval exp2 ] :: :: vector_range {{ com subvector }}
+    | lexp . id                   :: :: field {{ com struct field }}
 
 fexp :: 'FE_' ::=
   {{ com field expression }}
@@ -638,7 +643,7 @@ mpat :: 'MP_' ::=
   | id ( mpat1 , ... , mpatn )         ::   :: app
   | [ mpat1 , ... , mpatn ]            ::   :: vector
   | mpat1 @ ... @ mpatn                ::   :: vector_concat
-  | id [ num1 '..' num2 ]              ::   :: vector_subrange
+  | id [ num1 interval num2 ]          ::   :: vector_subrange
   | ( mpat1 , ... , mpatn )            ::   :: tuple
   | [|| mpat1 , ... , mpatn ||]        ::   :: list
   | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}

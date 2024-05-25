@@ -291,7 +291,7 @@ let statement_like opts = { opts with statement = true }
 let operator_precedence = function
   | "=" -> (10, precedence 1, nonatomic, 1)
   | ":" -> (0, subatomic, subatomic, 1)
-  | ".." -> (10, atomic, atomic, 0)
+  | ".." | ">.." | "..<" -> (10, atomic, atomic, 0)
   | "@" -> (6, precedence 5, precedence 6, 1)
   | _ -> (10, subatomic, subatomic, 1)
 

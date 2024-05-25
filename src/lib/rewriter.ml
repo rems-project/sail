@@ -213,10 +213,10 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
       rewrap (E_loop (loop, m, rewrite e1, rewrite e2))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
   | E_vector_access (vec, index) -> rewrap (E_vector_access (rewrite vec, rewrite index))
-  | E_vector_subrange (vec, i1, i2) -> rewrap (E_vector_subrange (rewrite vec, rewrite i1, rewrite i2))
+  | E_vector_subrange (vec, i1, ival, i2) -> rewrap (E_vector_subrange (rewrite vec, rewrite i1, ival, rewrite i2))
   | E_vector_update (vec, index, new_v) -> rewrap (E_vector_update (rewrite vec, rewrite index, rewrite new_v))
-  | E_vector_update_subrange (vec, i1, i2, new_v) ->
-      rewrap (E_vector_update_subrange (rewrite vec, rewrite i1, rewrite i2, rewrite new_v))
+  | E_vector_update_subrange (vec, i1, ival, i2, new_v) ->
+      rewrap (E_vector_update_subrange (rewrite vec, rewrite i1, ival, rewrite i2, rewrite new_v))
   | E_vector_append (v1, v2) -> rewrap (E_vector_append (rewrite v1, rewrite v2))
   | E_list exps -> rewrap (E_list (List.map rewrite exps))
   | E_cons (h, t) -> rewrap (E_cons (rewrite h, rewrite t))
@@ -268,11 +268,12 @@ let rewrite_lexp rewriters (LE_aux (lexp, (l, annot))) =
   | LE_app (id, exps) -> rewrap (LE_app (id, List.map (rewriters.rewrite_exp rewriters) exps))
   | LE_vector (lexp, exp) ->
       rewrap (LE_vector (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters exp))
-  | LE_vector_range (lexp, exp1, exp2) ->
+  | LE_vector_range (lexp, exp1, ival, exp2) ->
       rewrap
         (LE_vector_range
            ( rewriters.rewrite_lexp rewriters lexp,
              rewriters.rewrite_exp rewriters exp1,
+             ival,
              rewriters.rewrite_exp rewriters exp2
            )
         )
@@ -381,7 +382,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_app : id * 'pat list -> 'pat_aux;
   p_vector : 'pat list -> 'pat_aux;
   p_vector_concat : 'pat list -> 'pat_aux;
-  p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux;
+  p_vector_subrange : id * Big_int.num * interval * Big_int.num -> 'pat_aux;
   p_tuple : 'pat list -> 'pat_aux;
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
@@ -402,7 +403,7 @@ let rec fold_pat_aux (alg : ('a, 'pat, 'pat_aux) pat_alg) : 'a pat_aux -> 'pat_a
   | P_app (id, ps) -> alg.p_app (id, List.map (fold_pat alg) ps)
   | P_vector ps -> alg.p_vector (List.map (fold_pat alg) ps)
   | P_vector_concat ps -> alg.p_vector_concat (List.map (fold_pat alg) ps)
-  | P_vector_subrange (id, n, m) -> alg.p_vector_subrange (id, n, m)
+  | P_vector_subrange (id, n, ival, m) -> alg.p_vector_subrange (id, n, ival, m)
   | P_tuple ps -> alg.p_tuple (List.map (fold_pat alg) ps)
   | P_list ps -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph, pt) -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
@@ -420,7 +421,7 @@ let rec fold_mpat_aux (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat_aux -> 'm
   | MP_app (id, ps) -> alg.p_app (id, List.map (fold_mpat alg) ps)
   | MP_vector ps -> alg.p_vector (List.map (fold_mpat alg) ps)
   | MP_vector_concat ps -> alg.p_vector_concat (List.map (fold_mpat alg) ps)
-  | MP_vector_subrange (id, n, m) -> alg.p_vector_subrange (id, n, m)
+  | MP_vector_subrange (id, n, ival, m) -> alg.p_vector_subrange (id, n, ival, m)
   | MP_tuple ps -> alg.p_tuple (List.map (fold_mpat alg) ps)
   | MP_list ps -> alg.p_list (List.map (fold_mpat alg) ps)
   | MP_cons (ph, pt) -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
@@ -444,7 +445,7 @@ let id_pat_alg : ('a, 'a pat, 'a pat_aux) pat_alg =
     p_app = (fun (id, ps) -> P_app (id, ps));
     p_vector = (fun ps -> P_vector ps);
     p_vector_concat = (fun ps -> P_vector_concat ps);
-    p_vector_subrange = (fun (id, n, m) -> P_vector_subrange (id, n, m));
+    p_vector_subrange = (fun (id, n, ival, m) -> P_vector_subrange (id, n, ival, m));
     p_tuple = (fun ps -> P_tuple ps);
     p_list = (fun ps -> P_list ps);
     p_cons = (fun (ph, pt) -> P_cons (ph, pt));
@@ -466,7 +467,7 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_app = (fun (id, ps) -> Option.map (fun ps -> MP_app (id, ps)) (Util.option_all ps));
     p_vector = (fun ps -> Option.map (fun ps -> MP_vector ps) (Util.option_all ps));
     p_vector_concat = (fun ps -> Option.map (fun ps -> MP_vector_concat ps) (Util.option_all ps));
-    p_vector_subrange = (fun (id, n, m) -> Some (MP_vector_subrange (id, n, m)));
+    p_vector_subrange = (fun (id, n, ival, m) -> Some (MP_vector_subrange (id, n, ival, m)));
     p_tuple = (fun ps -> Option.map (fun ps -> MP_tuple ps) (Util.option_all ps));
     p_list = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps));
     p_cons = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt));
@@ -505,9 +506,9 @@ type ( 'a,
   e_loop : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux;
   e_vector : 'exp list -> 'exp_aux;
   e_vector_access : 'exp * 'exp -> 'exp_aux;
-  e_vector_subrange : 'exp * 'exp * 'exp -> 'exp_aux;
+  e_vector_subrange : 'exp * 'exp * interval * 'exp -> 'exp_aux;
   e_vector_update : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux;
+  e_vector_update_subrange : 'exp * 'exp * interval * 'exp * 'exp -> 'exp_aux;
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
@@ -536,7 +537,7 @@ type ( 'a,
   le_typ : Ast.typ * id -> 'lexp_aux;
   le_tuple : 'lexp list -> 'lexp_aux;
   le_vector : 'lexp * 'exp -> 'lexp_aux;
-  le_vector_range : 'lexp * 'exp * 'exp -> 'lexp_aux;
+  le_vector_range : 'lexp * 'exp * interval * 'exp -> 'lexp_aux;
   le_vector_concat : 'lexp list -> 'lexp_aux;
   le_field : 'lexp * id -> 'lexp_aux;
   le_aux : 'lexp_aux * 'a annot -> 'lexp;
@@ -574,10 +575,12 @@ let rec fold_exp_aux alg = function
       alg.e_loop (loop_type, m, fold_exp alg e1, fold_exp alg e2)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
   | E_vector_access (e1, e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
-  | E_vector_subrange (e1, e2, e3) -> alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  (* TODO: e_vector_subrange surely needs an interval? *)
+  | E_vector_subrange (e1, e2, ival, e3) -> alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, ival, fold_exp alg e3)
   | E_vector_update (e1, e2, e3) -> alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_vector_update_subrange (e1, e2, e3, e4) ->
-      alg.e_vector_update_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, fold_exp alg e4)
+  (* TODO: e_vector_update_subrange surely needs an interval? *)
+  | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
+      alg.e_vector_update_subrange (fold_exp alg e1, fold_exp alg e2, ival, fold_exp alg e3, fold_exp alg e4)
   | E_vector_append (e1, e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
   | E_list es -> alg.e_list (List.map (fold_exp alg) es)
   | E_cons (e1, e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
@@ -609,7 +612,7 @@ and fold_lexp_aux alg = function
   | LE_tuple les -> alg.le_tuple (List.map (fold_lexp alg) les)
   | LE_typ (typ, id) -> alg.le_typ (typ, id)
   | LE_vector (lexp, e) -> alg.le_vector (fold_lexp alg lexp, fold_exp alg e)
-  | LE_vector_range (lexp, e1, e2) -> alg.le_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+  | LE_vector_range (lexp, e1, ival, e2) -> alg.le_vector_range (fold_lexp alg lexp, fold_exp alg e1, ival, fold_exp alg e2)
   | LE_vector_concat les -> alg.le_vector_concat (List.map (fold_lexp alg) les)
   | LE_field (lexp, id) -> alg.le_field (fold_lexp alg lexp, id)
 
@@ -653,9 +656,9 @@ let id_exp_alg =
       );
     e_vector = (fun es -> E_vector es);
     e_vector_access = (fun (e1, e2) -> E_vector_access (e1, e2));
-    e_vector_subrange = (fun (e1, e2, e3) -> E_vector_subrange (e1, e2, e3));
+    e_vector_subrange = (fun (e1, e2, ival, e3) -> E_vector_subrange (e1, e2, ival, e3));
     e_vector_update = (fun (e1, e2, e3) -> E_vector_update (e1, e2, e3));
-    e_vector_update_subrange = (fun (e1, e2, e3, e4) -> E_vector_update_subrange (e1, e2, e3, e4));
+    e_vector_update_subrange = (fun (e1, e2, ival, e3, e4) -> E_vector_update_subrange (e1, e2, ival, e3, e4));
     e_vector_append = (fun (e1, e2) -> E_vector_append (e1, e2));
     e_list = (fun es -> E_list es);
     e_cons = (fun (e1, e2) -> E_cons (e1, e2));
@@ -684,7 +687,7 @@ let id_exp_alg =
     le_typ = (fun (typ, id) -> LE_typ (typ, id));
     le_tuple = (fun tups -> LE_tuple tups);
     le_vector = (fun (lexp, e2) -> LE_vector (lexp, e2));
-    le_vector_range = (fun (lexp, e2, e3) -> LE_vector_range (lexp, e2, e3));
+    le_vector_range = (fun (lexp, e2, ival, e3) -> LE_vector_range (lexp, e2, ival, e3));
     le_vector_concat = (fun lexps -> LE_vector_concat lexps);
     le_field = (fun (lexp, id) -> LE_field (lexp, id));
     le_aux = (fun (lexp, annot) -> LE_aux (lexp, annot));
@@ -724,7 +727,7 @@ let compute_pat_alg bot join =
     p_app = (fun (id, ps) -> split_join (fun ps -> P_app (id, ps)) ps);
     p_vector = split_join (fun ps -> P_vector ps);
     p_vector_concat = split_join (fun ps -> P_vector_concat ps);
-    p_vector_subrange = (fun (id, n, m) -> (bot, P_vector_subrange (id, n, m)));
+    p_vector_subrange = (fun (id, n, ival, m) -> (bot, P_vector_subrange (id, n, ival, m)));
     p_tuple = split_join (fun ps -> P_tuple ps);
     p_list = split_join (fun ps -> P_list ps);
     p_cons = (fun ((vh, ph), (vt, pt)) -> (join vh vt, P_cons (ph, pt)));
@@ -765,11 +768,13 @@ let compute_exp_alg bot join =
       );
     e_vector = split_join (fun es -> E_vector es);
     e_vector_access = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_vector_access (e1, e2)));
-    e_vector_subrange = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_vector_subrange (e1, e2, e3)));
+    (* TODO: Is this right? *)
+    e_vector_subrange = (fun ((v1, e1), (v2, e2), ival, (v3, e3)) -> (join_list [v1; v2; v3], E_vector_subrange (e1, e2, ival, e3)));
     e_vector_update = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_vector_update (e1, e2, e3)));
     e_vector_update_subrange =
-      (fun ((v1, e1), (v2, e2), (v3, e3), (v4, e4)) ->
-        (join_list [v1; v2; v3; v4], E_vector_update_subrange (e1, e2, e3, e4))
+    (* TODO: Is this right? *)
+      (fun ((v1, e1), (v2, e2), ival, (v3, e3), (v4, e4)) ->
+        (join_list [v1; v2; v3; v4], E_vector_update_subrange (e1, e2, ival, e3, e4))
       );
     e_vector_append = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_vector_append (e1, e2)));
     e_list = split_join (fun es -> E_list es);
@@ -819,7 +824,8 @@ let compute_exp_alg bot join =
         (join_list vs, LE_tuple ls)
       );
     le_vector = (fun ((vl, lexp), (v2, e2)) -> (join vl v2, LE_vector (lexp, e2)));
-    le_vector_range = (fun ((vl, lexp), (v2, e2), (v3, e3)) -> (join_list [vl; v2; v3], LE_vector_range (lexp, e2, e3)));
+    (* TODO: Is this right? *)
+    le_vector_range = (fun ((vl, lexp), (v2, e2), ival, (v3, e3)) -> (join_list [vl; v2; v3], LE_vector_range (lexp, e2, ival, e3)));
     le_vector_concat =
       (fun ls ->
         let vs, ls = List.split ls in
@@ -883,9 +889,11 @@ let pure_exp_alg bot join =
       );
     e_vector = join_list;
     e_vector_access = (fun (v1, v2) -> join v1 v2);
-    e_vector_subrange = (fun (v1, v2, v3) -> join_list [v1; v2; v3]);
+    (* TODO: Need to use ival? *)
+    e_vector_subrange = (fun (v1, v2, ival, v3) -> join_list [v1; v2; v3]);
     e_vector_update = (fun (v1, v2, v3) -> join_list [v1; v2; v3]);
-    e_vector_update_subrange = (fun (v1, v2, v3, v4) -> join_list [v1; v2; v3; v4]);
+    (* TODO: Need to use ival? *)
+    e_vector_update_subrange = (fun (v1, v2, ival, v3, v4) -> join_list [v1; v2; v3; v4]);
     e_vector_append = (fun (v1, v2) -> join v1 v2);
     e_list = join_list;
     e_cons = (fun (v1, v2) -> join v1 v2);
@@ -914,7 +922,8 @@ let pure_exp_alg bot join =
     le_typ = (fun (typ, id) -> bot);
     le_tuple = join_list;
     le_vector = (fun (vl, v2) -> join vl v2);
-    le_vector_range = (fun (vl, v2, v3) -> join_list [vl; v2; v3]);
+    (* TODO: Need to use ival? *)
+    le_vector_range = (fun (vl, v2, ival, v3) -> join_list [vl; v2; v3]);
     le_vector_concat = join_list;
     le_field = (fun (vl, id) -> vl);
     le_aux = (fun (vl, annot) -> vl);
@@ -993,11 +1002,11 @@ let rec default_fold_lexp f x (LE_aux (le, ann) as lexp) =
       let x, le = default_fold_lexp f x le in
       let x, e = f x e in
       (x, re (LE_vector (le, e)))
-  | LE_vector_range (le, e1, e2) ->
+  | LE_vector_range (le, e1, ival, e2) ->
       let x, le = default_fold_lexp f x le in
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
-      (x, re (LE_vector_range (le, e1, e2)))
+      (x, re (LE_vector_range (le, e1, ival, e2)))
   | LE_field (le, id) ->
       let x, le = default_fold_lexp f x le in
       (x, re (LE_field (le, id)))
@@ -1079,22 +1088,22 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
       (x, re (E_vector_access (e1, e2)))
-  | E_vector_subrange (e1, e2, e3) ->
+  | E_vector_subrange (e1, e2, ival, e3) ->
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
       let x, e3 = f x e3 in
-      (x, re (E_vector_subrange (e1, e2, e3)))
+      (x, re (E_vector_subrange (e1, e2, ival, e3)))
   | E_vector_update (e1, e2, e3) ->
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
       let x, e3 = f x e3 in
       (x, re (E_vector_update (e1, e2, e3)))
-  | E_vector_update_subrange (e1, e2, e3, e4) ->
+  | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
       let x, e3 = f x e3 in
       let x, e4 = f x e4 in
-      (x, re (E_vector_update_subrange (e1, e2, e3, e4)))
+      (x, re (E_vector_update_subrange (e1, e2, ival, e3, e4)))
   | E_vector_append (e1, e2) ->
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in

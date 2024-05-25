@@ -269,12 +269,14 @@ let reg_name_to_string = function
       let first, second =
         match dir with D_increasing -> (first, second) | D_decreasing -> (start - first, start - second)
       in
+      (* TODO: >.. and ..< *)
       s ^ "[" ^ string_of_int first ^ (if first = second then "" else ".." ^ string_of_int second) ^ "]"
   | Reg_field (s, _, _, f, _) -> s ^ "." ^ f
   | Reg_f_slice (s, start, dir, f, _, (first, second)) ->
       let first, second =
         match dir with D_increasing -> (first, second) | D_decreasing -> (start - first, start - second)
       in
+      (* TODO: >.. and ..< *)
       s ^ "." ^ f ^ "]" ^ string_of_int first ^ (if first = second then "" else ".." ^ string_of_int second) ^ "]"
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)

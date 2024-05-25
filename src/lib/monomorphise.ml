@@ -1083,10 +1083,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_loop (loop, m, e1, e2) -> re (E_loop (loop, m, map_exp e1, map_exp e2))
         | E_vector es -> re (E_vector (List.map map_exp es))
         | E_vector_access (e1, e2) -> re (E_vector_access (map_exp e1, map_exp e2))
-        | E_vector_subrange (e1, e2, e3) -> re (E_vector_subrange (map_exp e1, map_exp e2, map_exp e3))
+        | E_vector_subrange (e1, e2, ival, e3) -> re (E_vector_subrange (map_exp e1, map_exp e2, ival, map_exp e3))
         | E_vector_update (e1, e2, e3) -> re (E_vector_update (map_exp e1, map_exp e2, map_exp e3))
-        | E_vector_update_subrange (e1, e2, e3, e4) ->
-            re (E_vector_update_subrange (map_exp e1, map_exp e2, map_exp e3, map_exp e4))
+        | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
+            re (E_vector_update_subrange (map_exp e1, map_exp e2, ival, map_exp e3, map_exp e4))
         | E_vector_append (e1, e2) -> re (E_vector_append (map_exp e1, map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1, e2) -> re (E_cons (map_exp e1, map_exp e2))
@@ -1204,7 +1204,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | LE_app (id, es) -> re (LE_app (id, List.map map_exp es))
         | LE_tuple les -> re (LE_tuple (List.map map_lexp les))
         | LE_vector (le, e) -> re (LE_vector (map_lexp le, map_exp e))
-        | LE_vector_range (le, e1, e2) -> re (LE_vector_range (map_lexp le, map_exp e1, map_exp e2))
+        | LE_vector_range (le, e1, ival, e2) -> re (LE_vector_range (map_lexp le, map_exp e1, ival, map_exp e2))
         | LE_vector_concat les -> re (LE_vector_concat (List.map map_lexp les))
         | LE_field (le, id) -> re (LE_field (map_lexp le, id))
         | LE_deref e -> re (LE_deref (map_exp e))
@@ -2346,10 +2346,10 @@ module Analysis = struct
       | E_vector_access (e1, e2) | E_vector_append (e1, e2) | E_cons (e1, e2) ->
           let ds, assigns, r = non_det [e1; e2] in
           (merge_deps ds, assigns, r)
-      | E_vector_subrange (e1, e2, e3) | E_vector_update (e1, e2, e3) ->
+      | E_vector_subrange (e1, e2, _, e3) | E_vector_update (e1, e2, e3) ->
           let ds, assigns, r = non_det [e1; e2; e3] in
           (merge_deps ds, assigns, r)
-      | E_vector_update_subrange (e1, e2, e3, e4) ->
+      | E_vector_update_subrange (e1, e2, _, e3, e4) ->
           let ds, assigns, r = non_det [e1; e2; e3; e4] in
           (merge_deps ds, assigns, r)
       | E_struct fexps ->
@@ -2576,7 +2576,7 @@ module Analysis = struct
         let _, assigns, r1 = analyse_sub env assigns e in
         let assigns, r2 = analyse_lexp env assigns deps lexp in
         (assigns, merge r1 r2)
-    | LE_vector_range (lexp, e1, e2) ->
+    | LE_vector_range (lexp, e1, _, e2) ->
         let _, assigns, r1 = analyse_sub env assigns e1 in
         let _, assigns, r2 = analyse_sub env assigns e2 in
         let assigns, r3 = analyse_lexp env assigns deps lexp in
@@ -3691,7 +3691,8 @@ module MonoRewrites = struct
         | None -> E_aux (E_app (id, args), (l, tannot))
       end
     | ( E_assign
-          ( LE_aux (LE_vector_range (LE_aux (LE_id id1, (l_id1, _)), start1, end1), _),
+          (* TODO: Use ival? *)
+          ( LE_aux (LE_vector_range (LE_aux (LE_id id1, (l_id1, _)), start1, ival, end1), _),
             E_aux (E_app (subrange2, [vector2; start2; end2]), (l_assign, _))
           ),
         annot )
@@ -3714,13 +3715,15 @@ module MonoRewrites = struct
               ),
             (l_assign, empty_tannot)
           )
-    | ( E_assign (LE_aux (LE_vector_range (LE_aux (LE_id id1, annot1), start1, end1), _), E_aux (E_app (zeros, _), _)),
+    (* TODO: Use ival? *)
+    | ( E_assign (LE_aux (LE_vector_range (LE_aux (LE_id id1, annot1), start1, ival, end1), _), E_aux (E_app (zeros, _), _)),
         annot )
       when is_zeros (env_of_annot annot) zeros ->
         let lhs = LE_aux (LE_id id1, annot1) in
         let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
         E_aux (E_assign (lhs, rhs), annot)
-    | ( E_assign (LE_aux (LE_vector_range (lexp1, start1, end1), _), E_aux (E_app (zero_extend, zero_extend_args), _)),
+    (* TODO: Use ival? *)
+    | ( E_assign (LE_aux (LE_vector_range (lexp1, start1, ival, end1), _), E_aux (E_app (zero_extend, zero_extend_args), _)),
         (l, tannot) )
       when is_zero_extend (env_of_tannot tannot) zero_extend && not (is_constant_range (start1, end1)) ->
         let new_annot = (Generated l, empty_tannot) in
@@ -3740,7 +3743,8 @@ module MonoRewrites = struct
           ( E_block
               [
                 E_aux (E_assign (lexp1, with_zeros), new_annot);
-                E_aux (E_assign (LE_aux (LE_vector_range (lexp1, mid_point_low, end1), new_annot), vector), new_annot);
+                (* TODO: Support >.. and ..< *)
+                E_aux (E_assign (LE_aux (LE_vector_range (lexp1, mid_point_low, Ival_closed, end1), new_annot), vector), new_annot);
               ],
             new_annot
           )

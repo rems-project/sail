@@ -354,10 +354,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
         return
           (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings (complete_bindings bindings)))
       else fail "Match failure"
-  | E_vector_subrange (vec, n, m) -> wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
+  (* TODO: Pass ival to function. *)
+  | E_vector_subrange (vec, n, ival, m) -> wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
   | E_vector_access (vec, n) -> wrap (E_app (mk_id "vector_access_dec", [vec; n]))
   | E_vector_update (vec, n, x) -> wrap (E_app (mk_id "vector_update", [vec; n; x]))
-  | E_vector_update_subrange (vec, n, m, x) ->
+  (* TODO:Pass ival to function. *)
+  | E_vector_update_subrange (vec, n, ival, m, x) ->
       (* FIXME: Currently not general enough *)
       wrap (E_app (mk_id "vector_update_subrange_dec", [vec; n; m; x]))
   (* otherwise left-to-right evaluation order for function applications *)
@@ -530,12 +532,12 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
         wrap (E_assign (vec, exp'))
       with Failure s -> fail ("Failure: " ^ s)
     end
-  | E_assign (LE_aux (LE_vector_range (vec, n, m), lexp_annot), exp) -> begin
+  | E_assign (LE_aux (LE_vector_range (vec, n, ival, m), lexp_annot), exp) -> begin
       try
         let open Type_check in
         let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
         (* FIXME: let the type checker check this *)
-        let exp' = E_aux (E_vector_update_subrange (vec_exp, n, m, exp), lexp_annot) in
+        let exp' = E_aux (E_vector_update_subrange (vec_exp, n, ival, m, exp), lexp_annot) in
         wrap (E_assign (vec, exp'))
       with Failure s -> fail ("Failure: " ^ s)
     end
@@ -629,7 +631,7 @@ and exp_of_lexp (LE_aux (lexp_aux, _)) =
   | LE_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
   | LE_tuple lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
   | LE_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
-  | LE_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
+  | LE_vector_range (lexp, exp1, ival, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, ival, exp2))
   | LE_vector_concat [] -> failwith "Empty LE_vector_concat node in exp_of_lexp"
   | LE_vector_concat [lexp] -> exp_of_lexp lexp
   | LE_vector_concat (lexp :: lexps) ->
@@ -662,7 +664,8 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
             else (false, Bindings.empty)
         | _ -> (true, Bindings.singleton id (Complete_binding value))
       end
-  | P_vector_subrange (id, n, m) -> (true, Bindings.singleton id (Partial_binding [(value, n, m)]))
+  (* TODO: use ival *)
+  | P_vector_subrange (id, n, ival, m) -> (true, Bindings.singleton id (Partial_binding [(value, n, m)]))
   | P_var (pat, _) -> pattern_match env pat value
   | P_app (id, pats) ->
       let ctor, vals = coerce_ctor value in

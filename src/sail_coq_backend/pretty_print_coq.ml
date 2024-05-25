@@ -1415,7 +1415,7 @@ let doc_exp, doc_let =
     | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
         (* can only be register writes *)
         match le_act (*, t, tag*) with
-        | LE_vector_range (le, e2, e3) -> (
+        | LE_vector_range (le, e2, ival, e3) -> (
             match le with
             | LE_aux (LE_field ((LE_aux (_, lannot) as le), id), fannot) ->
                 if is_bit_typ (typ_of_annot fannot) then
@@ -1424,6 +1424,7 @@ let doc_exp, doc_let =
                   let field_ref = doc_id ctxt (typ_id_of (typ_of_annot lannot)) ^^ underscore ^^ doc_id ctxt id in
                   liftR
                     ((prefix 2 1) (string "write_reg_field_range")
+                       (* TODO: Use ival *)
                        (align (doc_lexp_deref ctxt le ^/^ field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e))
                     )
                 )
@@ -1926,7 +1927,7 @@ let doc_exp, doc_let =
         end
     | E_vector_access (v, e) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_access should have been rewritten before pretty-printing")
-    | E_vector_subrange (v, e1, e2) ->
+    | E_vector_subrange (v, e1, ival, e2) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field ((E_aux (_, (l, fannot)) as fexp), id) -> (
         match destruct_tannot fannot with
@@ -2076,7 +2077,7 @@ let doc_exp, doc_let =
         if aexp_needed then parens (align epp) else epp
     | E_vector_update (v, e1, e2) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_update should have been rewritten before pretty-printing")
-    | E_vector_update_subrange (v, e1, e2, e3) ->
+    | E_vector_update_subrange (v, e1, ival, e2, e3) ->
         raise (Reporting.err_unreachable l __POS__ "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps -> brackets (separate_map (semi ^^ break 1) expN exps)
     | E_match (e, pexps) ->
@@ -3217,7 +3218,8 @@ let doc_regtype_fields avoid_target_names (tname, (n1, n2, fields)) =
       | BF_aux (BF_single i, _) ->
           let i = const_int fid i in
           (i, i)
-      | BF_aux (BF_range (i, j), _) -> (const_int fid i, const_int fid j)
+      (* TODO: Use ival? *)
+      | BF_aux (BF_range (i, ival, j), _) -> (const_int fid i, const_int fid j)
       | _ ->
           raise
             (Reporting.err_unreachable Parse_ast.Unknown __POS__

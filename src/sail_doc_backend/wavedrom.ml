@@ -110,9 +110,11 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
       Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
       Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
-  | P_vector_subrange (_, n, m) when Big_int.equal n m ->
+  (* TODO: Use ival. *)
+  | P_vector_subrange (_, n, _ival, m) when Big_int.equal n m ->
       Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }" size (Big_int.to_string n) (wavedrom_label size label)
-  | P_vector_subrange (id, n, m) ->
+  (* TODO: Use ival. *)
+  | P_vector_subrange (id, n, _ival, m) ->
       Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Big_int.to_string n)
         (Big_int.to_string m) (wavedrom_label size label)
   | P_app (_, [P_aux (P_id arg, _)]) ->

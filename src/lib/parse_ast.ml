@@ -140,6 +140,11 @@ type lit_aux =
 
 type lit = L_aux of lit_aux * l
 
+type interval =
+ | Ival_closed
+ | Ival_open_dec
+ | Ival_open_inc
+
 type atyp_aux =
   (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
   | ATyp_id of id (* identifier *)
@@ -202,7 +207,7 @@ type pat_aux =
   | P_app of id * pat list (* union constructor pattern *)
   | P_vector of pat list (* vector pattern *)
   | P_vector_concat of pat list (* concatenated vector pattern *)
-  | P_vector_subrange of id * Big_int.num * Big_int.num
+  | P_vector_subrange of id * Big_int.num * interval * Big_int.num
   | P_tuple of pat list (* tuple pattern *)
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
@@ -243,9 +248,9 @@ and exp_aux =
   | E_for of id * exp * exp * exp * atyp * exp (* loop *)
   | E_vector of exp list (* vector (indexed from 0) *)
   | E_vector_access of exp * exp (* vector access *)
-  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
+  | E_vector_subrange of exp * exp * interval * exp (* subvector extraction *)
   | E_vector_update of exp * exp * exp (* vector functional update *)
-  | E_vector_update_subrange of exp * exp * exp * exp (* vector subrange update (with vector) *)
+  | E_vector_update_subrange of exp * exp * interval * exp * exp (* vector subrange update (with vector) *)
   | E_vector_append of exp * exp (* vector concatenation *)
   | E_list of exp list (* list *)
   | E_cons of exp * exp (* cons *)
@@ -341,7 +346,7 @@ type subst = IS_aux of subst_aux * l
 type index_range_aux =
   (* index specification, for bitfields in register types *)
   | BF_single of atyp (* single index *)
-  | BF_range of atyp * atyp (* index range *)
+  | BF_range of atyp * interval * atyp (* index range *)
   | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 and index_range = BF_aux of index_range_aux * l
@@ -357,7 +362,7 @@ type mpat_aux =
   | MP_app of id * mpat list
   | MP_vector of mpat list
   | MP_vector_concat of mpat list
-  | MP_vector_subrange of id * Big_int.num * Big_int.num
+  | MP_vector_subrange of id * Big_int.num * interval * Big_int.num
   | MP_tuple of mpat list
   | MP_list of mpat list
   | MP_cons of mpat * mpat
@@ -474,7 +479,7 @@ type lexp_aux =
   | LE_id of id (* identifier *)
   | LE_mem of id * exp list
   | LE_vector of lexp * exp (* vector element *)
-  | LE_vector_range of lexp * exp * exp (* subvector *)
+  | LE_vector_range of lexp * exp * interval * exp (* subvector *)
   | LE_vector_concat of lexp list
   | LE_field of lexp * id (* struct field *)
 

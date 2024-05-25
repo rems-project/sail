@@ -98,6 +98,8 @@ let prepend_id str1 = function
 let mk_id i n m = Id_aux (i, loc n m)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
+let mk_interval i n m = i (* TODO: Ival_aux (i, loc n m) *)
+
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
@@ -175,14 +177,14 @@ let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc)
 
 type vector_update =
   VU_single of exp * exp
-| VU_range of exp * exp * exp
+| VU_range of exp * interval * exp * exp
 
 let rec mk_vector_updates input updates n m =
   match updates with
   | VU_single (idx, value) :: updates ->
      mk_vector_updates (mk_exp (E_vector_update (input, idx, value)) n m) updates n m
-  | VU_range (high, low, value) :: updates ->
-     mk_vector_updates (mk_exp (E_vector_update_subrange (input, high, low, value)) n m) updates n m
+  | VU_range (high, ival, low, value) :: updates ->
+     mk_vector_updates (mk_exp (E_vector_update_subrange (input, high, ival, low, value)) n m) updates n m
   | [] -> input
 
 let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
@@ -246,7 +248,7 @@ let set_syntax_deprecated l =
 %nonassoc Then
 %nonassoc Else
 
-%token Bar Comma Dot Eof Minus Semi Under DotDot At ColonColon Caret Star
+%token Bar Comma Dot Eof Minus Semi Under GreaterDotDot DotDotLess DotDot At ColonColon Caret Star
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
 %token MinusGt Bidir
 
@@ -340,6 +342,14 @@ pat_op:
     { mk_id (Id "::") $startpos $endpos }
   | Caret
     { mk_id (Id "^") $startpos $endpos }
+
+interval:
+  | DotDot
+    { mk_interval Ival_closed $startpos $endpos }
+  | GreaterDotDot
+    { mk_interval Ival_open_dec $startpos $endpos }
+  | DotDotLess
+    { mk_interval Ival_open_inc $startpos $endpos }
 
 id_list:
   | id
@@ -576,9 +586,9 @@ atomic_pat:
   | id Unit
     { mk_pat (P_app ($1, [mk_pat (P_lit (mk_lit L_unit $startpos $endpos)) $startpos $endpos])) $startpos $endpos }
   | id Lsquare Num Rsquare
-    { mk_pat (P_vector_subrange ($1, $3, $3)) $startpos $endpos }
-  | id Lsquare Num DotDot Num Rsquare
-    { mk_pat (P_vector_subrange ($1, $3, $5)) $startpos $endpos }
+    { mk_pat (P_vector_subrange ($1, $3, Ival_closed, $3)) $startpos $endpos }
+  | id Lsquare Num interval Num Rsquare
+    { mk_pat (P_vector_subrange ($1, $3, $4, $5)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | atomic_pat Colon typ_no_caret
@@ -810,8 +820,8 @@ atomic_exp:
     { mk_exp (E_assert ($3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Rsquare
     { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
-  | atomic_exp Lsquare exp DotDot exp Rsquare
-    { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
+  | atomic_exp Lsquare exp interval exp Rsquare
+    { mk_exp (E_vector_subrange ($1, $3, $4, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Comma exp Rsquare
     { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
   | Struct Lcurly fexp_exp_list Rcurly
@@ -856,8 +866,8 @@ exp_list:
 vector_update:
   | atomic_exp Eq exp
     { VU_single ($1, $3) }
-  | atomic_exp DotDot atomic_exp Eq exp
-    { VU_range ($1, $3, $5) }
+  | atomic_exp interval atomic_exp Eq exp
+    { VU_range ($1, $2, $3, $5) }
   | id
     { VU_single (mk_exp (E_id $1) $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)}
 
@@ -968,10 +978,10 @@ paren_index_range:
 atomic_index_range:
   | typ
     { mk_ir (BF_single $1) $startpos $endpos }
-  | typ DotDot typ
-    { mk_ir (BF_range ($1, $3)) $startpos $endpos }
-  | Lparen typ DotDot typ Rparen
-    { mk_ir (BF_range ($2, $4)) $startpos $endpos }
+  | typ interval typ
+    { mk_ir (BF_range ($1, $2, $3)) $startpos $endpos }
+  | Lparen typ interval typ Rparen
+    { mk_ir (BF_range ($2, $3, $4)) $startpos $endpos }
 
 r_id_def:
   | id Colon index_range
@@ -1139,9 +1149,9 @@ atomic_mpat:
   | id
     { mk_mpat (MP_id $1) $startpos $endpos }
   | id Lsquare Num Rsquare
-    { mk_mpat (MP_vector_subrange ($1, $3, $3)) $startpos $endpos }
-  | id Lsquare Num DotDot Num Rsquare
-    { mk_mpat (MP_vector_subrange ($1, $3, $5)) $startpos $endpos }
+    { mk_mpat (MP_vector_subrange ($1, $3, Ival_closed, $3)) $startpos $endpos }
+  | id Lsquare Num interval Num Rsquare
+    { mk_mpat (MP_vector_subrange ($1, $3, $4, $5)) $startpos $endpos }
   | id Unit
     { mk_mpat (MP_app ($1, [mk_mpat (MP_lit (mk_lit L_unit $startpos($2) $endpos($2))) $startpos($2) $endpos($2)])) $startpos $endpos }
   | id Lparen mpat_list Rparen
