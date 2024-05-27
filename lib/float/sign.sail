@@ -27,12 +27,25 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_SIGN
+$define _FLOAT_SIGN
 
 $include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
+
+val      float_is_positive : fp_bits -> bool
+function float_is_positive (op) = {
+  let struct {sign, _} = float_decompose(op);
+  let is_positive = sign[0] == bitzero;
+
+  is_positive
+}
+
+val      float_is_negative : fp_bits -> bool
+function float_is_negative (op) = {
+  let struct {sign, _} = float_decompose(op);
+  let is_negative = sign[0] == bitone;
+
+  is_negative
+}
 
 $endif
