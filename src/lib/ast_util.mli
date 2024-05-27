@@ -310,6 +310,7 @@ val npow2 : nexp -> nexp
 val nvar : kid -> nexp
 val napp : id -> nexp list -> nexp
 val nid : id -> nexp
+val nite : n_constraint -> nexp -> nexp -> nexp
 
 (** {2 Functions for building numeric constraints} *)
 

@@ -255,12 +255,6 @@ let rank_overload_errors errs =
       )
   | [] -> (without_heuristic, None)
 
-let rec innermost_function_arg_error l typ err =
-  match err with
-  | Err_instantiation_info (_, err) -> innermost_function_arg_error l typ err
-  | Err_function_arg (l, typ, err) -> innermost_function_arg_error l typ err
-  | _ -> (l, typ, err)
-
 let rec overload_messages_all_same = function
   | (_, l1, m1) :: (id2, l2, m2) :: rest ->
       if l1 = l2 && m1 = m2 then overload_messages_all_same ((id2, l2, m2) :: rest) else None

@@ -280,7 +280,7 @@ let destruct_exist_plain ?(name = None) typ =
    N-expression that represents that numeric type in the
    environment. For example:
    - {'n, 'n <= 10. atom('n)} => ['n], 'n <= 10, 'n
-   - int => ['n], true, 'n (where x is fresh)
+   - int => ['n], true, 'n (where 'n is fresh)
    - atom('n) => [], true, 'n
 **)
 let destruct_numeric ?(name = None) typ =

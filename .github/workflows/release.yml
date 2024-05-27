@@ -1,0 +1,116 @@
+name: Release tarball
+
+on: [workflow_dispatch]
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            container: rockylinux:8
+            ocaml_version: 5.0.0
+            opam_cache_key: rocky8-5.0.0
+
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+
+    env:
+      # Disable opam warning about running as root.
+      OPAMROOTISOK: 1
+
+    steps:
+    # This must be before checkout otherwise Github will use a zip of the
+    # code instead of git clone.
+    - name: System dependencies
+      run: |
+        dnf install --assumeyes \
+          gmp-devel \
+          pkg-config \
+          zlib-devel \
+          openssl \
+          curl \
+          git \
+          make \
+          unzip \
+          patch \
+          gcc \
+          gcc-c++ \
+          cmake \
+          bzip2 \
+          python3 \
+          findutils \
+          diffutils \
+          rsync \
+          which
+
+    - uses: actions/checkout@v4
+
+    # Retreive git history (but not files) so that `git desribe` works. This is
+    # used to set the version info in the compiler (printed by `sail --version`).
+    # The safe.directory command is needed because the current user does not
+    # own the git repo directory and that can be a security issue in some case
+    # (but not this one).
+    - name: Unshallow git history
+      run: |
+        git config --global --add safe.directory '*'
+        git fetch --unshallow --filter=tree:0
+
+    - name: Download OPAM
+      run: |
+        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
+        chmod +x /usr/local/bin/opam
+
+    - name: Restore cached ~/.opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.opam_cache_key }}
+
+    - name: Init opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        # Sandboxing doesn't work in Docker.
+        opam init --disable-sandboxing --yes --no-setup --shell=sh --compiler=${{ matrix.ocaml_version }} && \
+        eval "$(opam env)" && \
+        ocaml --version
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Sail
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add .
+        opam install sail --yes
+
+    # Build Z3 from source since the binary releases only support glibc 2.31
+    # and old distros like RHEL 8 have 2.28.
+    - name: Build Z3
+      run: |
+        git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
+        mkdir z3/build
+        cd z3/build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        make -j4
+        make install
+
+    - name: Make release tarball
+      run: |
+        eval $(opam env)
+        make tarball TARBALL_EXTRA_BIN=$(which z3)
+
+    - name: Upload tarball
+      uses: actions/upload-artifact@v4
+      with:
+        name: sail
+        path: _build/sail.tar.gz

@@ -116,8 +116,6 @@ let zencode_uid (id, ctyps) =
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
 
-let ctor_bindings = List.fold_left (fun map (id, ctyp) -> Bindings.add id ctyp map) Bindings.empty
-
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -428,7 +426,7 @@ end) : CONFIG = struct
     | aval -> aval
 
   (* Map over all the functions in an aexp. *)
-  let rec analyze_functions ctx f (AE_aux (aexp, ({ env; loc = l; _ } as annot))) =
+  let rec analyze_functions ctx f (AE_aux (aexp, ({ env; _ } as annot))) =
     let ctx = { ctx with local_env = env } in
     let aexp =
       match aexp with
@@ -1483,7 +1481,7 @@ let codegen_type_def =
         c_function ~return:"static void" (sail_kill n "struct %s *op" n) [each_ctor "op->" (clear_field "op") tus]
       in
       let codegen_ctor (ctor_id, ctyp) =
-        let ctor_args, tuple, tuple_cleanup = (Printf.sprintf "%s op" (sgen_const_ctyp ctyp), empty, empty) in
+        let ctor_args = Printf.sprintf "%s op" (sgen_const_ctyp ctyp) in
         c_function ~return:"static void"
           (ksprintf string "%s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id)
              ctor_args
@@ -1495,7 +1493,6 @@ let codegen_type_def =
             [
               sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->%s" (sgen_id ctor_id);
               sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&rop->%s, op" (sgen_id ctor_id);
-              tuple_cleanup;
             ]
           )
       in
@@ -1612,7 +1609,7 @@ let codegen_list ctyp =
     let codegen_node =
       ksprintf string "struct node_%s {\n  unsigned int rc;\n  %s hd;\n  struct node_%s *tl;\n};\n" (sgen_id id)
         (sgen_ctyp ctyp) (sgen_id id)
-      ^^ string (Printf.sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id))
+      ^^ string (sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id))
     in
 
     let codegen_list_init =
@@ -1641,19 +1638,19 @@ let codegen_list ctyp =
     in
 
     let codegen_inc_reference_count =
-      string (Printf.sprintf "static void internal_inc_%s(%s l) {\n" (sgen_id id) (sgen_id id))
+      string (sprintf "static void internal_inc_%s(%s l) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  if (l == NULL) return;\n" ^^ string "  l->rc += 1;\n" ^^ string "}"
     in
 
     let codegen_dec_reference_count =
-      string (Printf.sprintf "static void internal_dec_%s(%s l) {\n" (sgen_id id) (sgen_id id))
+      string (sprintf "static void internal_dec_%s(%s l) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  if (l == NULL) return;\n" ^^ string "  l->rc -= 1;\n" ^^ string "}"
     in
 
     let codegen_list_copy =
       let ty = sgen_id id in
       c_function ~return:"static void" (sail_copy ty "%s *rop, %s op" ty ty)
-        [Printf.ksprintf c_stmt "internal_inc_%s(op)" ty; sail_kill ~suffix:";" ty "rop"; c_stmt "*rop = op"]
+        [ksprintf c_stmt "internal_inc_%s(op)" ty; sail_kill ~suffix:";" ty "rop"; c_stmt "*rop = op"]
     in
 
     let codegen_cons =
@@ -1685,7 +1682,6 @@ let codegen_list ctyp =
     in
 
     let codegen_list_equal =
-      let open Printf in
       let equal_hd = sail_equal (sgen_ctyp_name ctyp) "op1->hd, op2->hd" in
       let equal_tl = sail_equal (sgen_id id) "op1->tl, op2->tl" in
       c_function ~return:"static bool"
@@ -1698,7 +1694,6 @@ let codegen_list ctyp =
     in
 
     let codegen_list_undefined =
-      let open Printf in
       ksprintf string "static void UNDEFINED(%s)(%s *rop, %s u) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)
       ^^ ksprintf string "  *rop = NULL;\n" ^^ string "}"
     in
