@@ -3772,6 +3772,9 @@ end = struct
         string "destruct regs, r, r'; simpl; intro EQ; rewrite ?EQ; reflexivity.";
         string "Qed.";
         empty;
+        string "Arguments register_set : simpl never.";
+        string "Arguments register_lookup : simpl never.";
+        empty;
       ]
 
   let register_refs ctxt env register_map =
