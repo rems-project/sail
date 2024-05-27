@@ -1145,8 +1145,13 @@ let valid_hex_bits (n, s) =
   )
 
 let parse_hex_bits (n, s) =
-  if not (valid_hex_bits (n, s)) then zeros n
-  else bits_of_string (String.sub s 2 (String.length s - 2)) |> List.rev |> Util.take (Big_int.to_int n) |> List.rev
+  let padding = zeros n in
+  if not (valid_hex_bits (n, s)) then padding
+  else
+    padding @ bits_of_string (String.sub s 2 (String.length s - 2))
+    |> List.rev
+    |> Util.take (Big_int.to_int n)
+    |> List.rev
 
 let trace_memory_write (_, _, _) = ()
 let trace_memory_read (_, _, _) = ()

@@ -115,7 +115,7 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   | P_vector_subrange (id, n, m) ->
       Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Big_int.to_string n)
         (Big_int.to_string m) (wavedrom_label size label)
-  | P_app (id, [P_aux (P_id arg, _)]) ->
+  | P_app (_, [P_aux (P_id arg, _)]) ->
       Printf.sprintf "    { bits: %d, name: '%s'%s, type: 4 }" size (string_of_id arg) (wavedrom_label size label)
   | P_app (id, _) ->
       Printf.sprintf "    { bits: %d, name: '%s'%s, type: 7 }" size (string_of_id id) (wavedrom_label size label)

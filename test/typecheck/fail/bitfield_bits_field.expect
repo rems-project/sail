@@ -1,0 +1,7 @@
+[93mType error[0m:
+[96mfail/bitfield_bits_field.sail[0m:6.2-6:
+6[96m |[0m  bits : 15 .. 0,
+ [91m |[0m  [91m^--^[0m
+ [91m |[0m Field with name 'bits' found in bitfield definition.
+ [91m |[0m 
+ [91m |[0m This is used as the default name for all the bits in the bitfield, so should not be overridden.

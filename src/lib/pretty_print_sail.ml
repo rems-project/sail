@@ -272,8 +272,6 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
 
-  let doc_typschm_typ (TypSchm_aux (TypSchm_ts (_, typ), _)) = doc_typ typ
-
   let doc_typquant (TypQ_aux (tq_aux, _)) =
     match tq_aux with TypQ_no_forall -> None | TypQ_tq [] -> None | TypQ_tq qs -> Some (doc_param_quants qs)
 

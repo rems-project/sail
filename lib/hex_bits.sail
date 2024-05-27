@@ -68,6 +68,7 @@
 $ifndef _HEX_BITS
 $define _HEX_BITS
 
+$include <option.sail>
 $include <vector.sail>
 $include <string.sail>
 

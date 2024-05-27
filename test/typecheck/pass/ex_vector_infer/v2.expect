@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/ex_vector_infer/v2.sail[0m:13.11-16:
+13[96m |[0m    [0b00, 0b111]
+  [91m |[0m           [91m^---^[0m
+  [91m |[0m Failed to prove constraint: 3 == 2

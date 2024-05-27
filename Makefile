@@ -10,6 +10,17 @@ sail:
 install: sail
 	dune install
 
+
+# Build binary tarball. The lib directory is very large and not needed
+# for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.
+tarball: sail
+	dune install --relocatable --prefix=_build/tarball/sail
+	rm -rf _build/tarball/sail/lib
+ifdef TARBALL_EXTRA_BIN
+	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
+endif
+	tar czvf _build/sail.tar.gz -C _build/tarball sail
+
 coverage:
 	dune build --release --instrument-with bisect_ppx
 
