@@ -27,13 +27,18 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_ZERO
+$define _FLOAT_ZERO
 
 $include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
-$include <float/zero.sail>
+
+val      float_is_zero : fp_bits -> bool
+function float_is_zero (op) = {
+  let struct {_, exp, mantissa} = float_decompose(op);
+  let is_zero = exp == sail_zeros(length(exp))
+               & mantissa == sail_zeros(length(mantissa));
+
+  is_zero
+}
 
 $endif
