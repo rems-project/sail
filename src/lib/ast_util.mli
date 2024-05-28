@@ -487,6 +487,7 @@ val string_of_pat : 'a pat -> string
 val string_of_mpat : 'a mpat -> string
 val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
+val string_of_order : order -> string
 
 (** {1 Functions for getting identifiers from toplevel definitions} *)
 

@@ -60,6 +60,7 @@ skip_tests_mwords = {
     'ex_vector_infer',
     'ex_list_infer',
     'ex_cons_infer',
+    'right_open_dec_assign',
 }
 
 print('Sail is {}'.format(sail))

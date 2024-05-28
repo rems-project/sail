@@ -140,10 +140,7 @@ type lit_aux =
 
 type lit = L_aux of lit_aux * l
 
-type interval =
- | Ival_closed
- | Ival_open_dec
- | Ival_open_inc
+type interval = Ival_closed | Ival_open_dec | Ival_open_inc
 
 type atyp_aux =
   (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)

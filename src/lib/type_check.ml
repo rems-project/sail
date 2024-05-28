@@ -3300,15 +3300,25 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
           let slice_len, check =
-            match Env.get_default_order env with
-            | Ord_aux (Ord_inc, _) ->
+            match (Env.get_default_order env, ival) with
+            | Ord_aux (Ord_inc, _), Ival_closed ->
                 ( nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
                   nc_and (nc_and (nc_lteq (nint 0) nexp1) (nc_lteq nexp1 nexp2)) (nc_lt nexp2 len)
                 )
-            | Ord_aux (Ord_dec, _) ->
+            | Ord_aux (Ord_inc, _), Ival_open_inc ->
+                ( nexp_simp (nminus nexp2 nexp1),
+                  nc_and (nc_and (nc_lteq (nint 0) nexp1) (nc_lteq nexp1 nexp2)) (nc_lteq nexp2 len)
+                )
+            | Ord_aux (Ord_dec, _), Ival_closed ->
                 ( nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
                   nc_and (nc_and (nc_lteq (nint 0) nexp2) (nc_lteq nexp2 nexp1)) (nc_lt nexp1 len)
                 )
+            | Ord_aux (Ord_dec, _), Ival_open_dec ->
+                ( nexp_simp (nminus nexp1 nexp2),
+                  nc_and (nc_and (nc_lteq (nint 0) nexp2) (nc_lteq nexp2 nexp1)) (nc_lteq nexp1 len)
+                )
+            | ord, _ ->
+                typ_error l ("Cannot use interval " ^ string_of_ival ival ^ " with default order " ^ string_of_order ord)
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
             annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, ival, inferred_exp2)) (bitvector_typ slice_len)
@@ -3649,13 +3659,22 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | exn -> raise exn
     end
   | E_vector_update (v, n, exp) -> infer_vector_update l env v n exp
-  (* TODO: Pass ival here. *)
-  | E_vector_update_subrange (v, n, ival, m, exp) ->
-      infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
+  | E_vector_update_subrange (v, n, ival, m, exp) -> begin
+      match ival with
+      | Ival_closed -> infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
+      | Ival_open_dec ->
+          infer_exp env (E_aux (E_app (mk_id "vector_update_subrange_open_dec", [v; n; m; exp]), (l, uannot)))
+      | Ival_open_inc ->
+          infer_exp env (E_aux (E_app (mk_id "vector_update_subrange_open_inc", [v; n; m; exp]), (l, uannot)))
+    end
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot)))
-  (* TODO: Pass ival here. *)
-  | E_vector_subrange (v, n, ival, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
+  | E_vector_subrange (v, n, ival, m) -> begin
+      match ival with
+      | Ival_closed -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
+      | Ival_open_dec -> infer_exp env (E_aux (E_app (mk_id "vector_subrange_open_dec", [v; n; m]), (l, uannot)))
+      | Ival_open_inc -> infer_exp env (E_aux (E_app (mk_id "vector_subrange_open_inc", [v; n; m]), (l, uannot)))
+    end
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"
   | E_vector (item :: items as vec) ->
       let inferred_item = irule infer_exp env item in
@@ -4196,7 +4215,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
       | Enum enum -> (annot_mpat (MP_id v) enum, env, [])
     end
   | MP_vector_subrange (id, n, ival, m) ->
-    (* TODO: Definitely use ival here. *)
+      (* TODO: Definitely use ival here. *)
       let len =
         match Env.get_default_order env with
         | Ord_aux (Ord_dec, _) ->

@@ -372,7 +372,9 @@ void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
-                     
+
+void subrange_open_dec(lbits *rop, const lbits op, const sail_int n_mpz, const sail_int m_mpz);
+
 void sail_truncate(lbits *rop, const lbits op, const sail_int len);
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
@@ -418,6 +420,12 @@ void vector_update_subrange_inc_lbits(lbits *rop,
 				      const sail_int n_mpz,
 				      const sail_int m_mpz,
 				      const lbits slice);
+
+void update_subrange_open_dec(lbits *rop,
+                              const lbits op,
+                              const sail_int n_mpz,
+                              const sail_int m_mpz,
+                              const lbits slice);
 
 fbits fast_update_subrange(const fbits op,
 			   const mach_int n,

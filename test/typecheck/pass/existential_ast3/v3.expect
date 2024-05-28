@@ -3,4 +3,4 @@
 25[96m |[0m    Some(Ctor(64, unsigned(0b0 @ b @ a)))
   [91m |[0m         [91m^-----------------------------^[0m [91mchecking function argument has type ast[0m
   [91m |[0m Could not resolve quantifiers for Ctor
-  [91m |[0m [94m*[0m (64 in {32, 64} & (0 <= 'ex325# & 'ex325# < 64))
+  [91m |[0m [94m*[0m (64 in {32, 64} & (0 <= 'ex345# & 'ex345# < 64))

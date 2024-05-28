@@ -1133,8 +1133,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       match (start, length) with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
         when Big_int.equal s i && Big_int.equal l (Big_int.of_int (List.length lits)) ->
-          mk_exp (E_id rootid)
-          (* TODO: Support >.. and ..< *)
+          mk_exp (E_id rootid) (* TODO: Support >.. and ..< *)
       | _ -> mk_exp (E_vector_subrange (mk_exp (E_id rootid), mk_num_exp i, Ival_closed, mk_num_exp j))
     in
     check_eq_exp subvec_exp (mk_exp (E_vector (List.map strip_exp lits)))
@@ -2389,7 +2388,9 @@ let rewrite_ast_letbind_effects effect_info env =
         n_exp_name exp1 (fun exp1 ->
             n_exp_name exp2 (fun exp2 ->
                 n_exp_name exp3 (fun exp3 ->
-                    n_exp_name exp4 (fun exp4 -> k (pure_rewrap (E_vector_update_subrange (exp1, exp2, ival, exp3, exp4))))
+                    n_exp_name exp4 (fun exp4 ->
+                        k (pure_rewrap (E_vector_update_subrange (exp1, exp2, ival, exp3, exp4)))
+                    )
                 )
             )
         )
@@ -3191,7 +3192,9 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> exp_of_mpat m) mpats) empty_vec
   | MP_vector_subrange (id, n, ival, m) ->
       E_aux
-        (E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), ival, mk_lit_exp (L_num m)), (l, annot))
+        ( E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), ival, mk_lit_exp (L_num m)),
+          (l, annot)
+        )
   | MP_tuple mpats -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l, annot))
   | MP_list mpats -> E_aux (E_list (List.map exp_of_mpat mpats), (l, annot))
   | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l, annot))

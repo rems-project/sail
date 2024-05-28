@@ -815,7 +815,8 @@ and map_exp_annot_aux f = function
   | E_vector_update (exp1, exp2, exp3) ->
       E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
   | E_vector_update_subrange (exp1, exp2, ival, exp3, exp4) ->
-      E_vector_update_subrange (map_exp_annot f exp1, map_exp_annot f exp2, ival, map_exp_annot f exp3, map_exp_annot f exp4)
+      E_vector_update_subrange
+        (map_exp_annot f exp1, map_exp_annot f exp2, ival, map_exp_annot f exp3, map_exp_annot f exp4)
   | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_list xs -> E_list (List.map (map_exp_annot f) xs)
   | E_cons (exp1, exp2) -> E_cons (map_exp_annot f exp1, map_exp_annot f exp2)
@@ -1135,8 +1136,10 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
   | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_update_subrange (v, n, ival, m, exp) ->
-      "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " " ^ string_of_ival ival ^ " " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
-  | E_vector_subrange (v, n1, ival, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " " ^ string_of_ival ival ^ " " ^ string_of_exp n2 ^ "]"
+      "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " " ^ string_of_ival ival ^ " " ^ string_of_exp m ^ " = "
+      ^ string_of_exp exp ^ "]"
+  | E_vector_subrange (v, n1, ival, n2) ->
+      string_of_exp v ^ "[" ^ string_of_exp n1 ^ " " ^ string_of_ival ival ^ " " ^ string_of_exp n2 ^ "]"
   | E_vector_append (v1, v2) -> string_of_exp v1 ^ " @ " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
       "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
@@ -1180,11 +1183,7 @@ and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_var kid -> string_of_kid kid
   | TP_app (f, tpats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_typ_pat tpats ^ ")"
 
-and string_of_ival ival =
-  match ival with
-  | Ival_closed -> ".."
-  | Ival_open_dec -> ">.."
-  | Ival_open_inc -> "..<"
+and string_of_ival ival = match ival with Ival_closed -> ".." | Ival_open_dec -> ">.." | Ival_open_inc -> "..<"
 
 and string_of_pat (P_aux (pat, _)) =
   match pat with
@@ -1223,7 +1222,8 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
-  | MP_vector_subrange (id, n, ival, m) -> string_of_id id ^ "[" ^ Big_int.to_string n ^ " " ^ string_of_ival ival ^ " " ^ Big_int.to_string m ^ "]"
+  | MP_vector_subrange (id, n, ival, m) ->
+      string_of_id id ^ "[" ^ Big_int.to_string n ^ " " ^ string_of_ival ival ^ " " ^ Big_int.to_string m ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
@@ -1654,7 +1654,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_vector_update (exp1, exp2, exp3) ->
         E_vector_update (subst id value exp1, subst id value exp2, subst id value exp3)
     | E_vector_update_subrange (exp1, exp2, ival, exp3, exp4) ->
-        E_vector_update_subrange (subst id value exp1, subst id value exp2, ival, subst id value exp3, subst id value exp4)
+        E_vector_update_subrange
+          (subst id value exp1, subst id value exp2, ival, subst id value exp3, subst id value exp4)
     | E_vector_append (exp1, exp2) -> E_vector_append (subst id value exp1, subst id value exp2)
     | E_list exps -> E_list (List.map (subst id value) exps)
     | E_cons (exp1, exp2) -> E_cons (subst id value exp1, subst id value exp2)
@@ -1942,7 +1943,8 @@ and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp =
     | LE_tuple lexps -> LE_tuple (List.map (locate_lexp f) lexps)
     | LE_vector_concat lexps -> LE_vector_concat (List.map (locate_lexp f) lexps)
     | LE_vector (lexp, exp) -> LE_vector (locate_lexp f lexp, locate f exp)
-    | LE_vector_range (lexp, exp1, ival, exp2) -> LE_vector_range (locate_lexp f lexp, locate f exp1, ival, locate f exp2)
+    | LE_vector_range (lexp, exp1, ival, exp2) ->
+        LE_vector_range (locate_lexp f lexp, locate f exp1, ival, locate f exp2)
     | LE_field (lexp, id) -> LE_field (locate_lexp f lexp, locate_id f id)
   in
   LE_aux (lexp_aux, (f l, annot))

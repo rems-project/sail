@@ -532,10 +532,21 @@ let subrange_list_inc xs i j =
   let (_prefix,fromItoJ) = List.splitAt (nat_of_int i) toJ in
   fromItoJ
 
+val subrange_list_open_inc : forall 'a. list 'a -> integer -> integer -> list 'a
+let subrange_list_open_inc xs i j =
+  let (toJ,_suffix) = List.splitAt (nat_of_int j) xs in
+  let (_prefix,fromItoJ) = List.splitAt (nat_of_int i) toJ in
+  fromItoJ
+
 val subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a
 let subrange_list_dec xs i j =
   let top = (length_list xs) - 1 in
   subrange_list_inc xs (top - i) (top - j)
+
+val subrange_list_open_dec : forall 'a. list 'a -> integer -> integer -> list 'a
+let subrange_list_open_dec xs i j =
+  let top = (length_list xs) - 1 in
+  subrange_list_open_inc xs (top - i) (top - j)
 
 val subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a
 let subrange_list is_inc xs i j = if is_inc then subrange_list_inc xs i j else subrange_list_dec xs i j
@@ -546,10 +557,21 @@ let update_subrange_list_inc xs i j xs' =
   let (prefix,_fromItoJ) = List.splitAt (nat_of_int i) toJ in
   prefix ++ xs' ++ suffix
 
+val update_subrange_list_open_inc : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
+let update_subrange_list_open_inc xs i j xs' =
+  let (toJ,suffix) = List.splitAt (nat_of_int j) xs in
+  let (prefix,_fromItoJ) = List.splitAt (nat_of_int i) toJ in
+  prefix ++ xs' ++ suffix
+
 val update_subrange_list_dec : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
 let update_subrange_list_dec xs i j xs' =
   let top = (length_list xs) - 1 in
   update_subrange_list_inc xs (top - i) (top - j) xs'
+
+val update_subrange_list_open_dec : forall 'a. list 'a -> integer -> integer -> list 'a -> list 'a
+let update_subrange_list_open_dec xs i j xs' =
+  let top = (length_list xs) - 1 in
+  update_subrange_list_open_inc xs (top - i) (top - j) xs'
 
 val update_subrange_list : forall 'a. bool -> list 'a -> integer -> integer -> list 'a -> list 'a
 let update_subrange_list is_inc xs i j xs' =

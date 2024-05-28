@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/half_open_dec_assign/v3.sail[0m:8.2-12:
+8[96m |[0m  x[0 ..< 0] = sail_zeros(0);
+ [91m |[0m  [91m^--------^[0m
+ [91m |[0m Cannot use interval ..< with default order dec
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mpass/half_open_dec_assign/v3.sail[0m:8.2-12:
+ [91m |[0m 8[96m |[0m  x[0 ..< 0] = sail_zeros(0);
+ [91m |[0m  [91m |[0m  [91m^--------^[0m
+ [91m |[0m  [91m |[0m Cannot use interval ..< with default order dec

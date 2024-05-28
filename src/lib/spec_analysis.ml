@@ -218,7 +218,8 @@ let nexp_subst_fns substs =
     | E_vector_access (e1, e2) -> re (E_vector_access (s_exp e1, s_exp e2))
     | E_vector_subrange (e1, e2, ival, e3) -> re (E_vector_subrange (s_exp e1, s_exp e2, ival, s_exp e3))
     | E_vector_update (e1, e2, e3) -> re (E_vector_update (s_exp e1, s_exp e2, s_exp e3))
-    | E_vector_update_subrange (e1, e2, ival, e3, e4) -> re (E_vector_update_subrange (s_exp e1, s_exp e2, ival, s_exp e3, s_exp e4))
+    | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
+        re (E_vector_update_subrange (s_exp e1, s_exp e2, ival, s_exp e3, s_exp e4))
     | E_vector_append (e1, e2) -> re (E_vector_append (s_exp e1, s_exp e2))
     | E_list es -> re (E_list (List.map s_exp es))
     | E_cons (e1, e2) -> re (E_cons (s_exp e1, s_exp e2))

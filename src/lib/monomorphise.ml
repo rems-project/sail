@@ -3716,14 +3716,16 @@ module MonoRewrites = struct
             (l_assign, empty_tannot)
           )
     (* TODO: Use ival? *)
-    | ( E_assign (LE_aux (LE_vector_range (LE_aux (LE_id id1, annot1), start1, ival, end1), _), E_aux (E_app (zeros, _), _)),
+    | ( E_assign
+          (LE_aux (LE_vector_range (LE_aux (LE_id id1, annot1), start1, ival, end1), _), E_aux (E_app (zeros, _), _)),
         annot )
       when is_zeros (env_of_annot annot) zeros ->
         let lhs = LE_aux (LE_id id1, annot1) in
         let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
         E_aux (E_assign (lhs, rhs), annot)
     (* TODO: Use ival? *)
-    | ( E_assign (LE_aux (LE_vector_range (lexp1, start1, ival, end1), _), E_aux (E_app (zero_extend, zero_extend_args), _)),
+    | ( E_assign
+          (LE_aux (LE_vector_range (lexp1, start1, ival, end1), _), E_aux (E_app (zero_extend, zero_extend_args), _)),
         (l, tannot) )
       when is_zero_extend (env_of_tannot tannot) zero_extend && not (is_constant_range (start1, end1)) ->
         let new_annot = (Generated l, empty_tannot) in
@@ -3744,7 +3746,10 @@ module MonoRewrites = struct
               [
                 E_aux (E_assign (lexp1, with_zeros), new_annot);
                 (* TODO: Support >.. and ..< *)
-                E_aux (E_assign (LE_aux (LE_vector_range (lexp1, mid_point_low, Ival_closed, end1), new_annot), vector), new_annot);
+                E_aux
+                  ( E_assign (LE_aux (LE_vector_range (lexp1, mid_point_low, Ival_closed, end1), new_annot), vector),
+                    new_annot
+                  );
               ],
             new_annot
           )

@@ -248,6 +248,14 @@ let value_subrange_inc = function
   | [v1; v2; v3] -> mk_vector (Sail_lib.subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value subrange_inc"
 
+let value_subrange_open_dec = function
+  | [v1; v2; v3] -> mk_vector (Sail_lib.subrange_open_dec (coerce_bv v1, coerce_int v2, coerce_int v3))
+  | _ -> failwith "value subrange_open_dec"
+
+let value_subrange_open_inc = function
+  | [v1; v2; v3] -> mk_vector (Sail_lib.subrange_open_inc (coerce_bv v1, coerce_int v2, coerce_int v3))
+  | _ -> failwith "value subrange_open_inc"
+
 let value_access = function [v1; v2] -> Sail_lib.access (coerce_gv v1, coerce_int v2) | _ -> failwith "value access"
 
 let value_access_inc = function
@@ -270,6 +278,16 @@ let value_update_subrange_inc = function
   | [v1; v2; v3; v4] ->
       mk_vector (Sail_lib.update_subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
   | _ -> failwith "value update_subrange_inc"
+
+let value_update_subrange_open_dec = function
+  | [v1; v2; v3; v4] ->
+      mk_vector (Sail_lib.update_subrange_open_dec (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
+  | _ -> failwith "value update_subrange_open_dec"
+
+let value_update_subrange_open_inc = function
+  | [v1; v2; v3; v4] ->
+      mk_vector (Sail_lib.update_subrange_open_inc (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
+  | _ -> failwith "value update_subrange_open_inc"
 
 let value_append = function [v1; v2] -> V_vector (coerce_gv v1 @ coerce_gv v2) | _ -> failwith "value append"
 
@@ -719,12 +737,16 @@ let primops =
          ("length", value_length);
          ("subrange", value_subrange);
          ("subrange_inc", value_subrange_inc);
+         ("subrange_open_dec", value_subrange_open_dec);
+         ("subrange_open_inc", value_subrange_open_inc);
          ("access", value_access);
          ("access_inc", value_access_inc);
          ("update", value_update);
          ("update_inc", value_update_inc);
          ("update_subrange", value_update_subrange);
          ("update_subrange_inc", value_update_subrange_inc);
+         ("update_subrange_open_dec", value_update_subrange_open_dec);
+         ("update_subrange_open_inc", value_update_subrange_open_inc);
          ("slice", value_slice);
          ("slice_inc", value_slice_inc);
          ("append", value_append);

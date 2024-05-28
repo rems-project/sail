@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/half_open_dec_assign/v1.sail[0m:8.2-14:
+8[96m |[0m  x[33 >.. 16] = 0xAAAA;
+ [91m |[0m  [91m^----------^[0m
+ [91m |[0m Failed to prove constraint: false
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mpass/half_open_dec_assign/v1.sail[0m:8.2-14:
+ [91m |[0m 8[96m |[0m  x[33 >.. 16] = 0xAAAA;
+ [91m |[0m  [91m |[0m  [91m^----------^[0m
+ [91m |[0m  [91m |[0m Failed to prove constraint: false

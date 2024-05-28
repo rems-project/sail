@@ -85,9 +85,8 @@ let mk_id_exp id = mk_exp (E_id id)
 let mk_id_pat id = mk_pat (P_id id)
 
 let rec indices_of_range = function
-  | BF_aux (BF_single i, _) -> [(index_of_nexp i, index_of_nexp i)]
-  (* TODO: Support >.. and ..< *)
-  | BF_aux (BF_range (i, ival, j), _) -> [(index_of_nexp i, index_of_nexp j)]
+  | BF_aux (BF_single i, _) -> [(index_of_nexp i, Ival_closed, index_of_nexp i)]
+  | BF_aux (BF_range (i, ival, j), _) -> [(index_of_nexp i, ival, index_of_nexp j)]
   | BF_aux (BF_concat (l, r), _) -> indices_of_range l @ indices_of_range r
 
 let range_loc (BF_aux (_, l)) = l
@@ -100,7 +99,12 @@ let fix_locations l defs =
   in
   List.rev (go [] defs)
 
-let slice_width (i, j) = Big_int.succ (Big_int.abs (Big_int.sub i j))
+let slice_width (i, ival, j) =
+  match ival with
+  | Ival_closed -> Big_int.succ (Big_int.abs (Big_int.sub i j))
+  | Ival_open_dec -> Big_int.sub i j
+  | Ival_open_inc -> Big_int.sub j i
+
 let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left Big_int.add Big_int.zero
 
 (* Generate a constructor function for a bitfield type *)
@@ -112,8 +116,7 @@ let constructor name size =
 
 (* Helper functions to generate different kinds of field accessor exps and lexps *)
 let get_field_exp range inner_exp =
-  (* TODO: Support >.. and ..< *)
-  let mk_slice (i, j) = mk_exp (E_vector_subrange (inner_exp, mk_num_exp i, Ival_closed, mk_num_exp j)) in
+  let mk_slice (i, ival, j) = mk_exp (E_vector_subrange (inner_exp, mk_num_exp i, ival, mk_num_exp j)) in
   let rec aux = function
     | [e] -> e
     | e :: es -> mk_exp (E_vector_append (e, aux es))
@@ -126,8 +129,7 @@ let construct_bitfield_struct _ exp = mk_exp (E_struct [mk_fexp (mk_id "bits") e
 let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
 
 let set_field_lexp range inner_lexp =
-  (* TODO: Support >.. and ..< *)
-  let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, Ival_closed, mk_num_exp j)) in
+  let mk_slice (i, ival, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, ival, mk_num_exp j)) in
   match List.map mk_slice (indices_of_range range) with [e] -> e | es -> mk_lexp (LE_vector_concat es)
 
 let set_bits_field_lexp inner_lexp = mk_lexp (LE_field (inner_lexp, mk_id "bits"))
@@ -139,19 +141,17 @@ let set_bits_field exp value = mk_exp (E_struct_update (exp, [mk_fexp (mk_id "bi
 let update_field_exp range order inner_exp new_value =
   let single = List.length (indices_of_range range) == 1 in
   let rec aux e vi = function
-    | (i, j) :: is ->
-        let w = slice_width (i, j) in
+    | (i, ival, j) :: is ->
+        let w = slice_width (i, ival, j) in
         let vi' = if is_order_inc order then Big_int.add vi w else Big_int.sub vi w in
         let rhs =
           if single then new_value
           else begin
             let vj = if is_order_inc order then Big_int.pred vi' else Big_int.succ vi' in
-            (* TODO: Support >.. and ..< *)
-            mk_exp (E_vector_subrange (new_value, mk_num_exp vi, Ival_closed, mk_num_exp vj))
+            mk_exp (E_vector_subrange (new_value, mk_num_exp vi, ival, mk_num_exp vj))
           end
         in
-        (* TODO: Support >.. and ..< *)
-        let update = mk_exp (E_vector_update_subrange (e, mk_num_exp i, Ival_closed, mk_num_exp j, rhs)) in
+        let update = mk_exp (E_vector_update_subrange (e, mk_num_exp i, ival, mk_num_exp j, rhs)) in
         aux update vi' is
     | [] -> e
   in
@@ -233,8 +233,9 @@ let field_accessors typ_name field order range =
 
 (* Generate all accessor functions for a given bitfield type *)
 let macro id size order ranges =
-  (* TODO: Support >.. and ..< *)
-  let full_range = BF_aux (BF_range (nconstant (Big_int.pred size), Ival_closed, nconstant Big_int.zero), Parse_ast.Unknown) in
+  let full_range =
+    BF_aux (BF_range (nconstant (Big_int.pred size), Ival_closed, nconstant Big_int.zero), Parse_ast.Unknown)
+  in
   let ranges = (mk_id "bits", full_range) :: Bindings.bindings ranges in
   let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
   List.concat ([constructor id size] @ accessors)

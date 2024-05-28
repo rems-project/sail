@@ -59,11 +59,23 @@ let subrange_vec_dec w i j = Machine_word.word_extract (nat_of_int j) (nat_of_in
 val subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
 let subrange_vec_inc w i j = subrange_vec_dec w (length w - 1 - i) (length w - 1 - j)
 
+val subrange_open_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let subrange_open_dec w i j = Machine_word.word_extract (nat_of_int j) (nat_of_int i - 1) w
+
+val subrange_open_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b
+let subrange_open_inc w i j = subrange_open_dec w (length w - 1 - i) (length w - 1 - j)
+
 val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
 let update_subrange_vec_dec w i j w' = Machine_word.word_update w (nat_of_int j) (nat_of_int i) w'
 
 val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
 let update_subrange_vec_inc w i j w' = update_subrange_vec_dec w (length w - 1 - i) (length w - 1 - j) w'
+
+val update_subrange_open_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
+let update_subrange_open_dec w i j w' = Machine_word.word_update w (nat_of_int j) (nat_of_int i - 1) w'
+
+val update_subrange_open_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a
+let update_subrange_open_inc w i j w' = update_subrange_open_dec w (length w - 1 - i) (length w - 1 - j) w'
 
 val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b
 let extz_vec _ w = Machine_word.zeroExtend w

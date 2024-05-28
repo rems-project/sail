@@ -576,7 +576,8 @@ let rec fold_exp_aux alg = function
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
   | E_vector_access (e1, e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
   (* TODO: e_vector_subrange surely needs an interval? *)
-  | E_vector_subrange (e1, e2, ival, e3) -> alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, ival, fold_exp alg e3)
+  | E_vector_subrange (e1, e2, ival, e3) ->
+      alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, ival, fold_exp alg e3)
   | E_vector_update (e1, e2, e3) -> alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
   (* TODO: e_vector_update_subrange surely needs an interval? *)
   | E_vector_update_subrange (e1, e2, ival, e3, e4) ->
@@ -612,7 +613,8 @@ and fold_lexp_aux alg = function
   | LE_tuple les -> alg.le_tuple (List.map (fold_lexp alg) les)
   | LE_typ (typ, id) -> alg.le_typ (typ, id)
   | LE_vector (lexp, e) -> alg.le_vector (fold_lexp alg lexp, fold_exp alg e)
-  | LE_vector_range (lexp, e1, ival, e2) -> alg.le_vector_range (fold_lexp alg lexp, fold_exp alg e1, ival, fold_exp alg e2)
+  | LE_vector_range (lexp, e1, ival, e2) ->
+      alg.le_vector_range (fold_lexp alg lexp, fold_exp alg e1, ival, fold_exp alg e2)
   | LE_vector_concat les -> alg.le_vector_concat (List.map (fold_lexp alg) les)
   | LE_field (lexp, id) -> alg.le_field (fold_lexp alg lexp, id)
 
@@ -769,10 +771,11 @@ let compute_exp_alg bot join =
     e_vector = split_join (fun es -> E_vector es);
     e_vector_access = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_vector_access (e1, e2)));
     (* TODO: Is this right? *)
-    e_vector_subrange = (fun ((v1, e1), (v2, e2), ival, (v3, e3)) -> (join_list [v1; v2; v3], E_vector_subrange (e1, e2, ival, e3)));
+    e_vector_subrange =
+      (fun ((v1, e1), (v2, e2), ival, (v3, e3)) -> (join_list [v1; v2; v3], E_vector_subrange (e1, e2, ival, e3)));
     e_vector_update = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_vector_update (e1, e2, e3)));
     e_vector_update_subrange =
-    (* TODO: Is this right? *)
+      (* TODO: Is this right? *)
       (fun ((v1, e1), (v2, e2), ival, (v3, e3), (v4, e4)) ->
         (join_list [v1; v2; v3; v4], E_vector_update_subrange (e1, e2, ival, e3, e4))
       );
@@ -825,7 +828,8 @@ let compute_exp_alg bot join =
       );
     le_vector = (fun ((vl, lexp), (v2, e2)) -> (join vl v2, LE_vector (lexp, e2)));
     (* TODO: Is this right? *)
-    le_vector_range = (fun ((vl, lexp), (v2, e2), ival, (v3, e3)) -> (join_list [vl; v2; v3], LE_vector_range (lexp, e2, ival, e3)));
+    le_vector_range =
+      (fun ((vl, lexp), (v2, e2), ival, (v3, e3)) -> (join_list [vl; v2; v3], LE_vector_range (lexp, e2, ival, e3)));
     le_vector_concat =
       (fun ls ->
         let vs, ls = List.split ls in

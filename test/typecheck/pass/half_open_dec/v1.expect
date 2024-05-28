@@ -1,0 +1,6 @@
+[93mType error[0m:
+[96mpass/half_open_dec/v1.sail[0m:8.21-32:
+8[96m |[0m  print_bits("x = ", x[33 >.. 0]);
+ [91m |[0m                     [91m^---------^[0m [91mchecking function argument has type bitvector('n)[0m
+ [91m |[0m Could not resolve quantifiers for subrange_bits_open_dec
+ [91m |[0m [94m*[0m (0 <= 0 & (0 <= 33 & 33 <= 32))

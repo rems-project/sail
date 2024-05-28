@@ -286,7 +286,15 @@ val subrange_bits = pure {
   (bits('n), int('m), int('o)) -> bits('o - 'm + 1)
 $endif
 
+val subrange_bits_open_dec = pure "subrange_open_dec" : forall 'n 'm 'o, 0 <= 'o <= 'm <= 'n.
+  (bits('n), int('m), int('o)) -> bits('m - 'o)
+
+val subrange_bits_open_inc = pure "subrange_open_inc" : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
+  (bits('n), int('m), int('o)) -> bits('o - 'm)
+
 overload vector_subrange = {subrange_bits}
+overload vector_subrange_open_dec = {subrange_bits_open_dec}
+overload vector_subrange_open_inc = {subrange_bits_open_inc}
 
 $ifdef _DEFAULT_DEC
 val update_subrange_bits = pure {
@@ -306,7 +314,15 @@ val update_subrange_bits = pure {
 } : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o), bits('o - ('m - 1))) -> bits('n)
 $endif
 
+val update_subrange_bits_open_dec = pure "update_subrange_open_dec" : forall 'n 'm 'o, 0 <= 'o <= 'm <= 'n.
+  (bits('n), int('m), int('o), bits('m - 'o)) -> bits('n)
+
+val update_subrange_bits_open_inc = pure "update_subrange_open_inc" : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
+  (bits('n), int('m), int('o), bits('o - 'm)) -> bits('n)
+
 overload vector_update_subrange = {update_subrange_bits}
+overload vector_update_subrange_open_dec = {update_subrange_bits_open_dec}
+overload vector_update_subrange_open_inc = {update_subrange_bits_open_inc}
 
 val sail_shiftleft = pure "shiftl" : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)

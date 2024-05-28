@@ -82,11 +82,23 @@ let subrange_vec_inc = subrange_bv_inc
 val subrange_vec_dec : list bitU -> integer -> integer -> list bitU
 let subrange_vec_dec = subrange_bv_dec
 
+val subrange_open_inc : list bitU -> integer -> integer -> list bitU
+let subrange_open_inc xs i j = subrange_list_open_inc xs i j
+
+val subrange_open_dec : list bitU -> integer -> integer -> list bitU
+let subrange_open_dec xs i j = subrange_list_open_dec xs i j
+
 val update_subrange_vec_inc : list bitU -> integer -> integer -> list bitU -> list bitU
 let update_subrange_vec_inc = update_subrange_bv_inc
 
 val update_subrange_vec_dec : list bitU -> integer -> integer -> list bitU -> list bitU
 let update_subrange_vec_dec = update_subrange_bv_dec
+
+val update_subrange_open_dec : list bitU -> integer -> integer -> list bitU -> list bitU
+let update_subrange_open_dec = update_subrange_list_open_dec
+
+val update_subrange_open_inc : list bitU -> integer -> integer -> list bitU -> list bitU
+let update_subrange_open_inc = update_subrange_list_open_inc
 
 val concat_vec : list bitU -> list bitU -> list bitU
 let concat_vec = concat_bv

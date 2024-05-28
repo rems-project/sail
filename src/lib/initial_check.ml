@@ -164,11 +164,8 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_order -> None
   | P.K_bool -> Some (K_aux (K_bool, l))
 
-let to_ast_ival (ival) =
-  match ival with
-  | P.Ival_closed -> Ival_closed
-  | P.Ival_open_dec -> Ival_open_dec
-  | P.Ival_open_inc -> Ival_open_inc
+let to_ast_ival ival =
+  match ival with P.Ival_closed -> Ival_closed | P.Ival_open_dec -> Ival_open_dec | P.Ival_open_inc -> Ival_open_inc
 
 let to_ast_id ctx (P.Id_aux (id, l)) =
   let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
@@ -684,7 +681,8 @@ and to_ast_exp ctx exp =
         | P.E_vector_update (vex, exp1, exp2) ->
             E_vector_update (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
         | P.E_vector_update_subrange (vex, e1, ival, e2, e3) ->
-            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_ival ival, to_ast_exp ctx e2, to_ast_exp ctx e3)
+            E_vector_update_subrange
+              (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_ival ival, to_ast_exp ctx e2, to_ast_exp ctx e3)
         | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
         | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
@@ -860,7 +858,8 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
   BF_aux
     ( ( match r with
       | P.BF_single i -> BF_single (to_ast_bitfield_index_nexp ctx i)
-      | P.BF_range (i1, ival, i2) -> BF_range (to_ast_bitfield_index_nexp ctx i1, to_ast_ival ival, to_ast_bitfield_index_nexp ctx i2)
+      | P.BF_range (i1, ival, i2) ->
+          BF_range (to_ast_bitfield_index_nexp ctx i1, to_ast_ival ival, to_ast_bitfield_index_nexp ctx i2)
       | P.BF_concat (ir1, ir2) -> BF_concat (to_ast_range ctx ir1, to_ast_range ctx ir2)
       ),
       l
