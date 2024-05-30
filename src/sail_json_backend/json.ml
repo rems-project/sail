@@ -84,7 +84,7 @@ let operands = Hashtbl.create 997
 let encodings = Hashtbl.create 997
 let assembly = Hashtbl.create 997
 let assembly_clean = Hashtbl.create 997
-let functions = Hashtbl.create 997
+let executes = Hashtbl.create 997
 let op_functions = Hashtbl.create 997
 let formats = Hashtbl.create 997
 let extensions = Hashtbl.create 997
@@ -342,7 +342,7 @@ let parse_funcl fcl = match fcl with
         let operandl = (List.concat (List.map string_list_of_pat pl)) in
           if not (String.equal (List.hd operandl) "()") then
             Hashtbl.add operands (string_of_id i) operandl;
-        Hashtbl.add functions (string_of_id i) (extract_source_code (Ast_util.exp_loc e))
+        Hashtbl.add executes (string_of_id i) (extract_source_code (Ast_util.exp_loc e))
       end
   | _ -> debug_print "FCL_funcl other"
 
@@ -584,7 +584,7 @@ let json_of_fields k =
   | Some (fields) -> String.concat ", " (List.map (fun f -> json_of_field k f) fields)
 
 let json_of_function k =
-  let fspec = match Hashtbl.find_opt functions k with
+  let fspec = match Hashtbl.find_opt executes k with
       None -> ""
     | Some (f) -> String.escaped f
   in "\"" ^ fspec ^ "\""
@@ -705,8 +705,8 @@ let defs { defs; _ } =
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) encodings;
   debug_print "ASSEMBLY";
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ Util.string_of_list ", " (fun x -> x) v)) assembly;
-  debug_print "FUNCTIONS";
-  Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) functions;
+  debug_print "EXECUTES";
+  Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) executes;
   debug_print "OP_FUNCTIONS";
   Hashtbl.iter (fun k v -> debug_print (k ^ ":" ^ v)) op_functions;
   debug_print "EXENSIONS";
