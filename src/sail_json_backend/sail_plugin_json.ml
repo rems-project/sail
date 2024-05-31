@@ -69,8 +69,7 @@ open Libsail
 
 let json_options = []
 
-let json_target _ _ out_file ast effect_info env =
-  Json.defs (Type_check.strip_ast ast)
+let json_target _ _ out_file ast effect_info env = Json.defs (Type_check.strip_ast ast)
 
 let _ =
   Target.register ~name:"json" ~options:json_options
