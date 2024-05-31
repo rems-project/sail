@@ -33,8 +33,11 @@ $define _FLOAT_COMMON
 /* Floating point types definition */
 type fp_exception_flags = bits(5) /* Floating-point exception flags. */
 type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. */
+type fp_bits_x2 = { 'n, 'n in {16, 32, 64}. (bits('n), bits('n)) } /* Floating point x2 tuple */
+type fp_bool_and_flags = (bool, fp_exception_flags) /* Floating point bool and exception flags tuple */
 
 /* Floating point constants */
+let fp_eflag_none    : fp_exception_flags = 0b00000
 let fp_eflag_invalid : fp_exception_flags = 0b00001
 
 /* Floating point struct */
@@ -72,6 +75,15 @@ function float_decompose(op) = {
       mantissa  = op[51..0],
     }
   }
+}
+
+/* Floating point operator implementations */
+infix    2 ==_t /* The suffix _t indicates tuple */
+val      operator ==_t : (fp_bool_and_flags, fp_bool_and_flags) -> bool
+function operator ==_t((bool_0, flags_0), (bool_1, flags_1)) = {
+  let is_eq = (bool_0 == bool_1) & (flags_0 == flags_1);
+
+  is_eq;
 }
 
 $endif

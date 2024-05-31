@@ -27,14 +27,25 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_EQ
+$define _FLOAT_EQ
 
 $include <float/common.sail>
 $include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
 $include <float/zero.sail>
-$include <float/eq.sail>
+
+val      float_is_eq : fp_bits_x2 -> fp_bool_and_flags
+function float_is_eq ((op_0, op_1)) = {
+  let is_snan = float_is_snan (op_0) | float_is_snan (op_1);
+  let flags   = if   is_snan
+                then fp_eflag_invalid
+                else fp_eflag_none;
+
+  let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
+  let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
+  let is_eq   = is_nan == false & ((op_0 == op_1) | is_zero);
+
+  (is_eq, flags);
+}
 
 $endif
