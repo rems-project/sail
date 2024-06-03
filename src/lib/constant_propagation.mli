@@ -78,7 +78,7 @@ open Type_check
 
 val const_prop :
   string ->
-  tannot ast ->
+  (tannot, env) ast ->
   IdSet.t ->
   tannot exp Bindings.t * nexp KBindings.t ->
   tannot exp Bindings.t ->
@@ -87,4 +87,4 @@ val const_prop :
 
 val referenced_vars : tannot exp -> IdSet.t
 
-val remove_impossible_int_cases : 'a -> tannot ast -> tannot ast
+val remove_impossible_int_cases : 'a -> (tannot, env) ast -> (tannot, env) ast

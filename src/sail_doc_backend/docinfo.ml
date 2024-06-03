@@ -579,7 +579,10 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let clauses = List.filter (included_clause files) clauses in
     match clauses with
     | [] -> None
-    | [clause] -> Some (Single_clause (docinfo_for_funcl ~ast ~outer_annot:(def_annot, snd annot) 0 clause))
+    | [clause] ->
+        Some
+          (Single_clause (docinfo_for_funcl ~ast ~outer_annot:(Type_check.strip_def_annot def_annot, snd annot) 0 clause)
+          )
     | _ -> Some (Multiple_clauses (List.mapi (docinfo_for_funcl ~ast) clauses))
 
   let docinfo_for_mpexp (MPat_aux (aux, _)) =

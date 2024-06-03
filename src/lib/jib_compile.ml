@@ -1495,6 +1495,8 @@ module Make (C : CONFIG) = struct
     | _ -> compile_def' n total ctx def
 
   and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
+    let def_env = def_annot.env in
+    let def_annot = strip_def_annot def_annot in
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, []), def_annot)], ctx)
@@ -1568,7 +1570,7 @@ module Make (C : CONFIG) = struct
     | DEF_measure _ -> ([], ctx)
     | DEF_loop_measures _ -> ([], ctx)
     | DEF_internal_mutrec fundefs ->
-        let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef)) fundefs in
+        let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef) def_env) fundefs in
         List.fold_left
           (fun (cdefs, ctx) def ->
             let cdefs', ctx = compile_def n total ctx def in
@@ -1823,7 +1825,7 @@ module Make (C : CONFIG) = struct
       CDEF_aux
         ( CDEF_pragma
             ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)),
-          mk_def_annot (gen_loc (id_loc orig_id))
+          mk_def_annot (gen_loc (id_loc orig_id)) ()
         )
     in
 
@@ -2150,7 +2152,8 @@ module Make (C : CONFIG) = struct
     let dummy_exn = mk_id "__dummy_exn#" in
     let cdefs, ctx =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then
-        ( CDEF_aux (CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown)
+        ( CDEF_aux
+            (CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown ())
           :: cdefs,
           {
             ctx with

@@ -120,7 +120,8 @@ val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
-val jib_of_ast : Env.t -> Effects.side_effect_info -> tannot ast -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> Effects.side_effect_info -> out_channel -> string list -> tannot ast -> unit
+val jib_of_ast : Env.t -> Effects.side_effect_info -> (tannot, env) ast -> cdef list * Jib_compile.ctx
+val compile_ast : Env.t -> Effects.side_effect_info -> out_channel -> string list -> (tannot, env) ast -> unit
 
-val compile_ast_clib : Env.t -> Effects.side_effect_info -> tannot ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit
+val compile_ast_clib :
+  Env.t -> Effects.side_effect_info -> (tannot, env) ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit

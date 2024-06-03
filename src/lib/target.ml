@@ -75,9 +75,10 @@ type target = {
   options : (Arg.key * Arg.spec * Arg.doc) list;
   pre_parse_hook : unit -> unit;
   pre_initial_check_hook : Parse_ast.defs -> unit;
-  pre_rewrites_hook : tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+  pre_rewrites_hook : (tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit;
   rewrites : (string * Rewrites.rewriter_arg list) list;
-  action : Yojson.Basic.t option -> string -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+  action :
+    Yojson.Basic.t option -> string -> string option -> (tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit;
   asserts_termination : bool;
 }
 

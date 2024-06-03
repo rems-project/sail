@@ -121,12 +121,12 @@ val function_is_pure : id -> side_effect_info -> bool
    side effect information for [ast].  If [asserts_termination] is
    true then it is assumed that the backend will enforce the
    termination measures with assertions. *)
-val infer_side_effects : bool -> Type_check.tannot ast -> side_effect_info
+val infer_side_effects : bool -> (Type_check.tannot, Type_check.env) ast -> side_effect_info
 
 (** Checks constraints on side effects, raising an error if they are
    violated. Currently these are that termination measures and
    top-level letbindings must be pure. *)
-val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
+val check_side_effects : side_effect_info -> (Type_check.tannot, Type_check.env) ast -> unit
 
 (** [copy_function_effect id_from info id_to] copies the effect
    information from id_from to id_to in the side effect
@@ -151,7 +151,8 @@ val add_monadic_built_in : id -> side_effect_info -> side_effect_info
    attaches effect info into to the AST. Note that the effect info is
    simplified in its annotated form - it just becomes a boolean
    representing effectful/non-effectful *)
-val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast
+val rewrite_attach_effects :
+  side_effect_info -> (Type_check.tannot, Type_check.env) ast -> (Type_check.tannot, Type_check.env) ast
 
 (** Dumps the given side effect information to stderr. *)
 val dump_effects : side_effect_info -> unit

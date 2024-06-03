@@ -73,7 +73,7 @@ open Printf
 let opt_interactive = ref false
 
 type istate = {
-  ast : Type_check.tannot ast;
+  ast : (Type_check.tannot, Type_check.env) ast;
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   default_sail_dir : string;

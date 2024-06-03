@@ -118,7 +118,7 @@ type ctx = {
   tc_env : Type_check.Env.t;
   pragma_l : Ast.l;
   arg_stack : (int * string) Stack.t;
-  ast : Type_check.tannot ast;
+  ast : (Type_check.tannot, Type_check.env) ast;
   shared : ctyp Bindings.t;
   preserved : IdSet.t;
   events : smt_exp Stack.t EventMap.t ref;

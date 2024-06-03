@@ -106,7 +106,7 @@ type ctx = {
       (** A location, usually the $counterexample or $property we are
        generating the SMT for. Used for error messages. *)
   arg_stack : (int * string) Stack.t;  (** Used internally to keep track of function argument names *)
-  ast : Type_check.tannot ast;  (** The fully type-checked ast *)
+  ast : (Type_check.tannot, Type_check.env) ast;  (** The fully type-checked ast *)
   shared : ctyp Bindings.t;
       (** Shared variables. These variables do not get renamed by
        Smtlib.suffix_variables_def, and their SSA number is
@@ -137,7 +137,11 @@ type ctx = {
 }
 
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
-val compile : Type_check.Env.t -> Effects.side_effect_info -> Type_check.tannot ast -> cdef list * Jib_compile.ctx * ctx
+val compile :
+  Type_check.Env.t ->
+  Effects.side_effect_info ->
+  (Type_check.tannot, Type_check.env) ast ->
+  cdef list * Jib_compile.ctx * ctx
 
 (* TODO: Currently we internally use mutable stacks and queues to
    avoid any issues with stack overflows caused by some non
@@ -167,7 +171,8 @@ module Make_optimizer (S : Sequence) : sig
   val optimize : smt_def Stack.t -> smt_def S.t
 end
 
-val serialize_smt_model : string -> Type_check.Env.t -> Effects.side_effect_info -> Type_check.tannot ast -> unit
+val serialize_smt_model :
+  string -> Type_check.Env.t -> Effects.side_effect_info -> (Type_check.tannot, Type_check.env) ast -> unit
 
 val deserialize_smt_model : string -> cdef list * ctx
 
@@ -180,5 +185,5 @@ val generate_smt :
   Type_check.Env.t ->
   Effects.side_effect_info ->
   string list ->
-  Type_check.tannot ast ->
+  (Type_check.tannot, Type_check.env) ast ->
   unit
