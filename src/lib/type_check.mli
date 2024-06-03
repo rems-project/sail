@@ -319,8 +319,9 @@ val strip_val_spec : tannot val_spec -> uannot val_spec
 val strip_funcl : tannot funcl -> uannot funcl
 val strip_register : tannot dec_spec -> uannot dec_spec
 val strip_typedef : tannot type_def -> uannot type_def
-val strip_def : tannot def -> uannot def
-val strip_ast : tannot ast -> uannot ast
+val strip_def_annot : env def_annot -> unit def_annot
+val strip_def : (tannot, env) def -> (uannot, unit) def
+val strip_ast : (tannot, env) ast -> (uannot, unit) ast
 
 (** {2 Checking expressions and patterns} *)
 
@@ -342,9 +343,9 @@ val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp
 
 val check_funcl : Env.t -> uannot funcl -> typ -> tannot funcl
 
-val check_fundef : Env.t -> def_annot -> uannot fundef -> tannot def list * Env.t
+val check_fundef : Env.t -> env def_annot -> uannot fundef -> (tannot, env) def list * Env.t
 
-val check_val_spec : Env.t -> def_annot -> uannot val_spec -> tannot def list * Env.t
+val check_val_spec : Env.t -> env def_annot -> uannot val_spec -> (tannot, env) def list * Env.t
 
 val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 
@@ -357,7 +358,7 @@ val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
    check completeness of scattered functions, and should not be called
    otherwise. *)
 val check_funcls_complete :
-  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * (def_annot -> def_annot)
+  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * ('a def_annot -> 'a def_annot)
 
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
@@ -498,13 +499,13 @@ Some invariants that will hold of a fully checked AST are:
    check throws type_errors rather than Sail generic errors from
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
-val check : Env.t -> uannot ast -> tannot ast * Env.t
+val check : Env.t -> (uannot, unit) ast -> (tannot, env) ast * Env.t
 
-val check_defs : Env.t -> uannot def list -> tannot def list * Env.t
+val check_defs : Env.t -> (uannot, unit) def list -> (tannot, env) def list * Env.t
 
 (** The same as [check], but exposes the intermediate type-checking
    environments so we don't have to always re-check the entire AST *)
-val check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list
+val check_with_envs : Env.t -> (uannot, unit) def list -> ((tannot, env) def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t

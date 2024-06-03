@@ -249,6 +249,8 @@ instr :: 'I_' ::=
 
 def_annot :: '' ::=
   {{ phantom }}
+  {{ lem def_annot unit }}
+  {{ ocaml unit def_annot }}
 
 cdef :: 'CDEF_' ::=
   {{ aux _ def_annot }}

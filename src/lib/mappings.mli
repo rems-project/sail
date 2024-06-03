@@ -68,4 +68,4 @@
 open Ast_defs
 open Type_check
 
-val rewrite_ast : tannot ast -> tannot ast
+val rewrite_ast : (tannot, env) ast -> (tannot, env) ast

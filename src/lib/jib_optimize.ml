@@ -528,7 +528,7 @@ let remove_tuples cdefs ctx =
         let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
         let fields = List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), ctyp)) ctyps in
         [
-          CDEF_aux (CDEF_type (CTD_struct (mk_id name, fields)), mk_def_annot Parse_ast.Unknown);
+          CDEF_aux (CDEF_type (CTD_struct (mk_id name, fields)), mk_def_annot Parse_ast.Unknown ());
           CDEF_aux
             ( CDEF_pragma
                 ( "tuplestruct",
@@ -536,7 +536,7 @@ let remove_tuples cdefs ctx =
                     (fun x -> x)
                     (Util.zencode_string name :: List.map (fun (id, _) -> Util.zencode_string (string_of_id id)) fields)
                 ),
-              mk_def_annot Parse_ast.Unknown
+              mk_def_annot Parse_ast.Unknown ()
             );
         ]
     | _ -> assert false

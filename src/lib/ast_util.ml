@@ -123,7 +123,8 @@ let get_attributes annot = annot.attrs
 let find_attribute_opt attr1 attrs =
   List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (_, _, arg) -> arg)
 
-let mk_def_annot ?doc ?(attrs = []) ?(visibility = Public) l = { doc_comment = doc; attrs; visibility; loc = l }
+let mk_def_annot ?doc ?(attrs = []) ?(visibility = Public) l env =
+  { doc_comment = doc; attrs; visibility; loc = l; env }
 
 let map_clause_annot f (def_annot, annot) =
   let l, annot' = f (def_annot.loc, annot) in
@@ -134,14 +135,23 @@ let is_public = function Public -> true | _ -> false
 
 let visibility_loc = function Private l -> l | Public -> Parse_ast.Unknown
 
-let def_annot_map_loc f (annot : def_annot) = { annot with loc = f annot.loc }
+let def_annot_map_loc f (annot : 'a def_annot) = { annot with loc = f annot.loc }
 
-let add_def_attribute l attr arg (annot : def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
+let def_annot_map_env (f : 'a -> 'b) (annot : 'a def_annot) =
+  {
+    doc_comment = annot.doc_comment;
+    attrs = annot.attrs;
+    visibility = annot.visibility;
+    loc = annot.loc;
+    env = f annot.env;
+  }
 
-let get_def_attribute attr (annot : def_annot) =
+let add_def_attribute l attr arg (annot : 'a def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
+
+let get_def_attribute attr (annot : 'a def_annot) =
   List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
-let remove_def_attribute attr (annot : def_annot) =
+let remove_def_attribute attr (annot : 'a def_annot) =
   { annot with attrs = List.filter (fun (_, attr', _) -> attr <> attr') annot.attrs }
 
 type mut = Immutable | Mutable
@@ -220,7 +230,7 @@ let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 let mk_lit_exp ?loc:(l = Parse_ast.Unknown) lit_aux = mk_exp ~loc:l (E_lit (mk_lit lit_aux))
 
 let mk_funcl ?loc:(l = Parse_ast.Unknown) id pat body =
-  FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l, empty_uannot))
+  FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l (), empty_uannot))
 
 let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
 
@@ -233,13 +243,13 @@ let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
   let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
-  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot Parse_ast.Unknown)
+  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot Parse_ast.Unknown ())
 
 let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 
-let mk_val_spec vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown)
+let mk_val_spec vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown ())
 
-let mk_def ?loc:(l = Parse_ast.Unknown) def = DEF_aux (def, mk_def_annot l)
+let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
 
 let rec pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with
@@ -994,6 +1004,30 @@ and map_ast_annot f ast = { ast with defs = List.map (map_def_annot f) ast.defs 
 
 and map_loop_measure_annot f = function Loop (loop, exp) -> Loop (loop, map_exp_annot f exp)
 
+let rec map_def_def_annot f (DEF_aux (aux, annot)) =
+  let aux =
+    match aux with
+    | DEF_type td -> DEF_type td
+    | DEF_constraint nc -> DEF_constraint nc
+    | DEF_fundef fd -> DEF_fundef fd
+    | DEF_mapdef md -> DEF_mapdef md
+    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
+    | DEF_instantiation (inst_spec, substs) -> DEF_instantiation (inst_spec, substs)
+    | DEF_impl funcl -> DEF_impl funcl
+    | DEF_let lb -> DEF_let lb
+    | DEF_val vs -> DEF_val vs
+    | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
+    | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
+    | DEF_default ds -> DEF_default ds
+    | DEF_scattered sd -> DEF_scattered sd
+    | DEF_measure (id, pat, exp) -> DEF_measure (id, pat, exp)
+    | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
+    | DEF_register ds -> DEF_register ds
+    | DEF_internal_mutrec fds -> DEF_internal_mutrec fds
+    | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+  in
+  DEF_aux (aux, f annot)
+
 let def_loc (DEF_aux (_, annot)) = annot.loc
 
 let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
@@ -1347,7 +1381,7 @@ let record_ids defs =
 let rec get_scattered_union_clauses id = function
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
     ->
-      Tu_aux (tu, def_annot) :: get_scattered_union_clauses id defs
+      Tu_aux (tu, def_annot_map_env (fun _ -> ()) def_annot) :: get_scattered_union_clauses id defs
   | _ :: defs -> get_scattered_union_clauses id defs
   | [] -> []
 

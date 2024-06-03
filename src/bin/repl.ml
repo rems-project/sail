@@ -78,7 +78,7 @@ module Callgraph_commands = Callgraph_commands
 type mode = Evaluation of frame | Normal
 
 type istate = {
-  ast : Type_check.tannot ast;
+  ast : (Type_check.tannot, Type_check.env) ast;
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   ref_state : Interactive.istate ref;
@@ -537,7 +537,7 @@ let handle_input' istate input =
                 | v :: "=" :: args ->
                     let exp = Initial_check.exp_of_string (String.concat " " args) in
                     let defs, env =
-                      Type_check.check_defs istate.env [mk_def (DEF_let (mk_letbind (mk_pat (P_id (mk_id v))) exp))]
+                      Type_check.check_defs istate.env [mk_def (DEF_let (mk_letbind (mk_pat (P_id (mk_id v))) exp)) ()]
                     in
                     { istate with ast = append_ast_defs istate.ast defs; env }
                 | _ -> failwith "Invalid arguments for :let"

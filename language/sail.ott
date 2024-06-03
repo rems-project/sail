@@ -87,14 +87,15 @@ type extern = { pure : bool; bindings : (string * string) list } option
 
 type visibility = Public | Private of  l
 
-type def_annot = {
+type 'a def_annot = {
     doc_comment : string option;
     attrs : (l * string * config) list;
     visibility : visibility;
-    loc : l
+    loc : l;
+    env : 'a
 }
 
-type 'a clause_annot = def_annot * 'a
+type 'a clause_annot = unit def_annot * 'a
 
 }}
 
@@ -122,14 +123,15 @@ type extern = <| pure : bool; bindings : list (string * string) |>
 
 type visibility = Public | Private of l
 
-type def_annot = <|
+type def_annot 'a = <|
     doc_comment : maybe string;
     attrs : list (l * string * maybe attribute_data);
     visibility : visibility;
-    loc : l
+    loc : l;
+    env : 'a
 |>
 
-type clause_annot 'a = def_annot * 'a
+type clause_annot 'a = def_annot unit * 'a
 
 }}
 
@@ -176,13 +178,18 @@ external :: '' ::=
 
 def_annot :: '' ::=
   {{ phantom }}
-  {{ lem def_annot }}
-  {{ ocaml def_annot }}
+  {{ lem def_annot 'b }}
+  {{ ocaml 'b def_annot }}
 
 clause_annot :: '' ::=
   {{ phantom }}
   {{ lem clause_annot 'a }}
   {{ ocaml 'a clause_annot }}
+
+union_annot :: '' ::=
+  {{ phantom }}
+  {{ lem def_annot unit }}
+  {{ ocaml unit def_annot }}
 
 l :: '' ::=
   {{ phantom }}
@@ -337,7 +344,7 @@ type_def_aux  :: 'TD_' ::=
 
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
-  {{ aux _ def_annot }}
+  {{ aux _ union_annot }}
   | typ id                                              :: :: ty_id
 
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}}
@@ -770,7 +777,7 @@ loop_measure :: '' ::=
 
 def :: 'DEF_' ::=
   {{ com top-level definition }}
-  {{ aux _ def_annot }} {{ auxparam 'a }}
+  {{ aux _ def_annot }} {{ auxparam 'a 'b }}
   | type_def                                           :: :: type
     {{ com type definition }}
   | constraint n_constraint                            :: :: constraint

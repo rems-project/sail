@@ -158,7 +158,7 @@ let instantiate target ast =
                      (l, empty_uannot)
                    )
                 ),
-              def_annot
+              strip_def_annot def_annot
             )
         in
         let instantiated_def =
@@ -171,7 +171,7 @@ let instantiate target ast =
           | None ->
               [
                 DEF_aux
-                  (DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)), mk_def_annot (gen_loc (id_loc id)));
+                  (DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)), mk_def_annot (gen_loc (id_loc id)) ());
                 valspec true;
               ]
           | Some def -> [valspec false; strip_def def]

@@ -413,7 +413,7 @@ let latex_command ~docstring cat id no_loc l =
     ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
   end
 
-let latex_docstring (def_annot : Ast.def_annot) =
+let latex_docstring (def_annot : 'a Ast.def_annot) =
   match def_annot.doc_comment with Some contents -> string (latex_of_markdown contents) | None -> empty
 
 let latex_funcls def =
