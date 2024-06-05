@@ -27,14 +27,27 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_NORMAL
+$define _FLOAT_NORMAL
 
 $include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
-$include <float/zero.sail>
-$include <float/normal.sail>
+
+val      float_is_normal : fp_bits -> bool
+function float_is_normal (op) = {
+  let struct {_, exp} = float_decompose(op);
+  let is_normal = exp != sail_ones(length(exp))
+                  & exp != sail_zeros(length(exp));
+
+  is_normal
+}
+
+val      float_is_denormal : fp_bits -> bool
+function float_is_denormal (op) = {
+  let struct {_, exp, mantissa} = float_decompose(op);
+  let is_denormal = exp == sail_zeros(length(exp))
+                    & mantissa != sail_zeros(length(mantissa));
+
+  is_denormal
+}
 
 $endif
