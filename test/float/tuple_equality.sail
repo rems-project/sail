@@ -27,54 +27,19 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_COMMON
-$define _FLOAT_COMMON
+$ifndef _FLOAT_TUPLE_EQUALITY
+$define _FLOAT_TUPLE_EQUALITY
 
-/* Floating point types definition */
-type fp_exception_flags = bits(5) /* Floating-point exception flags. */
-type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. */
-type fp_bits_x2 = { 'n, 'n in {16, 32, 64}. (bits('n), bits('n)) } /* Floating point x2 tuple */
-type fp_bool_and_flags = (bool, fp_exception_flags) /* Floating point bool and exception flags tuple */
+$include <float/common.sail>
 
-/* Floating point constants */
-let fp_eflag_none    : fp_exception_flags = 0b00000
-let fp_eflag_invalid : fp_exception_flags = 0b00001
+/* Floating point related tuple implementations for test */
+val      bool_and_flags_eq : (fp_bool_and_flags, fp_bool_and_flags) -> bool
+function bool_and_flags_eq ((bool_0, flags_0), (bool_1, flags_1)) = {
+  let is_eq = (bool_0 == bool_1) & (flags_0 == flags_1);
 
-/* Floating point struct */
-struct float_bits('n : Int) = {
-  sign     : bits(1),
-  exp      : bits(if  'n == 16
-                  then 5
-                  else (if   'n == 32
-                        then 8
-                        else 11)),
-  mantissa : bits(if  'n == 16
-                  then 10
-                  else (if   'n == 32
-                        then 23
-                        else 52)),
+  is_eq;
 }
 
-/* The val func implementations */
-val      float_decompose : forall 'n, 'n in { 16, 32, 64 }. bits('n) -> float_bits('n)
-function float_decompose(op) = {
-  match 'n {
-    16 => struct {
-      sign     = op[15..15],
-      exp      = op[14..10],
-      mantissa = op[9..0],
-    },
-    32 => struct {
-      sign     = op[31..31],
-      exp      = op[30..23],
-      mantissa = op[22..0],
-    },
-    64 => struct {
-      sign      = op[63..63],
-      exp       = op[62..52],
-      mantissa  = op[51..0],
-    }
-  }
-}
+overload operator == = {bool_and_flags_eq}
 
 $endif

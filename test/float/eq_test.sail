@@ -31,49 +31,50 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/eq.sail>
+$include "tuple_equality.sail"
 
 function test_float_is_eq () -> unit = {
   /* Half floating point */
-  assert(float_is_eq((0x0001, 0x0001)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x0700, 0x0700)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x0000, 0x8000)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x7c00, 0x7c00)) ==_t (true, fp_eflag_none));
+  assert(float_is_eq((0x0001, 0x0001)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x0700, 0x0700)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x0000, 0x8000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x7c00, 0x7c00)) == (true, fp_eflag_none));
 
-  assert(float_is_eq((0x0001, 0x8001)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7c00, 0xfc00)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7e01, 0x7a01)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7ef1, 0x7ef1)) ==_t (false, fp_eflag_none));
+  assert(float_is_eq((0x0001, 0x8001)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7c00, 0xfc00)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7e01, 0x7a01)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7ef1, 0x7ef1)) == (false, fp_eflag_none));
 
-  assert(float_is_eq((0x7c01, 0x7e0f)) ==_t (false, fp_eflag_invalid));
-  assert(float_is_eq((0xf021, 0x7c0f)) ==_t (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7c01, 0x7e0f)) == (false, fp_eflag_invalid));
+  assert(float_is_eq((0xf021, 0x7c0f)) == (false, fp_eflag_invalid));
 
   /* Single floating point */
-  assert(float_is_eq((0x00001000, 0x00001000)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x80301000, 0x80301000)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x00000000, 0x80000000)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x7f800000, 0x7f800000)) ==_t (true, fp_eflag_none));
+  assert(float_is_eq((0x00001000, 0x00001000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x80301000, 0x80301000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x00000000, 0x80000000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x7f800000, 0x7f800000)) == (true, fp_eflag_none));
 
-  assert(float_is_eq((0x00001000, 0x80001000)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7fc00000, 0x80301000)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7fc00001, 0x01234000)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7f800000, 0xff800000)) ==_t (false, fp_eflag_none));
+  assert(float_is_eq((0x00001000, 0x80001000)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7fc00000, 0x80301000)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7fc00001, 0x01234000)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7f800000, 0xff800000)) == (false, fp_eflag_none));
 
-  assert(float_is_eq((0x7f800001, 0x01234000)) ==_t (false, fp_eflag_invalid));
-  assert(float_is_eq((0x7c800000, 0xff80000f)) ==_t (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7f800001, 0x01234000)) == (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7c800000, 0xff80000f)) == (false, fp_eflag_invalid));
 
   /* Double floating point */
-  assert(float_is_eq((0x0000000000000001, 0x0000000000000001)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x0f0000000000000f, 0x0f0000000000000f)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x8000000000000000, 0x0000000000000000)) ==_t (true, fp_eflag_none));
-  assert(float_is_eq((0x7ff0000000000000, 0x7ff0000000000000)) ==_t (true, fp_eflag_none));
+  assert(float_is_eq((0x0000000000000001, 0x0000000000000001)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x0f0000000000000f, 0x0f0000000000000f)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x8000000000000000, 0x0000000000000000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x7ff0000000000000, 0x7ff0000000000000)) == (true, fp_eflag_none));
 
-  assert(float_is_eq((0x0000000000000001, 0x8000000000000001)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x0f0000000000000f, 0x3f0000000000000f)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7ff8000000000000, 0x0000234db0000000)) ==_t (false, fp_eflag_none));
-  assert(float_is_eq((0x7ff8000000000000, 0xfff8000000000000)) ==_t (false, fp_eflag_none));
+  assert(float_is_eq((0x0000000000000001, 0x8000000000000001)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x0f0000000000000f, 0x3f0000000000000f)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7ff8000000000000, 0x0000234db0000000)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7ff8000000000000, 0xfff8000000000000)) == (false, fp_eflag_none));
 
-  assert(float_is_eq((0x7ff7000000000000, 0x0000234db0000000)) ==_t (false, fp_eflag_invalid));
-  assert(float_is_eq((0x7ff0000000000001, 0xfff0000003000001)) ==_t (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7ff7000000000000, 0x0000234db0000000)) == (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7ff0000000000001, 0xfff0000003000001)) == (false, fp_eflag_invalid));
 }
 
 function main () -> unit = {
