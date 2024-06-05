@@ -1881,6 +1881,10 @@ let doc_exp, doc_let =
                         );
                     underscore
                 | Some (Nexp_aux (Nexp_var _, _)), Some (Nexp_aux (Nexp_constant c, _)) -> string (Big_int.to_string c)
+                (* If an integer argument is the same as a type variable, but we couldn't merge them, then use the type variable to ensure that the result type won't be the wrong one. *)
+                | Some (Nexp_aux (Nexp_var v, _)), _
+                  when KidSet.mem v ctxt.bound_nvars && not (KBindings.mem v ctxt.kid_id_renames) ->
+                    doc_var ctxt v
                 | _ -> construct_dep_pairs ctxt inst_env want_parens arg typ_from_fn
               in
               let epp =
