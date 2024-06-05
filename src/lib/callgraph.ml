@@ -113,7 +113,9 @@ module Node = struct
     lex_ord (compare (node_kind n1) (node_kind n2)) (Id.compare (node_id n1) (node_id n2))
 end
 
-module NS = Set.Make (Node)
+module NodeSet = Set.Make (Node)
+module NS = NodeSet
+module NodeMap = Map.Make (Node)
 module G = Graph.Make (Node)
 
 let builtins =

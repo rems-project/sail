@@ -65,85 +65,22 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Initial desugaring pass over AST after parsing *)
+open Libsail
 
-open Ast
 open Ast_defs
-open Ast_util
 
-type ctx
+module Highlight : sig
+  type t = Id | Keyword | Kind | Comment | String | Pragma | Internal | Operator | Literal | TyVar
 
-val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
+  val to_class : t -> string
+end
 
-(** {2 Options} *)
+val highlights : filename:string -> contents:string -> (Highlight.t * int * int) array
 
-(** Enable abstract types in the AST. If unset, will report an error
-    if they are encountered. *)
-val opt_abstract_types : bool ref
+val hyperlink_targets : 'a ast -> Lexing.position Callgraph.NodeMap.t
 
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
-val opt_fast_undefined : bool ref
+val hyperlinks_for_file : filename:string -> Type_check.tannot ast -> (Callgraph.node * int * int) array
 
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
-val opt_magic_hash : bool ref
+type file_info = { filename : string; prefix : string; contents : string; highlights : (Highlight.t * int * int) array }
 
-(** This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the AST
-   once. The original assumption in sail is that the whole AST gets
-   processed at once (therefore they could only get added once), and
-   this isn't true any more with the interpreter. This needs to be
-   public so the interpreter can set it back to false if it unloads
-   all the loaded files. *)
-val have_undefined_builtins : bool ref
-
-(** Val specs of undefined functions for builtin types that get added to
-    the AST if opt_undefined_gen is set (minus those functions that already
-    exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
-
-(** {2 Desugar and process AST } *)
-
-val generate_undefined_record_context : typquant -> (id * typ) list
-val generate_undefined_record : id -> typquant -> (typ * id) list -> uannot def list
-val generate_undefined_enum : id -> id list -> uannot def list
-
-val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
-
-(** If the generate flag is false, then we won't generate any
-   auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
-
-(** {2 Parsing expressions and definitions from strings} *)
-
-val extern_of_string : ?pure:bool -> id -> string -> uannot def
-val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : string * int * int * int -> string -> uannot def list
-val ast_of_def_string : string * int * int * int -> string -> uannot ast
-val ast_of_def_string_with :
-  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
-val exp_of_string : string -> uannot exp
-val typ_of_string : string -> typ
-val constraint_of_string : string -> n_constraint
-
-(** {2 Parsing files } *)
-
-(** Parse a file into a sequence of comments and a parse AST
-
-   @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
-
-val get_lexbuf_from_string : filename:string -> contents:string -> Lexing.lexbuf
-
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
-
-val parse_project :
-  ?inline:Lexing.position -> ?filename:string -> contents:string -> unit -> Project.def Project.spanned list
+val output_html : ?css:string -> file_info:file_info -> hyperlinks:(string * int * int) array -> out_channel -> unit

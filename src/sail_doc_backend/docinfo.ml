@@ -138,6 +138,10 @@ let hyper_loc l =
 
 type hyperlink = Function of id * hyper_location | Register of id * hyper_location
 
+let hyperlink_target = function Function (id, _) -> Callgraph.Function id | Register (id, _) -> Callgraph.Register id
+
+let hyperlink_span = function Function (_, l) -> l | Register (_, l) -> l
+
 let json_of_hyperlink = function
   | Function (id, (file, c1, c2)) ->
       `Assoc
