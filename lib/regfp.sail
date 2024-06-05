@@ -92,12 +92,14 @@ union niafp = {
 type niafps = list(niafp)
 
 /* only for MIPS */
+$option --coq-extern-type diafp
 union diafp = {
   DIAFP_none : unit,
   DIAFP_concrete : bits(64),
   DIAFP_reg : regfp
 }
 
+$option --coq-extern-type read_kind
 enum read_kind = {
   Read_plain,
   Read_reserve,
@@ -114,6 +116,7 @@ enum read_kind = {
   Read_X86_locked
 }
 
+$option --coq-extern-type write_kind
 enum write_kind = {
   Write_plain,
   Write_conditional,
@@ -128,6 +131,7 @@ enum write_kind = {
   Write_X86_locked
 }
 
+$option --coq-extern-type barrier_kind
 $ifdef ARM_SPEC
 enum barrier_kind = {
   Barrier_DMB_SY,
@@ -157,6 +161,7 @@ enum barrier_kind = {
   Barrier_ISB
 }
 $else
+$option --coq-extern-type a64_barrier_domain
 enum a64_barrier_domain = {
   A64_FullShare,
   A64_InnerShare,
@@ -164,6 +169,7 @@ enum a64_barrier_domain = {
   A64_NonShare
 }
 
+$option --coq-extern-type a64_barrier_type
 enum a64_barrier_type = {
   A64_barrier_all,
   A64_barrier_LD,
@@ -194,6 +200,7 @@ union barrier_kind = {
 }
 $endif
 
+$option --coq-extern-type trans_kind
 enum trans_kind = {
   Transaction_start,
   Transaction_commit,
@@ -201,6 +208,7 @@ enum trans_kind = {
 }
 
 /* cache maintenance instructions */
+$option --coq-extern-type cache_op_kind
 enum cache_op_kind = {
   /* AArch64 DC */
   Cache_op_D_IVAC, Cache_op_D_ISW,  Cache_op_D_CSW,  Cache_op_D_CISW,
@@ -210,6 +218,7 @@ enum cache_op_kind = {
 }
 
 
+$option --coq-extern-type instruction_kind
 union instruction_kind = {
   IK_barrier : barrier_kind,
   IK_mem_read : read_kind,

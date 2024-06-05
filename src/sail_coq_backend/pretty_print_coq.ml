@@ -2538,16 +2538,6 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
       ^^ inhabited_pp ^^ twice hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      (* | Id_aux ((Id "regfp"),_) -> empty
-         | Id_aux ((Id "niafp"),_) -> empty
-         | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let id_pp = doc_id_type types_mod avoid_target_names None id in
@@ -2617,113 +2607,98 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
           in
           typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline ^^ inhabited_pp ^^ hardline
     )
-  | TD_enum (id, enums, _) -> (
-      match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
-      | Id_aux (Id "regfp", _) -> empty
-      | Id_aux (Id "niafp", _) -> empty
-      | Id_aux (Id "diafp", _) -> empty
-      | _ ->
-          let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
-          let id_pp = doc_id_type types_mod avoid_target_names None id in
-          let typ_pp =
-            (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
-          in
-          (* If we have conversion functions to Z, put them here and
-             derive a decision procedure that's efficient even for
-             large enums. *)
-          let eq1_pp =
-            let fallback = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
-            match (Bindings.find_opt id (fst enum_number_defs), Bindings.find_opt id (snd enum_number_defs)) with
-            | Some (num_of_id, num_of_pp), Some (of_num_id, of_num_pp) ->
-                let num_of_id_pp = doc_id bare_ctxt num_of_id in
-                let of_num_id_pp = doc_id bare_ctxt of_num_id in
-                let lemma1 =
-                  separate hardline
-                    [
-                      string "Lemma " ^^ id_pp ^^ string "_num_of_roundtrip "
-                      ^^ parens (string "x : " ^^ id_pp)
-                      ^^ string " : " ^^ of_num_id_pp ^^ space
-                      ^^ parens (num_of_id_pp ^^ string " x")
-                      ^^ string " = x.";
-                      string "destruct x; reflexivity.";
-                      string "Qed.";
-                    ]
-                in
-                let lemma2 =
-                  separate hardline
-                    [
-                      string "Lemma " ^^ num_of_id_pp ^^ string "_injective "
-                      ^^ parens (string "x y : " ^^ id_pp)
-                      ^^ string " : " ^^ num_of_id_pp ^^ string " x = " ^^ num_of_id_pp ^^ string " y -> x = y.";
-                      string "intro.";
-                      string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip x).";
-                      string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip y).";
-                      string "congruence.";
-                      string "Qed.";
-                    ]
-                in
-                let eq_pp =
-                  separate hardline
-                    [
-                      string "Definition " ^^ id_pp ^^ string "_eq_dec (x y : " ^^ id_pp
-                      ^^ string ") : {x = y} + {x <> y}.";
-                      string "refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp
-                      ^^ string " y) with";
-                      string "| left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
-                      string "| right ne => right _";
-                      string "end).";
-                      string "congruence.";
-                      string "Defined.";
-                    ]
-                in
-                num_of_pp ^^ of_num_pp ^^ separate hardline [lemma1; lemma2; eq_pp]
-            | Some (_, pp), None | None, Some (_, pp) -> pp ^^ fallback
-            | None, None -> fallback
-          in
-          let eq2_pp =
+  | TD_enum (id, enums, _) ->
+      let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
+      let id_pp = doc_id_type types_mod avoid_target_names None id in
+      let typ_pp =
+        (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
+      in
+      (* If we have conversion functions to Z, put them here and
+         derive a decision procedure that's efficient even for
+         large enums. *)
+      let eq1_pp =
+        let fallback = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
+        match (Bindings.find_opt id (fst enum_number_defs), Bindings.find_opt id (snd enum_number_defs)) with
+        | Some (num_of_id, num_of_pp), Some (of_num_id, of_num_pp) ->
+            let num_of_id_pp = doc_id bare_ctxt num_of_id in
+            let of_num_id_pp = doc_id bare_ctxt of_num_id in
+            let lemma1 =
+              separate hardline
+                [
+                  string "Lemma " ^^ id_pp ^^ string "_num_of_roundtrip "
+                  ^^ parens (string "x : " ^^ id_pp)
+                  ^^ string " : " ^^ of_num_id_pp ^^ space
+                  ^^ parens (num_of_id_pp ^^ string " x")
+                  ^^ string " = x.";
+                  string "destruct x; reflexivity.";
+                  string "Qed.";
+                ]
+            in
+            let lemma2 =
+              separate hardline
+                [
+                  string "Lemma " ^^ num_of_id_pp ^^ string "_injective "
+                  ^^ parens (string "x y : " ^^ id_pp)
+                  ^^ string " : " ^^ num_of_id_pp ^^ string " x = " ^^ num_of_id_pp ^^ string " y -> x = y.";
+                  string "intro.";
+                  string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip x).";
+                  string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip y).";
+                  string "congruence.";
+                  string "Qed.";
+                ]
+            in
+            let eq_pp =
+              separate hardline
+                [
+                  string "Definition " ^^ id_pp ^^ string "_eq_dec (x y : " ^^ id_pp ^^ string ") : {x = y} + {x <> y}.";
+                  string "refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp
+                  ^^ string " y) with";
+                  string "| left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
+                  string "| right ne => right _";
+                  string "end).";
+                  string "congruence.";
+                  string "Defined.";
+                ]
+            in
+            num_of_pp ^^ of_num_pp ^^ separate hardline [lemma1; lemma2; eq_pp]
+        | Some (_, pp), None | None, Some (_, pp) -> pp ^^ fallback
+        | None, None -> fallback
+      in
+      let eq2_pp =
+        string "#[export]" ^^ hardline
+        ^^ group
+             (nest 2
+                (flow (break 1)
+                   [
+                     string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
+                     string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
+                     string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
+                   ]
+                )
+             )
+      in
+      let inhabited_pp =
+        match enums with
+        | example_id :: _ ->
             string "#[export]" ^^ hardline
             ^^ group
                  (nest 2
                     (flow (break 1)
                        [
-                         string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
-                         string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
-                         string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
+                         string "Instance dummy_" ^^ id_pp ^^ space ^^ colon;
+                         string "Inhabited " ^^ id_pp ^^ string " := {";
                        ]
+                    ^/^ string "inhabitant :="
+                    ^^ nest 2 (break 1 ^^ doc_id_ctor bare_ctxt example_id)
                     )
+                 ^/^ string "}."
                  )
-          in
-          let inhabited_pp =
-            match enums with
-            | example_id :: _ ->
-                string "#[export]" ^^ hardline
-                ^^ group
-                     (nest 2
-                        (flow (break 1)
-                           [
-                             string "Instance dummy_" ^^ id_pp ^^ space ^^ colon;
-                             string "Inhabited " ^^ id_pp ^^ string " := {";
-                           ]
-                        ^/^ string "inhabitant :="
-                        ^^ nest 2 (break 1 ^^ doc_id_ctor bare_ctxt example_id)
-                        )
-                     ^/^ string "}."
-                     )
-                ^^ hardline
-            | [] ->
-                Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
-                empty
-          in
-          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
-    )
+            ^^ hardline
+        | [] ->
+            Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
+            empty
+      in
+      typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -3472,47 +3447,23 @@ let doc_isla_typ types_mod avoid_target_names (TD_aux (td, _)) =
           empty;
           empty;
         ]
-  | TD_enum (id, enums, _) -> (
-      match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
-      | Id_aux (Id "regfp", _) -> empty
-      | Id_aux (Id "niafp", _) -> empty
-      | Id_aux (Id "diafp", _) -> empty
-      | _ ->
-          hang 2
-            (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
-           ^^ string " :=" ^^ hardline
-            ^^ surround_separate_map 2 1 (brackets empty) lbracket
-                 (string ";" ^^ break 1)
-                 rbracket
-                 (fun id ->
-                   let idpp = doc_id_ctor bare_ctxt id in
-                   parens (dquotes idpp ^^ string ", " ^^ idpp)
-                 )
-                 enums
-            ^^ dot
-            )
-          ^^ hardline ^^ hardline
-    )
+  | TD_enum (id, enums, _) ->
+      hang 2
+        (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
+       ^^ string " :=" ^^ hardline
+        ^^ surround_separate_map 2 1 (brackets empty) lbracket
+             (string ";" ^^ break 1)
+             rbracket
+             (fun id ->
+               let idpp = doc_id_ctor bare_ctxt id in
+               parens (dquotes idpp ^^ string ", " ^^ idpp)
+             )
+             enums
+        ^^ dot
+        )
+      ^^ hardline ^^ hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      (* | Id_aux ((Id "regfp"),_) -> empty
-         | Id_aux ((Id "niafp"),_) -> empty
-         | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux (Id "option", _) -> empty
       | Id_aux (Id "register_value", _) -> empty
       | _ ->
