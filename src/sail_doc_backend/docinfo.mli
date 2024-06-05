@@ -69,19 +69,26 @@ open Libsail
 
 open Ast
 open Ast_defs
+open Ast_util
 open Type_check
+
+type embedding = Plain | Base64
 
 type hyperlink
 
-type 'a docinfo
+type hyper_location = string * int * int
+
+val hyperlink_target : hyperlink -> Callgraph.node
+
+val hyperlink_span : hyperlink -> hyper_location
 
 val hyperlinks_from_def : string list -> Type_check.tannot def -> hyperlink list
+
+type 'a docinfo
 
 val json_of_hyperlink : hyperlink -> Yojson.Basic.t
 
 val json_of_docinfo : 'a docinfo -> Yojson.Basic.t
-
-type embedding = Plain | Base64
 
 module type CONFIG = sig
   (** If [Some] then the source code will be directly included in the

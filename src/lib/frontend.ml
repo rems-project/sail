@@ -187,6 +187,7 @@ let load_modules ?target default_sail_dir options type_envs proj root_mod_ids =
     in
     Parse_ast.Defs files
   in
+  Option.iter (fun t -> Target.run_pre_initial_check_hook t ast) target;
   let ast = Initial_check.process_ast ~generate:true ast in
   let ast = { ast with comments } in
   process_ast target type_envs ast
@@ -203,6 +204,7 @@ let load_files ?target default_sail_dir options type_envs files =
          parsed_files
       )
   in
+  Option.iter (fun t -> Target.run_pre_initial_check_hook t ast) target;
   let ast = Initial_check.process_ast ~generate:true ast in
   let ast = { ast with comments } in
   process_ast target type_envs ast
