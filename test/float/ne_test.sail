@@ -75,6 +75,20 @@ function test_float_is_ne () -> unit = {
 
   assert(float_is_ne((0x7ff7000000000000, 0x0000234db0000000)) == (false, fp_eflag_invalid));
   assert(float_is_ne((0x7ff0000000000001, 0xfff0000003000001)) == (false, fp_eflag_invalid));
+
+  /* Quad floating point */
+  assert(float_is_ne((0x80000000000000000000000000000001, 0x00000000000000000000000000000001)) == (true, fp_eflag_none));
+  assert(float_is_ne((0x8f00000000000000000000000000000f, 0x0f00000000000000000000000000000f)) == (true, fp_eflag_none));
+  assert(float_is_ne((0x80000000000000000000000000000000, 0x00000000000000000000000000000001)) == (true, fp_eflag_none));
+  assert(float_is_ne((0x7fff0000000000000000000000000000, 0xffff0000000000000000000000000000)) == (true, fp_eflag_none));
+
+  assert(float_is_ne((0x00000000000000000000000000000011, 0x00000000000000000000000000000011)) == (false, fp_eflag_none));
+  assert(float_is_ne((0x0ffff00000000000000000000000000f, 0x0ffff00000000000000000000000000f)) == (false, fp_eflag_none));
+  assert(float_is_ne((0x00000000000000000000000000000000, 0x80000000000000000000000000000000)) == (false, fp_eflag_none));
+  assert(float_is_ne((0x7fff8000000000000000000000000100, 0x7fff8000000000000000000000000100)) == (false, fp_eflag_none));
+
+  assert(float_is_ne((0x7fff7000000000000000000000000000, 0x0000000000000234db00000000000000)) == (false, fp_eflag_invalid));
+  assert(float_is_ne((0x7fff0000000000000000000000000001, 0xffff0000000000000000000003000001)) == (false, fp_eflag_invalid));
 }
 
 function main () -> unit = {

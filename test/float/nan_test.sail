@@ -86,6 +86,24 @@ function test_float_is_nan () -> unit = {
   assert(float_is_nan(0xfff0000000000000) == false);
   assert(float_is_nan(0xffe0000000000000) == false);
   assert(float_is_nan(0xffc0000000000000) == false);
+
+  /* Quad floating point */
+  assert(float_is_nan(0x7fff8000000000000000000000000000));
+  assert(float_is_nan(0x7fff0000000000000000000000000001));
+  assert(float_is_nan(0x7fff8000000000000000000000000100));
+  assert(float_is_nan(0x7fffc000000000001000000000000000));
+
+  assert(float_is_nan(0xffff8000000000000000000000000000));
+  assert(float_is_nan(0xffff0000000000000000000000000001));
+  assert(float_is_nan(0xffff8000000000000000000000000100));
+  assert(float_is_nan(0xffffc000000000001000000000000000));
+
+  assert(float_is_nan(0x7fff0000000000000000000000000000) == false);
+  assert(float_is_nan(0x7ffe0000000000000000000000000000) == false);
+  assert(float_is_nan(0x7ffc0000000000000000000000000000) == false);
+  assert(float_is_nan(0xffff0000000000000000000000000000) == false);
+  assert(float_is_nan(0xfffe0000000000000000000000000000) == false);
+  assert(float_is_nan(0xfffc0000000000000000000000000000) == false);
 }
 
 function test_float_is_snan () -> unit = {
@@ -121,6 +139,18 @@ function test_float_is_snan () -> unit = {
   assert(float_is_snan(0x7ff8000000000000) == false);
   assert(float_is_snan(0xfff8000000000000) == false);
   assert(float_is_snan(0xfef8000000000001) == false);
+
+  /* Quad floating point */
+  assert(float_is_snan(0x7fff7000000000000000000000000000));
+  assert(float_is_snan(0x7fff7000000000000000000000000001));
+
+  assert(float_is_snan(0xffff7000000000000000000000000000));
+  assert(float_is_snan(0xffff7000000000000000000000000001));
+
+  assert(float_is_snan(0x7fff8000000000000000000000000000) == false);
+  assert(float_is_snan(0xffff8000000000000000000000000000) == false);
+  assert(float_is_snan(0xfeff8000000000000000000000000001) == false);
+
 }
 
 function test_float_is_qnan () -> unit = {
@@ -156,6 +186,17 @@ function test_float_is_qnan () -> unit = {
   assert(float_is_qnan(0x7ff7000000000000) == false);
   assert(float_is_qnan(0xfff7000000000000) == false);
   assert(float_is_qnan(0xfef7000000000001) == false);
+
+  /* Quad floating point */
+  assert(float_is_qnan(0x7fff8000000000000000000000000000));
+  assert(float_is_qnan(0x7fff8000000000000000000000000001));
+
+  assert(float_is_qnan(0xffff8000000000000000000000000000));
+  assert(float_is_qnan(0xffff8000000000000000000000000001));
+
+  assert(float_is_qnan(0x7fff7000000000000000000000000000) == false);
+  assert(float_is_qnan(0xffff7000000000000000000000000000) == false);
+  assert(float_is_qnan(0xfeff7000000000000000000000000001) == false);
 }
 
 function main () -> unit = {

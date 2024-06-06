@@ -59,6 +59,15 @@ function test_float_is_zero () -> unit = {
   assert(float_is_zero(0x7ff0000000000001) == false);
   assert(float_is_zero(0xfff8000000000000) == false);
   assert(float_is_zero(0xfff0000000000001) == false);
+
+  /* Quad floating point */
+  assert(float_is_zero(0x80000000000000000000000000000000));
+  assert(float_is_zero(0x00000000000000000000000000000000));
+
+  assert(float_is_zero(0x7fff8000000000000000000000000000) == false);
+  assert(float_is_zero(0x7fff0000000000000000000000000001) == false);
+  assert(float_is_zero(0xffff8000000000000000000000000000) == false);
+  assert(float_is_zero(0xffff0000000000000000000000000001) == false);
 }
 
 function main () -> unit = {

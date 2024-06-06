@@ -32,8 +32,8 @@ $define _FLOAT_COMMON
 
 /* Floating point types definition */
 type fp_exception_flags = bits(5) /* Floating-point exception flags. */
-type fp_bits = { 'n, 'n in {16, 32, 64}. bits('n) } /* Floating-point in bits. */
-type fp_bits_x2 = { 'n, 'n in {16, 32, 64}. (bits('n), bits('n)) } /* Floating point x2 tuple */
+type fp_bits = { 'n, 'n in {16, 32, 64, 128}. bits('n) } /* Floating-point in bits. */
+type fp_bits_x2 = { 'n, 'n in {16, 32, 64, 128}. (bits('n), bits('n)) } /* Floating point x2 tuple */
 type fp_bool_and_flags = (bool, fp_exception_flags) /* Floating point bool and exception flags tuple */
 
 /* Floating point constants */
@@ -47,16 +47,20 @@ struct float_bits('n : Int) = {
                   then 5
                   else (if   'n == 32
                         then 8
-                        else 11)),
+                        else (if   'n == 64
+                              then 11
+                              else 15))),
   mantissa : bits(if  'n == 16
                   then 10
                   else (if   'n == 32
                         then 23
-                        else 52)),
+                        else (if   'n == 64
+                              then 52
+                              else 112))),
 }
 
 /* The val func implementations */
-val      float_decompose : forall 'n, 'n in { 16, 32, 64 }. bits('n) -> float_bits('n)
+val      float_decompose : forall 'n, 'n in { 16, 32, 64, 128 }. bits('n) -> float_bits('n)
 function float_decompose(op) = {
   match 'n {
     16 => struct {
@@ -73,6 +77,11 @@ function float_decompose(op) = {
       sign      = op[63..63],
       exp       = op[62..52],
       mantissa  = op[51..0],
+    },
+    128 => struct {
+      sign      = op[127..127],
+      exp       = op[126..112],
+      mantissa  = op[111..0],
     }
   }
 }
