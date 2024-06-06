@@ -214,7 +214,11 @@ rule token comments = parse
   | "-"                                 { Minus }
   | "<->"                               { Bidir }
   | "=>"                                { EqGt "=>" }
-  | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
+  | "/*!"
+    { let startpos = Lexing.lexeme_start_p lexbuf in
+      let arg = doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf in
+      lexbuf.lex_start_p <- startpos;
+      Doc arg }
   | "//"        { line_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token comments lexbuf }
   | "/*"        { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token comments lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }

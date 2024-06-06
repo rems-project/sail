@@ -74,6 +74,9 @@ let opt_doc_embed_with_location = ref false
 let opt_doc_compact = ref false
 let opt_doc_bundle = ref "doc.json"
 
+let opt_html_css = ref None
+let opt_html_link_prefix = ref "../"
+
 let embedding_option () =
   match !opt_doc_embed with
   | None -> None
@@ -149,3 +152,76 @@ let _ =
       Type_check.opt_no_bitfield_expansion := true
     )
     doc_target
+
+let html_options =
+  [
+    ("-html_css", Arg.String (fun file -> opt_html_css := Some file), "<file> CSS file for html output");
+    ( "-html_link_prefix",
+      Arg.String (fun prefix -> opt_html_link_prefix := prefix),
+      "<string> Prefix links in HTML output with string"
+    );
+  ]
+
+let rec create_directories path =
+  match Sys.is_directory path with
+  | true -> ()
+  | false -> raise (Reporting.err_general Parse_ast.Unknown ("Failure: Path " ^ path ^ " exists and is not a directory"))
+  | exception Sys_error _ ->
+      let parent = Filename.dirname path in
+      create_directories parent;
+      Unix.mkdir path 0o755
+
+let html_target files _ _ out_dir_opt ast _ _ =
+  let open Html_source in
+  Reporting.opt_warnings := true;
+  let out_dir = match out_dir_opt with None -> "sail_doc" | Some s -> s in
+  let link_targets = hyperlink_targets ast in
+  List.iter
+    (fun file_info ->
+      let output_file = Filename.concat out_dir (file_info.prefix ^ ".html") in
+      create_directories (Filename.dirname output_file);
+      let ((out_chan, _, _, _) as handle) = Util.open_output_with_check_unformatted None output_file in
+      let file_links = Html_source.hyperlinks_for_file ~filename:file_info.filename ast in
+      let file_links =
+        Array.map
+          (fun (node, s, e) ->
+            match Callgraph.NodeMap.find_opt node link_targets with
+            | Some p ->
+                let filename = p.Lexing.pos_fname in
+                begin
+                  match List.find_opt (fun info -> info.filename = filename) !files with
+                  | Some info ->
+                      Some (Printf.sprintf "%s%s.html#L%d" !opt_html_link_prefix info.prefix p.Lexing.pos_lnum, s, e)
+                  | None -> None
+                end
+            | None -> None
+          )
+          file_links
+      in
+      let file_links = file_links |> Array.to_seq |> Seq.filter_map (fun x -> x) |> Array.of_seq in
+      let css =
+        try Option.map Util.read_whole_file !opt_html_css
+        with Sys_error msg -> raise (Reporting.err_general Parse_ast.Unknown msg)
+      in
+      output_html ?css ~file_info ~hyperlinks:file_links out_chan;
+      Util.close_output_with_check handle
+    )
+    !files
+
+let _ =
+  let files : Html_source.file_info list ref = ref [] in
+  Target.register ~name:"html" ~options:html_options
+    ~pre_initial_check_hook:(function
+      | Defs defs ->
+          List.iter
+            (fun (filename, _) ->
+              match Filename.chop_suffix_opt ~suffix:".sail" filename with
+              | Some prefix when Filename.is_relative filename ->
+                  let contents = Util.read_whole_file filename in
+                  let highlights = Html_source.highlights ~filename ~contents in
+                  files := { filename; prefix; contents; highlights } :: !files
+              | _ -> ()
+            )
+            defs
+      )
+    (html_target files)

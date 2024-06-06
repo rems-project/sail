@@ -84,6 +84,8 @@ val name : target -> string
 
 val run_pre_parse_hook : target -> unit -> unit
 
+val run_pre_initial_check_hook : target -> Parse_ast.defs -> unit
+
 val run_pre_rewrites_hook : target -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
 val rewrites : target -> Rewrites.rewrite_sequence
@@ -109,6 +111,7 @@ val asserts_termination : target -> bool
    @param ?description A custom description for the command line flag
    @param ?options Additional options for the Sail executable
    @param ?pre_parse_hook A function to call right at the start, before parsing
+   @param ?pre_initial_check_hook A function to call after parsing, but before de-sugaring
    @param ?pre_rewrites_hook A function to call before doing any rewrites
    @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
    @param ?asserts_termination Whether termination measures are enforced by assertions in the target
@@ -122,6 +125,7 @@ val register :
   ?description:string ->
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
   ?pre_parse_hook:(unit -> unit) ->
+  ?pre_initial_check_hook:(Parse_ast.defs -> unit) ->
   ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->

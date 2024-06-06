@@ -1841,10 +1841,11 @@ let rec filter_overload_tree env =
       let plausible_overloads =
         List.filter_map
           (fun (overload, param_lts, ret_lt) ->
-            (* If the overload and usage arity don't match, immediatly discard that overload *)
-            let arity_check = List.compare_lengths args param_lts in
-            if arity_check = 0 || (arity_check = -1 && is_implicit (List.hd param_lts)) then (
-              let param_lts = if arity_check = -1 then List.tl param_lts else param_lts in
+            (* If the overload and usage arity don't match, immediately discard that overload *)
+            let args_length = List.length args in
+            let params_length = List.length param_lts in
+            if args_length = params_length || (args_length + 1 = params_length && is_implicit (List.hd param_lts)) then (
+              let param_lts = if args_length = params_length then param_lts else List.tl param_lts in
               (* Special case for a function with a single implicit argument *)
               match (args, param_lts) with
               | [(_, arg_lts)], [param_lt] when List.exists is_unit arg_lts && is_implicit param_lt ->

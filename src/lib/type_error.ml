@@ -290,10 +290,13 @@ let message_of_type_error type_error =
         let msg, _ = to_message err in
         (msg, Some h)
     | Err_inner (err, l', prefix, err') ->
-        let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
         let msg, hint = to_message err in
-        let msg', hint' = to_message err' in
-        (Seq [msg; Line ""; Location (prefix, hint', l', msg')], hint)
+        if err = err' then (msg, hint)
+        else (
+          let prefix = if prefix = "" then "" else Util.(prefix ^ " " |> yellow |> clear) in
+          let msg', hint' = to_message err' in
+          (Seq [msg; Line ""; Location (prefix, hint', l', msg')], hint)
+        )
     | Err_other str -> ((if str = "" then Seq [] else Line str), None)
     | Err_function_arg (_, typ, err) ->
         let msg, _ = to_message err in
@@ -376,7 +379,18 @@ let message_of_type_error type_error =
           None
         )
     | Err_failed_constraint (check, locals, _, ncs) ->
-        (Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check)), None)
+        let simplified = constraint_simp check in
+        begin
+          match simplified with
+          | NC_aux (NC_false, _) ->
+              ( Line
+                  ("Failed to prove constraint: " ^ string_of_n_constraint check
+                 ^ ", as it simplifies directly to false"
+                  ),
+                None
+              )
+          | _ -> (Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check)), None)
+        end
     | Err_subtype (typ1, typ2, nc, all_constraints, tyvars) ->
         let nc = Option.map constraint_simp nc in
         let typ1, typ2 = (simp_typ typ1, simp_typ typ2) in

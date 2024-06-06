@@ -9,8 +9,3 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 12[96m |[0m  V[i] = v
   [91m |[0m  [91m^--^[0m
   [91m |[0m Failed to prove constraint: (0 <= 'i & 'i < 16)
-  [91m |[0m 
-  [91m |[0m [93mCaused by [0m[96mpass/lexp_vec/v1.sail[0m:12.2-6:
-  [91m |[0m 12[96m |[0m  V[i] = v
-  [91m |[0m   [91m |[0m  [91m^--^[0m
-  [91m |[0m   [91m |[0m Failed to prove constraint: (0 <= 'i & 'i < 16)

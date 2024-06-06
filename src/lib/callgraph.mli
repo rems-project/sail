@@ -90,6 +90,14 @@ module Node : sig
   val compare : node -> node -> int
 end
 
+module NodeSet : sig
+  include Set.S with type elt = node and type t = Set.Make(Node).t
+end
+
+module NodeMap : sig
+  include Map.S with type key = node and type 'a t = 'a Map.Make(Node).t
+end
+
 module G : sig
   include Graph.S with type node = Node.t and type node_set = Set.Make(Node).t and type graph = Graph.Make(Node).graph
 end
@@ -98,7 +106,7 @@ type callgraph = G.graph
 
 val graph_of_ast : Type_check.tannot ast -> callgraph
 
-val nodes_of_def : 'a def -> Set.Make(Node).t
+val nodes_of_def : 'a def -> NodeSet.t
 
 val filter_ast_ids : IdSet.t -> IdSet.t -> Type_check.tannot ast -> Type_check.tannot ast
 
