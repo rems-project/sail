@@ -94,4 +94,4 @@ val field_accessor_ids : id -> id -> field_accessor_ids
 (** Bitfields work a bit like a macro, which generate a struct wrapper
    around a simple bitvector type, along with a host of accessor
    functions. *)
-val macro : id -> Big_int.num -> order -> index_range Bindings.t -> (uannot, unit) def list
+val macro : id -> Big_int.num -> order -> index_range Bindings.t -> untyped_def list

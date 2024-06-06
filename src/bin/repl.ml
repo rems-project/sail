@@ -78,7 +78,7 @@ module Callgraph_commands = Callgraph_commands
 type mode = Evaluation of frame | Normal
 
 type istate = {
-  ast : (Type_check.tannot, Type_check.env) ast;
+  ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   ref_state : Interactive.istate ref;

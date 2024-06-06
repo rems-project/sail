@@ -75,8 +75,8 @@ let opt_ddump_tc_ast = ref false
 let opt_list_files = ref false
 let opt_reformat : string option ref = ref None
 
-let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : (uannot, unit) ast) :
-    (Type_check.tannot, Type_check.env) ast * Type_check.Env.t * Effects.side_effect_info =
+let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : untyped_ast) :
+    Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info =
   let ast, env = Type_error.check env ast in
   let ast = Scattered.descatter ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in

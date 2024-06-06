@@ -123,14 +123,14 @@ module Printer (Config : PRINT_CONFIG) : sig
 
   val doc_register : uannot dec_spec -> PPrint.document
 
-  val doc_def : (uannot, unit) def -> PPrint.document
+  val doc_def : untyped_def -> PPrint.document
 end
 
 (** This function is intended to reformat machine-generated Sail into
     something a bit more readable, it is not intended to be used as a
     general purpose code formatter. The output will be dumped as
     multiple files into the directory argument. *)
-val reformat : into_directory:string -> (uannot, unit) Ast_defs.ast -> unit
+val reformat : into_directory:string -> untyped_ast -> unit
 
 (** The default [PRINT_CONFIG] sets all the options to false, so it
     prints the AST 'as is' without modifications. *)
@@ -142,7 +142,7 @@ include module type of Printer (Default_print_config)
 
 (** This function is primarly used to dump the AST by debug options,
     such as [--ddump-tc-ast]. *)
-val output_ast : ?line_width:int -> out_channel -> (uannot, unit) Ast_defs.ast -> unit
+val output_ast : ?line_width:int -> out_channel -> untyped_ast -> unit
 
 (** Some convenience functions for outputting PPrint documents *)
 module Document : sig

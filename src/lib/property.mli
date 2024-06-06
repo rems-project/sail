@@ -104,7 +104,7 @@ val find_properties : ('a, 'b) ast -> (string * string * l * 'a val_spec) Bindin
    generation/proving we want to ensure that inputs outside the
    constraints of the function are ignored.
 *)
-val rewrite : (tannot, env) ast -> (tannot, env) ast
+val rewrite : typed_ast -> typed_ast
 
 type event = Overflow | Assertion | Assumption | Match | Return
 

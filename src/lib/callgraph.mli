@@ -104,15 +104,14 @@ end
 
 type callgraph = G.graph
 
-val graph_of_ast : (Type_check.tannot, Type_check.env) ast -> callgraph
+val graph_of_ast : Type_check.typed_ast -> callgraph
 
 val nodes_of_def : ('a, 'b) def -> NodeSet.t
 
-val filter_ast_ids :
-  IdSet.t -> IdSet.t -> (Type_check.tannot, Type_check.env) ast -> (Type_check.tannot, Type_check.env) ast
+val filter_ast_ids : IdSet.t -> IdSet.t -> Type_check.typed_ast -> Type_check.typed_ast
 
 val filter_ast : Set.Make(Node).t -> callgraph -> ('a, 'b) ast -> ('a, 'b) ast
 
 val filter_ast_extra : Set.Make(Node).t -> callgraph -> ('a, 'b) ast -> bool -> ('a, 'b) ast
 
-val top_sort_defs : (Type_check.tannot, Type_check.env) ast -> (Type_check.tannot, Type_check.env) ast
+val top_sort_defs : Type_check.typed_ast -> Type_check.typed_ast

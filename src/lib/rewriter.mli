@@ -87,14 +87,14 @@ val rewrite_exp : (tannot, env) rewriters -> tannot exp -> tannot exp
 val rewriters_base : (tannot, env) rewriters
 
 (** The identity re-writer *)
-val rewrite_ast : (tannot, env) ast -> (tannot, env) ast
+val rewrite_ast : typed_ast -> typed_ast
 
-val rewrite_ast_defs : (tannot, env) rewriters -> (tannot, env) def list -> (tannot, env) def list
+val rewrite_ast_defs : (tannot, env) rewriters -> typed_def list -> typed_def list
 
-val rewrite_ast_base : (tannot, env) rewriters -> (tannot, env) ast -> (tannot, env) ast
+val rewrite_ast_base : (tannot, env) rewriters -> typed_ast -> typed_ast
 
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
-val rewrite_ast_base_progress : string -> (tannot, env) rewriters -> (tannot, env) ast -> (tannot, env) ast
+val rewrite_ast_base_progress : string -> (tannot, env) rewriters -> typed_ast -> typed_ast
 
 val rewrite_lexp : (tannot, env) rewriters -> tannot lexp -> tannot lexp
 
@@ -104,7 +104,7 @@ val rewrite_pexp : (tannot, env) rewriters -> tannot pexp -> tannot pexp
 
 val rewrite_let : (tannot, env) rewriters -> tannot letbind -> tannot letbind
 
-val rewrite_def : (tannot, env) rewriters -> (tannot, env) def -> (tannot, env) def
+val rewrite_def : (tannot, env) rewriters -> typed_def -> typed_def
 
 val rewrite_fun : (tannot, env) rewriters -> tannot fundef -> tannot fundef
 

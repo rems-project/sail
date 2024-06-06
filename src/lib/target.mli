@@ -86,19 +86,12 @@ val run_pre_parse_hook : target -> unit -> unit
 
 val run_pre_initial_check_hook : target -> Parse_ast.defs -> unit
 
-val run_pre_rewrites_hook : target -> (tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit
+val run_pre_rewrites_hook : target -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
 
 val rewrites : target -> Rewrites.rewrite_sequence
 
 val action :
-  target ->
-  Yojson.Basic.t option ->
-  string ->
-  string option ->
-  (tannot, env) ast ->
-  Effects.side_effect_info ->
-  Env.t ->
-  unit
+  target -> Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
 
 val asserts_termination : target -> bool
 
@@ -133,15 +126,15 @@ val register :
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
   ?pre_parse_hook:(unit -> unit) ->
   ?pre_initial_check_hook:(Parse_ast.defs -> unit) ->
-  ?pre_rewrites_hook:((tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
-  (Yojson.Basic.t option -> string -> string option -> (tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  (Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   target
 
 (** Use if you want to register a target that does nothing *)
 val empty_action :
-  Yojson.Basic.t option -> string -> string option -> (tannot, env) ast -> Effects.side_effect_info -> Env.t -> unit
+  Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
 
 (** Return the current target. For example, if we register a 'coq'
    target, and Sail is invoked with `sail -coq`, then this function

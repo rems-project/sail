@@ -102,11 +102,7 @@ val get_initial_calls : unit -> id list
    environment to return if there is no polymorphism to remove, in
    which case specialize returns the AST unmodified. *)
 val specialize :
-  specialization ->
-  Env.t ->
-  (tannot, env) ast ->
-  Effects.side_effect_info ->
-  (tannot, env) ast * Env.t * Effects.side_effect_info
+  specialization -> Env.t -> typed_ast -> Effects.side_effect_info -> typed_ast * Env.t * Effects.side_effect_info
 
 (** specialize' n performs at most n specialization passes. Useful for
    int_specialization which is not guaranteed to terminate. *)
@@ -114,12 +110,12 @@ val specialize_passes :
   int ->
   specialization ->
   Env.t ->
-  (tannot, env) ast ->
+  typed_ast ->
   Effects.side_effect_info ->
-  (tannot, env) ast * Env.t * Effects.side_effect_info
+  typed_ast * Env.t * Effects.side_effect_info
 
 (** return all instantiations of a function id, with the
    instantiations filtered according to the specialization. *)
-val instantiations_of : specialization -> id -> (tannot, env) ast -> typ_arg KBindings.t list
+val instantiations_of : specialization -> id -> typed_ast -> typ_arg KBindings.t list
 
 val string_of_instantiation : typ_arg KBindings.t -> string
