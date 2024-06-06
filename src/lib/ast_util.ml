@@ -74,6 +74,9 @@ module Big_int = Nat_big_num
 (* The type of annotations for untyped AST nodes *)
 type uannot = { attrs : (l * string * attribute_data option) list }
 
+type untyped_def = (uannot, unit) def
+type untyped_ast = (uannot, unit) ast
+
 let rec string_of_attribute_data (AD_aux (aux, _)) =
   match aux with
   | AD_object kvs ->

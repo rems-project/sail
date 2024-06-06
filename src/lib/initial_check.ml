@@ -1010,7 +1010,7 @@ let to_ast_record ctx id typq fields =
   let fields = List.map (fun (atyp, id) -> (to_ast_typ typq_ctx atyp, to_ast_id ctx id)) fields in
   (id, typq, fields, add_constructor id typq ctx)
 
-let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : (uannot, unit) def list ctx_out =
+let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
       let id = to_ast_reserved_type_id ctx id in
@@ -1293,7 +1293,7 @@ let pragma_arg_loc pragma arg_left_trim l =
     )
     l
 
-let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : (uannot, unit) def list ctx_out =
+let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx_out =
   let annot = mk_def_annot ?doc ~attrs ?visibility:vis l () in
   match def with
   | P.DEF_private def -> begin

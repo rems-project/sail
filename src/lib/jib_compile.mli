@@ -171,9 +171,9 @@ module Make (C : CONFIG) : sig
        arguments are is the current definition number and the total
        number of definitions, and can be used to drive a progress bar
        (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> (tannot, env) def -> cdef list * ctx
+  val compile_def : int -> int -> ctx -> typed_def -> cdef list * ctx
 
-  val compile_ast : ctx -> (tannot, env) ast -> cdef list * ctx
+  val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end
 
 (** Adds some special functions to the environment that are used to

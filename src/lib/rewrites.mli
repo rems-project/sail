@@ -93,11 +93,10 @@ val fresh_id : string -> l -> id
 val move_loop_measures : ('a, 'b) ast -> ('a, 'b) ast
 
 (** Re-write undefined to functions created by -undefined_gen flag *)
-val rewrite_undefined : bool -> Env.t -> (tannot, env) ast -> (tannot, env) ast
+val rewrite_undefined : bool -> Env.t -> typed_ast -> typed_ast
 
 type rewriter =
-  | Base_rewriter of
-      (Effects.side_effect_info -> Env.t -> (tannot, env) ast -> (tannot, env) ast * Effects.side_effect_info * Env.t)
+  | Base_rewriter of (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -107,10 +106,7 @@ val describe_rewriter : rewriter -> string list
 val all_rewriters : (string * rewriter) list
 
 type rewrite_sequence =
-  ( string
-  * (Effects.side_effect_info -> Env.t -> (tannot, env) ast -> (tannot, env) ast * Effects.side_effect_info * Env.t)
-  )
-  list
+  (string * (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)) list
 
 val rewrite_lit_ocaml : lit -> bool
 val rewrite_lit_lem : lit -> bool
@@ -129,11 +125,7 @@ val instantiate_rewrites : (string * rewriter_arg list) list -> rewrite_sequence
 
 (** Apply a sequence of rewrites to an AST *)
 val rewrite :
-  Effects.side_effect_info ->
-  Env.t ->
-  rewrite_sequence ->
-  (tannot, env) ast ->
-  (tannot, env) ast * Effects.side_effect_info * Env.t
+  Effects.side_effect_info -> Env.t -> rewrite_sequence -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t
 
 val rewrites_interpreter : (string * rewriter_arg list) list
 

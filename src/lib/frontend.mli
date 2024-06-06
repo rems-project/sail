@@ -75,13 +75,9 @@ val opt_list_files : bool ref
 val opt_reformat : string option ref
 
 val check_ast :
-  bool ->
-  Type_check.Env.t ->
-  (uannot, unit) ast ->
-  (Type_check.tannot, Type_check.env) ast * Type_check.Env.t * Effects.side_effect_info
+  bool -> Type_check.Env.t -> untyped_ast -> Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
-val instantiate_abstract_types :
-  typ_arg Bindings.t -> (Type_check.tannot, Type_check.env) ast -> (Type_check.tannot, Type_check.env) ast
+val instantiate_abstract_types : typ_arg Bindings.t -> Type_check.typed_ast -> Type_check.typed_ast
 
 val load_modules :
   ?target:Target.target ->
@@ -90,7 +86,7 @@ val load_modules :
   Type_check.Env.t ->
   Project.project_structure ->
   Project.mod_id list ->
-  (Type_check.tannot, Type_check.env) ast * Type_check.Env.t * Effects.side_effect_info
+  Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val load_files :
   ?target:Target.target ->
@@ -98,10 +94,7 @@ val load_files :
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->
-  (Type_check.tannot, Type_check.env) ast * Type_check.Env.t * Effects.side_effect_info
+  Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val initial_rewrite :
-  Effects.side_effect_info ->
-  Type_check.Env.t ->
-  (Type_check.tannot, Type_check.env) ast ->
-  (Type_check.tannot, Type_check.env) ast * Type_check.Env.t
+  Effects.side_effect_info -> Type_check.Env.t -> Type_check.typed_ast -> Type_check.typed_ast * Type_check.Env.t

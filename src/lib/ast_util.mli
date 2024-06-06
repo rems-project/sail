@@ -78,6 +78,11 @@ module Big_int = Nat_big_num
    annotations {!Type_check.tannot}. *)
 type uannot
 
+(** Aliases for an untyped definitions and full AST for readability *)
+type untyped_def = (uannot, unit) def
+
+type untyped_ast = (uannot, unit) ast
+
 (** The empty annotation *)
 val empty_uannot : uannot
 
@@ -185,8 +190,8 @@ val mk_lit : lit_aux -> lit
 val mk_lit_exp : ?loc:l -> lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
-val mk_fundef : uannot funcl list -> (uannot, unit) def
-val mk_val_spec : val_spec_aux -> (uannot, unit) def
+val mk_fundef : uannot funcl list -> untyped_def
+val mk_val_spec : val_spec_aux -> untyped_def
 val mk_typschm : typquant -> typ -> typschm
 val mk_empty_typquant : loc:l -> typquant
 val mk_typquant : quant_item list -> typquant

@@ -4349,8 +4349,7 @@ let if_mwords f effect_info env ast =
 let if_flag flag f effect_info env ast = if !flag then f effect_info env ast else (ast, effect_info, env)
 
 type rewriter =
-  | Base_rewriter of
-      (Effects.side_effect_info -> Env.t -> (tannot, env) ast -> (tannot, env) ast * Effects.side_effect_info * Env.t)
+  | Base_rewriter of (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -4502,10 +4501,7 @@ let rewrites_interpreter =
   ]
 
 type rewrite_sequence =
-  ( string
-  * (Effects.side_effect_info -> Env.t -> (tannot, env) ast -> (tannot, env) ast * Effects.side_effect_info * Env.t)
-  )
-  list
+  (string * (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)) list
 
 let instantiate_rewrites rws =
   let get_rewriter name =

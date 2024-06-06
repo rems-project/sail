@@ -123,8 +123,6 @@ val string_of_type_error : type_error -> string * string option
 (** Convert a type error into a general purpose error from the Reporting file *)
 val to_reporting_exn : Parse_ast.l -> type_error -> exn
 
-val check_defs :
-  Type_check.Env.t -> (uannot, unit) Ast.def list -> (Type_check.tannot, Type_check.env) Ast.def list * Type_check.Env.t
+val check_defs : Type_check.Env.t -> untyped_def list -> Type_check.typed_def list * Type_check.Env.t
 
-val check :
-  Type_check.Env.t -> (uannot, unit) Ast_defs.ast -> (Type_check.tannot, Type_check.env) Ast_defs.ast * Type_check.Env.t
+val check : Type_check.Env.t -> untyped_ast -> Type_check.typed_ast * Type_check.Env.t

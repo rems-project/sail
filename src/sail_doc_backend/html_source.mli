@@ -79,7 +79,7 @@ val highlights : filename:string -> contents:string -> (Highlight.t * int * int)
 
 val hyperlink_targets : ('a, 'b) ast -> Lexing.position Callgraph.NodeMap.t
 
-val hyperlinks_for_file : filename:string -> (Type_check.tannot, Type_check.env) ast -> (Callgraph.node * int * int) array
+val hyperlinks_for_file : filename:string -> Type_check.typed_ast -> (Callgraph.node * int * int) array
 
 type file_info = { filename : string; prefix : string; contents : string; highlights : (Highlight.t * int * int) array }
 
