@@ -1161,17 +1161,22 @@ let rec nexp_const_eval (Nexp_aux (n, l) as nexp) =
 
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
-let similar_nexps ctxt env n1 n2 =
+let similar_nexps ctxt env ?(existentials = []) n1 n2 =
   let rec same_nexp_shape (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
     match (n1, n2) with
     | Nexp_id _, Nexp_id _ -> true
-    (* TODO: this is really just an approximation to what we really want:
-       will the Coq types have the same names?  We could probably do better
-       by tracking which existential kids are equal to bound kids. *)
+    (* TODO: this is really just an approximation to what we really
+       want: will the Coq types have the same names?  We could
+       probably do better by tracking which existential kids are equal
+       to bound kids.  We do a bit more than we orginally did to
+       detect when there's an existential which fits. *)
     | Nexp_var k1, Nexp_var k2 ->
-        Kid.compare k1 k2 == 0
+        (Kid.compare k1 k2 == 0
         || prove __POS__ env (nc_eq (nvar k1) (nvar k2))
            && ((not (KidSet.mem k1 ctxt.bound_nvars)) || not (KidSet.mem k2 ctxt.bound_nvars))
+        )
+        || List.exists (fun k -> Kid.compare k2 k == 0) existentials
+           && not (prove __POS__ env (nc_neq (nvar k1) (nvar k2)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
     | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
         NC.compare i1 i2 == 0 && same_nexp_shape t1 t2 && same_nexp_shape e1 e2
@@ -1336,7 +1341,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
 let maybe_parens_comma_list f ls =
   match ls with [x] -> f true x | xs -> parens (separate (string ", ") (List.map (f false) xs))
 
-let complex_autocast ctxt env top1 top2 =
+let complex_autocast ctxt env ?existentials top1 top2 =
   let ignore_apps_of = IdSet.of_list (List.map mk_id ["register"; "range"; "implicit"; "atom"; "atom_bool"]) in
   let rec aux_typ (Typ_aux (t1, _) as typ1) (Typ_aux (t2, _) as typ2) =
     match (t1, t2) with
@@ -1356,7 +1361,7 @@ let complex_autocast ctxt env top1 top2 =
     | _ -> (false, "_")
   and aux_arg (A_aux (a1, _)) (A_aux (a2, _)) =
     match (a1, a2) with
-    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env n1 n2 then (false, "_") else (true, "_sz")
+    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ?existentials n1 n2 then (false, "_") else (true, "_sz")
     | A_typ typ1, A_typ typ2 -> aux_typ typ1 typ2
     | _ -> (false, "_")
   in
@@ -1366,13 +1371,13 @@ type auto_t = Simple | Complex of string | No
 
 let string_of_auto_t = function No -> "no" | Simple -> "simple" | Complex s -> "complex(" ^ s ^ ")"
 
-let autocast_req ctxt env typ1 typ2 typ1_expanded typ2_expanded =
+let autocast_req ctxt env ?existentials typ1 typ2 typ1_expanded typ2_expanded =
   match (typ1_expanded, typ2_expanded) with
   | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
       Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
-      if similar_nexps ctxt env n1 n2 then No else Simple
+      if similar_nexps ctxt env ?existentials n1 n2 then No else Simple
   | _ -> (
-      match complex_autocast ctxt env typ1 typ2 with false, _ -> No | true, s -> Complex s
+      match complex_autocast ctxt env ?existentials typ1 typ2 with false, _ -> No | true, s -> Complex s
     )
 
 let report = Reporting.err_unreachable
@@ -1817,19 +1822,15 @@ let doc_exp, doc_let =
                     | ExNone, _, t1 -> t1
                   )
                 in
-                let out_typ_bound, out_typ =
-                  match ann_typ with Typ_aux (Typ_exist (ks, _, t1), _) -> (ks, t1) | t1 -> ([], t1)
+                let out_typ_bound, out_typ, out_env =
+                  match ann_typ with
+                  | Typ_aux (Typ_exist (ks, nc, t1), l) -> (ks, t1, add_existential l ks nc env)
+                  | t1 -> ([], t1, env)
                 in
-                let autocast =
-                  (* Avoid using helper functions which simplify the nexps *)
-                  match (in_typ, out_typ) with
-                  (* When we expect a bitvector of arbitrary length we don't need a cast *)
-                  | _, Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _)
-                    when List.exists (fun k -> Kid.compare v (kopt_kid k) == 0) out_typ_bound ->
-                      No
-                  | _ -> autocast_req ctxt env in_typ out_typ in_typ out_typ
-                in
-                autocast
+                (* Pass existentials because they can be an arbitrary value (consistent with any constraints), so
+                   we might be able to avoid a cast. *)
+                let existentials = List.map kopt_kid out_typ_bound in
+                autocast_req ctxt out_env ~existentials in_typ out_typ in_typ out_typ
               in
 
               let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
