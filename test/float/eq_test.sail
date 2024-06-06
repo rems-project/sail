@@ -75,6 +75,20 @@ function test_float_is_eq () -> unit = {
 
   assert(float_is_eq((0x7ff7000000000000, 0x0000234db0000000)) == (false, fp_eflag_invalid));
   assert(float_is_eq((0x7ff0000000000001, 0xfff0000003000001)) == (false, fp_eflag_invalid));
+
+  /* Quad floating point */
+  assert(float_is_eq((0x00000000000000000000000000000001, 0x00000000000000000000000000000001)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x0f00000000000000000000000000000f, 0x0f00000000000000000000000000000f)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x80000000000000000000000000000000, 0x00000000000000000000000000000000)) == (true, fp_eflag_none));
+  assert(float_is_eq((0x7fff0000000000000000000000000000, 0x7fff0000000000000000000000000000)) == (true, fp_eflag_none));
+
+  assert(float_is_eq((0x00000000000000000000000000000001, 0x80000000000000000000000000000001)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x0f00000000000000000000000000000f, 0x3f00000000000000000000000000000f)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7fff8000000000000000000000000000, 0x0000234db00000000000000000000000)) == (false, fp_eflag_none));
+  assert(float_is_eq((0x7fff8000000000000000000000000000, 0xffff8000000000000000000000000000)) == (false, fp_eflag_none));
+
+  assert(float_is_eq((0x7fff7000000000000000000000000000, 0x0000234db00000000000000000000000)) == (false, fp_eflag_invalid));
+  assert(float_is_eq((0x7fff0000000000000000000000000001, 0xfff00000030000000000000000000001)) == (false, fp_eflag_invalid));
 }
 
 function main () -> unit = {

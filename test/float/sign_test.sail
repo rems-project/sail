@@ -62,6 +62,16 @@ function test_float_is_positive () -> unit = {
   assert(float_is_positive(0xf8f0000000023000) == false);
   assert(float_is_positive(0xfce0000000000000) == false);
   assert(float_is_positive(0xe8c0000000000000) == false);
+
+  /* Quad floating point */
+  assert(float_is_positive(0x7ff080000f0f00000000000000000000));
+  assert(float_is_positive(0x0000000000000fedc000000000000001));
+  assert(float_is_positive(0x7fffffffffffffffffffffffffffffff));
+  assert(float_is_positive(0x00000000003000000000010000000000));
+
+  assert(float_is_positive(0xf8ff0000000000000023000000000000) == false);
+  assert(float_is_positive(0xffce0000000000000000000000000000) == false);
+  assert(float_is_positive(0xe88c0000000000000000000000000000) == false);
 }
 
 function test_float_is_negative () -> unit = {
@@ -94,6 +104,16 @@ function test_float_is_negative () -> unit = {
   assert(float_is_negative(0x78f0000000023000) == false);
   assert(float_is_negative(0x7ce0000000000000) == false);
   assert(float_is_negative(0x68c0000000000000) == false);
+
+  /* Quad floating point */
+  assert(float_is_negative(0xfff0000000800000000f0f0000000000));
+  assert(float_is_negative(0x8000000000000fedc000000000000001));
+  assert(float_is_negative(0xffffffffffffffffffffffffffffffff));
+  assert(float_is_negative(0x80000000003000000000010000000000));
+
+  assert(float_is_negative(0x78ff0000000000000000023000000000) == false);
+  assert(float_is_negative(0x7fce0000000000000000000000000000) == false);
+  assert(float_is_negative(0x688c0000000000000000000000000000) == false);
 }
 
 function main () -> unit = {

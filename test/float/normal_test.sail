@@ -65,6 +65,17 @@ function test_float_is_normal () -> unit = {
   assert(float_is_normal(0x7ff0000000000000) == false);
   assert(float_is_normal(0x0008000000000000) == false);
   assert(float_is_normal(0x8008000000000000) == false);
+
+    /* Quad floating point */
+  assert(float_is_normal(0x7ffe0000000000000000000000000000));
+  assert(float_is_normal(0x7ffe0000000000000000000000000001));
+  assert(float_is_normal(0xfffc000000000000000000000000000f));
+  assert(float_is_normal(0x80030000000000000001000000000000));
+
+  assert(float_is_normal(0x7fff8000000000000000000000000000) == false);
+  assert(float_is_normal(0x7fff0000000000000000000000000000) == false);
+  assert(float_is_normal(0x00008000000000000000000000000000) == false);
+  assert(float_is_normal(0x80008000000000000000000000000000) == false);
 }
 
 function test_float_is_denormal () -> unit = {
@@ -100,6 +111,17 @@ function test_float_is_denormal () -> unit = {
   assert(float_is_denormal(0x7ff0000000000000) == false);
   assert(float_is_denormal(0xffc000000000000f) == false);
   assert(float_is_denormal(0x8030000000100000) == false);
+
+    /* Quad floating point */
+  assert(float_is_denormal(0x00008000000000000000000000000000));
+  assert(float_is_denormal(0x80008000000000000000000000000000));
+  assert(float_is_denormal(0x80000000000000000000000000000001));
+  assert(float_is_denormal(0x80008000000000000001000000000000));
+
+  assert(float_is_denormal(0x7fff8000000000000000000000000000) == false);
+  assert(float_is_denormal(0x7fff0000000000000000000000000000) == false);
+  assert(float_is_denormal(0xfffc000000000000000000000000000f) == false);
+  assert(float_is_denormal(0x80030000000000000001000000000000) == false);
 }
 
 function main () -> unit = {

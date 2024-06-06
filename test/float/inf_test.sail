@@ -65,6 +65,17 @@ function test_float_is_inf () -> unit = {
   assert(float_is_inf(0xfff8000000000000) == false);
   assert(float_is_inf(0xfff0000000000001) == false);
   assert(float_is_inf(0xffc0000000000000) == false);
+
+    /* Quad floating point */
+  assert(float_is_inf(0x7fff0000000000000000000000000000));
+  assert(float_is_inf(0xffff0000000000000000000000000000));
+
+  assert(float_is_inf(0x7fff8000000000000000000000000000) == false);
+  assert(float_is_inf(0x7fff0000000000000000000000000001) == false);
+  assert(float_is_inf(0x7ffc0000000000000000000000000000) == false);
+  assert(float_is_inf(0xffff8000000000000000000000000000) == false);
+  assert(float_is_inf(0xffff0000000000000000000000000001) == false);
+  assert(float_is_inf(0xfffc0000000000000000000000000000) == false);
 }
 
 function main () -> unit = {
