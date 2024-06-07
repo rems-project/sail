@@ -1393,6 +1393,8 @@ module Make (C : CONFIG) = struct
   let letdef_count = ref 0
 
   let compile_funcl ctx def_annot id pat guard exp =
+    let debug_attr = get_def_attribute "jib_debug" def_annot in
+
     (* Find the function's type. *)
     let quant, Typ_aux (fn_typ, _) =
       try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
@@ -1444,6 +1446,11 @@ module Make (C : CONFIG) = struct
     (* Optimize and compile the expression to ANF. *)
     let aexp = C.optimize_anf ctx (no_shadow (IdSet.union known_ids !guard_bindings) (anf exp)) in
 
+    if Option.is_some debug_attr then (
+      prerr_endline Util.("ANF for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      prerr_endline (Document.to_string (pp_aexp aexp))
+    );
+
     let setup, call, cleanup = compile_aexp ctx aexp in
     let destructure, destructure_cleanup =
       compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
@@ -1458,6 +1465,11 @@ module Make (C : CONFIG) = struct
     let instrs = unique_names instrs in
     let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
     let instrs = coverage_function_entry ctx id (exp_loc exp) @ instrs in
+
+    if Option.is_some debug_attr then (
+      prerr_endline Util.("IR for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
+    );
 
     ([CDEF_aux (CDEF_fundef (id, None, List.map fst compiled_args, instrs), def_annot)], orig_ctx)
 
