@@ -150,6 +150,7 @@ typ4r:
   | typ5 { $1 }
 
 typ5:
+  | typ6 In typ6 { mk_typ (ATyp_in ($1, $3)) $startpos $endpos }
   | typ6 Op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ5l Op5l typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ6 Op5r typ5r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -218,7 +219,6 @@ typ8r:
   | typ9 { $1 }
 
 typ9:
-  | atomic_typ In atomic_typ { mk_typ (ATyp_in ($1, $3)) $startpos $endpos }
   | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ9l Op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | atomic_typ Op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
