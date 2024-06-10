@@ -25,6 +25,7 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
+(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -67,66 +68,73 @@
 
 open Libsail
 
-open Array
-open Jib_util
+open Ast_util
 
-(** A mutable array based graph type, with nodes indexed by integers. *)
-type 'a array_graph
+type spec_info
 
-(** Create an empty array_graph, specifying the initial size of the
-   underlying array. *)
-val make : initial_size:int -> unit -> 'a array_graph
+val collect_spec_info : Jib_compile.ctx -> Jib.cdef list -> spec_info
 
-module IntSet : Set.S with type elt = int
+module type CONFIG = sig
+  val max_unknown_integer_width : int
+  val max_unknown_bitvector_width : int
 
-val get_cond : 'a array_graph -> int -> Jib.cval
+  (** Output SystemVerilog line directives where possible *)
+  val line_directives : bool
 
-val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
+  (** If true, treat all strings as if they were the unit type.
+      Obviously this is only sound when the semantics does not depend
+      on strings, and they are only used for output. *)
+  val nostrings : bool
 
-val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
+  val nopacked : bool
+  val union_padding : bool
+  val unreachable : string list
+  val comb : bool
+  val ignore : string list
+end
 
-(** Add a vertex to a graph, returning the index of the inserted
-   vertex. If the number of vertices exceeds the size of the
-   underlying array, then it is dynamically resized. *)
-val add_vertex : 'a -> 'a array_graph -> int
+module Make (Config : CONFIG) : sig
+  type cdef_doc = {
+    outside_module : PPrint.document;
+    inside_module_prefix : PPrint.document;
+    inside_module : PPrint.document;
+  }
 
-(** Add an edge between two existing vertices. Raises Invalid_argument
-   if either of the vertices do not exist. *)
-val add_edge : int -> int -> 'a array_graph -> unit
+  val svir_cdef :
+    spec_info ->
+    Jib_compile.ctx ->
+    (Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
+    Jib.cdef ->
+    Sv_ir.sv_def list * (Jib.ctyp list * Jib.ctyp) Bindings.t
 
-exception Not_a_DAG of int
+  val pp_def : Sv_ir.sv_def -> PPrint.document
 
-val topsort : 'a array_graph -> int list
+  val toplevel_module : spec_info -> Sv_ir.sv_module option
 
-type terminator =
-  | T_undefined of Jib.ctyp
-  | T_exit of string
-  | T_end of Jib.name
-  | T_goto of string
-  | T_jump of int * string
-  | T_label of string
-  | T_none
+  val sv_cdef :
+    spec_info ->
+    Jib_compile.ctx ->
+    (Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
+    string list ->
+    Jib.cdef ->
+    cdef_doc * (Jib.ctyp list * Jib.ctyp) Bindings.t * string list
 
-type cf_node =
-  | CF_label of string
-  | CF_block of Jib.instr list * terminator
-  | CF_guard of int
-  | CF_start of Jib.ctyp NameMap.t
+  val sv_register_references : Jib.cdef list -> PPrint.document * PPrint.document
 
-val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
+  val sv_fundef_with :
+    Jib_compile.ctx -> string -> Ast.id list -> Jib.ctyp list -> Jib.ctyp -> PPrint.document -> PPrint.document
 
-(** [immediate_dominators graph root] will calculate the immediate
-   dominators for a control flow graph with a specified root node. *)
-val immediate_dominators : 'a array_graph -> int -> int array
+  val sv_ctyp : Jib.ctyp -> string * string option
 
-type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
+  val wrap_type : Jib.ctyp -> PPrint.document -> PPrint.document
 
-(** Convert a list of instructions into SSA form *)
-val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
+  val pp_id_string : Ast.id -> string
 
-(** Output the control-flow graph in graphviz format for
-   debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
-   image of the graph. *)
-val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
+  val pp_id : Ast.id -> PPrint.document
+  val main_args :
+    Jib.cdef option ->
+    (Jib.ctyp list * Jib.ctyp) Bindings.t ->
+    PPrint.document list * PPrint.document option * PPrint.document list
 
-val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit
+  val make_call_precise : Jib_compile.ctx -> Ast.id -> bool
+end

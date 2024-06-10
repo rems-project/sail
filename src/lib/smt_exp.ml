@@ -67,6 +67,10 @@
 
 open Ast_util
 
+let zencode_id id = Util.zencode_string (string_of_id id)
+let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
+let zencode_name id = Jib_util.string_of_name ~deref_current_exception:false ~zencode:true id
+
 type smt_typ =
   | Bitvec of int
   | Bool
@@ -115,12 +119,8 @@ let rec fold_smt_exp f = function
   | Store (info, store_fn, arr, index, x) ->
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
   | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
-  | Tl (hd_op, xs) -> f (Tl (hd_op, fold_smt_exp f xs))
+  | Tl (tl_op, xs) -> f (Tl (tl_op, fold_smt_exp f xs))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _ | Empty_list) as exp -> f exp
-
-let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
-
-let smt_disj = function [] -> Bool_lit false | [x] -> x | xs -> Fn ("or", xs)
 
 let extract i j x = Extract (i, j, x)
 
@@ -145,76 +145,358 @@ let bvone n =
   if n > 0 then Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int (n - 1)) @ [Sail2_values.B1])
   else Bitvec_lit []
 
-let rec simp exp =
+let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
+
+let smt_disj = function [] -> Bool_lit false | [x] -> x | xs -> Fn ("or", xs)
+
+let simp_and xs =
+  let xs = List.filter (function Bool_lit true -> false | _ -> true) xs in
+  match xs with
+  | [] -> Bool_lit true
+  | [x] -> x
+  | _ -> if List.exists (function Bool_lit false -> true | _ -> false) xs then Bool_lit false else Fn ("and", xs)
+
+let simp_or xs =
+  let xs = List.filter (function Bool_lit false -> false | _ -> true) xs in
+  match xs with
+  | [] -> Bool_lit false
+  | [x] -> x
+  | _ -> if List.exists (function Bool_lit true -> true | _ -> false) xs then Bool_lit true else Fn ("or", xs)
+
+let simp_fn f args =
+  let open Sail2_operators_bitlists in
+  match (f, args) with
+  | "not", [Fn ("not", [exp])] -> exp
+  | "not", [Bool_lit b] -> Bool_lit (not b)
+  | "contents", [Fn ("Bits", [_; bv])] -> bv
+  | "len", [Fn ("Bits", [len; _])] -> len
+  | "or", _ -> simp_or args
+  | "and", _ -> simp_and args
+  | "concat", _ ->
+      let chunks, bv =
+        List.fold_left
+          (fun (chunks, current_literal) arg ->
+            match (current_literal, arg) with
+            | Some bv1, Bitvec_lit bv2 -> (chunks, Some (bv1 @ bv2))
+            | None, Bitvec_lit bv -> (chunks, Some bv)
+            | Some bv, exp -> (exp :: Bitvec_lit bv :: chunks, None)
+            | None, exp -> (exp :: chunks, None)
+          )
+          ([], None) args
+      in
+      begin
+        match (chunks, bv) with
+        | [], Some bv -> Bitvec_lit bv
+        | chunks, Some bv -> Fn ("concat", List.rev (Bitvec_lit bv :: chunks))
+        | chunks, None -> Fn ("concat", List.rev chunks)
+      end
+  | "bvnot", [Bitvec_lit bv] -> Bitvec_lit (not_vec bv)
+  | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (and_vec lhs rhs)
+  | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (or_vec lhs rhs)
+  | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (xor_vec lhs rhs)
+  | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftl lhs shift) | None -> Fn (f, args)
+    end
+  | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
+    end
+  | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
+    end
+  | _, _ -> Fn (f, args)
+
+let rec simp vars exp =
   let open Sail2_operators_bitlists in
   match exp with
+  | Var v -> begin match vars v with Some exp -> simp vars exp | None -> Var v end
   | Fn (f, args) ->
-      let args = List.map simp args in
-      begin
-        match (f, args) with
-        | "contents", [Fn ("Bits", [_; bv])] -> bv
-        | "len", [Fn ("Bits", [len; _])] -> len
-        | "concat", _ ->
-            let chunks, bv =
-              List.fold_left
-                (fun (chunks, current_literal) arg ->
-                  match (current_literal, arg) with
-                  | Some bv1, Bitvec_lit bv2 -> (chunks, Some (bv1 @ bv2))
-                  | None, Bitvec_lit bv -> (chunks, Some bv)
-                  | Some bv, exp -> (exp :: Bitvec_lit bv :: chunks, None)
-                  | None, exp -> (exp :: chunks, None)
-                )
-                ([], None) args
-            in
-            begin
-              match (chunks, bv) with
-              | [], Some bv -> Bitvec_lit bv
-              | chunks, Some bv -> Fn ("concat", List.rev (Bitvec_lit bv :: chunks))
-              | chunks, None -> Fn ("concat", List.rev chunks)
-            end
-        | "bvnot", [Bitvec_lit bv] -> Bitvec_lit (not_vec bv)
-        | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (and_vec lhs rhs)
-        | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (or_vec lhs rhs)
-        | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (xor_vec lhs rhs)
-        | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftl lhs shift) | None -> Fn (f, args)
-          end
-        | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
-          end
-        | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-            match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
-          end
-        | f, args -> Fn (f, args)
-      end
-  | ZeroExtend (to_len, from_len, arg) ->
-      let arg = simp arg in
+      let args = List.map (simp vars) args in
+      simp_fn f args
+  | ZeroExtend (to_len, by_len, arg) ->
+      let arg = simp vars arg in
       begin
         match arg with
         | Bitvec_lit bv -> Bitvec_lit (zero_extend bv (Big_int.of_int to_len))
-        | _ -> ZeroExtend (to_len, from_len, arg)
+        | _ -> ZeroExtend (to_len, by_len, arg)
       end
-  | SignExtend (to_len, from_len, arg) ->
-      let arg = simp arg in
+  | SignExtend (to_len, by_len, arg) ->
+      let arg = simp vars arg in
       begin
         match arg with
         | Bitvec_lit bv -> Bitvec_lit (sign_extend bv (Big_int.of_int to_len))
-        | _ -> SignExtend (to_len, from_len, arg)
+        | _ -> SignExtend (to_len, by_len, arg)
       end
   | Extract (n, m, arg) -> begin
-      match simp arg with
+      match simp vars arg with
       | Bitvec_lit bv -> Bitvec_lit (subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m))
       | exp -> Extract (n, m, exp)
     end
-  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp arr, simp i, simp x)
-  | exp -> exp
+  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp vars arr, simp vars i, simp vars x)
+  | Ite (Fn ("not", [cond]), then_exp, else_exp) -> simp vars (Ite (cond, else_exp, then_exp))
+  | Ite (cond, then_exp, else_exp) -> Ite (simp vars cond, simp vars then_exp, simp vars else_exp)
+  | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
+  | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)
+  | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp vars exp)
+  | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Enum _ | Hd _ | Tl _ -> exp
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_fun of string * smt_typ list * smt_typ
-  | Declare_const of string * smt_typ
-  | Define_const of string * smt_typ * smt_exp
+  | Declare_const of Jib.name * smt_typ
+  | Define_const of Jib.name * smt_typ * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Assert of smt_exp
 
 let declare_datatypes = function Datatype (name, ctors) -> Declare_datatypes (name, ctors) | _ -> assert false
+
+let pp_sfun str docs =
+  let open PPrint in
+  parens (separate space (string str :: docs))
+
+let rec pp_smt_typ =
+  let open PPrint in
+  function
+  | Bool -> string "Bool"
+  | String -> string "String"
+  | Real -> string "Real"
+  | Bitvec n -> string (Printf.sprintf "(_ BitVec %d)" n)
+  | Datatype (name, _) -> string name
+  | Array (ty1, ty2) -> pp_sfun "Array" [pp_smt_typ ty1; pp_smt_typ ty2]
+
+let pp_str_smt_typ (str, ty) =
+  let open PPrint in
+  parens (string str ^^ space ^^ pp_smt_typ ty)
+
+let rec pp_smt_exp =
+  let open PPrint in
+  function
+  | Bool_lit b -> string (string_of_bool b)
+  | Real_lit str -> string str
+  | String_lit str -> string ("\"" ^ str ^ "\"")
+  | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
+  | Var id -> string (zencode_name id)
+  | Enum str -> string str
+  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
+  | Field (struct_id, field_id, exp) ->
+      parens (string (zencode_upper_id struct_id ^ "_" ^ zencode_id field_id) ^^ space ^^ pp_smt_exp exp)
+  | Unwrap (ctor, _, exp) -> parens (string ("un" ^ zencode_id ctor) ^^ space ^^ pp_smt_exp exp)
+  | Ite (cond, then_exp, else_exp) ->
+      parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
+  | Extract (i, j, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
+  | Tester (kind, exp) -> parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
+  | SignExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+  | ZeroExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ zero_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+  | Store (_, _, arr, index, x) -> parens (string "store" ^^ space ^^ separate_map space pp_smt_exp [arr; index; x])
+  | Hd (op, exp) | Tl (op, exp) -> parens (string op ^^ space ^^ pp_smt_exp exp)
+  | Empty_list -> string "empty_list"
+
+let pp_smt_def =
+  let open PPrint in
+  let open Printf in
+  function
+  | Define_fun (name, args, ty, exp) ->
+      parens
+        (string "define-fun" ^^ space ^^ string name ^^ space
+        ^^ parens (separate_map space pp_str_smt_typ args)
+        ^^ space ^^ pp_smt_typ ty ^//^ pp_smt_exp exp
+        )
+  | Declare_fun (name, args, ty) ->
+      parens
+        (string "declare-fun" ^^ space ^^ string name ^^ space
+        ^^ parens (separate_map space pp_smt_typ args)
+        ^^ space ^^ pp_smt_typ ty
+        )
+  | Declare_const (name, ty) -> pp_sfun "declare-const" [string (zencode_name name); pp_smt_typ ty]
+  | Define_const (name, ty, exp) -> pp_sfun "define-const" [string (zencode_name name); pp_smt_typ ty; pp_smt_exp exp]
+  | Declare_datatypes (name, ctors) ->
+      let pp_ctor (ctor_name, fields) =
+        match fields with [] -> parens (string ctor_name) | _ -> pp_sfun ctor_name (List.map pp_str_smt_typ fields)
+      in
+      pp_sfun "declare-datatypes"
+        [Printf.ksprintf string "((%s 0))" name; parens (parens (separate_map space pp_ctor ctors))]
+  | Assert exp -> pp_sfun "assert" [pp_smt_exp exp]
+
+let string_of_smt_def def = Pretty_print_sail.Document.to_string (pp_smt_def def)
+
+(**************************************************************************)
+(* 2. Parser for SMT solver output                                        *)
+(**************************************************************************)
+
+(* Output format from each SMT solver does not seem to be completely
+   standardised, unlike the SMTLIB input format, but usually is some
+   form of s-expression based representation. Therefore we define a
+   simple parser for s-expressions using monadic parser combinators. *)
+
+type counterexample_solver = Cvc5 | Cvc4 | Z3
+
+let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3"
+
+let counterexample_solver_from_name name =
+  match String.lowercase_ascii name with "cvc4" -> Some Cvc4 | "cvc5" -> Some Cvc5 | "z3" -> Some Z3 | _ -> None
+
+module type COUNTEREXAMPLE_CONFIG = sig
+  val max_unknown_integer_width : int
+end
+
+module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
+  type sexpr = List of sexpr list | Atom of string
+
+  let rec string_of_sexpr = function
+    | List sexprs -> "(" ^ Util.string_of_list " " string_of_sexpr sexprs ^ ")"
+    | Atom str -> str
+
+  open Parser_combinators
+
+  let lparen = token (function Str.Delim "(" -> Some () | _ -> None)
+  let rparen = token (function Str.Delim ")" -> Some () | _ -> None)
+  let atom = token (function Str.Text str -> Some str | _ -> None)
+
+  let rec sexp toks =
+    let parse =
+      pchoose
+        (atom >>= fun str -> preturn (Atom str))
+        ( lparen >>= fun _ ->
+          plist sexp >>= fun xs ->
+          rparen >>= fun _ -> preturn (List xs)
+        )
+    in
+    parse toks
+
+  let parse_sexps input =
+    let delim = Str.regexp "[ \n\t]+\\|(\\|)" in
+    let tokens = Str.full_split delim input in
+    let non_whitespace = function Str.Delim d when String.trim d = "" -> false | _ -> true in
+    let tokens = List.filter non_whitespace tokens in
+    match plist sexp tokens with Ok (result, _) -> Some result | Fail -> None
+
+  let parse_sexpr_int width = function
+    | List [Atom "_"; Atom v; Atom m] when int_of_string m = width && String.length v > 2 && String.sub v 0 2 = "bv" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        Some (Big_int.of_string v)
+    | Atom v when String.length v > 2 && String.sub v 0 2 = "#b" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        Some (Big_int.of_string ("0b" ^ v))
+    | Atom v when String.length v > 2 && String.sub v 0 2 = "#x" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        Some (Big_int.of_string ("0x" ^ v))
+    | _ -> None
+
+  let rec value_of_sexpr sexpr =
+    let open Jib in
+    let open Value in
+    function
+    | CT_fbits width -> begin
+        match parse_sexpr_int width sexpr with
+        | Some value -> mk_vector (Sail_lib.get_slice_int' (width, value, 0))
+        | None -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
+      end
+    | CT_struct (_, fields) -> begin
+        match sexpr with
+        | List (Atom name :: smt_fields) ->
+            V_record
+              (List.fold_left2
+                 (fun m (field_id, ctyp) sexpr -> StringMap.add (string_of_id field_id) (value_of_sexpr sexpr ctyp) m)
+                 StringMap.empty fields smt_fields
+              )
+        | _ -> failwith ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr)
+      end
+    | CT_enum (_, members) -> begin
+        match sexpr with
+        | Atom name -> begin
+            match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
+            | Some member -> V_member (string_of_id member)
+            | None ->
+                failwith
+                  ("Could not find enum member for " ^ name ^ " in " ^ Util.string_of_list ", " string_of_id members)
+          end
+        | _ -> failwith ("Cannot parse sexpr as enum " ^ string_of_sexpr sexpr)
+      end
+    | CT_bool -> begin
+        match sexpr with
+        | Atom "true" -> V_bool true
+        | Atom "false" -> V_bool false
+        | _ -> failwith ("Cannot parse sexpr as bool " ^ string_of_sexpr sexpr)
+      end
+    | CT_fint width -> begin
+        match parse_sexpr_int width sexpr with
+        | Some value -> V_int value
+        | None -> failwith ("Cannot parse sexpr as fixed-width integer: " ^ string_of_sexpr sexpr)
+      end
+    | CT_lint -> begin
+        match parse_sexpr_int Config.max_unknown_integer_width sexpr with
+        | Some value -> V_int value
+        | None -> failwith ("Cannot parse sexpr as integer: " ^ string_of_sexpr sexpr)
+      end
+    | ctyp -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp ctyp)
+
+  let rec find_arg id ctyp arg_smt_names = function
+    | List [Atom "define-fun"; Atom str; List []; _; value] :: _
+      when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
+        (id, value_of_sexpr value ctyp)
+    | _ :: sexps -> find_arg id ctyp arg_smt_names sexps
+    | [] -> (id, V_unit)
+
+  let build_counterexample args arg_ctyps arg_smt_names model =
+    List.map2 (fun id ctyp -> find_arg id ctyp arg_smt_names model) args arg_ctyps
+
+  let rec run frame =
+    match frame with
+    | Interpreter.Done (state, v) -> Some v
+    | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
+    | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
+    | Interpreter.Fail (_, _, _, _, msg) -> None
+    | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp state eff)
+
+  let check ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
+    let open Printf in
+    let open Ast in
+    print_endline ("Checking counterexample: " ^ file_name);
+    let in_chan = ksprintf Unix.open_process_in "%s %s" (counterexample_command solver) file_name in
+    let lines = ref [] in
+    begin
+      try
+        while true do
+          lines := input_line in_chan :: !lines
+        done
+      with End_of_file -> ()
+    end;
+    let solver_output = List.rev !lines |> String.concat "\n" in
+    begin
+      match parse_sexps solver_output with
+      | Some (Atom "sat" :: (List (Atom "model" :: model) | List model) :: _) ->
+          let open Value in
+          let open Interpreter in
+          print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
+          let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
+          List.iter (fun (id, v) -> print_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
+          let istate = initial_state ast env !primops in
+          let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ) in
+          let call =
+            E_aux
+              ( E_app
+                  ( function_id,
+                    List.map
+                      (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot)))
+                      counterexample
+                  ),
+                annot
+              )
+          in
+          let result = run (Step (lazy "", istate, return call, [])) in
+          begin
+            match result with
+            | Some (V_bool false) | None ->
+                ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
+            | _ -> ()
+          end
+      | Some (Atom "unsat" :: _) ->
+          print_endline "Solver could not find counterexample";
+          print_endline "Solver output:";
+          print_endline solver_output
+      | _ ->
+          print_endline "Unexpected solver output:";
+          print_endline solver_output
+    end;
+    let _ = Unix.close_process_in in_chan in
+    ()
+end

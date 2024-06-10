@@ -383,7 +383,7 @@ module Typ : sig
 end
 
 module IdSet : sig
-  include Set.S with type elt = id
+  include Set.S with type elt = id and type t = Set.Make(Id).t
 end
 
 module NexpSet : sig

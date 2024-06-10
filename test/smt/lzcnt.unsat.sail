@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-val lzcnt = "count_leading_zeros" : forall 'w. bits('w) -> range(0, 'w)
+val lzcnt = pure "count_leading_zeros" : forall 'w. bits('w) -> range(0, 'w)
 
 $property
 function prop() -> bool = {

@@ -84,6 +84,50 @@ let find_properties { defs; _ } =
   |> List.map (fun ((_, _, _, vs) as prop) -> (id_of_val_spec vs, prop))
   |> List.fold_left (fun m (id, prop) -> Bindings.add id prop m) Bindings.empty
 
+let well_formedness_check (Typ_aux (aux, _)) =
+  match aux with
+  | Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp nexp, _)]) ->
+      Some (fun exp -> mk_exp (E_app (mk_id "eq_int", [exp; mk_exp (E_sizeof nexp)])))
+  | Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]) ->
+      Some (fun exp -> mk_exp (E_app (mk_id "eq_bool", [exp; mk_exp (E_constraint nc)])))
+  | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp nexp, _)]) ->
+      Some
+        (fun exp ->
+          mk_exp (E_app (mk_id "eq_int", [mk_exp (E_app (mk_id "bitvector_length", [exp])); mk_exp (E_sizeof nexp)]))
+        )
+  | _ -> None
+
+let destruct_tuple_pat = function P_aux (P_tuple pats, annot) -> (pats, Some annot) | pat -> ([pat], None)
+
+let reconstruct_tuple_pat pats = function
+  | Some (l, tannot) -> P_aux (P_tuple pats, (l, Type_check.untyped_annot tannot))
+  | None -> List.hd pats
+
+let well_formed_function_arguments pragma_l pat =
+  let wf_var n = mk_id ("wf_arg" ^ string_of_int n ^ "#") in
+  function
+  | Typ_aux (Typ_fn (arg_typs, _), _) ->
+      let pats, pats_annot = destruct_tuple_pat pat in
+      if List.compare_lengths pats arg_typs = 0 then (
+        let pats, checks =
+          List.combine pats arg_typs
+          |> List.mapi (fun n (pat, arg_typ) ->
+                 let id = wf_var n in
+                 match well_formedness_check arg_typ with
+                 | Some check ->
+                     let pat = mk_pat (P_as (Type_check.strip_pat pat, id)) in
+                     (pat, Some (check (mk_exp (E_id id))))
+                 | None -> (Type_check.strip_pat pat, None)
+             )
+          |> List.split
+        in
+        (reconstruct_tuple_pat pats pats_annot, Util.option_these checks)
+      )
+      else
+        Reporting.unreachable pragma_l __POS__
+          "Function pattern and type do not match when generating well-formedness check for property"
+  | _ -> Reporting.unreachable pragma_l __POS__ "Found function with non-function type"
+
 let add_property_guards props ast =
   let open Type_check in
   let open Type_error in
@@ -91,49 +135,45 @@ let add_property_guards props ast =
     | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs ->
       begin
         match Bindings.find_opt (id_of_fundef fdef) props with
-        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, _), _), _, _), _)) -> begin
+        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, fn_typ), _), _, _), _)) -> begin
             match quant_split quant with
-            | _, [] -> add_property_guards' (def :: acc) defs
             | _, constraints ->
-                let add_constraints_to_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, pexp_aux)), fcl_aux)) =
-                  let add_guard exp =
-                    (* FIXME: Use an assert *)
-                    let exp' =
-                      mk_exp
-                        (E_block
-                           [
-                             mk_exp
-                               (E_app
-                                  ( mk_id "sail_assume",
-                                    [mk_exp (E_constraint (List.fold_left nc_and nc_true constraints))]
-                                  )
-                               );
-                             strip_exp exp;
-                           ]
-                        )
-                    in
-                    try Type_check.check_exp (env_of exp) exp' (typ_of exp)
-                    with Type_error (l, err) ->
-                      let msg =
-                        "\n\
-                         Type error when generating guard for a property.\n\
-                         When generating guards we convert type quantifiers from the function signature\n\
-                         into runtime checks so it must be possible to reconstruct the quantifier from\n\
-                         the function arguments. For example:\n\n\
-                         function f : forall 'n, 'n <= 100. (x: int('n)) -> bool\n\n\
-                         would cause the runtime check x <= 100 to be added to the function body.\n\
-                         To fix this error, ensure that all quantifiers have corresponding function arguments.\n"
-                      in
-                      let original_msg, hint = Type_error.string_of_type_error err in
-                      raise (Reporting.err_typ ?hint pragma_l (original_msg ^ msg))
+                let add_checks_to_funcl (FCL_aux (FCL_funcl (id, pexp), (def_annot, fcl_tannot))) =
+                  let pat, guard, exp, (pexp_l, pexp_tannot) = destruct_pexp pexp in
+                  let pat, checks = well_formed_function_arguments pragma_l pat fn_typ in
+                  let exp =
+                    mk_exp
+                      (E_block
+                         (List.map
+                            (fun check -> mk_exp (E_app (mk_id "sail_assume", [check])))
+                            (mk_exp (E_constraint (List.fold_left nc_and nc_true constraints)) :: checks)
+                         @ [strip_exp exp]
+                         )
+                      )
                   in
-                  let mk_funcl p = FCL_aux (FCL_funcl (id, Pat_aux (p, pexp_aux)), fcl_aux) in
-                  match pexp with
-                  | Pat_exp (pat, exp) -> mk_funcl (Pat_exp (pat, add_guard exp))
-                  | Pat_when (pat, guard, exp) -> mk_funcl (Pat_when (pat, guard, add_guard exp))
+                  let pexp =
+                    construct_pexp (pat, Option.map strip_exp guard, exp, (pexp_l, Type_check.untyped_annot pexp_tannot))
+                  in
+                  try
+                    Type_check.check_funcl (env_of_tannot fcl_tannot)
+                      (FCL_aux (FCL_funcl (id, pexp), (def_annot, Type_check.untyped_annot fcl_tannot)))
+                      (typ_of_tannot fcl_tannot)
+                  with Type_error (l, err) ->
+                    let msg =
+                      "\n\
+                       Type error when generating guard for a property.\n\
+                       When generating guards we convert type quantifiers from the function signature\n\
+                       into runtime checks so it must be possible to reconstruct the quantifier from\n\
+                       the function arguments. For example:\n\n\
+                       function f : forall 'n, 'n <= 100. (x: int('n)) -> bool\n\n\
+                       would cause the runtime check x <= 100 to be added to the function body.\n\
+                       To fix this error, ensure that all quantifiers have corresponding function arguments.\n"
+                    in
+                    let original_msg, hint = Type_error.string_of_type_error err in
+                    raise (Reporting.err_typ ?hint pragma_l (original_msg ^ msg))
                 in
 
-                let funcls = List.map add_constraints_to_funcl funcls in
+                let funcls = List.map add_checks_to_funcl funcls in
                 let fdef = FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) in
 
                 add_property_guards' (DEF_aux (DEF_fundef fdef, def_annot) :: acc) defs

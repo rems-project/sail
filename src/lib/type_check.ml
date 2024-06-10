@@ -5180,8 +5180,9 @@ let initial_env =
        ( TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)], Parse_ast.Unknown),
          function_typ [atom_typ (nvar (mk_kid "n"))] (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))])
        )
-  (* __assume is used by property.ml to add guards for SMT generation,
+  (* sail_assume is used by property.ml to add guards for SMT generation,
      but which don't affect flow-typing. *)
+  |> Env.add_extern (mk_id "sail_assume") { pure = true; bindings = [("_", "sail_assume")] }
   |> Env.add_val_spec (mk_id "sail_assume")
        (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), function_typ [bool_typ] unit_typ)
 

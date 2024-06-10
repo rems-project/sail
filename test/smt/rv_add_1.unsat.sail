@@ -50,6 +50,7 @@ register R31 : xlenbits
 /* Getters and setters for X registers (special case for zeros register, x0) */
 val rX : forall 'n, 0 <= 'n < 32. regno('n) -> xlenbits effect {rreg}
 
+$[jib_debug]
 function rX(r) = {
   if r == 0 then sail_zero_extend(0x0, sizeof(xlen))
   else if r == 1 then R1
@@ -149,6 +150,7 @@ function clause execute (ITYPE (imm, rs1, rd, RISCV_ADDI)) =
 function clause decode _ = None()
 
 $property
+$[jib_debug { "skip_graph" = true }]
 function prop(imm:  bits(12), rs1: regbits, rd: regbits) -> bool = {
   let v = X(rs1);
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {

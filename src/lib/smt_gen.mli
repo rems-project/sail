@@ -78,6 +78,8 @@ open Jib
     features like strings or real numbers. *)
 type checks
 
+val get_overflows : checks -> Smt_exp.smt_exp list
+
 (** We generate primitives in a monad that accumulates any required
     dynamic checks, and contains the location information for any
     error messages. *)
@@ -99,7 +101,13 @@ val ( let+ ) : 'a check_writer -> ('a -> 'b) -> 'b check_writer
 
 val mapM : ('a -> 'b check_writer) -> 'a list -> 'b list check_writer
 
+val iterM : ('a -> unit check_writer) -> 'a list -> unit check_writer
+
 val run : 'a check_writer -> Parse_ast.l -> 'a * checks
+
+val string_used : unit check_writer
+
+val real_used : unit check_writer
 
 (** Convert a SMT bitvector expression of size [from] into a SMT
     bitvector expression of size [into] with the same signed
@@ -131,12 +139,20 @@ module type CONFIG = sig
       sufficient. *)
   val max_unknown_bitvector_width : int
 
+  (** If we have a generic vector, [vector('n, 'a)], where ['n] is
+      unconstrained, then we represent it as a vector of at most this
+      length. *)
+  val max_unknown_generic_vector_length : int
+
   (** Some SystemVerilog implementations (e.g. Verilator), don't
       support unpacked union types, which forces us to generate
       different code for different unions depending on the types the
       contain. This is abstracted into a classify function that the
       instantiator of this module can supply. *)
   val union_ctyp_classify : ctyp -> bool
+
+  (** How we handle register references differs between backends *)
+  val register_ref : string -> Smt_exp.smt_exp
 end
 
 (** Some Sail primitives we can't directly convert to pure SMT
@@ -157,6 +173,13 @@ module type PRIMOP_GEN = sig
   val tl : Parse_ast.l -> ctyp -> string
 end
 
+(** We have various options for handling undefined bits for SMT
+    generation, either we can treat them all as zero (which is
+    consistent with the default emulator behavior), or generated
+    undefined bits, or have the builtin generator skip these
+    functions. *)
+type undefined_mode = Undefined_zeros | Undefined_bits | Undefined_disable
+
 module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   (** Convert a Jib IR cval into an SMT expression *)
   val smt_cval : cval -> Smt_exp.smt_exp check_writer
@@ -164,6 +187,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   val int_size : ctyp -> int
 
   val bv_size : ctyp -> int
+
+  val generic_vector_length : ctyp -> int
+
+  val wf_lbits : Smt_exp.smt_exp -> Smt_exp.smt_exp
 
   (** Create an SMT expression that converts an expression of the jib
       type [from] into an SMT expression for the jib type [into]. Note
@@ -174,5 +201,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   (** Compile a call to a Sail builtin function into an SMT expression
       implementing that call. Returns None if that builtin is
       unsupported by this module. *)
-  val builtin : string -> (cval list -> ctyp -> Smt_exp.smt_exp check_writer) option
+  val builtin :
+    ?allow_io:bool -> ?undefined:undefined_mode -> string -> (cval list -> ctyp -> Smt_exp.smt_exp check_writer) option
 end
