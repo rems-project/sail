@@ -138,6 +138,8 @@ type context = {
   effect_info : Effects.side_effect_info;
   is_monadic : bool;
   avoid_target_names : StringSet.t;
+  proof_mode : bool;
+      (* Is the body being given via a tactic in proof mode (affects implicit arguments in recursive definitions *)
 }
 let empty_ctxt =
   {
@@ -155,6 +157,7 @@ let empty_ctxt =
     effect_info = Effects.empty_side_effect_info;
     is_monadic = false;
     avoid_target_names = StringSet.empty;
+    proof_mode = false;
   }
 
 let add_single_kid_id_rename ctxt id kid =
@@ -1904,7 +1907,7 @@ let doc_exp, doc_let =
                   let all =
                     match is_rec with
                     | Some (pre, post, is_measured) ->
-                        (call :: List.init pre (fun _ -> underscore))
+                        (call :: (if ctxt.proof_mode then List.init pre (fun _ -> underscore) else []))
                         @ argspp
                         @ List.init post (fun _ -> underscore)
                         @ if is_measured then [parens (string "_limit_reduces _acc")] else []
@@ -2906,7 +2909,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set
+let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec rec_opt ?rec_set
     (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
   let tq, typ = Env.get_val_spec_orig id env in
@@ -2959,6 +2962,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
       effect_info;
       is_monadic;
       avoid_target_names;
+      proof_mode;
     }
   in
   let ctxt =
@@ -3083,11 +3087,11 @@ let get_id = function [] -> failwith "FD_function with empty list" | FCL_aux (FC
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs types_mod avoid_target_names effect_info ?(mutrec = NotMutrec) rec_set
+let doc_fundef_rhs types_mod avoid_target_names effect_info proof_mode ?(mutrec = NotMutrec) rec_set
     (FD_aux (FD_function (r, typa, funcls), (l, _))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info mutrec r ~rec_set funcl
+  | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r ~rec_set funcl
   | FCL_aux (FCL_funcl (id, _), _) :: _ ->
       unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
@@ -3095,10 +3099,11 @@ let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef :: fundefs ->
       let pre1, ctxt1, details1 =
-        doc_fundef_rhs types_mod avoid_target_names effect_info ~mutrec:FirstFn rec_set fundef
+        doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:FirstFn rec_set fundef
       in
       let pren, ctxtn, detailsn =
-        Util.split3 (List.map (doc_fundef_rhs types_mod avoid_target_names effect_info ~mutrec:LaterFn rec_set) fundefs)
+        Util.split3
+          (List.map (doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:LaterFn rec_set) fundefs)
       in
       let recursive_fns =
         List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn
@@ -3112,8 +3117,8 @@ let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
       let pres = pre1 :: pren in
       separate hardline pres ^^ dot ^^ hardline ^^ separate hardline bodies ^^ break 1 ^^ string "Defined." ^^ hardline
 
-let doc_funcl types_mod avoid_target_names effect_info mutrec r funcl =
-  let pre, ctxt, details = doc_funcl_init types_mod avoid_target_names effect_info mutrec r funcl in
+let doc_funcl types_mod avoid_target_names effect_info proof_mode mutrec r funcl =
+  let pre, ctxt, details = doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r funcl in
   let body = doc_funcl_body ctxt details in
   (pre, body)
 
@@ -3122,7 +3127,8 @@ let doc_fundef types_mod avoid_target_names effect_info (FD_aux (FD_function (r,
   | [] -> failwith "FD_function with empty function list"
   | [(FCL_aux (FCL_funcl (id, _), annot) as funcl)] when not (Env.is_extern id (env_of_tannot (snd annot)) "coq") ->
     begin
-      let pre, body = doc_funcl types_mod avoid_target_names effect_info NotMutrec r funcl in
+      let proof_mode = match r with Rec_aux (Rec_measure _, _) -> true | _ -> false in
+      let pre, body = doc_funcl types_mod avoid_target_names effect_info proof_mode NotMutrec r funcl in
       match r with
       | Rec_aux (Rec_measure _, _) ->
           group
