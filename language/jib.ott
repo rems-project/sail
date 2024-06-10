@@ -93,6 +93,7 @@ op :: '' ::=
   | is_empty          :: :: list_is_empty
   | eq                :: :: eq
   | neq               :: :: neq
+  | ite               :: :: ite
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq

@@ -330,6 +330,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | Bvadd, args -> Fn ("bvadd", args)
     | Bvsub, args -> Fn ("bvsub", args)
     | Concat, args -> Fn ("concat", args)
+    | Ite, args -> Fn ("ite", args)
     | Zero_extend _, _ -> failwith "ZE"
     | Sign_extend _, _ -> failwith "SE"
     | Slice _, _ -> failwith "slice"

@@ -873,19 +873,36 @@ module Make (C : CONFIG) = struct
         else if is_dead_aexp else_aexp then compile_aexp ctx then_aexp
         else (
           let if_ctyp = ctyp_of_typ ctx if_typ in
-          let branch_id, on_reached = coverage_branch_reached ctx l in
-          let compile_branch aexp =
-            let setup, call, cleanup = compile_aexp ctx aexp in
-            fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
-          in
           let setup, cval, cleanup = compile_aval l ctx aval in
-          ( setup,
-            (fun clexp ->
-              append_into_block on_reached
-                (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
-            ),
-            cleanup
-          )
+          match get_attribute "anf_pure" uannot with
+          | Some _ ->
+              let then_gs = ngensym () in
+              let then_setup, then_call, then_cleanup = compile_aexp ctx then_aexp in
+              let else_gs = ngensym () in
+              let else_setup, else_call, else_cleanup = compile_aexp ctx else_aexp in
+              ( setup @ then_setup @ else_setup
+                @ [
+                    idecl l if_ctyp then_gs;
+                    idecl l if_ctyp else_gs;
+                    then_call (CL_id (then_gs, if_ctyp));
+                    else_call (CL_id (else_gs, if_ctyp));
+                  ],
+                (fun clexp -> icopy l clexp (V_call (Ite, [cval; V_id (then_gs, if_ctyp); V_id (else_gs, if_ctyp)]))),
+                [iclear if_ctyp else_gs; iclear if_ctyp then_gs] @ else_cleanup @ then_cleanup @ cleanup
+              )
+          | None ->
+              let branch_id, on_reached = coverage_branch_reached ctx l in
+              let compile_branch aexp =
+                let setup, call, cleanup = compile_aexp ctx aexp in
+                fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
+              in
+              ( setup,
+                (fun clexp ->
+                  append_into_block on_reached
+                    (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
+                ),
+                cleanup
+              )
         )
     (* FIXME: AE_struct_update could be AV_record_update - would reduce some copying. *)
     | AE_struct_update (aval, fields, typ) ->

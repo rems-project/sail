@@ -24,10 +24,10 @@ skip_tests = {
     'load_store_dep_sat' : { 'z3', 'cvc4' },
     'store_load_scattered_sat' : { 'z3', 'cvc4' },
     'mem_builtins_unsat' : { 'z3', 'cvc4' },
-    'rv_add_1_unsat' : { 'z3', 'cvc4' },
-    'rv_add_0_unsat' : { 'z3', 'cvc4' },
-    'rv_add_1_sat' : { 'z3', 'cvc4' },
-    'rv_add_0_sat' : { 'z3', 'cvc4' },
+    'arith_FFL_3_unsat' : { 'cvc4' },
+    'arith_LCBL_unsat' : { 'cvc4' },
+    'arith_LC32L_3_unsat' : { 'cvc4' },
+    'arith_FFL_5_unsat' : { 'cvc4' },
 }
 
 print("Sail is {}".format(sail))

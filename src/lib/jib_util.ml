@@ -253,6 +253,7 @@ let string_of_op = function
   | Replicate n -> "@replicate::<" ^ string_of_int n ^ ">"
   | Set_slice -> "@set_slice"
   | Concat -> "@concat"
+  | Ite -> "@ite"
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
@@ -1000,6 +1001,7 @@ let rec infer_call op vs =
       | CT_sbits n, CT_sbits m -> CT_sbits (max n m)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
     end
+  | Ite, [_; t; _] -> cval_ctyp t
   | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
 
 and cval_ctyp = function

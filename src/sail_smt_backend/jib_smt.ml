@@ -694,6 +694,15 @@ module Make (Config : CONFIG) = struct
     Jib_ssa.make_dot out_chan cfg;
     close_out out_chan
 
+  let debug_attr_skip_graph attr =
+    Option.value ~default:false
+      (let open Util.Option_monad in
+       let* _, attr_data = attr in
+       let* obj = Option.bind attr_data attribute_data_object in
+       let* skip_graph = List.assoc_opt "skip_graph" obj in
+       attribute_data_bool skip_graph
+      )
+
   let push_smt_defs stack smt_defs = List.iter (fun def -> Stack.push def stack) smt_defs
 
   let smt_instr_list debug_attr name ctx all_cdefs instrs =
@@ -712,7 +721,7 @@ module Make (Config : CONFIG) = struct
              )
           )
     in
-    if Option.is_some debug_attr then dump_graph name cfg;
+    if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph name cfg;
 
     let state = { events = ref EventMap.empty; cfg; node = -1; arg_stack = Stack.create () } in
 
@@ -1160,7 +1169,75 @@ end) : Jib_compile.CONFIG = struct
       end
     | aexp -> aexp
 
-  let optimize_anf ctx aexp = aexp |> smt_literals ctx |> fold_aexp (unroll_static_foreach ctx)
+  let rec is_pure_aexp ctx (AE_aux (aexp, { uannot; _ })) =
+    match get_attribute "anf_pure" uannot with
+    | Some _ -> true
+    | None -> (
+        match aexp with
+        | AE_app (f, _, _) -> Effects.function_is_pure f ctx.effect_info
+        | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2
+        | AE_val _ -> true
+        | _ -> false
+      )
+
+  (* Map over all the functions in an aexp. *)
+  let rec analyze ctx (AE_aux (aexp, ({ env; uannot; loc } as annot))) =
+    let ctx = { ctx with local_env = env } in
+    let aexp, annot =
+      match aexp with
+      | AE_typ (aexp, typ) -> (AE_typ (analyze ctx aexp, typ), annot)
+      | AE_assign (alexp, aexp) -> (AE_assign (alexp, analyze ctx aexp), annot)
+      | AE_short_circuit (op, aval, aexp) -> (AE_short_circuit (op, aval, analyze ctx aexp), annot)
+      | AE_let (mut, id, typ1, aexp1, (AE_aux (_, { env = env2; _ }) as aexp2), typ2) ->
+          let aexp1 = analyze ctx aexp1 in
+          (* Use aexp2's environment because it will contain constraints for id *)
+          let ctyp1 = convert_typ { ctx with local_env = env2 } typ1 in
+          let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
+          (AE_let (mut, id, typ1, aexp1, analyze ctx aexp2, typ2), annot)
+      | AE_block (aexps, aexp, typ) -> (AE_block (List.map (analyze ctx) aexps, analyze ctx aexp, typ), annot)
+      | AE_if (aval, aexp1, aexp2, typ) ->
+          let aexp1 = analyze ctx aexp1 in
+          let aexp2 = analyze ctx aexp2 in
+          let annot =
+            if is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2 then
+              { annot with uannot = add_attribute (gen_loc loc) "anf_pure" None uannot }
+            else annot
+          in
+          (AE_if (aval, aexp1, aexp2, typ), annot)
+      | AE_loop (loop_typ, aexp1, aexp2) -> (AE_loop (loop_typ, analyze ctx aexp1, analyze ctx aexp2), annot)
+      | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
+          let aexp1 = analyze ctx aexp1 in
+          let aexp2 = analyze ctx aexp2 in
+          let aexp3 = analyze ctx aexp3 in
+          (* Currently we assume that loop indexes are always safe to put into an int64 *)
+          let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
+          let aexp4 = analyze ctx aexp4 in
+          (AE_for (id, aexp1, aexp2, aexp3, order, aexp4), annot)
+      | AE_match (aval, cases, typ) ->
+          let analyze_case ((AP_aux (_, env, _) as pat), aexp1, aexp2) =
+            let pat_bindings = Bindings.bindings (apat_types pat) in
+            let ctx = { ctx with local_env = env } in
+            let ctx =
+              List.fold_left
+                (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals })
+                ctx pat_bindings
+            in
+            (pat, analyze ctx aexp1, analyze ctx aexp2)
+          in
+          (AE_match (aval, List.map analyze_case cases, typ), annot)
+      | AE_try (aexp, cases, typ) ->
+          ( AE_try
+              ( analyze ctx aexp,
+                List.map (fun (pat, aexp1, aexp2) -> (pat, analyze ctx aexp1, analyze ctx aexp2)) cases,
+                typ
+              ),
+            annot
+          )
+      | (AE_field _ | AE_struct_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ | AE_app _) as v -> (v, annot)
+    in
+    AE_aux (aexp, annot)
+
+  let optimize_anf ctx aexp = aexp |> analyze ctx |> smt_literals ctx |> fold_aexp (unroll_static_foreach ctx)
 
   let make_call_precise _ _ = false
   let ignore_64 = true

@@ -150,7 +150,7 @@ function clause execute (ITYPE (imm, rs1, rd, RISCV_ADDI)) =
 function clause decode _ = None()
 
 $property
-$[jib_debug]
+$[jib_debug { "skip_graph" = true }]
 function prop(imm:  bits(12), rs1: regbits, rd: regbits) -> bool = {
   let v = X(rs1);
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {
