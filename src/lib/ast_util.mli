@@ -78,6 +78,11 @@ module Big_int = Nat_big_num
    annotations {!Type_check.tannot}. *)
 type uannot
 
+(** Aliases for an untyped definitions and full AST for readability *)
+type untyped_def = (uannot, unit) def
+
+type untyped_ast = (uannot, unit) ast
+
 (** The empty annotation *)
 val empty_uannot : uannot
 
@@ -115,15 +120,17 @@ val get_attributes : uannot -> (l * string * attribute_data option) list
 val find_attribute_opt : string -> (l * string * attribute_data option) list -> attribute_data option option
 
 val mk_def_annot :
-  ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> def_annot
+  ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> 'a -> 'a def_annot
 
-val add_def_attribute : l -> string -> attribute_data option -> def_annot -> def_annot
+val add_def_attribute : l -> string -> attribute_data option -> 'a def_annot -> 'a def_annot
 
-val get_def_attribute : string -> def_annot -> (l * attribute_data option) option
+val get_def_attribute : string -> 'a def_annot -> (l * attribute_data option) option
 
-val remove_def_attribute : string -> def_annot -> def_annot
+val remove_def_attribute : string -> 'a def_annot -> 'a def_annot
 
-val def_annot_map_loc : (l -> l) -> def_annot -> def_annot
+val def_annot_map_loc : (l -> l) -> 'a def_annot -> 'a def_annot
+
+val def_annot_map_env : ('a -> 'b) -> 'a def_annot -> 'b def_annot
 
 (** The empty annotation (as a location + uannot pair). Should be used
    carefully because it can result in unhelpful error messgaes. However
@@ -183,8 +190,8 @@ val mk_lit : lit_aux -> lit
 val mk_lit_exp : ?loc:l -> lit_aux -> uannot exp
 val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
-val mk_fundef : uannot funcl list -> uannot def
-val mk_val_spec : val_spec_aux -> uannot def
+val mk_fundef : uannot funcl list -> untyped_def
+val mk_val_spec : val_spec_aux -> untyped_def
 val mk_typschm : typquant -> typ -> typschm
 val mk_empty_typquant : loc:l -> typquant
 val mk_typquant : quant_item list -> typquant
@@ -194,7 +201,7 @@ val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> uannot exp -> uannot fexp
 val mk_letbind : uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
-val mk_def : ?loc:l -> 'a def_aux -> 'a def
+val mk_def : ?loc:l -> ('a, 'b) def_aux -> 'b -> ('a, 'b) def
 
 (** Mapping patterns are a subset of patterns, so we can always convert one to the other *)
 val pat_of_mpat : 'a mpat -> 'a pat
@@ -376,7 +383,7 @@ module Typ : sig
 end
 
 module IdSet : sig
-  include Set.S with type elt = id
+  include Set.S with type elt = id and type t = Set.Make(Id).t
 end
 
 module NexpSet : sig
@@ -445,8 +452,9 @@ val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
 val map_register_annot : ('a annot -> 'b annot) -> 'a dec_spec -> 'b dec_spec
 val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
-val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def
-val map_ast_annot : ('a annot -> 'b annot) -> 'a ast -> 'b ast
+val map_def_annot : ('a annot -> 'b annot) -> ('a, 'c) def -> ('b, 'c) def
+val map_def_def_annot : ('a def_annot -> 'b def_annot) -> ('c, 'a) def -> ('c, 'b) def
+val map_ast_annot : ('a annot -> 'b annot) -> ('a, 'c) ast -> ('b, 'c) ast
 
 (** {1 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
@@ -458,7 +466,7 @@ val pat_loc : 'a pat -> Parse_ast.l
 val mpat_loc : 'a mpat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val nexp_loc : nexp -> Parse_ast.l
-val def_loc : 'a def -> Parse_ast.l
+val def_loc : ('a, 'b) def -> Parse_ast.l
 
 (** {1 Printing utilities}
 
@@ -542,31 +550,32 @@ val construct_pexp : 'a pat * 'a exp option * 'a exp * (Ast.l * 'a) -> 'a pexp
 val destruct_mpexp : 'a mpexp -> 'a mpat * 'a exp option * (Ast.l * 'a)
 val construct_mpexp : 'a mpat * 'a exp option * (Ast.l * 'a) -> 'a mpexp
 
-val is_valspec : id -> 'a def -> bool
-val is_fundef : id -> 'a def -> bool
+val is_valspec : id -> ('a, 'b) def -> bool
+val is_fundef : id -> ('a, 'b) def -> bool
 
 val rename_valspec : id -> 'a val_spec -> 'a val_spec
 
 val rename_fundef : id -> 'a fundef -> 'a fundef
 
-val split_defs : ('a def -> bool) -> 'a def list -> ('a def list * 'a def * 'a def list) option
+val split_defs :
+  (('a, 'b) def -> bool) -> ('a, 'b) def list -> (('a, 'b) def list * ('a, 'b) def * ('a, 'b) def list) option
 
-val append_ast : 'a ast -> 'a ast -> 'a ast
-val append_ast_defs : 'a ast -> 'a def list -> 'a ast
-val concat_ast : 'a ast list -> 'a ast
+val append_ast : ('a, 'b) ast -> ('a, 'b) ast -> ('a, 'b) ast
+val append_ast_defs : ('a, 'b) ast -> ('a, 'b) def list -> ('a, 'b) ast
+val concat_ast : ('a, 'b) ast list -> ('a, 'b) ast
 
 val type_union_id : type_union -> id
 
-val ids_of_def : 'a def -> IdSet.t
-val ids_of_defs : 'a def list -> IdSet.t
-val ids_of_ast : 'a ast -> IdSet.t
+val ids_of_def : ('a, 'b) def -> IdSet.t
+val ids_of_defs : ('a, 'b) def list -> IdSet.t
+val ids_of_ast : ('a, 'b) ast -> IdSet.t
 
-val val_spec_ids : 'a def list -> IdSet.t
+val val_spec_ids : ('a, 'b) def list -> IdSet.t
 
-val record_ids : 'a def list -> IdSet.t
+val record_ids : ('a, 'b) def list -> IdSet.t
 
-val get_scattered_union_clauses : id -> 'a def list -> type_union list
-val get_scattered_enum_clauses : id -> 'a def list -> id list
+val get_scattered_union_clauses : id -> ('a, 'b) def list -> type_union list
+val get_scattered_enum_clauses : id -> ('a, 'b) def list -> id list
 
 val pat_ids : 'a pat -> IdSet.t
 
@@ -603,7 +612,7 @@ val extern_assoc : string -> extern option -> string option
    the closest annotation or even finding an annotation at all. This
    is used by the Emacs mode to provide type-at-cursor functionality
    and we don't mind if it's a bit fuzzy in that context. *)
-val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a ast -> (Ast.l * 'a) option
+val find_annot_ast : (Lexing.position * Lexing.position) option -> ('a, 'b) ast -> (Ast.l * 'a) option
 
 (** {1 Substitutions}
 

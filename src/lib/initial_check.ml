@@ -874,7 +874,7 @@ let rec to_ast_type_union doc attrs vis ctx = function
   | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union doc (attrs @ [(l, attr, arg)]) vis ctx tu
   | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
       let typ = to_ast_typ ctx atyp in
-      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs ?visibility:vis l)
+      Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs ?visibility:vis l ())
   | P.Tu_aux (_, l) ->
       raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
@@ -1010,7 +1010,7 @@ let to_ast_record ctx id typq fields =
   let fields = List.map (fun (atyp, id) -> (to_ast_typ typq_ctx atyp, to_ast_id ctx id)) fields in
   (id, typq, fields, add_constructor id typq ctx)
 
-let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot def list ctx_out =
+let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind, typ_arg) ->
       let id = to_ast_reserved_type_id ctx id in
@@ -1039,7 +1039,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : uannot d
       let generated_records, ctx =
         List.fold_left
           (fun (prev, ctx) td ->
-            let td, ctx = to_ast_typedef ctx (mk_def_annot (gen_loc l)) td in
+            let td, ctx = to_ast_typedef ctx (mk_def_annot (gen_loc l) ()) td in
             (prev @ td, ctx)
           )
           ([], ctx) generated_records
@@ -1112,7 +1112,7 @@ let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl
       | None -> to_ast_funcl (Some doc_comment) attrs ctx fcl
     end
   | P.FCL_funcl (id, pexp) ->
-      FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
+      FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l (), empty_uannot))
 
 let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   match fcl with
@@ -1122,10 +1122,12 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
           List.map
             (fun target ->
               FCL_aux
-                (FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))
+                ( FCL_funcl (Id_aux (Id target, parse_id_loc id), to_ast_case ctx pexp),
+                  (mk_def_annot l (), empty_uannot)
+                )
             )
             targets
-      | None -> [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l, empty_uannot))]
+      | None -> [FCL_aux (FCL_funcl (to_ast_id ctx id, to_ast_case ctx pexp), (mk_def_annot l (), empty_uannot))]
     )
   | _ -> raise (Reporting.err_general l "Attributes or documentation comment not permitted here")
 
@@ -1177,13 +1179,14 @@ let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
       | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
     end
   | P.MCL_bidir (mpexp1, mpexp2) ->
-      MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l, empty_uannot))
+      MCL_aux
+        (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l (), empty_uannot))
   | P.MCL_forwards_deprecated (mpexp, exp) ->
       let mpexp = to_ast_mpexp ctx mpexp in
       let exp = to_ast_exp ctx exp in
-      MCL_aux (MCL_forwards (pexp_of_mpexp mpexp exp), (mk_def_annot ?doc ~attrs l, empty_uannot))
-  | P.MCL_forwards pexp -> MCL_aux (MCL_forwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
-  | P.MCL_backwards pexp -> MCL_aux (MCL_backwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l, empty_uannot))
+      MCL_aux (MCL_forwards (pexp_of_mpexp mpexp exp), (mk_def_annot ?doc ~attrs l (), empty_uannot))
+  | P.MCL_forwards pexp -> MCL_aux (MCL_forwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l (), empty_uannot))
+  | P.MCL_backwards pexp -> MCL_aux (MCL_backwards (to_ast_case ctx pexp), (mk_def_annot ?doc ~attrs l (), empty_uannot))
 
 let to_ast_mapdef ctx (P.MD_aux (md, l) : P.mapdef) : uannot mapdef =
   match md with
@@ -1230,7 +1233,7 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
                         (DEF_aux
                            ( DEF_scattered
                                (SD_aux (SD_internal_unioncl_record (id, record_id, typq, fields), (l, empty_uannot))),
-                             mk_def_annot l
+                             mk_def_annot l ()
                            )
                         ),
                       scattered_ctx
@@ -1290,8 +1293,8 @@ let pragma_arg_loc pragma arg_left_trim l =
     )
     l
 
-let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : uannot def list ctx_out =
-  let annot = mk_def_annot ?doc ~attrs ?visibility:vis l in
+let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx_out =
+  let annot = mk_def_annot ?doc ~attrs ?visibility:vis l () in
   match def with
   | P.DEF_private def -> begin
       match vis with
@@ -1412,7 +1415,9 @@ let to_ast ctx (P.Defs files) =
     (List.rev defs, ctx)
   in
   let wrap_file file defs =
-    [mk_def (DEF_pragma ("file_start", file, P.Unknown))] @ defs @ [mk_def (DEF_pragma ("file_end", file, P.Unknown))]
+    [mk_def (DEF_pragma ("file_start", file, P.Unknown)) ()]
+    @ defs
+    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown)) ()]
   in
   let defs, ctx =
     List.fold_left

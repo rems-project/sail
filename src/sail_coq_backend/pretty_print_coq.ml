@@ -138,6 +138,8 @@ type context = {
   effect_info : Effects.side_effect_info;
   is_monadic : bool;
   avoid_target_names : StringSet.t;
+  proof_mode : bool;
+      (* Is the body being given via a tactic in proof mode (affects implicit arguments in recursive definitions *)
 }
 let empty_ctxt =
   {
@@ -155,6 +157,7 @@ let empty_ctxt =
     effect_info = Effects.empty_side_effect_info;
     is_monadic = false;
     avoid_target_names = StringSet.empty;
+    proof_mode = false;
   }
 
 let add_single_kid_id_rename ctxt id kid =
@@ -1161,17 +1164,22 @@ let rec nexp_const_eval (Nexp_aux (n, l) as nexp) =
 
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
-let similar_nexps ctxt env n1 n2 =
+let similar_nexps ctxt env ?(existentials = []) n1 n2 =
   let rec same_nexp_shape (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
     match (n1, n2) with
     | Nexp_id _, Nexp_id _ -> true
-    (* TODO: this is really just an approximation to what we really want:
-       will the Coq types have the same names?  We could probably do better
-       by tracking which existential kids are equal to bound kids. *)
+    (* TODO: this is really just an approximation to what we really
+       want: will the Coq types have the same names?  We could
+       probably do better by tracking which existential kids are equal
+       to bound kids.  We do a bit more than we orginally did to
+       detect when there's an existential which fits. *)
     | Nexp_var k1, Nexp_var k2 ->
-        Kid.compare k1 k2 == 0
+        (Kid.compare k1 k2 == 0
         || prove __POS__ env (nc_eq (nvar k1) (nvar k2))
            && ((not (KidSet.mem k1 ctxt.bound_nvars)) || not (KidSet.mem k2 ctxt.bound_nvars))
+        )
+        || List.exists (fun k -> Kid.compare k2 k == 0) existentials
+           && not (prove __POS__ env (nc_neq (nvar k1) (nvar k2)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
     | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
         NC.compare i1 i2 == 0 && same_nexp_shape t1 t2 && same_nexp_shape e1 e2
@@ -1336,7 +1344,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
 let maybe_parens_comma_list f ls =
   match ls with [x] -> f true x | xs -> parens (separate (string ", ") (List.map (f false) xs))
 
-let complex_autocast ctxt env top1 top2 =
+let complex_autocast ctxt env ?existentials top1 top2 =
   let ignore_apps_of = IdSet.of_list (List.map mk_id ["register"; "range"; "implicit"; "atom"; "atom_bool"]) in
   let rec aux_typ (Typ_aux (t1, _) as typ1) (Typ_aux (t2, _) as typ2) =
     match (t1, t2) with
@@ -1356,7 +1364,7 @@ let complex_autocast ctxt env top1 top2 =
     | _ -> (false, "_")
   and aux_arg (A_aux (a1, _)) (A_aux (a2, _)) =
     match (a1, a2) with
-    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env n1 n2 then (false, "_") else (true, "_sz")
+    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ?existentials n1 n2 then (false, "_") else (true, "_sz")
     | A_typ typ1, A_typ typ2 -> aux_typ typ1 typ2
     | _ -> (false, "_")
   in
@@ -1366,13 +1374,13 @@ type auto_t = Simple | Complex of string | No
 
 let string_of_auto_t = function No -> "no" | Simple -> "simple" | Complex s -> "complex(" ^ s ^ ")"
 
-let autocast_req ctxt env typ1 typ2 typ1_expanded typ2_expanded =
+let autocast_req ctxt env ?existentials typ1 typ2 typ1_expanded typ2_expanded =
   match (typ1_expanded, typ2_expanded) with
   | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
       Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
-      if similar_nexps ctxt env n1 n2 then No else Simple
+      if similar_nexps ctxt env ?existentials n1 n2 then No else Simple
   | _ -> (
-      match complex_autocast ctxt env typ1 typ2 with false, _ -> No | true, s -> Complex s
+      match complex_autocast ctxt env ?existentials typ1 typ2 with false, _ -> No | true, s -> Complex s
     )
 
 let report = Reporting.err_unreachable
@@ -1817,19 +1825,15 @@ let doc_exp, doc_let =
                     | ExNone, _, t1 -> t1
                   )
                 in
-                let out_typ_bound, out_typ =
-                  match ann_typ with Typ_aux (Typ_exist (ks, _, t1), _) -> (ks, t1) | t1 -> ([], t1)
+                let out_typ_bound, out_typ, out_env =
+                  match ann_typ with
+                  | Typ_aux (Typ_exist (ks, nc, t1), l) -> (ks, t1, add_existential l ks nc env)
+                  | t1 -> ([], t1, env)
                 in
-                let autocast =
-                  (* Avoid using helper functions which simplify the nexps *)
-                  match (in_typ, out_typ) with
-                  (* When we expect a bitvector of arbitrary length we don't need a cast *)
-                  | _, Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _)
-                    when List.exists (fun k -> Kid.compare v (kopt_kid k) == 0) out_typ_bound ->
-                      No
-                  | _ -> autocast_req ctxt env in_typ out_typ in_typ out_typ
-                in
-                autocast
+                (* Pass existentials because they can be an arbitrary value (consistent with any constraints), so
+                   we might be able to avoid a cast. *)
+                let existentials = List.map kopt_kid out_typ_bound in
+                autocast_req ctxt out_env ~existentials in_typ out_typ in_typ out_typ
               in
 
               let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
@@ -1881,6 +1885,10 @@ let doc_exp, doc_let =
                         );
                     underscore
                 | Some (Nexp_aux (Nexp_var _, _)), Some (Nexp_aux (Nexp_constant c, _)) -> string (Big_int.to_string c)
+                (* If an integer argument is the same as a type variable, but we couldn't merge them, then use the type variable to ensure that the result type won't be the wrong one. *)
+                | Some (Nexp_aux (Nexp_var v, _)), _
+                  when KidSet.mem v ctxt.bound_nvars && not (KBindings.mem v ctxt.kid_id_renames) ->
+                    doc_var ctxt v
                 | _ -> construct_dep_pairs ctxt inst_env want_parens arg typ_from_fn
               in
               let epp =
@@ -1899,7 +1907,7 @@ let doc_exp, doc_let =
                   let all =
                     match is_rec with
                     | Some (pre, post, is_measured) ->
-                        (call :: List.init pre (fun _ -> underscore))
+                        (call :: (if ctxt.proof_mode then List.init pre (fun _ -> underscore) else []))
                         @ argspp
                         @ List.init post (fun _ -> underscore)
                         @ if is_measured then [parens (string "_limit_reduces _acc")] else []
@@ -2534,16 +2542,6 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
       ^^ inhabited_pp ^^ twice hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      (* | Id_aux ((Id "regfp"),_) -> empty
-         | Id_aux ((Id "niafp"),_) -> empty
-         | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let id_pp = doc_id_type types_mod avoid_target_names None id in
@@ -2613,113 +2611,98 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
           in
           typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline ^^ inhabited_pp ^^ hardline
     )
-  | TD_enum (id, enums, _) -> (
-      match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
-      | Id_aux (Id "regfp", _) -> empty
-      | Id_aux (Id "niafp", _) -> empty
-      | Id_aux (Id "diafp", _) -> empty
-      | _ ->
-          let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
-          let id_pp = doc_id_type types_mod avoid_target_names None id in
-          let typ_pp =
-            (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
-          in
-          (* If we have conversion functions to Z, put them here and
-             derive a decision procedure that's efficient even for
-             large enums. *)
-          let eq1_pp =
-            let fallback = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
-            match (Bindings.find_opt id (fst enum_number_defs), Bindings.find_opt id (snd enum_number_defs)) with
-            | Some (num_of_id, num_of_pp), Some (of_num_id, of_num_pp) ->
-                let num_of_id_pp = doc_id bare_ctxt num_of_id in
-                let of_num_id_pp = doc_id bare_ctxt of_num_id in
-                let lemma1 =
-                  separate hardline
-                    [
-                      string "Lemma " ^^ id_pp ^^ string "_num_of_roundtrip "
-                      ^^ parens (string "x : " ^^ id_pp)
-                      ^^ string " : " ^^ of_num_id_pp ^^ space
-                      ^^ parens (num_of_id_pp ^^ string " x")
-                      ^^ string " = x.";
-                      string "destruct x; reflexivity.";
-                      string "Qed.";
-                    ]
-                in
-                let lemma2 =
-                  separate hardline
-                    [
-                      string "Lemma " ^^ num_of_id_pp ^^ string "_injective "
-                      ^^ parens (string "x y : " ^^ id_pp)
-                      ^^ string " : " ^^ num_of_id_pp ^^ string " x = " ^^ num_of_id_pp ^^ string " y -> x = y.";
-                      string "intro.";
-                      string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip x).";
-                      string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip y).";
-                      string "congruence.";
-                      string "Qed.";
-                    ]
-                in
-                let eq_pp =
-                  separate hardline
-                    [
-                      string "Definition " ^^ id_pp ^^ string "_eq_dec (x y : " ^^ id_pp
-                      ^^ string ") : {x = y} + {x <> y}.";
-                      string "refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp
-                      ^^ string " y) with";
-                      string "| left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
-                      string "| right ne => right _";
-                      string "end).";
-                      string "congruence.";
-                      string "Defined.";
-                    ]
-                in
-                num_of_pp ^^ of_num_pp ^^ separate hardline [lemma1; lemma2; eq_pp]
-            | Some (_, pp), None | None, Some (_, pp) -> pp ^^ fallback
-            | None, None -> fallback
-          in
-          let eq2_pp =
+  | TD_enum (id, enums, _) ->
+      let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
+      let id_pp = doc_id_type types_mod avoid_target_names None id in
+      let typ_pp =
+        (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
+      in
+      (* If we have conversion functions to Z, put them here and
+         derive a decision procedure that's efficient even for
+         large enums. *)
+      let eq1_pp =
+        let fallback = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
+        match (Bindings.find_opt id (fst enum_number_defs), Bindings.find_opt id (snd enum_number_defs)) with
+        | Some (num_of_id, num_of_pp), Some (of_num_id, of_num_pp) ->
+            let num_of_id_pp = doc_id bare_ctxt num_of_id in
+            let of_num_id_pp = doc_id bare_ctxt of_num_id in
+            let lemma1 =
+              separate hardline
+                [
+                  string "Lemma " ^^ id_pp ^^ string "_num_of_roundtrip "
+                  ^^ parens (string "x : " ^^ id_pp)
+                  ^^ string " : " ^^ of_num_id_pp ^^ space
+                  ^^ parens (num_of_id_pp ^^ string " x")
+                  ^^ string " = x.";
+                  string "destruct x; reflexivity.";
+                  string "Qed.";
+                ]
+            in
+            let lemma2 =
+              separate hardline
+                [
+                  string "Lemma " ^^ num_of_id_pp ^^ string "_injective "
+                  ^^ parens (string "x y : " ^^ id_pp)
+                  ^^ string " : " ^^ num_of_id_pp ^^ string " x = " ^^ num_of_id_pp ^^ string " y -> x = y.";
+                  string "intro.";
+                  string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip x).";
+                  string "rewrite <- (" ^^ id_pp ^^ string "_num_of_roundtrip y).";
+                  string "congruence.";
+                  string "Qed.";
+                ]
+            in
+            let eq_pp =
+              separate hardline
+                [
+                  string "Definition " ^^ id_pp ^^ string "_eq_dec (x y : " ^^ id_pp ^^ string ") : {x = y} + {x <> y}.";
+                  string "refine (match Z.eq_dec (" ^^ num_of_id_pp ^^ string " x) (" ^^ num_of_id_pp
+                  ^^ string " y) with";
+                  string "| left e => left (" ^^ num_of_id_pp ^^ string "_injective x y e)";
+                  string "| right ne => right _";
+                  string "end).";
+                  string "congruence.";
+                  string "Defined.";
+                ]
+            in
+            num_of_pp ^^ of_num_pp ^^ separate hardline [lemma1; lemma2; eq_pp]
+        | Some (_, pp), None | None, Some (_, pp) -> pp ^^ fallback
+        | None, None -> fallback
+      in
+      let eq2_pp =
+        string "#[export]" ^^ hardline
+        ^^ group
+             (nest 2
+                (flow (break 1)
+                   [
+                     string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
+                     string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
+                     string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
+                   ]
+                )
+             )
+      in
+      let inhabited_pp =
+        match enums with
+        | example_id :: _ ->
             string "#[export]" ^^ hardline
             ^^ group
                  (nest 2
                     (flow (break 1)
                        [
-                         string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
-                         string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
-                         string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
+                         string "Instance dummy_" ^^ id_pp ^^ space ^^ colon;
+                         string "Inhabited " ^^ id_pp ^^ string " := {";
                        ]
+                    ^/^ string "inhabitant :="
+                    ^^ nest 2 (break 1 ^^ doc_id_ctor bare_ctxt example_id)
                     )
+                 ^/^ string "}."
                  )
-          in
-          let inhabited_pp =
-            match enums with
-            | example_id :: _ ->
-                string "#[export]" ^^ hardline
-                ^^ group
-                     (nest 2
-                        (flow (break 1)
-                           [
-                             string "Instance dummy_" ^^ id_pp ^^ space ^^ colon;
-                             string "Inhabited " ^^ id_pp ^^ string " := {";
-                           ]
-                        ^/^ string "inhabitant :="
-                        ^^ nest 2 (break 1 ^^ doc_id_ctor bare_ctxt example_id)
-                        )
-                     ^/^ string "}."
-                     )
-                ^^ hardline
-            | [] ->
-                Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
-                empty
-          in
-          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
-    )
+            ^^ hardline
+        | [] ->
+            Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
+            empty
+      in
+      typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -2926,7 +2909,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_set
+let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec rec_opt ?rec_set
     (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
   let tq, typ = Env.get_val_spec_orig id env in
@@ -2979,6 +2962,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info mutrec rec_opt ?rec_
       effect_info;
       is_monadic;
       avoid_target_names;
+      proof_mode;
     }
   in
   let ctxt =
@@ -3103,11 +3087,11 @@ let get_id = function [] -> failwith "FD_function with empty list" | FCL_aux (FC
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs types_mod avoid_target_names effect_info ?(mutrec = NotMutrec) rec_set
+let doc_fundef_rhs types_mod avoid_target_names effect_info proof_mode ?(mutrec = NotMutrec) rec_set
     (FD_aux (FD_function (r, typa, funcls), (l, _))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info mutrec r ~rec_set funcl
+  | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r ~rec_set funcl
   | FCL_aux (FCL_funcl (id, _), _) :: _ ->
       unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
@@ -3115,10 +3099,11 @@ let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef :: fundefs ->
       let pre1, ctxt1, details1 =
-        doc_fundef_rhs types_mod avoid_target_names effect_info ~mutrec:FirstFn rec_set fundef
+        doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:FirstFn rec_set fundef
       in
       let pren, ctxtn, detailsn =
-        Util.split3 (List.map (doc_fundef_rhs types_mod avoid_target_names effect_info ~mutrec:LaterFn rec_set) fundefs)
+        Util.split3
+          (List.map (doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:LaterFn rec_set) fundefs)
       in
       let recursive_fns =
         List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn
@@ -3132,8 +3117,8 @@ let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
       let pres = pre1 :: pren in
       separate hardline pres ^^ dot ^^ hardline ^^ separate hardline bodies ^^ break 1 ^^ string "Defined." ^^ hardline
 
-let doc_funcl types_mod avoid_target_names effect_info mutrec r funcl =
-  let pre, ctxt, details = doc_funcl_init types_mod avoid_target_names effect_info mutrec r funcl in
+let doc_funcl types_mod avoid_target_names effect_info proof_mode mutrec r funcl =
+  let pre, ctxt, details = doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r funcl in
   let body = doc_funcl_body ctxt details in
   (pre, body)
 
@@ -3142,7 +3127,8 @@ let doc_fundef types_mod avoid_target_names effect_info (FD_aux (FD_function (r,
   | [] -> failwith "FD_function with empty function list"
   | [(FCL_aux (FCL_funcl (id, _), annot) as funcl)] when not (Env.is_extern id (env_of_tannot (snd annot)) "coq") ->
     begin
-      let pre, body = doc_funcl types_mod avoid_target_names effect_info NotMutrec r funcl in
+      let proof_mode = match r with Rec_aux (Rec_measure _, _) -> true | _ -> false in
+      let pre, body = doc_funcl types_mod avoid_target_names effect_info proof_mode NotMutrec r funcl in
       match r with
       | Rec_aux (Rec_measure _, _) ->
           group
@@ -3468,47 +3454,23 @@ let doc_isla_typ types_mod avoid_target_names (TD_aux (td, _)) =
           empty;
           empty;
         ]
-  | TD_enum (id, enums, _) -> (
-      match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
-      | Id_aux (Id "regfp", _) -> empty
-      | Id_aux (Id "niafp", _) -> empty
-      | Id_aux (Id "diafp", _) -> empty
-      | _ ->
-          hang 2
-            (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
-           ^^ string " :=" ^^ hardline
-            ^^ surround_separate_map 2 1 (brackets empty) lbracket
-                 (string ";" ^^ break 1)
-                 rbracket
-                 (fun id ->
-                   let idpp = doc_id_ctor bare_ctxt id in
-                   parens (dquotes idpp ^^ string ", " ^^ idpp)
-                 )
-                 enums
-            ^^ dot
-            )
-          ^^ hardline ^^ hardline
-    )
+  | TD_enum (id, enums, _) ->
+      hang 2
+        (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
+       ^^ string " :=" ^^ hardline
+        ^^ surround_separate_map 2 1 (brackets empty) lbracket
+             (string ";" ^^ break 1)
+             rbracket
+             (fun id ->
+               let idpp = doc_id_ctor bare_ctxt id in
+               parens (dquotes idpp ^^ string ", " ^^ idpp)
+             )
+             enums
+        ^^ dot
+        )
+      ^^ hardline ^^ hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      (* | Id_aux ((Id "regfp"),_) -> empty
-         | Id_aux ((Id "niafp"),_) -> empty
-         | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux (Id "option", _) -> empty
       | Id_aux (Id "register_value", _) -> empty
       | _ ->

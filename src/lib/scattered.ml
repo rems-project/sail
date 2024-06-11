@@ -110,9 +110,11 @@ let rec filter_enum_clauses id = function
   | def :: defs -> def :: filter_enum_clauses id defs
   | [] -> []
 
-let patch_funcl_loc def_annot (FCL_aux (aux, (_, tannot))) = FCL_aux (aux, (def_annot, tannot))
+let patch_funcl_loc def_annot (FCL_aux (aux, (_, tannot))) =
+  FCL_aux (aux, (Type_check.strip_def_annot def_annot, tannot))
 
-let patch_mapcl_annot def_annot (MCL_aux (aux, (_, tannot))) = MCL_aux (aux, (def_annot, tannot))
+let patch_mapcl_annot def_annot (MCL_aux (aux, (_, tannot))) =
+  MCL_aux (aux, (Type_check.strip_def_annot def_annot, tannot))
 
 let rec descatter' accumulator funcls mapcls = function
   (* For scattered functions we collect all the seperate function
@@ -132,7 +134,7 @@ let rec descatter' accumulator funcls mapcls = function
       let accumulator =
         DEF_aux
           ( DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
-            update_attr (mk_def_annot (gen_loc l))
+            update_attr (mk_def_annot (gen_loc l) def_annot.env)
           )
         :: accumulator
       in
@@ -155,7 +157,7 @@ let rec descatter' accumulator funcls mapcls = function
       let accumulator =
         DEF_aux
           ( DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))),
-            mk_def_annot (gen_loc l)
+            mk_def_annot (gen_loc l) def_annot.env
           )
         :: accumulator
       in

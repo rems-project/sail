@@ -107,29 +107,29 @@ val have_undefined_builtins : bool ref
 (** Val specs of undefined functions for builtin types that get added to
     the AST if opt_undefined_gen is set (minus those functions that already
     exist in the AST). *)
-val undefined_builtin_val_specs : uannot def list
+val undefined_builtin_val_specs : untyped_def list
 
 (** {2 Desugar and process AST } *)
 
 val generate_undefined_record_context : typquant -> (id * typ) list
-val generate_undefined_record : id -> typquant -> (typ * id) list -> uannot def list
-val generate_undefined_enum : id -> id list -> uannot def list
+val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
+val generate_undefined_enum : id -> id list -> untyped_def list
 
-val generate_undefineds : IdSet.t -> uannot def list -> uannot def list
-val generate_enum_functions : IdSet.t -> uannot def list -> uannot def list
+val generate_undefineds : IdSet.t -> untyped_def list -> untyped_def list
+val generate_enum_functions : IdSet.t -> untyped_def list -> untyped_def list
 
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> uannot ast
+val process_ast : ?generate:bool -> Parse_ast.defs -> untyped_ast
 
 (** {2 Parsing expressions and definitions from strings} *)
 
-val extern_of_string : ?pure:bool -> id -> string -> uannot def
-val val_spec_of_string : id -> string -> uannot def
-val defs_of_string : string * int * int * int -> string -> uannot def list
-val ast_of_def_string : string * int * int * int -> string -> uannot ast
+val extern_of_string : ?pure:bool -> id -> string -> untyped_def
+val val_spec_of_string : id -> string -> untyped_def
+val defs_of_string : string * int * int * int -> string -> untyped_def list
+val ast_of_def_string : string * int * int * int -> string -> untyped_ast
 val ast_of_def_string_with :
-  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> uannot ast
+  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> untyped_ast
 val exp_of_string : string -> uannot exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint

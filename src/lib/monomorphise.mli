@@ -84,20 +84,20 @@ val monomorphise :
   options ->
   ((string * int) * string) list ->
   (* List of splits from the command line *)
-  Type_check.tannot ast ->
-  Type_check.tannot ast
+  Type_check.typed_ast ->
+  Type_check.typed_ast
 
 (* Rewrite (combinations of) variable-sized operations into fixed-sized operations *)
-val mono_rewrites : Type_check.tannot ast -> Type_check.tannot ast
+val mono_rewrites : Type_check.typed_ast -> Type_check.typed_ast
 
 (* Move complex nexps in function signatures into constraints *)
-val rewrite_toplevel_nexps : Type_check.tannot ast -> Type_check.tannot ast
+val rewrite_toplevel_nexps : Type_check.typed_ast -> Type_check.typed_ast
 
 (* Move complex nexps in record fields into parameters *)
-val rewrite_complete_record_params : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast
+val rewrite_complete_record_params : Type_check.Env.t -> Type_check.typed_ast -> Type_check.typed_ast
 
 (* Add casts across case splits *)
-val add_bitvector_casts : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast
+val add_bitvector_casts : Type_check.Env.t -> Type_check.typed_ast -> Type_check.typed_ast
 
 (* Replace atom arguments which are fixed by a type parameter for a size with a singleton type *)
-val rewrite_atoms_to_singletons : string -> Type_check.tannot ast -> Type_check.tannot ast
+val rewrite_atoms_to_singletons : string -> Type_check.typed_ast -> Type_check.typed_ast

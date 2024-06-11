@@ -59,17 +59,14 @@ function operator <=_u (x, y) = unsigned(x) <= unsigned(y)
 val pow2_atom = "pow2" : forall 'n. int('n) -> int(2 ^ 'n)
 val pow2_int = "pow2" : int -> int
 
-overload pow2 = {pow2_atom, pow2_int}
-
-
-val cast cast_bool_bit : bool -> bit
+val cast_bool_bit : bool -> bit
 function cast_bool_bit(b) = 
   match b {
     true => b1,
     false => b0
   }
 
-val cast cast_bit_bool : bit -> bool
+val cast_bit_bool : bit -> bool
 function cast_bit_bool (b) = 
   match b {
     bitzero => false,

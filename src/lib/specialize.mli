@@ -90,7 +90,7 @@ val int_specialization_with_externs : specialization
    argument specifies what X should be - it should be one of:
    [is_int_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
    or some combination of those. *)
-val polymorphic_functions : specialization -> 'a def list -> IdSet.t
+val polymorphic_functions : specialization -> ('a, 'b) def list -> IdSet.t
 
 val add_initial_calls : IdSet.t -> unit
 
@@ -102,7 +102,7 @@ val get_initial_calls : unit -> id list
    environment to return if there is no polymorphism to remove, in
    which case specialize returns the AST unmodified. *)
 val specialize :
-  specialization -> Env.t -> tannot ast -> Effects.side_effect_info -> tannot ast * Env.t * Effects.side_effect_info
+  specialization -> Env.t -> typed_ast -> Effects.side_effect_info -> typed_ast * Env.t * Effects.side_effect_info
 
 (** specialize' n performs at most n specialization passes. Useful for
    int_specialization which is not guaranteed to terminate. *)
@@ -110,12 +110,12 @@ val specialize_passes :
   int ->
   specialization ->
   Env.t ->
-  tannot ast ->
+  typed_ast ->
   Effects.side_effect_info ->
-  tannot ast * Env.t * Effects.side_effect_info
+  typed_ast * Env.t * Effects.side_effect_info
 
 (** return all instantiations of a function id, with the
    instantiations filtered according to the specialization. *)
-val instantiations_of : specialization -> id -> tannot ast -> typ_arg KBindings.t list
+val instantiations_of : specialization -> id -> typed_ast -> typ_arg KBindings.t list
 
 val string_of_instantiation : typ_arg KBindings.t -> string

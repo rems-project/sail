@@ -165,7 +165,7 @@ let typ_arg_ids nc = IdSet.diff (typ_arg_ids' nc) builtins
 
 type callgraph = Graph.Make(Node).graph
 
-let add_def_to_graph graph (DEF_aux (def, _)) =
+let add_def_to_graph graph (DEF_aux (def, def_annot)) =
   let open Type_check in
   let graph = ref graph in
 
@@ -393,6 +393,13 @@ let add_def_to_graph graph (DEF_aux (def, _)) =
         | SD_funcl (FCL_aux (FCL_funcl (id, pexp), _)) -> ignore (rewrite_pexp (rewriters (Function id)) pexp)
         | _ -> ()
       end
+    | DEF_overload (id, ids) ->
+        List.iter
+          (fun id' ->
+            let n = if Env.is_union_constructor id' def_annot.env then Constructor id' else Function id' in
+            graph := G.add_edge (Overload id) n !graph
+          )
+          ids
     | _ -> ()
   end;
   !graph
@@ -433,6 +440,7 @@ let nodes_of_def (DEF_aux (def, _)) =
   | DEF_type tdef -> NS.singleton (Type (id_of_type_def tdef))
   | DEF_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
   | DEF_instantiation (IN_aux (IN_id id, _), _) -> NS.singleton (Function id)
+  | DEF_overload (id, _) -> NS.singleton (Overload id)
   | _ -> NS.empty
 
 let filter_ast_extra cuts g ast keep_std =
@@ -540,9 +548,11 @@ let top_sort_defs ast =
           in
           let fundefs = List.map get_fundefs cdefs |> List.concat in
           let other_defs = List.filter (fun d -> get_fundefs d = []) cdefs in
-          if List.length fundefs > 1 then
+          if List.length fundefs > 1 then (
+            let env = Util.last cdefs |> function DEF_aux (_, da) -> da.env in
             (* Mutrec definition, then others (including val-specs); will be reversed later *)
-            mk_def (DEF_internal_mutrec fundefs) :: other_defs
+            mk_def (DEF_internal_mutrec fundefs) env :: other_defs
+          )
           else cdefs
         in
         reorder already_seen' (cdefs' @ acc) (components, defs)

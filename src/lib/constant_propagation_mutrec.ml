@@ -199,8 +199,8 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
     | [] -> List.rev acc
     | DEF_aux (DEF_internal_mutrec mutrecs, def_annot) :: ds ->
         let mutrec_ids = IdSet.of_list (List.map id_of_fundef mutrecs) in
-        let valspecs = ref ([] : uannot def list) in
-        let fundefs = ref ([] : uannot def list) in
+        let valspecs = ref ([] : untyped_def list) in
+        let fundefs = ref ([] : untyped_def list) in
         (* Try to replace mutually recursive calls that have some constant arguments *)
         let rec e_app (id, args) (l, annot) =
           if IdSet.mem id mutrec_ids && List.exists is_const_exp args then (

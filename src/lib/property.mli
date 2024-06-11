@@ -84,7 +84,7 @@ open Type_check
    where prop_type is either "counterexample" or "property" and the
    location loc is the location that was attached to the pragma
 *)
-val find_properties : 'a ast -> (string * string * l * 'a val_spec) Bindings.t
+val find_properties : ('a, 'b) ast -> (string * string * l * 'a val_spec) Bindings.t
 
 (** For a property
 
@@ -104,7 +104,7 @@ val find_properties : 'a ast -> (string * string * l * 'a val_spec) Bindings.t
    generation/proving we want to ensure that inputs outside the
    constraints of the function are ignored.
 *)
-val rewrite : tannot ast -> tannot ast
+val rewrite : typed_ast -> typed_ast
 
 type event = Overflow | Assertion | Assumption | Match | Return
 

@@ -82,7 +82,7 @@ val hyperlink_target : hyperlink -> Callgraph.node
 
 val hyperlink_span : hyperlink -> hyper_location
 
-val hyperlinks_from_def : string list -> Type_check.tannot def -> hyperlink list
+val hyperlinks_from_def : string list -> Type_check.typed_def -> hyperlink list
 
 type 'a docinfo
 
@@ -102,5 +102,5 @@ end
 
 module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) : sig
   val docinfo_for_ast :
-    files:string list -> hyperlinks:(string list -> tannot def -> hyperlink list) -> tannot ast -> tannot docinfo
+    files:string list -> hyperlinks:(string list -> typed_def -> hyperlink list) -> typed_ast -> tannot docinfo
 end

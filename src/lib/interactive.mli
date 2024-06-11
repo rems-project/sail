@@ -75,7 +75,7 @@ val opt_interactive : bool ref
    abstract syntax tree, effect info and the type-checking
    environment. Also contains the default Sail directory *)
 type istate = {
-  ast : Type_check.tannot ast;
+  ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
   default_sail_dir : string;

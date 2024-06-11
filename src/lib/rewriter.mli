@@ -72,43 +72,43 @@ open Ast
 open Ast_defs
 open Type_check
 
-type 'a rewriters = {
-  rewrite_exp : 'a rewriters -> 'a exp -> 'a exp;
-  rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;
-  rewrite_pat : 'a rewriters -> 'a pat -> 'a pat;
-  rewrite_let : 'a rewriters -> 'a letbind -> 'a letbind;
-  rewrite_fun : 'a rewriters -> 'a fundef -> 'a fundef;
-  rewrite_def : 'a rewriters -> 'a def -> 'a def;
-  rewrite_ast : 'a rewriters -> 'a ast -> 'a ast;
+type ('a, 'b) rewriters = {
+  rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
+  rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
+  rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
+  rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
+  rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
+  rewrite_ast : ('a, 'b) rewriters -> ('a, 'b) ast -> ('a, 'b) ast;
 }
 
-val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
+val rewrite_exp : (tannot, env) rewriters -> tannot exp -> tannot exp
 
-val rewriters_base : tannot rewriters
+val rewriters_base : (tannot, env) rewriters
 
 (** The identity re-writer *)
-val rewrite_ast : tannot ast -> tannot ast
+val rewrite_ast : typed_ast -> typed_ast
 
-val rewrite_ast_defs : tannot rewriters -> tannot def list -> tannot def list
+val rewrite_ast_defs : (tannot, env) rewriters -> typed_def list -> typed_def list
 
-val rewrite_ast_base : tannot rewriters -> tannot ast -> tannot ast
+val rewrite_ast_base : (tannot, env) rewriters -> typed_ast -> typed_ast
 
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
-val rewrite_ast_base_progress : string -> tannot rewriters -> tannot ast -> tannot ast
+val rewrite_ast_base_progress : string -> (tannot, env) rewriters -> typed_ast -> typed_ast
 
-val rewrite_lexp : tannot rewriters -> tannot lexp -> tannot lexp
+val rewrite_lexp : (tannot, env) rewriters -> tannot lexp -> tannot lexp
 
-val rewrite_pat : tannot rewriters -> tannot pat -> tannot pat
+val rewrite_pat : (tannot, env) rewriters -> tannot pat -> tannot pat
 
-val rewrite_pexp : tannot rewriters -> tannot pexp -> tannot pexp
+val rewrite_pexp : (tannot, env) rewriters -> tannot pexp -> tannot pexp
 
-val rewrite_let : tannot rewriters -> tannot letbind -> tannot letbind
+val rewrite_let : (tannot, env) rewriters -> tannot letbind -> tannot letbind
 
-val rewrite_def : tannot rewriters -> tannot def -> tannot def
+val rewrite_def : (tannot, env) rewriters -> typed_def -> typed_def
 
-val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
+val rewrite_fun : (tannot, env) rewriters -> tannot fundef -> tannot fundef
 
-val rewrite_mapdef : tannot rewriters -> tannot mapdef -> tannot mapdef
+val rewrite_mapdef : (tannot, env) rewriters -> tannot mapdef -> tannot mapdef
 
 (** the type of interpretations of patterns *)
 type ('a, 'pat, 'pat_aux) pat_alg = {

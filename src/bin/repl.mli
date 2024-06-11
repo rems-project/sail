@@ -87,5 +87,5 @@ val start_repl :
   options:(Arg.key * Arg.spec * Arg.doc) list ->
   Env.t ->
   Effects.side_effect_info ->
-  tannot ast ->
+  typed_ast ->
   unit

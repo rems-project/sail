@@ -1,5 +1,7 @@
 default Order dec
 
+$option -smt_bits_size 128
+
 $include <reverse_endianness.sail>
 
 $property

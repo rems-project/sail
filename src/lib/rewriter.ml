@@ -71,14 +71,14 @@ open Ast_defs
 open Ast_util
 open Type_check
 
-type 'a rewriters = {
-  rewrite_exp : 'a rewriters -> 'a exp -> 'a exp;
-  rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;
-  rewrite_pat : 'a rewriters -> 'a pat -> 'a pat;
-  rewrite_let : 'a rewriters -> 'a letbind -> 'a letbind;
-  rewrite_fun : 'a rewriters -> 'a fundef -> 'a fundef;
-  rewrite_def : 'a rewriters -> 'a def -> 'a def;
-  rewrite_ast : 'a rewriters -> 'a ast -> 'a ast;
+type ('a, 'b) rewriters = {
+  rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
+  rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
+  rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
+  rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
+  rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
+  rewrite_ast : ('a, 'b) rewriters -> ('a, 'b) ast -> ('a, 'b) ast;
 }
 
 let lookup_generated_kid env kid =

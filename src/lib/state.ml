@@ -145,7 +145,7 @@ let generate_regstate env registers =
   [
     DEF_aux
       ( DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
-        add_def_attribute Unknown "undefined_gen" (Some (AD_aux (AD_string "forbid", Unknown))) (mk_def_annot Unknown)
+        add_def_attribute Unknown "undefined_gen" (Some (AD_aux (AD_string "forbid", Unknown))) (mk_def_annot Unknown ())
       );
   ]
 
@@ -200,6 +200,14 @@ let generate_initial_regstate env ast =
             "[" ^ String.concat ", " (elems len) ^ "]"
         | Typ_app (id, args) -> Bindings.find id vals args
         | Typ_tuple typs -> "(" ^ String.concat ", " (List.map (lookup_init_val vals) typs) ^ ")"
+        (* Range types *)
+        | Typ_exist
+            ( [k],
+              NC_aux (NC_set (Nexp_aux (Nexp_var k', _), h :: _), _),
+              Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var k'', _)), _)]), _)
+            )
+          when Kid.compare (kopt_kid k) k' == 0 && Kid.compare k' k'' == 0 && string_of_id id = "atom" ->
+            Big_int.to_string h
         | Typ_exist (_, _, typ) -> lookup_init_val vals typ
         | _ -> raise Not_found
       in

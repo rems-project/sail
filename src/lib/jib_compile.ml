@@ -258,6 +258,7 @@ module type CONFIG = sig
   val use_real : bool
   val branch_coverage : out_channel option
   val track_throw : bool
+  val use_void : bool
 end
 
 module IdGraph = Graph.Make (Id)
@@ -361,6 +362,7 @@ module Make (C : CONFIG) = struct
           ([iinit l ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs])
         )
         else ([], cval, [])
+    | AV_id (id, Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
     | AV_id (id, typ) -> begin
         match Bindings.find_opt id ctx.locals with
         | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
@@ -635,7 +637,7 @@ module Make (C : CONFIG) = struct
     | AP_id (pid, _) when is_ct_enum ctyp -> begin
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
-        | _ -> ([ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], [], ctx)
+        | _ -> ([ijump l (V_call (Neq, [V_member (pid, ctyp); cval])) case_label], [], [], ctx)
       end
     | AP_id (pid, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
@@ -871,19 +873,36 @@ module Make (C : CONFIG) = struct
         else if is_dead_aexp else_aexp then compile_aexp ctx then_aexp
         else (
           let if_ctyp = ctyp_of_typ ctx if_typ in
-          let branch_id, on_reached = coverage_branch_reached ctx l in
-          let compile_branch aexp =
-            let setup, call, cleanup = compile_aexp ctx aexp in
-            fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
-          in
           let setup, cval, cleanup = compile_aval l ctx aval in
-          ( setup,
-            (fun clexp ->
-              append_into_block on_reached
-                (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
-            ),
-            cleanup
-          )
+          match get_attribute "anf_pure" uannot with
+          | Some _ ->
+              let then_gs = ngensym () in
+              let then_setup, then_call, then_cleanup = compile_aexp ctx then_aexp in
+              let else_gs = ngensym () in
+              let else_setup, else_call, else_cleanup = compile_aexp ctx else_aexp in
+              ( setup @ then_setup @ else_setup
+                @ [
+                    idecl l if_ctyp then_gs;
+                    idecl l if_ctyp else_gs;
+                    then_call (CL_id (then_gs, if_ctyp));
+                    else_call (CL_id (else_gs, if_ctyp));
+                  ],
+                (fun clexp -> icopy l clexp (V_call (Ite, [cval; V_id (then_gs, if_ctyp); V_id (else_gs, if_ctyp)]))),
+                [iclear if_ctyp else_gs; iclear if_ctyp then_gs] @ else_cleanup @ then_cleanup @ cleanup
+              )
+          | None ->
+              let branch_id, on_reached = coverage_branch_reached ctx l in
+              let compile_branch aexp =
+                let setup, call, cleanup = compile_aexp ctx aexp in
+                fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
+              in
+              ( setup,
+                (fun clexp ->
+                  append_into_block on_reached
+                    (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
+                ),
+                cleanup
+              )
         )
     (* FIXME: AE_struct_update could be AV_record_update - would reduce some copying. *)
     | AE_struct_update (aval, fields, typ) ->
@@ -1132,8 +1151,11 @@ module Make (C : CONFIG) = struct
     | (AE_aux (_, { loc = l; _ }) as exp) :: exps ->
         let setup, call, cleanup = compile_aexp ctx exp in
         let rest = compile_block ctx exps in
-        let gs = ngensym () in
-        iblock (setup @ [idecl l CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
+        if C.use_void then iblock (setup @ [call CL_void] @ cleanup) :: rest
+        else (
+          let gs = ngensym () in
+          iblock (setup @ [idecl l CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
+        )
 
   let fast_int = function CT_lint when !optimize_aarch64_fast_struct -> CT_fint 64 | ctyp -> ctyp
 
@@ -1393,6 +1415,8 @@ module Make (C : CONFIG) = struct
   let letdef_count = ref 0
 
   let compile_funcl ctx def_annot id pat guard exp =
+    let debug_attr = get_def_attribute "jib_debug" def_annot in
+
     (* Find the function's type. *)
     let quant, Typ_aux (fn_typ, _) =
       try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
@@ -1444,6 +1468,11 @@ module Make (C : CONFIG) = struct
     (* Optimize and compile the expression to ANF. *)
     let aexp = C.optimize_anf ctx (no_shadow (IdSet.union known_ids !guard_bindings) (anf exp)) in
 
+    if Option.is_some debug_attr then (
+      prerr_endline Util.("ANF for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      prerr_endline (Document.to_string (pp_aexp aexp))
+    );
+
     let setup, call, cleanup = compile_aexp ctx aexp in
     let destructure, destructure_cleanup =
       compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
@@ -1458,6 +1487,11 @@ module Make (C : CONFIG) = struct
     let instrs = unique_names instrs in
     let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
     let instrs = coverage_function_entry ctx id (exp_loc exp) @ instrs in
+
+    if Option.is_some debug_attr then (
+      prerr_endline Util.("IR for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
+    );
 
     ([CDEF_aux (CDEF_fundef (id, None, List.map fst compiled_args, instrs), def_annot)], orig_ctx)
 
@@ -1495,6 +1529,8 @@ module Make (C : CONFIG) = struct
     | _ -> compile_def' n total ctx def
 
   and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
+    let def_env = def_annot.env in
+    let def_annot = strip_def_annot def_annot in
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, []), def_annot)], ctx)
@@ -1568,7 +1604,7 @@ module Make (C : CONFIG) = struct
     | DEF_measure _ -> ([], ctx)
     | DEF_loop_measures _ -> ([], ctx)
     | DEF_internal_mutrec fundefs ->
-        let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef)) fundefs in
+        let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef) def_env) fundefs in
         List.fold_left
           (fun (cdefs, ctx) def ->
             let cdefs', ctx = compile_def n total ctx def in
@@ -1811,7 +1847,7 @@ module Make (C : CONFIG) = struct
 
   let rec specialize_variants ctx prior =
     let instantiations = ref CTListSet.empty in
-    let fix_variants ctx var_id = visit_ctyp (new fix_variants_visitor ctx var_id) in
+    let fix_variants ctx var_id = visit_ctyp (new fix_variants_visitor ctx var_id :> common_visitor) in
 
     let specialize_constructor ctx ctor_id =
       visit_cdefs (new specialize_constructor_visitor instantiations ctx ctor_id)
@@ -1823,7 +1859,7 @@ module Make (C : CONFIG) = struct
       CDEF_aux
         ( CDEF_pragma
             ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)),
-          mk_def_annot (gen_loc (id_loc orig_id))
+          mk_def_annot (gen_loc (id_loc orig_id)) ()
         )
     in
 
@@ -1981,7 +2017,7 @@ module Make (C : CONFIG) = struct
 
     let precise_call call tail =
       match call with
-      | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr -> begin
+      | I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr -> begin
           match get_function_typ id with
           | None when string_of_id id = "sail_cons" -> begin
               match (ctyp_args, args) with
@@ -1993,7 +2029,9 @@ module Make (C : CONFIG) = struct
                     [
                       iblock
                         (cast
-                        @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux)]
+                        @ [
+                            I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux);
+                          ]
                         @ tail @ cleanup
                         );
                     ]
@@ -2037,7 +2075,7 @@ module Make (C : CONFIG) = struct
               [
                 iblock1
                   (casts @ ret_setup
-                  @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux)]
+                  @ [I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), args), aux)]
                   @ tail @ ret_cleanup @ cleanup
                   );
               ]
@@ -2150,7 +2188,8 @@ module Make (C : CONFIG) = struct
     let dummy_exn = mk_id "__dummy_exn#" in
     let cdefs, ctx =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then
-        ( CDEF_aux (CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown)
+        ( CDEF_aux
+            (CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown ())
           :: cdefs,
           {
             ctx with

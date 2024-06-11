@@ -65,20 +65,31 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Libsail
-
 open Ast_util
 open Jib
 open Jib_util
 
-module IntSet = Set.Make (struct
-  type t = int
-  let compare = compare
-end)
+module IntSet = Util.IntSet
 module IntMap = Map.Make (struct
   type t = int
   let compare = compare
 end)
+
+let ssa_name i = function
+  | Name (id, _) -> Name (id, i)
+  | Have_exception _ -> Have_exception i
+  | Current_exception _ -> Current_exception i
+  | Throw_location _ -> Throw_location i
+  | Channel (c, _) -> Channel (c, i)
+  | Return _ -> Return i
+
+let unssa_name = function
+  | Name (id, n) -> (Name (id, -1), n)
+  | Have_exception n -> (Have_exception (-1), n)
+  | Current_exception n -> (Current_exception (-1), n)
+  | Throw_location n -> (Throw_location (-1), n)
+  | Channel (c, n) -> (Channel (c, -1), n)
+  | Return n -> (Return (-1), n)
 
 (**************************************************************************)
 (* 1. Mutable graph type                                                  *)
@@ -215,7 +226,12 @@ type terminator =
   | T_label of string
   | T_none
 
-type cf_node = CF_label of string | CF_block of instr list * terminator | CF_guard of int | CF_start of ctyp NameMap.t
+type cf_node =
+  | CF_label of string
+  | CF_block of instr list * terminator
+  | CF_guard of int
+  | CF_start of ctyp NameMap.t
+  | CF_end
 
 let to_terminator graph = function
   | I_label label -> T_label label
@@ -247,6 +263,9 @@ let control_flow_graph instrs =
     match aux with I_label _ | I_goto _ | I_jump _ | I_end _ | I_exit _ | I_undefined _ -> true | _ -> false
   in
 
+  let start = add_vertex ([], CF_start NameMap.empty) graph in
+  let finish = add_vertex ([], CF_end) graph in
+
   let rec cfg preds instrs =
     let before, after = instr_split_at cf_split instrs in
     let terminator, after =
@@ -261,7 +280,9 @@ let control_flow_graph instrs =
           [n]
     in
     match terminator with
-    | T_end _ | T_exit _ | T_undefined _ -> cfg [] after
+    | T_end _ | T_exit _ | T_undefined _ ->
+        List.iter (fun p -> add_edge p finish graph) preds;
+        cfg [] after
     | T_goto label ->
         List.iter (fun p -> add_edge p (StringMap.find label !labels) graph) preds;
         cfg [] after
@@ -280,8 +301,7 @@ let control_flow_graph instrs =
     | T_none -> preds
   in
 
-  let start = add_vertex ([], CF_start NameMap.empty) graph in
-  let finish = cfg [start] instrs in
+  let _ = cfg [start] instrs in
 
   let visited = reachable (IntSet.singleton start) graph in
   prune visited graph;
@@ -292,11 +312,17 @@ let control_flow_graph instrs =
 (* 3. Computing dominators                                                *)
 (**************************************************************************)
 
+(* If we are computing post-dominators rather than dominators, we
+   swap the graph ordering. *)
+let graph_order ~post predecessors successors = if post then (successors, predecessors) else (predecessors, successors)
+
 (** Calculate the (immediate) dominators of a graph using the
    Lengauer-Tarjan algorithm. This is the slightly less sophisticated
    version from Appel's book 'Modern compiler implementation in ML'
-   which runs in O(n log(n)) time. *)
-let immediate_dominators graph root =
+   which runs in O(n log(n)) time.
+
+   If the post flag is set this computes the post-dominators. *)
+let immediate_dominators ?(post = false) graph root =
   let none = -1 in
   let vertex = Array.make (cardinal graph) 0 in
   let parent = Array.make (cardinal graph) none in
@@ -333,7 +359,9 @@ let immediate_dominators graph root =
       parent.(n) <- p;
       incr count;
       match graph.nodes.(n) with
-      | Some (_, _, successors) -> IntSet.iter (fun w -> dfs n w) successors
+      | Some (_, predecessors, successors) ->
+          let predecessors, successors = graph_order ~post predecessors successors in
+          IntSet.iter (fun w -> dfs n w) successors
       | None -> assert false
     end
   in
@@ -346,7 +374,8 @@ let immediate_dominators graph root =
 
     begin
       match graph.nodes.(n) with
-      | Some (_, predecessors, _) ->
+      | Some (_, predecessors, successors) ->
+          let predecessors, successors = graph_order ~post predecessors successors in
           IntSet.iter
             (fun v ->
               let s' = if dfnum.(v) <= dfnum.(n) then v else semi.(ancestor_with_lowest_semi v) in
@@ -390,7 +419,7 @@ let rec dominate idom n w =
   let p = idom.(n) in
   if p = none then false else if p = w then true else dominate idom p w
 
-let dominance_frontiers graph root idom children =
+let dominance_frontiers ?(post = false) graph root idom children =
   let df = Array.make (cardinal graph) IntSet.empty in
 
   let rec compute_df n =
@@ -398,7 +427,9 @@ let dominance_frontiers graph root idom children =
 
     begin
       match graph.nodes.(n) with
-      | Some (content, _, succs) -> IntSet.iter (fun y -> if idom.(y) <> n then set := IntSet.add y !set) succs
+      | Some (content, predecessors, successors) ->
+          let predecessors, successors = graph_order ~post predecessors successors in
+          IntSet.iter (fun y -> if idom.(y) <> n then set := IntSet.add y !set) successors
       | None -> ()
     end;
     IntSet.iter
@@ -486,14 +517,6 @@ let rename_variables graph root children =
 
   let phi_zeros = ref NameMap.empty in
 
-  let ssa_name i = function
-    | Name (id, _) -> Name (id, i)
-    | Have_exception _ -> Have_exception i
-    | Current_exception _ -> Current_exception i
-    | Throw_location _ -> Throw_location i
-    | Return _ -> Return i
-  in
-
   let get_count id = match NameMap.find_opt id !counts with Some n -> n | None -> 0 in
   let top_stack id = match NameMap.find_opt id !stacks with Some (x :: _) -> x | Some [] -> 0 | None -> 0 in
   let top_stack_phi id ctyp =
@@ -512,6 +535,7 @@ let rename_variables graph root children =
     | V_id (id, ctyp) ->
         let i = top_stack id in
         V_id (ssa_name i id, ctyp)
+    | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)
@@ -540,13 +564,17 @@ let rename_variables graph root children =
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void -> CL_void
   in
+  let fold_creturn = function
+    | CR_one clexp -> CR_one (fold_clexp false clexp)
+    | CR_multi clexps -> CR_multi (List.map (fold_clexp false) clexps)
+  in
 
   let ssa_instr (I_aux (aux, annot)) =
     let aux =
       match aux with
-      | I_funcall (clexp, extern, id, args) ->
+      | I_funcall (creturn, extern, id, args) ->
           let args = List.map fold_cval args in
-          I_funcall (fold_clexp false clexp, extern, id, args)
+          I_funcall (fold_creturn creturn, extern, id, args)
       | I_copy (clexp, cval) ->
           let cval = fold_cval cval in
           I_copy (fold_clexp false clexp, cval)
@@ -587,6 +615,7 @@ let rename_variables graph root children =
         CF_block (instrs, ssa_terminator terminator)
     | CF_label label -> CF_label label
     | CF_guard cond -> CF_guard cond
+    | CF_end -> CF_end
   in
 
   let ssa_ssanode = function
@@ -642,35 +671,79 @@ let rename_variables graph root children =
   | Some ((ssa, CF_start _), preds, succs) -> graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs)
   | _ -> failwith "root node is not CF_start"
 
-let place_pi_functions graph start idom children =
+let is_true_literal = function V_lit (VL_bool true, _) -> true | _ -> false
+
+let is_false_literal = function V_lit (VL_bool false, _) -> true | _ -> false
+
+let simp_disj = function
+  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (VL_bool true, CT_bool)]
+  | xs ->
+      if List.exists is_true_literal xs then [V_lit (VL_bool true, CT_bool)]
+      else List.filter (fun x -> not (is_false_literal x)) xs
+
+let simp_conj = function
+  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (VL_bool false, CT_bool)]
+  | xs ->
+      if List.exists is_false_literal xs then [V_lit (VL_bool false, CT_bool)]
+      else List.filter (fun x -> not (is_true_literal x)) xs
+
+let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
   let get_guard = function
     | CF_guard cond -> begin
         match IntMap.find_opt (abs cond) graph.conds with
-        | Some guard when cond > 0 -> [guard]
-        | Some guard -> [V_call (Bnot, [guard])]
+        | Some guard when cond > 0 -> Some guard
+        | Some guard -> Some (V_call (Bnot, [guard]))
         | None -> assert false
       end
-    | _ -> []
+    | _ -> None
   in
-  let get_pi_contents ssanodes = List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes) in
+  let get_pi ssanode = List.concat (List.map (function Pi guards -> guards | _ -> []) ssanode) in
 
+  let mk_disj xs = match simp_disj xs with [] -> V_lit (VL_bool false, CT_bool) | [x] -> x | xs -> V_call (Bor, xs) in
+  let mk_conj xs = match simp_conj xs with [] -> V_lit (VL_bool true, CT_bool) | [x] -> x | xs -> V_call (Band, xs) in
+
+  let visited = ref IntSet.empty in
   let rec go n =
-    begin
+    if not (IntSet.mem n !visited) then (
       match graph.nodes.(n) with
       | Some ((ssa, cfnode), preds, succs) ->
-          let p = idom.(n) in
-          if p <> -1 then begin
-            match graph.nodes.(p) with
-            | Some ((dom_ssa, _), _, _) ->
-                let args = get_guard cfnode @ get_pi_contents dom_ssa in
-                graph.nodes.(n) <- Some ((Pi args :: ssa, cfnode), preds, succs)
-            | None -> assert false
-          end
-      | None -> assert false
-    end;
-    IntSet.iter go children.(n)
+          let disj =
+            List.map
+              (fun post_frontier ->
+                assert (post_frontier <> n);
+                go post_frontier;
+                match graph.nodes.(post_frontier) with
+                | Some ((ssanode, _), _, succs) ->
+                    let pathcond = get_pi ssanode in
+                    let disj =
+                      List.filter_map
+                        (fun s ->
+                          if s = n || dominate post_idom s n then (
+                            let (_, cfnode), _, _ = Option.get graph.nodes.(s) in
+                            get_guard cfnode
+                          )
+                          else None
+                        )
+                        (IntSet.elements succs)
+                    in
+                    mk_disj disj :: pathcond
+                | None -> assert false
+              )
+              (IntSet.elements post_df.(n))
+          in
+          let mk_pi = function
+            | [] -> Pi []
+            | [conj] -> Pi conj
+            | conjs -> Pi [mk_disj (List.map (fun conj -> mk_conj conj) conjs)]
+          in
+          visited := IntSet.add n !visited;
+          graph.nodes.(n) <- Some ((mk_pi disj :: ssa, cfnode), preds, succs)
+      | None -> ()
+    )
   in
-  go start
+  for n = 0 to graph.next - 1 do
+    go n
+  done
 
 (** Remove p nodes. Assumes the graph is acyclic. *)
 let remove_nodes remove_cf graph =
@@ -697,16 +770,6 @@ let remove_nodes remove_cf graph =
     | _ -> ()
   done
 
-let ssa instrs =
-  let start, finish, cfg = control_flow_graph instrs in
-  let idom = immediate_dominators cfg start in
-  let children = dominator_children idom in
-  let df = dominance_frontiers cfg start idom children in
-  place_phi_functions cfg df;
-  rename_variables cfg start children;
-  place_pi_functions cfg start idom children;
-  (start, cfg)
-
 (* Debugging utilities for outputing Graphviz files. *)
 
 let string_of_ssainstr = function
@@ -719,20 +782,17 @@ let string_of_phis = function [] -> "" | phis -> Util.string_of_list "\\l" strin
 let string_of_node = function
   | phis, CF_label label -> string_of_phis phis ^ label
   | phis, CF_block (instrs, terminator) ->
-      let string_of_instr instr =
-        let buf = Buffer.create 128 in
-        Jib_ir.Flat_ir_formatter.output_instr 0 buf 0 Jib_ir.StringMap.empty instr;
-        Buffer.contents buf
-      in
       string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (string_of_instr instr)) instrs
   | phis, CF_start inits -> string_of_phis phis ^ "START"
   | phis, CF_guard cval -> string_of_phis phis ^ string_of_int cval
+  | phis, CF_end -> string_of_phis phis ^ "END"
 
 let vertex_color = function
   | _, CF_start _ -> "peachpuff"
   | _, CF_block _ -> "white"
   | _, CF_label _ -> "springgreen"
   | _, CF_guard _ -> "yellow"
+  | _, CF_end -> "red"
 
 let make_dot out_chan graph =
   Util.opt_colors := false;
@@ -776,3 +836,24 @@ let make_dominators_dot out_chan idom graph =
   done;
   output_string out_chan "}\n";
   Util.opt_colors := true
+
+let ssa ?debug_prefix instrs =
+  let start, finish, cfg = control_flow_graph instrs in
+  let idom = immediate_dominators cfg start in
+  let post_idom = immediate_dominators ~post:true cfg finish in
+  begin
+    match debug_prefix with
+    | Some prefix ->
+        let out_chan = open_out (prefix ^ "_post_doms.gv") in
+        make_dominators_dot out_chan post_idom cfg;
+        close_out out_chan
+    | None -> ()
+  end;
+  let children = dominator_children idom in
+  let post_children = dominator_children post_idom in
+  let df = dominance_frontiers cfg start idom children in
+  let post_df = dominance_frontiers ~post:true cfg finish post_idom post_children in
+  place_phi_functions cfg df;
+  rename_variables cfg start children;
+  place_pi_functions ~start ~finish ~post_idom ~post_df cfg;
+  (start, cfg)

@@ -158,10 +158,12 @@ module type CONFIG = sig
      for debugging C but we want to turn it off for SMT generation
      where we can't use strings *)
   val track_throw : bool
+
+  val use_void : bool
 end
 
 module IdGraph : sig
-  include Graph.S with type node = id
+  include Graph.S with type node = id and type node_set = IdSet.t
 end
 
 val callgraph : cdef list -> IdGraph.graph
@@ -171,9 +173,9 @@ module Make (C : CONFIG) : sig
        arguments are is the current definition number and the total
        number of definitions, and can be used to drive a progress bar
        (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
+  val compile_def : int -> int -> ctx -> typed_def -> cdef list * ctx
 
-  val compile_ast : ctx -> tannot ast -> cdef list * ctx
+  val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end
 
 (** Adds some special functions to the environment that are used to

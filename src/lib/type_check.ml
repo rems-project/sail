@@ -1297,6 +1297,9 @@ type tannot' = {
 
 type tannot = tannot' option * uannot
 
+type typed_def = (tannot, env) def
+type typed_ast = (tannot, env) ast
+
 let untyped_annot tannot = snd tannot
 
 let mk_tannot ?(uannot = empty_uannot) env typ : tannot =
@@ -1943,8 +1946,10 @@ let strip_funcl funcl = map_funcl_annot (fun (l, tannot) -> (l, untyped_annot ta
 let strip_val_spec vs = map_valspec_annot (fun (l, tannot) -> (l, untyped_annot tannot)) vs
 let strip_register r = map_register_annot (fun (l, tannot) -> (l, untyped_annot tannot)) r
 let strip_typedef td = map_typedef_annot (fun (l, tannot) -> (l, untyped_annot tannot)) td
-let strip_def def = map_def_annot (fun (l, tannot) -> (l, untyped_annot tannot)) def
-let strip_ast ast = map_ast_annot (fun (l, tannot) -> (l, untyped_annot tannot)) ast
+let strip_def_annot da = def_annot_map_env (fun _ -> ()) da
+let strip_def def =
+  map_def_annot (fun (l, tannot) -> (l, untyped_annot tannot)) def |> map_def_def_annot strip_def_annot
+let strip_ast ast = { ast with defs = List.map strip_def ast.defs }
 
 (* A L-expression can either be declaring new variables, or updating existing variables, but never a mix of the two *)
 type lexp_assignment_type = Declaration | Update
@@ -4704,7 +4709,7 @@ let check_global_constraint env def_annot nc =
 let undefined_skip l = Some (AD_aux (AD_string "skip", gen_loc l))
 let undefined_forbid l = Some (AD_aux (AD_string "forbid", gen_loc l))
 
-let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list * Env.t =
+let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
   typ_print (lazy ("\n" ^ Util.("Check type " |> cyan |> clear) ^ string_of_id (id_of_type_def_aux tdef)));
   match tdef with
@@ -4836,7 +4841,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
                   ranges;
                 let def_annot = add_def_attribute l "bitfield" (Some (AD_aux (AD_num size, l))) def_annot in
                 let defs =
-                  DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), def_annot)
+                  DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
                   :: Bitfield.macro id size (Env.get_default_order env) ranges
                 in
                 let defs, env =
@@ -4853,7 +4858,7 @@ let rec check_typedef : Env.t -> def_annot -> uannot type_def -> tannot def list
         | typ -> typ_error l ("Underlying bitfield type " ^ string_of_typ typ ^ " must be a constant-width bitvector")
       end
 
-and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def list * Env.t =
+and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_def list * Env.t =
  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
   | SD_function _ | SD_end _ | SD_mapping _ -> ([], env)
@@ -4904,7 +4909,7 @@ and check_scattered : Env.t -> def_annot -> uannot scattered_def -> tannot def l
       let mapcl = check_mapcl mapcl_env mapcl typ in
       ([DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)], env)
 
-and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * tannot def list * Env.t =
+and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =
  fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->
   let valid_outcome_def = function
     | DEF_aux ((DEF_impl _ | DEF_val _), _) -> ()
@@ -4939,7 +4944,7 @@ and check_outcome : Env.t -> outcome_spec -> uannot def list -> outcome_spec * t
       let msg = "Outcome must be declared within top-level scope" in
       typ_raise l (err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
-and check_impldef : Env.t -> def_annot -> uannot funcl -> tannot def list * Env.t =
+and check_impldef : Env.t -> env def_annot -> uannot funcl -> typed_def list * Env.t =
  fun env def_annot (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
   typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
   match Env.get_outcome_typschm_opt env with
@@ -4949,7 +4954,7 @@ and check_impldef : Env.t -> def_annot -> uannot funcl -> tannot def list * Env.
   | None -> typ_error fcl_def_annot.loc "Cannot declare an implementation outside of an outcome"
 
 and check_outcome_instantiation :
-      'a. Env.t -> def_annot -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
+      'a. Env.t -> env def_annot -> 'a instantiation_spec -> subst list -> typed_def list * Env.t =
  fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params, vals, outcome_env = Env.get_outcome l id env in
@@ -5038,8 +5043,9 @@ and check_outcome_instantiation :
     Env.add_val_spec id (typq, typ) env
   )
 
-and check_def : Env.t -> uannot def -> tannot def list * Env.t =
+and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
  fun env (DEF_aux (aux, def_annot)) ->
+  let def_annot = def_annot_map_env (fun _ -> env) def_annot in
   match aux with
   | DEF_fixity (prec, n, op) -> ([DEF_aux (DEF_fixity (prec, n, op), def_annot)], env)
   | DEF_type tdef -> check_typedef env def_annot tdef
@@ -5068,7 +5074,9 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
           Reporting.warn "No default value" l "Registers of type option should explicitly be given a default value";
           let none_ctor = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))) in
-          check_def env (DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), def_annot))
+          check_def env
+            (DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot)
+            )
       | _ ->
           if not (can_be_undefined ~at:l env typ) then
             typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
@@ -5111,7 +5119,7 @@ and check_def : Env.t -> uannot def -> tannot def list * Env.t =
       Reporting.unreachable (id_loc id) __POS__
         "Loop termination measures should have been rewritten before type checking"
 
-and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def list * Env.t =
+and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def list * Env.t =
  fun n total env defs ->
   let rec aux n total acc env defs =
     match defs with
@@ -5140,18 +5148,18 @@ and check_defs_progress : int -> int -> Env.t -> uannot def list -> tannot def l
   in
   aux n total [] env defs
 
-and check_defs : Env.t -> uannot def list -> tannot def list * Env.t =
+and check_defs : Env.t -> untyped_def list -> typed_def list * Env.t =
  fun env defs ->
   let total = List.length defs in
   check_defs_progress 1 total env defs
 
-let check : Env.t -> uannot ast -> tannot ast * Env.t =
+let check : Env.t -> untyped_ast -> typed_ast * Env.t =
  fun env ast ->
   let total = List.length ast.defs in
   let defs, env = check_defs_progress 1 total env ast.defs in
   ({ ast with defs }, Env.open_all_modules env)
 
-let rec check_with_envs : Env.t -> uannot def list -> (tannot def list * Env.t) list =
+let rec check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list =
  fun env defs ->
   match defs with
   | [] -> []
@@ -5172,8 +5180,9 @@ let initial_env =
        ( TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)], Parse_ast.Unknown),
          function_typ [atom_typ (nvar (mk_kid "n"))] (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))])
        )
-  (* __assume is used by property.ml to add guards for SMT generation,
+  (* sail_assume is used by property.ml to add guards for SMT generation,
      but which don't affect flow-typing. *)
+  |> Env.add_extern (mk_id "sail_assume") { pure = true; bindings = [("_", "sail_assume")] }
   |> Env.add_val_spec (mk_id "sail_assume")
        (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), function_typ [bool_typ] unit_typ)
 
