@@ -102,6 +102,7 @@ let opt_max_unknown_bitvector_width = ref 128
 
 let opt_nostrings = ref false
 let opt_nopacked = ref false
+let opt_never_pack_unions = ref false
 let opt_padding = ref false
 let opt_nomem = ref false
 
@@ -147,6 +148,7 @@ let verilog_options =
     );
     ("-sv_nostrings", Arg.Set opt_nostrings, " don't emit any strings, instead emit units");
     ("-sv_nopacked", Arg.Set opt_nopacked, " don't emit packed datastructures");
+    ("-sv_never_pack_unions", Arg.Set opt_never_pack_unions, " never emit a packed union");
     ("-sv_padding", Arg.Set opt_padding, " add padding on packed unions");
     ( "-sv_unreachable",
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
@@ -388,6 +390,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     let line_directives = !opt_line_directives
     let nostrings = !opt_nostrings
     let nopacked = !opt_nopacked
+    let never_pack_unions = !opt_never_pack_unions
     let union_padding = !opt_padding
     let unreachable = !opt_unreachable
     let comb = !opt_comb
@@ -431,16 +434,19 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
     List.fold_left
       (fun (doc, fn_ctyps) cdef ->
         let svir_defs, fn_ctyps = svir_cdef spec_info ctx fn_ctyps cdef in
-        (separate_map (twice hardline) pp_def svir_defs ^^ twice hardline ^^ doc, fn_ctyps)
+        match svir_defs with
+        | [] -> (doc, fn_ctyps)
+        | _ -> (doc ^^ separate_map (twice hardline) pp_def svir_defs ^^ twice hardline, fn_ctyps)
       )
       (empty, Bindings.empty) cdefs
   in
   let doc =
+    let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let library_defs = Generate_primop2.get_generated_library_defs () in
-    let top_doc =
-      Option.fold ~none:empty ~some:(fun m -> twice hardline ^^ pp_def (SVD_module m)) (SV.toplevel_module spec_info)
-    in
-    separate_map (twice hardline) pp_def library_defs ^^ twice hardline ^^ doc ^^ top_doc
+    let top_doc = Option.fold ~none:empty ~some:(fun m -> pp_def (SVD_module m)) (SV.toplevel_module spec_info) in
+    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
+    ^^ separate_map (twice hardline) pp_def library_defs
+    ^^ twice hardline ^^ doc ^^ top_doc
   in
 
   (*
@@ -594,7 +600,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
             output_string out_chan line;
             output_char out_chan '\n'
           )
-          (verilator_cpp_wrapper out);
+          (verilator_cpp_wrapper "sail_toplevel");
         Util.close_output_with_check file_info;
 
         (* Verilator sometimes just spuriously returns non-zero exit
@@ -602,13 +608,14 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
            here, and just hope for the best. *)
         let _ =
           Unix.system
-            (sprintf "verilator --cc --exe --build -j 0 -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv" sail_sv_libdir out out
-               out
+            (sprintf
+               "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
+               sail_sv_libdir out out out
             )
         in
         begin
           match !opt_verilate with
-          | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out out)
+          | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
           | _ -> ()
         end
     | _ -> ()

@@ -125,7 +125,7 @@ module Make_optimizer (S : Sequence) = struct
           | Some n -> NameHashtbl.replace uses var (n + 1)
           | None -> NameHashtbl.add uses var 1
         end
-      | Enum _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ | Empty_list -> ()
+      | Unit | Member _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ | Empty_list -> ()
       | Fn (_, exps) -> List.iter uses_in_exp exps
       | Field (_, _, exp) -> uses_in_exp exp
       | Ite (cond, t, e) ->

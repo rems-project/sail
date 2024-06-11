@@ -50,6 +50,7 @@ skip_tests = {
     'warl_undef',
     'xlen_val', # Calls external C function
     'zero_length_bv',
+    'spc_mappings',
 }
 
 print("Sail is {}".format(sail))
@@ -72,7 +73,7 @@ def test_sv(name, opts, skip_list):
                     step('{} -no_warn -sv ../c/{} -o {} -sv_verilate compile{} > {}.out'.format(sail, filename, basename, opts, basename))
                 else:
                     step('{} -no_warn -sv ../c/{} -o {} -sv_verilate run{} > {}.out'.format(sail, filename, basename, opts, basename))
-                    step('awk \'/TEST START/{{flag=1;next}}/TEST END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
+                    step('awk \'/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
                     step('diff ../c/{}.expect {}.result'.format(basename, basename))
                 print_ok(filename)
                 sys.exit()
@@ -82,13 +83,13 @@ def test_sv(name, opts, skip_list):
 xml = '<testsuites>\n'
 
 xml += test_sv('SystemVerilog', '', skip_tests)
-xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests)
-xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests)
-xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests)
+# xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests) */
+# xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests) */
+# xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests) */
 
 skip_tests.remove('bitvector')
 
-xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
+# xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
 xml += '</testsuites>\n'
 

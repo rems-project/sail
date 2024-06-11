@@ -124,6 +124,12 @@ val immediate_dominators : ?post:bool -> 'a array_graph -> int -> int array
 
 type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
 
+module NameGraph : sig
+  include Graph.S with type node = Jib.name and type node_set = Set.Make(Name).t and type graph = Graph.Make(Name).graph
+end
+
+val phi_dependencies : (ssa_elem list * cf_node) array_graph -> NameGraph.graph * int NameMap.t
+
 (** Convert a list of instructions into SSA form *)
 val ssa : ?debug_prefix:string -> Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 

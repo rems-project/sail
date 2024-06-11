@@ -511,6 +511,27 @@ let place_phi_functions graph df =
     )
     !all_vars
 
+module NameGraph = Graph.Make (Name)
+
+let phi_dependencies cfg =
+  let deps = ref NameGraph.empty in
+  let decl_nodes = ref NameMap.empty in
+  for n = 0 to cfg.next - 1 do
+    match cfg.nodes.(n) with
+    | Some ((ssa, _), _, _) ->
+        List.iter
+          (function
+            | Phi (id, _, args) ->
+                assert (not (NameMap.mem id !decl_nodes));
+                decl_nodes := NameMap.add id n !decl_nodes;
+                List.iter (fun arg -> deps := NameGraph.add_edge id arg !deps) args
+            | _ -> ()
+            )
+          ssa
+    | None -> ()
+  done;
+  (!deps, !decl_nodes)
+
 let rename_variables graph root children =
   let counts = ref NameMap.empty in
   let stacks = ref NameMap.empty in
@@ -783,7 +804,11 @@ let string_of_node = function
   | phis, CF_label label -> string_of_phis phis ^ label
   | phis, CF_block (instrs, terminator) ->
       string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (string_of_instr instr)) instrs
-  | phis, CF_start inits -> string_of_phis phis ^ "START"
+  | phis, CF_start inits ->
+      string_of_phis phis ^ "START" ^ "\\l"
+      ^ Util.string_of_list "\\l"
+          (fun (n, ctyp) -> string_of_name n ^ " : " ^ string_of_ctyp ctyp)
+          (NameMap.bindings inits)
   | phis, CF_guard cval -> string_of_phis phis ^ string_of_int cval
   | phis, CF_end -> string_of_phis phis ^ "END"
 

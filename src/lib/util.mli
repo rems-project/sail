@@ -203,6 +203,8 @@ val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 val take : int -> 'a list -> 'a list
 val drop : int -> 'a list -> 'a list
 
+val delimit_list : ('a -> bool) -> 'a list -> 'a list list
+
 val take_drop : ('a -> bool) -> 'a list -> 'a list * 'a list
 
 val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option

@@ -261,6 +261,14 @@ let rec option_first f xL =
       match f x with None -> option_first f xs | Some s -> Some s
     )
 
+let delimit_list f xs =
+  let add x = function next :: rest -> (x :: next) :: rest | _ -> assert false in
+  let rec go acc = function
+    | x :: xs -> if not (f x) then go (add x acc) xs else go ([] :: acc) xs
+    | [] -> List.rev (List.map List.rev acc)
+  in
+  go [[]] xs
+
 let list_to_front n l =
   if n <= 0 then l
   else (

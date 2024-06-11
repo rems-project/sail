@@ -135,6 +135,7 @@ and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 and sv_statement_aux =
   | SVS_comment of string
   | SVS_skip
+  | SVS_split_comb
   | SVS_var of Jib.name * Jib.ctyp * smt_exp option
   | SVS_return of smt_exp
   | SVS_assign of sv_place * smt_exp
@@ -142,9 +143,16 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
+  | SVS_assert of smt_exp * smt_exp
   | SVS_raw of string * Jib.name list * Jib.name list
 
 val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_statement_aux
+
+val is_split_comb : sv_statement -> bool
+
+val filter_skips : sv_statement list -> sv_statement list
+
+val svs_block : sv_statement list -> sv_statement_aux
 
 val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
 
