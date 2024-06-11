@@ -10,7 +10,7 @@ jobs:
     # GitHub allows matrix variables in more places than env variables
     strategy:
       matrix:
-        version: [4.08.1]
+        version: [5.0.0]
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
