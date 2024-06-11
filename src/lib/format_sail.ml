@@ -536,6 +536,9 @@ module Make (Config : CONFIG) = struct
             | ls -> blank n ^^ group (align (string "/*" ^^ separate hardline ls ^^ string "*/")) ^^ require_hardline
           )
       end
+    | Doc_comment contents ->
+        let ls = block_comment_lines 0 contents in
+        align (string "/*!" ^^ separate hardline ls ^^ string "*/") ^^ require_hardline
     | Function f ->
         let sep = hardline ^^ string "and" ^^ space in
         let clauses =

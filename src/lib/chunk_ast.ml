@@ -96,6 +96,7 @@ type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of
 
 and chunk =
   | Comment of Lexer.comment_type * int * int * string * bool
+  | Doc_comment of string
   | Spacer of bool * int
   | Function of {
       id : id;
@@ -155,6 +156,7 @@ let rec prerr_chunk indent = function
   | Comment (comment_type, n, col, contents, trailing) ->
       let s, e = comment_type_delimiters comment_type in
       Printf.eprintf "%sComment: blank=%d col=%d trailing=%b %s%s%s\n" indent n col trailing s contents e
+  | Doc_comment contents -> Printf.eprintf "%sDoc_comment: /*!%s*/\n" indent contents
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
@@ -1307,44 +1309,49 @@ let can_handle_td (TD_aux (aux, _)) = match aux with TD_enum _ -> true | _ -> fa
 
 let can_handle_sd (SD_aux (aux, _)) = match aux with SD_funcl _ | SD_end _ | SD_function _ -> true | _ -> false
 
-let chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
+let rec chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = (starting_line_num l, ending_line_num l) in
   let spacing = def_spacer last_line_span line_span in
   if spacing > 0 then Queue.add (Spacer (true, spacing)) chunks;
   let pragma_span = ref false in
-  begin
-    match def with
-    | DEF_fundef fdef -> chunk_fundef comments chunks fdef
-    | DEF_pragma (pragma, arg, _) ->
-        Queue.add (Pragma (pragma, arg)) chunks;
-        pragma_span := true
-    | DEF_default dts -> chunk_default_typing_spec comments chunks dts
-    | DEF_fixity (prec, n, id) ->
-        pop_comments comments chunks (id_loc id);
-        let string_of_prec = function Infix -> "infix" | InfixL -> "infixl" | InfixR -> "infixr" in
-        Queue.add
-          (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) (string_of_id id)))
-          chunks;
-        Queue.add (Spacer (true, 1)) chunks
-    | DEF_register reg -> chunk_register comments chunks reg
-    | DEF_let lb -> chunk_toplevel_let l comments chunks lb
-    | DEF_val vs -> chunk_val_spec comments chunks vs
-    | DEF_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
-    | DEF_type td when can_handle_td td -> chunk_type_def comments chunks td
-    | _ -> begin
-        match Reporting.simp_loc l with
-        | Some (p1, p2) ->
-            pop_comments comments chunks l;
-            (* These comments are within the source we are about to include *)
-            discard_comments comments p2;
-            let source = read_source p1 p2 source in
-            Queue.add (Raw source) chunks;
+  match def with
+  | DEF_doc (doc, def) ->
+      Queue.add (Doc_comment doc) chunks;
+      chunk_def source last_line_span comments chunks def
+  | def ->
+      begin
+        match def with
+        | DEF_fundef fdef -> chunk_fundef comments chunks fdef
+        | DEF_pragma (pragma, arg, _) ->
+            Queue.add (Pragma (pragma, arg)) chunks;
+            pragma_span := true
+        | DEF_default dts -> chunk_default_typing_spec comments chunks dts
+        | DEF_fixity (prec, n, id) ->
+            pop_comments comments chunks (id_loc id);
+            let string_of_prec = function Infix -> "infix" | InfixL -> "infixl" | InfixR -> "infixr" in
+            Queue.add
+              (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) (string_of_id id)))
+              chunks;
             Queue.add (Spacer (true, 1)) chunks
-        | None -> Reporting.unreachable l __POS__ "Could not format"
-      end
-  end;
-  (* Adjust the line span of a pragma to a single line so the spacing works out *)
-  if not !pragma_span then line_span else (fst line_span, fst line_span)
+        | DEF_register reg -> chunk_register comments chunks reg
+        | DEF_let lb -> chunk_toplevel_let l comments chunks lb
+        | DEF_val vs -> chunk_val_spec comments chunks vs
+        | DEF_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
+        | DEF_type td when can_handle_td td -> chunk_type_def comments chunks td
+        | _ -> begin
+            match Reporting.simp_loc l with
+            | Some (p1, p2) ->
+                pop_comments comments chunks l;
+                (* These comments are within the source we are about to include *)
+                discard_comments comments p2;
+                let source = read_source p1 p2 source in
+                Queue.add (Raw source) chunks;
+                Queue.add (Spacer (true, 1)) chunks
+            | None -> Reporting.unreachable l __POS__ "Could not format"
+          end
+      end;
+      (* Adjust the line span of a pragma to a single line so the spacing works out *)
+      if not !pragma_span then line_span else (fst line_span, fst line_span)
 
 let chunk_defs source comments defs =
   let comments = Stack.of_seq (List.to_seq comments) in

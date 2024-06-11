@@ -88,6 +88,7 @@ type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of
 
 and chunk =
   | Comment of Lexer.comment_type * int * int * string * bool
+  | Doc_comment of string
   | Spacer of bool * int
   | Function of {
       id : Parse_ast.id;
