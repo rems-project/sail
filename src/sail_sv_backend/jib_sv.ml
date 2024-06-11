@@ -107,9 +107,10 @@ class footprint_visitor ctx registers reads writes need_stdout need_stderr : jib
       | I_aux (I_funcall (_, _, (id, _), _), _) ->
           if ctx_is_extern id ctx then (
             let name = ctx_get_extern id ctx in
-            prerr_endline ("NAME: " ^ name);
-            if name = "print" || name = "print_endline" || name = "print_bits" then need_stdout := true
-            else if name = "prerr" || name = "prerr_endline" || name = "prerr_bits" then need_stderr := true
+            if name = "print" || name = "print_endline" || name = "print_bits" || name = "print_int" then
+              need_stdout := true
+            else if name = "prerr" || name = "prerr_endline" || name = "prerr_bits" || name = "prerr_int" then
+              need_stderr := true
           );
           DoChildren
       | _ -> DoChildren
@@ -143,6 +144,8 @@ type spec_info = {
   register_ctyp_map : IdSet.t CTMap.t;
   (* A map from register names to types *)
   registers : ctyp Bindings.t;
+  (* A list of constructor functions *)
+  constructors : IdSet.t;
   (* Function footprint information *)
   footprints : footprint Bindings.t;
   (* Specification callgraph *)
@@ -163,6 +166,16 @@ let collect_spec_info ctx cdefs =
         | _ -> (ctyp_map, regs)
       )
       (CTMap.empty, Bindings.empty) cdefs
+  in
+  let constructors =
+    List.fold_left
+      (fun acc cdef ->
+        match cdef with
+        | CDEF_aux (CDEF_type (CTD_variant (_, ctors)), _) ->
+            List.fold_left (fun acc (id, _) -> IdSet.add id acc) acc ctors
+        | _ -> acc
+      )
+      IdSet.empty cdefs
   in
   let footprints =
     List.fold_left
@@ -218,7 +231,7 @@ let collect_spec_info ctx cdefs =
       )
       footprints cdefs
   in
-  { register_ctyp_map; registers; footprints; callgraph = cfg }
+  { register_ctyp_map; registers; constructors; footprints; callgraph = cfg }
 
 module type CONFIG = sig
   val max_unknown_integer_width : int
@@ -226,6 +239,7 @@ module type CONFIG = sig
   val line_directives : bool
   val nostrings : bool
   val nopacked : bool
+  val never_pack_unions : bool
   val union_padding : bool
   val unreachable : string list
   val comb : bool
@@ -330,7 +344,7 @@ module Make (Config : CONFIG) = struct
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_generic_vector_length = 32
-        let union_ctyp_classify = is_packed
+        let union_ctyp_classify ctyp = is_packed ctyp && not Config.never_pack_unions
         let register_ref reg_name = Fn ("reg_ref", [String_lit reg_name])
       end)
       (struct
@@ -417,7 +431,7 @@ module Make (Config : CONFIG) = struct
     | _ -> string "DEFAULT"
      *)
 
-  let sv_type_def = function
+  let pp_type_def = function
     | CTD_enum (id, ids) ->
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
@@ -456,7 +470,7 @@ module Make (Config : CONFIG) = struct
         (* At least verilator only allows unions for packed types (which
            is roughly equivalent to types that can be represented as
            finite bitvectors). *)
-        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors in
+        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors && not Config.never_pack_unions in
         kind_enum ^^ twice hardline
         ^^
         if can_be_packed then (
@@ -681,7 +695,8 @@ module Make (Config : CONFIG) = struct
     | Bool_lit true -> string "1'h1"
     | Bool_lit false -> string "1'h0"
     | String_lit s -> if Config.nostrings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
-    | Enum "unit" -> string "SAIL_UNIT"
+    | Unit -> string "SAIL_UNIT"
+    | Member id -> string (string_of_id id)
     | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
     | Fn ("Bits", [size; bv]) -> squote ^^ lbrace ^^ pp_smt size ^^ comma ^^ space ^^ pp_smt bv ^^ rbrace
     | Fn ("concat", xs) -> lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
@@ -745,7 +760,6 @@ module Make (Config : CONFIG) = struct
     | Field (_, field, v) -> pp_smt v ^^ dot ^^ pp_id field
     | Ite (cond, then_exp, else_exp) ->
         separate space [pp_smt_parens cond; char '?'; pp_smt_parens then_exp; char ':'; pp_smt_parens else_exp]
-    | Enum e -> failwith "Unknown enum"
     | Empty_list -> string "{}"
     | Hd (op, arg) -> begin
         match tails arg with
@@ -803,16 +817,38 @@ module Make (Config : CONFIG) = struct
         ksprintf string "sail_reg_assign_%s" encoded ^^ parens (pp_name id ^^ comma ^^ space ^^ value) ^^ semi
     | _ -> sv_clexp clexp ^^ space ^^ equals ^^ space ^^ value ^^ semi
 
-  let rec svir_clexp = function
-    | CL_id (id, _) -> SVP_id id
-    | CL_field (clexp, field) -> SVP_field (svir_clexp clexp, field)
-    | CL_void -> SVP_void
-    | CL_rmw _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "RMW"
+  let rec svir_clexp ?(parents = []) = function
+    | CL_id (id, _) -> ([], SVP_id id)
+    | CL_field (clexp, field) ->
+        let updates, lexp = svir_clexp ~parents:(field :: parents) clexp in
+        (updates, SVP_field (lexp, field))
+    | CL_void -> ([], SVP_void)
+    | CL_rmw (id_from, id, ctyp) ->
+        let rec assignments lexp ctyp = function
+          | parent :: parents -> begin
+              match ctyp with
+              | CT_struct (struct_id, fields) ->
+                  let _, field_ctyp = List.find (fun (f, _) -> Id.compare f parent = 0) fields in
+                  let other_fields = List.filter (fun (f, _) -> Id.compare f parent <> 0) fields in
+                  assignments (SVP_field (lexp, parent)) field_ctyp parents
+                  @ List.map
+                      (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, Var id_from)))
+                      other_fields
+              | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "expected struct type"
+            end
+          | [] -> []
+        in
+        let updates = assignments (SVP_id id) ctyp parents in
+        (updates, SVP_id id)
     | CL_addr _ | CL_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "addr/tuple"
 
   let svir_creturn = function
     | CR_one clexp -> svir_clexp clexp
-    | CR_multi clexps -> SVP_multi (List.map svir_clexp clexps)
+    | CR_multi clexps -> ([], SVP_multi (List.map snd (List.map svir_clexp clexps)))
+
+  let with_updates l updates aux =
+    let wrap aux = SVS_aux (aux, l) in
+    match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
   let rec svir_instr ctx (I_aux (aux, (_, l))) =
     let wrap aux = return (Some (SVS_aux (aux, l))) in
@@ -832,40 +868,56 @@ module Make (Config : CONFIG) = struct
         let* value =
           Smt_gen.bind (Smt.smt_cval cval) (Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval))
         in
-        wrap (SVS_assign (svir_clexp clexp, value))
+        let updates, lexp = svir_clexp clexp in
+        wrap (with_updates l updates (SVS_assign (lexp, value)))
     | I_funcall (creturn, _, (id, _), args) ->
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
-          match Smt.builtin ~allow_io:false name with
-          | Some generator ->
-              let clexp =
-                match creturn with
-                | CR_one clexp -> clexp
-                | CR_multi _ -> Reporting.unreachable l __POS__ "Multiple return generator primitive found"
-              in
-              let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
-              begin
-                (* We can optimize R = store(R, i x) into R[i] = x *)
-                match (clexp, value) with
-                | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
-                    wrap (SVS_assign (SVP_index (svir_clexp clexp, i), x))
-                | _, _ -> wrap (SVS_assign (svir_clexp clexp, value))
-              end
-          | None -> (
-              match Generate_primop2.generate_module ~at:l name with
-              | Some generator ->
-                  let generated_name = generator args (creturn_ctyp creturn) in
-                  let* args = mapM Smt.smt_cval args in
-                  wrap (SVS_call (svir_creturn creturn, SVN_string generated_name, args))
-              | None ->
-                  let* args = mapM Smt.smt_cval args in
-                  let value = Fn ("sail_" ^ name, args) in
-                  wrap (SVS_call (svir_creturn creturn, SVN_id id, args))
-            )
+          if name = "sail_assert" then (
+            let _, ret = svir_creturn creturn in
+            match args with
+            | [cond; msg] ->
+                let* cond = Smt.smt_cval cond in
+                let* msg = Smt.smt_cval msg in
+                wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
+          )
+          else (
+            match Smt.builtin ~allow_io:false name with
+            | Some generator ->
+                let clexp =
+                  match creturn with
+                  | CR_one clexp -> clexp
+                  | CR_multi _ -> Reporting.unreachable l __POS__ "Multiple return generator primitive found"
+                in
+                let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
+                begin
+                  (* We can optimize R = store(R, i x) into R[i] = x *)
+                  match (clexp, value) with
+                  | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
+                      wrap (SVS_assign (SVP_index (SVP_id v, i), x))
+                  | _, _ ->
+                      let updates, lexp = svir_clexp clexp in
+                      wrap (with_updates l updates (SVS_assign (lexp, value)))
+                end
+            | None -> (
+                match Generate_primop2.generate_module ~at:l name with
+                | Some generator ->
+                    let generated_name = generator args (creturn_ctyp creturn) in
+                    let* args = mapM Smt.smt_cval args in
+                    let updates, ret = svir_creturn creturn in
+                    wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
+                | None ->
+                    let* args = mapM Smt.smt_cval args in
+                    let updates, ret = svir_creturn creturn in
+                    wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
+              )
+          )
         )
         else if Id.compare id (mk_id "update_fbits") = 0 then
           let* rhs = svir_update_fbits args in
-          wrap (SVS_assign (svir_creturn creturn, rhs))
+          let updates, ret = svir_creturn creturn in
+          wrap (with_updates l updates (SVS_assign (ret, rhs)))
         else if Id.compare id (mk_id "internal_vector_init") = 0 then return None
         else if Id.compare id (mk_id "internal_vector_update") = 0 then (
           match args with
@@ -880,21 +932,23 @@ module Make (Config : CONFIG) = struct
                       )
                   in
                   let* x = Smt.smt_cval x in
-                  wrap (SVS_assign (SVP_index (svir_creturn creturn, i), x))
+                  let updates, ret = svir_creturn creturn in
+                  wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
               | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
             end
           | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
         )
         else
           let* args = mapM Smt.smt_cval args in
-          wrap (SVS_call (svir_creturn creturn, SVN_id id, args))
+          let updates, ret = svir_creturn creturn in
+          wrap (with_updates l updates (SVS_call (ret, SVN_id id, args)))
     | I_block instrs ->
         let* statements = fmap Util.option_these (mapM (svir_instr ctx) instrs) in
-        wrap (SVS_block statements)
+        wrap (svs_block statements)
     | I_if (cond, then_instrs, else_instrs, _) ->
         let* cond = Smt.smt_cval cond in
         let to_block statements =
-          match Util.option_these statements with
+          match filter_skips (Util.option_these statements) with
           | [] -> None
           | [statement] -> Some statement
           | statements -> Some (SVS_aux (SVS_block statements, Parse_ast.Unknown))
@@ -925,6 +979,10 @@ module Make (Config : CONFIG) = struct
     let ld = sv_line_directive l in
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
+    | SVS_split_comb -> string "/* split comb */"
+    | SVS_assert (cond, msg) ->
+        separate space [string "assert"; parens (pp_smt cond); string "else"; string "$error" ^^ parens (pp_smt msg)]
+        ^^ terminator
     | SVS_var (id, ctyp, init_opt) -> begin
         match init_opt with
         | Some init -> ld ^^ separate space [wrap_type ctyp (pp_name id); equals; pp_smt init] ^^ terminator
@@ -965,7 +1023,7 @@ module Make (Config : CONFIG) = struct
              )
         ^^ hardline ^^ string "end" ^^ terminator
     | SVS_raw (s, _, _) -> string s ^^ terminator
-    | SVS_skip -> empty
+    | SVS_skip -> string "begin" ^^ hardline ^^ string "end" ^^ terminator
 
   let sv_instr ctx instr =
     let* statement_opt = svir_instr ctx instr in
@@ -980,12 +1038,19 @@ module Make (Config : CONFIG) = struct
     function
     | Pi _ -> return None
     | Phi (id, ctyp, ids) -> (
+        let ids, preds =
+          List.combine ids (IntSet.elements preds)
+          |> List.filter (fun (id, pred) ->
+                 match Option.get (get_vertex cfg pred) with (_, CF_block (_, T_exit _)), _, _ -> false | _ -> true
+             )
+          |> List.split
+        in
         let get_pi n =
           match get_vertex cfg n with
           | Some ((ssa_elems, _), _, _) -> List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
           | None -> failwith "Predecessor node does not exist"
         in
-        let pis = List.map get_pi (IntSet.elements preds) in
+        let pis = List.map get_pi preds in
         let* mux =
           List.fold_right2
             (fun pi id chain ->
@@ -1003,10 +1068,7 @@ module Make (Config : CONFIG) = struct
     let open Jib_ssa in
     function
     | CF_start inits ->
-        let svir_start (id, ctyp) =
-          prerr_endline (string_of_name id);
-          SVS_aux (SVS_var (id, ctyp, None), Parse_ast.Unknown)
-        in
+        let svir_start (id, ctyp) = SVS_aux (SVS_var (id, ctyp, None), Parse_ast.Unknown) in
         let svir_inits = List.map svir_start (NameMap.bindings inits) in
         return svir_inits
     | CF_block (instrs, _) ->
@@ -1044,7 +1106,7 @@ module Make (Config : CONFIG) = struct
                 let reads =
                   List.map
                     (fun id -> V_id (Name (id, -1), Bindings.find id spec_info.registers))
-                    (IdSet.elements footprint.all_reads)
+                    (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
                 in
                 let writes =
                   List.map
@@ -1067,7 +1129,7 @@ module Make (Config : CONFIG) = struct
             | None ->
                 if ctx_is_extern f ctx then (
                   let name = ctx_get_extern f ctx in
-                  if name = "print" || name = "print_endline" || name = "print_bits" then
+                  if name = "print" || name = "print_endline" || name = "print_bits" || name = "print_int" then
                     ChangeTo
                       (I_aux
                          ( I_funcall
@@ -1089,53 +1151,149 @@ module Make (Config : CONFIG) = struct
         | _ -> DoChildren
     end
 
-  class find_final_names ssa_nums final_names : svir_visitor =
-    object
-      inherit empty_svir_visitor
-
-      method! vctyp _ = SkipChildren
-
-      method! vname ssa_name =
-        let name, n = Jib_ssa.unssa_name ssa_name in
-        match NameMap.find_opt name ssa_nums with
-        | Some ns when n = IntSet.max_elt ns ->
-            final_names := NameMap.add name ssa_name !final_names;
-            None
-        | _ -> None
-    end
+  let sv_name_is_constructor spec_info = function SVN_id id -> IdSet.mem id spec_info.constructors | _ -> false
 
   (* This rewrite lifts statements out of an always_comb block in a
      module, that need to appear in the toplevel of the module as
      definitions. *)
-  class hoist_module_statements decls instantiations : svir_visitor =
+  class hoist_module_statements spec_info decls instantiations : svir_visitor =
     object
       inherit empty_svir_visitor
 
       method! vctyp _ = SkipChildren
 
-      method! vstatement (SVS_aux (aux, l)) =
+      method! vstatement (SVS_aux (aux, l) as no_change) =
         match aux with
-        | SVS_var (Name (id, n), ctyp, exp_opt) ->
-            decls := Bindings.add id ctyp !decls;
+        | SVS_var (name, ctyp, exp_opt) ->
+            begin
+              match name with Name (id, _) -> decls := Bindings.add id ctyp !decls | _ -> ()
+            end;
             begin
               match exp_opt with
-              | Some exp -> ChangeTo (SVS_aux (SVS_assign (SVP_id (Name (id, n)), exp), l))
+              | Some exp -> ChangeTo (SVS_aux (SVS_assign (SVP_id name, exp), l))
               | None -> ChangeTo (SVS_aux (SVS_skip, l))
             end
         | SVS_call (place, f, args) ->
-            Queue.add (place, f, args) instantiations;
-            ChangeTo (SVS_aux (SVS_skip, l))
+            if sv_name_is_constructor spec_info f then SkipChildren
+            else (
+              Queue.add (place, f, args) instantiations;
+              ChangeTo (SVS_aux (SVS_split_comb, l))
+            )
+        | SVS_block _ ->
+            ChangeDoChildrenPost
+              ( no_change,
+                fun (SVS_aux (aux, l) as no_change) ->
+                  match aux with SVS_block stmts -> SVS_aux (SVS_block (filter_skips stmts), l) | _ -> no_change
+              )
         | _ -> DoChildren
     end
 
-  let svir_module spec_info ctx f params param_ctyps ret_ctyp body =
+  (* We want to be able tp find the final assigned value of any
+     variable v in the SSA control flow graph, as that is the variable
+     that will be passed on to output ports if needed. *)
+  let get_final_names ssa_vars cfg =
+    let open Jib_ssa in
+    let phi_graph, phi_nodes = phi_dependencies cfg in
+    let phi_names, final_names =
+      phi_graph |> NameGraph.topsort
+      |> List.fold_left
+           (fun (seen, fins) ssa_name ->
+             let name, n = Jib_ssa.unssa_name ssa_name in
+             if NameSet.mem name seen then (seen, fins) else (NameSet.add name seen, NameMap.add name ssa_name fins)
+           )
+           (NameSet.empty, NameMap.empty)
+    in
+    (* Once we find the final assignment to a variable v by a phi function,
+       we explore all successor nodes from where that phi function is to check for cases like:
+
+       v_a = phi(v_b, v_c);
+       v_d = f(v_a);
+       v_e = g(v_d);
+
+       here v_e is the last assignment to v, not v_a
+    *)
+    let rec explore_successors node name ssa_name =
+      match get_vertex cfg node with
+      | Some ((_, cf_node), _, succs) ->
+          let num_succs = IntSet.cardinal succs in
+          let ssa_name =
+            match cf_node with
+            | CF_block (instrs, _) ->
+                let last_write =
+                  List.fold_left
+                    (fun acc instr ->
+                      match acc with
+                      | None ->
+                          let writes =
+                            instr_writes instr
+                            |> NameSet.filter (fun w ->
+                                   let w', _ = unssa_name w in
+                                   Name.compare name w' = 0
+                               )
+                          in
+                          let num_writes = NameSet.cardinal writes in
+                          if num_writes = 0 then None
+                          else (
+                            assert (num_writes = 1);
+                            let write = NameSet.min_elt writes in
+                            Some write
+                          )
+                      | Some v -> Some v
+                    )
+                    None (List.rev instrs)
+                in
+                Option.value last_write ~default:ssa_name
+            | _ -> ssa_name
+          in
+          if num_succs = 0 then ssa_name
+          else (
+            assert (num_succs = 1);
+            explore_successors (IntSet.min_elt succs) name ssa_name
+          )
+      | None -> assert false
+    in
+    let final_names =
+      NameMap.mapi
+        (fun name ssa_name ->
+          let node = NameMap.find ssa_name phi_nodes in
+          explore_successors node name ssa_name
+        )
+        final_names
+    in
+    let final_names =
+      NameMap.fold
+        (fun name nums fins ->
+          if NameSet.mem name phi_names then fins
+          else NameMap.add name (Jib_ssa.ssa_name (IntSet.max_elt nums) name) fins
+        )
+        ssa_vars final_names
+    in
+    final_names
+
+  let dump_graph name cfg =
+    let gv_file = name ^ ".gv" in
+    prerr_endline Util.("Dumping graph: " ^ gv_file |> bold |> yellow |> clear);
+    let out_chan = open_out gv_file in
+    Jib_ssa.make_dot out_chan cfg;
+    close_out out_chan
+
+  let debug_attr_skip_graph attr =
+    Option.value ~default:false
+      (let open Util.Option_monad in
+       let* _, attr_data = attr in
+       let* obj = Option.bind attr_data attribute_data_object in
+       let* skip_graph = List.assoc_opt "skip_graph" obj in
+       attribute_data_bool skip_graph
+      )
+
+  let svir_module debug_attr spec_info ctx f params param_ctyps ret_ctyp body =
     prerr_endline Util.(string_of_id f |> red |> clear);
     let footprint = Bindings.find f spec_info.footprints in
     let always_comb = Queue.create () in
     let declvars = ref Bindings.empty in
     let ssa_vars = ref NameMap.empty in
 
-    (* Add a statment to the always_comb block *)
+    (* Add a statement to the always_comb block *)
     let add_comb_statement stmt =
       let stmt = visit_sv_statement (new register_fix_visitor spec_info ssa_vars) stmt in
       Queue.add stmt always_comb
@@ -1146,6 +1304,9 @@ module Make (Config : CONFIG) = struct
 
     let open Jib_ssa in
     let start, cfg = ssa (visit_instrs (new thread_registers ctx spec_info) body) in
+
+    if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_id f) cfg;
+
     let visit_order =
       try topsort cfg
       with Not_a_DAG n ->
@@ -1177,19 +1338,26 @@ module Make (Config : CONFIG) = struct
       |> fun m -> Smt_gen.run m (id_loc f)
     in
 
+    let final_names = get_final_names !ssa_vars cfg in
+    NameMap.iter (fun x y -> prerr_endline (string_of_name x ^ " -> " ^ string_of_name y)) final_names;
+
     (* Create the always_comb definition, lifting/hoisting the module instantations out of the block *)
-    let final_names = ref NameMap.empty in
     let module_instantiations = Queue.create () in
     let always_comb_def =
-      let fix s =
-        s
-        |> visit_sv_statement (new find_final_names !ssa_vars final_names)
-        |> visit_sv_statement (new hoist_module_statements declvars module_instantiations)
+      let fix s = visit_sv_statement (new hoist_module_statements spec_info declvars module_instantiations) s in
+      let mk_always_comb = function
+        | [] -> None
+        | [statement] -> Some (fix statement)
+        | statements -> Some (fix (SVS_aux (SVS_block statements, Parse_ast.Unknown)))
       in
-      match List.of_seq (Queue.to_seq always_comb) with
-      | [] -> []
-      | [statement] -> [SVD_always_comb (fix statement)]
-      | statements -> [SVD_always_comb (fix (SVS_aux (SVS_block statements, Parse_ast.Unknown)))]
+      match Queue.to_seq always_comb |> List.of_seq |> mk_always_comb with
+      | None -> []
+      | Some (SVS_aux (SVS_block statements, l)) ->
+          Util.delimit_list is_split_comb statements
+          |> List.map (function [] -> None | statements -> Some (SVD_always_comb (SVS_aux (SVS_block statements, l))))
+          |> Util.option_these
+      | Some (SVS_aux (SVS_split_comb, _)) -> []
+      | Some statement -> [SVD_always_comb statement]
     in
     let module_instantiation_defs, _ =
       Queue.fold
@@ -1218,7 +1386,7 @@ module Make (Config : CONFIG) = struct
               typ = Bindings.find id spec_info.registers;
             }
           )
-          (IdSet.elements footprint.all_reads)
+          (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
       @ ( if footprint.need_stdout then
             [{ name = Channel (Chan_stdout, 0); external_name = "in_stdout"; typ = CT_string }]
           else []
@@ -1229,11 +1397,11 @@ module Make (Config : CONFIG) = struct
     in
 
     let output_ports : sv_module_port list =
-      [{ name = NameMap.find Jib_util.return !final_names; external_name = "sail_return"; typ = ret_ctyp }]
+      [{ name = NameMap.find Jib_util.return final_names; external_name = "sail_return"; typ = ret_ctyp }]
       @ List.map
           (fun id ->
             {
-              name = NameMap.find (Name (id, -1)) !final_names;
+              name = NameMap.find (Name (id, -1)) final_names;
               external_name = string_of_id (prepend_id "out_" id);
               typ = Bindings.find id spec_info.registers;
             }
@@ -1242,7 +1410,7 @@ module Make (Config : CONFIG) = struct
       @ ( if footprint.need_stdout then
             [
               {
-                name = NameMap.find (Channel (Chan_stdout, -1)) !final_names;
+                name = NameMap.find (Channel (Chan_stdout, -1)) final_names;
                 external_name = "out_stdout";
                 typ = CT_string;
               };
@@ -1251,9 +1419,7 @@ module Make (Config : CONFIG) = struct
         )
       @
       if footprint.need_stderr then
-        [
-          { name = NameMap.find (Channel (Chan_stderr, -1)) !final_names; external_name = "out_stderr"; typ = CT_string };
-        ]
+        [{ name = NameMap.find (Channel (Chan_stderr, -1)) final_names; external_name = "out_stderr"; typ = CT_string }]
       else []
     in
 
@@ -1274,7 +1440,7 @@ module Make (Config : CONFIG) = struct
                   | None -> (
                       match Util.list_index (fun p -> Id.compare p id = 0) params with
                       | Some i -> List.nth param_ctyps i
-                      | None -> failwith (string_of_id id)
+                      | None -> failwith ("Not sure what this is: " ^ string_of_id id)
                     )
                 )
             end
@@ -1321,8 +1487,10 @@ module Make (Config : CONFIG) = struct
               module_name = SVN_id (mk_id "main");
               instance_name = "inst_main";
               input_connections =
-                ([Enum "unit"]
-                @ List.map (fun reg -> Var (Name (prepend_id "in_" reg, -1))) (IdSet.elements footprint.all_reads)
+                ([Unit]
+                @ List.map
+                    (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
+                    (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
                 @ (if footprint.need_stdout then [String_lit ""] else [])
                 @ if footprint.need_stderr then [String_lit ""] else []
                 );
@@ -1348,7 +1516,12 @@ module Make (Config : CONFIG) = struct
           in
           let channel_writes =
             ( if footprint.need_stdout then
-                [mk_statement (svs_raw "$write(out_stdout)" ~inputs:[Name (mk_id "out_stdout", -1)])]
+                [
+                  mk_statement
+                    (svs_raw "$write({\"SAIL START\\n\", out_stdout, \"SAIL END\\n\"})"
+                       ~inputs:[Name (mk_id "out_stdout", -1)]
+                    );
+                ]
               else []
             )
             @
@@ -1386,28 +1559,24 @@ module Make (Config : CONFIG) = struct
           ^^ hardline ^^ char ')' ^^ semi
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ ports
-    ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) pp_def m.defs)
+    ^^ nest 4 (hardline ^^ separate_map hardline pp_def m.defs)
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f = string "function"
 
   and pp_def = function
-    | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id)
-    | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement statement
+    | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
+    | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
         let inputs = List.map (fun exp -> pp_smt exp) input_connections in
         let outputs = List.map pp_place output_connections in
         let connections =
           match inputs @ outputs with [] -> empty | connections -> parens (separate (comma ^^ space) connections)
         in
-        pp_sv_name module_name ^^ space ^^ string instance_name ^^ connections
+        pp_sv_name module_name ^^ space ^^ string instance_name ^^ connections ^^ semi
     | SVD_fundef f -> pp_fundef f
     | SVD_module m -> pp_module m
-    | _ -> string "def"
-
-  (*
-  let svir_fundef f params param_ctyps ret_ctyp 
-*)
+    | SVD_type type_def -> pp_type_def type_def
 
   let sv_fundef_with ctx f params param_ctyps ret_ctyp fun_body =
     let sv_ret_ty, index_ty = sv_ctyp ret_ctyp in
@@ -1431,7 +1600,7 @@ module Make (Config : CONFIG) = struct
     ^^ hardline ^^ string "endfunction"
 
   let sv_fundef spec_info ctx f params param_ctyps ret_ctyp body =
-    pp_module (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
+    pp_module (svir_module None spec_info ctx f params param_ctyps ret_ctyp body)
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 
@@ -1551,10 +1720,11 @@ module Make (Config : CONFIG) = struct
 
   let empty_cdef_doc = { outside_module = empty; inside_module_prefix = empty; inside_module = empty }
 
-  let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, _)) =
+  let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, def_annot)) =
     match aux with
     | CDEF_val (f, _, param_ctyps, ret_ctyp) -> ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
     | CDEF_fundef (f, _, params, body) ->
+        let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
         else (
           let body =
@@ -1563,11 +1733,16 @@ module Make (Config : CONFIG) = struct
               |> remove_undefined |> filter_clear
             )
           in
+          if Option.is_some debug_attr then (
+            prerr_endline Util.("Pre-SV IR for " ^ string_of_id f ^ ":" |> yellow |> bold |> clear);
+            List.iter (fun instr -> prerr_endline (string_of_instr instr)) body
+          );
           match Bindings.find_opt f fn_ctyps with
           | Some (param_ctyps, ret_ctyp) ->
-              ([SVD_module (svir_module spec_info ctx f params param_ctyps ret_ctyp body)], fn_ctyps)
+              ([SVD_module (svir_module debug_attr spec_info ctx f params param_ctyps ret_ctyp body)], fn_ctyps)
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
+    | CDEF_type type_def -> ([SVD_type type_def], fn_ctyps)
     | _ -> ([], fn_ctyps)
 
   let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
@@ -1579,7 +1754,7 @@ module Make (Config : CONFIG) = struct
           fn_ctyps,
           name :: setup_calls
         )
-    | CDEF_type td -> ({ empty_cdef_doc with outside_module = sv_type_def td ^^ twice hardline }, fn_ctyps, setup_calls)
+    | CDEF_type td -> ({ empty_cdef_doc with outside_module = pp_type_def td ^^ twice hardline }, fn_ctyps, setup_calls)
     | CDEF_val (f, _, param_ctyps, ret_ctyp) ->
         (empty_cdef_doc, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
     | CDEF_fundef (f, _, params, body) ->

@@ -295,7 +295,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | VL_int n, CT_fint sz -> return (bvint sz n)
     | VL_int n, CT_lint -> return (bvint Config.max_unknown_integer_width n)
     | VL_bit b, CT_bit -> return (Bitvec_lit [b])
-    | VL_unit, _ -> return (Enum "unit")
+    | VL_unit, _ -> return Unit
     | VL_string str, _ ->
         let* _ = string_used in
         return (String_lit str)
@@ -347,7 +347,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         match cval with
         | V_lit (vl, ctyp) -> literal vl ctyp
         | V_id (id, _) -> return (Var id)
-        | V_member (id, _) -> return (Var (Name (id, -1)))
+        | V_member (id, _) -> return (Member id)
         | V_call (List_hd, [arg]) ->
             let* l = current_location in
             let op = Primop_gen.hd l (cval_ctyp arg) in

@@ -139,6 +139,7 @@ and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 and sv_statement_aux =
   | SVS_comment of string
   | SVS_skip
+  | SVS_split_comb
   | SVS_var of Jib.name * Jib.ctyp * smt_exp option
   | SVS_return of smt_exp
   | SVS_assign of sv_place * smt_exp
@@ -146,7 +147,14 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
+  | SVS_assert of smt_exp * smt_exp
   | SVS_raw of string * Jib.name list * Jib.name list
+
+let filter_skips = List.filter (function SVS_aux (SVS_skip, _) -> false | _ -> true)
+
+let is_split_comb = function SVS_aux (SVS_split_comb, _) -> true | _ -> false
+
+let svs_block stmts = SVS_block (filter_skips stmts)
 
 let svs_raw ?(inputs = []) ?(outputs = []) s = SVS_raw (s, inputs, outputs)
 
@@ -203,7 +211,7 @@ let rec visit_smt_exp (vis : svir_visitor) outer_smt_exp =
     | Unwrap (ctor, b, exp) ->
         let exp' = visit_smt_exp vis exp in
         if exp == exp' then no_change else Unwrap (ctor, b, exp')
-    | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Enum _ | Empty_list -> no_change
+    | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> no_change
   in
   do_visit vis (vis#vsmt_exp outer_smt_exp) aux outer_smt_exp
 
@@ -268,13 +276,17 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
         let fallthrough' = map_no_copy_opt (visit_sv_statement vis) fallthrough in
         if head_exp == head_exp' && cases == cases' && fallthrough == fallthrough' then no_change
         else SVS_aux (SVS_case { head_exp = head_exp'; cases = cases'; fallthrough = fallthrough' }, l)
+    | SVS_assert (cond, msg) ->
+        let cond' = visit_smt_exp vis cond in
+        let msg' = visit_smt_exp vis msg in
+        if cond == cond' && msg == msg' then no_change else SVS_aux (SVS_assert (cond', msg'), l)
     | SVS_if (exp, then_stmt_opt, else_stmt_opt) ->
         let exp' = visit_smt_exp vis exp in
         let then_stmt_opt' = map_no_copy_opt (visit_sv_statement vis) then_stmt_opt in
         let else_stmt_opt' = map_no_copy_opt (visit_sv_statement vis) else_stmt_opt in
         if exp == exp' && then_stmt_opt == then_stmt_opt' && else_stmt_opt == else_stmt_opt' then no_change
         else SVS_aux (SVS_if (exp', then_stmt_opt', else_stmt_opt'), l)
-    | SVS_raw _ | SVS_comment _ | SVS_skip -> no_change
+    | SVS_raw _ | SVS_comment _ | SVS_skip | SVS_split_comb -> no_change
   in
   do_visit vis (vis#vstatement outer_statement) aux outer_statement
 

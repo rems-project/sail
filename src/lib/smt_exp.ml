@@ -93,7 +93,8 @@ type smt_exp =
   | Real_lit of string
   | String_lit of string
   | Var of Jib.name
-  | Enum of string
+  | Unit
+  | Member of Ast.id
   | Fn of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
   | SignExtend of int * int * smt_exp
@@ -120,7 +121,7 @@ let rec fold_smt_exp f = function
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
   | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
   | Tl (tl_op, xs) -> f (Tl (tl_op, fold_smt_exp f xs))
-  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Enum _ | Empty_list) as exp -> f exp
+  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list) as exp -> f exp
 
 let extract i j x = Extract (i, j, x)
 
@@ -237,7 +238,7 @@ let rec simp vars exp =
   | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
   | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)
   | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp vars exp)
-  | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Enum _ | Hd _ | Tl _ -> exp
+  | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Hd _ | Tl _ -> exp
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
@@ -275,7 +276,8 @@ let rec pp_smt_exp =
   | String_lit str -> string ("\"" ^ str ^ "\"")
   | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
   | Var id -> string (zencode_name id)
-  | Enum str -> string str
+  | Member id -> string (zencode_id id)
+  | Unit -> string "unit"
   | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
   | Field (struct_id, field_id, exp) ->
       parens (string (zencode_upper_id struct_id ^ "_" ^ zencode_id field_id) ^^ space ^^ pp_smt_exp exp)
