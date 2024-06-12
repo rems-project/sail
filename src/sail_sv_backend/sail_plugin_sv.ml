@@ -442,7 +442,7 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
-    let library_defs = Generate_primop2.get_generated_library_defs () in
+    let library_defs = SV.Primops.get_generated_library_defs () in
     let top_doc = Option.fold ~none:empty ~some:(fun m -> pp_def (SVD_module m)) (SV.toplevel_module spec_info) in
     string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
     ^^ separate_map (twice hardline) pp_def library_defs

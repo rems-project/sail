@@ -69,130 +69,229 @@ let output_primop buf lines =
     lines;
   Buffer.add_char buf '\n'
 
-let generated_library_defs = ref (StringSet.empty, [])
+module type S = sig
+  val generate_module : at:Parse_ast.l -> string -> (cval list -> ctyp -> string) option
 
-let register_library_def name def =
-  let names, _ = !generated_library_defs in
-  if StringSet.mem name names then name
-  else (
-    let source = def () in
-    let names, defs = !generated_library_defs in
-    generated_library_defs := (StringSet.add name names, source :: defs);
-    name
-  )
+  val get_generated_library_defs : unit -> sv_def list
+end
 
-let get_generated_library_defs () = List.rev (snd !generated_library_defs)
+module Make
+    (Config : sig
+      val max_unknown_bitvector_width : int
+    end)
+    () : S = struct
+  let generated_library_defs = ref (StringSet.empty, [])
 
-let primop_name s = Jib_util.name (mk_id s)
-
-let print_fbits width =
-  let name = sprintf "sail_print_fixed_bits_%d" width in
-  register_library_def name (fun () ->
-      let b = primop_name "b" in
-      let s = primop_name "s" in
-      let in_str = primop_name "in_str" in
-      let out_str = primop_name "out_str" in
-      let always_comb =
-        (* If the width is a multiple of four, format as hexadecimal.
-           We take care to ensure the formatting is identical to other
-           Sail backends. *)
-        let zeros = Jib_util.name (mk_id "zeros") in
-        let bstr = Jib_util.name (mk_id "bstr") in
-        if width mod 4 = 0 then (
-          let zeros_init = String.make (width / 4) '0' in
-          [
-            SVS_var (zeros, CT_string, None);
-            SVS_var (bstr, CT_string, None);
-            svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
-            svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-            svs_raw
-              (sprintf
-                 "out_str = {in_str, s, $sformatf(\"0x%%s\", zeros.substr(0, %d - bstr.len()), bstr.toupper()), \
-                  \"\\n\"}"
-                 ((width / 4) - 1)
-              )
-              ~inputs:[in_str; s; zeros; bstr] ~outputs:[out_str];
-            SVS_assign (SVP_id Jib_util.return, Unit);
-          ]
-          |> List.map mk_statement
-        )
-        else (
-          let zeros_init = String.make width '0' in
-          [
-            SVS_var (zeros, CT_string, None);
-            SVS_var (bstr, CT_string, None);
-            svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
-            svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-            svs_raw
-              (sprintf "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
-                 (width - 1)
-              )
-              ~inputs:[in_str; s; bstr] ~outputs:[out_str];
-            SVS_assign (SVP_id Jib_util.return, Unit);
-          ]
-          |> List.map mk_statement
-        )
-      in
-      SVD_module
-        {
-          name = SVN_string name;
-          input_ports = [mk_port s CT_string; mk_port b (CT_fbits width); mk_port in_str CT_string];
-          output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-          defs = [SVD_always_comb (mk_statement (SVS_block always_comb))];
-        }
-  )
-
-let print_int () =
-  let name = "sail_print_int" in
-  register_library_def name (fun () ->
-      let i = primop_name "i" in
-      let s = primop_name "s" in
-      let in_str = primop_name "in_str" in
-      let out_str = primop_name "out_str" in
-      let always_comb =
-        svs_raw "out_str = {in_str, s, $sformatf(\"%0d\", signed'(i)), \"\\n\"}" ~inputs:[in_str; s; i]
-          ~outputs:[out_str]
-      in
-      SVD_module
-        {
-          name = SVN_string name;
-          input_ports = [mk_port s CT_string; mk_port i CT_lint; mk_port in_str CT_string];
-          output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-          defs = [SVD_always_comb (mk_statement always_comb)];
-        }
-  )
-
-let binary_module l gen =
-  Some
-    (fun args ret_ctyp ->
-      match (args, ret_ctyp) with
-      | [v1; v2], ret_ctyp -> gen v1 v2 ret_ctyp
-      | _ -> Reporting.unreachable l __POS__ "Incorrect arity given to binary module generator"
+  let register_library_def name def =
+    let names, _ = !generated_library_defs in
+    if StringSet.mem name names then name
+    else (
+      let source = def () in
+      let names, defs = !generated_library_defs in
+      generated_library_defs := (StringSet.add name names, source :: defs);
+      name
     )
 
-let ternary_module l gen =
-  Some
-    (fun args ret_ctyp ->
-      match (args, ret_ctyp) with
-      | [v1; v2; v3], ret_ctyp -> gen v1 v2 v3 ret_ctyp
-      | _ -> Reporting.unreachable l __POS__ "Incorrect arity given to binary module generator"
+  let get_generated_library_defs () = List.rev (snd !generated_library_defs)
+
+  let primop_name s = Jib_util.name (mk_id s)
+
+  let print_fbits width =
+    let name = sprintf "sail_print_fixed_bits_%d" width in
+    register_library_def name (fun () ->
+        let b = primop_name "b" in
+        let s = primop_name "s" in
+        let in_str = primop_name "in_str" in
+        let out_str = primop_name "out_str" in
+        let always_comb =
+          (* If the width is a multiple of four, format as hexadecimal.
+             We take care to ensure the formatting is identical to other
+             Sail backends. *)
+          let zeros = Jib_util.name (mk_id "zeros") in
+          let bstr = Jib_util.name (mk_id "bstr") in
+          if width mod 4 = 0 then (
+            let zeros_init = String.make (width / 4) '0' in
+            [
+              SVS_var (zeros, CT_string, None);
+              SVS_var (bstr, CT_string, None);
+              svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
+              svs_raw
+                (sprintf
+                   "out_str = {in_str, s, $sformatf(\"0x%%s\", zeros.substr(0, %d - bstr.len()), bstr.toupper()), \
+                    \"\\n\"}"
+                   ((width / 4) - 1)
+                )
+                ~inputs:[in_str; s; zeros; bstr] ~outputs:[out_str];
+              SVS_assign (SVP_id Jib_util.return, Unit);
+            ]
+            |> List.map mk_statement
+          )
+          else (
+            let zeros_init = String.make width '0' in
+            [
+              SVS_var (zeros, CT_string, None);
+              SVS_var (bstr, CT_string, None);
+              svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
+              svs_raw
+                (sprintf "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
+                   (width - 1)
+                )
+                ~inputs:[in_str; s; bstr] ~outputs:[out_str];
+              SVS_assign (SVP_id Jib_util.return, Unit);
+            ]
+            |> List.map mk_statement
+          )
+        in
+        SVD_module
+          {
+            name = SVN_string name;
+            input_ports = [mk_port s CT_string; mk_port b (CT_fbits width); mk_port in_str CT_string];
+            output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
+            defs = [SVD_always_comb (mk_statement (SVS_block always_comb))];
+          }
     )
 
-let generate_module ~at:l = function
-  | "print_bits" ->
-      ternary_module l (fun _ v2 _ _ ->
-          match cval_ctyp v2 with
-          | CT_fbits width -> print_fbits width
-          | _ -> Reporting.unreachable l __POS__ "Invalid types given to print_bits generator"
+  let print_lbits () =
+    let width = Config.max_unknown_bitvector_width in
+    register_library_def "sail_print_bits" (fun () ->
+        let b = primop_name "b" in
+        let s = primop_name "s" in
+        let in_str = primop_name "in_str" in
+        let out_str = primop_name "out_str" in
+        let zeros = primop_name "zeros" in
+        let binstr = primop_name "binstr" in
+        let hexstr = primop_name "hexstr" in
+        let tempstr n = primop_name ("tempstr" ^ string_of_int n) in
+        let defs =
+          List.init width (fun n -> SVD_var (tempstr n, CT_string))
+          @ [
+              SVD_var (zeros, CT_string);
+              SVD_var (hexstr, CT_string);
+              SVD_var (binstr, CT_string);
+              SVD_always_comb
+                (mk_statement
+                   (SVS_block
+                      (List.map mk_statement
+                         [
+                           svs_raw (sprintf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
+                           svs_raw (sprintf "hexstr.hextoa(b.bits)") ~inputs:[b] ~outputs:[hexstr];
+                           svs_raw (sprintf "binstr.bintoa(b.bits)") ~inputs:[b] ~outputs:[binstr];
+                           svs_raw
+                             (sprintf "%s = {in_str, s}" (string_of_name ~zencode:false (tempstr 0)))
+                             ~inputs:[in_str; s]
+                             ~outputs:[tempstr 0];
+                         ]
+                      )
+                   )
+                );
+            ]
+          @ (List.init (width - 1) (fun n ->
+                 if (n + 1) mod 4 == 0 then
+                   svs_raw
+                     (sprintf
+                        "if (b.size == %d) %s = {%s, $sformatf(\"0x%%s\", zeros.substr(0, %d - hexstr.len()), \
+                         hexstr.toupper()), \"\\n\"}; else %s = %s"
+                        (n + 1)
+                        (string_of_name ~zencode:false (tempstr (n + 1)))
+                        (string_of_name ~zencode:false (tempstr n))
+                        (((n + 1) / 4) - 1)
+                        (string_of_name ~zencode:false (tempstr (n + 1)))
+                        (string_of_name ~zencode:false (tempstr n))
+                     )
+                     ~inputs:[b; zeros; hexstr; tempstr n]
+                     ~outputs:[tempstr (n + 1)]
+                 else
+                   svs_raw
+                     (sprintf
+                        "if (b.size == %d) %s = {%s, $sformatf(\"0b%%s\", zeros.substr(0, %d - binstr.len()), binstr), \
+                         \"\\n\"}; else %s = %s"
+                        (n + 1)
+                        (string_of_name ~zencode:false (tempstr (n + 1)))
+                        (string_of_name ~zencode:false (tempstr n))
+                        n
+                        (string_of_name ~zencode:false (tempstr (n + 1)))
+                        (string_of_name ~zencode:false (tempstr n))
+                     )
+                     ~inputs:[b; zeros; binstr; tempstr n]
+                     ~outputs:[tempstr (n + 1)]
+             )
+            |> List.map (fun s -> SVD_always_comb (mk_statement s))
+            )
+          @ [
+              SVD_always_comb
+                (mk_statement
+                   (svs_raw
+                      (sprintf "out_str = %s" (string_of_name ~zencode:false (tempstr (width - 1))))
+                      ~inputs:[tempstr (width - 1)]
+                      ~outputs:[out_str]
+                   )
+                );
+            ]
+        in
+        SVD_module
+          {
+            name = SVN_string "sail_print_bits";
+            input_ports = [mk_port s CT_string; mk_port b CT_lbits; mk_port in_str CT_string];
+            output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
+            defs;
+          }
+    )
+
+  let print_int () =
+    let name = "sail_print_int" in
+    register_library_def name (fun () ->
+        let i = primop_name "i" in
+        let s = primop_name "s" in
+        let in_str = primop_name "in_str" in
+        let out_str = primop_name "out_str" in
+        let always_comb =
+          svs_raw "out_str = {in_str, s, $sformatf(\"%0d\", signed'(i)), \"\\n\"}" ~inputs:[in_str; s; i]
+            ~outputs:[out_str]
+        in
+        SVD_module
+          {
+            name = SVN_string name;
+            input_ports = [mk_port s CT_string; mk_port i CT_lint; mk_port in_str CT_string];
+            output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
+            defs = [SVD_always_comb (mk_statement always_comb)];
+          }
+    )
+
+  let binary_module l gen =
+    Some
+      (fun args ret_ctyp ->
+        match (args, ret_ctyp) with
+        | [v1; v2], ret_ctyp -> gen v1 v2 ret_ctyp
+        | _ -> Reporting.unreachable l __POS__ "Incorrect arity given to binary module generator"
       )
-  | "print_int" ->
-      ternary_module l (fun _ v2 _ _ ->
-          match cval_ctyp v2 with
-          | CT_lint -> print_int ()
-          | ctyp ->
-              Reporting.unreachable l __POS__ ("Invalid types given to print_int generator: " ^ string_of_ctyp ctyp)
+
+  let ternary_module l gen =
+    Some
+      (fun args ret_ctyp ->
+        match (args, ret_ctyp) with
+        | [v1; v2; v3], ret_ctyp -> gen v1 v2 v3 ret_ctyp
+        | _ -> Reporting.unreachable l __POS__ "Incorrect arity given to binary module generator"
       )
-  | _ -> None
+
+  let generate_module ~at:l = function
+    | "print_bits" ->
+        ternary_module l (fun _ v2 _ _ ->
+            match cval_ctyp v2 with
+            | CT_fbits width -> print_fbits width
+            | CT_lbits -> print_lbits ()
+            | _ -> Reporting.unreachable l __POS__ "Invalid types given to print_bits generator"
+        )
+    | "print_int" ->
+        ternary_module l (fun _ v2 _ _ ->
+            match cval_ctyp v2 with
+            | CT_lint -> print_int ()
+            | ctyp ->
+                Reporting.unreachable l __POS__ ("Invalid types given to print_int generator: " ^ string_of_ctyp ctyp)
+        )
+    | _ -> None
+end
 
 let basic_defs bv_width int_width =
   let buf = Buffer.create 4096 in
