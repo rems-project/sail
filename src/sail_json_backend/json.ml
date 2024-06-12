@@ -775,7 +775,7 @@ let defs { defs; _ } =
   print_endline "  \"registers\": ";
   print_endline (json_of_registers ());
   print_endline ",";
-  
+
   print_endline "  \"formats\": [";
   let format_list = Hashtbl.fold (fun k v accum -> ("\"" ^ v ^ "\"") :: accum) formats [] in
   print_endline
