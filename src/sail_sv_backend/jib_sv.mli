@@ -95,6 +95,8 @@ module type CONFIG = sig
 end
 
 module Make (Config : CONFIG) : sig
+  module Primops : Generate_primop2.S
+
   type cdef_doc = {
     outside_module : PPrint.document;
     inside_module_prefix : PPrint.document;

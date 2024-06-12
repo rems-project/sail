@@ -249,6 +249,13 @@ end
 module Make (Config : CONFIG) = struct
   let lbits_index_width = required_width (Big_int.of_int (Config.max_unknown_bitvector_width - 1))
 
+  module Primops =
+    Generate_primop2.Make
+      (struct
+        let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
+      end)
+      ()
+
   let valid_sv_identifier_regexp : Str.regexp option ref = ref None
 
   let has_prefix prefix s =
@@ -901,7 +908,7 @@ module Make (Config : CONFIG) = struct
                       wrap (with_updates l updates (SVS_assign (lexp, value)))
                 end
             | None -> (
-                match Generate_primop2.generate_module ~at:l name with
+                match Primops.generate_module ~at:l name with
                 | Some generator ->
                     let generated_name = generator args (creturn_ctyp creturn) in
                     let* args = mapM Smt.smt_cval args in
@@ -1364,7 +1371,9 @@ module Make (Config : CONFIG) = struct
         (fun (defs, numbers) (place, module_name, inputs) ->
           let number = match SVNameMap.find_opt module_name numbers with None -> 0 | Some n -> n in
           let instance_name =
-            string_of_sv_name (modify_sv_name ~prefix:("inst_" ^ string_of_int number ^ "_") module_name)
+            match modify_sv_name ~prefix:("inst_" ^ string_of_int number ^ "_") module_name with
+            | SVN_id id -> pp_id_string id
+            | SVN_string s -> s
           in
           let outputs = match place with SVP_multi places -> places | place -> [place] in
           ( SVD_instantiate { module_name; instance_name; input_connections = inputs; output_connections = outputs }
