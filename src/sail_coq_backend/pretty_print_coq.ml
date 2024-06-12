@@ -780,17 +780,6 @@ and doc_nexp ctx env ?(skip_vars = KidSet.empty) nexp =
   in
   atomic nexp
 
-and doc_arithfact ctxt env ?(exists = []) ?extra nc =
-  let prop = doc_nc_exp ctxt env nc in
-  let prop = match extra with None -> prop | Some pp -> separate space [parens pp; string "&&"; parens prop] in
-  let prop = prop in
-  match exists with
-  | [] -> string "ArithFact" ^^ space ^^ parens prop
-  | _ ->
-      string "ArithFactP" ^^ space
-      ^^ parens
-           (separate space ([string "exists"] @ List.map (doc_var ctxt) exists @ [comma; prop; equals; string "true"]))
-
 (* Follows Coq precedence levels *)
 and doc_nc_exp ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
@@ -3303,9 +3292,7 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
         (* This case is silly, but useful for tests *)
         | Some (Nexp_aux (Nexp_constant n, _)) ->
             let v = fresh_var () in
-            parens (v ^^ string " : Z")
-            ^/^ bquote
-            ^^ braces (string "ArithFact " ^^ parens (v ^^ string " =? " ^^ string (Big_int.to_string n)))
+            parens (v ^^ string " : Z") ^/^ comment (v ^^ string " =? " ^^ string (Big_int.to_string n))
         | _ -> (
             match Type_check.destruct_atom_bool typ_env typ with
             | Some (NC_aux (NC_var kid, _)) when KidSet.mem kid args ->
