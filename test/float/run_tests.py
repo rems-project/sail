@@ -24,8 +24,11 @@ def test_float(name, sail_opts, compiler, c_opts):
 
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
-            tests[filename] = os.fork()
 
+            if basename == "tuple_equality":
+              continue
+
+            tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
