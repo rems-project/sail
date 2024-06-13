@@ -122,7 +122,7 @@ module Make (Config : CONFIG) : sig
     Jib.cdef ->
     cdef_doc * (Jib.ctyp list * Jib.ctyp) Bindings.t * string list
 
-  val sv_register_references : Jib.cdef list -> PPrint.document * PPrint.document
+  val sv_register_references : spec_info -> PPrint.document * PPrint.document
 
   val sv_fundef_with :
     Jib_compile.ctx -> string -> Ast.id list -> Jib.ctyp list -> Jib.ctyp -> PPrint.document -> PPrint.document
@@ -134,6 +134,7 @@ module Make (Config : CONFIG) : sig
   val pp_id_string : Ast.id -> string
 
   val pp_id : Ast.id -> PPrint.document
+
   val main_args :
     Jib.cdef option ->
     (Jib.ctyp list * Jib.ctyp) Bindings.t ->

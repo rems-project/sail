@@ -170,6 +170,7 @@ let verilog_rewrites =
   [
     ("instantiate_outcomes", [String_arg "c"]);
     ("realize_mappings", []);
+    ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_patterns", []);
@@ -442,9 +443,10 @@ let verilog_target _ default_sail_dir out_opt ast effect_info env =
   in
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
+    let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
     let library_defs = SV.Primops.get_generated_library_defs () in
     let top_doc = Option.fold ~none:empty ~some:(fun m -> pp_def (SVD_module m)) (SV.toplevel_module spec_info) in
-    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
+    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base ^^ reg_ref_enums ^^ reg_ref_functions
     ^^ separate_map (twice hardline) pp_def library_defs
     ^^ twice hardline ^^ doc ^^ top_doc
   in

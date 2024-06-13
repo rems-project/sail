@@ -73,11 +73,16 @@ module type S = sig
   val generate_module : at:Parse_ast.l -> string -> (cval list -> ctyp -> string) option
 
   val get_generated_library_defs : unit -> sv_def list
+
+  val hex_str : unit -> string
+
+  val dec_str : unit -> string
 end
 
 module Make
     (Config : sig
       val max_unknown_bitvector_width : int
+      val max_unknown_integer_width : int
     end)
     () : S = struct
   let generated_library_defs = ref (StringSet.empty, [])
@@ -258,6 +263,52 @@ module Make
             defs = [SVD_always_comb (mk_statement always_comb)];
           }
     )
+
+  let hex_str () =
+    register_library_def "sail_hex_str" (fun () ->
+        let i = primop_name "i" in
+        let s = primop_name "s" in
+        SVD_fundef
+          {
+            function_name = SVN_string "sail_hex_str";
+            return_type = Some CT_string;
+            params = [(mk_id "i", CT_lint)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [SVS_var (s, CT_string, None); svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                   )
+                );
+          }
+    )
+
+  let dec_str () =
+    register_library_def "sail_dec_str" (fun () ->
+        let i = primop_name "i" in
+        let s = primop_name "s" in
+        SVD_fundef
+          {
+            function_name = SVN_string "sail_dec_str";
+            return_type = Some CT_string;
+            params = [(mk_id "i", CT_lint)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [SVS_var (s, CT_string, None); svs_raw "s.itoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                   )
+                );
+          }
+    )
+
+  let unary_module l gen =
+    Some
+      (fun args ret_ctyp ->
+        match (args, ret_ctyp) with
+        | [v], ret_ctyp -> gen v ret_ctyp
+        | _ -> Reporting.unreachable l __POS__ "Incorrect arity given to unary module generator"
+      )
 
   let binary_module l gen =
     Some
