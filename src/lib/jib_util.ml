@@ -1091,6 +1091,13 @@ let ctype_def_ctyps = function
   | CTD_struct (_, fields) -> List.map snd fields
   | CTD_variant (_, ctors) -> List.map snd ctors
 
+let ctype_def_id = function CTD_enum (id, _) -> id | CTD_struct (id, _) -> id | CTD_variant (id, _) -> id
+
+let ctype_def_to_ctyp = function
+  | CTD_enum (id, ids) -> CT_enum (id, ids)
+  | CTD_struct (id, fields) -> CT_struct (id, fields)
+  | CTD_variant (id, ctors) -> CT_variant (id, ctors)
+
 let cdef_ctyps (CDEF_aux (aux, _)) =
   match aux with
   | CDEF_register (_, ctyp, instrs) -> CTSet.add ctyp (instrs_ctyps instrs)

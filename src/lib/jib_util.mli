@@ -191,6 +191,12 @@ val cdef_ctyps : cdef -> CTSet.t
 
 val cdef_ctyps_has : (ctyp -> bool) -> cdef -> bool
 
+(** {2 Type definitions} *)
+
+val ctype_def_id : ctype_def -> id
+
+val ctype_def_to_ctyp : ctype_def -> ctyp
+
 (** {1 Functions for mapping over and extracting information from instructions, values, and definitions} *)
 
 val instr_ids : instr -> NameSet.t

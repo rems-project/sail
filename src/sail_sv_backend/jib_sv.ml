@@ -82,7 +82,7 @@ open Sv_ir
 
 module IntSet = Util.IntSet
 
-class footprint_visitor ctx registers references reads writes need_stdout need_stderr : jib_visitor =
+class footprint_visitor ctx registers references reads writes throws need_stdout need_stderr : jib_visitor =
   object
     inherit empty_jib_visitor
 
@@ -122,6 +122,9 @@ class footprint_visitor ctx registers references reads writes need_stdout need_s
 
     method! vclexp =
       function
+      | CL_id (Have_exception _, _) ->
+          throws := true;
+          SkipChildren
       | CL_id (Name (id, _), local_ctyp) ->
           begin
             match Bindings.find_opt id registers with
@@ -138,8 +141,10 @@ class footprint_visitor ctx registers references reads writes need_stdout need_s
 type footprint = {
   direct_reads : IdSet.t;
   direct_writes : IdSet.t;
+  direct_throws : bool;
   all_reads : IdSet.t;
   all_writes : IdSet.t;
+  throws : bool;
   need_stdout : bool;
   need_stderr : bool;
 }
@@ -155,6 +160,8 @@ type spec_info = {
   footprints : footprint Bindings.t;
   (* Specification callgraph *)
   callgraph : IdGraph.graph;
+  (* The type of exceptions *)
+  exception_ctyp : ctyp;
 }
 
 let collect_spec_info ctx cdefs =
@@ -189,11 +196,14 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let reads = ref IdSet.empty in
             let writes = ref IdSet.empty in
+            let throws = ref false in
             let references = ref CTSet.empty in
             let need_stdout = ref false in
             let need_stderr = ref false in
             let _ =
-              visit_cdef (new footprint_visitor ctx registers references reads writes need_stdout need_stderr) cdef
+              visit_cdef
+                (new footprint_visitor ctx registers references reads writes throws need_stdout need_stderr)
+                cdef
             in
             CTSet.iter
               (fun ctyp ->
@@ -206,8 +216,10 @@ let collect_spec_info ctx cdefs =
               {
                 direct_reads = !reads;
                 direct_writes = !writes;
+                direct_throws = !throws;
                 all_reads = IdSet.empty;
                 all_writes = IdSet.empty;
+                throws = false;
                 need_stdout = !need_stdout;
                 need_stderr = !need_stderr;
               }
@@ -224,29 +236,45 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let footprint = Bindings.find f footprints in
             let callees = cfg |> IdGraph.reachable (IdSet.singleton f) IdSet.empty |> IdSet.remove f in
-            let all_reads, all_writes, need_stdout, need_stderr =
+            let all_reads, all_writes, throws, need_stdout, need_stderr =
               List.fold_left
-                (fun (all_reads, all_writes, need_stdout, need_stderr) callee ->
+                (fun (all_reads, all_writes, throws, need_stdout, need_stderr) callee ->
                   match Bindings.find_opt callee footprints with
                   | Some footprint ->
                       ( IdSet.union all_reads footprint.direct_reads,
                         IdSet.union all_writes footprint.direct_writes,
+                        throws || footprint.direct_throws,
                         need_stdout || footprint.need_stdout,
                         need_stderr || footprint.need_stderr
                       )
-                  | _ -> (all_reads, all_writes, need_stdout, need_stderr)
+                  | _ -> (all_reads, all_writes, throws, need_stdout, need_stderr)
                 )
-                (footprint.direct_reads, footprint.direct_writes, footprint.need_stdout, footprint.need_stderr)
+                ( footprint.direct_reads,
+                  footprint.direct_writes,
+                  footprint.direct_throws,
+                  footprint.need_stdout,
+                  footprint.need_stderr
+                )
                 (IdSet.elements callees)
             in
             Bindings.update f
-              (fun _ -> Some { footprint with all_reads; all_writes; need_stdout; need_stderr })
+              (fun _ -> Some { footprint with all_reads; all_writes; throws; need_stdout; need_stderr })
               footprints
         | _ -> footprints
       )
       footprints cdefs
   in
-  { register_ctyp_map; registers; constructors; footprints; callgraph = cfg }
+  let exception_ctyp =
+    List.fold_left
+      (fun ctyp cdef ->
+        match cdef with
+        | CDEF_aux (CDEF_type ctd, _) when Id.compare (ctype_def_id ctd) (mk_id "exception") = 0 ->
+            ctype_def_to_ctyp ctd
+        | _ -> ctyp
+      )
+      CT_unit cdefs
+  in
+  { register_ctyp_map; registers; constructors; footprints; callgraph = cfg; exception_ctyp }
 
 module type CONFIG = sig
   val max_unknown_integer_width : int
@@ -1152,6 +1180,11 @@ module Make (Config : CONFIG) = struct
                     (fun id -> CL_id (Name (id, -1), Bindings.find id spec_info.registers))
                     (IdSet.elements footprint.all_writes)
                 in
+                let throws =
+                  if footprint.throws then
+                    [CL_id (Have_exception (-1), CT_bool); CL_id (Current_exception (-1), spec_info.exception_ctyp)]
+                  else []
+                in
                 let channels =
                   (if footprint.need_stdout then [Channel (Chan_stdout, -1)] else [])
                   @ if footprint.need_stderr then [Channel (Chan_stderr, -1)] else []
@@ -1161,7 +1194,11 @@ module Make (Config : CONFIG) = struct
                 ChangeTo
                   (I_aux
                      ( I_funcall
-                         (CR_multi ((clexp :: writes) @ output_channels), ext, (f, []), args @ reads @ input_channels),
+                         ( CR_multi ((clexp :: writes) @ throws @ output_channels),
+                           ext,
+                           (f, []),
+                           args @ reads @ input_channels
+                         ),
                        iannot
                      )
                   )
@@ -1357,7 +1394,11 @@ module Make (Config : CONFIG) = struct
       (List.map (fun (I_aux (_, (_, l)) as instr) -> string_of_instr instr ^ " " ^ Reporting.short_loc_to_string l) body);
 
     let open Jib_ssa in
-    let start, cfg = ssa (visit_instrs (new thread_registers ctx spec_info) body) in
+    let start, cfg =
+      ssa
+        ?debug_prefix:(Option.map (fun _ -> string_of_id f) debug_attr)
+        (visit_instrs (new thread_registers ctx spec_info) body)
+    in
 
     if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_id f) cfg;
 
@@ -1463,6 +1504,17 @@ module Make (Config : CONFIG) = struct
             }
           )
           (IdSet.elements footprint.all_writes)
+      @ ( if footprint.throws then
+            [
+              { name = NameMap.find (Have_exception (-1)) final_names; external_name = "have_exception"; typ = CT_bool };
+              {
+                name = NameMap.find (Current_exception (-1)) final_names;
+                external_name = "current_exception";
+                typ = spec_info.exception_ctyp;
+              };
+            ]
+          else []
+        )
       @ ( if footprint.need_stdout then
             [
               {
@@ -1503,7 +1555,7 @@ module Make (Config : CONFIG) = struct
           | Channel _ -> CT_string
           | Have_exception _ -> CT_bool
           | Throw_location _ -> CT_string
-          | Current_exception _ -> failwith "current_exception"
+          | Current_exception _ -> spec_info.exception_ctyp
         in
         let ctyp = get_ctyp name in
         IntSet.iter
@@ -1533,6 +1585,11 @@ module Make (Config : CONFIG) = struct
             )
             spec_info.registers ([], [])
         in
+        let throws_outputs =
+          if footprint.throws then
+            [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
+          else []
+        in
         let channel_outputs =
           (if footprint.need_stdout then [SVD_var (Name (mk_id "out_stdout", -1), CT_string)] else [])
           @ if footprint.need_stderr then [SVD_var (Name (mk_id "out_stderr", -1), CT_string)] else []
@@ -1553,6 +1610,7 @@ module Make (Config : CONFIG) = struct
               output_connections =
                 ([SVP_id Jib_util.return]
                 @ List.map (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1))) (IdSet.elements footprint.all_writes)
+                @ (if footprint.throws then [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))] else [])
                 @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
                 @ if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else []
                 );
@@ -1594,7 +1652,7 @@ module Make (Config : CONFIG) = struct
             input_ports = [];
             output_ports = [];
             defs =
-              register_inputs @ register_outputs @ channel_outputs
+              register_inputs @ register_outputs @ throws_outputs @ channel_outputs
               @ [SVD_var (Jib_util.return, CT_unit)]
               @ [instantiate_main; always_comb];
           }
@@ -1706,8 +1764,8 @@ module Make (Config : CONFIG) = struct
   let sv_setup_function ctx name setup =
     let setup =
       Jib_optimize.(
-        setup |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> structure_control_flow_block
-        |> remove_undefined |> filter_clear
+        setup |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top
+        |> structure_control_flow_block |> filter_clear
       )
     in
     separate space [string "function"; string "automatic"; string "void"; string name]
@@ -1839,10 +1897,13 @@ module Make (Config : CONFIG) = struct
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
         else (
+          if Option.is_some debug_attr then (
+            prerr_endline Util.("Pre-SV IR for " ^ string_of_id f ^ ":" |> yellow |> bold |> clear);
+            List.iter (fun instr -> prerr_endline (string_of_instr instr)) body
+          );
           let body =
             Jib_optimize.(
-              body |> flatten_instrs |> remove_dead_code |> variable_decls_to_top (* |> structure_control_flow_block *)
-              |> remove_undefined |> filter_clear
+              body |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> filter_clear
             )
           in
           if Option.is_some debug_attr then (

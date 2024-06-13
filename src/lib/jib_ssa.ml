@@ -864,6 +864,14 @@ let make_dominators_dot out_chan idom graph =
 
 let ssa ?debug_prefix instrs =
   let start, finish, cfg = control_flow_graph instrs in
+  begin
+    match debug_prefix with
+    | Some prefix ->
+        let out_chan = open_out (prefix ^ "_cfg.gv") in
+        make_dot out_chan cfg;
+        close_out out_chan
+    | None -> ()
+  end;
   let idom = immediate_dominators cfg start in
   let post_idom = immediate_dominators ~post:true cfg finish in
   begin

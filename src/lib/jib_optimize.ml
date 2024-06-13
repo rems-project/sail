@@ -185,8 +185,13 @@ let rec cval_map_id f = function
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_map_id f cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_map_id f) members, ctyp)
 
-let remove_undefined =
-  let gensym, _ = symbol_generator "gz" in
+module Remove_undefined = struct
+  open Jib
+  open Jib_util
+  open Jib_visitor
+
+  let gensym, _ = symbol_generator "gz"
+
   let rec create_value l = function
     | CT_unit -> ([], V_lit (VL_unit, CT_unit))
     | CT_bool -> ([], V_lit (VL_bool false, CT_bool))
@@ -205,16 +210,24 @@ let remove_undefined =
     | ctyp ->
         let gs = name (gensym ()) in
         ([idecl l ctyp gs], V_id (gs, ctyp))
-  in
-  let rewrite_instr = function
-    | I_aux (I_undefined ctyp, (_, l)) ->
-        let setup, value = create_value l ctyp in
-        begin
-          match setup with [] -> ireturn value | _ -> iblock (setup @ [ireturn value])
-        end
-    | instr -> instr
-  in
-  map_instr_list rewrite_instr
+
+  class visitor : jib_visitor =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
+      method! vinstr =
+        function
+        | I_aux (I_undefined ctyp, (_, l)) ->
+            let setup, value = create_value l ctyp in
+            ChangeTo (iblock (setup @ [icopy l (CL_id (return, ctyp)) value; iend l]))
+        | _ -> DoChildren
+    end
+end
+
+let remove_undefined = Jib_visitor.visit_instrs (new Remove_undefined.visitor)
 
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
