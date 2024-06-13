@@ -144,6 +144,7 @@ and sv_statement_aux =
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
   | SVS_assert of smt_exp * smt_exp
+  | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list
 
 val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_statement_aux

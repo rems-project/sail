@@ -148,6 +148,7 @@ and sv_statement_aux =
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
   | SVS_assert of smt_exp * smt_exp
+  | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list
 
 let filter_skips = List.filter (function SVS_aux (SVS_skip, _) -> false | _ -> true)
@@ -280,6 +281,10 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
         let cond' = visit_smt_exp vis cond in
         let msg' = visit_smt_exp vis msg in
         if cond == cond' && msg == msg' then no_change else SVS_aux (SVS_assert (cond', msg'), l)
+    | SVS_foreach (i, exp, stmt) ->
+        let exp' = visit_smt_exp vis exp in
+        let stmt' = visit_sv_statement vis stmt in
+        if exp == exp' && stmt == stmt' then no_change else SVS_aux (SVS_foreach (i, exp', stmt'), l)
     | SVS_if (exp, then_stmt_opt, else_stmt_opt) ->
         let exp' = visit_smt_exp vis exp in
         let then_stmt_opt' = map_no_copy_opt (visit_sv_statement vis) then_stmt_opt in

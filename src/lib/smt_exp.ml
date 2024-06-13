@@ -108,6 +108,8 @@ type smt_exp =
   | Hd of string * smt_exp
   | Tl of string * smt_exp
 
+let var_id id = Var (Name (id, -1))
+
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
   | Ite (cond, t, e) -> f (Ite (fold_smt_exp f cond, fold_smt_exp f t, fold_smt_exp f e))
@@ -164,9 +166,13 @@ let simp_or xs =
   | [x] -> x
   | _ -> if List.exists (function Bool_lit true -> true | _ -> false) xs then Bool_lit true else Fn ("or", xs)
 
+let simp_eq x y =
+  match (x, y) with Bool_lit x, Bool_lit y -> Some (x = y) | Bitvec_lit x, Bitvec_lit y -> Some (x = y) | _ -> None
+
 let simp_fn f args =
   let open Sail2_operators_bitlists in
   match (f, args) with
+  | "=", [x; y] -> begin match simp_eq x y with Some b -> Bool_lit b | None -> Fn (f, args) end
   | "not", [Fn ("not", [exp])] -> exp
   | "not", [Bool_lit b] -> Bool_lit (not b)
   | "contents", [Fn ("Bits", [_; bv])] -> bv
@@ -233,8 +239,13 @@ let rec simp vars exp =
       | exp -> Extract (n, m, exp)
     end
   | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp vars arr, simp vars i, simp vars x)
-  | Ite (Fn ("not", [cond]), then_exp, else_exp) -> simp vars (Ite (cond, else_exp, then_exp))
-  | Ite (cond, then_exp, else_exp) -> Ite (simp vars cond, simp vars then_exp, simp vars else_exp)
+  | Ite (cond, then_exp, else_exp) -> begin
+      match Ite (simp vars cond, simp vars then_exp, simp vars else_exp) with
+      | Ite (Bool_lit true, then_exp, _) -> then_exp
+      | Ite (Bool_lit false, _, else_exp) -> else_exp
+      | Ite (Fn ("not", [cond]), then_exp, else_exp) -> Ite (cond, else_exp, then_exp)
+      | exp -> exp
+    end
   | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
   | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)
   | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp vars exp)

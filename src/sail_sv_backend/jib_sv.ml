@@ -977,16 +977,30 @@ module Make (Config : CONFIG) = struct
           | [arr; i; x] -> begin
               match cval_ctyp arr with
               | CT_fvector (len, _) ->
+                  let* arr = Smt.smt_cval arr in
+                  let sz = required_width (Big_int.of_int (len - 1)) - 1 in
                   let* i =
                     Smt_gen.bind (Smt.smt_cval i)
-                      (Smt_gen.unsigned_size ~checked:false
-                         ~into:(required_width (Big_int.of_int (len - 1)) - 1)
-                         ~from:(Smt.int_size (cval_ctyp i))
-                      )
+                      (Smt_gen.unsigned_size ~checked:false ~into:sz ~from:(Smt.int_size (cval_ctyp i)))
                   in
                   let* x = Smt.smt_cval x in
+                  let j = mk_id "j" in
                   let updates, ret = svir_creturn creturn in
-                  wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
+                  wrap
+                    (with_updates l updates
+                       (SVS_foreach
+                          ( SVN_id j,
+                            arr,
+                            SVS_aux
+                              ( SVS_assign
+                                  ( SVP_index (ret, var_id j),
+                                    Ite (Fn ("=", [Extract (sz - 1, 0, var_id j); i]), x, Fn ("select", [arr; var_id j]))
+                                  ),
+                                l
+                              )
+                          )
+                       )
+                    )
               | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
             end
           | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
@@ -1036,6 +1050,10 @@ module Make (Config : CONFIG) = struct
     | SVS_split_comb -> string "/* split comb */"
     | SVS_assert (cond, msg) ->
         separate space [string "assert"; parens (pp_smt cond); string "else"; string "$error" ^^ parens (pp_smt msg)]
+        ^^ terminator
+    | SVS_foreach (i, exp, stmt) ->
+        separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
+        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
         ^^ terminator
     | SVS_var (id, ctyp, init_opt) -> begin
         match init_opt with
@@ -1538,34 +1556,38 @@ module Make (Config : CONFIG) = struct
     NameMap.iter
       (fun name nums ->
         let get_ctyp = function
-          | Return _ -> ret_ctyp
+          | Return _ -> Some ret_ctyp
           | Name (id, _) -> begin
               match Bindings.find_opt id spec_info.registers with
-              | Some ctyp -> ctyp
+              | Some ctyp -> Some ctyp
               | None -> (
                   match Bindings.find_opt id !declvars with
-                  | Some ctyp -> ctyp
+                  | Some ctyp -> Some ctyp
                   | None -> (
                       match Util.list_index (fun p -> Id.compare p id = 0) params with
-                      | Some i -> List.nth param_ctyps i
-                      | None -> failwith ("Not sure what this is: " ^ string_of_id id)
+                      | Some i -> Some (List.nth param_ctyps i)
+                      | None -> None
                     )
                 )
             end
-          | Channel _ -> CT_string
-          | Have_exception _ -> CT_bool
-          | Throw_location _ -> CT_string
-          | Current_exception _ -> spec_info.exception_ctyp
+          | Channel _ -> Some CT_string
+          | Have_exception _ -> Some CT_bool
+          | Throw_location _ -> Some CT_string
+          | Current_exception _ -> Some spec_info.exception_ctyp
         in
-        let ctyp = get_ctyp name in
-        IntSet.iter
-          (fun n ->
-            let name = Jib_ssa.ssa_name n name in
-            if
-              List.for_all (fun (port : sv_module_port) -> Name.compare name port.name <> 0) (input_ports @ output_ports)
-            then Queue.add (SVD_var (name, ctyp)) module_vars
-          )
-          nums
+        match get_ctyp name with
+        | Some ctyp ->
+            IntSet.iter
+              (fun n ->
+                let name = Jib_ssa.ssa_name n name in
+                if
+                  List.for_all
+                    (fun (port : sv_module_port) -> Name.compare name port.name <> 0)
+                    (input_ports @ output_ports)
+                then Queue.add (SVD_var (name, ctyp)) module_vars
+              )
+              nums
+        | None -> ()
       )
       !ssa_vars;
 
