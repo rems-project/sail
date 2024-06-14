@@ -152,7 +152,7 @@ function main() = {
     decode(0b0110 @ 0xFFFFF @ 0b00 @ 0b10 @ 0b00 @ 0b01);
     // add V0 to V1 in 16 groups of 16, storing the result in V3
     decode(0b0100 @ 0xFFFFF @ 0b00 @ 0b11 @ 0b00 @ 0b01);
-    
+
     print_bits("V2 = ", V2);
     print_bits("V3 = ", V3);
 

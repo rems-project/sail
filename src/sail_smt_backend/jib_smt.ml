@@ -320,7 +320,7 @@ module Make (Config : CONFIG) = struct
         return (mk_variant (zencode_upper_id id) ctors)
     | CT_fvector (n, ctyp) ->
         let* ctyp = smt_ctyp ctyp in
-        return (Array (Bitvec (required_width (Big_int.of_int (n - 1))), ctyp))
+        return (Array (Bitvec (required_width (Big_int.of_int (n - 1)) - 1), ctyp))
     | CT_vector ctyp ->
         let* ctyp = smt_ctyp ctyp in
         return (Array (Bitvec vector_index_width, ctyp))
@@ -571,10 +571,10 @@ module Make (Config : CONFIG) = struct
         else if extern && string_of_id function_id = "internal_vector_update" then begin
           match args with
           | [vec; i; x] ->
-              let sz = required_width (Big_int.of_int (Smt.generic_vector_length (cval_ctyp vec) - 1)) in
+              let sz = required_width (Big_int.of_int (Smt.generic_vector_length (cval_ctyp vec) - 1)) - 1 in
               let* vec = Smt.smt_cval vec in
               let* i =
-                Smt_gen.bind (Smt.smt_cval i) (Smt_gen.signed_size ~into:sz ~from:(Smt.int_size (cval_ctyp i)))
+                Smt_gen.bind (Smt.smt_cval i) (Smt_gen.unsigned_size ~into:sz ~from:(Smt.int_size (cval_ctyp i)))
               in
               let* x = Smt.smt_cval x in
               singleton (define_const id ret_ctyp (Fn ("store", [vec; i; x])))
@@ -841,6 +841,8 @@ module Make (Config : CONFIG) = struct
             List.iter (fun include_file -> output_string out_chan (Util.read_whole_file include_file)) smt_includes;
 
             let queue = Queue_optimizer.optimize stack in
+
+            (* let queue = Queue.of_seq (List.to_seq (List.rev (List.of_seq (Stack.to_seq stack)))) in *)
             Queue.iter
               (fun def ->
                 output_string out_chan (string_of_smt_def def);
@@ -848,7 +850,6 @@ module Make (Config : CONFIG) = struct
               )
               queue;
 
-            (* (Queue.of_seq (List.to_seq (List.rev (List.of_seq (Stack.to_seq stack))))); *)
             output_string out_chan "(check-sat)\n";
             if prop_type = "counterexample" then output_string out_chan "(get-model)\n";
 

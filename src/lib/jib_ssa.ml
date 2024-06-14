@@ -532,7 +532,7 @@ let phi_dependencies cfg =
   done;
   (!deps, !decl_nodes)
 
-let rename_variables graph root children =
+let rename_variables globals graph root children =
   let counts = ref NameMap.empty in
   let stacks = ref NameMap.empty in
 
@@ -554,8 +554,11 @@ let rename_variables graph root children =
 
   let rec fold_cval = function
     | V_id (id, ctyp) ->
-        let i = top_stack id in
-        V_id (ssa_name i id, ctyp)
+        if NameSet.mem id globals then V_id (id, ctyp)
+        else (
+          let i = top_stack id in
+          V_id (ssa_name i id, ctyp)
+        )
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
@@ -862,8 +865,16 @@ let make_dominators_dot out_chan idom graph =
   output_string out_chan "}\n";
   Util.opt_colors := true
 
-let ssa ?debug_prefix instrs =
+let ssa ?globals ?debug_prefix instrs =
   let start, finish, cfg = control_flow_graph instrs in
+  begin
+    match debug_prefix with
+    | Some prefix ->
+        let out_chan = open_out (prefix ^ "_cfg.gv") in
+        make_dot out_chan cfg;
+        close_out out_chan
+    | None -> ()
+  end;
   let idom = immediate_dominators cfg start in
   let post_idom = immediate_dominators ~post:true cfg finish in
   begin
@@ -879,6 +890,6 @@ let ssa ?debug_prefix instrs =
   let df = dominance_frontiers cfg start idom children in
   let post_df = dominance_frontiers ~post:true cfg finish post_idom post_children in
   place_phi_functions cfg df;
-  rename_variables cfg start children;
+  rename_variables (Option.value ~default:NameSet.empty globals) cfg start children;
   place_pi_functions ~start ~finish ~post_idom ~post_df cfg;
   (start, cfg)

@@ -919,7 +919,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* vec = smt_cval vec in
         let* i =
           bind (smt_cval i)
-            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1))) ~from:(int_size i_ctyp))
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
         return (Fn ("select", [vec; i]))
         (*
@@ -998,7 +998,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* x = smt_cval x in
         let* i =
           bind (smt_cval i)
-            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1))) ~from:(int_size i_ctyp))
+            (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
         return (Store (Fixed len, store_fn, vec, i, x))
     (*

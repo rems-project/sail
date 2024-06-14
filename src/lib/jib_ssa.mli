@@ -131,7 +131,7 @@ end
 val phi_dependencies : (ssa_elem list * cf_node) array_graph -> NameGraph.graph * int NameMap.t
 
 (** Convert a list of instructions into SSA form *)
-val ssa : ?debug_prefix:string -> Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
+val ssa : ?globals:NameSet.t -> ?debug_prefix:string -> Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 
 (** Output the control-flow graph in graphviz format for
    debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
