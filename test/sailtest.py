@@ -3,6 +3,19 @@ import re
 import sys
 import subprocess
 import datetime
+import argparse
+
+parser = argparse.ArgumentParser("run_tests.py")
+parser.add_argument("--hide-errors", help="Hide error information.", action='store_true')
+parser.add_argument("--compact", help="Compact output.", action='store_true')
+args = parser.parse_args()
+
+def is_compact():
+    return args.compact
+
+def compact_char(code, char):
+    print('{}{}{}'.format(code, char, color.END), end='')
+    sys.stdout.flush()
 
 class color:
     NOTICE = '\033[94m'
@@ -33,10 +46,16 @@ def get_sail_dir():
             sys.exit(1)
 
 def print_ok(name):
-    print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.PASS, 'ok', color.END))
+    if is_compact():
+        compact_char(color.PASS, '.')
+    else:
+        print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.PASS, 'ok', color.END))
 
 def print_skip(name):
-    print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.WARNING, 'skip', color.END))
+    if is_compact():
+        compact_char(color.WARNING, 's')
+    else:
+        print('{} {}{}{}'.format('{} '.format(name).ljust(40, '.'), color.WARNING, 'skip', color.END))
 
 def get_sail():
     try:
@@ -68,11 +87,15 @@ def step(string, expected_status=0):
     out, err = p.communicate()
     status = p.wait()
     if status != expected_status:
-        print("{}Failed{}: {}".format(color.FAIL, color.END, string))
-        print('{}stdout{}:'.format(color.NOTICE, color.END))
-        print(out.decode('utf-8'))
-        print('{}stderr{}:'.format(color.NOTICE, color.END))
-        print(err.decode('utf-8'))
+        if is_compact():
+            compact_char(color.FAIL, 'X')
+        else:
+            print("{}Failed{}: {}".format(color.FAIL, color.END, string))
+        if not args.hide_errors:
+            print('{}stdout{}:'.format(color.NOTICE, color.END))
+            print(out.decode('utf-8'))
+            print('{}stderr{}:'.format(color.NOTICE, color.END))
+            print(err.decode('utf-8'))
         sys.exit(1)
 
 def banner(string):
@@ -120,6 +143,8 @@ class Results:
 
     def finish(self):
         xfail_msg = f' ({self.xfails} expected failures)' if self.xfails else ''
+        if is_compact():
+            print()
         print('{}{} passes and {} failures{}{}'.format(color.NOTICE, self.passes, self.failures, xfail_msg, color.END))
 
         time = datetime.datetime.utcnow()

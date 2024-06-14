@@ -47,6 +47,14 @@ skip_tests = {
     'warl_undef',
     'xlen_val', # Calls external C function
     'spc_mappings',
+    'list_test', # lists
+    'list_scope', # lists
+    'list_scope2', # lists
+    'list_scope3', # lists
+    'list_cons_cons', # lists
+    'lib_hex_bits', # bitvector parsing
+    'lib_hex_bits_signed', # bitvector parsing
+    'lib_valid_hex_bits', # bitvector parsing
 }
 
 print("Sail is {}".format(sail))

@@ -1438,6 +1438,13 @@ module Make (Config : CONFIG) = struct
        attribute_data_bool skip_graph
       )
 
+  let never_returns end_node cfg =
+    let open Jib_ssa in
+    let _, preds, _ = Option.get (get_vertex cfg end_node) in
+    IntSet.for_all
+      (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
+      preds
+
   let svir_module debug_attr spec_info ctx f params param_ctyps ret_ctyp body =
     prerr_endline Util.(string_of_id f |> red |> clear);
     let footprint = Bindings.find f spec_info.footprints in
@@ -1455,11 +1462,13 @@ module Make (Config : CONFIG) = struct
       (List.map (fun (I_aux (_, (_, l)) as instr) -> string_of_instr instr ^ " " ^ Reporting.short_loc_to_string l) body);
 
     let open Jib_ssa in
-    let start, cfg =
+    let _, end_node, cfg =
       ssa ~globals:spec_info.global_lets
         ?debug_prefix:(Option.map (fun _ -> string_of_id f) debug_attr)
         (visit_instrs (new thread_registers ctx spec_info) body)
     in
+
+    if never_returns end_node cfg then prerr_endline "NEVER RETURNS";
 
     if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_id f) cfg;
 
@@ -1565,8 +1574,10 @@ module Make (Config : CONFIG) = struct
       | name -> name
     in
 
+    let get_final_name name = match NameMap.find_opt name final_names with Some n -> n | None -> name in
+
     let output_ports : sv_module_port list =
-      [{ name = NameMap.find Jib_util.return final_names; external_name = "sail_return"; typ = ret_ctyp }]
+      [{ name = get_final_name Jib_util.return; external_name = "sail_return"; typ = ret_ctyp }]
       @ List.map
           (fun id ->
             {
@@ -1578,9 +1589,9 @@ module Make (Config : CONFIG) = struct
           (IdSet.elements footprint.all_writes)
       @ ( if footprint.throws then
             [
-              { name = NameMap.find (Have_exception (-1)) final_names; external_name = "have_exception"; typ = CT_bool };
+              { name = get_final_name (Have_exception (-1)); external_name = "have_exception"; typ = CT_bool };
               {
-                name = NameMap.find (Current_exception (-1)) final_names;
+                name = get_final_name (Current_exception (-1));
                 external_name = "current_exception";
                 typ = spec_info.exception_ctyp;
               };
@@ -2005,10 +2016,6 @@ module Make (Config : CONFIG) = struct
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
         else (
-          if Option.is_some debug_attr then (
-            prerr_endline Util.("Pre-SV IR for " ^ string_of_id f ^ ":" |> yellow |> bold |> clear);
-            List.iter (fun instr -> prerr_endline (string_of_instr instr)) body
-          );
           let body =
             Jib_optimize.(
               body |> remove_undefined |> remove_functions_to_references |> flatten_instrs |> remove_dead_code
