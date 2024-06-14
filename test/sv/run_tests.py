@@ -21,7 +21,6 @@ skip_tests = {
     'cheri128_hsb',
     'cheri_capreg', # behavior?
     'empty_list', # recursion
-    'eq_struct',
     'flow_restrict', # contains very large integer literal
     'for_shadow',
     'foreach_none',
@@ -43,13 +42,10 @@ skip_tests = {
     'split', # generic vectors
     'string_of_bits',
     'string_take',
-    'tuple_conversion', # verilator fails?
     'vector_example',
-    'vector_subrange_pattern',
     'warl',
     'warl_undef',
     'xlen_val', # Calls external C function
-    'zero_length_bv',
     'spc_mappings',
 }
 

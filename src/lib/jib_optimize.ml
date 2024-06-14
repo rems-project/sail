@@ -229,6 +229,38 @@ end
 
 let remove_undefined = Jib_visitor.visit_instrs (new Remove_undefined.visitor)
 
+module Remove_functions_to_references = struct
+  open Jib
+  open Jib_util
+  open Jib_visitor
+
+  let gensym, _ = symbol_generator "gref"
+
+  class visitor : jib_visitor =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
+      method! vinstr =
+        function
+        | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, CT_ref reg_ctyp))), ext, f, args), (n, l)) ->
+            let gs = name (gensym ()) in
+            ChangeTo
+              (iblock
+                 [
+                   idecl l reg_ctyp gs;
+                   I_aux (I_funcall (CR_one (CL_id (gs, reg_ctyp)), ext, f, args), (n, l));
+                   icopy l (CL_addr (CL_id (id, CT_ref reg_ctyp))) (V_id (gs, reg_ctyp));
+                 ]
+              )
+        | _ -> DoChildren
+    end
+end
+
+let remove_functions_to_references = Jib_visitor.visit_instrs (new Remove_functions_to_references.visitor)
+
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
   | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->

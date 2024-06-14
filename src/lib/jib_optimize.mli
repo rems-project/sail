@@ -86,6 +86,8 @@ val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
 
 val remove_undefined : instr list -> instr list
 
+val remove_functions_to_references : instr list -> instr list
+
 val remove_clear : instr list -> instr list
 
 (** Remove gotos immediately followed by the label it jumps to *)

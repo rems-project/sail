@@ -217,6 +217,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
     | Typ_id id when string_of_id id = "nat" -> CT_lint
     | Typ_id id when string_of_id id = "unit" -> CT_unit
     | Typ_id id when string_of_id id = "string" -> CT_string
+    | Typ_id id when string_of_id id = "string_literal" -> CT_string
     | Typ_id id when string_of_id id = "real" -> CT_real
     | Typ_id id when string_of_id id = "float16" -> CT_float 16
     | Typ_id id when string_of_id id = "float32" -> CT_float 32

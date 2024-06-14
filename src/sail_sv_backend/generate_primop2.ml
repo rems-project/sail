@@ -74,6 +74,8 @@ module type S = sig
 
   val get_generated_library_defs : unit -> sv_def list
 
+  val string_of_fbits : int -> string
+
   val hex_str : unit -> string
 
   val dec_str : unit -> string
@@ -241,6 +243,38 @@ module Make
             input_ports = [mk_port s CT_string; mk_port b CT_lbits; mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
             defs;
+          }
+    )
+
+  let string_of_fbits width =
+    let function_name = pf "sail_string_of_bits_%d" width in
+    register_library_def function_name (fun () ->
+        let b = primop_name "b" in
+        let bstr = primop_name "bstr" in
+        let zeros = primop_name "zeros" in
+        let vars = [SVS_var (bstr, CT_string, None); SVS_var (zeros, CT_string, None)] in
+        let body =
+          if width mod 4 = 0 then
+            [
+              svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw (pf "zeros = \"%s\"" (String.make (width / 4) '0')) ~outputs:[zeros];
+              svs_raw
+                (pf "return {\"0x\", zeros.substr(0, %d - bstr.len()), bstr.toupper()}" ((width / 4) - 1))
+                ~inputs:[zeros; bstr];
+            ]
+          else
+            [
+              svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw (pf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
+              svs_raw (pf "return {\"0b\", zeros.substr(0, %d - bstr.len()), bstr}" (width - 1)) ~inputs:[zeros; bstr];
+            ]
+        in
+        SVD_fundef
+          {
+            function_name = SVN_string function_name;
+            return_type = Some CT_string;
+            params = [(mk_id "b", CT_fbits width)];
+            body = mk_statement (SVS_block (List.map mk_statement (vars @ body)));
           }
     )
 

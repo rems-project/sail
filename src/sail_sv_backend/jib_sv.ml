@@ -86,12 +86,7 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
   object
     inherit empty_jib_visitor
 
-    method! vctyp =
-      function
-      | CT_ref ctyp ->
-          references := CTSet.add ctyp !references;
-          DoChildren
-      | _ -> DoChildren
+    method! vctyp _ = SkipChildren
 
     method! vcval =
       function
@@ -109,19 +104,29 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
 
     method! vinstr =
       function
-      | I_aux (I_funcall (_, _, (id, _), _), _) ->
+      | I_aux (I_funcall (_, _, (id, _), args), _) ->
           if ctx_is_extern id ctx then (
             let name = ctx_get_extern id ctx in
             if name = "print" || name = "print_endline" || name = "print_bits" || name = "print_int" then
               need_stdout := true
             else if name = "prerr" || name = "prerr_endline" || name = "prerr_bits" || name = "prerr_int" then
               need_stderr := true
+            else if name = "reg_deref" then (
+              match args with
+              | [cval] -> begin
+                  match cval_ctyp cval with CT_ref reg_ctyp -> references := CTSet.add reg_ctyp !references | _ -> ()
+                end
+              | _ -> ()
+            )
           );
           DoChildren
       | _ -> DoChildren
 
     method! vclexp =
       function
+      | CL_addr clexp ->
+          references := CTSet.add (clexp_ctyp clexp) !references;
+          DoChildren
       | CL_id (Have_exception _, _) ->
           throws := true;
           SkipChildren
@@ -156,6 +161,10 @@ type spec_info = {
   registers : ctyp Bindings.t;
   (* A list of constructor functions *)
   constructors : IdSet.t;
+  (* Global letbindings *)
+  global_lets : NameSet.t;
+  (* Global let numbers *)
+  global_let_numbers : IntSet.t;
   (* Function footprint information *)
   footprints : footprint Bindings.t;
   (* Specification callgraph *)
@@ -188,6 +197,16 @@ let collect_spec_info ctx cdefs =
         | _ -> acc
       )
       IdSet.empty cdefs
+  in
+  let global_lets, global_let_numbers =
+    List.fold_left
+      (fun (names, nums) cdef ->
+        match cdef with
+        | CDEF_aux (CDEF_let (n, bindings, _), _) ->
+            (List.fold_left (fun acc (id, _) -> NameSet.add (name id) acc) names bindings, IntSet.add n nums)
+        | _ -> (names, nums)
+      )
+      (NameSet.empty, IntSet.empty) cdefs
   in
   let footprints =
     List.fold_left
@@ -274,7 +293,16 @@ let collect_spec_info ctx cdefs =
       )
       CT_unit cdefs
   in
-  { register_ctyp_map; registers; constructors; footprints; callgraph = cfg; exception_ctyp }
+  {
+    register_ctyp_map;
+    registers;
+    constructors;
+    global_lets;
+    global_let_numbers;
+    footprints;
+    callgraph = cfg;
+    exception_ctyp;
+  }
 
 module type CONFIG = sig
   val max_unknown_integer_width : int
@@ -358,6 +386,7 @@ module Make (Config : CONFIG) = struct
   let rec sv_ctyp = function
     | CT_bool -> simple_type "bit"
     | CT_bit -> simple_type "logic"
+    | CT_fbits 0 -> simple_type "sail_zwbv"
     | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_sbits max_width ->
         let logic = sprintf "logic [%d:0]" (max_width - 1) in
@@ -410,7 +439,7 @@ module Make (Config : CONFIG) = struct
         let string_of_bits l = function
           | CT_lbits -> "sail_string_of_bits"
           | CT_fbits sz when Config.nostrings -> Generate_primop.string_of_fbits_stub sz
-          | CT_fbits sz -> Generate_primop.string_of_fbits sz
+          | CT_fbits sz -> Primops.string_of_fbits sz
           | _ -> Reporting.unreachable l __POS__ "string_of_bits"
 
         let dec_str l = function
@@ -502,11 +531,6 @@ module Make (Config : CONFIG) = struct
              )
         ^^ space ^^ sv_type_id id ^^ semi
     | CTD_variant (id, ctors) ->
-        let exception_boilerplate =
-          if Id.compare id (mk_id "exception") = 0 then
-            twice hardline ^^ ksprintf string "%s sail_current_exception;" (sv_type_id_string id)
-          else empty
-        in
         let kind_id (id, _) = string_of_id id |> Util.zencode_string |> String.uppercase_ascii |> string in
         let sv_ctor (id, ctyp) = wrap_type ctyp (pp_id id) in
         let tag_type = string ("sailtag_" ^ pp_id_string id) in
@@ -660,7 +684,6 @@ module Make (Config : CONFIG) = struct
                ]
           ^^ twice hardline
           ^^ separate (twice hardline) constructors
-          ^^ exception_boilerplate
         )
         else (
           let constructors =
@@ -701,7 +724,6 @@ module Make (Config : CONFIG) = struct
             ]
           ^^ twice hardline
           ^^ separate (twice hardline) constructors
-          ^^ exception_boilerplate
         )
 
   let sv_signed x = string "signed'" ^^ parens x
@@ -741,6 +763,7 @@ module Make (Config : CONFIG) = struct
     let pp_smt_parens exp = pp_smt ~need_parens:true exp in
     let opt_parens doc = if need_parens then parens doc else doc in
     function
+    | Bitvec_lit [] -> string "SAIL_ZWBV"
     | Bitvec_lit bits ->
         let len = List.length bits in
         if len mod 4 = 0 && not (has_undefined_bit bits) then ksprintf string "%d'h%s" len (hex_bitvector bits)
@@ -877,21 +900,21 @@ module Make (Config : CONFIG) = struct
         (updates, SVP_field (lexp, field))
     | CL_void -> ([], SVP_void)
     | CL_rmw (id_from, id, ctyp) ->
-        let rec assignments lexp ctyp = function
+        let rec assignments lexp subpart ctyp = function
           | parent :: parents -> begin
               match ctyp with
               | CT_struct (struct_id, fields) ->
                   let _, field_ctyp = List.find (fun (f, _) -> Id.compare f parent = 0) fields in
                   let other_fields = List.filter (fun (f, _) -> Id.compare f parent <> 0) fields in
-                  assignments (SVP_field (lexp, parent)) field_ctyp parents
+                  assignments (SVP_field (lexp, parent)) (Field (struct_id, parent, subpart)) field_ctyp parents
                   @ List.map
-                      (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, Var id_from)))
+                      (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, subpart)))
                       other_fields
               | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "expected struct type"
             end
           | [] -> []
         in
-        let updates = assignments (SVP_id id) ctyp parents in
+        let updates = assignments (SVP_id id) (Var id_from) ctyp parents in
         (updates, SVP_id id)
     | CL_addr _ | CL_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "addr/tuple"
 
@@ -986,21 +1009,31 @@ module Make (Config : CONFIG) = struct
                   let* x = Smt.smt_cval x in
                   let j = mk_id "j" in
                   let updates, ret = svir_creturn creturn in
-                  wrap
-                    (with_updates l updates
-                       (SVS_foreach
-                          ( SVN_id j,
-                            arr,
-                            SVS_aux
-                              ( SVS_assign
-                                  ( SVP_index (ret, var_id j),
-                                    Ite (Fn ("=", [Extract (sz - 1, 0, var_id j); i]), x, Fn ("select", [arr; var_id j]))
-                                  ),
-                                l
-                              )
+                  begin
+                    match (ret, arr) with
+                    | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
+                        wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
+                    | _ ->
+                        wrap
+                          (with_updates l updates
+                             (SVS_foreach
+                                ( SVN_id j,
+                                  arr,
+                                  SVS_aux
+                                    ( SVS_assign
+                                        ( SVP_index (ret, var_id j),
+                                          Ite
+                                            ( Fn ("=", [Extract (sz - 1, 0, var_id j); i]),
+                                              x,
+                                              Fn ("select", [arr; var_id j])
+                                            )
+                                        ),
+                                      l
+                                    )
+                                )
+                             )
                           )
-                       )
-                    )
+                  end
               | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
             end
           | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
@@ -1355,10 +1388,20 @@ module Make (Config : CONFIG) = struct
             | _ -> ssa_name
           in
           if num_succs = 0 then ssa_name
-          else (
-            assert (num_succs = 1);
+          else
+            (* Note if we have successors like
+
+                 A
+                / \
+               B   C
+                \ /
+                 D
+
+               There could be updates in D, but there cannot be any in
+               B or C because then D would have a phi function, and we
+               would then have started from there. Therefore we can
+               just choose a single successor here. *)
             explore_successors (IntSet.min_elt succs) name ssa_name
-          )
       | None -> assert false
     in
     let final_names =
@@ -1413,7 +1456,7 @@ module Make (Config : CONFIG) = struct
 
     let open Jib_ssa in
     let start, cfg =
-      ssa
+      ssa ~globals:spec_info.global_lets
         ?debug_prefix:(Option.map (fun _ -> string_of_id f) debug_attr)
         (visit_instrs (new thread_registers ctx spec_info) body)
     in
@@ -1511,12 +1554,23 @@ module Make (Config : CONFIG) = struct
       else []
     in
 
+    let register_passthroughs = Queue.create () in
+    let output_register name =
+      match NameMap.find name final_names with
+      | Name (id, 0) ->
+          Queue.add
+            (SVS_aux (SVS_assign (SVP_id (Name (id, 1)), Var (Name (id, 0))), Parse_ast.Unknown))
+            register_passthroughs;
+          Name (id, 1)
+      | name -> name
+    in
+
     let output_ports : sv_module_port list =
       [{ name = NameMap.find Jib_util.return final_names; external_name = "sail_return"; typ = ret_ctyp }]
       @ List.map
           (fun id ->
             {
-              name = NameMap.find (Name (id, -1)) final_names;
+              name = output_register (Name (id, -1));
               external_name = string_of_id (prepend_id "out_" id);
               typ = Bindings.find id spec_info.registers;
             }
@@ -1591,7 +1645,15 @@ module Make (Config : CONFIG) = struct
       )
       !ssa_vars;
 
-    let defs = List.of_seq (Queue.to_seq module_vars) @ List.rev module_instantiation_defs @ always_comb_def in
+    let passthroughs =
+      match List.of_seq (Queue.to_seq register_passthroughs) with
+      | [] -> []
+      | statements -> [SVD_always_comb (SVS_aux (SVS_block statements, Parse_ast.Unknown))]
+    in
+
+    let defs =
+      passthroughs @ List.of_seq (Queue.to_seq module_vars) @ List.rev module_instantiation_defs @ always_comb_def
+    in
     { name = SVN_id f; input_ports; output_ports; defs }
 
   let toplevel_module spec_info =
@@ -1639,6 +1701,12 @@ module Make (Config : CONFIG) = struct
             }
         in
         let always_comb =
+          let let_initializers =
+            IntSet.fold
+              (fun n stmts -> mk_statement (svs_raw (sprintf "sail_setup_let_%d()" n)) :: stmts)
+              spec_info.global_let_numbers []
+            |> List.rev
+          in
           let unchanged_registers =
             Bindings.fold
               (fun reg _ unchanged ->
@@ -1666,7 +1734,9 @@ module Make (Config : CONFIG) = struct
             else []
           in
           SVD_always_comb
-            (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
+            (mk_statement
+               (SVS_block (let_initializers @ unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")]))
+            )
         in
         Some
           {
@@ -1794,6 +1864,22 @@ module Make (Config : CONFIG) = struct
     ^^ string "()" ^^ semi
     ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
+
+  let svir_setup_function l ctx name setup =
+    let setup =
+      Jib_optimize.(
+        setup |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top
+        |> structure_control_flow_block |> filter_clear
+      )
+    in
+    let statements, _ = Smt_gen.run (fmap Util.option_these (mapM (svir_instr ctx) setup)) (gen_loc l) in
+    SVD_fundef
+      {
+        function_name = SVN_string name;
+        return_type = None;
+        params = [];
+        body = SVS_aux (SVS_block statements, gen_loc l);
+      }
 
   let collect_registers cdefs =
     List.fold_left
@@ -1925,7 +2011,8 @@ module Make (Config : CONFIG) = struct
           );
           let body =
             Jib_optimize.(
-              body |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top |> filter_clear
+              body |> remove_undefined |> remove_functions_to_references |> flatten_instrs |> remove_dead_code
+              |> variable_decls_to_top |> filter_clear
             )
           in
           if Option.is_some debug_attr then (
@@ -1938,6 +2025,9 @@ module Make (Config : CONFIG) = struct
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
     | CDEF_type type_def -> ([SVD_type type_def], fn_ctyps)
+    | CDEF_let (n, bindings, setup) ->
+        let setup_function = svir_setup_function def_annot.loc ctx (sprintf "sail_setup_let_%d" n) setup in
+        (List.map (fun (id, ctyp) -> SVD_var (name id, ctyp)) bindings @ [setup_function], fn_ctyps)
     | _ -> ([], fn_ctyps)
 
   let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =

@@ -4,6 +4,9 @@
 // The Sail unit type.
 typedef enum logic [0:0] {SAIL_UNIT=0} sail_unit;
 
+// The Sail zero-width bitvector.
+typedef enum logic [0:0] {SAIL_ZWBV=0} sail_zwbv;
+
 module print
   (input string     in_str,
    input string     in_sail_stdout,
