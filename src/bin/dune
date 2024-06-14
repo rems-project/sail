@@ -159,6 +159,7 @@
   (%{workspace_root}/lib/float/zero.sail as lib/float/zero.sail)
   (%{workspace_root}/lib/float/normal.sail as lib/float/normal.sail)
   (%{workspace_root}/lib/float/eq.sail as lib/float/eq.sail)
+  (%{workspace_root}/lib/float/ne.sail as lib/float/ne.sail)
   (%{workspace_root}/lib/float/interface.sail as lib/float/interface.sail)
   (%{workspace_root}/lib/reverse_endianness.sail
    as
