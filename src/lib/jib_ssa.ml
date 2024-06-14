@@ -892,4 +892,4 @@ let ssa ?globals ?debug_prefix instrs =
   place_phi_functions cfg df;
   rename_variables (Option.value ~default:NameSet.empty globals) cfg start children;
   place_pi_functions ~start ~finish ~post_idom ~post_df cfg;
-  (start, cfg)
+  (start, finish, cfg)

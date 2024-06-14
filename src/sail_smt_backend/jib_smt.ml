@@ -709,7 +709,7 @@ module Make (Config : CONFIG) = struct
     let stack = Stack.create () in
 
     let open Jib_ssa in
-    let start, cfg = ssa ?debug_prefix:(Option.map (fun _ -> name) debug_attr) instrs in
+    let start, _, cfg = ssa ?debug_prefix:(Option.map (fun _ -> name) debug_attr) instrs in
     let visit_order =
       try topsort cfg
       with Not_a_DAG n ->
