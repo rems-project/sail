@@ -27,16 +27,25 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_NE
+$define _FLOAT_NE
 
 $include <float/common.sail>
 $include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
 $include <float/zero.sail>
-$include <float/normal.sail>
-$include <float/eq.sail>
-$include <float/ne.sail>
+
+val      float_is_ne : fp_bits_x2 -> fp_bool_and_flags
+function float_is_ne ((op_0, op_1)) = {
+  let is_snan = float_is_snan (op_0) | float_is_snan (op_1);
+  let flags   = if   is_snan
+                then fp_eflag_invalid
+                else fp_eflag_none;
+
+  let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
+  let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
+  let is_ne   = is_nan == false & (op_0 != op_1) & is_zero == false;
+
+  (is_ne, flags);
+}
 
 $endif
