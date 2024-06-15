@@ -384,6 +384,7 @@ let help =
       sprintf ":help %s - Get a description of <command>. Commands are prefixed with a colon, e.g. %s."
         (color yellow "<command>") (color green ":help :type")
   | ":r" | ":run" -> "(:r | :run) - Completely evaluate the currently evaluating expression."
+  | ":reset" -> ":reset - Reset the interpreter state."
   | ":s" | ":step" -> sprintf "(:s | :step) %s - Perform a number of evaluation steps." (color yellow "<number>")
   | ":f" | ":step_function" ->
       sprintf "(:f | :step_function) - Perform evaluation steps until the currently evaulating function returns."
@@ -490,7 +491,8 @@ let handle_input' istate input =
               [
                 "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help \
                  :output :option :show_register :hide_register";
-                "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile " ^ more_commands;
+                "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile :reset "
+                ^ more_commands;
                 "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command.";
@@ -631,6 +633,7 @@ let handle_input' istate input =
                 | [] ->
                     failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
               end
+          | ":reset" -> { istate with state = initial_state istate.ast istate.env !Value.primops }
           | ":sync_script" ->
               {
                 istate with
