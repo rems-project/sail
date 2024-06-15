@@ -6,7 +6,7 @@ import datetime
 import argparse
 
 parser = argparse.ArgumentParser("run_tests.py")
-parser.add_argument("--hide-errors", help="Hide error information.", action='store_true')
+parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')
 parser.add_argument("--compact", help="Compact output.", action='store_true')
 args = parser.parse_args()
 
@@ -91,7 +91,7 @@ def step(string, expected_status=0):
             compact_char(color.FAIL, 'X')
         else:
             print("{}Failed{}: {}".format(color.FAIL, color.END, string))
-        if not args.hide_errors:
+        if not args.hide_error_output:
             print('{}stdout{}:'.format(color.NOTICE, color.END))
             print(out.decode('utf-8'))
             print('{}stderr{}:'.format(color.NOTICE, color.END))

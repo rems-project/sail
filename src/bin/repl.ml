@@ -77,6 +77,8 @@ module Callgraph_commands = Callgraph_commands
 
 type mode = Evaluation of frame | Normal
 
+type display_options = { clear : bool; registers : IdSet.t }
+
 type istate = {
   ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
@@ -85,7 +87,7 @@ type istate = {
   vs_ids : IdSet.t ref;
   options : (Arg.key * Arg.spec * Arg.doc) list;
   mode : mode;
-  clear : bool;
+  display_options : display_options;
   state : Interpreter.lstate * Interpreter.gstate;
   default_sail_dir : string;
   config : Yojson.Basic.t option;
@@ -109,8 +111,8 @@ let initial_istate config options env effect_info ast =
     vs_ids = ref (val_spec_ids ast.defs);
     options;
     mode = Normal;
-    clear = true;
-    state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops;
+    display_options = { clear = true; registers = IdSet.empty };
+    state = initial_state ast env !Value.primops;
     default_sail_dir = Locations.sail_dir;
     config;
   }
@@ -124,12 +126,27 @@ let setup_interpreter_state istate =
       default_sail_dir = istate.default_sail_dir;
       config = istate.config;
     };
-  { istate with state = initial_state istate.ast istate.env !Value.primops }
+  istate
 
-let prompt istate = match istate.mode with Normal -> "sail> " | Evaluation _ -> "eval> "
+let prompt istate =
+  if not (IdSet.is_empty istate.display_options.registers) then (
+    let _, gstate = istate.state in
+    print_endline ("---- registers ----" |> Util.cyan |> Util.clear);
+    List.iter
+      (fun reg ->
+        match Bindings.find_opt reg gstate.registers with
+        | Some value ->
+            print_endline (string_of_id reg ^ " = " ^ (Value.string_of_value value |> Util.green |> Util.clear))
+        | None -> print_endline ("No register " ^ string_of_id reg)
+      )
+      (IdSet.elements istate.display_options.registers)
+  );
+  match istate.mode with Normal -> "sail> " | Evaluation _ -> "eval> "
 
 let mode_clear istate =
-  match istate.mode with Normal -> () | Evaluation _ -> if istate.clear then LNoise.clear_screen () else ()
+  match istate.mode with
+  | Normal -> ()
+  | Evaluation _ -> if istate.display_options.clear then LNoise.clear_screen () else ()
 
 let rec user_input istate callback =
   match LNoise.linenoise (prompt istate) with
@@ -382,6 +399,12 @@ let help =
   | ":rewrite" ->
       sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
         (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
+  | ":show_register" | ":show_registers" ->
+      sprintf ":show_register %s - Print the value of the registers above the prompt."
+        (color yellow "<register1> <register2> ...")
+  | ":hide_register" | ":hide_registers" ->
+      sprintf ":hide_register %s - Do not print the value of the registers above the prompt."
+        (color yellow "<register1> <register2> ...")
   | "" ->
       sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
         (color green ":commands") (color green ":help") (color yellow "<command>")
@@ -453,8 +476,10 @@ let handle_input' istate input =
             Type_check.set_tc_debug (int_of_string arg);
             istate
         | ":clear" ->
-            if arg = "on" || arg = "true" then { istate with clear = true }
-            else if arg = "off" || arg = "false" then { istate with clear = false }
+            if arg = "on" || arg = "true" then
+              { istate with display_options = { istate.display_options with clear = true } }
+            else if arg = "off" || arg = "false" then
+              { istate with display_options = { istate.display_options with clear = false } }
             else (
               print_endline "Invalid argument for :clear, expected either :clear on or :clear off";
               istate
@@ -464,7 +489,7 @@ let handle_input' istate input =
             let commands =
               [
                 "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help \
-                 :output :option";
+                 :output :option :show_register :hide_register";
                 "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile " ^ more_commands;
                 "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
                 "";
@@ -507,6 +532,35 @@ let handle_input' istate input =
         | ":help" ->
             print_endline (help arg);
             istate
+        | ":show_register" | ":show_registers" ->
+            let args = Str.split (Str.regexp " +") arg in
+            List.fold_left
+              (fun istate arg ->
+                let display_options = istate.display_options in
+                let display_options =
+                  { display_options with registers = IdSet.add (mk_id arg) display_options.registers }
+                in
+                { istate with display_options }
+              )
+              istate args
+        | ":hide_register" | ":hide_registers" ->
+            let args = Str.split (Str.regexp " +") arg in
+            List.fold_left
+              (fun istate arg ->
+                let display_options = istate.display_options in
+                let reg = mk_id arg in
+                if IdSet.mem reg display_options.registers then (
+                  let display_options =
+                    { display_options with registers = IdSet.remove (mk_id arg) display_options.registers }
+                  in
+                  { istate with display_options }
+                )
+                else (
+                  print_endline ("Register " ^ arg ^ " is not being displayed");
+                  istate
+                )
+              )
+              istate args
         | _ ->
             recognised := false;
             istate
