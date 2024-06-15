@@ -55,6 +55,7 @@ skip_tests = {
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
     'lib_valid_hex_bits', # bitvector parsing
+    'issue202_1', # lists
 }
 
 print("Sail is {}".format(sail))

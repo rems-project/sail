@@ -322,7 +322,7 @@ let string_of_value = function
 
 let rec string_of_cval = function
   | V_id (id, _) -> string_of_name id
-  | V_member (id, _) -> string_of_id id
+  | V_member (id, _) -> Util.zencode_string (string_of_id id)
   | V_lit (VL_undefined, ctyp) -> string_of_value VL_undefined ^ " : " ^ string_of_ctyp ctyp
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) -> Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
