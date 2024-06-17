@@ -1,4 +1,4 @@
 default Order dec
 
-/** A documentation comment */
+/*! A documentation comment */
 val main : unit -> unit

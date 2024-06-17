@@ -1,6 +1,6 @@
 default Order dec
 
-/** A documentation comment */
+/*! A documentation comment */
 
 
 
