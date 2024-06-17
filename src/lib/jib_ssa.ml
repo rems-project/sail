@@ -127,7 +127,6 @@ let add_vertex data graph =
     Array.blit graph.nodes 0 new_nodes 0 (Array.length graph.nodes);
     graph.nodes <- new_nodes
   end;
-  let n = graph.next in
   graph.nodes.(n) <- Some (data, IntSet.empty, IntSet.empty);
   graph.next <- n + 1;
   n

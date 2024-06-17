@@ -3197,7 +3197,7 @@ and bind_assignment assign_l env (LE_aux (lexp_aux, (lexp_l, uannot)) as lexp) e
   match lexp_aux with
   | LE_app (f, xs) ->
       ( check_exp env
-          (E_aux (E_app (f, xs @ [exp]), (lexp_l, add_attribute (gen_loc lexp_l) "setter" None uannot)))
+          (E_aux (E_app (f, xs @ [exp]), (assign_l, add_attribute (gen_loc lexp_l) "setter" None uannot)))
           unit_typ,
         env
       )

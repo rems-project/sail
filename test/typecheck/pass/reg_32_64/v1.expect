@@ -5,8 +5,8 @@
 Explicit effect annotations are deprecated. They are no longer used and can be removed.
 
 [93mType error[0m:
-[96mpass/reg_32_64/v1.sail[0m:35.2-6:
+[96mpass/reg_32_64/v1.sail[0m:35.2-28:
 35[96m |[0m  R(0) = 0xCAFE_CAFE_0000_00;
-  [91m |[0m  [91m^--^[0m
+  [91m |[0m  [91m^------------------------^[0m
   [91m |[0m Could not resolve quantifiers for set_R
   [91m |[0m [94m*[0m (regno(0) & 56 in {32, 64})
