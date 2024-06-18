@@ -153,6 +153,8 @@ This is used by the interactive read-eval-print loop. The interactive mode expos
 it's possible to excute code paths from the interactive mode that would otherwise be unreachable during normal execution. *)
 val print_error : ?interactive:bool -> error -> unit
 
+val print_type_error : ?hint:string -> Parse_ast.l -> string -> unit
+
 (** This function transforms all errors raised by the provided function into internal [Err_unreachable] errors *)
 val forbid_errors : string * int * int * int -> ('a -> 'b) -> 'a -> 'b
 
@@ -176,3 +178,22 @@ val get_sail_dir : string -> string
 
 (** Run a command using Unix.system, but raise a Reporting exception if the command fails or is stopped/killed by a signal *)
 val system_checked : ?loc:Parse_ast.l -> string -> unit
+
+module Position : sig
+  (** Assuming a position is at the start of a string, move it to the
+     position of the first character that would not get removed by
+     String.trim *)
+  val trim_position : string -> Lexing.position -> Lexing.position
+
+  (** Assuming a position represents the start of a string, advance it
+     to the end of the string, plus 'after' characters (default 0). If
+     trim is true, then the position is moved to the last
+     non-whitespace character. *)
+  val advance_position : ?after:int -> trim:bool -> string -> Lexing.position -> Lexing.position
+
+  (** Assuming a position represents the start of a string, create a
+     location representing the contents of the string. If trim is
+     true, whitespace at the start and end is not included in the
+     location. *)
+  val string_location : trim:bool -> start:Lexing.position -> string -> Parse_ast.l
+end

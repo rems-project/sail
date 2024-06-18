@@ -1474,31 +1474,49 @@ let initial_ctx =
     target_sets = StringMap.empty;
   }
 
-let exp_of_string str =
-  try
-    let exp = Parser.exp_eof (Lexer.token (ref [])) (Lexing.from_string str) in
-    to_ast_exp initial_ctx exp
-  with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
+let inline_lexbuf lexbuf inline =
+  (* Note that OCaml >= 4.11 has a much less hacky way of doing this *)
+  let open Lexing in
+  match inline with
+  | Some p ->
+      lexbuf.lex_curr_p <- p;
+      lexbuf.lex_abs_pos <- p.pos_cnum
+  | None -> ()
 
-let typschm_of_string str =
+let parse_from_string action ?inline str =
+  let lexbuf = Lexing.from_string str in
   try
-    let typschm = Parser.typschm_eof (Lexer.token (ref [])) (Lexing.from_string str) in
-    let typschm, _ = to_ast_typschm initial_ctx typschm in
-    typschm
-  with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
+    inline_lexbuf lexbuf inline;
+    action lexbuf
+  with Parser.Error ->
+    let pos = Lexing.lexeme_start_p lexbuf in
+    let tok = Lexing.lexeme lexbuf in
+    raise (Reporting.err_syntax pos (Printf.sprintf "Failed to parse '%s' at token '%s'" str tok))
 
-let typ_of_string str =
-  try
-    let typ = Parser.typ_eof (Lexer.token (ref [])) (Lexing.from_string str) in
-    let typ = to_ast_typ initial_ctx typ in
-    typ
-  with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
+let exp_of_string =
+  parse_from_string (fun lexbuf ->
+      let exp = Parser.exp_eof (Lexer.token (ref [])) lexbuf in
+      to_ast_exp initial_ctx exp
+  )
 
-let constraint_of_string str =
-  try
-    let atyp = Parser.typ_eof (Lexer.token (ref [])) (Lexing.from_string str) in
-    to_ast_constraint initial_ctx atyp
-  with Parser.Error -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
+let typschm_of_string =
+  parse_from_string (fun lexbuf ->
+      let typschm = Parser.typschm_eof (Lexer.token (ref [])) lexbuf in
+      let typschm, _ = to_ast_typschm initial_ctx typschm in
+      typschm
+  )
+
+let typ_of_string =
+  parse_from_string (fun lexbuf ->
+      let typ = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
+      to_ast_typ initial_ctx typ
+  )
+
+let constraint_of_string =
+  parse_from_string (fun lexbuf ->
+      let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
+      to_ast_constraint initial_ctx atyp
+  )
 
 let extern_of_string ?(pure = false) id str =
   VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }) |> mk_val_spec
@@ -1700,17 +1718,24 @@ let process_ast ?(generate = true) ast =
     }
   else ast
 
-let ast_of_def_string_with ocaml_pos f str =
+let ast_of_def_string_with ?inline ocaml_pos f str =
   let lexbuf = Lexing.from_string str in
+  lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  inline_lexbuf lexbuf inline;
   let internal = !opt_magic_hash in
   opt_magic_hash := true;
-  lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-  let def = Parser.def_eof (Lexer.token (ref [])) lexbuf in
+  let def =
+    try Parser.def_eof (Lexer.token (ref [])) lexbuf
+    with Parser.Error ->
+      let pos = Lexing.lexeme_start_p lexbuf in
+      let tok = Lexing.lexeme lexbuf in
+      raise (Reporting.err_syntax pos ("current token: " ^ tok))
+  in
   let ast = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ~generate:false ast) (P.Defs [("", f [def])]) in
   opt_magic_hash := internal;
   ast
 
-let ast_of_def_string ocaml_pos str = ast_of_def_string_with ocaml_pos (fun x -> x) str
+let ast_of_def_string ?inline ocaml_pos str = ast_of_def_string_with ?inline ocaml_pos (fun x -> x) str
 
 let defs_of_string ocaml_pos str = (ast_of_def_string ocaml_pos str).defs
 
@@ -1753,18 +1778,12 @@ let parse_project ?inline ?filename:f ~contents:s () =
   let open Project in
   let open Lexing in
   let lexbuf = from_string s in
-
-  (* Note that OCaml >= 4.11 has a much less hacky way of doing this *)
-  begin
-    match inline with
-    | Some p ->
-        lexbuf.lex_curr_p <- p;
-        lexbuf.lex_abs_pos <- p.pos_cnum
-    | None -> lexbuf.lex_curr_p <- { pos_fname = Option.get f; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
-  end;
+  if Option.is_none inline then
+    lexbuf.lex_curr_p <- { pos_fname = Option.get f; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  inline_lexbuf lexbuf inline;
 
   try Project_parser.file Project_lexer.token lexbuf
   with Project_parser.Error ->
-    let pos = Lexing.lexeme_start_p lexbuf in
-    let tok = Lexing.lexeme lexbuf in
+    let pos = lexeme_start_p lexbuf in
+    let tok = lexeme lexbuf in
     raise (Reporting.err_syntax pos ("current token: " ^ tok))

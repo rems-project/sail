@@ -231,6 +231,8 @@ let print_error ?(interactive = false) e =
   let m1, hint, pos_l, m2 = dest_err ~interactive e in
   print_err_internal hint pos_l m1 m2
 
+let print_type_error ?hint l msg = print_err_internal hint (Loc l) Util.("Type error" |> yellow |> clear) msg
+
 (* Warnings *)
 
 module StringSet = Set.Make (String)
@@ -352,3 +354,38 @@ let system_checked ?loc:(l = Parse_ast.Unknown) cmd =
   | WEXITED n -> raise (err_general l (Printf.sprintf "Command %s failed with exit code %d" cmd n))
   | WSTOPPED n -> raise (err_general l (Printf.sprintf "Command %s stopped by signal %d" cmd n))
   | WSIGNALED n -> raise (err_general l (Printf.sprintf "Command %s killed by signal %d" cmd n))
+
+module Position = struct
+  open Lexing
+
+  let trim_position str p =
+    let len = String.length str in
+    let rec go n p =
+      if n < len && (str.[n] = ' ' || str.[n] = '\t') then go (n + 1) { p with pos_cnum = p.pos_cnum + 1 }
+      else if n < len && str.[n] = '\n' then
+        go (n + 1) { p with pos_lnum = p.pos_lnum + 1; pos_bol = p.pos_cnum + 1; pos_cnum = p.pos_cnum + 1 }
+      else p
+    in
+    go 0 p
+
+  let string_positions trim after str p =
+    let str, p = if trim then (String.trim str, trim_position str p) else (str, p) in
+    let lnum = ref p.pos_lnum in
+    let bol = ref p.pos_bol in
+    let cnum = ref p.pos_cnum in
+    for i = 0 to String.length str - 1 do
+      if str.[i] = '\n' then (
+        incr lnum;
+        incr cnum;
+        bol := !cnum
+      )
+      else incr cnum
+    done;
+    (p, { p with pos_lnum = !lnum; pos_bol = !bol; pos_cnum = !cnum + after })
+
+  let advance_position ?(after = 0) ~trim str p = snd (string_positions trim after str p)
+
+  let string_location ~trim ~start:s str =
+    let s, e = string_positions trim 0 str s in
+    Parse_ast.Range (s, e)
+end
