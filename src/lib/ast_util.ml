@@ -202,7 +202,7 @@ let rec is_gen_loc = function
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range _ -> false
 
-let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
+let mk_id ?loc:(l = Parse_ast.Unknown) str = Id_aux (Id str, l)
 
 let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
@@ -248,7 +248,7 @@ let mk_fundef funcls =
   let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
   DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot Parse_ast.Unknown ())
 
-let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
+let mk_letbind ?loc:(l = Parse_ast.Unknown) pat exp = LB_aux (LB_val (pat, exp), (l, empty_uannot))
 
 let mk_val_spec vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown ())
 

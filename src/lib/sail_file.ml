@@ -67,7 +67,9 @@
 
 type handle = int
 
-let handles = ref 0
+let handles = ref 1
+
+let interactive_repl = 0
 
 let new_handle () =
   let handle = !handles in
@@ -119,9 +121,43 @@ type info = {
 let new_info ~owner ~given_path ~canonical_path ~contents =
   { owner; given_path; canonical_path; contents; next_edit = 0; edits = Array.make 64 None }
 
-let files : (int, info) Hashtbl.t = Hashtbl.create 64
+let files : (int, info) Hashtbl.t =
+  let tbl = Hashtbl.create 64 in
+  let contents = Array.make 1 "0000001,0000016" in
+  Hashtbl.add tbl interactive_repl (new_info ~owner:Compiler ~given_path:"REPL" ~canonical_path:"REPL" ~contents);
+  tbl
 
-let opened : (string, int) Hashtbl.t = Hashtbl.create 64
+let opened : (string, int) Hashtbl.t =
+  let tbl = Hashtbl.create 64 in
+  Hashtbl.add tbl "REPL" interactive_repl;
+  tbl
+
+let add_line_to_repl_contents n line info =
+  let len = Array.length info.contents in
+  if n >= len then (
+    let new_contents = Array.make (len * 2) "" in
+    Array.blit info.contents 0 new_contents 0 len;
+    info.contents <- new_contents
+  );
+  info.contents.(n) <- line
+
+let repl_prompt_line () =
+  let info = Hashtbl.find files interactive_repl in
+  Scanf.sscanf info.contents.(0) "%d,%d" (fun n _ -> n + 1)
+
+let add_to_repl_contents ~command =
+  let info = Hashtbl.find files interactive_repl in
+  let n, bol = Scanf.sscanf info.contents.(0) "%d,%d" (fun n bol -> (n, bol)) in
+  let n', bol' =
+    List.fold_left
+      (fun (n, bol) line ->
+        add_line_to_repl_contents n line info;
+        (n + 1, bol + String.length line)
+      )
+      (n, bol) (Util.split_on_char '\n' command)
+  in
+  info.contents.(0) <- Printf.sprintf "%07d,%07d" n' bol';
+  (n + 1, bol)
 
 let edit_file handle edit =
   let info = Hashtbl.find files handle in

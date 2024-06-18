@@ -67,6 +67,13 @@
 
 type handle = private int
 
+(** This is a special handle that contains inputs to the sail -i REPL *)
+val interactive_repl : handle
+
+val repl_prompt_line : unit -> int
+
+val add_to_repl_contents : command:string -> int * int
+
 (** For the LSP, we might have Sail and the editor use slightly
     different paths for the same file so we can set this to
     Sys.realpath, and we will then treat files with the same canonical

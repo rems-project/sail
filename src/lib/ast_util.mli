@@ -176,7 +176,7 @@ val is_order_dec : order -> bool
 
 (** {2 Functions for building untyped AST elements} *)
 
-val mk_id : string -> id
+val mk_id : ?loc:l -> string -> id
 val mk_kid : string -> kid
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
@@ -199,7 +199,7 @@ val mk_qi_id : kind_aux -> kid -> quant_item
 val mk_qi_nc : n_constraint -> quant_item
 val mk_qi_kopt : kinded_id -> quant_item
 val mk_fexp : id -> uannot exp -> uannot fexp
-val mk_letbind : uannot pat -> uannot exp -> uannot letbind
+val mk_letbind : ?loc:l -> uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> ('a, 'b) def_aux -> 'b -> ('a, 'b) def
 

@@ -125,14 +125,25 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> untyped_ast
 (** {2 Parsing expressions and definitions from strings} *)
 
 val extern_of_string : ?pure:bool -> id -> string -> untyped_def
+
 val val_spec_of_string : id -> string -> untyped_def
+
 val defs_of_string : string * int * int * int -> string -> untyped_def list
-val ast_of_def_string : string * int * int * int -> string -> untyped_ast
+
+val ast_of_def_string : ?inline:Lexing.position -> string * int * int * int -> string -> untyped_ast
+
 val ast_of_def_string_with :
-  string * int * int * int -> (Parse_ast.def list -> Parse_ast.def list) -> string -> untyped_ast
-val exp_of_string : string -> uannot exp
-val typ_of_string : string -> typ
-val constraint_of_string : string -> n_constraint
+  ?inline:Lexing.position ->
+  string * int * int * int ->
+  (Parse_ast.def list -> Parse_ast.def list) ->
+  string ->
+  untyped_ast
+
+val exp_of_string : ?inline:Lexing.position -> string -> uannot exp
+
+val typ_of_string : ?inline:Lexing.position -> string -> typ
+
+val constraint_of_string : ?inline:Lexing.position -> string -> n_constraint
 
 (** {2 Parsing files } *)
 

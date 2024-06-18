@@ -72,6 +72,7 @@ open Ast_defs
 open Ast_util
 open Interpreter
 open Pretty_print_sail
+open Reporting.Position
 
 module Callgraph_commands = Callgraph_commands
 
@@ -141,7 +142,8 @@ let prompt istate =
       )
       (IdSet.elements istate.display_options.registers)
   );
-  match istate.mode with Normal -> "sail> " | Evaluation _ -> "eval> "
+  let l = Sail_file.repl_prompt_line () in
+  match istate.mode with Normal -> Printf.sprintf "REPL:%d> " l | Evaluation _ -> Printf.sprintf "REPL:%d eval> " l
 
 let mode_clear istate =
   match istate.mode with
@@ -417,7 +419,23 @@ let help =
             (color green ":help :help")
     )
 
-type input = Command of string * string | Expression of string | Empty
+type input = Command of string * string * Lexing.position | Expression of string * Lexing.position | Empty
+
+let editor = ref "vim"
+
+let editor_command cmd =
+  let open Lexing in
+  let temp_file = Filename.temp_file "repl" ".sail" in
+  Reporting.system_checked (!editor ^ " " ^ temp_file);
+  let contents = Util.read_whole_file temp_file in
+  let start_line, start_bol = Sail_file.add_to_repl_contents ~command:contents in
+  let pos = { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol } in
+  if cmd = "" then Expression (contents, pos) else Command (cmd, contents, pos)
+
+let () =
+  let open Interactive in
+  ArgString ("command", fun cmd -> ActionUnit (fun _ -> editor := cmd))
+  |> register_command ~name:"set_editor" ~help:"Set the editor for the :edit command. Default vim"
 
 (* This function is called on every line of input passed to the interpreter *)
 let handle_input' istate input =
@@ -426,16 +444,22 @@ let handle_input' istate input =
   (* Process the input and check if it's a command, a raw expression,
      or empty. *)
   let input =
+    let open Lexing in
     if input <> "" && input.[0] = ':' then (
+      let start_line, start_bol = Sail_file.add_to_repl_contents ~command:input in
       let n = try String.index input ' ' with Not_found -> String.length input in
       let cmd = Str.string_before input n in
-      let arg = String.trim (Str.string_after input n) in
-      Command (cmd, arg)
+      let arg = Str.string_after input n in
+      let pos = { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol + n } in
+      Command (cmd, String.trim arg, trim_position arg pos)
     )
     else if String.length input >= 2 && input.[0] = '/' && input.[1] = '/' then
       (* Treat anything starting with // as a comment *)
       Empty
-    else if input <> "" then Expression input
+    else if input <> "" then (
+      let start_line, start_bol = Sail_file.add_to_repl_contents ~command:input in
+      Expression (input, { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol })
+    )
     else Empty
   in
 
@@ -446,10 +470,12 @@ let handle_input' istate input =
     istate
   in
 
+  let input = match input with Command (":edit", arg, pos) -> editor_command arg | input -> input in
+
   (* First handle commands that are mode-independent *)
   let istate =
     match input with
-    | Command (cmd, arg) -> begin
+    | Command (cmd, arg, pos) -> begin
         match cmd with
         | ":n" | ":normal" -> { istate with mode = Normal }
         | ":t" | ":type" ->
@@ -461,17 +487,17 @@ let handle_input' istate input =
             Value.output_close ();
             exit 0
         | ":i" | ":infer" ->
-            let exp = Initial_check.exp_of_string arg in
+            let exp = Initial_check.exp_of_string ~inline:pos arg in
             let exp = Type_check.infer_exp istate.env exp in
             Document.to_channel stdout (doc_typ (Type_check.typ_of exp));
             print_newline ();
             istate
         | ":prove" ->
-            let nc = Initial_check.constraint_of_string arg in
+            let nc = Initial_check.constraint_of_string ~inline:pos arg in
             print_endline (string_of_bool (Type_check.prove __POS__ istate.env nc));
             istate
         | ":assume" ->
-            let nc = Initial_check.constraint_of_string arg in
+            let nc = Initial_check.constraint_of_string ~inline:pos arg in
             { istate with env = Type_check.Env.add_constraint nc istate.env }
         | ":v" | ":verbose" ->
             Type_check.set_tc_debug (int_of_string arg);
@@ -491,8 +517,7 @@ let handle_input' istate input =
               [
                 "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help \
                  :output :option :show_register :hide_register";
-                "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile :reset "
-                ^ more_commands;
+                "Normal mode commands - :elf :let :def :(b)ind :recheck :compile :reset " ^ more_commands;
                 "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command.";
@@ -573,36 +598,44 @@ let handle_input' istate input =
   match istate.mode with
   | Normal -> begin
       match input with
-      | Command (cmd, arg) -> begin
+      | Command (cmd, arg, pos) -> begin
           (* Normal mode commands *)
           match cmd with
-          | ":b" | ":bind" ->
-              let args = Str.split (Str.regexp " +") arg in
-              begin
-                match args with
-                | v :: ":" :: args ->
-                    let typ = Initial_check.typ_of_string (String.concat " " args) in
-                    let _, env, _ = Type_check.bind_pat istate.env (mk_pat (P_id (mk_id v))) typ in
-                    { istate with env }
-                | _ -> failwith "Invalid arguments for :bind"
-              end
-          | ":let" ->
-              let args = Str.split (Str.regexp " +") arg in
-              begin
-                match args with
-                | v :: "=" :: args ->
-                    let exp = Initial_check.exp_of_string (String.concat " " args) in
-                    let defs, env =
-                      Type_check.check_defs istate.env [mk_def (DEF_let (mk_letbind (mk_pat (P_id (mk_id v))) exp)) ()]
-                    in
-                    { istate with ast = append_ast_defs istate.ast defs; env }
-                | _ -> failwith "Invalid arguments for :let"
-              end
+          | ":b" | ":bind" -> begin
+              match Util.split_on_char ':' arg with
+              | [v; arg] ->
+                  let typ = Initial_check.typ_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) arg in
+                  let v_l = string_location ~start:pos ~trim:true v in
+                  let _, env, _ =
+                    Type_check.bind_pat istate.env (mk_pat ~loc:v_l (P_id (mk_id ~loc:v_l (String.trim v)))) typ
+                  in
+                  { istate with env }
+              | _ -> failwith "Invalid arguments for :bind"
+            end
+          | ":let" -> begin
+              match Util.split_on_char '=' arg with
+              | [v; exp_str] ->
+                  let exp = Initial_check.exp_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) exp_str in
+                  let arg_l = string_location ~start:pos ~trim:true arg in
+                  let v_l = string_location ~start:pos ~trim:true v in
+                  let defs, env =
+                    Type_check.check_defs istate.env
+                      [
+                        mk_def ~loc:arg_l
+                          (DEF_let (mk_letbind ~loc:arg_l (mk_pat ~loc:v_l (P_id (mk_id ~loc:v_l (String.trim v)))) exp))
+                          ();
+                      ]
+                  in
+                  { istate with ast = append_ast_defs istate.ast defs; env }
+              | _ -> failwith "Invalid arguments for :let"
+            end
           | ":def" ->
+              (* Add an extra blank line so we can handle directives that require a newline to be parsed. *)
+              ignore (Sail_file.add_to_repl_contents ~command:"");
               let ast =
-                Initial_check.ast_of_def_string_with __POS__
+                Initial_check.ast_of_def_string_with ~inline:pos __POS__
                   (Preprocess.preprocess istate.default_sail_dir None istate.options)
-                  arg
+                  (arg ^ "\n")
               in
               let ast, env = Type_check.check istate.env ast in
               { istate with ast = append_ast istate.ast ast; env }
@@ -652,10 +685,10 @@ let handle_input' istate input =
               | None -> unrecognised_command istate cmd
             )
         end
-      | Expression str ->
+      | Expression (str, pos) ->
           (* An expression in normal mode is type checked, then puts
                us in evaluation mode. *)
-          let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string str) in
+          let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string ~inline:pos str) in
           let istate = setup_interpreter_state istate in
           let istate = { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, return exp, []))) } in
           print_program istate;
@@ -664,7 +697,7 @@ let handle_input' istate input =
     end
   | Evaluation frame -> begin
       match input with
-      | Command (cmd, arg) -> begin
+      | Command (cmd, arg, pos) -> begin
           (* Evaluation mode commands *)
           match cmd with
           | ":r" | ":run" -> run istate
@@ -720,8 +753,9 @@ let handle_input istate input =
   | Failure str ->
       print_endline ("Error: " ^ str);
       istate
-  | Type_error.Type_error (_, err) ->
-      print_endline (fst (Type_error.string_of_type_error err));
+  | Type_error.Type_error (l, err) ->
+      let msg, hint = Type_error.string_of_type_error err in
+      Reporting.print_type_error ?hint l msg;
       istate
   | Reporting.Fatal_error err ->
       Reporting.print_error ~interactive:true err;
