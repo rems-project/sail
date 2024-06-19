@@ -3559,10 +3559,11 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
             else
               [
                 empty;
-                string "Definition M a := Defs.monad a exception.";
-                string "Definition MR a r := Defs.monad a (r + exception)%type.";
-                string "Definition returnM {A:Type} : A -> M A := Defs.returnm (E := exception).";
-                string "Definition returnR {A:Type} (R:Type) : A -> MR A R := Defs.returnm (E := R + exception)%type.";
+                string ("Definition M a := Defs.monad a " ^ exc_typ ^ ".");
+                string ("Definition MR a r := Defs.monad a (r + " ^ exc_typ ^ ")%type.");
+                string ("Definition returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ").");
+                string
+                  ("Definition returnR {A:Type} (R:Type) : A -> MR A R := Defs.returnm (E := R + " ^ exc_typ ^ ")%type.");
               ]
           in
           separate hardline
