@@ -73,16 +73,19 @@ val opt_interactive : bool ref
 
 (** Each interactive command is passed this struct, containing the
    abstract syntax tree, effect info and the type-checking
-   environment. Also contains the default Sail directory *)
-type istate = {
-  ast : Type_check.typed_ast;
-  effect_info : Effects.side_effect_info;
-  env : Type_check.Env.t;
-  default_sail_dir : string;
-  config : Yojson.Basic.t option;
-}
+    environment. Also contains the default Sail directory *)
+module State : sig
+  type istate = {
+    ctx : Initial_check.ctx;
+    ast : Type_check.typed_ast;
+    effect_info : Effects.side_effect_info;
+    env : Type_check.Env.t;
+    default_sail_dir : string;
+    config : Yojson.Basic.t option;
+  }
 
-val initial_istate : Yojson.Basic.t option -> string -> istate
+  val initial_istate : Yojson.Basic.t option -> string -> istate
+end
 
 val arg : string -> string
 val command : string -> string
@@ -90,8 +93,8 @@ val command : string -> string
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of (istate -> istate)
-  | ActionUnit of (istate -> unit)
+  | Action of (State.istate -> State.istate)
+  | ActionUnit of (State.istate -> unit)
 
 val reflect_typ : action -> typ
 
@@ -101,7 +104,7 @@ val all_commands : unit -> (string * (string * action)) list
 
 val generate_help : string -> string -> action -> string
 
-val run_action : istate -> string -> string -> action -> istate
+val run_action : State.istate -> string -> string -> action -> State.istate
 
 (** This is the main function used to register new interactive commands. *)
 val register_command : name:string -> help:string -> action -> unit

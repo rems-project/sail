@@ -130,9 +130,9 @@ let annotate_ast ast =
   in
   { ast with defs = List.map annotate_def ast.defs }
 
-let splice ast file =
+let splice ctx ast file =
   let parsed_ast = Initial_check.parse_file file |> snd in
-  let repl_ast = Initial_check.process_ast ~generate:false (Parse_ast.Defs [(file, parsed_ast)]) in
+  let repl_ast, _ = Initial_check.process_ast ctx (Parse_ast.Defs [(file, parsed_ast)]) in
   let repl_ast = Rewrites.move_loop_measures repl_ast in
   let repl_ast = map_ast_annot (fun (l, _) -> (l, Type_check.empty_tannot)) repl_ast in
   let repl_ast = annotate_ast repl_ast in
@@ -141,8 +141,8 @@ let splice ast file =
   let defs2 = filter_replacements specs_found repl_ast in
   { ast with defs = defs1 @ defs2 }
 
-let splice_files ast files =
-  let spliced_ast = List.fold_left (fun ast file -> splice ast file) ast files in
+let splice_files ctx ast files =
+  let spliced_ast = List.fold_left (fun ast file -> splice ctx ast file) ast files in
   let checked_ast, env = Type_error.check Type_check.initial_env (Type_check.strip_ast spliced_ast) in
   (* Move replacement functions into place and top-sort, in case dependencies have changed *)
   let sorted_ast = Callgraph.top_sort_defs (move_replacement_fundefs checked_ast) in

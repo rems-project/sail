@@ -69,6 +69,7 @@ open Libsail
 
 open Ast_defs
 open PPrint
+open Interactive.State
 
 let opt_libs_lem : string list ref = ref []
 let opt_lem_output_dir : string option ref = ref None
@@ -174,7 +175,7 @@ let write_doc dir filename doc =
   Pretty_print_common.print chan doc;
   Util.close_output_with_check o
 
-let lem_target _ _ out_file ast effect_info type_env =
+let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
   let out_filename = match out_file with Some f -> f | None -> "out" in
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let monad_modules =
@@ -207,7 +208,8 @@ let lem_target _ _ out_file ast effect_info type_env =
     ^^ hardline
   in
   let lem_files =
-    Pretty_print_lem.doc_ast_lem out_filename !opt_lem_split_files base_imports !opt_libs_lem effect_info type_env ast
+    Pretty_print_lem.doc_ast_lem out_filename !opt_lem_split_files base_imports !opt_libs_lem ctx effect_info type_env
+      ast
   in
   write_doc !opt_isa_output_dir (isa_thy_name ^ ".thy") isa_lemmas;
   List.iter (fun (filename, doc) -> write_doc !opt_lem_output_dir filename doc) lem_files

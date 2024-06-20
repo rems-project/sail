@@ -90,8 +90,7 @@ val run_pre_rewrites_hook : target -> typed_ast -> Effects.side_effect_info -> E
 
 val rewrites : target -> Rewrites.rewrite_sequence
 
-val action :
-  target -> Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
+val action : target -> string option -> Interactive.State.istate -> unit
 
 val asserts_termination : target -> bool
 
@@ -129,12 +128,11 @@ val register :
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
-  (Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  (string option -> Interactive.State.istate -> unit) ->
   target
 
 (** Use if you want to register a target that does nothing *)
-val empty_action :
-  Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
+val empty_action : string option -> Interactive.State.istate -> unit
 
 (** Return the current target. For example, if we register a 'coq'
    target, and Sail is invoked with `sail -coq`, then this function

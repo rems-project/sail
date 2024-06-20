@@ -80,7 +80,7 @@ let span x s e = (x, (s, e))
 %token Lparen Rparen Lsquare Rsquare Lcurly Rcurly
 %token Eof
 
-%token <string> FileId
+%token <string * string> FileId
 %token <string> Id
 %token <string * Lexing.position> IdLcurly
 %token <string> String
@@ -146,8 +146,8 @@ atomic_exp:
     { span (E_value (bool_value true)) $startpos $endpos }
   | False
     { span (E_value (bool_value false)) $startpos $endpos }
-  | f = FileId
-    { span (E_file f) $startpos $endpos }
+  | fid = FileId
+    { span (E_file (fst fid, snd fid)) $startpos $endpos }
   | id = Id
     { span (E_id id) $startpos $endpos }
   | id = Id; Lparen; args = exp_non_empty; Rparen

@@ -67,6 +67,7 @@
 
 open Ast_defs
 open Type_check
+open Interactive.State
 
 module StringMap = Map.Make (String)
 
@@ -77,7 +78,7 @@ type target = {
   pre_initial_check_hook : Parse_ast.defs -> unit;
   pre_rewrites_hook : typed_ast -> Effects.side_effect_info -> Env.t -> unit;
   rewrites : (string * Rewrites.rewriter_arg list) list;
-  action : Yojson.Basic.t option -> string -> string option -> typed_ast -> Effects.side_effect_info -> Env.t -> unit;
+  action : string option -> istate -> unit;
   asserts_termination : bool;
 }
 
@@ -128,7 +129,7 @@ let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fu
   targets := StringMap.add name tgt !targets;
   tgt
 
-let empty_action _ _ _ _ _ _ = ()
+let empty_action _ _ = ()
 
 let get_the_target () = match !the_target with Some name -> StringMap.find_opt name !targets | None -> None
 
@@ -156,8 +157,11 @@ let () =
           (fun istate ->
             match get ~name with
             | Some tgt ->
-                let ast, effect_info, env = Rewrites.rewrite istate.effect_info istate.env (rewrites tgt) istate.ast in
-                { istate with ast; env; effect_info }
+                let rws = rewrites tgt in
+                let ctx, ast, effect_info, env =
+                  Rewrites.rewrite istate.ctx istate.effect_info istate.env rws istate.ast
+                in
+                { istate with ctx; ast; env; effect_info }
             | None ->
                 print_endline ("No target " ^ name);
                 istate
@@ -174,9 +178,7 @@ let () =
               ActionUnit
                 (fun istate ->
                   match get ~name with
-                  | Some tgt ->
-                      action tgt istate.config istate.default_sail_dir (Some out) istate.ast istate.effect_info
-                        istate.env
+                  | Some tgt -> action tgt (Some out) istate
                   | None -> print_endline ("No target " ^ name)
                 )
           )

@@ -72,22 +72,28 @@ open Printf
 
 let opt_interactive = ref false
 
-type istate = {
-  ast : Type_check.typed_ast;
-  effect_info : Effects.side_effect_info;
-  env : Type_check.Env.t;
-  default_sail_dir : string;
-  config : Yojson.Basic.t option;
-}
-
-let initial_istate config default_sail_dir =
-  {
-    ast = empty_ast;
-    effect_info = Effects.empty_side_effect_info;
-    env = Type_check.initial_env;
-    default_sail_dir;
-    config;
+module State = struct
+  type istate = {
+    ctx : Initial_check.ctx;
+    ast : Type_check.typed_ast;
+    effect_info : Effects.side_effect_info;
+    env : Type_check.Env.t;
+    default_sail_dir : string;
+    config : Yojson.Basic.t option;
   }
+
+  let initial_istate config default_sail_dir =
+    {
+      ctx = Initial_check.initial_ctx;
+      ast = empty_ast;
+      effect_info = Effects.empty_side_effect_info;
+      env = Type_check.initial_env;
+      default_sail_dir;
+      config;
+    }
+end
+
+open State
 
 let arg str = "<" ^ str ^ ">" |> Util.yellow |> Util.clear
 
@@ -96,8 +102,8 @@ let command str = str |> Util.green |> Util.clear
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of (istate -> istate)
-  | ActionUnit of (istate -> unit)
+  | Action of (State.istate -> State.istate)
+  | ActionUnit of (State.istate -> unit)
 
 let commands = ref []
 

@@ -142,7 +142,7 @@ rule token = parse
   | ".."                              { DotDot }
   | (startident ident* as i) wsc* "{" { let p = Lexing.lexeme_start_p lexbuf in
                                         IdLcurly (i, { p with pos_cnum = p.pos_cnum + String.length i}) }
-  | ident* ".sail" as f               { FileId f }
+  | (ident* as f) "." (ident+ as ext) { FileId (f, ext) }
   | startident ident* as i            { match M.find_opt i kw_table with
                                         | Some kw -> kw (Lexing.lexeme_start_p lexbuf)
                                         | None -> Id i }

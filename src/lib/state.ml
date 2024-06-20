@@ -149,7 +149,7 @@ let generate_regstate env registers =
       );
   ]
 
-let generate_initial_regstate env ast =
+let generate_initial_regstate ctx env ast =
   let initial_values =
     (* We need to turn off intialisation of registers without an
        initialiser to avoid calling undefined_* functions that might
@@ -261,7 +261,8 @@ let generate_initial_regstate env ast =
         in
         string_of_id id ^ " = " ^ init_val
       in
-      List.map (defs_of_string __POS__)
+      List.map
+        (fun s -> fst (defs_of_string __POS__ ctx s))
         (init_defs
         @ ["let initial_regstate : regstate = struct { " ^ String.concat ", " (List.map init_reg registers) ^ " }"]
         )
@@ -302,7 +303,7 @@ let register_bitfield_types env typs =
   in
   List.fold_left add_bitfield_typs Bindings.empty typs
 
-let generate_regval_typ env typs =
+let generate_regval_typ ctx env typs =
   let constr (constr_id, typ) =
     Printf.sprintf "Regval_%s : %s" (string_of_id constr_id) (Document.to_string (doc_typ typ))
   in
@@ -311,10 +312,8 @@ let generate_regval_typ env typs =
     ^ "Regval_option : option(register_value), " ^ "Regval_bool : bool, " ^ "Regval_int : int, "
     ^ "Regval_real : real, " ^ "Regval_string : string"
   in
-  [
-    defs_of_string __POS__
-      ("union register_value = { " ^ String.concat ", " (builtins :: List.map constr (Bindings.bindings typs)) ^ " }");
-  ]
+  defs_of_string __POS__ ctx
+    ("union register_value = { " ^ String.concat ", " (builtins :: List.map constr (Bindings.bindings typs)) ^ " }")
 
 let regval_class_typs_lem = [("bool", "bool"); ("int", "integer"); ("real", "real"); ("string", "string")]
 
@@ -345,7 +344,7 @@ let regval_base_convs typ =
   if List.mem id (List.map fst regval_class_typs_lem) then (id ^ "_of_register_value", "register_value_of_" ^ id)
   else (id ^ "_of_regval", "regval_of_" ^ id)
 
-let add_regval_conv env id typ defs =
+let add_regval_conv ctx env id typ defs =
   let typ_str = Document.to_string (doc_typ typ) in
   let v_exp = mk_exp (E_id (mk_id "v")) in
   let base_typ = regval_base_typ env typ in
@@ -378,7 +377,7 @@ let add_regval_conv env id typ defs =
   in
   let to_function = Printf.sprintf "function %s v = %s" to_name (string_of_exp to_exp) in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
-  let cdefs = List.concat (List.map (defs_of_string __POS__) (from_defs @ to_defs)) in
+  let cdefs = List.concat (List.map (fun s -> fst (defs_of_string __POS__ ctx s)) (from_defs @ to_defs)) in
   defs @ cdefs
 
 let rec regval_convs wrap_fun (Typ_aux (t, _) as typ) =
@@ -856,35 +855,39 @@ let register_refs_coq doc_id coq_record_update env registers =
   in
   separate hardline [generic_convs; refs; getters_setters]
 
-let generate_regstate_defs env ast =
+let generate_regstate_defs ctx env ast =
   let defs = ast.defs in
   let registers = find_registers defs in
   let regtyps = List.map (fun (x, _, _) -> x) registers in
   let base_regtyps = register_base_types env regtyps in
   let bitfield_regtyps = register_bitfield_types env regtyps in
   let regtyps_with_ids = Bindings.union (fun _ x _ -> Some x) base_regtyps bitfield_regtyps in
-  let option_typ =
-    if is_defined defs "option" then []
-    else [defs_of_string __POS__ "union option ('a : Type) = {None : unit, Some : 'a}"]
+  let option_typ, ctx =
+    if is_defined defs "option" then ([], ctx)
+    else defs_of_string __POS__ ctx "union option ('a : Type) = {None : unit, Some : 'a}"
   in
-  let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ env base_regtyps in
+  let regval_typ, ctx =
+    if is_defined defs "register_value" then ([], ctx) else generate_regval_typ ctx env base_regtyps
+  in
   let regstate_typ = if is_defined defs "regstate" then [] else [generate_regstate env registers] in
   let initregstate =
     (* Don't create initial regstate if it is already defined or if we generated
        a regstate record with registers grouped per type; the latter would
        require record fields storing functions, which is not supported in
        Sail. *)
-    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else generate_initial_regstate env ast
+    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then []
+    else generate_initial_regstate ctx env ast
   in
   let defs =
-    option_typ @ regval_typ @ regstate_typ @ initregstate
+    [option_typ] @ [regval_typ] @ regstate_typ @ initregstate
     |> List.concat
-    |> Bindings.fold (add_regval_conv env) regtyps_with_ids
+    |> Bindings.fold (add_regval_conv ctx env) regtyps_with_ids
   in
   let typdefs, defs = List.partition (function DEF_aux (DEF_type _, _) -> true | _ -> false) defs in
   let valspecs, defs = List.partition (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs in
-  typdefs @ valspecs @ defs
+  (typdefs @ valspecs @ defs, ctx)
 
-let add_regstate_defs mwords env ast =
-  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs env ast) in
-  (env, append_ast_defs ast reg_defs)
+let add_regstate_defs mwords ctx env ast =
+  let defs, ctx = generate_regstate_defs ctx env ast in
+  let reg_defs, env = Type_error.check_defs env defs in
+  (ctx, env, append_ast_defs ast reg_defs)

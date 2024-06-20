@@ -1773,9 +1773,9 @@ let group_defs_by_file top_filename defs =
   in
   group None [] [] defs
 
-let doc_ast_lem out_filename split_files base_imports extra_imports effect_info type_env ({ defs; _ } as ast) =
+let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_info type_env ({ defs; _ } as ast) =
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
-  let state_ids = State.generate_regstate_defs type_env ast |> val_spec_ids in
+  let state_ids = fst (State.generate_regstate_defs ctx type_env ast) |> val_spec_ids in
   let is_state_def = function
     | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
     | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids

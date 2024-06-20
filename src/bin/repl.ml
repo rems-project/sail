@@ -81,10 +81,11 @@ type mode = Evaluation of frame | Normal
 type display_options = { clear : bool; registers : IdSet.t }
 
 type istate = {
+  ctx : Initial_check.ctx;
   ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
   env : Type_check.Env.t;
-  ref_state : Interactive.istate ref;
+  ref_state : Interactive.State.istate ref;
   vs_ids : IdSet.t ref;
   options : (Arg.key * Arg.spec * Arg.doc) list;
   mode : mode;
@@ -94,8 +95,9 @@ type istate = {
   config : Yojson.Basic.t option;
 }
 
-let shrink_istate istate : Interactive.istate =
+let shrink_istate istate : Interactive.State.istate =
   {
+    ctx = istate.ctx;
     ast = istate.ast;
     effect_info = istate.effect_info;
     env = istate.env;
@@ -103,12 +105,13 @@ let shrink_istate istate : Interactive.istate =
     config = istate.config;
   }
 
-let initial_istate config options env effect_info ast =
+let initial_istate config options ctx env effect_info ast =
   {
+    ctx;
     ast;
     effect_info;
     env;
-    ref_state = ref (Interactive.initial_istate config Locations.sail_dir);
+    ref_state = ref (Interactive.State.initial_istate config Locations.sail_dir);
     vs_ids = ref (val_spec_ids ast.defs);
     options;
     mode = Normal;
@@ -121,6 +124,7 @@ let initial_istate config options env effect_info ast =
 let setup_interpreter_state istate =
   istate.ref_state :=
     {
+      ctx = istate.ctx;
       ast = istate.ast;
       effect_info = istate.effect_info;
       env = istate.env;
@@ -632,19 +636,19 @@ let handle_input' istate input =
           | ":def" ->
               (* Add an extra blank line so we can handle directives that require a newline to be parsed. *)
               ignore (Sail_file.add_to_repl_contents ~command:"");
-              let ast =
-                Initial_check.ast_of_def_string_with ~inline:pos __POS__
+              let ast, ctx =
+                Initial_check.ast_of_def_string_with ~inline:pos __POS__ istate.ctx
                   (Preprocess.preprocess istate.default_sail_dir None istate.options)
                   (arg ^ "\n")
               in
               let ast, env = Type_check.check istate.env ast in
-              { istate with ast = append_ast istate.ast ast; env }
+              { istate with ast = append_ast istate.ast ast; env; ctx }
           | ":rewrite" ->
               let open Rewrites in
               let args = Str.split (Str.regexp " +") arg in
               let rec parse_args rw args =
                 match (rw, args) with
-                | Base_rewriter rw, [] -> rw
+                | Full_rewriter rw, [] -> rw
                 | Bool_rewriter rw, arg :: args -> parse_args (rw (bool_of_string arg)) args
                 | String_rewriter rw, arg :: args -> parse_args (rw arg) args
                 | Literal_rewriter rw, arg :: args -> begin
@@ -661,8 +665,8 @@ let handle_input' istate input =
                 | rw :: args ->
                     let rw = List.assoc rw Rewrites.all_rewriters in
                     let rw = parse_args rw args in
-                    let ast', effect_info', env' = rw istate.effect_info istate.env istate.ast in
-                    { istate with ast = ast'; effect_info = effect_info'; env = env' }
+                    let ctx', ast', effect_info', env' = rw istate.ctx istate.effect_info istate.env istate.ast in
+                    { istate with ctx = ctx'; ast = ast'; effect_info = effect_info'; env = env' }
                 | [] ->
                     failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
               end
@@ -764,16 +768,16 @@ let handle_input istate input =
       print_endline (Printexc.to_string exn);
       istate
 
-let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options env
+let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options ctx env
     effect_info ast =
   let istate =
     if rewrites then (
-      let ast, effect_info, env =
-        Rewrites.rewrite effect_info env (Rewrites.instantiate_rewrites Rewrites.rewrites_interpreter) ast
+      let ctx, ast, effect_info, env =
+        Rewrites.rewrite ctx effect_info env (Rewrites.instantiate_rewrites Rewrites.rewrites_interpreter) ast
       in
-      initial_istate config options env effect_info ast
+      initial_istate config options ctx env effect_info ast
     )
-    else initial_istate config options env effect_info ast
+    else initial_istate config options ctx env effect_info ast
   in
 
   LNoise.set_completion_callback (fun line_so_far ln_completions ->

@@ -100,7 +100,7 @@ val parse_assignment : variables:value Util.StringMap.t ref -> string -> bool
 
 type exp =
   | E_app of string * exp spanned list
-  | E_file of string
+  | E_file of string * string
   | E_id of string
   | E_if of exp spanned * exp spanned * exp spanned
   | E_list of exp spanned list
