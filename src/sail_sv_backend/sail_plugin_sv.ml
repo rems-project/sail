@@ -77,6 +77,7 @@ open Value2
 open PPrint
 open Printf
 open Smt_exp
+open Interactive.State
 
 open Generate_primop
 
@@ -385,7 +386,7 @@ let make_genlib_file filename =
   output_string out_chan "`endif\n";
   Util.close_output_with_check file_info
 
-let verilog_target _ default_sail_dir out_opt ast effect_info env =
+let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let module SV = Jib_sv.Make (struct
     let max_unknown_integer_width = !opt_max_unknown_integer_width
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width

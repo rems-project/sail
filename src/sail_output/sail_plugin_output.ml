@@ -67,6 +67,8 @@
 
 open Libsail
 
+open Interactive.State
+
 let output_sail_options =
   [
     ( "-output_sail_dir",
@@ -75,7 +77,7 @@ let output_sail_options =
     );
   ]
 
-let sail_target _ _ out_file ast _effect_info _env =
+let sail_target out_file { ast; env; _ } =
   let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".sail")) | None -> (false, stdout) in
   Pretty_print_sail.output_ast output_chan (Type_check.strip_ast ast);
   if close then close_out output_chan

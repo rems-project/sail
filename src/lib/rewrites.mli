@@ -96,7 +96,13 @@ val move_loop_measures : ('a, 'b) ast -> ('a, 'b) ast
 val rewrite_undefined : bool -> Env.t -> typed_ast -> typed_ast
 
 type rewriter =
-  | Base_rewriter of (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)
+  | Full_rewriter of
+      (Initial_check.ctx ->
+      Effects.side_effect_info ->
+      Env.t ->
+      typed_ast ->
+      Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
+      )
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -106,7 +112,15 @@ val describe_rewriter : rewriter -> string list
 val all_rewriters : (string * rewriter) list
 
 type rewrite_sequence =
-  (string * (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)) list
+  ( string
+  * (Initial_check.ctx ->
+    Effects.side_effect_info ->
+    Env.t ->
+    typed_ast ->
+    Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
+    )
+  )
+  list
 
 val rewrite_lit_ocaml : lit -> bool
 val rewrite_lit_lem : lit -> bool
@@ -125,7 +139,12 @@ val instantiate_rewrites : (string * rewriter_arg list) list -> rewrite_sequence
 
 (** Apply a sequence of rewrites to an AST *)
 val rewrite :
-  Effects.side_effect_info -> Env.t -> rewrite_sequence -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t
+  Initial_check.ctx ->
+  Effects.side_effect_info ->
+  Env.t ->
+  rewrite_sequence ->
+  typed_ast ->
+  Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
 
 val rewrites_interpreter : (string * rewriter_arg list) list
 

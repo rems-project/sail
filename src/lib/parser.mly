@@ -868,6 +868,8 @@ vector_update_list:
     { $1 :: $3 }
 
 attribute_data_key_value:
+  | key = Id; Eq; value = attribute_data
+    { (key, value) }
   | key = String; Eq; value = attribute_data
     { (key, value) }
 

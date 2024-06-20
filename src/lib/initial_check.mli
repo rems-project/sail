@@ -71,10 +71,6 @@ open Ast
 open Ast_defs
 open Ast_util
 
-type ctx
-
-val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
-
 (** {2 Options} *)
 
 (** Enable abstract types in the AST. If unset, will report an error
@@ -95,32 +91,38 @@ val opt_fast_undefined : bool ref
    name *)
 val opt_magic_hash : bool ref
 
-(** This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the AST
-   once. The original assumption in sail is that the whole AST gets
-   processed at once (therefore they could only get added once), and
-   this isn't true any more with the interpreter. This needs to be
-   public so the interpreter can set it back to false if it unloads
-   all the loaded files. *)
-val have_undefined_builtins : bool ref
+(** {2 Contexts} *)
 
-(** Val specs of undefined functions for builtin types that get added to
-    the AST if opt_undefined_gen is set (minus those functions that already
-    exist in the AST). *)
-val undefined_builtin_val_specs : untyped_def list
+type ctx
+
+val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
+
+val initial_ctx : ctx
 
 (** {2 Desugar and process AST } *)
 
 val generate_undefined_record_context : typquant -> (id * typ) list
+
 val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
+
 val generate_undefined_enum : id -> id list -> untyped_def list
 
-val generate_undefineds : IdSet.t -> untyped_def list -> untyped_def list
-val generate_enum_functions : IdSet.t -> untyped_def list -> untyped_def list
+(** Val specs of undefined functions for builtin types that get added
+    to the AST by generate_undefinds (minus those functions that
+    already exist in the AST). *)
+val undefined_builtin_val_specs : untyped_def list
+
+val generate_undefineds : IdSet.t -> untyped_def list
+
+val generate_initialize_registers : IdSet.t -> untyped_def list -> untyped_def list
+
+val generate_enum_number_functions : untyped_def list -> untyped_def list
+
+val generate : untyped_ast -> untyped_ast
 
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> untyped_ast
+val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 
 (** {2 Parsing expressions and definitions from strings} *)
 
@@ -128,16 +130,17 @@ val extern_of_string : ?pure:bool -> id -> string -> untyped_def
 
 val val_spec_of_string : id -> string -> untyped_def
 
-val defs_of_string : string * int * int * int -> string -> untyped_def list
+val defs_of_string : string * int * int * int -> ctx -> string -> untyped_def list * ctx
 
-val ast_of_def_string : ?inline:Lexing.position -> string * int * int * int -> string -> untyped_ast
+val ast_of_def_string : ?inline:Lexing.position -> string * int * int * int -> ctx -> string -> untyped_ast * ctx
 
 val ast_of_def_string_with :
   ?inline:Lexing.position ->
   string * int * int * int ->
+  ctx ->
   (Parse_ast.def list -> Parse_ast.def list) ->
   string ->
-  untyped_ast
+  untyped_ast * ctx
 
 val exp_of_string : ?inline:Lexing.position -> string -> uannot exp
 

@@ -421,8 +421,8 @@ val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
 
-(* Returns the type that an expression was checked against, if any.
-   Note that these may be removed if an expression is rewritten. *)
+(** Returns the type that an expression was checked against, if any.
+    Note that these may be removed if an expression is rewritten. *)
 val expected_typ_of : Ast.l * tannot -> typ option
 
 (** {2 Utilities } *)
@@ -446,6 +446,7 @@ val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) opt
 val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * typ) option
+
 val destruct_bitvector : Env.t -> typ -> nexp option
 
 val destruct_boolean : ?name:string option -> typ -> (kid * n_constraint) option
@@ -476,7 +477,7 @@ val instantiation_of : tannot exp -> typ_arg KBindings.t
     May fail if the arguments aren't sufficient to calculate all unifiers. *)
 val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 
-(* Type variable instantiations that inference will extract from constraints *)
+(** Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 
 val big_int_of_nexp : nexp -> Big_int.num option

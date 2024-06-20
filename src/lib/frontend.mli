@@ -86,7 +86,7 @@ val load_modules :
   Type_check.Env.t ->
   Project.project_structure ->
   Project.mod_id list ->
-  Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val load_files :
   ?target:Target.target ->
@@ -94,7 +94,7 @@ val load_files :
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->
-  Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val initial_rewrite :
   Effects.side_effect_info -> Type_check.Env.t -> Type_check.typed_ast -> Type_check.typed_ast * Type_check.Env.t

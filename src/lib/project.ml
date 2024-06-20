@@ -116,7 +116,7 @@ let parse_assignment ~variables s =
 
 type exp =
   | E_app of string * exp spanned list
-  | E_file of string
+  | E_file of string * string
   | E_id of string
   | E_if of exp spanned * exp spanned * exp spanned
   | E_list of exp spanned list
@@ -338,7 +338,8 @@ class eval_visitor (vars : value StringMap.t ref) =
     method! vexp outer_exp =
       let aux no_change =
         match no_change with
-        | (E_string s | E_file s | E_id s), l -> (E_value (V_string s), l)
+        | (E_string s | E_id s), l -> (E_value (V_string s), l)
+        | E_file (f, ext), l -> (E_value (V_string (f ^ "." ^ ext)), l)
         | E_parent, l -> (E_value (V_string Filename.parent_dir_name), l)
         | E_var var, l -> begin
             match StringMap.find_opt var !vars with

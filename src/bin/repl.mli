@@ -85,6 +85,7 @@ val start_repl :
   ?auto_rewrites:bool ->
   config:Yojson.Basic.t option ->
   options:(Arg.key * Arg.spec * Arg.doc) list ->
+  Initial_check.ctx ->
   Env.t ->
   Effects.side_effect_info ->
   typed_ast ->

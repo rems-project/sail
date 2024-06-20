@@ -108,6 +108,8 @@ let attribute_data_bool = function AD_aux (AD_bool b, _) -> Some b | _ -> None
 
 let attribute_data_string = function AD_aux (AD_string s, _) -> Some s | _ -> None
 
+let attribute_data_string_with_loc = function AD_aux (AD_string s, l) -> Some (s, l) | _ -> None
+
 let json_of_attribute attr = function
   | None -> `String attr
   | Some data -> `List [`String attr; json_of_attribute_data data]
@@ -204,9 +206,9 @@ let rec is_gen_loc = function
 
 let mk_id ?loc:(l = Parse_ast.Unknown) str = Id_aux (Id str, l)
 
-let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
+let mk_nc ?loc:(l = Parse_ast.Unknown) nc_aux = NC_aux (nc_aux, l)
 
-let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
+let mk_nexp ?loc:(l = Parse_ast.Unknown) nexp_aux = Nexp_aux (nexp_aux, l)
 
 let mk_exp ?loc:(l = Parse_ast.Unknown) exp_aux = E_aux (exp_aux, (l, empty_uannot))
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
@@ -221,36 +223,36 @@ let untyp_pat = function P_aux (P_typ (typ, pat), _) -> (pat, Some typ) | pat ->
 
 let mk_pexp ?loc:(l = Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, empty_uannot))
 
-let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
-let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
+let mk_mpat ?loc:(l = Parse_ast.Unknown) mpat_aux = MP_aux (mpat_aux, (l, empty_uannot))
+let mk_mpexp ?loc:(l = Parse_ast.Unknown) mpexp_aux = MPat_aux (mpexp_aux, (l, empty_uannot))
 
-let mk_lexp lexp_aux = LE_aux (lexp_aux, no_annot)
+let mk_lexp ?loc:(l = Parse_ast.Unknown) lexp_aux = LE_aux (lexp_aux, (l, empty_uannot))
 
-let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
+let mk_typ_pat ?loc:(l = Parse_ast.Unknown) tpat_aux = TP_aux (tpat_aux, l)
 
-let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
+let mk_lit ?loc:(l = Parse_ast.Unknown) lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
-let mk_lit_exp ?loc:(l = Parse_ast.Unknown) lit_aux = mk_exp ~loc:l (E_lit (mk_lit lit_aux))
+let mk_lit_exp ?loc:(l = Parse_ast.Unknown) lit_aux = mk_exp ~loc:l (E_lit (mk_lit ~loc:l lit_aux))
 
 let mk_funcl ?loc:(l = Parse_ast.Unknown) id pat body =
   FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), (l, empty_uannot))), (mk_def_annot l (), empty_uannot))
 
-let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
+let mk_qi_nc ?loc:(l = Parse_ast.Unknown) nc = QI_aux (QI_constraint nc, l)
 
-let mk_qi_id k kid =
-  let kopt = KOpt_aux (KOpt_kind (K_aux (k, Parse_ast.Unknown), kid), Parse_ast.Unknown) in
-  QI_aux (QI_id kopt, Parse_ast.Unknown)
+let mk_qi_id ?loc:(l = Parse_ast.Unknown) k kid =
+  let kopt = KOpt_aux (KOpt_kind (K_aux (k, l), kid), l) in
+  QI_aux (QI_id kopt, l)
 
-let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
+let mk_qi_kopt ?loc:(l = Parse_ast.Unknown) kopt = QI_aux (QI_id kopt, l)
 
-let mk_fundef funcls =
-  let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
-  let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
-  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot Parse_ast.Unknown ())
+let mk_fundef ?loc:(l = Parse_ast.Unknown) funcls =
+  let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, l) in
+  let rec_opt = Rec_aux (Rec_nonrec, l) in
+  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
 
 let mk_letbind ?loc:(l = Parse_ast.Unknown) pat exp = LB_aux (LB_val (pat, exp), (l, empty_uannot))
 
-let mk_val_spec vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot Parse_ast.Unknown ())
+let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
 
@@ -642,11 +644,11 @@ let rec constraint_conj (NC_aux (nc_aux, _) as nc) =
 let rec constraint_disj (NC_aux (nc_aux, _) as nc) =
   match nc_aux with NC_or (nc1, nc2) -> constraint_disj nc1 @ constraint_disj nc2 | _ -> [nc]
 
-let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
-let mk_typ_arg arg = A_aux (arg, Parse_ast.Unknown)
-let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
+let mk_typ ?loc:(l = Parse_ast.Unknown) typ = Typ_aux (typ, l)
+let mk_typ_arg ?loc:(l = Parse_ast.Unknown) arg = A_aux (arg, l)
+let mk_kid ?loc:(l = Parse_ast.Unknown) str = Kid_aux (Var ("'" ^ str), l)
 
-let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
+let mk_id_typ ?loc:(l = Parse_ast.Unknown) id = Typ_aux (Typ_id id, l)
 
 let mk_kopt ?loc:(l = Parse_ast.Unknown) kind_aux v =
   let l = match l with Parse_ast.Unknown -> kid_loc v | l -> l in
@@ -723,12 +725,12 @@ let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) =
 
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
-let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
+let mk_typschm ?loc:(l = Parse_ast.Unknown) typq typ = TypSchm_aux (TypSchm_ts (typq, typ), l)
 
 let mk_empty_typquant ~loc:l = TypQ_aux (TypQ_no_forall, l)
-let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
+let mk_typquant ?loc:(l = Parse_ast.Unknown) qis = TypQ_aux (TypQ_tq qis, l)
 
-let mk_fexp id exp = FE_aux (FE_fexp (id, exp), no_annot)
+let mk_fexp ?loc:(l = Parse_ast.Unknown) id exp = FE_aux (FE_fexp (id, exp), (l, empty_uannot))
 
 type effect = bool
 
@@ -1979,6 +1981,18 @@ and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp =
 
 and locate_fexp : 'a. (l -> l) -> 'a fexp -> 'a fexp =
  fun f (FE_aux (FE_fexp (id, exp), (l, annot))) -> FE_aux (FE_fexp (locate_id f id, locate f exp), (f l, annot))
+
+let unknown_to into_l l =
+  let open Parse_ast in
+  let rec go l =
+    match l with
+    | Unknown -> into_l
+    | Hint (msg, l1, l2) -> Hint (msg, go l1, go l2)
+    | Generated l -> Generated (go l)
+    | Unique (n, l) -> Unique (n, go l)
+    | Range _ -> l
+  in
+  go l
 
 let unique_ref = ref 0
 

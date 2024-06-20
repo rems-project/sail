@@ -107,7 +107,7 @@ let constructor name size =
   let typschm = fun_typschm [constant_bitvector_typ size] (mk_id_typ name) in
   let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None)) in
   let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" (string_of_id name) in
-  constructor_val :: defs_of_string __POS__ constructor_fun
+  constructor_val :: fst (defs_of_string __POS__ initial_ctx constructor_fun)
 
 (* Helper functions to generate different kinds of field accessor exps and lexps *)
 let get_field_exp range inner_exp =
@@ -188,7 +188,10 @@ let field_updater typ_name field order range =
   let body = set_bits_field (mk_id_exp orig_var) new_bits in
   let funcl = mk_funcl fun_id (mk_pat (P_tuple [mk_id_pat orig_var; mk_id_pat new_val_var])) body in
   let overload =
-    defs_of_string __POS__ (Printf.sprintf "overload update_%s = {%s}" (string_of_id field) (string_of_id fun_id))
+    fst
+      (defs_of_string __POS__ initial_ctx
+         (Printf.sprintf "overload update_%s = {%s}" (string_of_id field) (string_of_id fun_id))
+      )
   in
   [spec; mk_fundef [funcl]] @ overload |> fix_locations (range_loc range)
 
@@ -209,13 +212,14 @@ let register_field_setter typ_name field order range =
         "}";
       ]
   in
-  List.concat [defs_of_string __POS__ rfs_val; defs_of_string __POS__ rfs_function] |> fix_locations (range_loc range)
+  List.concat [fst (defs_of_string __POS__ initial_ctx rfs_val); fst (defs_of_string __POS__ initial_ctx rfs_function)]
+  |> fix_locations (range_loc range)
 
 let field_overload name field =
   let fun_id = string_of_id (field_accessor_ids name field).overload in
   let get_id = string_of_id (field_accessor_ids name field).get in
   let set_id = string_of_id (field_accessor_ids name field).set in
-  defs_of_string __POS__ (Printf.sprintf "overload %s = {%s, %s}" fun_id get_id set_id)
+  fst (defs_of_string __POS__ initial_ctx (Printf.sprintf "overload %s = {%s, %s}" fun_id get_id set_id))
 
 let field_accessors typ_name field order range =
   List.concat

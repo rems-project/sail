@@ -68,6 +68,7 @@
 open Libsail
 
 open Jib_smt
+open Interactive.State
 
 let opt_smt_auto = ref false
 let opt_smt_auto_solver = ref Smt_exp.Cvc5
@@ -140,7 +141,7 @@ let smt_rewrites =
     ("properties", []);
   ]
 
-let smt_target _ _ out_file ast effect_info env =
+let smt_target out_file { ast; effect_info; env; _ } =
   let open Ast_util in
   let properties = Property.find_properties ast in
   let prop_ids = Bindings.bindings properties |> List.map fst |> IdSet.of_list in

@@ -67,6 +67,8 @@
 
 open Libsail
 
+open Interactive.State
+
 type version = { major : int; minor : int; patch : int }
 
 (* Current version of Sail. Must be updated manually. CI checks this matches
@@ -415,7 +417,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
     List.partition (fun free -> Filename.check_suffix free ".sail_project") !opt_free_arguments
   in
 
-  let ast, env, effect_info =
+  let ctx, ast, env, effect_info =
     match (project_files, !opt_project_files) with
     | [], [] ->
         (* If there are no provided project files, we concatenate all
@@ -467,7 +469,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
           )
   in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
-  let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ast (List.rev files) in
+  let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
 
   (* Don't show warnings during re-writing for now *)
@@ -475,11 +477,11 @@ let run_sail (config : Yojson.Basic.t option) tgt =
   Reporting.opt_warnings := false;
 
   Target.run_pre_rewrites_hook tgt ast effect_info env;
-  let ast, effect_info, env = Rewrites.rewrite effect_info env (Target.rewrites tgt) ast in
+  let ctx, ast, effect_info, env = Rewrites.rewrite ctx effect_info env (Target.rewrites tgt) ast in
 
-  Target.action tgt config Locations.sail_dir !opt_file_out ast effect_info env;
+  Target.action tgt !opt_file_out { ctx; ast; effect_info; env; default_sail_dir = Locations.sail_dir; config };
 
-  (ast, env, effect_info)
+  (ctx, ast, env, effect_info)
 
 let run_sail_format (config : Yojson.Basic.t option) =
   let is_format_file f = match !opt_format_only with [] -> true | files -> List.exists (fun f' -> f = f') files in
@@ -616,7 +618,7 @@ let main () =
 
   if !opt_memo_z3 then Constraint.load_digests ();
 
-  let ast, env, effect_info =
+  let ctx, ast, env, effect_info =
     match Target.get_the_target () with
     | Some target when not !opt_just_check -> run_sail config target
     | _ -> run_sail config default_target
@@ -640,7 +642,7 @@ let main () =
           with End_of_file -> List.rev !lines
         )
     in
-    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~config ~options:!options env
+    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~config ~options:!options ctx env
       effect_info ast
   )
 

@@ -4339,27 +4339,43 @@ let monomorphise target effect_info env defs =
     env
   )
 
-let if_mono f effect_info env ast =
-  match (!opt_mono_split, !opt_auto_mono) with [], false -> (ast, effect_info, env) | _, _ -> f effect_info env ast
+let if_mono f ctx effect_info env ast =
+  match (!opt_mono_split, !opt_auto_mono) with
+  | [], false -> (ctx, ast, effect_info, env)
+  | _, _ -> f ctx effect_info env ast
 
 (* Also turn mwords stages on when we're just trying out mono *)
-let if_mwords f effect_info env ast =
-  if !Monomorphise.opt_mwords then f effect_info env ast else if_mono f effect_info env ast
+let if_mwords f ctx effect_info env ast =
+  if !Monomorphise.opt_mwords then f ctx effect_info env ast else if_mono f ctx effect_info env ast
 
-let if_flag flag f effect_info env ast = if !flag then f effect_info env ast else (ast, effect_info, env)
+let if_flag flag f ctx effect_info env ast = if !flag then f ctx effect_info env ast else (ctx, ast, effect_info, env)
 
 type rewriter =
-  | Base_rewriter of (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)
+  | Full_rewriter of
+      (Initial_check.ctx ->
+      Effects.side_effect_info ->
+      Env.t ->
+      typed_ast ->
+      Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
+      )
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
 
-let basic_rewriter f = Base_rewriter (fun effect_info env ast -> (f env ast, effect_info, env))
+let basic_rewriter f = Full_rewriter (fun ctx effect_info env ast -> (ctx, f env ast, effect_info, env))
+
+let base_rewriter f =
+  Full_rewriter
+    (fun ctx effect_info env ast ->
+      let ast, effect_info, env = f effect_info env ast in
+      (ctx, ast, effect_info, env)
+    )
+
 let checking_rewriter f =
-  Base_rewriter
-    (fun effect_info env ast ->
+  Full_rewriter
+    (fun ctx effect_info env ast ->
       let ast, env = f env ast in
-      (ast, effect_info, env)
+      (ctx, ast, effect_info, env)
     )
 
 type rewriter_arg =
@@ -4375,7 +4391,7 @@ let rec describe_rewriter = function
   | String_rewriter rw -> "<string>" :: describe_rewriter (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewriter (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewriter (rw (fun _ -> true))
-  | Base_rewriter _ -> []
+  | Full_rewriter _ -> []
 
 let instantiate_rewriter rewriter args =
   let selector_function = function
@@ -4390,9 +4406,9 @@ let instantiate_rewriter rewriter args =
   in
   let instantiate rewriter arg =
     match (rewriter, arg) with
-    | Base_rewriter rw, If_mono_arg -> Base_rewriter (if_mono rw)
-    | Base_rewriter rw, If_mwords_arg -> Base_rewriter (if_mwords rw)
-    | Base_rewriter rw, If_flag flag -> Base_rewriter (if_flag flag rw)
+    | Full_rewriter rw, If_mono_arg -> Full_rewriter (if_mono rw)
+    | Full_rewriter rw, If_mwords_arg -> Full_rewriter (if_mwords rw)
+    | Full_rewriter rw, If_flag flag -> Full_rewriter (if_flag flag rw)
     | Bool_rewriter rw, Flag_arg b -> rw !b
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
@@ -4400,15 +4416,15 @@ let instantiate_rewriter rewriter args =
     | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument"
   in
   match List.fold_left instantiate rewriter args with
-  | Base_rewriter rw -> rw
+  | Full_rewriter rw -> rw
   | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Rewrite not fully instantiated"
 
 let all_rewriters =
   [
     ("recheck_defs", checking_rewriter (fun _ ast -> Type_error.check initial_env (strip_ast ast)));
-    ("realize_mappings", Base_rewriter rewrite_ast_realize_mappings);
+    ("realize_mappings", base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
-    ("toplevel_string_append", Base_rewriter rewrite_ast_toplevel_string_append);
+    ("toplevel_string_append", base_rewriter rewrite_ast_toplevel_string_append);
     ("pat_string_append", basic_rewriter rewrite_ast_pat_string_append);
     ("mapping_patterns", basic_rewriter (fun _ -> Mappings.rewrite_ast));
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
@@ -4416,14 +4432,14 @@ let all_rewriters =
     ("complete_record_params", basic_rewriter rewrite_complete_record_params);
     ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);
     ("toplevel_consts", String_rewriter (fun target -> basic_rewriter (rewrite_toplevel_consts target)));
-    ("monomorphise", String_rewriter (fun target -> Base_rewriter (monomorphise target)));
+    ("monomorphise", String_rewriter (fun target -> base_rewriter (monomorphise target)));
     ( "atoms_to_singletons",
       String_rewriter (fun target -> basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))
     );
     ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
-    ("const_prop_mutrec", String_rewriter (fun target -> Base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
-    ("make_cases_exhaustive", Base_rewriter MakeExhaustive.rewrite);
+    ("const_prop_mutrec", String_rewriter (fun target -> base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
+    ("make_cases_exhaustive", base_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
@@ -4439,10 +4455,10 @@ let all_rewriters =
     ("guarded_pats", basic_rewriter rewrite_ast_guarded_pats);
     ("bit_lists_to_lits", basic_rewriter rewrite_bit_lists_to_lits);
     ("exp_lift_assign", basic_rewriter rewrite_ast_exp_lift_assign);
-    ("early_return", Base_rewriter rewrite_ast_early_return);
+    ("early_return", base_rewriter rewrite_ast_early_return);
     ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
     ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
-    ("letbind_effects", Base_rewriter rewrite_ast_letbind_effects);
+    ("letbind_effects", base_rewriter rewrite_ast_letbind_effects);
     ("remove_e_assign", basic_rewriter rewrite_ast_remove_e_assign);
     ("internal_lets", basic_rewriter rewrite_ast_internal_lets);
     ("remove_superfluous_letbinds", basic_rewriter rewrite_ast_remove_superfluous_letbinds);
@@ -4450,7 +4466,7 @@ let all_rewriters =
     ("merge_function_clauses", basic_rewriter merge_funcls);
     ("minimise_recursive_functions", basic_rewriter minimise_recursive_functions);
     ("move_termination_measures", basic_rewriter move_termination_measures);
-    ("rewrite_explicit_measure", Base_rewriter rewrite_explicit_measure);
+    ("rewrite_explicit_measure", base_rewriter rewrite_explicit_measure);
     ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", basic_rewriter rewrite_simple_types);
     ( "instantiate_outcomes",
@@ -4461,24 +4477,24 @@ let all_rewriters =
       String_rewriter
         (fun target -> basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target)))
     );
-    ("split", String_rewriter (fun str -> Base_rewriter (rewrite_split_fun_ctor_pats str)));
+    ("split", String_rewriter (fun str -> base_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
     ( "infer_effects",
       Bool_rewriter
         (fun asserts_termination ->
-          Base_rewriter (fun side_effects env ast -> (ast, Effects.infer_side_effects asserts_termination ast, env))
+          base_rewriter (fun side_effects env ast -> (ast, Effects.infer_side_effects asserts_termination ast, env))
         )
     );
     ( "attach_effects",
-      Base_rewriter (fun effect_info env ast -> (Effects.rewrite_attach_effects effect_info ast, effect_info, env))
+      base_rewriter (fun effect_info env ast -> (Effects.rewrite_attach_effects effect_info ast, effect_info, env))
     );
     ( "prover_regstate",
       Bool_rewriter
         (fun mwords ->
-          Base_rewriter
-            (fun effect_info env ast ->
-              let env, ast = State.add_regstate_defs mwords env ast in
-              (ast, effect_info, env)
+          Full_rewriter
+            (fun ctx effect_info env ast ->
+              let ctx, env, ast = State.add_regstate_defs mwords ctx env ast in
+              (ctx, ast, effect_info, env)
             )
         )
     );
@@ -4501,7 +4517,15 @@ let rewrites_interpreter =
   ]
 
 type rewrite_sequence =
-  (string * (Effects.side_effect_info -> Env.t -> typed_ast -> typed_ast * Effects.side_effect_info * Env.t)) list
+  ( string
+  * (Initial_check.ctx ->
+    Effects.side_effect_info ->
+    Env.t ->
+    typed_ast ->
+    Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
+    )
+  )
+  list
 
 let instantiate_rewrites rws =
   let get_rewriter name =
@@ -4513,9 +4537,9 @@ let instantiate_rewrites rws =
 
 let opt_ddump_rewrite_ast = ref None
 
-let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
+let rewrite_step n total (ctx, ast, effect_info, env) (name, rewriter) =
   let t = Profile.start () in
-  let ast, effect_info, env = rewriter effect_info env ast in
+  let ctx, ast, effect_info, env = rewriter ctx effect_info env ast in
   Profile.finish ("rewrite " ^ name) t;
 
   begin
@@ -4530,15 +4554,15 @@ let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
   end;
   Util.progress "Rewrite " name n total;
 
-  (ast, effect_info, env)
+  (ctx, ast, effect_info, env)
 
-let rewrite effect_info env rewriters ast =
+let rewrite ctx effect_info env rewriters ast =
   let total = List.length rewriters in
   try
     snd
       (List.fold_left
          (fun (n, astenv) rw -> (n + 1, rewrite_step n total astenv rw))
-         (1, (ast, effect_info, env))
+         (1, (ctx, ast, effect_info, env))
          rewriters
       )
   with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)

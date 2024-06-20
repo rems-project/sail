@@ -102,6 +102,8 @@ val attribute_data_bool : attribute_data -> bool option
 
 val attribute_data_string : attribute_data -> string option
 
+val attribute_data_string_with_loc : attribute_data -> (string * Parse_ast.l) option
+
 (** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
     {@sail[
     $[attribute argument] expression
@@ -177,28 +179,28 @@ val is_order_dec : order -> bool
 (** {2 Functions for building untyped AST elements} *)
 
 val mk_id : ?loc:l -> string -> id
-val mk_kid : string -> kid
-val mk_nc : n_constraint_aux -> n_constraint
-val mk_nexp : nexp_aux -> nexp
+val mk_kid : ?loc:l -> string -> kid
+val mk_nc : ?loc:l -> n_constraint_aux -> n_constraint
+val mk_nexp : ?loc:l -> nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
 val mk_pat : ?loc:l -> uannot pat_aux -> uannot pat
-val mk_mpat : uannot mpat_aux -> uannot mpat
+val mk_mpat : ?loc:l -> uannot mpat_aux -> uannot mpat
 val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
-val mk_mpexp : uannot mpexp_aux -> uannot mpexp
-val mk_lexp : uannot lexp_aux -> uannot lexp
-val mk_lit : lit_aux -> lit
+val mk_mpexp : ?loc:l -> uannot mpexp_aux -> uannot mpexp
+val mk_lexp : ?loc:l -> uannot lexp_aux -> uannot lexp
+val mk_lit : ?loc:l -> lit_aux -> lit
 val mk_lit_exp : ?loc:l -> lit_aux -> uannot exp
-val mk_typ_pat : typ_pat_aux -> typ_pat
+val mk_typ_pat : ?loc:l -> typ_pat_aux -> typ_pat
 val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
-val mk_fundef : uannot funcl list -> untyped_def
-val mk_val_spec : val_spec_aux -> untyped_def
-val mk_typschm : typquant -> typ -> typschm
+val mk_fundef : ?loc:l -> uannot funcl list -> untyped_def
+val mk_val_spec : ?loc:l -> val_spec_aux -> untyped_def
+val mk_typschm : ?loc:l -> typquant -> typ -> typschm
 val mk_empty_typquant : loc:l -> typquant
-val mk_typquant : quant_item list -> typquant
-val mk_qi_id : kind_aux -> kid -> quant_item
-val mk_qi_nc : n_constraint -> quant_item
-val mk_qi_kopt : kinded_id -> quant_item
-val mk_fexp : id -> uannot exp -> uannot fexp
+val mk_typquant : ?loc:l -> quant_item list -> typquant
+val mk_qi_id : ?loc:l -> kind_aux -> kid -> quant_item
+val mk_qi_nc : ?loc:l -> n_constraint -> quant_item
+val mk_qi_kopt : ?loc:l -> kinded_id -> quant_item
+val mk_fexp : ?loc:l -> id -> uannot exp -> uannot fexp
 val mk_letbind : ?loc:l -> uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> ('a, 'b) def_aux -> 'b -> ('a, 'b) def
@@ -235,9 +237,9 @@ val is_bool_kopt : kinded_id -> bool
 
 (** {2 Utility functions for constructing types} *)
 
-val mk_typ : typ_aux -> typ
-val mk_typ_arg : typ_arg_aux -> typ_arg
-val mk_id_typ : id -> typ
+val mk_typ : ?loc:l -> typ_aux -> typ
+val mk_typ_arg : ?loc:l -> typ_arg_aux -> typ_arg
+val mk_id_typ : ?loc:l -> id -> typ
 
 val is_typ_arg_nexp : typ_arg -> bool
 val is_typ_arg_typ : typ_arg -> bool
@@ -585,6 +587,8 @@ val hex_to_bin : string -> string
 
 val vector_string_to_bit_list : lit -> lit list
 
+val extern_assoc : string -> extern option -> string option
+
 (** {1 Manipulating locations} *)
 
 (** locate takes an expression and recursively sets the location in
@@ -605,7 +609,10 @@ val locate_typ : (l -> l) -> typ -> typ
    a generated number. *)
 val unique : l -> l
 
-val extern_assoc : string -> extern option -> string option
+(** Convert unknown locations into known ones by replacing any Unknown
+    subparts of the second argument with the first argument. Set up so
+    one can do: [locate (unknown_to l) exp] and similar. *)
+val unknown_to : l -> l -> l
 
 (** Try to find the annotation closest to the provided location (which
     can be in any format, as long as we can tell if it is smaller than

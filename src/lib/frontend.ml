@@ -124,7 +124,7 @@ let wrap_module proj parsed_module =
   |> Util.update_first (fun (f, (comments, defs)) -> (f, (comments, bracket_pragma "start_module#" :: defs)))
   |> Util.update_last (fun (f, (comments, defs)) -> (f, (comments, defs @ [bracket_pragma "end_module#"])))
 
-let process_ast target type_envs ast =
+let process_ast ctx target type_envs ast =
   if !opt_ddump_initial_ast then Pretty_print_sail.output_ast stdout ast;
 
   begin
@@ -144,7 +144,7 @@ let process_ast target type_envs ast =
   let ast, type_envs, side_effects = check_ast asserts_termination type_envs ast in
   Profile.finish "type checking" t;
 
-  (ast, type_envs, side_effects)
+  (ctx, ast, type_envs, side_effects)
 
 let load_modules ?target default_sail_dir options type_envs proj root_mod_ids =
   let open Project in
@@ -188,9 +188,8 @@ let load_modules ?target default_sail_dir options type_envs proj root_mod_ids =
     Parse_ast.Defs files
   in
   Option.iter (fun t -> Target.run_pre_initial_check_hook t ast) target;
-  let ast = Initial_check.process_ast ~generate:true ast in
-  let ast = { ast with comments } in
-  process_ast target type_envs ast
+  let ast, ctx = Initial_check.(process_ast initial_ctx ast) in
+  process_ast ctx target type_envs { (Initial_check.generate ast) with comments }
 
 let load_files ?target default_sail_dir options type_envs files =
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) files in
@@ -205,16 +204,15 @@ let load_files ?target default_sail_dir options type_envs files =
       )
   in
   Option.iter (fun t -> Target.run_pre_initial_check_hook t ast) target;
-  let ast = Initial_check.process_ast ~generate:true ast in
-  let ast = { ast with comments } in
-  process_ast target type_envs ast
+  let ast, ctx = Initial_check.(process_ast initial_ctx ast) in
+  process_ast ctx target type_envs { (Initial_check.generate ast) with comments }
 
 let rewrite_ast_initial effect_info env =
-  Rewrites.rewrite effect_info env
-    [("initial", fun effect_info env ast -> (Rewriter.rewrite_ast ast, effect_info, env))]
+  Rewrites.rewrite Initial_check.initial_ctx effect_info env
+    [("initial", fun ctx effect_info env ast -> (ctx, Rewriter.rewrite_ast ast, effect_info, env))]
 
 let initial_rewrite effect_info type_envs ast =
-  let ast, _, _ = rewrite_ast_initial effect_info type_envs ast in
+  let _, ast, _, _ = rewrite_ast_initial effect_info type_envs ast in
   (* Recheck after descattering so that the internal type environments
      always have complete variant types *)
   Type_error.check Type_check.initial_env (Type_check.strip_ast ast)

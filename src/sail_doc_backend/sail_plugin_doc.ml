@@ -67,6 +67,8 @@
 
 open Libsail
 
+open Interactive.State
+
 let opt_doc_format = ref "asciidoc"
 let opt_doc_files = ref []
 let opt_doc_embed = ref None
@@ -116,7 +118,7 @@ let output_docinfo doc_dir docinfo =
   output_char chan '\n';
   close_out chan
 
-let doc_target _ _ out_file ast _ _ =
+let doc_target out_file { ast; _ } =
   Reporting.opt_warnings := true;
   let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
   begin
@@ -171,7 +173,7 @@ let rec create_directories path =
       create_directories parent;
       Unix.mkdir path 0o755
 
-let html_target files _ _ out_dir_opt ast _ _ =
+let html_target files out_dir_opt { ast; _ } =
   let open Html_source in
   Reporting.opt_warnings := true;
   let out_dir = match out_dir_opt with None -> "sail_doc" | Some s -> s in

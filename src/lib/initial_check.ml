@@ -1579,8 +1579,6 @@ let generate_undefined_enum id ids =
       ];
   ]
 
-let have_undefined_builtins = ref false
-
 let undefined_builtin_val_specs =
   [
     extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
@@ -1601,15 +1599,8 @@ let undefined_builtin_val_specs =
 let make_global (DEF_aux (def, def_annot)) =
   DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
 
-let generate_undefineds vs_ids defs =
-  let undefined_builtins =
-    if !have_undefined_builtins then []
-    else begin
-      have_undefined_builtins := true;
-      List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) undefined_builtin_val_specs
-    end
-  in
-  undefined_builtins @ defs
+let generate_undefineds vs_ids =
+  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) undefined_builtin_val_specs
 
 let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> begin
@@ -1645,12 +1636,30 @@ let generate_initialize_registers vs_ids defs =
   in
   defs @ List.map make_global initialize_registers
 
-let generate_enum_functions vs_ids defs =
+let update_def_annot f (DEF_aux (def, annot)) = DEF_aux (def, f annot)
+
+let generate_enum_number_functions defs =
   let rec gen_enums acc = function
     | (DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), def_annot) as enum) :: defs -> begin
         match get_def_attribute "no_enum_functions" def_annot with
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->
+            let attr_opt = get_def_attribute "enum_functions" def_annot in
+            let names =
+              let open Util.Option_monad in
+              let* fields = Option.bind (Option.join (Option.map snd attr_opt)) attribute_data_object in
+              let* to_enum, to_l = Option.bind (List.assoc_opt "to_enum" fields) attribute_data_string_with_loc in
+              let* from_enum, from_l = Option.bind (List.assoc_opt "from_enum" fields) attribute_data_string_with_loc in
+              Some (mk_id ~loc:to_l to_enum, mk_id ~loc:from_l from_enum)
+            in
+            let l, to_enum_name, from_enum_name =
+              match (attr_opt, names) with
+              | Some (l, _), None -> raise (Reporting.err_general l "Expected to_enum and from_enum fields in attribute")
+              | None, Some _ -> Reporting.unreachable def_annot.loc __POS__ "Have attribute fields with no attribute!"
+              | Some (l, _), Some (id1, id2) -> (gen_loc l, id1, id2)
+              | None, None -> (gen_loc def_annot.loc, append_id id "_of_num", prepend_id "num_of_" id)
+            in
+
             let enum_val_spec name quants typ =
               mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None))
             in
@@ -1660,43 +1669,44 @@ let generate_enum_functions vs_ids defs =
 
             (* Create a function that converts a number to an enum. *)
             let to_enum =
+              let name = to_enum_name in
               let kid = mk_kid "e" in
-              let name = append_id id "_of_num" in
               let pexp n id =
                 let pat =
                   if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
                 in
-                mk_pexp (Pat_exp (pat, mk_exp (E_id id)))
+                let pat = locate_pat (unknown_to l) pat in
+                mk_pexp (Pat_exp (pat, mk_exp ~loc:l (E_id id)))
               in
               let funcl =
                 mk_funcl name
                   (mk_pat (P_id (mk_id "arg#")))
                   (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
               in
-              if IdSet.mem name vs_ids then []
-              else
-                [
-                  enum_val_spec name
-                    [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
-                    (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
-                  mk_fundef [funcl];
-                ]
+              [
+                enum_val_spec name
+                  [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
+                  (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
+                mk_fundef [funcl];
+              ]
             in
 
             (* Create a function that converts from an enum to a number. *)
             let from_enum =
+              let name = from_enum_name in
               let kid = mk_kid "e" in
               let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-              let name = prepend_id "num_of_" id in
               let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
               let funcl =
                 mk_funcl name
                   (mk_pat (P_id (mk_id "arg#")))
                   (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
               in
-              if IdSet.mem name vs_ids then []
-              else [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
+              [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
             in
+
+            let enum = update_def_annot (add_def_attribute (gen_loc (id_loc id)) "no_enum_functions" None) enum in
+
             gen_enums (List.rev ((enum :: to_enum) @ from_enum) @ acc) defs
       end
     | def :: defs -> gen_enums (def :: acc) defs
@@ -1704,21 +1714,15 @@ let generate_enum_functions vs_ids defs =
   in
   gen_enums [] defs
 
-let incremental_ctx = ref initial_ctx
+let process_ast ctx ast =
+  let ast, ctx = to_ast ctx ast in
+  ({ ast with defs = generate_enum_number_functions ast.defs }, ctx)
 
-let process_ast ?(generate = true) ast =
-  let ast, ctx = to_ast !incremental_ctx ast in
-  incremental_ctx := ctx;
+let generate ast =
   let vs_ids = val_spec_ids ast.defs in
-  if generate then
-    {
-      ast with
-      defs =
-        ast.defs |> generate_undefineds vs_ids |> generate_enum_functions vs_ids |> generate_initialize_registers vs_ids;
-    }
-  else ast
+  { ast with defs = generate_undefineds vs_ids @ generate_initialize_registers vs_ids ast.defs }
 
-let ast_of_def_string_with ?inline ocaml_pos f str =
+let ast_of_def_string_with ?inline ocaml_pos ctx f str =
   let lexbuf = Lexing.from_string str in
   lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   inline_lexbuf lexbuf inline;
@@ -1731,13 +1735,15 @@ let ast_of_def_string_with ?inline ocaml_pos f str =
       let tok = Lexing.lexeme lexbuf in
       raise (Reporting.err_syntax pos ("current token: " ^ tok))
   in
-  let ast = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ~generate:false ast) (P.Defs [("", f [def])]) in
+  let ast, ctx = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ctx ast) (P.Defs [("", f [def])]) in
   opt_magic_hash := internal;
-  ast
+  (ast, ctx)
 
-let ast_of_def_string ?inline ocaml_pos str = ast_of_def_string_with ?inline ocaml_pos (fun x -> x) str
+let ast_of_def_string ?inline ocaml_pos ctx str = ast_of_def_string_with ?inline ocaml_pos ctx (fun x -> x) str
 
-let defs_of_string ocaml_pos str = (ast_of_def_string ocaml_pos str).defs
+let defs_of_string ocaml_pos ctx str =
+  let ast, ctx = ast_of_def_string ocaml_pos ctx str in
+  (ast.defs, ctx)
 
 let get_lexbuf_from_string ~filename:f ~contents:s =
   let lexbuf = Lexing.from_string s in
