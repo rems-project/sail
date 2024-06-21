@@ -103,6 +103,9 @@ module Env : sig
   (** Env.t is the type of environments *)
   type t = env
 
+  (** This effectively disables all module related access control *)
+  val open_all_modules : t -> t
+
   (** Note: Most get_ functions assume the identifiers exist, and throw
      type errors if they don't. *)
 

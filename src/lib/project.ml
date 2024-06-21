@@ -132,8 +132,6 @@ type dependency =
   | D_requires of exp spanned non_empty
   | D_after of exp spanned non_empty
   | D_before of exp spanned non_empty
-  | D_default
-  | D_optional
 
 type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of mdl | M_files of exp spanned non_empty
 
@@ -196,7 +194,6 @@ let visit_dependency vis l outer_dependency =
         let e' = visit_exp vis e in
         let es' = map_no_copy (visit_exp vis) es in
         if e == e' && es == es' then no_change else D_before (e', es')
-    | D_default | D_optional -> no_change
   in
   do_visit vis (vis#vdependency l outer_dependency) aux outer_dependency
 
@@ -388,8 +385,6 @@ type project_structure = {
   mutable files : string spanned list ModMap.t;
   mutable requires : ModGraph.graph;
   mutable deps : ModGraph.graph;
-  mutable optional : ModSet.t;
-  mutable default : ModSet.t;
 }
 
 (* Simple visitor that visits modules in order of appearance
@@ -480,17 +475,11 @@ type frame = {
   requires : (selector * string) spanned list;
   after : (selector * string) spanned list;
   before : (selector * string) spanned list;
-  optional : bool;
-  default : bool;
 }
 
-let empty_frame = { directory = None; requires = []; after = []; before = []; optional = false; default = false }
+let empty_frame = { directory = None; requires = []; after = []; before = [] }
 
 type stack = frame list
-
-let is_default stack = List.exists (fun frame -> frame.default) stack
-
-let is_optional stack = List.exists (fun frame -> frame.optional) stack
 
 let get_from_frame f stack proj =
   let rec go acc = function
@@ -534,14 +523,11 @@ class dependency_visitor (proj : project_structure) =
             stack <- update_head (fun frame -> { frame with before = frame.before @ to_selectors (e :: es) }) stack
         | D_after (e, es) ->
             stack <- update_head (fun frame -> { frame with after = frame.after @ to_selectors (e :: es) }) stack
-        | D_default -> stack <- update_head (fun frame -> { frame with default = true }) stack
-        | D_optional -> stack <- update_head (fun frame -> { frame with optional = true }) stack
       end;
       SkipChildren
 
     method! vmodule m =
       let name = fst m.name in
-      let l = snd m.name in
       let id = StringMap.find name proj.ids in
       stack <- empty_frame :: stack;
       ChangeDoChildrenPost
@@ -557,13 +543,6 @@ class dependency_visitor (proj : project_structure) =
             proj.deps <- ModSet.fold (fun r -> ModGraph.add_edge id r) requires proj.deps;
             proj.deps <- ModSet.fold (fun b -> ModGraph.add_edge b id) before proj.deps;
             proj.deps <- ModSet.fold (fun a -> ModGraph.add_edge id a) after proj.deps;
-
-            let optional = is_optional stack in
-            let default = is_default stack in
-            if optional && default then
-              raise (Reporting.err_general (to_loc l) (name ^ " is marked as both optional and default"))
-            else if optional then proj.optional <- ModSet.add id proj.optional
-            else if default then proj.default <- ModSet.add id proj.default;
 
             stack <- List.tl stack;
             m
@@ -582,13 +561,7 @@ let run_tests defs (proj : project_structure) =
         let reduce_req = match List.nth_opt args 1 with Some "reduce_req" -> true | _ -> false in
         let darken id color = match ModMap.find_opt id proj.files with Some [] -> color | _ -> color ^ "3" in
         ModGraph.make_multi_dot
-          ~node_color:(fun id ->
-            darken id
-              ( if ModSet.mem id proj.optional then "aquamarine"
-                else if ModSet.mem id proj.default then "lemonchiffon"
-                else "chartreuse"
-              )
-          )
+          ~node_color:(fun id -> darken id "chartreuse")
           ~edge_color:(fun _ _ -> "black")
           ~string_of_node:(fun id -> fst proj.names.(id))
           chan
@@ -621,8 +594,6 @@ let initialize_project_structure ~variables defs =
       files = ModMap.empty;
       requires = ModMap.empty;
       deps = ModGraph.empty;
-      optional = ModSet.empty;
-      default = ModSet.empty;
     }
   in
   (* Fill in the mutable fields of the project *)

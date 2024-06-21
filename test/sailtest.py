@@ -89,6 +89,18 @@ def chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
+def project_chunks(filenames, cores):
+    ys = []
+    chunk = []
+    for filename in filenames:
+        if re.match('.+\.sail_project$', filename):
+            chunk.append(filename)
+        if len(chunk) >= cores:
+            ys.append(list(chunk))
+            chunk = []
+    ys.append(list(chunk))
+    return ys
+
 def step(string, expected_status=0):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate()

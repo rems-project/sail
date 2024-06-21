@@ -2200,13 +2200,12 @@ let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> begin
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) -> get_uninitialized_registers defs
-      | _ -> (typ, id) :: get_uninitialized_registers defs
+      | _ -> (id, typ) :: get_uninitialized_registers defs
     end
   | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
-let generate_initialize_registers vs_ids defs =
-  let regs = get_uninitialized_registers defs in
+let generate_initialize_registers vs_ids regs =
   let initialize_registers =
     if IdSet.mem (mk_id "initialize_registers") vs_ids then []
     else if regs = [] then
@@ -2223,12 +2222,12 @@ let generate_initialize_registers vs_ids defs =
             mk_funcl (mk_id "initialize_registers")
               (mk_pat (P_lit (mk_lit L_unit)))
               (mk_exp
-                 (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_lit_exp L_undef))) regs))
+                 (E_block (List.map (fun (id, typ) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_lit_exp L_undef))) regs))
               );
           ];
       ]
   in
-  defs @ List.map make_global initialize_registers
+  List.map make_global initialize_registers
 
 let update_def_annot f (DEF_aux (def, annot)) = DEF_aux (def, f annot)
 
@@ -2339,7 +2338,8 @@ let process_ast ctx ast =
 
 let generate ast =
   let vs_ids = val_spec_ids ast.defs in
-  { ast with defs = generate_undefineds vs_ids @ generate_initialize_registers vs_ids ast.defs }
+  let regs = get_uninitialized_registers ast.defs in
+  { ast with defs = generate_undefineds vs_ids @ ast.defs @ generate_initialize_registers vs_ids regs }
 
 let ast_of_def_string_with ?inline ocaml_pos ctx f str =
   let lexbuf = Lexing.from_string str in

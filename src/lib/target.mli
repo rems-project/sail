@@ -84,7 +84,7 @@ val name : target -> string
 
 val run_pre_parse_hook : target -> unit -> unit
 
-val run_pre_initial_check_hook : target -> Parse_ast.defs -> unit
+val run_pre_initial_check_hook : target -> string list -> unit
 
 val run_pre_rewrites_hook : target -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
 
@@ -124,7 +124,7 @@ val register :
   ?description:string ->
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
   ?pre_parse_hook:(unit -> unit) ->
-  ?pre_initial_check_hook:(Parse_ast.defs -> unit) ->
+  ?pre_initial_check_hook:(string list -> unit) ->
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->

@@ -213,17 +213,16 @@ let html_target files out_dir_opt { ast; _ } =
 let _ =
   let files : Html_source.file_info list ref = ref [] in
   Target.register ~name:"html" ~options:html_options
-    ~pre_initial_check_hook:(function
-      | Defs defs ->
-          List.iter
-            (fun (filename, _) ->
-              match Filename.chop_suffix_opt ~suffix:".sail" filename with
-              | Some prefix when Filename.is_relative filename ->
-                  let contents = Util.read_whole_file filename in
-                  let highlights = Html_source.highlights ~filename ~contents in
-                  files := { filename; prefix; contents; highlights } :: !files
-              | _ -> ()
-            )
-            defs
-      )
+    ~pre_initial_check_hook:(fun filenames ->
+      List.iter
+        (fun filename ->
+          match Filename.chop_suffix_opt ~suffix:".sail" filename with
+          | Some prefix when Filename.is_relative filename ->
+              let contents = Util.read_whole_file filename in
+              let highlights = Html_source.highlights ~filename ~contents in
+              files := { filename; prefix; contents; highlights } :: !files
+          | _ -> ()
+        )
+        filenames
+    )
     (html_target files)

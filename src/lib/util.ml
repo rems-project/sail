@@ -264,6 +264,17 @@ let list_index p l =
   let rec aux i l = match l with [] -> None | x :: xs -> if p x then Some i else aux (i + 1) xs in
   aux 0 l
 
+let fold_left_map f acc xs =
+  let ys, result =
+    List.fold_left
+      (fun (ys, acc) x ->
+        let acc', y = f acc x in
+        (y :: ys, acc')
+      )
+      ([], acc) xs
+  in
+  (result, List.rev ys)
+
 let option_get_exn e = function Some o -> o | None -> raise e
 
 let option_cases op f1 f2 = match op with Some o -> f1 o | None -> f2 ()

@@ -116,8 +116,6 @@ type dependency =
   | D_requires of exp spanned non_empty
   | D_after of exp spanned non_empty
   | D_before of exp spanned non_empty
-  | D_default
-  | D_optional
 
 type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of mdl | M_files of exp spanned non_empty
 
