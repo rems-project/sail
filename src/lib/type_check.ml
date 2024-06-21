@@ -5121,8 +5121,9 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   | DEF_pragma ("start_module#", arg, l) ->
       let mod_id = Env.get_module_id ~at:l env arg in
       typ_print (lazy (Printf.sprintf "module start %d '%s'" (Project.ModId.to_int mod_id) arg));
-      ([], Env.start_module ~at:l mod_id env)
-  | DEF_pragma ("end_module#", _, _) -> ([], Env.end_module env)
+      ([DEF_aux (DEF_pragma ("started_module#", arg, l), def_annot)], Env.start_module ~at:l mod_id env)
+  | DEF_pragma ("end_module#", arg, l) ->
+      ([DEF_aux (DEF_pragma ("ended_module#", arg, l), def_annot)], Env.end_module env)
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
@@ -5168,7 +5169,7 @@ let check : Env.t -> untyped_ast -> typed_ast * Env.t =
  fun env ast ->
   let total = List.length ast.defs in
   let defs, env = check_defs_progress 1 total env ast.defs in
-  ({ ast with defs }, Env.open_all_modules env)
+  ({ ast with defs }, env)
 
 let rec check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list =
  fun env defs ->

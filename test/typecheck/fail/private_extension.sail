@@ -3,7 +3,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$project# A {} E { optional } B { requires A }
+$project# A {} E {} B { requires A }
 
 $start_module# A
 

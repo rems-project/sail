@@ -75,7 +75,7 @@ type target = {
   name : string;
   options : (Arg.key * Arg.spec * Arg.doc) list;
   pre_parse_hook : unit -> unit;
-  pre_initial_check_hook : Parse_ast.defs -> unit;
+  pre_initial_check_hook : string list -> unit;
   pre_rewrites_hook : typed_ast -> Effects.side_effect_info -> Env.t -> unit;
   rewrites : (string * Rewrites.rewriter_arg list) list;
   action : string option -> istate -> unit;

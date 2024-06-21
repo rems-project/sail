@@ -75,7 +75,7 @@ let span x s e = (x, (s, e))
 
 %}
 
-%token After Before Directory If Then Else Requires Files Default Optional Variable Test True False
+%token After Before Directory If Then Else Requires Files Variable Test True False
 %token Comma DotDot Eq Gt Lt EqEq GtEq LtEq ExclEq Slash Semi
 %token Lparen Rparen Lsquare Rsquare Lcurly Rcurly
 %token Eof
@@ -174,10 +174,6 @@ dependency:
     { D_after xs }
   | Before; xs = exp_comma_block
     { D_before xs }
-  | Default
-    { D_default }
-  | Optional
-    { D_optional }
 
 mdl_def:
   | d = dependency

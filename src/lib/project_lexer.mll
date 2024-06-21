@@ -80,21 +80,23 @@ let kw_table =
       ("__test",    (fun _ -> Test));
       ("after",     (fun _ -> After));
       ("before",    (fun _ -> Before));
-      ("default",   (fun _ -> Default));
       ("directory", (fun _ -> Directory));
       ("else",      (fun _ -> Else));
       ("false",     (fun _ -> False));
       ("files",     (fun _ -> Files));
       ("if",        (fun _ -> If));
-      ("optional",  (fun _ -> Optional));
       ("requires",  (fun _ -> Requires));
       ("then",      (fun _ -> Then));
       ("true",      (fun _ -> True));
       ("variable",  (fun _ -> Variable));
+      ("default",   (fun p -> raise (Reporting.err_lex p "default is a reserved keyword")));
+      ("extension", (fun p -> raise (Reporting.err_lex p "extension is a reserved keyword")));
       ("import",    (fun p -> raise (Reporting.err_lex p "import is a reserved keyword")));
       ("namespace", (fun p -> raise (Reporting.err_lex p "namespace is a reserved keyword")));
       ("open",      (fun p -> raise (Reporting.err_lex p "open is a reserved keyword")));
+      ("optional",  (fun p -> raise (Reporting.err_lex p "optional is a reserved keyword")));
       ("use",       (fun p -> raise (Reporting.err_lex p "use is a reserved keyword")));
+      ("version",   (fun p -> raise (Reporting.err_lex p "version is a reserved keyword")));
       ("versions",  (fun p -> raise (Reporting.err_lex p "versions is a reserved keyword")));
     ]
 

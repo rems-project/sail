@@ -74,10 +74,55 @@ val opt_ddump_tc_ast : bool ref
 val opt_list_files : bool ref
 val opt_reformat : string option ref
 
-val check_ast :
-  bool -> Type_check.Env.t -> untyped_ast -> Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
-
 val instantiate_abstract_types : typ_arg Bindings.t -> Type_check.typed_ast -> Type_check.typed_ast
+
+(** The [FILE_HANDLER] module type allows plugins to define handlers
+    for custom file types. It defines how those files are processed
+    and eventually generate Sail AST types. *)
+module type FILE_HANDLER = sig
+  (** A parsed representation of the file. *)
+  type parsed
+
+  (** The file handler may do some arbitrary processing of the parsed
+      file contents prior to generating Sail AST types. *)
+  type processed
+
+  val parse : Parse_ast.l option -> string -> parsed
+
+  (** If the file will define any functions, we must inform Sail. *)
+  val defines_functions : processed -> IdSet.t
+
+  (** If the file generates registers without any initialized default
+      value, we must inform Sail, i.e this would be a register like
+
+      {@sail[
+      register X : bits(32)
+      ]}
+
+      rather than
+
+      {@sail[
+      register X : bits(32) = 0x0000_0000
+      ]}
+
+      which does have a default value.
+  *)
+  val uninitialized_registers : processed -> (Ast.id * Ast.typ) list
+
+  val process :
+    default_sail_dir:string ->
+    target_name:string option ->
+    options:(Arg.key * Arg.spec * Arg.doc) list ->
+    Initial_check.ctx ->
+    parsed ->
+    processed * Initial_check.ctx
+
+  val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
+end
+
+(** Register a file handler module. The extension should be the
+    extension for the file type we want to handle, e.g. ".json". *)
+val register_file_handler : extension:string -> (module FILE_HANDLER) -> unit
 
 val load_modules :
   ?target:Target.target ->

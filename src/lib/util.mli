@@ -243,6 +243,8 @@ val fold_left_index : (int -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 
 val fold_left_index_last : (int -> bool -> 'a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 
+val fold_left_map : ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a list -> 'acc * 'b list
+
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 String utilities} *)

@@ -54,6 +54,20 @@ def test_pass():
         results.collect(tests)
     return results.finish()
 
+def test_projects():
+    banner('Testing passing projects')
+    results = Results('projects')
+    for filenames in project_chunks(os.listdir('project'), parallel()):
+        tests = {}
+        for filename in filenames:
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('{} --no-memo-z3 project/{} --all-modules'.format(sail, filename))
+                print_ok(filename)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
 def test_fail():
     banner('Testing failing programs')
     results = Results('fail')
@@ -74,6 +88,7 @@ def test_fail():
 xml = '<testsuites>\n'
 
 xml += test_pass()
+xml += test_projects()
 xml += test_fail()
 
 xml += '</testsuites>\n'

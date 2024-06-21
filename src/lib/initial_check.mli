@@ -101,6 +101,8 @@ val initial_ctx : ctx
 
 (** {2 Desugar and process AST } *)
 
+val get_uninitialized_registers : untyped_def list -> (id * typ) list
+
 val generate_undefined_record_context : typquant -> (id * typ) list
 
 val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
@@ -114,14 +116,12 @@ val undefined_builtin_val_specs : untyped_def list
 
 val generate_undefineds : IdSet.t -> untyped_def list
 
-val generate_initialize_registers : IdSet.t -> untyped_def list -> untyped_def list
+val generate_initialize_registers : IdSet.t -> (id * typ) list -> untyped_def list
 
 val generate_enum_number_conversions : untyped_def list -> untyped_def list
 
 val generate : untyped_ast -> untyped_ast
 
-(** If the generate flag is false, then we won't generate any
-   auxilliary definitions, like the initialize_registers function *)
 val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 
 (** {2 Parsing expressions and definitions from strings} *)

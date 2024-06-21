@@ -646,7 +646,10 @@ let main () =
   )
 
 let () =
-  try try main () with Failure s -> raise (Reporting.err_general Parse_ast.Unknown s)
+  try
+    try main () with
+    | Sys_error s -> raise (Reporting.err_general Parse_ast.Unknown s)
+    | Failure s -> raise (Reporting.err_general Parse_ast.Unknown s)
   with Reporting.Fatal_error e ->
     Reporting.print_error e;
     if !opt_memo_z3 then Constraint.save_digests () else ();
