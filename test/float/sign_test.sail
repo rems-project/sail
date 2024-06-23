@@ -31,89 +31,130 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/sign.sail>
+$include "data.sail"
 
 function test_float_is_positive () -> unit = {
   /* Half floating point */
-  assert(float_is_positive(0x7e00));
-  assert(float_is_positive(0x0011));
-  assert(float_is_positive(0x7fff));
-  assert(float_is_positive(0x7ff1));
+  assert(float_is_positive(fp16_pos_snan_0));
+  assert(float_is_positive(fp16_pos_qnan_0));
+  assert(float_is_positive(fp16_pos_zero));
+  assert(float_is_positive(fp16_pos_inf));
+  assert(float_is_positive(fp16_pos_denormal_0));
+  assert(float_is_positive(fp16_pos_normal_0));
 
-  assert(float_is_positive(0xc900) == false);
-  assert(float_is_positive(0xdb00) == false);
-  assert(float_is_positive(0x802f) == false);
+  assert(float_is_positive(fp16_neg_snan_0) == false);
+  assert(float_is_positive(fp16_neg_qnan_0) == false);
+  assert(float_is_positive(fp16_neg_zero) == false);
+  assert(float_is_positive(fp16_neg_inf) == false);
+  assert(float_is_positive(fp16_neg_denormal_0) == false);
+  assert(float_is_positive(fp16_neg_normal_0) == false);
 
   /* Single floating point */
-  assert(float_is_positive(0x7fc00000));
-  assert(float_is_positive(0x00003001));
-  assert(float_is_positive(0x7fffffff));
-  assert(float_is_positive(0x7f1f0000));
+  assert(float_is_positive(fp32_pos_snan_0));
+  assert(float_is_positive(fp32_pos_qnan_0));
+  assert(float_is_positive(fp32_pos_zero));
+  assert(float_is_positive(fp32_pos_inf));
+  assert(float_is_positive(fp32_pos_denormal_0));
+  assert(float_is_positive(fp32_pos_normal_0));
 
-  assert(float_is_positive(0xc7800000) == false);
-  assert(float_is_positive(0xdf000000) == false);
-  assert(float_is_positive(0x8003f000) == false);
+  assert(float_is_positive(fp32_neg_snan_0) == false);
+  assert(float_is_positive(fp32_neg_qnan_0) == false);
+  assert(float_is_positive(fp32_neg_zero) == false);
+  assert(float_is_positive(fp32_neg_inf) == false);
+  assert(float_is_positive(fp32_neg_denormal_0) == false);
+  assert(float_is_positive(fp32_neg_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_positive(0x7f080000f0f00000));
-  assert(float_is_positive(0x00000fedc0000001));
-  assert(float_is_positive(0x7fffffffffffffff));
-  assert(float_is_positive(0x0000300000100000));
+  assert(float_is_positive(fp64_pos_snan_0));
+  assert(float_is_positive(fp64_pos_qnan_0));
+  assert(float_is_positive(fp64_pos_zero));
+  assert(float_is_positive(fp64_pos_inf));
+  assert(float_is_positive(fp64_pos_denormal_0));
+  assert(float_is_positive(fp64_pos_normal_0));
 
-  assert(float_is_positive(0xf8f0000000023000) == false);
-  assert(float_is_positive(0xfce0000000000000) == false);
-  assert(float_is_positive(0xe8c0000000000000) == false);
+  assert(float_is_positive(fp64_neg_snan_0) == false);
+  assert(float_is_positive(fp64_neg_qnan_0) == false);
+  assert(float_is_positive(fp64_neg_zero) == false);
+  assert(float_is_positive(fp64_neg_inf) == false);
+  assert(float_is_positive(fp64_neg_denormal_0) == false);
+  assert(float_is_positive(fp64_neg_normal_0) == false);
 
   /* Quad floating point */
-  assert(float_is_positive(0x7ff080000f0f00000000000000000000));
-  assert(float_is_positive(0x0000000000000fedc000000000000001));
-  assert(float_is_positive(0x7fffffffffffffffffffffffffffffff));
-  assert(float_is_positive(0x00000000003000000000010000000000));
+  assert(float_is_positive(fp128_pos_snan_0));
+  assert(float_is_positive(fp128_pos_qnan_0));
+  assert(float_is_positive(fp128_pos_zero));
+  assert(float_is_positive(fp128_pos_inf));
+  assert(float_is_positive(fp128_pos_denormal_0));
+  assert(float_is_positive(fp128_pos_normal_0));
 
-  assert(float_is_positive(0xf8ff0000000000000023000000000000) == false);
-  assert(float_is_positive(0xffce0000000000000000000000000000) == false);
-  assert(float_is_positive(0xe88c0000000000000000000000000000) == false);
+  assert(float_is_positive(fp128_neg_snan_0) == false);
+  assert(float_is_positive(fp128_neg_qnan_0) == false);
+  assert(float_is_positive(fp128_neg_zero) == false);
+  assert(float_is_positive(fp128_neg_inf) == false);
+  assert(float_is_positive(fp128_neg_denormal_0) == false);
+  assert(float_is_positive(fp128_neg_normal_0) == false);
 }
 
 function test_float_is_negative () -> unit = {
   /* Half floating point */
-  assert(float_is_negative(0xfe00));
-  assert(float_is_negative(0x8011));
-  assert(float_is_negative(0xffff));
-  assert(float_is_negative(0xfff1));
+  assert(float_is_negative(fp16_neg_snan_0));
+  assert(float_is_negative(fp16_neg_qnan_0));
+  assert(float_is_negative(fp16_neg_zero));
+  assert(float_is_negative(fp16_neg_inf));
+  assert(float_is_negative(fp16_neg_denormal_0));
+  assert(float_is_negative(fp16_neg_normal_0));
 
-  assert(float_is_negative(0x2900) == false);
-  assert(float_is_negative(0x4b00) == false);
-  assert(float_is_negative(0x002f) == false);
+  assert(float_is_negative(fp16_pos_snan_0) == false);
+  assert(float_is_negative(fp16_pos_qnan_0) == false);
+  assert(float_is_negative(fp16_pos_zero) == false);
+  assert(float_is_negative(fp16_pos_inf) == false);
+  assert(float_is_negative(fp16_pos_denormal_0) == false);
+  assert(float_is_negative(fp16_pos_normal_0) == false);
 
   /* Single floating point */
-  assert(float_is_negative(0xffc00000));
-  assert(float_is_negative(0x80003001));
-  assert(float_is_negative(0xffffffff));
-  assert(float_is_negative(0xff1f0000));
+  assert(float_is_negative(fp32_neg_snan_0));
+  assert(float_is_negative(fp32_neg_qnan_0));
+  assert(float_is_negative(fp32_neg_zero));
+  assert(float_is_negative(fp32_neg_inf));
+  assert(float_is_negative(fp32_neg_denormal_0));
+  assert(float_is_negative(fp32_neg_normal_0));
 
-  assert(float_is_negative(0x47800000) == false);
-  assert(float_is_negative(0x5f000000) == false);
-  assert(float_is_negative(0x0003f000) == false);
+  assert(float_is_negative(fp32_pos_snan_0) == false);
+  assert(float_is_negative(fp32_pos_qnan_0) == false);
+  assert(float_is_negative(fp32_pos_zero) == false);
+  assert(float_is_negative(fp32_pos_inf) == false);
+  assert(float_is_negative(fp32_pos_denormal_0) == false);
+  assert(float_is_negative(fp32_pos_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_negative(0xff080000f0f00000));
-  assert(float_is_negative(0x80000fedc0000001));
-  assert(float_is_negative(0xffffffffffffffff));
-  assert(float_is_negative(0x8000300000100000));
+  assert(float_is_negative(fp64_neg_snan_0));
+  assert(float_is_negative(fp64_neg_qnan_0));
+  assert(float_is_negative(fp64_neg_zero));
+  assert(float_is_negative(fp64_neg_inf));
+  assert(float_is_negative(fp64_neg_denormal_0));
+  assert(float_is_negative(fp64_neg_normal_0));
 
-  assert(float_is_negative(0x78f0000000023000) == false);
-  assert(float_is_negative(0x7ce0000000000000) == false);
-  assert(float_is_negative(0x68c0000000000000) == false);
+  assert(float_is_negative(fp64_pos_snan_0) == false);
+  assert(float_is_negative(fp64_pos_qnan_0) == false);
+  assert(float_is_negative(fp64_pos_zero) == false);
+  assert(float_is_negative(fp64_pos_inf) == false);
+  assert(float_is_negative(fp64_pos_denormal_0) == false);
+  assert(float_is_negative(fp64_pos_normal_0) == false);
 
   /* Quad floating point */
-  assert(float_is_negative(0xfff0000000800000000f0f0000000000));
-  assert(float_is_negative(0x8000000000000fedc000000000000001));
-  assert(float_is_negative(0xffffffffffffffffffffffffffffffff));
-  assert(float_is_negative(0x80000000003000000000010000000000));
+  assert(float_is_negative(fp128_neg_snan_0));
+  assert(float_is_negative(fp128_neg_qnan_0));
+  assert(float_is_negative(fp128_neg_zero));
+  assert(float_is_negative(fp128_neg_inf));
+  assert(float_is_negative(fp128_neg_denormal_0));
+  assert(float_is_negative(fp128_neg_normal_0));
 
-  assert(float_is_negative(0x78ff0000000000000000023000000000) == false);
-  assert(float_is_negative(0x7fce0000000000000000000000000000) == false);
-  assert(float_is_negative(0x688c0000000000000000000000000000) == false);
+  assert(float_is_negative(fp128_pos_snan_0) == false);
+  assert(float_is_negative(fp128_pos_qnan_0) == false);
+  assert(float_is_negative(fp128_pos_zero) == false);
+  assert(float_is_negative(fp128_pos_inf) == false);
+  assert(float_is_negative(fp128_pos_denormal_0) == false);
+  assert(float_is_negative(fp128_pos_normal_0) == false);
 }
 
 function main () -> unit = {

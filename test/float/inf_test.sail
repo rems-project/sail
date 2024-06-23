@@ -31,51 +31,52 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/inf.sail>
+$include "data.sail"
 
 function test_float_is_inf () -> unit = {
   /* Half floating point */
-  assert(float_is_inf(0x7c00));
-  assert(float_is_inf(0xfc00));
+  assert(float_is_inf(fp16_pos_inf));
+  assert(float_is_inf(fp16_neg_inf));
 
-  assert(float_is_inf(0x7a00) == false);
-  assert(float_is_inf(0x7b00) == false);
-  assert(float_is_inf(0x7e00) == false);
-  assert(float_is_inf(0xca00) == false);
-  assert(float_is_inf(0xdb00) == false);
-  assert(float_is_inf(0xfe00) == false);
+  assert(float_is_inf(fp16_pos_snan_0) == false);
+  assert(float_is_inf(fp16_neg_qnan_0) == false);
+  assert(float_is_inf(fp16_pos_zero) == false);
+  assert(float_is_inf(fp16_neg_zero) == false);
+  assert(float_is_inf(fp16_pos_denormal_0) == false);
+  assert(float_is_inf(fp16_neg_normal_0) == false);
 
   /* Single floating point */
-  assert(float_is_inf(0x7f800000));
-  assert(float_is_inf(0xff800000));
+  assert(float_is_inf(fp32_pos_inf));
+  assert(float_is_inf(fp32_neg_inf));
 
-  assert(float_is_inf(0x7fc00000) == false);
-  assert(float_is_inf(0x7f000001) == false);
-  assert(float_is_inf(0x7e800000) == false);
-  assert(float_is_inf(0xffc00000) == false);
-  assert(float_is_inf(0xff000001) == false);
-  assert(float_is_inf(0xfe800000) == false);
+  assert(float_is_inf(fp32_pos_snan_0) == false);
+  assert(float_is_inf(fp32_neg_qnan_0) == false);
+  assert(float_is_inf(fp32_pos_zero) == false);
+  assert(float_is_inf(fp32_neg_zero) == false);
+  assert(float_is_inf(fp32_pos_denormal_0) == false);
+  assert(float_is_inf(fp32_neg_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_inf(0x7ff0000000000000));
-  assert(float_is_inf(0xfff0000000000000));
+  assert(float_is_inf(fp64_pos_inf));
+  assert(float_is_inf(fp64_neg_inf));
 
-  assert(float_is_inf(0x7ff8000000000000) == false);
-  assert(float_is_inf(0x7ff0000000000001) == false);
-  assert(float_is_inf(0x7fc0000000000000) == false);
-  assert(float_is_inf(0xfff8000000000000) == false);
-  assert(float_is_inf(0xfff0000000000001) == false);
-  assert(float_is_inf(0xffc0000000000000) == false);
+  assert(float_is_inf(fp64_pos_snan_0) == false);
+  assert(float_is_inf(fp64_neg_qnan_0) == false);
+  assert(float_is_inf(fp64_pos_zero) == false);
+  assert(float_is_inf(fp64_neg_zero) == false);
+  assert(float_is_inf(fp64_pos_denormal_0) == false);
+  assert(float_is_inf(fp64_neg_normal_0) == false);
 
     /* Quad floating point */
-  assert(float_is_inf(0x7fff0000000000000000000000000000));
-  assert(float_is_inf(0xffff0000000000000000000000000000));
+  assert(float_is_inf(fp128_pos_inf));
+  assert(float_is_inf(fp128_neg_inf));
 
-  assert(float_is_inf(0x7fff8000000000000000000000000000) == false);
-  assert(float_is_inf(0x7fff0000000000000000000000000001) == false);
-  assert(float_is_inf(0x7ffc0000000000000000000000000000) == false);
-  assert(float_is_inf(0xffff8000000000000000000000000000) == false);
-  assert(float_is_inf(0xffff0000000000000000000000000001) == false);
-  assert(float_is_inf(0xfffc0000000000000000000000000000) == false);
+  assert(float_is_inf(fp128_pos_snan_0) == false);
+  assert(float_is_inf(fp128_neg_qnan_0) == false);
+  assert(float_is_inf(fp128_pos_zero) == false);
+  assert(float_is_inf(fp128_neg_zero) == false);
+  assert(float_is_inf(fp128_pos_denormal_0) == false);
+  assert(float_is_inf(fp128_neg_normal_0) == false);
 }
 
 function main () -> unit = {
