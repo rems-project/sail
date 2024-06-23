@@ -25,7 +25,7 @@ def test_float(name, sail_opts, compiler, c_opts):
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
 
-            if basename == "tuple_equality":
+            if not basename.endswith ("_test"):
               continue
 
             tests[filename] = os.fork()

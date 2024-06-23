@@ -31,172 +31,188 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/nan.sail>
+$include "data.sail"
 
 function test_float_is_nan () -> unit = {
   /* Half floating point */
-  assert(float_is_nan(0x7e00));
-  assert(float_is_nan(0x7c01));
-  assert(float_is_nan(0x7c10));
-  assert(float_is_nan(0x7f01));
+  assert(float_is_nan(fp16_pos_snan_0));
+  assert(float_is_nan(fp16_pos_snan_1));
+  assert(float_is_nan(fp16_pos_qnan_0));
+  assert(float_is_nan(fp16_pos_qnan_1));
 
-  assert(float_is_nan(0xfe00));
-  assert(float_is_nan(0xfc01));
-  assert(float_is_nan(0xfc10));
-  assert(float_is_nan(0xff01));
+  assert(float_is_nan(fp16_neg_snan_0));
+  assert(float_is_nan(fp16_neg_snan_1));
+  assert(float_is_nan(fp16_neg_qnan_0));
+  assert(float_is_nan(fp16_neg_qnan_1));
 
-  assert(float_is_nan(0x7a00) == false);
-  assert(float_is_nan(0x7b00) == false);
-  assert(float_is_nan(0x7c00) == false);
-  assert(float_is_nan(0xca00) == false);
-  assert(float_is_nan(0xdb00) == false);
-  assert(float_is_nan(0xfc00) == false);
+  assert(float_is_nan(fp16_pos_inf) == false);
+  assert(float_is_nan(fp16_neg_zero) == false);
+  assert(float_is_nan(fp16_pos_denormal_0) == false);
+  assert(float_is_nan(fp16_pos_denormal_1) == false);
+  assert(float_is_nan(fp16_neg_normal_0) == false);
+  assert(float_is_nan(fp16_neg_normal_1) == false);
 
   /* Single floating point */
-  assert(float_is_nan(0x7fc00000));
-  assert(float_is_nan(0x7f800001));
-  assert(float_is_nan(0x7fc00100));
-  assert(float_is_nan(0x7ff10000));
+  assert(float_is_nan(fp32_pos_snan_0));
+  assert(float_is_nan(fp32_pos_snan_1));
+  assert(float_is_nan(fp32_pos_qnan_0));
+  assert(float_is_nan(fp32_pos_qnan_1));
 
-  assert(float_is_nan(0xffc00000));
-  assert(float_is_nan(0xff800001));
-  assert(float_is_nan(0xffc00100));
-  assert(float_is_nan(0xfff10000));
+  assert(float_is_nan(fp32_neg_snan_0));
+  assert(float_is_nan(fp32_neg_snan_1));
+  assert(float_is_nan(fp32_neg_qnan_0));
+  assert(float_is_nan(fp32_neg_qnan_1));
 
-  assert(float_is_nan(0x7f800000) == false);
-  assert(float_is_nan(0x7f000000) == false);
-  assert(float_is_nan(0x7e800000) == false);
-  assert(float_is_nan(0xcf800000) == false);
-  assert(float_is_nan(0xdf000000) == false);
-  assert(float_is_nan(0xfe800000) == false);
+  assert(float_is_nan(fp32_pos_inf) == false);
+  assert(float_is_nan(fp32_neg_zero) == false);
+  assert(float_is_nan(fp32_pos_denormal_0) == false);
+  assert(float_is_nan(fp32_pos_denormal_1) == false);
+  assert(float_is_nan(fp32_neg_normal_0) == false);
+  assert(float_is_nan(fp32_neg_normal_1) == false);
 
   /* Double floating point */
-  assert(float_is_nan(0x7ff8000000000000));
-  assert(float_is_nan(0x7ff0000000000001));
-  assert(float_is_nan(0x7ff8000000000100));
-  assert(float_is_nan(0x7ffc000000100000));
+  assert(float_is_nan(fp64_pos_snan_0));
+  assert(float_is_nan(fp64_pos_snan_1));
+  assert(float_is_nan(fp64_pos_qnan_0));
+  assert(float_is_nan(fp64_pos_qnan_1));
 
-  assert(float_is_nan(0xfff8000000000000));
-  assert(float_is_nan(0xfff0000000000001));
-  assert(float_is_nan(0xfff8000000000100));
-  assert(float_is_nan(0xfffc000000100000));
+  assert(float_is_nan(fp64_neg_snan_0));
+  assert(float_is_nan(fp64_neg_snan_1));
+  assert(float_is_nan(fp64_neg_qnan_0));
+  assert(float_is_nan(fp64_neg_qnan_1));
 
-  assert(float_is_nan(0x7ff0000000000000) == false);
-  assert(float_is_nan(0x7fe0000000000000) == false);
-  assert(float_is_nan(0x7fc0000000000000) == false);
-  assert(float_is_nan(0xfff0000000000000) == false);
-  assert(float_is_nan(0xffe0000000000000) == false);
-  assert(float_is_nan(0xffc0000000000000) == false);
+  assert(float_is_nan(fp64_pos_inf) == false);
+  assert(float_is_nan(fp64_neg_zero) == false);
+  assert(float_is_nan(fp64_pos_denormal_0) == false);
+  assert(float_is_nan(fp64_pos_denormal_1) == false);
+  assert(float_is_nan(fp64_neg_normal_0) == false);
+  assert(float_is_nan(fp64_neg_normal_1) == false);
 
   /* Quad floating point */
-  assert(float_is_nan(0x7fff8000000000000000000000000000));
-  assert(float_is_nan(0x7fff0000000000000000000000000001));
-  assert(float_is_nan(0x7fff8000000000000000000000000100));
-  assert(float_is_nan(0x7fffc000000000001000000000000000));
+  assert(float_is_nan(fp128_pos_snan_0));
+  assert(float_is_nan(fp128_pos_snan_1));
+  assert(float_is_nan(fp128_pos_qnan_0));
+  assert(float_is_nan(fp128_pos_qnan_1));
 
-  assert(float_is_nan(0xffff8000000000000000000000000000));
-  assert(float_is_nan(0xffff0000000000000000000000000001));
-  assert(float_is_nan(0xffff8000000000000000000000000100));
-  assert(float_is_nan(0xffffc000000000001000000000000000));
+  assert(float_is_nan(fp128_neg_snan_0));
+  assert(float_is_nan(fp128_neg_snan_1));
+  assert(float_is_nan(fp128_neg_qnan_0));
+  assert(float_is_nan(fp128_neg_qnan_1));
 
-  assert(float_is_nan(0x7fff0000000000000000000000000000) == false);
-  assert(float_is_nan(0x7ffe0000000000000000000000000000) == false);
-  assert(float_is_nan(0x7ffc0000000000000000000000000000) == false);
-  assert(float_is_nan(0xffff0000000000000000000000000000) == false);
-  assert(float_is_nan(0xfffe0000000000000000000000000000) == false);
-  assert(float_is_nan(0xfffc0000000000000000000000000000) == false);
+  assert(float_is_nan(fp128_pos_inf) == false);
+  assert(float_is_nan(fp128_neg_zero) == false);
+  assert(float_is_nan(fp128_pos_denormal_0) == false);
+  assert(float_is_nan(fp128_pos_denormal_1) == false);
+  assert(float_is_nan(fp128_neg_normal_0) == false);
+  assert(float_is_nan(fp128_neg_normal_1) == false);
 }
 
 function test_float_is_snan () -> unit = {
   /* Half floating point */
-  assert(float_is_snan(0x7d00));
-  assert(float_is_snan(0x7d01));
+  assert(float_is_snan(fp16_pos_snan_0));
+  assert(float_is_snan(fp16_pos_snan_1));
+  assert(float_is_snan(fp16_neg_snan_0));
+  assert(float_is_snan(fp16_neg_snan_1));
 
-  assert(float_is_snan(0xfd00));
-  assert(float_is_snan(0xfd01));
-
-  assert(float_is_snan(0x7e00) == false);
-  assert(float_is_snan(0xde01) == false);
-  assert(float_is_snan(0xff01) == false);
+  assert(float_is_snan(fp16_pos_inf) == false);
+  assert(float_is_snan(fp16_neg_zero) == false);
+  assert(float_is_snan(fp16_pos_qnan_0) == false);
+  assert(float_is_snan(fp16_neg_qnan_0) == false);
+  assert(float_is_snan(fp16_pos_denormal_0) == false);
+  assert(float_is_snan(fp16_neg_normal_0) == false);
 
   /* Single floating point */
-  assert(float_is_snan(0x7fa00000));
-  assert(float_is_snan(0x7fa00001));
+  assert(float_is_snan(fp32_pos_snan_0));
+  assert(float_is_snan(fp32_pos_snan_1));
+  assert(float_is_snan(fp32_neg_snan_0));
+  assert(float_is_snan(fp32_neg_snan_1));
 
-  assert(float_is_snan(0xffa00000));
-  assert(float_is_snan(0xffa00001));
-
-  assert(float_is_snan(0x7fc00000) == false);
-  assert(float_is_snan(0xffc00001) == false);
-  assert(float_is_snan(0xfec00001) == false);
+  assert(float_is_snan(fp32_pos_inf) == false);
+  assert(float_is_snan(fp32_neg_zero) == false);
+  assert(float_is_snan(fp32_pos_qnan_0) == false);
+  assert(float_is_snan(fp32_neg_qnan_0) == false);
+  assert(float_is_snan(fp32_pos_denormal_0) == false);
+  assert(float_is_snan(fp32_neg_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_snan(0x7ff7000000000000));
-  assert(float_is_snan(0x7ff7000000000001));
+  assert(float_is_snan(fp64_pos_snan_0));
+  assert(float_is_snan(fp64_pos_snan_1));
+  assert(float_is_snan(fp64_neg_snan_0));
+  assert(float_is_snan(fp64_neg_snan_1));
 
-  assert(float_is_snan(0xfff7000000000000));
-  assert(float_is_snan(0xfff7000000000001));
-
-  assert(float_is_snan(0x7ff8000000000000) == false);
-  assert(float_is_snan(0xfff8000000000000) == false);
-  assert(float_is_snan(0xfef8000000000001) == false);
+  assert(float_is_snan(fp64_pos_inf) == false);
+  assert(float_is_snan(fp64_neg_zero) == false);
+  assert(float_is_snan(fp64_pos_qnan_0) == false);
+  assert(float_is_snan(fp64_neg_qnan_0) == false);
+  assert(float_is_snan(fp64_pos_denormal_0) == false);
+  assert(float_is_snan(fp64_neg_normal_0) == false);
 
   /* Quad floating point */
-  assert(float_is_snan(0x7fff7000000000000000000000000000));
-  assert(float_is_snan(0x7fff7000000000000000000000000001));
+  assert(float_is_snan(fp128_pos_snan_0));
+  assert(float_is_snan(fp128_pos_snan_1));
+  assert(float_is_snan(fp128_neg_snan_0));
+  assert(float_is_snan(fp128_neg_snan_1));
 
-  assert(float_is_snan(0xffff7000000000000000000000000000));
-  assert(float_is_snan(0xffff7000000000000000000000000001));
-
-  assert(float_is_snan(0x7fff8000000000000000000000000000) == false);
-  assert(float_is_snan(0xffff8000000000000000000000000000) == false);
-  assert(float_is_snan(0xfeff8000000000000000000000000001) == false);
-
+  assert(float_is_snan(fp128_pos_inf) == false);
+  assert(float_is_snan(fp128_neg_zero) == false);
+  assert(float_is_snan(fp128_pos_qnan_0) == false);
+  assert(float_is_snan(fp128_neg_qnan_0) == false);
+  assert(float_is_snan(fp128_pos_denormal_0) == false);
+  assert(float_is_snan(fp128_neg_normal_0) == false);
 }
 
 function test_float_is_qnan () -> unit = {
   /* Half floating point */
-  assert(float_is_qnan(0x7e00));
-  assert(float_is_qnan(0x7e01));
+  assert(float_is_qnan(fp16_pos_qnan_0));
+  assert(float_is_qnan(fp16_pos_qnan_1));
+  assert(float_is_qnan(fp16_neg_qnan_0));
+  assert(float_is_qnan(fp16_neg_qnan_1));
 
-  assert(float_is_qnan(0xfe00));
-  assert(float_is_qnan(0xfe01));
-
-  assert(float_is_qnan(0x7c00) == false);
-  assert(float_is_qnan(0xdc01) == false);
-  assert(float_is_qnan(0xfc01) == false);
+  assert(float_is_qnan(fp16_pos_inf) == false);
+  assert(float_is_qnan(fp16_neg_zero) == false);
+  assert(float_is_qnan(fp16_pos_snan_0) == false);
+  assert(float_is_qnan(fp16_neg_snan_0) == false);
+  assert(float_is_qnan(fp16_pos_denormal_0) == false);
+  assert(float_is_qnan(fp16_neg_normal_0) == false);
 
   /* Single floating pont */
-  assert(float_is_qnan(0x7fc00000));
-  assert(float_is_qnan(0x7fc00001));
+  assert(float_is_qnan(fp32_pos_qnan_0));
+  assert(float_is_qnan(fp32_pos_qnan_1));
+  assert(float_is_qnan(fp32_neg_qnan_0));
+  assert(float_is_qnan(fp32_neg_qnan_1));
 
-  assert(float_is_qnan(0xffc00000));
-  assert(float_is_qnan(0xffc00001));
-
-  assert(float_is_qnan(0x7fa00000) == false);
-  assert(float_is_qnan(0xffa00001) == false);
-  assert(float_is_qnan(0xfea00001) == false);
+  assert(float_is_qnan(fp32_pos_inf) == false);
+  assert(float_is_qnan(fp32_neg_zero) == false);
+  assert(float_is_qnan(fp32_pos_snan_0) == false);
+  assert(float_is_qnan(fp32_neg_snan_0) == false);
+  assert(float_is_qnan(fp32_pos_denormal_0) == false);
+  assert(float_is_qnan(fp32_neg_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_qnan(0x7ff8000000000000));
-  assert(float_is_qnan(0x7ff8000000000001));
+  assert(float_is_qnan(fp64_pos_qnan_0));
+  assert(float_is_qnan(fp64_pos_qnan_1));
+  assert(float_is_qnan(fp64_neg_qnan_0));
+  assert(float_is_qnan(fp64_neg_qnan_1));
 
-  assert(float_is_qnan(0xfff8000000000000));
-  assert(float_is_qnan(0xfff8000000000001));
-
-  assert(float_is_qnan(0x7ff7000000000000) == false);
-  assert(float_is_qnan(0xfff7000000000000) == false);
-  assert(float_is_qnan(0xfef7000000000001) == false);
+  assert(float_is_qnan(fp64_pos_inf) == false);
+  assert(float_is_qnan(fp64_neg_zero) == false);
+  assert(float_is_qnan(fp64_pos_snan_0) == false);
+  assert(float_is_qnan(fp64_neg_snan_0) == false);
+  assert(float_is_qnan(fp64_pos_denormal_0) == false);
+  assert(float_is_qnan(fp64_neg_normal_0) == false);
 
   /* Quad floating point */
-  assert(float_is_qnan(0x7fff8000000000000000000000000000));
-  assert(float_is_qnan(0x7fff8000000000000000000000000001));
+  assert(float_is_qnan(fp128_pos_qnan_0));
+  assert(float_is_qnan(fp128_pos_qnan_1));
+  assert(float_is_qnan(fp128_neg_qnan_0));
+  assert(float_is_qnan(fp128_neg_qnan_1));
 
-  assert(float_is_qnan(0xffff8000000000000000000000000000));
-  assert(float_is_qnan(0xffff8000000000000000000000000001));
-
-  assert(float_is_qnan(0x7fff7000000000000000000000000000) == false);
-  assert(float_is_qnan(0xffff7000000000000000000000000000) == false);
-  assert(float_is_qnan(0xfeff7000000000000000000000000001) == false);
+  assert(float_is_qnan(fp128_pos_inf) == false);
+  assert(float_is_qnan(fp128_neg_zero) == false);
+  assert(float_is_qnan(fp128_pos_snan_0) == false);
+  assert(float_is_qnan(fp128_neg_snan_0) == false);
+  assert(float_is_qnan(fp128_pos_denormal_0) == false);
+  assert(float_is_qnan(fp128_neg_normal_0) == false);
 }
 
 function main () -> unit = {

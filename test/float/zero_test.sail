@@ -31,43 +31,48 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/zero.sail>
+$include "data.sail"
 
 function test_float_is_zero () -> unit = {
   /* Half floating point */
-  assert(float_is_zero(0x8000));
-  assert(float_is_zero(0x0000));
+  assert(float_is_zero(fp16_pos_zero));
+  assert(float_is_zero(fp16_neg_zero));
 
-  assert(float_is_zero(0x7a00) == false);
-  assert(float_is_zero(0x7b00) == false);
-  assert(float_is_zero(0xca00) == false);
-  assert(float_is_zero(0xfe00) == false);
+  assert(float_is_zero(fp16_pos_snan_0) == false);
+  assert(float_is_zero(fp16_neg_qnan_0) == false);
+  assert(float_is_zero(fp16_pos_inf) == false);
+  assert(float_is_zero(fp16_pos_denormal_0) == false);
+  assert(float_is_zero(fp16_neg_normal_0) == false);
 
   /* Single floating point */
-  assert(float_is_zero(0x80000000));
-  assert(float_is_zero(0x00000000));
+  assert(float_is_zero(fp32_pos_zero));
+  assert(float_is_zero(fp32_neg_zero));
 
-  assert(float_is_zero(0x7fc00000) == false);
-  assert(float_is_zero(0x7e800000) == false);
-  assert(float_is_zero(0xffc00000) == false);
-  assert(float_is_zero(0xfe800000) == false);
+  assert(float_is_zero(fp32_pos_snan_0) == false);
+  assert(float_is_zero(fp32_neg_qnan_0) == false);
+  assert(float_is_zero(fp32_pos_inf) == false);
+  assert(float_is_zero(fp32_pos_denormal_0) == false);
+  assert(float_is_zero(fp32_neg_normal_0) == false);
 
   /* Double floating point */
-  assert(float_is_zero(0x8000000000000000));
-  assert(float_is_zero(0x0000000000000000));
+  assert(float_is_zero(fp64_pos_zero));
+  assert(float_is_zero(fp64_neg_zero));
 
-  assert(float_is_zero(0x7ff8000000000000) == false);
-  assert(float_is_zero(0x7ff0000000000001) == false);
-  assert(float_is_zero(0xfff8000000000000) == false);
-  assert(float_is_zero(0xfff0000000000001) == false);
+  assert(float_is_zero(fp64_pos_snan_0) == false);
+  assert(float_is_zero(fp64_neg_qnan_0) == false);
+  assert(float_is_zero(fp64_pos_inf) == false);
+  assert(float_is_zero(fp64_pos_denormal_0) == false);
+  assert(float_is_zero(fp64_neg_normal_0) == false);
 
   /* Quad floating point */
-  assert(float_is_zero(0x80000000000000000000000000000000));
-  assert(float_is_zero(0x00000000000000000000000000000000));
+  assert(float_is_zero(fp128_pos_zero));
+  assert(float_is_zero(fp128_neg_zero));
 
-  assert(float_is_zero(0x7fff8000000000000000000000000000) == false);
-  assert(float_is_zero(0x7fff0000000000000000000000000001) == false);
-  assert(float_is_zero(0xffff8000000000000000000000000000) == false);
-  assert(float_is_zero(0xffff0000000000000000000000000001) == false);
+  assert(float_is_zero(fp128_pos_snan_0) == false);
+  assert(float_is_zero(fp128_neg_qnan_0) == false);
+  assert(float_is_zero(fp128_pos_inf) == false);
+  assert(float_is_zero(fp128_pos_denormal_0) == false);
+  assert(float_is_zero(fp128_neg_normal_0) == false);
 }
 
 function main () -> unit = {
