@@ -214,6 +214,7 @@ bitvectors as the code to support these is effectively never exercised
 as a result.
 
 === Vectors
+:vectorex: sail_doc/bitvector_and_generic.json
 
 Sail has the built-in type `vector`, which is a polymorphic type for
 fixed-length vectors. For example, we could define a vector `v` of
@@ -229,14 +230,7 @@ representing the length of the vector, and the second is the type of
 the vector's elements. As mentioned in the bitvector section, the
 ordering of bitvectors and vectors is always the same, so:
 
-[source,sail]
-----
-let a_generic_vector : vector(3, bit) = [bitzero, bitzero, bitone]
-let a_bit_vector : bits(3) = [bitzero, bitzero, bitone] // 0b001
-
-assert(a_generic_vector[0] == bitone)
-assert(a_bitvector_vector[0] == bitone)
-----
+sail::same_order[from=vectorex,part=body,dedent]
 
 Note that a generic vector of bits and a bitvector are not the same
 type, despite us being able to write them using the same syntax. This

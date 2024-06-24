@@ -14,6 +14,7 @@ SAIL_DOCS += sail_doc/string.json
 SAIL_DOCS += sail_doc/function_pat.json
 SAIL_DOCS += sail_doc/let_var.json
 SAIL_DOCS += sail_doc/list.json
+SAIL_DOCS += sail_doc/bitvector_and_generic.json
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
 SAIL_DOCS += module_sail_doc/cond.sail_project
