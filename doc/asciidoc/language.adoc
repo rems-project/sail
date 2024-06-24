@@ -135,16 +135,18 @@ denoted `{|32, 64|}`.
 === Bitvector literals
 
 Bitvector literals in Sail are written as either `0x` followed by a
-sequence of hexadecimal digits or `0b` followed by a sequence of
-binary digits, for example `0x12FE` or `0b1010100`. The length of a
-hex literal is always four times the number of digits, and the length
-of binary string is always the exact number of digits, so `0x12FE` has
-length 16, while `0b1010100` has length 7. To ensure bitvector logic
+sequence of hexadecimal digits (as in `0x12FE`) or `0b` followed by a
+sequence of binary digits (as in `0b1010100`). The bit length of a
+hex literal is always four times the number of hexadecimal digits,
+and the bit length of binary literal is always the exact number of
+binary digits. So, `0x12FE` has bit length 16, and `0b1010100` has
+bit length 7. To ensure bitvector logic
 in specifications is precisely specified, we do not allow any kind of
 implicit widening or truncation as might occur in C. To change the
 length of a bitvector, explicit zero/sign extension and truncation
 functions must be used. Underscores can be used in bitvector literals
-to separate groups of bits (typically in groups of 16), for example:
+to separate groups, where each group is typically 16 bits. For
+example:
 
 [source,sail]
 ----
