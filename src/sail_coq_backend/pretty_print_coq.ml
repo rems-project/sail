@@ -2555,7 +2555,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
         ^^ separate space (list_init numfields (fun n -> string (s ^ string_of_int n)))
         ^^ string "]." ^^ hardline
       in
-      let full_type_pps = type_id_pp :: (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
       let full_type_pp = separate space full_type_pps in
       let eq_pp =
         if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
@@ -2566,16 +2566,18 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                 ( string "forall (x y : " ^^ full_type_pp ^^ string "), Decidable (x = y).",
                   string "refine (Build_Decidable _ true _). subst. split; reflexivity."
                 )
-            | Stdpp -> (string "EqDecision " ^^ (if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp) ^^ string ".", string "left; subst; reflexivity.")
+            | Stdpp ->
+                ( string "EqDecision "
+                  ^^ (if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp)
+                  ^^ string ".",
+                  string "left; subst; reflexivity."
+                )
           in
           string "#[export]" ^^ hardline
           ^^ group
                (nest 2
                   (flow (break 1)
-                     (((string "Instance Decidable_eq_" ^^ type_id_pp) :: typq_pps)
-                     @ eq_req_pps
-                     @ [colon; class_pp]
-                     )
+                     (((string "Instance Decidable_eq_" ^^ type_id_pp) :: typq_pps) @ eq_req_pps @ [colon; class_pp])
                   ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
                   ^^ separate hardline
                        (list_init numfields (fun n ->
@@ -2585,9 +2587,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                        )
                   )
                )
-          ^^ hardline
-          ^^ final_pp
-          ^^ hardline ^^ string "Defined." ^^ twice hardline
+          ^^ hardline ^^ final_pp ^^ hardline ^^ string "Defined." ^^ twice hardline
         )
         else empty
       in
@@ -3664,7 +3664,8 @@ end = struct
         empty;
         string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
         string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
-        string "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
+        string
+          "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
         string "* rewrite H, String.eqb_refl.";
         string "  specialize (string_of_register_roundtrip r) as H1.";
         string "  specialize (string_of_register_roundtrip r') as H2.";
@@ -3673,7 +3674,9 @@ end = struct
         string "  injection H1.";
         string "  intros; subst.";
         string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
-        string "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) T r')).";
+        string
+          "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) \
+           T r')).";
         string "  rewrite <- H0.";
         string "  unfold f.";
         string "  apply register_beq_refl.";
@@ -3681,7 +3684,8 @@ end = struct
         string "  rewrite H'.";
         string "  apply Bool.not_true_is_false.";
         string "  contradict H.";
-        string "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
+        string
+          "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
         string "Qed.";
         empty;
       ]
