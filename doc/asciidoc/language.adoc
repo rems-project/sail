@@ -130,7 +130,7 @@ set of integers. The type `{32,{nbsp}64}` is a type that can only
 contain the values `32` and `64`.
 
 NOTE: In older Sail versions the numeric set type would have been
-denoted `{|32, 64|}`.
+denoted `{|32, 64|}`. This syntax is now deprecated.
 
 === Bitvector literals
 
