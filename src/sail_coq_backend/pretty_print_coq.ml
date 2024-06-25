@@ -1219,18 +1219,6 @@ let is_no_proof_fn env id =
   )
   else false
 
-let replace_atom_return_type ret_typ =
-  (* TODO: more complex uses of atom *)
-  match ret_typ with
-  | Typ_aux (Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp nexp, _)]), l) ->
-      let kid = mk_kid "_retval" in
-      (* TODO: collision avoidance *)
-      ( Some "build_ex",
-        Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)), Parse_ast.Generated l)
-      )
-  | Typ_aux (Typ_app (Id_aux (Id "atom_bool", il), ([A_aux (A_bool _, _)] as args)), l) -> (Some "build_ex", ret_typ)
-  | _ -> (None, ret_typ)
-
 let is_range_from_atom env (Typ_aux (argty, _)) (Typ_aux (fnty, _)) =
   match (argty, fnty) with
   | ( Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp nexp, _)]),
@@ -1798,21 +1786,14 @@ let doc_exp, doc_let =
                 let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l, annot)) in
                 let ann_typ = expand_range_type ann_typ in
                 let ret_typ_inst = expand_range_type (Env.expand_synonyms inst_env ret_typ_inst) in
-                let ret_typ_inst =
-                  if is_no_proof_fn env f then ret_typ_inst else snd (replace_atom_return_type ret_typ_inst)
-                in
                 let () =
                   debug ctxt (lazy (" type returned " ^ string_of_typ ret_typ_inst));
                   debug ctxt (lazy (" type expected " ^ string_of_typ ann_typ))
                 in
                 let in_typ =
-                  (* TODO: just existential stripping? *)
-                  if is_no_proof_fn env f then ret_typ_inst
-                  else (
-                    match classify_ex_type ctxt inst_env ~rawbools:true ret_typ_inst with
-                    | ExGeneral, _, t1 -> t1
-                    | ExNone, _, t1 -> t1
-                  )
+                  match classify_ex_type ctxt inst_env ~rawbools:true ret_typ_inst with
+                  | ExGeneral, _, t1 -> t1
+                  | ExNone, _, t1 -> t1
                 in
                 let out_typ_bound, out_typ, out_env =
                   match ann_typ with
@@ -1899,7 +1880,7 @@ let doc_exp, doc_let =
                         (call :: (if ctxt.proof_mode then List.init pre (fun _ -> underscore) else []))
                         @ argspp
                         @ List.init post (fun _ -> underscore)
-                        @ if is_measured then [parens (string "_limit_reduces _acc")] else []
+                        @ if is_measured then [parens (string "_limit_reduces_bool _acc ltac:(assumption)")] else []
                     | None -> (
                         match f with
                         | Id_aux (Id x, _) when is_prefix "#rec#" x ->
@@ -3301,7 +3282,6 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
           )
       in
       let arg_typs_pp = separate space (List.map doc_typ' typs) in
-      let _, ret_ty = replace_atom_return_type ret_ty in
       let ret_typ_pp = doc_typ empty_ctxt Env.empty ret_ty in
       let ret_typ_pp = if is_monadic then string "M" ^^ space ^^ parens ret_typ_pp else ret_typ_pp in
       let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt typ_env braces tqs in
