@@ -669,11 +669,15 @@ let const_props target ast =
       match (string_of_id id, args) with
       | ( "and_bool",
           ( [(E_aux (E_lit (L_aux (L_false, _)), _) as e_false); _]
-          | [_; (E_aux (E_lit (L_aux (L_false, _)), _) as e_false)] ) ) ->
+          | [E_aux (E_typ (_, (E_aux (E_lit (L_aux (L_false, _)), _) as e_false)), _); _]
+          | [_; (E_aux (E_lit (L_aux (L_false, _)), _) as e_false)]
+          | [_; E_aux (E_typ (_, (E_aux (E_lit (L_aux (L_false, _)), _) as e_false)), _)] ) ) ->
           e_false
       | ( "or_bool",
-          ([(E_aux (E_lit (L_aux (L_true, _)), _) as e_true); _] | [_; (E_aux (E_lit (L_aux (L_true, _)), _) as e_true)])
-        ) ->
+          ( [(E_aux (E_lit (L_aux (L_true, _)), _) as e_true); _]
+          | [E_aux (E_typ (_, (E_aux (E_lit (L_aux (L_true, _)), _) as e_true)), _); _]
+          | [_; (E_aux (E_lit (L_aux (L_true, _)), _) as e_true)]
+          | [_; E_aux (E_typ (_, (E_aux (E_lit (L_aux (L_true, _)), _) as e_true)), _)] ) ) ->
           e_true
       | (_, [E_aux (E_vector [], _); e'] | _, [e'; E_aux (E_vector [], _)]) when is_overload_of (mk_id "append") -> e'
       | _, _ when List.for_all Constant_fold.is_constant args -> const_fold exp
