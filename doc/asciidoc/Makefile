@@ -15,6 +15,8 @@ SAIL_DOCS += sail_doc/function_pat.json
 SAIL_DOCS += sail_doc/let_var.json
 SAIL_DOCS += sail_doc/list.json
 SAIL_DOCS += sail_doc/bitvector_and_generic.json
+SAIL_DOCS += sail_doc/struct.json
+SAIL_DOCS += sail_doc/enum.json
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
 SAIL_DOCS += module_sail_doc/cond.sail_project
@@ -29,26 +31,26 @@ all: manual.html manual.pdf
 
 sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
-	sail -no_color -doc -doc_file $< -doc_embed plain -doc_bundle $(notdir $@) $< 2> $(basename $@).warning
+	sail --no-color -doc --doc-file $< --doc-embed plain --doc-bundle $(notdir $@) $< 2> $(basename $@).warning
 
 lib_sail_doc/%.json: ../examples/order_dec.sail ../../lib/%.sail
 	mkdir -p lib_sail_doc
 	mkdir -p lib_sail_doc/concurrency_interface
-	sail -doc -doc_file $< -doc_embed plain -doc_bundle $(patsubst lib_sail_doc/%,%,$@) -o lib_sail_doc $<
+	sail --doc --doc-file $< --doc-embed plain --doc-bundle $(patsubst lib_sail_doc/%,%,$@) -o lib_sail_doc $<
 
 .SECONDEXPANSION:
 
-module_sail_doc/%.json: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
+module_sail_doc/%.json: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project --list-files)
 	mkdir -p module_sail_doc
-	sail -doc $(addprefix -doc_file ,$(shell sail $< -list_files)) -doc_embed plain -doc_bundle $(notdir $@) -o module_sail_doc $<
+	sail --doc $(addprefix --doc-file ,$(shell sail $< -list_files)) --doc-embed plain --doc-bundle $(notdir $@) -o module_sail_doc $< --all-modules
 
 module_sail_doc/%.error: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
 	mkdir -p module_sail_doc
-	-sail -no_color $< 2> $@
+	-sail --no-color $< 2> $@
 
 module_sail_doc/%.sail_project: ../examples/%.sail_project
 	mkdir -p module_sail_doc
-	sail $< -just_parse_project 1>/dev/null
+	sail $< --just-parse-project 1>/dev/null
 	cp $< $@
 
 ordering-tikz.pdf: latex_figures/ordering.tex

@@ -2473,6 +2473,10 @@ pre.rouge .gi {
   color: #116329;
   background-color: #dafbe1;
 }
+pre.rouge .ges {
+  font-weight: bold;
+  font-style: italic;
+}
 pre.rouge .kc {
   color: #0550ae;
 }
@@ -2609,6 +2613,7 @@ pre.rouge .gs {
 <li><a href="#_the_list_type">The list type</a></li>
 <li><a href="#_tuples">Tuples</a></li>
 <li><a href="#_strings">Strings</a></li>
+<li><a href="#_user_defined_types">User-defined types</a></li>
 <li><a href="#_pattern_matching">Pattern matching</a></li>
 <li><a href="#_matching_in_let_and_function_arguments">Matching in let and function arguments</a></li>
 <li><a href="#_type_patterns">Type patterns</a></li>
@@ -2656,14 +2661,14 @@ suggestive, while in others it is close to a complete description of
 the envelope of architecturally allowed behaviour for sequential code.</p>
 </div>
 <div class="paragraph">
-<p>For x86[.citation]<mark>[<a href="#Intel61">1</a>]</mark>, the Intel pseudocode is just suggestive,
-with embedded prose, while the AMD descriptions[.citation]<mark>[<a href="#AMD_3_21">2</a>]</mark>
-are prose alone. For IBM Power[.citation]<mark>[<a href="#Power3.0B">3</a>]</mark>, there is
+<p>For x86 <span class="citation">[<a href="#Intel61">1</a>]</span>, the Intel pseudocode is just suggestive,
+with embedded prose, while the AMD descriptions <span class="citation">[<a href="#AMD_3_21">2</a>]</span>
+are prose alone. For IBM Power <span class="citation">[<a href="#Power3.0B">3</a>]</span>, there is
 detailed pseudocode which has recently become
-machine-processed[.citation]<mark>[<a href="#Leighton21">4</a>]</mark>. For
-Arm[.citation]<mark>[<a href="#armarmv8">5</a>]</mark>, there is detailed pseudocode, which has
-recently become machine-processed[.citation]<mark>[<a href="#Reid16">6</a>]</mark>. For
-MIPS[.citation]<mark>[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</mark> there is also reasonably detailed
+machine-processed <span class="citation">[<a href="#Leighton21">4</a>]</span>. For
+Arm <span class="citation">[<a href="#armarmv8">5</a>]</span>, there is detailed pseudocode, which has
+recently become machine-processed <span class="citation">[<a href="#Reid16">6</a>]</span>. For
+MIPS <span class="citation">[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</span> there is also reasonably detailed
 pseudocode.</p>
 </div>
 <div class="paragraph">
@@ -2721,7 +2726,7 @@ and generate:</p>
 <p>An internal representation of the fully type-annotated
 definition (a deep embedding of the definition) in a form that can
 be executed by the Sail interpreter.  These are both expressed in
-Lem[.citation]<mark>[<a href="#Lem-icfp2014">9</a>, <a href="#Lemcode">10</a>]</mark>, a language of type, function, and
+Lem <span class="citation">[<a href="#Lem-icfp2014">9</a>, <a href="#Lemcode">10</a>]</span>, a language of type, function, and
 relation definitions that can be compiled into OCaml and various
 theorem provers. The Sail interpreter can also be used to analyse
 instruction definitions (or partially executed instructions) to
@@ -2783,14 +2788,14 @@ ARM&#8217;s specification.</p>
 </div>
 <div class="paragraph">
 <p>The MIPS model is hand-written based on the MIPS64 manual version
-2.5[.citation]<mark>[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</mark>,
+2.5 <span class="citation">[<a href="#MIPS64-II">7</a>, <a href="#MIPS64-III">8</a>]</span>,
 but covering only the features in the BERI hardware
-reference[.citation]<mark>[<a href="#UCAM-CL-TR-868">11</a>]</mark>,
-which in turn drew on MIPS4000 and MIPS32[.citation]<mark>[<a href="#MIPS4000">12</a>, <a href="#MIPS32-I">13</a>]</mark>.</p>
+reference <span class="citation">[<a href="#UCAM-CL-TR-868">11</a>]</span>,
+which in turn drew on MIPS4000 and MIPS32 <span class="citation">[<a href="#MIPS4000">12</a>, <a href="#MIPS32-I">13</a>]</span>.</p>
 </div>
 <div class="paragraph">
 <p>The CHERI model is based on that and the CHERI ISA reference manual
-version&#160;5[.citation]<mark>[<a href="#UCAM-CL-TR-891">14</a>]</mark>. These two are both
+version&#160;5 <span class="citation">[<a href="#UCAM-CL-TR-891">14</a>]</span>. These two are both
 principally by Norton-Wright; they cover all basic user
 and kernel mode MIPS features sufficient to boot FreeBSD, including a
 TLB, exceptions and a basic UART for console interaction. ISA
@@ -2981,7 +2986,7 @@ argument.</p>
 that the clauses in a scattered function will be matched in the order
 they appear in the file.</p>
 </div>
-<div id="riscv-code-decode" class="listingblock">
+<div class="listingblock">
 <div class="content">
 <pre class="rouge highlight"><code data-lang="sail"><span class="k">function</span><span class="w"> </span><span class="nf">clause</span><span class="w"> </span><span class="n">decode</span><span class="w"> </span><span class="mi">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">None</span><span class="p">()</span></code></pre>
 </div>
@@ -3613,7 +3618,7 @@ contain the values <code>32</code> and <code>64</code>.</p>
 </td>
 <td class="content">
 In older Sail versions the numeric set type would have been
-denoted <code>{|32, 64|}</code>.
+denoted <code>{|32, 64|}</code>. This syntax is now deprecated.
 </td>
 </tr>
 </table>
@@ -3623,16 +3628,18 @@ denoted <code>{|32, 64|}</code>.
 <h3 id="_bitvector_literals">Bitvector literals</h3>
 <div class="paragraph">
 <p>Bitvector literals in Sail are written as either <code>0x</code> followed by a
-sequence of hexadecimal digits or <code>0b</code> followed by a sequence of
-binary digits, for example <code>0x12FE</code> or <code>0b1010100</code>. The length of a
-hex literal is always four times the number of digits, and the length
-of binary string is always the exact number of digits, so <code>0x12FE</code> has
-length 16, while <code>0b1010100</code> has length 7. To ensure bitvector logic
+sequence of hexadecimal digits (as in <code>0x12FE</code>) or <code>0b</code> followed by a
+sequence of binary digits (as in <code>0b1010100</code>). The bit length of a
+hex literal is always four times the number of hexadecimal digits,
+and the bit length of binary literal is always the exact number of
+binary digits. So, <code>0x12FE</code> has bit length 16, and <code>0b1010100</code> has
+bit length 7. To ensure bitvector logic
 in specifications is precisely specified, we do not allow any kind of
 implicit widening or truncation as might occur in C. To change the
 length of a bitvector, explicit zero/sign extension and truncation
 functions must be used. Underscores can be used in bitvector literals
-to separate groups of bits (typically in groups of 16), for example:</p>
+to separate groups, where each group is typically 16 bits. For
+example:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -3953,6 +3960,201 @@ following escape sequences are supported:</p>
 </span><span class="s">               World!"</span><span class="p">);</span><span class="w">
 </span><span class="c">// Is equivalent to</span><span class="w">
 </span><span class="n">print_endline</span><span class="p">(</span><span class="s">"Hello, World!"</span><span class="p">)</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_user_defined_types">User-defined types</h3>
+<div class="paragraph">
+<p>Sail supports various kinds of user-defined types: <em>structs</em>,
+<em>unions</em>, and <em>enums</em>.</p>
+</div>
+<div class="sect3">
+<h4 id="_structs">Structs</h4>
+<div class="paragraph">
+<p>Like in C, structs are used to hold multiple values. Structs are
+created using the <code>struct</code> keyword followed by the name of the struct.
+The data the struct contains is then defined following the <code>=</code> symbol.
+Each piece of data stored in a struct is called a <code>field</code>, and each is
+given a unique name that identifies that piece of data, and can have a
+different type.</p>
+</div>
+<div class="paragraph">
+<p>The following example struct defines three fields. The first contains
+a bitvector of length 5 and is called <code>field1</code>. The second, <code>field2</code>
+contains an integer. The third, <code>field3</code> contains a string.</p>
+</div>
+<div id="struct-type-My_struct" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">My_struct</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">field1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span><span class="w">
+  </span><span class="n">field2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w">
+  </span><span class="n">field3</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">string</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can then construct struct values by using the <code>struct</code> keyword and
+providing values for all the fields. The individual fields can be
+accessed using the <code>.</code> operator. If the struct is mutable, we can also
+the <code>.</code> operator on the left-hand side of an assignment to assign to
+the struct field. For immutable structs, we can update them using the
+<code>with</code> keyword, which will create a new struct value with some fields
+changed.</p>
+</div>
+<div id="struct-example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">My_struct</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">field1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b11111</span><span class="p">,</span><span class="w">
+    </span><span class="n">field2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w">
+    </span><span class="n">field3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"test"</span><span class="p">,</span><span class="w">
+  </span><span class="p">};</span><span class="w">
+
+  </span><span class="c">// Accessing a struct field, prints "field1 is 0b11111"</span><span class="w">
+  </span><span class="n">print_bits</span><span class="p">(</span><span class="s">"field1 is "</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">field1</span><span class="p">);</span><span class="w">
+
+  </span><span class="c">// Updating struct fields, creating a new struct variable s2</span><span class="w">
+  </span><span class="k">var</span><span class="w"> </span><span class="n">s2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">field1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b00000</span><span class="p">,</span><span class="w"> </span><span class="n">field3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"a string"</span><span class="w"> </span><span class="p">};</span><span class="w">
+
+  </span><span class="c">// Prints "field1 is 0b00000"</span><span class="w">
+  </span><span class="n">print_bits</span><span class="p">(</span><span class="s">"field1 is "</span><span class="p">,</span><span class="w"> </span><span class="n">s2</span><span class="o">.</span><span class="n">field1</span><span class="p">);</span><span class="w">
+  </span><span class="c">// Prints "field2 is 5", as field2 was taken from 's' and not modified</span><span class="w">
+  </span><span class="n">print_int</span><span class="p">(</span><span class="s">"field2 is "</span><span class="p">,</span><span class="w"> </span><span class="n">s2</span><span class="o">.</span><span class="n">field2</span><span class="p">);</span><span class="w">
+
+  </span><span class="c">// Because s2 is mutable we can assign to it</span><span class="w">
+  </span><span class="n">s2</span><span class="o">.</span><span class="n">field3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"some string"</span><span class="p">;</span><span class="w">
+  </span><span class="c">// Prints "some string"</span><span class="w">
+  </span><span class="n">print_endline</span><span class="p">(</span><span class="n">s2</span><span class="o">.</span><span class="n">field3</span><span class="p">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Structs can have user defined type parameters. The following example
+has an integer parameter <code>'n</code> and a type parameter <code>'a</code>.</p>
+</div>
+<div id="struct-type-My_other_struct" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">My_other_struct</span><span class="p">(</span><span class="nv">'n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Type</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">a_bitvector</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">),</span><span class="w">
+  </span><span class="n">something</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'a</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The struct can then be instantiated with any length of bitvector for
+the <code>a_bitvector</code> field, and any data type for the <code>something</code> field,
+including another struct like the <code>My_struct</code> type we defined earlier.</p>
+</div>
+<div id="struct-poly_example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="w">  </span><span class="k">var</span><span class="w"> </span><span class="n">s3</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">My_other_struct</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">a_bitvector</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b00</span><span class="p">,</span><span class="w">
+    </span><span class="n">something</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"a string"</span><span class="w">
+  </span><span class="p">};</span><span class="w">
+
+  </span><span class="k">var</span><span class="w"> </span><span class="n">s4</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">My_other_struct</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="n">My_struct</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">a_bitvector</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0xFFFF_FFFF</span><span class="p">,</span><span class="w">
+    </span><span class="n">something</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="n">field1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b11111</span><span class="p">,</span><span class="w">
+      </span><span class="n">field2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span><span class="w">
+      </span><span class="n">field3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"nested structs!"</span><span class="p">,</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">};</span><span class="w">
+
+  </span><span class="n">s3</span><span class="o">.</span><span class="n">a_bitvector</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b11</span><span class="p">;</span><span class="w">
+
+  </span><span class="c">// Note that once created, we cannot change a variable's type, so the following is forbidden:</span><span class="w">
+  </span><span class="c">// s3.a_bitvector = 0xFFFF_FFFF;</span><span class="w">
+
+  </span><span class="c">// Changing the type is also forbidden in a with expression:</span><span class="w">
+  </span><span class="c">// let s4 : My_other_struct(32, string) = { s3 with a_bitvector = 0xFFFF_FFFF };</span><span class="w">
+
+  </span><span class="c">// If structs are nested, then field accesses can also be nested</span><span class="w">
+  </span><span class="n">print_endline</span><span class="p">(</span><span class="n">s4</span><span class="o">.</span><span class="n">something</span><span class="o">.</span><span class="n">field3</span><span class="p">);</span><span class="w">
+  </span><span class="c">// and assignments</span><span class="w">
+  </span><span class="n">s4</span><span class="o">.</span><span class="n">something</span><span class="o">.</span><span class="n">field3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"another string"</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_enums">Enums</h4>
+<div class="paragraph">
+<p>Sail enumerations are also much like their C counterparts. An enum is
+declared using the <code>enum</code> keyword followed by the name of the
+enumeration type. The members of the enumeration are specified as a
+comma-separated list of identifiers between curly braces, like so:</p>
+</div>
+<div id="enum-type-My_enum" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">enum</span><span class="w"> </span><span class="n">My_enum</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">Foo</span><span class="p">,</span><span class="w">
+  </span><span class="n">Bar</span><span class="p">,</span><span class="w">
+  </span><span class="n">Baz</span><span class="p">,</span><span class="w">
+  </span><span class="n">Quux</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The above style is best when there are a lot of elements in the
+enumeration. We allow enums to be defined in a style similar to
+Haskell, where the identifiers are separated by a vertical bar <code>|</code>
+character, like so:</p>
+</div>
+<div id="enum-type-My_short_enum" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">enum</span><span class="w"> </span><span class="n">My_short_enum</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">B</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">C</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This style is better when the enumeration is short and has few
+constructors, however specification authors may prefer to use the
+first style exclusively for consistency.</p>
+</div>
+<div class="paragraph">
+<p>Sail will automatically generate functions for converting enumeration
+members into numbers, starting with 0 for the first element of the
+enumeration.</p>
+</div>
+<div id="enum-enum_example1" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">function</span><span class="w"> </span><span class="nf">enum_example1</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">num_of_My_enum</span><span class="p">(</span><span class="n">Foo</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">num_of_My_enum</span><span class="p">(</span><span class="n">Bar</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">num_of_My_enum</span><span class="p">(</span><span class="n">Baz</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">num_of_My_enum</span><span class="p">(</span><span class="n">Quux</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">3</span><span class="p">);</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Likewise, there is a function for converting the other way</p>
+</div>
+<div id="enum-enum_example2" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">function</span><span class="w"> </span><span class="nf">enum_example2</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">My_enum_of_num</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="n">Foo</span><span class="p">)</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the names of the generated functions are not ideal, then custom
+names can be provided using the <code>enum_number_conversions</code> attribute.</p>
+</div>
+<div id="enum-span-ENUM_CONV" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="cp">$[enum_number_conversions { from_enum = to_number, to_enum = from_number }]</span><span class="w">
+</span><span class="k">enum</span><span class="w"> </span><span class="n">Another_enum</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">Member1</span><span class="p">,</span><span class="w">
+  </span><span class="n">Member2</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="k">function</span><span class="w"> </span><span class="nf">custom_conversions</span><span class="p">()</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">unit</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">to_number</span><span class="p">(</span><span class="n">Member1</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">
+  </span><span class="n">assert</span><span class="p">(</span><span class="n">from_number</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="n">Member2</span><span class="p">);</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>no_enum_number_conversions</code> attribute can be used to disable the
+generation of these functions entirely.</p>
 </div>
 </div>
 </div>

@@ -358,6 +358,87 @@ Multi-line strings can be written by escaping the newline character at the end o
 
 sail::multi_line[from=strings,type=function,part=body,dedent]
 
+=== User-defined types
+
+Sail supports various kinds of user-defined types: _structs_,
+_unions_, and _enums_.
+
+==== Structs
+:struct: sail_doc/struct.json
+
+Like in C, structs are used to hold multiple values. Structs are
+created using the `struct` keyword followed by the name of the struct.
+The data the struct contains is then defined following the `=` symbol.
+Each piece of data stored in a struct is called a `field`, and each is
+given a unique name that identifies that piece of data, and can have a
+different type.
+
+The following example struct defines three fields. The first contains
+a bitvector of length 5 and is called `field1`. The second, `field2`
+contains an integer. The third, `field3` contains a string.
+
+sail::My_struct[from=struct,type=type]
+
+We can then construct struct values by using the `struct` keyword and
+providing values for all the fields. The individual fields can be
+accessed using the `.` operator. If the struct is mutable, we can also
+the `.` operator on the left-hand side of an assignment to assign to
+the struct field. For immutable structs, we can update them using the
+`with` keyword, which will create a new struct value with some fields
+changed.
+
+sail::example[from=struct,part=body,dedent]
+
+Structs can have user defined type parameters. The following example
+has an integer parameter `'n` and a type parameter `'a`.
+
+sail::My_other_struct[from=struct,type=type]
+
+The struct can then be instantiated with any length of bitvector for
+the `a_bitvector` field, and any data type for the `something` field,
+including another struct like the `My_struct` type we defined earlier.
+
+sail::poly_example[from=struct,part=body,dedent]
+
+==== Enums
+:enum: sail_doc/enum.json
+
+Sail enumerations are also much like their C counterparts. An enum is
+declared using the `enum` keyword followed by the name of the
+enumeration type. The members of the enumeration are specified as a
+comma-separated list of identifiers between curly braces, like so:
+
+sail::My_enum[from=enum,type=type]
+
+The above style is best when there are a lot of elements in the
+enumeration. We allow enums to be defined in a style similar to
+Haskell, where the identifiers are separated by a vertical bar `|`
+character, like so:
+
+sail::My_short_enum[from=enum,type=type]
+
+This style is better when the enumeration is short and has few
+constructors, however specification authors may prefer to use the
+first style exclusively for consistency.
+
+Sail will automatically generate functions for converting enumeration
+members into numbers, starting with 0 for the first element of the
+enumeration.
+
+sail::enum_example1[from=enum,dedent]
+
+Likewise, there is a function for converting the other way
+
+sail::enum_example2[from=enum,dedent]
+
+If the names of the generated functions are not ideal, then custom
+names can be provided using the `enum_number_conversions` attribute.
+
+sail::ENUM_CONV[from=enum,type=span]
+
+The `no_enum_number_conversions` attribute can be used to disable the
+generation of these functions entirely.
+
 === Pattern matching
 :pattern-match: sail_doc/pattern_matching.json
 :cannot-wildcard: sail_doc/cannot_wildcard.json
