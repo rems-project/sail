@@ -9,14 +9,14 @@ They vary in how precise that pseudocode is: in some it is just
 suggestive, while in others it is close to a complete description of
 the envelope of architecturally allowed behaviour for sequential code.
 
-For x86{blank}cite:[Intel61], the Intel pseudocode is just suggestive,
-with embedded prose, while the AMD descriptions{blank}cite:[AMD_3_21]
-are prose alone. For IBM Power{blank}cite:[Power3.0B], there is
+For x86 cite:[Intel61], the Intel pseudocode is just suggestive,
+with embedded prose, while the AMD descriptions cite:[AMD_3_21]
+are prose alone. For IBM Power cite:[Power3.0B], there is
 detailed pseudocode which has recently become
-machine-processed{blank}cite:[Leighton21]. For
-Arm{blank}cite:[armarmv8], there is detailed pseudocode, which has
-recently become machine-processed{blank}cite:[Reid16]. For
-MIPS{blank}cite:[MIPS64-II,MIPS64-III] there is also reasonably detailed
+machine-processed cite:[Leighton21]. For
+Arm cite:[armarmv8], there is detailed pseudocode, which has
+recently become machine-processed cite:[Reid16]. For
+MIPS cite:[MIPS64-II,MIPS64-III] there is also reasonably detailed
 pseudocode.
 
 Sail is intended:
@@ -30,7 +30,7 @@ Sail is intended:
 * To expose the structure needed to combine the sequential ISA
   semantics with the relaxed-memory concurrency models we have
   developed;
-  
+
 * To provide an expressive type system that can statically check the
   bitvector length and indexing computation that arises in these
   specifications, to detect errors and to support code generation,
@@ -57,7 +57,7 @@ and generate:
 * An internal representation of the fully type-annotated
   definition (a deep embedding of the definition) in a form that can
   be executed by the Sail interpreter.  These are both expressed in
-  Lem{blank}cite:[Lem-icfp2014,Lemcode], a language of type, function, and
+  Lem cite:[Lem-icfp2014,Lemcode], a language of type, function, and
   relation definitions that can be compiled into OCaml and various
   theorem provers. The Sail interpreter can also be used to analyse
   instruction definitions (or partially executed instructions) to
@@ -102,13 +102,13 @@ machine-readable public v8.3 ASL specification footnote:[ARM v8-A
 ARM's specification.
 
 The MIPS model is hand-written based on the MIPS64 manual version
-2.5{blank}cite:[MIPS64-II,MIPS64-III],
+2.5 cite:[MIPS64-II,MIPS64-III],
 but covering only the features in the BERI hardware
-reference{blank}cite:[UCAM-CL-TR-868],
-which in turn drew on MIPS4000 and MIPS32{blank}cite:[MIPS4000,MIPS32-I].
+reference cite:[UCAM-CL-TR-868],
+which in turn drew on MIPS4000 and MIPS32 cite:[MIPS4000,MIPS32-I].
 
 The CHERI model is based on that and the CHERI ISA reference manual
-version{nbsp}5{blank}cite:[UCAM-CL-TR-891]. These two are both
+version{nbsp}5 cite:[UCAM-CL-TR-891]. These two are both
 principally by Norton-Wright; they cover all basic user
 and kernel mode MIPS features sufficient to boot FreeBSD, including a
 TLB, exceptions and a basic UART for console interaction. ISA
