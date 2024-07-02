@@ -242,6 +242,8 @@ let update_subrange_inc (xs, n, _, ys) =
   in
   aux xs n ys
 
+let vector_init (n, elem) = List.init (Big_int.to_int n) (fun _ -> elem)
+
 let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
 
 let vector_truncateLSB (xs, n) = take (Big_int.to_int n) xs
