@@ -116,7 +116,7 @@ val generate_undefineds : IdSet.t -> untyped_def list
 
 val generate_initialize_registers : IdSet.t -> untyped_def list -> untyped_def list
 
-val generate_enum_number_functions : untyped_def list -> untyped_def list
+val generate_enum_number_conversions : untyped_def list -> untyped_def list
 
 val generate : untyped_ast -> untyped_ast
 

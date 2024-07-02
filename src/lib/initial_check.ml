@@ -1638,13 +1638,14 @@ let generate_initialize_registers vs_ids defs =
 
 let update_def_annot f (DEF_aux (def, annot)) = DEF_aux (def, f annot)
 
-let generate_enum_number_functions defs =
+let generate_enum_number_conversions defs =
+  let vs_ids = val_spec_ids defs in
   let rec gen_enums acc = function
     | (DEF_aux (DEF_type (TD_aux (TD_enum (id, elems, _), _)), def_annot) as enum) :: defs -> begin
-        match get_def_attribute "no_enum_functions" def_annot with
+        match get_def_attribute "no_enum_number_conversions" def_annot with
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->
-            let attr_opt = get_def_attribute "enum_functions" def_annot in
+            let attr_opt = get_def_attribute "enum_number_conversions" def_annot in
             let names =
               let open Util.Option_monad in
               let* fields = Option.bind (Option.join (Option.map snd attr_opt)) attribute_data_object in
@@ -1667,45 +1668,69 @@ let generate_enum_number_functions defs =
               nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))
             in
 
+            let already_defined name =
+              let original_id = IdSet.find name vs_ids in
+              Reporting.warn
+                (Printf.sprintf "Cannot generate %s for enum" (string_of_id name))
+                (Hint ("Function with the same name defined here", id_loc original_id, def_annot.loc))
+                (Printf.sprintf
+                   "Could not generate an automatic conversion function for enum %s, as a function with the same name \
+                    (%s) already exists.\n\
+                    Use the $[no_enum_number_conversions] attribute to suppress the automatic generation, or rename \
+                    one of the functions."
+                   (string_of_id id) (string_of_id name)
+                );
+              []
+            in
+
             (* Create a function that converts a number to an enum. *)
             let to_enum =
               let name = to_enum_name in
-              let kid = mk_kid "e" in
-              let pexp n id =
-                let pat =
-                  if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+              if IdSet.mem name vs_ids then already_defined name
+              else (
+                let kid = mk_kid "e" in
+                let pexp n id =
+                  let pat =
+                    if n = List.length elems - 1 then mk_pat P_wild
+                    else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+                  in
+                  let pat = locate_pat (unknown_to l) pat in
+                  mk_pexp (Pat_exp (pat, mk_exp ~loc:l (E_id id)))
                 in
-                let pat = locate_pat (unknown_to l) pat in
-                mk_pexp (Pat_exp (pat, mk_exp ~loc:l (E_id id)))
-              in
-              let funcl =
-                mk_funcl name
-                  (mk_pat (P_id (mk_id "arg#")))
-                  (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
-              in
-              [
-                enum_val_spec name
-                  [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
-                  (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
-                mk_fundef [funcl];
-              ]
+                let funcl =
+                  mk_funcl name
+                    (mk_pat (P_id (mk_id "arg#")))
+                    (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+                in
+                [
+                  enum_val_spec name
+                    [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
+                    (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
+                  mk_fundef [funcl];
+                ]
+              )
             in
 
             (* Create a function that converts from an enum to a number. *)
             let from_enum =
               let name = from_enum_name in
-              let kid = mk_kid "e" in
-              let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-              let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
-              let funcl =
-                mk_funcl name
-                  (mk_pat (P_id (mk_id "arg#")))
-                  (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
-              in
-              [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
+              if IdSet.mem name vs_ids then already_defined name
+              else (
+                let kid = mk_kid "e" in
+                let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
+                let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+                let funcl =
+                  mk_funcl name
+                    (mk_pat (P_id (mk_id "arg#")))
+                    (mk_exp (E_match (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
+                in
+                [enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ); mk_fundef [funcl]]
+              )
             in
 
-            let enum = update_def_annot (add_def_attribute (gen_loc (id_loc id)) "no_enum_functions" None) enum in
+            let enum =
+              update_def_annot (add_def_attribute (gen_loc (id_loc id)) "no_enum_number_conversions" None) enum
+            in
 
             gen_enums (List.rev ((enum :: to_enum) @ from_enum) @ acc) defs
       end
@@ -1716,7 +1741,7 @@ let generate_enum_number_functions defs =
 
 let process_ast ctx ast =
   let ast, ctx = to_ast ctx ast in
-  ({ ast with defs = generate_enum_number_functions ast.defs }, ctx)
+  ({ ast with defs = generate_enum_number_conversions ast.defs }, ctx)
 
 let generate ast =
   let vs_ids = val_spec_ids ast.defs in
