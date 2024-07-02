@@ -82,6 +82,8 @@ val isla_mark_register_pair = pure "mark_register_pair" : forall ('a: Type) ('b:
 
 val isla_monomorphize = pure "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
 
+val isla_interrupt_pending = pure "interrupt_pending" : unit -> bool
+
 $else
 
 val isla_reset_registers : unit -> unit
@@ -107,6 +109,10 @@ function isla_mark_register_pair(_, _, _) = ()
 val isla_monomorphize : forall 'n, 'n >= 0. bits('n) -> bits('n)
 
 function isla_monomorphize bv = bv
+
+val isla_interrupt_pending : unit -> bool
+
+function isla_interrupt_pending() = false
 
 $endif
 
