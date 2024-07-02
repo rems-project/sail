@@ -1467,8 +1467,24 @@ let doc_exp, doc_let =
     | E_if (c, t, e) ->
         let epp = if_exp ctxt (env_of full_exp) (typ_of full_exp) false c t e in
         if aexp_needed then parens (align epp) else epp
-    | E_for (id, exp1, exp2, exp3, Ord_aux (order, _), exp4) ->
-        raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
+    | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
+        (* The remove_e_assign rewrite will get rid of all for loops *except* those which are pure
+           and don't update variables (i.e., essentially just a fancy constant unit).  However, the
+           `print_...` functions are currently pure, so diagnostic things in tests can trip it up.
+        *)
+        if effectful (effect_of body) then
+          raise (report l __POS__ "Effectful for loop should have been rewritten before pretty-printing")
+        else (
+          let combinator = match order with Ord_inc -> "foreach_Z_up" | Ord_dec -> "foreach_Z_down" in
+          let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
+          let from_exp_pp, to_exp_pp, step_exp_pp = (expY from_exp, expY to_exp, expY step_exp) in
+          let body_pp = top_exp body_ctxt false body in
+          parens
+            ((prefix 2 1)
+               ((separate space) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; string "tt"])
+               (parens (prefix 2 1 (string "fun " ^^ doc_id ctxt loopvar ^^ string " _ => ") body_pp))
+            )
+        )
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     (* Special case to catch rebinding (our extra vector monomorphisation in asl-to-sail
        leaves "let 'VL = VL;" around), which would trigger our shadowed type detection. *)
