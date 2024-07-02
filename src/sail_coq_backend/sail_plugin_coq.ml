@@ -75,6 +75,8 @@ let opt_alt_modules_coq : string list ref = ref []
 let opt_alt_modules2_coq : string list ref = ref []
 let opt_coq_isla : string option ref = ref None
 
+let opt_coq_lib_style : Pretty_print_coq.library_style option ref = ref None
+
 let coq_options =
   [
     ( "-coq_output_dir",
@@ -109,6 +111,14 @@ let coq_options =
     ( "-coq_record_update",
       Arg.Set Pretty_print_coq.opt_coq_record_update,
       " use coq-record-update package's syntax for record updates"
+    );
+    ( "-coq_lib_style",
+      Arg.Symbol
+        ( ["bbv"; "stdpp"],
+          fun s -> opt_coq_lib_style := match s with "bbv" -> Some BBV | "stdpp" -> Some Stdpp | _ -> assert false
+        ),
+      " select which style of Coq library to use (default: stdpp when the concurrency interfaces is used, bbv \
+       otherwise)"
     );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
@@ -195,16 +205,20 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
   let generated_line = generated_line filename in
   let types_module = filename ^ "_types" in
   let concurrency_monad_params = Monad_params.find_monad_parameters env in
+  let library_style =
+    let open Pretty_print_coq in
+    match (concurrency_monad_params, !opt_coq_lib_style) with
+    | None, None -> BBV
+    | Some _, None -> Stdpp
+    | _, Some style -> style
+  in
+  let base_imports_lib = match library_style with BBV -> "Sail." | Stdpp -> "SailStdpp." in
   let base_imports_default =
-    if Option.is_some concurrency_monad_params then
-      [
-        "SailStdpp.Base";
-        "SailStdpp.Real";
-        "SailStdpp.ConcurrencyInterfaceTypes";
-        "SailStdpp.ConcurrencyInterface";
-        "SailStdpp.ConcurrencyInterfaceBuiltins";
-      ]
-    else ["Sail.Base"; "Sail.Real"]
+    List.map (( ^ ) base_imports_lib)
+      ( if Option.is_some concurrency_monad_params then
+          ["Base"; "Real"; "ConcurrencyInterfaceTypes"; "ConcurrencyInterface"; "ConcurrencyInterfaceBuiltins"]
+        else ["Base"; "Real"]
+      )
   in
   let base_imports =
     match alt_modules with
@@ -220,7 +234,7 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
         let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (fname ^ ".v") in
         (Some o, Some ext_o)
   in
-  (Pretty_print_coq.pp_ast_coq (ot, base_imports)
+  (Pretty_print_coq.pp_ast_coq library_style (ot, base_imports)
      (o, base_imports @ (types_module :: libs) @ alt_modules2)
      types_module oi ctx effect_info env ast concurrency_monad_params generated_line
   )
