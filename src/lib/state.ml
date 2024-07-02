@@ -776,7 +776,7 @@ let register_refs_coq doc_id coq_record_update env registers =
         "";
         "Definition option_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option \
          (option a) := match rv with";
-        "  | Regval_option v => option_map of_regval v";
+        "  | Regval_option v => match v with None => Some None | Some v' => option_map Some (of_regval v') end";
         "  | _ => None";
         "end.";
         "";
