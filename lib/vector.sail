@@ -106,6 +106,8 @@ val vector_length = pure {
   coq: "vec_length"
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
+val vector_init = pure "vector_init" : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
+
 overload length = {bitvector_length, vector_length}
 
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
