@@ -1,14 +1,15 @@
-[93mWarning[0m: Duplicate function type definition for bar
-[96mfail/enum_function_override.sail[0m:8.29-32:
-8[96m |[0m$[enum_functions { to_enum = bar, from_enum = baz }]
- [91m |[0m                             [91m^-^[0m
- [91m |[0m This duplicate definition is being ignored!
- [91m |[0m [96mfail/enum_function_override.sail[0m:4.4-7:
- [91m |[0m 4[96m |[0mval bar : unit -> unit
- [91m |[0m  [91m |[0m    [91m^-^[0m [91mprevious definition here[0m
+[93mWarning[0m: Cannot generate bar for enum [96mfail/enum_function_override.sail[0m:4.4-7:
+4[96m |[0mval bar : unit -> unit
+ [92m |[0m    [92m^-^[0m [92mFunction with the same name defined here[0m
+[96mfail/enum_function_override.sail[0m:9.0-20:
+9[96m |[0menum Foo = A | B | C
+ [91m |[0m[91m^------------------^[0m
+ [91m |[0m 
+Could not generate an automatic conversion function for enum Foo, as a function with the same name (bar) already exists.
+Use the $[no_enum_number_conversions] attribute to suppress the automatic generation, or rename one of the functions.
+
 [93mType error[0m:
-Code generated nearby:
-[96mfail/enum_function_override.sail[0m:8.0-52:
-8[96m |[0m$[enum_functions { to_enum = bar, from_enum = baz }]
- [91m |[0m[91m^--------------------------------------------------^[0m [91m(operator ==)[0m
- [91m |[0m No possible overloading for (operator ==)
+[96mfail/enum_function_override.sail[0m:12.17-25:
+12[96m |[0mlet x : int(0) = "string"
+  [91m |[0m                 [91m^------^[0m
+  [91m |[0m Type mismatch between int(0) and string

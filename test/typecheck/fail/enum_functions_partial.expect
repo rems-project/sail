@@ -1,5 +1,5 @@
 [93mError[0m:
-[96mfail/enum_functions_partial.sail[0m:4.0-35:
-4[96m |[0m$[enum_functions { to_enum = bar }]
- [91m |[0m[91m^---------------------------------^[0m
+[96mfail/enum_functions_partial.sail[0m:4.0-44:
+4[96m |[0m$[enum_number_conversions { to_enum = bar }]
+ [91m |[0m[91m^------------------------------------------^[0m
  [91m |[0m Expected to_enum and from_enum fields in attribute
