@@ -108,6 +108,8 @@ declare {isabelle} termination_argument repeat = automatic
 
 let duplicate_to_list bit length = repeat [bit] length
 
+let vector_init length element = repeat [element] length
+
 let rec replace bs (n : integer) b' = match bs with
   | [] -> []
   | b :: bs ->
