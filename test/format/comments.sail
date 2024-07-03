@@ -1,3 +1,15 @@
+
+/* first line comment
+             indent many
+           last line comment*/
+
+          /* first line comment
+      indent many
+           last line comment*/
+
+        /* first line comment
+             indent many
+      last line comment*/
 function a () -> int = {
     *R = baz; // comment
        // comment

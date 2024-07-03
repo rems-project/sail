@@ -218,8 +218,56 @@ module PPrintWrapper = struct
 
   let lines s = List.map string (Util.split_on_char '\n' s)
 
+  let count_indent line =
+    let rec loop i = if i < String.length line && line.[i] = ' ' then loop (i + 1) else i in
+    loop 0
+
+  let rtrim str =
+    let len = String.length str in
+    let rec find_end i =
+      if i < 0 then 0
+      else if str.[i] = ' ' || str.[i] = '\t' || str.[i] = '\n' || str.[i] = '\r' then find_end (i - 1)
+      else i + 1
+    in
+    let new_len = find_end (len - 1) in
+    String.sub str 0 new_len
+
+  let count_lines_min_indent lines =
+    let rec loop min_indent lines =
+      match lines with
+      | line :: rest_of_lines ->
+          (* ignore empty line *)
+          if line = "" then loop min_indent rest_of_lines
+          else (
+            let indent = count_indent line in
+            let new_min_indent = min indent min_indent in
+            loop new_min_indent rest_of_lines
+          )
+      | [] -> min_indent
+    in
+    match lines with _ :: xs -> loop max_int xs | _ -> 0
+
+  let patch_comment_lines_indent col lines =
+    let min_indent = count_lines_min_indent lines in
+    Printf.printf "min_ident: %d, col: %d, " min_indent col;
+    let right_indent_count = col - min_indent in
+    Printf.printf "right_indent_count: %d\n" right_indent_count;
+    let lines =
+      List.mapi
+        (fun i l ->
+          (* The first line remains unchanged *)
+          if i == 0 then l else if right_indent_count > 0 then String.make (abs right_indent_count) ' ' ^ l else l
+        )
+        lines
+    in
+    lines
+
   let block_comment_lines col s =
     let lines = Util.split_on_char '\n' s in
+    let lines =
+      List.mapi (fun i l -> if i + 1 == List.length lines then l else rtrim l) lines
+    in
+    let lines = patch_comment_lines_indent col lines in
     List.mapi
       (fun n line ->
         if n = 0 || col > String.length line then string line
