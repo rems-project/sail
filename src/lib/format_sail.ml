@@ -264,9 +264,7 @@ module PPrintWrapper = struct
 
   let block_comment_lines col s =
     let lines = Util.split_on_char '\n' s in
-    let lines =
-      List.mapi (fun i l -> if i + 1 == List.length lines then l else rtrim l) lines
-    in
+    let lines = List.mapi (fun i l -> if i + 1 == List.length lines then l else rtrim l) lines in
     let lines = patch_comment_lines_indent col lines in
     List.mapi
       (fun n line ->
