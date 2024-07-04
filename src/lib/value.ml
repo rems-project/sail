@@ -440,6 +440,10 @@ let value_shift_bits_right = function
   | [v1; v2] -> mk_vector (Sail_lib.shift_bits_right (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value shift_bits_right"
 
+let value_vector_init = function
+  | [v1; v2] -> V_vector (Sail_lib.vector_init (coerce_int v1, v2))
+  | _ -> failwith "value vector_init"
+
 let value_vector_truncate = function
   | [v1; v2] -> mk_vector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncate"
@@ -771,6 +775,7 @@ let primops =
          ("sub_vec_int", value_sub_vec_int);
          ("add_vec", value_add_vec);
          ("sub_vec", value_sub_vec);
+         ("vector_init", value_vector_init);
          ("vector_truncate", value_vector_truncate);
          ("vector_truncateLSB", value_vector_truncateLSB);
          ("read_ram", value_read_ram);

@@ -1284,6 +1284,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
             | cval :: _ -> Printf.sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
             | _ -> c_error "vector access function with bad arity."
           end
+        | "vector_init", _ -> Printf.sprintf "vector_init_%s" (sgen_ctyp_name ctyp)
         | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
         | "vector_update_subrange_inc", _ -> Printf.sprintf "vector_update_subrange_inc_%s" (sgen_ctyp_name ctyp)
         | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
@@ -1735,10 +1736,28 @@ let codegen_vector ctyp =
       ksprintf string "struct %s {\n  size_t len;\n  %s *data;\n};\n" (sgen_id id) (sgen_ctyp ctyp)
       ^^ ksprintf string "typedef struct %s %s;" (sgen_id id) (sgen_id id)
     in
-    let vector_init =
+    let vector_decl =
       c_function ~return:"static void"
         (sail_create (sgen_id id) "%s *rop" (sgen_id id))
         [c_stmt "rop->len = 0"; c_stmt "rop->data = NULL"]
+    in
+    let vector_init =
+      c_function ~return:"static void"
+        (ksprintf string "vector_init_%s(%s *vec, sail_int n, %s elem)" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+        [
+          sail_kill ~suffix:";" (sgen_id id) "vec";
+          c_stmt "size_t m = (size_t)sail_int_get_ui(n)";
+          c_stmt "vec->len = m";
+          ksprintf c_stmt "vec->data = sail_new_array(%s, m)" (sgen_ctyp ctyp);
+          c_for (string "(size_t i = 0; i < m; i++)")
+            ( if is_stack_ctyp ctyp then [c_stmt "(vec->data)[i] = elem"]
+              else
+                [
+                  sail_create ~suffix:";" (sgen_ctyp_name ctyp) "(vec->data) + i";
+                  sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "(vec->data) + i, elem";
+                ]
+            );
+        ]
     in
     let vector_set =
       c_function ~return:"static void"
@@ -1869,8 +1888,9 @@ let codegen_vector ctyp =
       separate (twice hardline)
         [
           vector_typedef;
-          vector_init;
+          vector_decl;
           vector_clear;
+          vector_init;
           vector_reinit;
           vector_undefined;
           vector_access;

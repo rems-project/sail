@@ -795,8 +795,27 @@ let doc_exp_lem, doc_let_lem =
         raise (Reporting.err_unreachable l __POS__ "E_vector_append should have been rewritten before pretty-printing")
     | E_cons (le, re) -> wrap_parens (doc_op (group (colon ^^ colon)) (expY le) (expY re))
     | E_if (c, t, e) -> wrap_parens (align (if_exp ctxt false c t e))
-    | E_for (id, exp1, exp2, exp3, Ord_aux (order, _), exp4) ->
-        raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
+    | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
+        (* The remove_e_assign rewrite will get rid of all for loops *except* those which are pure
+           and don't update variables (i.e., essentially just a fancy constant unit).  However, the
+           `print_...` functions are currently pure, so diagnostic things in tests can trip it up.
+        *)
+        if effectful (effect_of body) then
+          raise (report l __POS__ "Effectful for loop should have been rewritten before pretty-printing")
+        else (
+          let step =
+            match order with
+            | Ord_inc -> expY step_exp
+            | Ord_dec -> parens (separate space [string "integerNegate"; expY step_exp])
+          in
+          let indices_pp = parens (separate space [string "index_list"; expY from_exp; expY to_exp; step]) in
+          let body_lambda = separate space [string "fun"; doc_id_lem loopvar; string "_"; arrow] in
+          parens
+            ((prefix 2 1)
+               ((separate space) [string "foreach"; indices_pp; string "()"])
+               (parens (prefix 2 1 (group body_lambda) (expN body)))
+            )
+        )
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     | E_let (leb, e) -> wrap_parens (let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e)
     | E_app (f, args) -> begin

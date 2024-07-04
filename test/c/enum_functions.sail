@@ -1,7 +1,7 @@
 default Order dec
 $include <prelude.sail>
 
-$[enum_functions { to_enum = bar, from_enum = baz }]
+$[enum_number_conversions { to_enum = bar, from_enum = baz }]
 enum Foo = A | B | C
 
 val main : unit -> unit

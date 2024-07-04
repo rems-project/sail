@@ -118,8 +118,17 @@ let prefix_recordtype = true
  * must rely entirely on the type (like the Sail type checker).
  *)
 
-type context = {
+type library_style = BBV | Stdpp
+
+type global_context = {
   types_mod : string; (* Name of the types module for disambiguation *)
+  avoid_target_names : StringSet.t;
+  effect_info : Effects.side_effect_info;
+  library_style : library_style;
+}
+
+type context = {
+  global : global_context;
   early_ret : typ option;
   kid_renames : kid KBindings.t;
   (* Plain tyvar -> tyvar renames,
@@ -135,15 +144,19 @@ type context = {
       (* Number of implicit arguments and constraints for (mutually) recursive definitions, and whether there is a measure *)
   debug : bool;
   ret_typ_pp : PPrint.document; (* Return type formatted for use with returnR *)
-  effect_info : Effects.side_effect_info;
   is_monadic : bool;
-  avoid_target_names : StringSet.t;
   proof_mode : bool;
       (* Is the body being given via a tactic in proof mode (affects implicit arguments in recursive definitions *)
 }
 let empty_ctxt =
   {
-    types_mod = "";
+    global =
+      {
+        types_mod = "";
+        avoid_target_names = StringSet.empty;
+        effect_info = Effects.empty_side_effect_info;
+        library_style = BBV;
+      };
     early_ret = None;
     kid_renames = KBindings.empty;
     kid_id_renames = KBindings.empty;
@@ -154,9 +167,7 @@ let empty_ctxt =
     recursive_fns = Bindings.empty;
     debug = false;
     ret_typ_pp = PPrint.empty;
-    effect_info = Effects.empty_side_effect_info;
     is_monadic = false;
-    avoid_target_names = StringSet.empty;
     proof_mode = false;
   }
 
@@ -224,12 +235,12 @@ let rec fix_id avoid remove_tick name =
 let string_id avoid (Id_aux (i, _)) =
   match i with Id i -> fix_id avoid false i | Operator x -> Util.zencode_string ("op " ^ x)
 
-let doc_id ctxt id = string (string_id ctxt.avoid_target_names id)
+let doc_id ctxt id = string (string_id ctxt.global.avoid_target_names id)
 
-let doc_id_type types_mod avoid env (Id_aux (i, _) as id) =
+let doc_id_type global env (Id_aux (i, _) as id) =
   (* If a type is shadowed by a definition, use the types module to disambiguate *)
   let is_shadowed () =
-    if types_mod = "" then false
+    if global.types_mod = "" then false
     else (
       match env with
       | None -> false
@@ -239,13 +250,13 @@ let doc_id_type types_mod avoid env (Id_aux (i, _) as id) =
   match i with
   | Id "int" -> string "Z"
   | Id "real" -> string "R"
-  | Id i when is_shadowed () -> string types_mod ^^ dot ^^ string (fix_id avoid false i)
-  | Id i -> string (fix_id avoid false i)
+  | Id i when is_shadowed () -> string global.types_mod ^^ dot ^^ string (fix_id global.avoid_target_names false i)
+  | Id i -> string (fix_id global.avoid_target_names false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_ctor ctxt (Id_aux (i, _)) =
   match i with
-  | Id i -> string (fix_id ctxt.avoid_target_names false i)
+  | Id i -> string (fix_id ctxt.global.avoid_target_names false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_var ctxt kid =
@@ -254,7 +265,7 @@ let doc_var ctxt kid =
   | None -> underscore (* The original id has been shadowed, hope Coq can work it out...  TODO: warn? *)
   | exception Not_found ->
       string
-        (fix_id ctxt.avoid_target_names true
+        (fix_id ctxt.global.avoid_target_names true
            (string_of_kid (try KBindings.find kid ctxt.kid_renames with Not_found -> kid))
         )
 
@@ -572,9 +583,7 @@ let rec doc_typ_fns ctx env =
         string "Z"
     | Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool _atom_nc, _)]) -> string "bool"
     | Typ_app (id, args) ->
-        let tpp =
-          doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id ^^ space ^^ separate_map space doc_typ_arg args
-        in
+        let tpp = doc_id_type ctx.global (Some env) id ^^ space ^^ separate_map space doc_typ_arg args in
         if atyp_needed then parens tpp else tpp
     | _ -> atomic_typ atyp_needed ty
   and atomic_typ atyp_needed (Typ_aux (t, l) as ty) =
@@ -586,7 +595,7 @@ let rec doc_typ_fns ctx env =
         (*if List.exists ((=) (string_of_id id)) regtypes
           then string "register"
           else*)
-        doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id
+        doc_id_type ctx.global (Some env) id
     | Typ_var v -> doc_var ctx v
     | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
         (* exhaustiveness matters here to avoid infinite loops
@@ -832,7 +841,7 @@ and doc_nc_exp ctx env nc =
     | _ -> l0 nc_full
   and l0 (NC_aux (nc, _) as nc_full) =
     match nc with
-    | NC_id id -> doc_id_type ctx.types_mod ctx.avoid_target_names (Some env) id
+    | NC_id id -> doc_id_type ctx.global (Some env) id
     | NC_true -> string "true"
     | NC_false -> string "false"
     | NC_var kid -> doc_nexp ctx env (nvar kid)
@@ -1458,8 +1467,24 @@ let doc_exp, doc_let =
     | E_if (c, t, e) ->
         let epp = if_exp ctxt (env_of full_exp) (typ_of full_exp) false c t e in
         if aexp_needed then parens (align epp) else epp
-    | E_for (id, exp1, exp2, exp3, Ord_aux (order, _), exp4) ->
-        raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
+    | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
+        (* The remove_e_assign rewrite will get rid of all for loops *except* those which are pure
+           and don't update variables (i.e., essentially just a fancy constant unit).  However, the
+           `print_...` functions are currently pure, so diagnostic things in tests can trip it up.
+        *)
+        if effectful (effect_of body) then
+          raise (report l __POS__ "Effectful for loop should have been rewritten before pretty-printing")
+        else (
+          let combinator = match order with Ord_inc -> "foreach_Z_up" | Ord_dec -> "foreach_Z_down" in
+          let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
+          let from_exp_pp, to_exp_pp, step_exp_pp = (expY from_exp, expY to_exp, expY step_exp) in
+          let body_pp = top_exp body_ctxt false body in
+          parens
+            ((prefix 2 1)
+               ((separate space) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; string "tt"])
+               (parens (prefix 2 1 (string "fun " ^^ doc_id ctxt loopvar ^^ string " _ => ") body_pp))
+            )
+        )
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     (* Special case to catch rebinding (our extra vector monomorphisation in asl-to-sail
        leaves "let 'VL = VL;" around), which would trigger our shadowed type detection. *)
@@ -1692,7 +1717,7 @@ let doc_exp, doc_let =
                 | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
               in
               let fn_typ_env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env (quant_kopts tqs) in
-              let is_monadic = not (Effects.function_is_pure f ctxt.effect_info) in
+              let is_monadic = not (Effects.function_is_pure f ctxt.global.effect_info) in
               let inst, inst_env =
                 (* We attempt to get an instantiation of the function signature's
                    type variables which agrees with Coq by
@@ -2355,14 +2380,14 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
  *)
 
 (* TODO: check use of empty_ctxt below doesn't cause problems due to missing info *)
-let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
+  let bare_ctxt = { empty_ctxt with global } in
   match td with
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
       let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
       doc_op coloneq
         (separate space
-           ([string "Definition"; doc_id_type types_mod avoid_target_names None id]
+           ([string "Definition"; doc_id_type global None id]
            @ doc_typquant_items bare_ctxt Env.empty parens typq
            @ [colon; string "Type"]
            )
@@ -2370,7 +2395,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
         (doc_typschm bare_ctxt Env.empty false typschm)
       ^^ dot ^^ twice hardline
   | TD_abbrev (id, typq, A_aux (A_nexp nexp, _)) ->
-      let idpp = doc_id_type types_mod avoid_target_names None id in
+      let idpp = doc_id_type global None id in
       doc_op coloneq
         (separate space
            ([string "Definition"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "Z"])
@@ -2380,7 +2405,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
       ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
       ^^ twice hardline
   | TD_abbrev (id, typq, A_aux (A_bool nc, _)) ->
-      let idpp = doc_id_type types_mod avoid_target_names None id in
+      let idpp = doc_id_type global None id in
       doc_op coloneq
         (separate space
            ([string "Definition"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "bool"])
@@ -2406,7 +2431,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
         | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id
       in
       let fs_doc = separate_map hardline f_pp fs in
-      let type_id_pp = doc_id_type types_mod avoid_target_names None id in
+      let type_id_pp = doc_id_type global None id in
       let typq_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
       let match_parameters =
         match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l
@@ -2429,17 +2454,18 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
             string id
           )
         in
+        (* Use level 1 to match stdpp *)
         match fs with
         | [_] ->
             string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "{| " ^^ idpp
-            ^^ string " := e |} (only parsing)."
+            ^^ string " := e |} (at level 1, only parsing)."
         | _ ->
             string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^ string "match r with Build_"
             ^^ type_id_pp ^^ match_parameters ^^ space
             ^^ separate space (List.mapi (pp_field "_") fs)
             ^^ string " =>" ^//^ string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space
             ^^ separate space (List.mapi (pp_field "e") fs)
-            ^//^ string "end" ^^ dot
+            ^//^ string "end (at level 1)" ^^ dot
       in
       let updates_pp =
         if !opt_coq_record_update then (
@@ -2463,12 +2489,20 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
         ^^ string "]." ^^ hardline
       in
       let eq_pp =
-        if IdSet.mem id generic_eq_types then
+        if IdSet.mem id generic_eq_types then (
+          let class_pp, final_pp =
+            match global.library_style with
+            | BBV ->
+                ( string "forall (x y : " ^^ type_id_pp ^^ string "), Decidable (x = y).",
+                  string "refine (Build_Decidable _ true _). subst. split; reflexivity."
+                )
+            | Stdpp -> (string "EqDecision " ^^ type_id_pp ^^ string ".", string "left; subst; reflexivity.")
+          in
           string "#[export]" ^^ hardline
           ^^ group
                (nest 2
-                  (string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^ string "forall (x y : "
-                 ^^ type_id_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
+                  (string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^ class_pp ^^ hardline
+                 ^^ intros_pp "x" ^^ intros_pp "y"
                   ^^ separate hardline
                        (list_init numfields (fun n ->
                             let ns = string_of_int n in
@@ -2477,9 +2511,8 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
                        )
                   )
                )
-          ^^ hardline
-          ^^ string "refine (Build_Decidable _ true _). subst. split; reflexivity."
-          ^^ hardline ^^ string "Defined." ^^ twice hardline
+          ^^ hardline ^^ final_pp ^^ hardline ^^ string "Defined." ^^ twice hardline
+        )
         else empty
       in
       let inhabited_pp =
@@ -2514,7 +2547,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
       match id with
       | Id_aux (Id "option", _) -> empty
       | _ ->
-          let id_pp = doc_id_type types_mod avoid_target_names None id in
+          let id_pp = doc_id_type global None id in
           let q_pps = doc_typquant_items bare_ctxt Env.empty braces typq in
           let ar_doc = separate_map hardline (fun x -> pipe ^^ space ^^ doc_type_union bare_ctxt id_pp x) ar in
           let typ_pp =
@@ -2523,8 +2556,14 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
           let reset_implicits_pp = doc_reset_implicits id_pp typq in
           let doc_dec_eq_req = function
             | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
-                (* TODO: collision avoidance for x y *)
-                Some (string "`{forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)}")
+                let class_pp =
+                  match global.library_style with
+                  | BBV ->
+                      (* TODO: collision avoidance for x y *)
+                      string "forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)"
+                  | Stdpp -> string "EqDecision " ^^ doc_var bare_ctxt kid
+                in
+                Some (string "`{" ^^ class_pp ^^ string "}")
             | _ -> None
           in
           let doc_inhabited_req = function
@@ -2532,25 +2571,32 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
                 Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
             | _ -> None
           in
-          let typ_use_pp =
-            separate space (id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq))
-          in
+          let typ_use_pps = id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
+          let typ_use_pp = separate space typ_use_pps in
           let eq_pp =
             if IdSet.mem id generic_eq_types then (
               let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
+              let class_pp =
+                match global.library_style with
+                | BBV -> string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)"
+                | Stdpp -> string "EqDecision " ^^ if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp
+              in
+              let proof_start =
+                match global.library_style with
+                | BBV -> string "refine (Decidable_eq_from_dec (fun x y => _))."
+                | Stdpp -> string "unfold EqDecision, Decision."
+              in
               string "#[export]" ^^ hardline
               ^^ group
                    (nest 2
                       (flow (break 1)
                          (((string "Instance Decidable_eq_" ^^ id_pp) :: q_pps)
                          @ eq_req_pps
-                         @ [colon; string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)."]
+                         @ [colon; class_pp ^^ string "."]
                          )
                       )
                    )
-              ^^ hardline
-              ^^ string "refine (Decidable_eq_from_dec (fun x y => _))."
-              ^^ hardline
+              ^^ hardline ^^ proof_start ^^ hardline
               ^^ string "decide equality; refine (generic_dec _ _)."
               ^^ hardline ^^ string "Defined." ^^ hardline
             )
@@ -2583,7 +2629,7 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
     )
   | TD_enum (id, enums, _) ->
       let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
-      let id_pp = doc_id_type types_mod avoid_target_names None id in
+      let id_pp = doc_id_type global None id in
       let typ_pp =
         (doc_op coloneq) (concat [string "Inductive"; space; id_pp]) (ifflat empty (pipe ^^ space) ^^ enums_doc)
       in
@@ -2639,15 +2685,19 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
         | None, None -> fallback
       in
       let eq2_pp =
+        let class_pp, proof_pp =
+          match global.library_style with
+          | BBV ->
+              ( string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)",
+                string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec."
+              )
+          | Stdpp -> (string "EqDecision " ^^ id_pp, id_pp ^^ string "_eq_dec.")
+        in
         string "#[export]" ^^ hardline
         ^^ group
              (nest 2
                 (flow (break 1)
-                   [
-                     string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon;
-                     string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=";
-                     string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec.";
-                   ]
+                   [string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon; class_pp ^^ string " :="; proof_pp]
                 )
              )
       in
@@ -2879,8 +2929,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec rec_opt ?rec_set
-    (FCL_aux (FCL_funcl (id, pexp), annot)) =
+let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
   let tq, typ = Env.get_val_spec_orig id env in
   let arg_typs, ret_typ, _ =
@@ -2888,7 +2937,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec re
     | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ, no_effect)
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
-  let is_monadic = not (Effects.function_is_pure id effect_info) in
+  let is_monadic = not (Effects.function_is_pure id global.effect_info) in
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
   let pat, guard, exp, (l, _) = destruct_pexp pexp in
@@ -2914,10 +2963,10 @@ let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec re
   in
   let ctxt0 =
     {
-      types_mod;
+      global;
       early_ret = None;
       (* filled in below *)
-      kid_renames = mk_kid_renames avoid_target_names ids_to_avoid kids_used;
+      kid_renames = mk_kid_renames global.avoid_target_names ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
       constant_kids;
@@ -2929,9 +2978,7 @@ let doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec re
       debug = List.mem (string_of_id id) !opt_debug_on;
       ret_typ_pp = PPrint.empty;
       (* filled in below *)
-      effect_info;
       is_monadic;
-      avoid_target_names;
       proof_mode;
     }
   in
@@ -3057,24 +3104,18 @@ let get_id = function [] -> failwith "FD_function with empty list" | FCL_aux (FC
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs types_mod avoid_target_names effect_info proof_mode ?(mutrec = NotMutrec) rec_set
-    (FD_aux (FD_function (r, typa, funcls), (l, _))) =
+let doc_fundef_rhs global proof_mode ?(mutrec = NotMutrec) rec_set (FD_aux (FD_function (r, typa, funcls), (l, _))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r ~rec_set funcl
+  | [funcl] -> doc_funcl_init global proof_mode mutrec r ~rec_set funcl
   | FCL_aux (FCL_funcl (id, _), _) :: _ ->
       unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
-let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
+let doc_mutrec global rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef :: fundefs ->
-      let pre1, ctxt1, details1 =
-        doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:FirstFn rec_set fundef
-      in
-      let pren, ctxtn, detailsn =
-        Util.split3
-          (List.map (doc_fundef_rhs types_mod avoid_target_names effect_info true ~mutrec:LaterFn rec_set) fundefs)
-      in
+      let pre1, ctxt1, details1 = doc_fundef_rhs global true ~mutrec:FirstFn rec_set fundef in
+      let pren, ctxtn, detailsn = Util.split3 (List.map (doc_fundef_rhs global true ~mutrec:LaterFn rec_set) fundefs) in
       let recursive_fns =
         List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn
       in
@@ -3087,18 +3128,18 @@ let doc_mutrec types_mod avoid_target_names effect_info rec_set = function
       let pres = pre1 :: pren in
       separate hardline pres ^^ dot ^^ hardline ^^ separate hardline bodies ^^ break 1 ^^ string "Defined." ^^ hardline
 
-let doc_funcl types_mod avoid_target_names effect_info proof_mode mutrec r funcl =
-  let pre, ctxt, details = doc_funcl_init types_mod avoid_target_names effect_info proof_mode mutrec r funcl in
+let doc_funcl global proof_mode mutrec r funcl =
+  let pre, ctxt, details = doc_funcl_init global proof_mode mutrec r funcl in
   let body = doc_funcl_body ctxt details in
   (pre, body)
 
-let doc_fundef types_mod avoid_target_names effect_info (FD_aux (FD_function (r, typa, fcls), fannot)) =
+let doc_fundef global (FD_aux (FD_function (r, typa, fcls), fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [(FCL_aux (FCL_funcl (id, _), annot) as funcl)] when not (Env.is_extern id (env_of_tannot (snd annot)) "coq") ->
     begin
       let proof_mode = match r with Rec_aux (Rec_measure _, _) -> true | _ -> false in
-      let pre, body = doc_funcl types_mod avoid_target_names effect_info proof_mode NotMutrec r funcl in
+      let pre, body = doc_funcl global proof_mode NotMutrec r funcl in
       match r with
       | Rec_aux (Rec_measure _, _) ->
           group
@@ -3112,8 +3153,8 @@ let doc_fundef types_mod avoid_target_names effect_info (FD_aux (FD_function (r,
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 
-let doc_dec avoid_target_names (DEC_aux (reg, (l, _))) =
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_dec global (DEC_aux (reg, (l, _))) =
+  let bare_ctxt = { empty_ctxt with global } in
   match reg with
   | DEC_reg (typ, id, None) -> empty
   (*
@@ -3157,8 +3198,8 @@ let int_of_field_index tname fid nexp =
            ("Non-constant bitfield index in field " ^ string_of_id fid ^ " of " ^ tname)
         )
 
-let doc_regtype_fields avoid_target_names (tname, (n1, n2, fields)) =
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_regtype_fields global (tname, (n1, n2, fields)) =
+  let bare_ctxt = { empty_ctxt with global } in
   let const_int fid idx = int_of_field_index tname fid idx in
   let i1, i2 =
     match (n1, n2) with
@@ -3288,16 +3329,15 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       string "forall" ^/^ separate space tyvars_pp ^/^ arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs, typ), l))
 
-let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux (VS_val_spec (_, id, _), (l, ann)) as vs)
-    =
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_val_spec global def_annot unimplemented (VS_aux (VS_val_spec (_, id, _), (l, ann)) as vs) =
+  let bare_ctxt = { empty_ctxt with global } in
   if !opt_undef_axioms && IdSet.mem id unimplemented then (
     let typ_env = env_of_annot (l, ann) in
     (* The type checker will expand the type scheme, and we need to look at the
        environment afterwards to find it. *)
     let _, next_env = check_val_spec typ_env def_annot (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
-    let is_monadic = not (Effects.function_is_pure id effect_info) in
+    let is_monadic = not (Effects.function_is_pure id global.effect_info) in
     group
       (separate space [string "Axiom"; doc_id bare_ctxt id; colon; doc_axiom_typschm typ_env is_monadic l tys] ^^ dot)
     ^/^ hardline
@@ -3306,8 +3346,8 @@ let doc_val_spec def_annot unimplemented avoid_target_names effect_info (VS_aux 
 
 (* If a top-level value is declared with an existential type, we turn it into
    a type annotation expression instead (unless it duplicates an existing one). *)
-let doc_val avoid_target_names pat exp =
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_val global pat exp =
+  let bare_ctxt = { empty_ctxt with global } in
   let id, pat_typ =
     match pat with
     | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (id, Some typ)
@@ -3359,21 +3399,19 @@ let doc_val avoid_target_names pat exp =
   ^^ group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."])
   ^^ hardline
 
-let doc_def types_mod unimplemented avoid_target_names generic_eq_types enum_number_defs effect_info
-    (DEF_aux (aux, def_annot) as def) =
+let doc_def global unimplemented generic_eq_types enum_number_defs (DEF_aux (aux, def_annot) as def) =
   match aux with
-  | DEF_val v_spec -> doc_val_spec def_annot unimplemented avoid_target_names effect_info v_spec
+  | DEF_val v_spec -> doc_val_spec global def_annot unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
-      else doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs t_def
-  | DEF_register dec -> group (doc_dec avoid_target_names dec)
+      else doc_typdef global generic_eq_types enum_number_defs t_def
+  | DEF_register dec -> group (doc_dec global dec)
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef types_mod avoid_target_names effect_info fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs ->
-      doc_mutrec types_mod avoid_target_names effect_info (ids_of_def def) fundefs ^/^ hardline
-  | DEF_let (LB_aux (LB_val (pat, exp), _)) -> doc_val avoid_target_names pat exp
+  | DEF_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec global (ids_of_def def) fundefs ^/^ hardline
+  | DEF_let (LB_aux (LB_val (pat, exp), _)) -> doc_val global pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_pragma _ -> empty
@@ -3389,9 +3427,9 @@ let doc_def types_mod unimplemented avoid_target_names generic_eq_types enum_num
 
 (* Definitions to help translate Isla trace values embedded in Coq into directly
    translated Coq datatypes. *)
-let doc_isla_typ types_mod avoid_target_names (TD_aux (td, _)) =
-  let type_id_pp id = doc_id_type types_mod avoid_target_names None id in
-  let bare_ctxt = { empty_ctxt with avoid_target_names } in
+let doc_isla_typ global (TD_aux (td, _)) =
+  let type_id_pp id = doc_id_type global None id in
+  let bare_ctxt = { empty_ctxt with global } in
   match td with
   | TD_record (id, typq, fs, _) ->
       let fname fid = doc_id bare_ctxt fid in
@@ -3463,11 +3501,11 @@ let doc_isla_typ types_mod avoid_target_names (TD_aux (td, _)) =
     )
   | _ -> empty
 
-let doc_isla types_mod avoid_target_names (DEF_aux (aux, _)) =
+let doc_isla global (DEF_aux (aux, _)) =
   match aux with
   | DEF_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
-      else doc_isla_typ types_mod avoid_target_names t_def
+      else doc_isla_typ global t_def
   | _ -> empty
 
 let find_exc_typ defs =
@@ -3500,8 +3538,8 @@ let builtin_target_names defs =
   in
   List.fold_left check_def StringSet.empty defs
 
-let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_module opt_coq_isla ctx effect_info
-    type_env ({ defs; _ } as ast) concurrency_monad_params top_line suppress_MR_M =
+let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_modules) type_defs_module opt_coq_isla ctx
+    effect_info type_env ({ defs; _ } as ast) concurrency_monad_params top_line suppress_MR_M =
   try
     (* let regtypes = find_regtypes d in *)
     let state_ids = fst (State.generate_regstate_defs ctx type_env ast) |> val_spec_ids in
@@ -3514,7 +3552,8 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     let exc_typ = find_exc_typ defs in
     let unimplemented = find_unimplemented defs in
     let avoid_target_names = builtin_target_names defs in
-    let bare_doc_id = doc_id { empty_ctxt with avoid_target_names } in
+    let global = { types_mod = type_defs_module; avoid_target_names; effect_info; library_style } in
+    let bare_doc_id = doc_id { empty_ctxt with global } in
     let register_refs =
       State.register_refs_coq bare_doc_id !opt_coq_record_update type_env (State.find_registers defs)
     in
@@ -3532,7 +3571,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                 string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ").");
               ]
       | Some params ->
-          let pp_typ = doc_typ { empty_ctxt with avoid_target_names } type_env in
+          let pp_typ = doc_typ { empty_ctxt with global } type_env in
           let open Monad_params in
           let mr_m =
             if suppress_MR_M then []
@@ -3576,10 +3615,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     in
     let enums = Type_check.Env.get_enums type_env in
     let defs, enum_number_defs =
-      let doc_def =
-        doc_def type_defs_module unimplemented avoid_target_names generic_eq_types (Bindings.empty, Bindings.empty)
-          effect_info
-      in
+      let doc_def = doc_def global unimplemented generic_eq_types (Bindings.empty, Bindings.empty) in
       let num_of_map, of_num_map, rdefs =
         List.fold_left
           (fun (num_of_map, of_num_map, rdefs) def ->
@@ -3608,9 +3644,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
     let typdefs, defs = List.partition is_typ_def defs in
     let statedefs, defs = List.partition is_state_def defs in
 
-    let doc_def =
-      doc_def type_defs_module unimplemented avoid_target_names generic_eq_types enum_number_defs effect_info
-    in
+    let doc_def = doc_def global unimplemented generic_eq_types enum_number_defs in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
       else
@@ -3624,6 +3658,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
          ([
             string "(*" ^^ string top_line ^^ string "*)";
             hardline;
+            (match library_style with BBV -> empty | Stdpp -> string "From stdpp Require Import base." ^^ hardline);
             (separate_map hardline)
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
               types_modules;
@@ -3705,7 +3740,7 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                hardline;
                hardline;
                hardline;
-               separate empty (List.map (doc_isla type_defs_module avoid_target_names) typdefs);
+               separate empty (List.map (doc_isla global) typdefs);
                hardline;
                hardline;
              ]
