@@ -47,6 +47,12 @@ lib/hol/sail-heap
 
 /lib/isabelle/output
 
+# Sail coverage
+/lib/coverage/Cargo.lock
+/lib/coverage/target
+/lib/coverage/libsail_coverage.a
+/sailcov/sailcov
+
 # location specific things
 
 /doc/code_riscv
