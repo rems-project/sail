@@ -3804,7 +3804,7 @@ end = struct
         | example :: _ ->
             hardline ^^ string "Instance "
             ^^ doc_id ctxt (prepend_id "dummy_" (reg_type_name typ_id))
-            ^^ string " : Inhabited (register_ref register _) := populate _ "
+            ^^ string " : Inhabited (register_ref register _) := populate "
             ^^ doc_id ctxt (ref_name example)
             ^^ string "." ^^ hardline
       )
