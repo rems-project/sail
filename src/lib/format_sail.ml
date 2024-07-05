@@ -440,6 +440,26 @@ module type CONFIG = sig
   val config : config
 end
 
+let rec can_chunks_list_wrap cqs =
+  match cqs with
+  | [] -> true
+  | [cq] -> (
+      match List.of_seq (Queue.to_seq cq) with
+      | [] -> true
+      | [c] -> (
+          match c with
+          (* Atom is ok *)
+          | Atom _ -> true
+          (* {{{ Atom }}} is ok *)
+          | Block (_, exps) -> can_chunks_list_wrap exps
+          | If_then_else (_, i, t, e) -> can_chunks_list_wrap [t; e]
+          | _ -> false
+        )
+      | c :: cq ->
+          can_chunks_list_wrap [Queue.of_seq (List.to_seq [c])] && can_chunks_list_wrap [Queue.of_seq (List.to_seq cq)]
+    )
+  | cq :: cqs -> can_chunks_list_wrap [cq] && can_chunks_list_wrap cqs
+
 module Make (Config : CONFIG) = struct
   let indent = Config.config.indent
   let preserve_structure = Config.config.preserve_structure
@@ -636,6 +656,9 @@ module Make (Config : CONFIG) = struct
              )
     | Pragma (pragma, arg) -> char '$' ^^ string pragma ^^ space ^^ string arg ^^ hardline
     | Block (always_hardline, exps) ->
+        let always_hardline =
+          match exps with [x] -> if can_chunks_list_wrap exps then false else always_hardline | _ -> always_hardline
+        in
         let exps =
           map_last
             (fun no_semi chunks -> doc_block_exp_chunks (opts |> nonatomic |> statement_like) no_semi chunks)
