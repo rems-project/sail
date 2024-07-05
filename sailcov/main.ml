@@ -194,17 +194,25 @@ type source_char = { mutable badness : int; mutable goodness : int; mutable bad_
 
 let zero_width span = span.l1 = span.l2 && span.c1 = span.c2
 
-let mark_bad_region source span _ =
-  if zero_width span then source.(span.l2 - 1).(span.c2 - 1).bad_zero_width <- true
-  else (
-    source.(span.l1 - 1).(span.c1).badness <- source.(span.l1 - 1).(span.c1).badness + 1;
-    source.(span.l2 - 1).(span.c2 - 1).badness <- source.(span.l2 - 1).(span.c2 - 1).badness - 1
-  )
+let mark_bad_region file source span _ =
+  try
+    if zero_width span then source.(span.l2 - 1).(span.c2 - 1).bad_zero_width <- true
+    else (
+      source.(span.l1 - 1).(span.c1).badness <- source.(span.l1 - 1).(span.c1).badness + 1;
+      source.(span.l2 - 1).(span.c2 - 1).badness <- source.(span.l2 - 1).(span.c2 - 1).badness - 1
+    )
+  with Invalid_argument _ ->
+    Printf.ksprintf warn "Could not find span %s. Has the file been edited since collecting coverage data?\n"
+      (string_of_span file span)
 
-let mark_good_region source span _ =
+let mark_good_region file source span _ =
   if not (zero_width span) then (
-    source.(span.l1 - 1).(span.c1).goodness <- source.(span.l1 - 1).(span.c1).goodness + 1;
-    source.(span.l2 - 1).(span.c2 - 1).goodness <- source.(span.l2 - 1).(span.c2 - 1).goodness - 1
+    try
+      source.(span.l1 - 1).(span.c1).goodness <- source.(span.l1 - 1).(span.c1).goodness + 1;
+      source.(span.l2 - 1).(span.c2 - 1).goodness <- source.(span.l2 - 1).(span.c2 - 1).goodness - 1
+    with Invalid_argument _ ->
+      Printf.ksprintf warn "Could not find span %s. Has the file been edited since collecting coverage data?\n"
+        (string_of_span file span)
   )
 
 let process_line l =
@@ -409,8 +417,8 @@ let main () =
       end;
 
       let source = read_source file in
-      SpanMap.iter (mark_good_region source) taken;
-      SpanMap.iter (mark_bad_region source) not_taken;
+      SpanMap.iter (mark_good_region file source) taken;
+      SpanMap.iter (mark_bad_region file source) not_taken;
 
       let output_file = html_file_for file in
       let chan = open_out output_file in
