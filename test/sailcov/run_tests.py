@@ -41,7 +41,7 @@ def test_sailcov():
                 step('{} -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches {} -o {}'.format(sail, basename, filename, basename))
                 step('cc {}.c {}/lib/*.c {}/lib/coverage/libsail_coverage.a -lgmp -lz -lpthread -ldl -I {}/lib -o {}.bin'.format(basename, sail_dir, sail_dir, sail_dir, basename))
                 step('./{}.bin -c {}.taken'.format(basename, basename))
-                step('{} --all {}.branches --taken {}.taken {}'.format(sailcov, basename, basename, filename))
+                step('{} --werror --all {}.branches --taken {}.taken {}'.format(sailcov, basename, basename, filename))
                 step('diff {}.html {}.expect'.format(basename, basename))
                 step('rm {}.taken {}.bin {}.branches'.format(basename, basename, basename))
                 print_ok(filename)
