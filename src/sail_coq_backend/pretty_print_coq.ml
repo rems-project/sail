@@ -3671,13 +3671,10 @@ end = struct
         string "  specialize (string_of_register_roundtrip r') as H2.";
         string "  rewrite H in H1.";
         string "  rewrite H2 in H1.";
-        string "  injection H1.";
-        string "  intros; subst.";
+        string "  assert (E : existT T' r' = existT T r). { congruence. }";
         string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
-        string
-          "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) \
-           T r')).";
-        string "  rewrite <- H0.";
+        string "  change (register_beq r r') with (f (@existT _ register T r) (@existT _ register T' r')).";
+        string "  rewrite <- E.";
         string "  unfold f.";
         string "  apply register_beq_refl.";
         string "* apply String.eqb_neq in H as H'.";
