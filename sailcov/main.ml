@@ -515,7 +515,7 @@ let main () =
                   output_html_char chan source.(line - 1).(i).char
                 done;
               output_string chan "<br>\n";
-              if line + 1 < Array.length source then finish (stack, line + 1, 0) else ()
+              if line < Array.length source then finish (stack, line + 1, 0) else ()
         in
         let stack, line, char = SpanMap.fold process combined ([], 1, 0) in
         finish (stack, line, char)
