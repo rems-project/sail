@@ -236,7 +236,7 @@ module PPrintWrapper = struct
     let rec loop min_indent lines =
       match lines with
       | line :: rest_of_lines ->
-          (* ignore empty line *)
+          (* Ignore empty line *)
           if line = "" then loop min_indent rest_of_lines
           else (
             let indent = count_indent line in
@@ -249,14 +249,14 @@ module PPrintWrapper = struct
 
   let patch_comment_lines_indent col lines =
     let min_indent = count_lines_min_indent lines in
-    Printf.printf "min_ident: %d, col: %d, " min_indent col;
     let right_indent_count = col - min_indent in
-    Printf.printf "right_indent_count: %d\n" right_indent_count;
     let lines =
       List.mapi
         (fun i l ->
-          (* The first line remains unchanged *)
-          if i == 0 then l else if right_indent_count > 0 then String.make (abs right_indent_count) ' ' ^ l else l
+          (* The first_line or empty_line remains unchanged *)
+          if i == 0 || l = "" then l
+          else if right_indent_count > 0 then String.make (abs right_indent_count) ' ' ^ l
+          else l
         )
         lines
     in
@@ -264,7 +264,8 @@ module PPrintWrapper = struct
 
   let block_comment_lines col s =
     let lines = Util.split_on_char '\n' s in
-    let lines = List.mapi (fun i l -> if i + 1 == List.length lines then l else rtrim l) lines in
+    (* Last line (before */) shouldn't be rtrimed *)
+    let lines = List.mapi (fun i l -> if i + 1 = List.length lines then l else rtrim l) lines in
     let lines = patch_comment_lines_indent col lines in
     List.mapi
       (fun n line ->
