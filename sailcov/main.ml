@@ -107,7 +107,7 @@ let warn message =
   else prerr_endline ("Warning: " ^ message)
 
 let warn_assert where b =
-  if b then (
+  if not b then (
     let message = "assertion failed at " ^ where in
     if !opt_werror then (
       prerr_endline ("Error: " ^ message);
