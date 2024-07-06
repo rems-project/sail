@@ -43,7 +43,7 @@ function float_is_ne ((op_0, op_1)) = {
 
   let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
   let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
-  let is_ne   = is_nan == false & (op_0 != op_1) & is_zero == false;
+  let is_ne   = not (is_nan) & (op_0 != op_1) & not (is_zero);
 
   (is_ne, flags);
 }

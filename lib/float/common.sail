@@ -86,4 +86,13 @@ function float_decompose(op) = {
   }
 }
 
+val      not : bool -> bool
+function not (predicate) = {
+  let is_not = if   predicate
+               then false
+               else true;
+
+  is_not;
+}
+
 $endif

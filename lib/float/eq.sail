@@ -43,7 +43,7 @@ function float_is_eq ((op_0, op_1)) = {
 
   let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
   let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
-  let is_eq   = is_nan == false & ((op_0 == op_1) | is_zero);
+  let is_eq   = not (is_nan) & ((op_0 == op_1) | is_zero);
 
   (is_eq, flags);
 }
