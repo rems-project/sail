@@ -767,7 +767,7 @@ module Make (C : CONFIG) = struct
         (* Get the number of cases, because we don't want to check branch
            coverage for matches with only a single case. *)
         let num_cases = List.length cases in
-        let branch_id, on_reached = coverage_branch_reached ctx l in
+        let branch_id, on_reached = if num_cases > 1 then coverage_branch_reached ctx l else (0, []) in
         let case_return_id = ngensym () in
         let finish_match_label = label "finish_match_" in
         let compile_case (apat, guard, body) =
@@ -807,7 +807,7 @@ module Make (C : CONFIG) = struct
         in
         ( aval_setup
           @ [icomment ("Case with num_cases: " ^ string_of_int num_cases)]
-          @ (if num_cases > 1 then on_reached else [])
+          @ on_reached
           @ [idecl l ctyp case_return_id]
           @ List.concat (List.map compile_case cases)
           @ [imatch_failure l]
