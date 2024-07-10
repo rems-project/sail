@@ -529,8 +529,8 @@ let main () =
         finish (stack, line, char)
       )
       else
-        Array.iter
-          (fun line ->
+        Array.iteri
+          (fun line_no line ->
             Array.iter
               (fun loc ->
                 if loc.goodness < 0 && loc.badness < 0 then (
@@ -558,7 +558,7 @@ let main () =
                   done
                 )
                 else if loc.badness > 0 then (
-                  warn_assert __LOC__ (loc.goodness <= 0);
+                  warn_assert (Printf.sprintf "%s (location marked both covered and uncovered at %s:%d)" __LOC__ file (line_no + 1)) (loc.goodness <= 0);
                   current_badness := !current_badness + loc.badness;
                   for _ = 1 to loc.badness do
                     output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (bad_color ()))
@@ -581,8 +581,8 @@ let main () =
                   output_string chan "</span>"
                 );
 
-                warn_assert __LOC__ (!current_goodness >= 0);
-                warn_assert __LOC__ (!current_badness >= 0)
+                warn_assert (Printf.sprintf "%s (negative current_goodness at %s:%d)" __LOC__ file (line_no + 1)) (!current_goodness >= 0);
+                warn_assert (Printf.sprintf "%s (negative current_badness at %s:%d)" __LOC__ file (line_no + 1)) (!current_badness >= 0)
               )
               line;
             output_string chan "<br>\n"
