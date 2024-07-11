@@ -1207,6 +1207,8 @@ let_def:
     { $2 }
 
 outcome_spec_def:
+  | Outcome id Colon typschm
+    { mk_outcome (OV_outcome ($2, $4, [])) $startpos $endpos }
   | Outcome id Colon typschm With separated_nonempty_list(Comma, param_kopt)
     { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 

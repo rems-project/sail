@@ -84,4 +84,9 @@ outcome sail_return_exception : 'pa -> unit
     impl emulator(_) = ()
 }
 
+outcome sail_system_register_write : unit -> unit
+= {
+    impl emulator() = ()
+}
+
 $endif
