@@ -86,4 +86,7 @@ function float_decompose(op) = {
   }
 }
 
+val      not : forall ('p : Bool). bool('p) -> bool(not('p))
+function not(b) = not_bool(b)
+
 $endif
