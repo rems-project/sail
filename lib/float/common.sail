@@ -89,4 +89,46 @@ function float_decompose(op) = {
 val      not : forall ('p : Bool). bool('p) -> bool(not('p))
 function not(b) = not_bool(b)
 
+val      is_lowest_one : forall 'n, 0 < 'n. bits('n) -> bool
+function is_lowest_one (op) = {
+  let is_one = op[0] == bitone;
+
+  is_one;
+}
+
+val      is_highest_one : forall 'n, 0 < 'n. bits('n) -> bool
+function is_highest_one (op) = {
+  let is_one = op['n - 1] == bitone;
+
+  is_one;
+}
+
+val      is_all_ones : forall 'n, 0 < 'n. bits('n) -> bool
+function is_all_ones (op) = {
+  let is_ones = op == sail_ones ('n);
+
+  is_ones;
+}
+
+val      is_lowest_zero : forall 'n, 0 < 'n. bits('n) -> bool
+function is_lowest_zero (op) = {
+  let is_zero = op[0] == bitzero;
+
+  is_zero;
+}
+
+val      is_highest_zero : forall 'n, 0 < 'n. bits('n) -> bool
+function is_highest_zero (op) = {
+  let is_zero = op['n - 1] == bitzero;
+
+  is_zero;
+}
+
+val      is_all_zeros : forall 'n, 0 < 'n. bits('n) -> bool
+function is_all_zeros (op) = {
+  let is_zeros = op == sail_zeros ('n);
+
+  is_zeros;
+}
+
 $endif

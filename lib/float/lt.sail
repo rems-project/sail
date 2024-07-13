@@ -45,9 +45,9 @@ function float_is_lt ((op_0, op_1)) = {
   let fp_1 = float_decompose (op_1);
 
   let is_zero      = float_is_zero (op_0) & float_is_zero (op_1);
-  let diff_sign_lt = (fp_0.sign[0] == bitone) & not (is_zero);
+  let diff_sign_lt = is_lowest_one (fp_0.sign) & not (is_zero);
 
-  let is_neg       = fp_0.sign[0] == bitone;
+  let is_neg       = is_lowest_one (fp_0.sign);
   let unsigned_lt  = unsigned (op_0) < unsigned (op_1);
   let is_xor       = (is_neg & not (unsigned_lt)) | (not (is_neg) & unsigned_lt);
   let same_sign_lt = (op_0 != op_1) & is_xor;

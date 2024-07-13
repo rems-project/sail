@@ -35,8 +35,7 @@ $include <float/common.sail>
 val      float_is_inf : fp_bits -> bool
 function float_is_inf (op) = {
   let struct {_, exp, mantissa} = float_decompose(op);
-  let is_inf = exp == sail_ones(length(exp))
-               & mantissa == sail_zeros(length(mantissa));
+  let is_inf                    = is_all_ones (exp) & is_all_zeros (mantissa);
 
   is_inf
 }
