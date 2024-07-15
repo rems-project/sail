@@ -10,6 +10,7 @@ union option ('a : Type) = {
   Some : 'a
 }
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 function main() : unit -> unit = {

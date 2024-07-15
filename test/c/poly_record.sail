@@ -1,5 +1,6 @@
 default Order dec
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 struct S('a: Type) = {

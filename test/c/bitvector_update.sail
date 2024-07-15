@@ -1,6 +1,7 @@
 default Order dec
 $include <prelude.sail>
 
+$[sv_update]
 val "print_endline" : string -> unit
 
 function main() -> unit = {

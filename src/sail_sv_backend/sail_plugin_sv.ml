@@ -313,7 +313,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
 
   let optimize_anf _ aexp = aexp
 
-  let unroll_loops = None
+  let unroll_loops = Some 64
   let specialize_calls = false
   let make_call_precise = C.make_call_precise
   let ignore_64 = true

@@ -23,6 +23,7 @@ function SignalException () = {
     ();
 }
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 val main : unit -> unit

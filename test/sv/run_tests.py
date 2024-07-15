@@ -33,7 +33,6 @@ skip_tests = {
     'list_rec_functions2',
     'list_torture',
     'loop_exception',
-    'pointer_assign',
     'poly_mapping', # length
     'poly_mapping2',
     'read_write_ram',
@@ -54,7 +53,6 @@ skip_tests = {
     'list_cons_cons', # lists
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
-    'lib_valid_hex_bits', # bitvector parsing
     'issue202_1', # lists
 }
 

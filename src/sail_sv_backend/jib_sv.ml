@@ -455,7 +455,7 @@ module Make (Config : CONFIG) = struct
           | _ -> Reporting.unreachable l __POS__ "hex_str"
 
         let hex_str_upper l = function
-          | CT_lint -> "sail_hex_str_upper"
+          | CT_lint -> Primops.hex_str_upper ()
           | CT_fint sz when Config.nostrings -> Generate_primop.hex_str_upper_fint_stub sz
           | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
           | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
@@ -958,6 +958,14 @@ module Make (Config : CONFIG) = struct
                 wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
+          else if name = "valid_hex_bits" then
+            let* args = mapM Smt.smt_cval args in
+            let updates, ret = svir_creturn creturn in
+            match args with
+            | [arg1; arg2] ->
+                let arg1 = Extract (31, 0, arg1) in
+                wrap (with_updates l updates (SVS_assign (ret, Fn ("sail_valid_hex_bits", [arg1; arg2]))))
+            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_valid_hex_bits"
           else (
             match Smt.builtin ~allow_io:false name with
             | Some generator ->
@@ -983,10 +991,14 @@ module Make (Config : CONFIG) = struct
                     let* args = mapM Smt.smt_cval args in
                     let updates, ret = svir_creturn creturn in
                     wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
-                | None ->
+                | None -> (
+                    let _, _, _, uannot = Bindings.find id ctx.valspecs in
                     let* args = mapM Smt.smt_cval args in
                     let updates, ret = svir_creturn creturn in
-                    wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
+                    match get_attribute "sv_module" uannot with
+                    | Some _ -> wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
+                    | None -> wrap (with_updates l updates (SVS_assign (ret, Fn (name, args))))
+                  )
               )
           )
         )

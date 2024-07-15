@@ -1936,7 +1936,7 @@ let codegen_def' ctx (CDEF_aux (aux, _)) =
              (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
           )
   | CDEF_fundef (id, ret_arg, args, instrs) ->
-      let _, arg_ctyps, ret_ctyp =
+      let _, arg_ctyps, ret_ctyp, _ =
         match Bindings.find_opt id ctx.valspecs with
         | Some vs -> vs
         | None -> c_error ~loc:(id_loc id) ("No valspec found for " ^ string_of_id id)

@@ -78,6 +78,8 @@ module type S = sig
 
   val hex_str : unit -> string
 
+  val hex_str_upper : unit -> string
+
   val dec_str : unit -> string
 end
 
@@ -312,6 +314,30 @@ module Make
                 (SVS_block
                    (List.map mk_statement
                       [SVS_var (s, CT_string, None); svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                   )
+                );
+          }
+    )
+
+  let hex_str_upper () =
+    register_library_def "sail_hex_str_upper" (fun () ->
+        let i = primop_name "i" in
+        let s = primop_name "s" in
+        SVD_fundef
+          {
+            function_name = SVN_string "sail_hex_str_upper";
+            return_type = Some CT_string;
+            params = [(mk_id "i", CT_lint)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (s, CT_string, None);
+                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
+                        svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
+                        SVS_return (Var s);
+                      ]
                    )
                 );
           }

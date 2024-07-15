@@ -1,5 +1,6 @@
 default Order dec
 
+$[sv_module]
 val print = "print_endline" : string -> unit
 
 newtype X = X : string

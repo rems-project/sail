@@ -1,5 +1,6 @@
 default Order dec
 
+$[sv_module]
 val print = "print_endline" : string -> unit
 
 val eq_int = { lem: "eq", coq: "Z.eqb", _: "eq_int" } : (int, int) -> bool

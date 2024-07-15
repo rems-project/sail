@@ -1,3 +1,4 @@
+$[sv_module]
 val "print_endline" : string -> unit
 
 val operator <= = {

@@ -4,6 +4,7 @@ $include <prelude.sail>
 
 register R : bool
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 function IMPDEF(str : string) -> bool = {

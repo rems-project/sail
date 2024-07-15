@@ -576,7 +576,9 @@ let remove_tuples cdefs ctx =
       records = Bindings.map (fun (params, fields) -> (params, Bindings.map fix_tuples fields)) ctx.records;
       variants = Bindings.map (fun (params, ctors) -> (params, Bindings.map fix_tuples ctors)) ctx.variants;
       valspecs =
-        Bindings.map (fun (extern, ctyps, ctyp) -> (extern, List.map fix_tuples ctyps, fix_tuples ctyp)) ctx.valspecs;
+        Bindings.map
+          (fun (extern, ctyps, ctyp, uannot) -> (extern, List.map fix_tuples ctyps, fix_tuples ctyp, uannot))
+          ctx.valspecs;
       locals = Bindings.map (fun (mut, ctyp) -> (mut, fix_tuples ctyp)) ctx.locals;
     }
   in

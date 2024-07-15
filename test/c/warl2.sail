@@ -3,6 +3,7 @@ default Order dec
 $include <prelude.sail>
 $include <generic_equality.sail>
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 struct WARL_range = {

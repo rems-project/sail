@@ -4,6 +4,7 @@ $sail_internal
 
 $include <flow.sail>
 
+$[sv_module]
 val print = "print_endline" : string -> unit
 
 val "print_int" : (string, int) -> unit

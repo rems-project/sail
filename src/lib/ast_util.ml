@@ -140,6 +140,8 @@ let is_public = function Public -> true | _ -> false
 
 let visibility_loc = function Private l -> l | Public -> Parse_ast.Unknown
 
+let uannot_of_def_annot (def_annot : 'a def_annot) : uannot = { attrs = def_annot.attrs }
+
 let def_annot_map_loc f (annot : 'a def_annot) = { annot with loc = f annot.loc }
 
 let def_annot_map_env (f : 'a -> 'b) (annot : 'a def_annot) =

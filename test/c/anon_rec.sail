@@ -4,6 +4,7 @@ union Foo ('a : Type) = {
   MkFoo : { field1 : 'a, field2 : int }
 }
 
+$[sv_module]
 val "print_endline" : string -> unit
 
 function main((): unit) -> unit = {

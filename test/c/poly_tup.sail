@@ -2,7 +2,9 @@ default Order dec
 
 $sail_internal
 
+$[sv_module]
 val "print" : string -> unit
+
 val "print_int" : (string, int) -> unit
 
 union option ('a : Type) = {
