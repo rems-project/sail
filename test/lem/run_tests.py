@@ -28,6 +28,8 @@ skip_tests = {
     'abstract_bool',
     'abstract_bool2',
     'constraint_syn',
+    'type_enum_simple',
+    'type_enum',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -60,6 +62,8 @@ skip_tests_mwords = {
     'ex_vector_infer',
     'ex_list_infer',
     'ex_cons_infer',
+    'type_enum_simple',
+    'type_enum',
 }
 
 print('Sail is {}'.format(sail))

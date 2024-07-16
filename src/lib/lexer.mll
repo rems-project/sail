@@ -124,6 +124,7 @@ let kw_table =
      ("then",                    (fun _ -> Then));
      ("true",                    (fun _ -> True));
      ("Type",                    (fun _ -> TYPE));
+     ("Enum",                    (fun _ -> ENUM));
      ("type",		         (fun _ -> Typedef));
      ("undefined",               (fun _ -> Undefined));
      ("union",			 (fun _ -> Union));

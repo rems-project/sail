@@ -276,7 +276,7 @@ let rec typ_has_existential (Typ_aux (t, _)) =
   | Typ_exist _ -> true
 
 and typ_arg_has_existential (A_aux (a, _)) =
-  match a with A_nexp _ | A_bool _ -> false | A_typ typ -> typ_has_existential typ
+  match a with A_nexp _ | A_bool _ -> false | A_enum _ -> false | A_typ typ -> typ_has_existential typ
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)

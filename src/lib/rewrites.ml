@@ -210,6 +210,7 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
   and rewrite_typ_arg env (A_aux (targ, l)) =
     match targ with
     | A_nexp nexp -> A_aux (A_nexp (rewrite_nexp_ids env nexp), l)
+    | A_enum (id, nexp) -> A_aux (A_enum (id, rewrite_nexp_ids env nexp), l)
     | A_typ typ -> A_aux (A_typ (rewrite_typ env typ), l)
     | A_bool nc -> A_aux (A_bool nc, l)
   in

@@ -278,6 +278,10 @@ let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
 
 let is_int_kopt = function KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true | _ -> false
 
+let is_enum_kopt = function KOpt_aux (KOpt_kind (K_aux (K_enum _, _), _), _) -> true | _ -> false
+
+let enum_kopt_id = function KOpt_aux (KOpt_kind (K_aux (K_enum id, _), _), _) -> Some id | _ -> None
+
 let is_typ_kopt = function KOpt_aux (KOpt_kind (K_aux (K_type, _), _), _) -> true | _ -> false
 
 let is_bool_kopt = function KOpt_aux (KOpt_kind (K_aux (K_bool, _), _), _) -> true | _ -> false
@@ -289,26 +293,6 @@ module Kid = struct
   let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)
 end
 
-module Kind = struct
-  type t = kind
-  let compare (K_aux (aux1, _)) (K_aux (aux2, _)) =
-    match (aux1, aux2) with
-    | K_int, K_int -> 0
-    | K_type, K_type -> 0
-    | K_bool, K_bool -> 0
-    | K_int, _ -> 1
-    | _, K_int -> -1
-    | K_type, _ -> 1
-    | _, K_type -> -1
-end
-
-module KOpt = struct
-  type t = kinded_id
-  let compare kopt1 kopt2 =
-    let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
-    lex_ord (Kid.compare (kopt_kid kopt1) (kopt_kid kopt2)) (Kind.compare (kopt_kind kopt1) (kopt_kind kopt2))
-end
-
 module Id = struct
   type t = id
   let compare id1 id2 =
@@ -317,6 +301,29 @@ module Id = struct
     | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
     | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
     | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
+end
+
+module Kind = struct
+  type t = kind
+  let compare (K_aux (aux1, _)) (K_aux (aux2, _)) =
+    match (aux1, aux2) with
+    | K_int, K_int -> 0
+    | K_type, K_type -> 0
+    | K_bool, K_bool -> 0
+    | K_enum id1, K_enum id2 -> Id.compare id1 id2
+    | K_int, _ -> 1
+    | _, K_int -> -1
+    | K_type, _ -> 1
+    | _, K_type -> -1
+    | K_bool, _ -> 1
+    | _, K_bool -> -1
+end
+
+module KOpt = struct
+  type t = kinded_id
+  let compare kopt1 kopt2 =
+    let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
+    lex_ord (Kid.compare (kopt_kid kopt1) (kopt_kid kopt2)) (Kind.compare (kopt_kind kopt1) (kopt_kind kopt2))
 end
 
 let lex_ord f g x1 x2 y1 y2 = match f x1 x2 with 0 -> g y1 y2 | n -> n
@@ -373,6 +380,7 @@ and nc_compare (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_not_equal (n1, n2), NC_not_equal (n3, n4) ->
       lex_ord nexp_compare nexp_compare n1 n3 n2 n4
   | NC_set (n1, s1), NC_set (n2, s2) -> lex_ord nexp_compare (Util.compare_list Nat_big_num.compare) n1 n2 s1 s2
+  | NC_enum_set (n1, s1), NC_enum_set (n2, s2) -> lex_ord nexp_compare (Util.compare_list Id.compare) n1 n2 s1 s2
   | NC_or (nc1, nc2), NC_or (nc3, nc4) | NC_and (nc1, nc2), NC_and (nc3, nc4) ->
       lex_ord nc_compare nc_compare nc1 nc3 nc2 nc4
   | NC_app (f1, args1), NC_app (f2, args2) -> lex_ord Id.compare (Util.compare_list typ_arg_compare) f1 f2 args1 args2
@@ -392,6 +400,8 @@ and nc_compare (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | _, NC_not_equal _ -> 1
   | NC_set _, _ -> -1
   | _, NC_set _ -> 1
+  | NC_enum_set _, _ -> -1
+  | _, NC_enum_set _ -> 1
   | NC_or _, _ -> -1
   | _, NC_or _ -> 1
   | NC_and _, _ -> -1
@@ -447,10 +457,15 @@ and typ_arg_compare (A_aux (ta1, _)) (A_aux (ta2, _)) =
   | A_nexp n1, A_nexp n2 -> nexp_compare n1 n2
   | A_typ t1, A_typ t2 -> typ_compare t1 t2
   | A_bool nc1, A_bool nc2 -> nc_compare nc1 nc2
+  | A_enum (id1, n1), A_enum (id2, n2) ->
+      let c = Id.compare id1 id2 in
+      if c = 0 then nexp_compare n1 n2 else c
   | A_nexp _, _ -> -1
   | _, A_nexp _ -> 1
   | A_typ _, _ -> -1
   | _, A_typ _ -> 1
+  | A_bool _, _ -> -1
+  | _, A_bool _ -> 1
 
 module Nexp = struct
   type t = nexp
@@ -693,6 +708,7 @@ let nite nc n1 n2 = Nexp_aux (Nexp_if (nc, n1, n2), Parse_ast.Unknown)
 
 let nc_set kid nums = mk_nc (NC_set (kid, nums))
 let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
+let nc_enum_set nexp ids = mk_nc (NC_enum_set (nexp, ids))
 let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
@@ -719,9 +735,14 @@ let nc_and nc1 nc2 =
 let arg_nexp ?loc:(l = Parse_ast.Unknown) n = A_aux (A_nexp n, l)
 let arg_typ ?loc:(l = Parse_ast.Unknown) typ = A_aux (A_typ typ, l)
 let arg_bool ?loc:(l = Parse_ast.Unknown) nc = A_aux (A_bool nc, l)
+let arg_enum ?loc:(l = Parse_ast.Unknown) id n = A_aux (A_enum (id, n), l)
 
 let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) =
-  match k with K_int -> arg_nexp (nvar v) | K_bool -> arg_bool (nc_var v) | K_type -> arg_typ (mk_typ (Typ_var v))
+  match k with
+  | K_int -> arg_nexp (nvar v)
+  | K_enum id -> arg_enum id (nvar v)
+  | K_bool -> arg_bool (nc_var v)
+  | K_type -> arg_typ (mk_typ (Typ_var v))
 
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
@@ -1053,7 +1074,11 @@ let append_id id str =
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
-let string_of_kind_aux = function K_type -> "Type" | K_int -> "Int" | K_bool -> "Bool"
+let string_of_kind_aux = function
+  | K_type -> "Type"
+  | K_int -> "Int"
+  | K_bool -> "Bool"
+  | K_enum id -> "Enum " ^ string_of_id id
 
 let string_of_kind (K_aux (k, _)) = string_of_kind_aux k
 
@@ -1100,6 +1125,7 @@ and string_of_typ_arg_aux = function
   | A_nexp n -> string_of_nexp n
   | A_typ typ -> string_of_typ typ
   | A_bool nc -> string_of_n_constraint nc
+  | A_enum (_, n) -> string_of_nexp n
 
 and string_of_n_constraint = function
   | NC_aux (NC_id id, _) -> string_of_id id
@@ -1112,6 +1138,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_or (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_enum_set (n, ids), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " string_of_id ids ^ "}"
   | NC_aux (NC_app (Id_aux (Operator op, _), [arg1; arg2]), _) ->
       "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
@@ -1403,7 +1430,11 @@ let is_typ_arg_typ = function A_aux (A_typ _, _) -> true | _ -> false
 let is_typ_arg_bool = function A_aux (A_bool _, _) -> true | _ -> false
 
 let typ_arg_kind (A_aux (aux, l)) =
-  match aux with A_typ _ -> K_aux (K_type, l) | A_bool _ -> K_aux (K_bool, l) | A_nexp _ -> K_aux (K_int, l)
+  match aux with
+  | A_typ _ -> K_aux (K_type, l)
+  | A_enum (id, _) -> K_aux (K_enum id, l)
+  | A_bool _ -> K_aux (K_bool, l)
+  | A_nexp _ -> K_aux (K_int, l)
 
 module NC = struct
   type t = n_constraint
@@ -1508,6 +1539,7 @@ and kopts_of_constraint (NC_aux (nc, _)) =
   | NC_not_equal (nexp1, nexp2) ->
       KOptSet.union (kopts_of_nexp nexp1) (kopts_of_nexp nexp2)
   | NC_set (nexp, _) -> kopts_of_nexp nexp
+  | NC_enum_set (nexp, _) -> kopts_of_nexp nexp
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> KOptSet.union (kopts_of_constraint nc1) (kopts_of_constraint nc2)
   | NC_app (_, args) -> List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ_arg t)) KOptSet.empty args
   | NC_var kid -> KOptSet.singleton (mk_kopt K_bool kid)
@@ -1529,6 +1561,7 @@ and kopts_of_typ (Typ_aux (t, _)) =
 and kopts_of_typ_arg (A_aux (ta, _)) =
   match ta with
   | A_nexp nexp -> kopts_of_nexp nexp
+  | A_enum (_, nexp) -> kopts_of_nexp nexp
   | A_typ typ -> kopts_of_typ typ
   | A_bool nc -> kopts_of_constraint nc
 
@@ -1553,7 +1586,7 @@ and tyvars_of_constraint (NC_aux (nc, _)) =
   | NC_bounded_lt (nexp1, nexp2)
   | NC_not_equal (nexp1, nexp2) ->
       KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
-  | NC_set (nexp, _) -> tyvars_of_nexp nexp
+  | NC_set (nexp, _) | NC_enum_set (nexp, _) -> tyvars_of_nexp nexp
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
   | NC_app (_, args) -> List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ_arg t)) KidSet.empty args
   | NC_var kid -> KidSet.singleton kid
@@ -1574,7 +1607,7 @@ and tyvars_of_typ (Typ_aux (t, _)) =
 
 and tyvars_of_typ_arg (A_aux (ta, _)) =
   match ta with
-  | A_nexp nexp -> tyvars_of_nexp nexp
+  | A_nexp nexp | A_enum (_, nexp) -> tyvars_of_nexp nexp
   | A_typ typ -> tyvars_of_typ typ
   | A_bool nc -> tyvars_of_constraint nc
 
@@ -1612,6 +1645,9 @@ and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _)) =
   | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
   | A_typ typ -> [undefined_of_typ mwords l annot typ]
   | A_bool nc -> [E_aux (E_constraint nc, (l, annot (atom_bool_typ nc)))]
+  | A_enum (enum_id, _) ->
+      Reporting.unreachable l __POS__
+        ("Cannot create undefined element for enumeration type argument " ^ string_of_id enum_id)
 
 let destruct_pexp (Pat_aux (pexp, ann)) =
   match pexp with
@@ -1834,6 +1870,7 @@ and locate_nc f (NC_aux (nc_aux, l)) =
     | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_not_equal (nexp1, nexp2) -> NC_not_equal (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_set (nexp, nums) -> NC_set (locate_nexp f nexp, nums)
+    | NC_enum_set (nexp, ids) -> NC_enum_set (locate_nexp f nexp, List.map (locate_id f) ids)
     | NC_or (nc1, nc2) -> NC_or (locate_nc f nc1, locate_nc f nc2)
     | NC_and (nc1, nc2) -> NC_and (locate_nc f nc1, locate_nc f nc2)
     | NC_true -> NC_true
@@ -1862,6 +1899,7 @@ and locate_typ_arg f (A_aux (typ_arg_aux, l)) =
   let typ_arg_aux =
     match typ_arg_aux with
     | A_nexp nexp -> A_nexp (locate_nexp f nexp)
+    | A_enum (id, nexp) -> A_enum (locate_id f id, locate_nexp f nexp)
     | A_typ typ -> A_typ (locate_typ f typ)
     | A_bool nc -> A_bool (locate_nc f nc)
   in
@@ -2014,13 +2052,15 @@ let extern_assoc backend ext =
 
 let rec nexp_subst sv subst = function
   | Nexp_aux (Nexp_var kid, _) as nexp -> begin
-      match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n | _ -> nexp
+      match subst with A_aux ((A_nexp n | A_enum (_, n)), _) when Kid.compare kid sv = 0 -> n | _ -> nexp
     end
   | Nexp_aux (nexp, l) -> Nexp_aux (nexp_subst_aux sv subst nexp, l)
 
 and nexp_subst_aux sv subst = function
   | Nexp_var kid -> begin
-      match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> unaux_nexp n | _ -> Nexp_var kid
+      match subst with
+      | A_aux ((A_nexp n | A_enum (_, n)), _) when Kid.compare kid sv = 0 -> unaux_nexp n
+      | _ -> Nexp_var kid
     end
   | Nexp_id id -> Nexp_id id
   | Nexp_constant c -> Nexp_constant c
@@ -2043,6 +2083,7 @@ and constraint_subst_aux l sv subst = function
   | NC_bounded_lt (n1, n2) -> NC_bounded_lt (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (n, ints) -> NC_set (nexp_subst sv subst n, ints)
+  | NC_enum_set (n, ids) -> NC_enum_set (nexp_subst sv subst n, ids)
   | NC_or (nc1, nc2) -> NC_or (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
   | NC_and (nc1, nc2) -> NC_and (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
   | NC_app (id, args) -> NC_app (id, List.map (typ_arg_subst sv subst) args)
@@ -2072,6 +2113,7 @@ and typ_arg_subst sv subst (A_aux (arg, l)) = A_aux (typ_arg_subst_aux sv subst 
 
 and typ_arg_subst_aux sv subst = function
   | A_nexp nexp -> A_nexp (nexp_subst sv subst nexp)
+  | A_enum (id, nexp) -> A_enum (id, nexp_subst sv subst nexp)
   | A_typ typ -> A_typ (typ_subst sv subst typ)
   | A_bool nc -> A_bool (constraint_subst sv subst nc)
 
@@ -2125,6 +2167,7 @@ let subst_kids_nexp, subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | NC_bounded_lt (n1, n2) -> re (NC_bounded_lt (snexp n1, snexp n2))
     | NC_not_equal (n1, n2) -> re (NC_not_equal (snexp n1, snexp n2))
     | NC_set (n, ints) -> re (NC_set (snexp n, ints))
+    | NC_enum_set (n, ids) -> re (NC_enum_set (snexp n, ids))
     | NC_or (nc1, nc2) -> re (NC_or (snc nc1, snc nc2))
     | NC_and (nc1, nc2) -> re (NC_and (snc nc1, snc nc2))
     | NC_true | NC_false -> n_constraint
@@ -2145,6 +2188,7 @@ let subst_kids_nexp, subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
   and s_starg substs (A_aux (ta, l)) =
     match ta with
     | A_nexp ne -> A_aux (A_nexp (subst_kids_nexp substs ne), l)
+    | A_enum (id, ne) -> A_aux (A_enum (id, subst_kids_nexp substs ne), l)
     | A_typ t -> A_aux (A_typ (s_styp substs t), l)
     | A_bool nc -> A_aux (A_bool (subst_kids_nc substs nc), l)
   in

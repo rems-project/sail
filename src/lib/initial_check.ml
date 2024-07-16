@@ -94,6 +94,7 @@ type type_constructor = kind_aux option list
 type ctx = {
   kinds : kind_aux KBindings.t;
   type_constructors : type_constructor Bindings.t;
+  enums : IdSet.t Bindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
   fixities : (prec * int) Bindings.t;
   internal_files : StringSet.t;
@@ -103,6 +104,7 @@ type ctx = {
 let rec equal_ctx ctx1 ctx2 =
   KBindings.equal ( = ) ctx1.kinds ctx2.kinds
   && Bindings.equal ( = ) ctx1.type_constructors ctx2.type_constructors
+  && Bindings.equal IdSet.equal ctx1.enums ctx2.enums
   && Bindings.equal
        (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
        ctx1.scattereds ctx2.scattereds
@@ -127,6 +129,7 @@ let merge_ctx l ctx1 ctx2 =
       Bindings.merge
         (compatible ( = ) (fun id -> "Different definitions for type constructor " ^ string_of_id id ^ " found"))
         ctx1.type_constructors ctx2.type_constructors;
+    enums = Bindings.union (fun _ e1 e2 -> Some (IdSet.union e1 e2)) ctx1.enums ctx2.enums;
     scattereds =
       Bindings.merge
         (compatible
@@ -157,13 +160,6 @@ let string_contains str char =
     true
   with Not_found -> false
 
-let to_ast_kind (P.K_aux (k, l)) =
-  match k with
-  | P.K_type -> Some (K_aux (K_type, l))
-  | P.K_int -> Some (K_aux (K_int, l))
-  | P.K_order -> None
-  | P.K_bool -> Some (K_aux (K_bool, l))
-
 let to_ast_id ctx (P.Id_aux (id, l)) =
   let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
   if string_contains (string_of_parse_id_aux id) '#' then begin
@@ -173,6 +169,14 @@ let to_ast_id ctx (P.Id_aux (id, l)) =
     | _ -> raise (Reporting.err_general l "Identifier contains hash character and -dmagic_hash is unset")
   end
   else to_ast_id' id
+
+let to_ast_kind ctx (P.K_aux (k, l)) =
+  match k with
+  | P.K_type -> Some (K_aux (K_type, l))
+  | P.K_int -> Some (K_aux (K_int, l))
+  | P.K_order -> None
+  | P.K_bool -> Some (K_aux (K_bool, l))
+  | P.K_enum id -> Some (K_aux (K_enum (to_ast_id ctx id), l))
 
 let to_infix_parser_op =
   let open Infix_parser in
@@ -301,7 +305,7 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
     let v = to_ast_var v in
     Option.map
       (fun k -> (KOpt_aux (KOpt_kind (k, v), l), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }))
-      (to_ast_kind k)
+      (to_ast_kind ctx k)
   in
   match aux with
   | P.KOpt_kind (attr, vs, None) ->
@@ -322,6 +326,29 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
         attr
       )
 
+let rec id_set_members ~last = function
+  | [] -> []
+  | P.ATyp_aux (P.ATyp_id id, l) :: members -> id :: id_set_members ~last:l members
+  | P.ATyp_aux (_, l) :: members ->
+      raise (Reporting.err_general (Hint ("Identifier here", last, l)) "Found a non-identifier in an identifier set")
+
+let rec numeric_set_members ~last = function
+  | [] -> []
+  | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), l) :: members -> n :: numeric_set_members ~last:l members
+  | P.ATyp_aux (_, l) :: members ->
+      raise (Reporting.err_general (Hint ("Number here", last, l)) "Found a non-number in a numeric set")
+
+type type_set = Numeric_set of Big_int.num list | Id_set of Parse_ast.id list
+
+let set_members ~at:l = function
+  | [] -> raise (Reporting.err_general l "Empty set found in type")
+  | member :: members -> (
+      match member with
+      | P.ATyp_aux (P.ATyp_id id, l) -> Id_set (id :: id_set_members ~last:l members)
+      | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), l) -> Numeric_set (n :: numeric_set_members ~last:l members)
+      | P.ATyp_aux (_, l) -> raise (Reporting.err_general l "Found unexpected element in set type")
+    )
+
 let rec to_ast_typ ctx atyp =
   let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
   match aux with
@@ -335,9 +362,40 @@ let rec to_ast_typ ctx atyp =
       in
       Typ_aux (Typ_fn (from_typs, to_ast_typ ctx to_typ), l)
   | P.ATyp_bidir (typ1, typ2, _) -> Typ_aux (Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2), l)
-  | P.ATyp_nset nums ->
-      let n = Kid_aux (Var "'n", gen_loc l) in
-      Typ_aux (Typ_exist ([mk_kopt ~loc:l K_int n], nc_set (nvar n) nums, atom_typ (nvar n)), l)
+  | P.ATyp_nset members -> begin
+      match set_members ~at:l members with
+      | Numeric_set nums ->
+          let n = Kid_aux (Var "'n", gen_loc l) in
+          Typ_aux (Typ_exist ([mk_kopt ~loc:l K_int n], nc_set (nvar n) nums, atom_typ (nvar n)), l)
+      | Id_set ids -> (
+          let ids = List.map (to_ast_id ctx) ids in
+          let first_id = List.hd ids in
+          match List.find_opt (fun (_, members) -> IdSet.mem (List.hd ids) members) (Bindings.bindings ctx.enums) with
+          | None ->
+              raise
+                (Reporting.err_typ (id_loc first_id) ("Could not find enumeration containing " ^ string_of_id first_id))
+          | Some (enum_id, members) ->
+              begin
+                match List.find_opt (fun id -> not (IdSet.mem id members)) ids with
+                | Some bad_id ->
+                    raise
+                      (Reporting.err_typ
+                         (Hint (string_of_id first_id ^ " in " ^ string_of_id enum_id, id_loc first_id, id_loc bad_id))
+                         ("Identifier " ^ string_of_id bad_id ^ " not in the " ^ string_of_id enum_id ^ " enumeration")
+                      )
+                | None -> ()
+              end;
+              let e = Kid_aux (Var "'e", gen_loc l) in
+              Typ_aux
+                ( Typ_exist
+                    ( [mk_kopt ~loc:l (K_enum enum_id) e],
+                      nc_enum_set (nvar e) ids,
+                      app_typ enum_id [arg_enum enum_id (nvar e)]
+                    ),
+                  l
+                )
+        )
+    end
   | P.ATyp_tuple typs -> Typ_aux (Typ_tuple (List.map (to_ast_typ ctx) typs), l)
   | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
       Typ_aux (Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int]), l)
@@ -345,7 +403,14 @@ let rec to_ast_typ ctx atyp =
       Typ_aux (Typ_app (Id_aux (Id "atom_bool", il), [to_ast_typ_arg ctx n K_bool]), l)
   | P.ATyp_app (id, args) ->
       let id = to_ast_id ctx id in
-      begin
+      if Bindings.mem id ctx.enums then (
+        match args with
+        | [arg] ->
+            let arg = to_ast_typ_arg ctx arg (K_enum id) in
+            Typ_aux (Typ_app (id, [arg]), l)
+        | _ -> raise (Reporting.err_typ l "Expected parameterised enumeration to have a single type argument")
+      )
+      else (
         match Bindings.find_opt id ctx.type_constructors with
         | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
         | Some kinds ->
@@ -365,7 +430,7 @@ let rec to_ast_typ ctx atyp =
                       (format_kind_aux_list non_order_kinds) (List.length kinds) (List.length args)
                    )
                 )
-      end
+      )
   | P.ATyp_exist (kopts, nc, atyp) ->
       let kopts, ctx =
         List.fold_right
@@ -386,6 +451,7 @@ and to_ast_typ_arg ctx (ATyp_aux (_, l) as atyp) = function
   | K_type -> A_aux (A_typ (to_ast_typ ctx atyp), l)
   | K_int -> A_aux (A_nexp (to_ast_nexp ctx atyp), l)
   | K_bool -> A_aux (A_bool (to_ast_constraint ctx atyp), l)
+  | K_enum id -> A_aux (A_enum (id, to_ast_nexp ctx atyp), l)
 
 and to_ast_nexp ctx atyp =
   let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
@@ -481,7 +547,11 @@ and to_ast_constraint ctx atyp =
         | P.ATyp_var v -> NC_var (to_ast_var v)
         | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
         | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
-        | P.ATyp_in (n, P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_nexp ctx n, bounds)
+        | P.ATyp_in (n, P.ATyp_aux (P.ATyp_nset members, _)) -> begin
+            match set_members ~at:l members with
+            | Numeric_set bounds -> NC_set (to_ast_nexp ctx n, bounds)
+            | Id_set ids -> NC_enum_set (to_ast_nexp ctx n, List.map (to_ast_id ctx) ids)
+          end
         | _ -> raise (Reporting.err_typ l "Invalid constraint")
       in
       NC_aux (aux, l)
@@ -1016,7 +1086,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let id = to_ast_reserved_type_id ctx id in
       let typq, typq_ctx = to_ast_typquant ctx typq in
       begin
-        match to_ast_kind kind with
+        match to_ast_kind ctx kind with
         | Some kind ->
             let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
             ( [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
@@ -1056,15 +1126,15 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
   | P.TD_enum (id, fns, enums) ->
       let id = to_ast_reserved_type_id ctx id in
       let fns = generate_enum_functions l ctx id fns enums in
-      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
-        { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
+      let members = List.map (fun e -> to_ast_id ctx (fst e)) enums in
+      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
+        { ctx with enums = Bindings.add id (IdSet.of_list members) ctx.enums }
       )
   | P.TD_abstract (id, kind) ->
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let id = to_ast_reserved_type_id ctx id in
       begin
-        match to_ast_kind kind with
+        match to_ast_kind ctx kind with
         | Some kind ->
             ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
               { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
@@ -1456,6 +1526,7 @@ let initial_ctx =
           ("ite", [Some K_bool; Some K_int; Some K_int]);
         ];
     kinds = KBindings.empty;
+    enums = Bindings.empty;
     scattereds = Bindings.empty;
     fixities =
       List.fold_left

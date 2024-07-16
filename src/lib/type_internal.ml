@@ -155,6 +155,7 @@ and unloc_n_constraint_aux = function
   | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_not_equal (nexp1, nexp2) -> NC_not_equal (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_set (nexp, nums) -> NC_set (unloc_nexp nexp, nums)
+  | NC_enum_set (nexp, ids) -> NC_enum_set (unloc_nexp nexp, ids)
   | NC_or (nc1, nc2) -> NC_or (unloc_n_constraint nc1, unloc_n_constraint nc2)
   | NC_and (nc1, nc2) -> NC_and (unloc_n_constraint nc1, unloc_n_constraint nc2)
   | NC_var kid -> NC_var (unloc_kid kid)
@@ -168,6 +169,7 @@ and unloc_typ_arg = function A_aux (typ_arg_aux, _) -> A_aux (unloc_typ_arg_aux 
 
 and unloc_typ_arg_aux = function
   | A_nexp nexp -> A_nexp (unloc_nexp nexp)
+  | A_enum (id, nexp) -> A_enum (unloc_id id, unloc_nexp nexp)
   | A_typ typ -> A_typ (unloc_typ typ)
   | A_bool nc -> A_bool (unloc_n_constraint nc)
 
@@ -215,7 +217,11 @@ let rec typ_nexps (Typ_aux (typ_aux, _)) =
   | Typ_bidir (typ1, typ2) -> typ_nexps typ1 @ typ_nexps typ2
 
 and typ_arg_nexps (A_aux (typ_arg_aux, _)) =
-  match typ_arg_aux with A_nexp n -> [n] | A_typ typ -> typ_nexps typ | A_bool nc -> constraint_nexps nc
+  match typ_arg_aux with
+  | A_nexp n -> [(None, n)]
+  | A_enum (id, n) -> [(Some id, n)]
+  | A_typ typ -> typ_nexps typ
+  | A_bool nc -> constraint_nexps nc
 
 and constraint_nexps (NC_aux (nc_aux, _)) =
   match nc_aux with
@@ -225,9 +231,9 @@ and constraint_nexps (NC_aux (nc_aux, _)) =
   | NC_bounded_gt (n1, n2)
   | NC_bounded_lt (n1, n2)
   | NC_not_equal (n1, n2) ->
-      [n1; n2]
+      [(None, n1); (None, n2)]
   | NC_id _ | NC_true | NC_false | NC_var _ -> []
-  | NC_set (n, _) -> [n]
+  | NC_set (n, _) | NC_enum_set (n, _) -> [(None, n)]
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
   | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
 
@@ -245,7 +251,7 @@ let rec nexp_power_variables (Nexp_aux (aux, _)) =
       KidSet.union (constraint_power_variables i) (KidSet.union (nexp_power_variables t) (nexp_power_variables e))
 
 and constraint_power_variables nc =
-  List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables (constraint_nexps nc))
+  List.fold_left KidSet.union KidSet.empty (List.map (fun (_, n) -> nexp_power_variables n) (constraint_nexps nc))
 
 let ex_counter = ref 0
 
@@ -298,6 +304,31 @@ let destruct_numeric ?(name = None) typ =
       let kid = kopt_kid (named_existential l K_int name) in
       Some ([kid], nc_true, nvar kid)
   | _, _ -> None
+
+let destruct_enum ?(name = None) is_enum = function
+  | Typ_aux (Typ_app (id, [A_aux (A_enum (id', nexp), _)]), _) when is_enum id && Id.compare id id' = 0 ->
+      Some (id, [], nc_true, nexp)
+  | Typ_aux (Typ_id id, l) when is_enum id ->
+      let k = named_existential l (K_enum id) name in
+      Some (id, [k], nc_true, nvar (kopt_kid k))
+  | typ -> (
+      match destruct_exist_plain ~name typ with
+      | Some (kopts, nc, Typ_aux (Typ_app (id, [A_aux (A_enum (id', nexp), _)]), _))
+        when is_enum id && Id.compare id id' = 0 ->
+          Some (id, kopts, nc, nexp)
+      | _ -> None
+    )
+
+type destructured_existential = DE_numeric of nexp | DE_enum of id * nexp
+
+let destruct_numeric_or_enum ?(name = None) is_enum typ =
+  match destruct_numeric ~name typ with
+  | Some (kids, nc, nexp) -> Some (List.map (mk_kopt K_int) kids, nc, DE_numeric nexp)
+  | None -> (
+      match destruct_enum ~name is_enum typ with
+      | Some (enum_id, kopts, nc, nexp) -> Some (kopts, nc, DE_enum (enum_id, nexp))
+      | None -> None
+    )
 
 let destruct_boolean ?name:(_ = None) = function
   | Typ_aux (Typ_id (Id_aux (Id "bool", _)), l) ->

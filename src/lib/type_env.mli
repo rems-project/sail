@@ -232,6 +232,7 @@ val add_enum_clause : id -> id -> t -> t
 val get_enum_opt : id -> t -> id list option
 val get_enum : id -> t -> id list
 val get_enums : t -> IdSet.t Bindings.t
+val is_enum : t -> id -> bool
 
 val lookup_id : id -> t -> typ lvar
 

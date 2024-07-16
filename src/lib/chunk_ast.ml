@@ -481,7 +481,12 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
     end
 
 let string_of_kind (K_aux (k, _)) =
-  match k with K_type -> "Type" | K_int -> "Int" | K_order -> "Order" | K_bool -> "Bool"
+  match k with
+  | K_type -> "Type"
+  | K_int -> "Int"
+  | K_order -> "Order"
+  | K_bool -> "Bool"
+  | K_enum id -> "Enum " ^ string_of_id id
 
 (* Right now, let's just assume we never break up kinded-identifiers *)
 let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind), l)) =
@@ -588,7 +593,9 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
-  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) chunks
+  | ATyp_nset set ->
+      let args = chunk_delimit ~delim:"," ~get_loc:(fun (ATyp_aux (_, l)) -> l) ~chunk:chunk_atyp comments set in
+      Queue.add (Tuple ("{", "}", 0, args)) chunks
   | ATyp_in (lhs, rhs) ->
       let lhs_chunks = rec_chunk_atyp lhs in
       let rhs_chunks = rec_chunk_atyp rhs in

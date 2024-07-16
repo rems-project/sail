@@ -132,7 +132,9 @@ let rec constraint_ids' (NC_aux (aux, _)) =
   | NC_not_equal (n1, n2) ->
       IdSet.union (nexp_ids' n1) (nexp_ids' n2)
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (constraint_ids' nc1) (constraint_ids' nc2)
-  | NC_var _ | NC_true | NC_false | NC_set _ -> IdSet.empty
+  | NC_set (n, _) -> nexp_ids' n
+  | NC_enum_set (n, _) -> nexp_ids' n
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
   | NC_id id -> IdSet.singleton id
   | NC_app (id, args) -> IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
 
@@ -156,7 +158,11 @@ and typ_ids' (Typ_aux (aux, _)) =
   | Typ_exist (_, _, typ) -> typ_ids' typ
 
 and typ_arg_ids' (A_aux (aux, _)) =
-  match aux with A_typ typ -> typ_ids' typ | A_nexp nexp -> nexp_ids' nexp | A_bool nc -> constraint_ids' nc
+  match aux with
+  | A_typ typ -> typ_ids' typ
+  | A_nexp nexp -> nexp_ids' nexp
+  | A_enum (_, nexp) -> nexp_ids' nexp
+  | A_bool nc -> constraint_ids' nc
 
 let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
 

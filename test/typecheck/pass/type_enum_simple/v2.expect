@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/type_enum_simple/v2.sail[0m:12.2-25:
+12[96m |[0m  _not_check(h(C) : unit);
+  [91m |[0m  [91m^---------------------^[0m
+  [91m |[0m Expected _not_check(h(C) : unit) to fail

@@ -103,24 +103,25 @@ exception Parse_error_locn of l * string
 type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
+type id_aux = (* Identifier *)
+  | Id of x | Operator of x (* remove infix status *)
+
+type id = Id_aux of id_aux * l
+
 type kind_aux =
   | (* base kind *)
     K_type (* kind of types *)
   | K_int (* kind of natural number size expressions *)
   | K_order (* kind of vector order specifications *)
   | K_bool (* kind of constraints *)
+  | K_enum of id
 
 type kind = K_aux of kind_aux * l
 
 type kid_aux = (* identifiers with kind, ticked to differentiate from program variables *)
   | Var of x
 
-type id_aux = (* Identifier *)
-  | Id of x | Operator of x (* remove infix status *)
-
 type kid = Kid_aux of kid_aux * l
-
-type id = Id_aux of id_aux * l
 
 type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id
 
@@ -145,7 +146,7 @@ type atyp_aux =
   | ATyp_id of id (* identifier *)
   | ATyp_var of kid (* ticked variable *)
   | ATyp_lit of lit (* literal *)
-  | ATyp_nset of Big_int.num list (* set type *)
+  | ATyp_nset of atyp list (* set type *)
   | ATyp_in of atyp * atyp (* set type *)
   | ATyp_times of atyp * atyp (* product *)
   | ATyp_sum of atyp * atyp (* sum *)

@@ -232,8 +232,11 @@ val kopt_kid : kinded_id -> kid
 val kopt_kind : kinded_id -> kind
 
 val is_int_kopt : kinded_id -> bool
+val is_enum_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool
+
+val enum_kopt_id : kinded_id -> id option
 
 (** {2 Utility functions for constructing types} *)
 
@@ -336,6 +339,7 @@ val nc_true : n_constraint
 val nc_false : n_constraint
 val nc_set : nexp -> Big_int.num list -> n_constraint
 val nc_int_set : nexp -> int list -> n_constraint
+val nc_enum_set : nexp -> id list -> n_constraint
 val nc_id : id -> n_constraint
 val nc_var : kid -> n_constraint
 
@@ -344,6 +348,8 @@ val nc_var : kid -> n_constraint
 val arg_nexp : ?loc:l -> nexp -> typ_arg
 val arg_typ : ?loc:l -> typ -> typ_arg
 val arg_bool : ?loc:l -> n_constraint -> typ_arg
+val arg_enum : ?loc:l -> id -> nexp -> typ_arg
+
 val arg_kopt : kinded_id -> typ_arg
 
 (** {1 Set and Map modules for various AST elements} *)

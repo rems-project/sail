@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/type_existential.sail[0m:2.8-33:
+2[96m |[0mval f : unit -> {('a : Type). 'a}
+ [91m |[0m        [91m^-----------------------^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/type_existential.sail[0m:2.16-33:
+ [91m |[0m 2[96m |[0mval f : unit -> {('a : Type). 'a}
+ [91m |[0m  [92m |[0m                [92m^---------------^[0m [92mExistential here[0m
+ [91m |[0m [93mCaused by [0m[96mfail/type_existential.sail[0m:2.17-28:
+ [91m |[0m 2[96m |[0mval f : unit -> {('a : Type). 'a}
+ [91m |[0m  [91m |[0m                 [91m^---------^[0m
+ [91m |[0m  [91m |[0m Type variables in existential types must not quantify over types, only boolean constraints and numeric expressions

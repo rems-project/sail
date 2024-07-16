@@ -135,7 +135,7 @@ let rec typ_constraints (Typ_aux (typ_aux, _)) =
   | Typ_bidir (typ1, typ2) -> typ_constraints typ1 @ typ_constraints typ2
 
 and typ_arg_constraints (A_aux (typ_arg_aux, _)) =
-  match typ_arg_aux with A_nexp _ -> [] | A_typ typ -> typ_constraints typ | A_bool nc -> [nc]
+  match typ_arg_aux with A_nexp _ -> [] | A_enum _ -> [] | A_typ typ -> typ_constraints typ | A_bool nc -> [nc]
 
 (* Replace A_nexp nexp with A_nexp nexp' in typ, intended for use after typ_nexps. *)
 let rec replace_nexp_typ nexp nexp' (Typ_aux (typ_aux, l) as typ) =
@@ -151,6 +151,7 @@ let rec replace_nexp_typ nexp nexp' (Typ_aux (typ_aux, l) as typ) =
 and replace_nexp_typ_arg nexp nexp' (A_aux (typ_arg_aux, l) as arg) =
   match typ_arg_aux with
   | A_nexp n -> if Nexp.compare n nexp == 0 then A_aux (A_nexp nexp', l) else arg
+  | A_enum (id, n) -> if Nexp.compare n nexp == 0 then A_aux (A_enum (id, nexp'), l) else arg
   | A_typ typ -> A_aux (A_typ (replace_nexp_typ nexp nexp' typ), l)
   | A_bool nc -> A_aux (A_bool (replace_nexp_nc nexp nexp' nc), l)
 
@@ -165,7 +166,7 @@ and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
   | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (rep n1, rep n2), l)
   | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (rep n1, rep n2), l)
   | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (rep n1, rep n2), l)
-  | NC_set _ | NC_true | NC_false | NC_var _ -> nc
+  | NC_set _ | NC_enum_set _ | NC_true | NC_false | NC_var _ -> nc
   | NC_or (nc1, nc2) -> NC_aux (NC_or (rep_nc nc1, rep_nc nc2), l)
   | NC_and (nc1, nc2) -> NC_aux (NC_and (rep_nc nc1, rep_nc nc2), l)
   | NC_app (f, args) -> NC_aux (NC_app (f, List.map (replace_nexp_typ_arg nexp nexp') args), l)
@@ -183,7 +184,7 @@ let rec replace_nc_typ nc nc' (Typ_aux (typ_aux, l) as typ) =
 
 and replace_nc_typ_arg nc nc' (A_aux (typ_arg_aux, l) as arg) =
   match typ_arg_aux with
-  | A_nexp _ -> arg
+  | A_nexp _ | A_enum _ -> arg
   | A_typ typ -> A_aux (A_typ (replace_nc_typ nc nc' typ), l)
   | A_bool nc'' -> if NC.compare nc nc'' == 0 then A_aux (A_bool nc', l) else arg
 
@@ -229,6 +230,7 @@ let add_existential l kopts nc env =
   Env.add_constraint nc env
 
 let add_typ_vars l kopts env =
+  typ_debug (lazy ("Adding " ^ Util.string_of_list ", " string_of_kinded_id kopts));
   List.fold_left
     (fun env (KOpt_aux (_, kl) as kopt) -> Env.add_typ_var (Parse_ast.Hint ("derived from here", kl, l)) kopt env)
     env kopts
@@ -237,6 +239,10 @@ let is_exist = function Typ_aux (Typ_exist (_, _, _), _) -> true | _ -> false
 
 let exist_typ l constr typ =
   let fresh = fresh_existential l K_int in
+  mk_typ (Typ_exist ([fresh], constr (kopt_kid fresh), typ (kopt_kid fresh)))
+
+let exist_typ2 l kind constr typ =
+  let fresh = fresh_existential l kind in
   mk_typ (Typ_exist ([fresh], constr (kopt_kid fresh), typ (kopt_kid fresh)))
 
 let bind_numeric l typ env =
@@ -395,8 +401,8 @@ and simp_typ_aux = function
    which is then a problem we can feed to the constraint solver expecting unsat.
 *)
 
-let prove_smt ~abstract ~assumptions:ncs (NC_aux (_, l) as nc) =
-  match Constraint.call_smt l abstract (List.fold_left nc_and (nc_not nc) ncs) with
+let prove_smt ~enums ~abstract ~assumptions:ncs (NC_aux (_, l) as nc) =
+  match Constraint.call_smt l enums abstract (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat ->
       typ_debug (lazy "unsat");
       true
@@ -408,7 +414,7 @@ let prove_smt ~abstract ~assumptions:ncs (NC_aux (_, l) as nc) =
          constraints, even when such constraints are irrelevant *)
       let ncs' = List.concat (List.map constraint_conj ncs) in
       let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
-      match Constraint.call_smt l abstract (List.fold_left nc_and (nc_not nc) ncs') with
+      match Constraint.call_smt l enums abstract (List.fold_left nc_and (nc_not nc) ncs') with
       | Constraint.Unsat ->
           typ_debug (lazy "unsat");
           true
@@ -433,7 +439,7 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
       let _vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
       let abstract = Env.get_abstract_typs env in
       let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-      Constraint.solve_unique_smt l abstract constr (mk_kid "solve#")
+      Constraint.solve_unique_smt l (Env.get_enums env) abstract constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) = "(" ^ file ^ "/" ^ string_of_int line ^ ") "
 
@@ -454,7 +460,9 @@ let prove pos env nc =
       ^ string_of_list ", " string_of_n_constraint ncs
       ^ " |- " ^ string_of_n_constraint nc
       );
-  match nc_aux with NC_true -> true | _ -> prove_smt ~abstract:(Env.get_abstract_typs env) ~assumptions:ncs nc
+  match nc_aux with
+  | NC_true -> true
+  | _ -> prove_smt ~enums:(Env.get_enums env) ~abstract:(Env.get_abstract_typs env) ~assumptions:ncs nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)
@@ -580,6 +588,7 @@ and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as 
   | A_typ typ1, A_typ typ2 -> unify_typ l env goals typ1 typ2
   | A_nexp nexp1, A_nexp nexp2 -> unify_nexp l env goals nexp1 nexp2
   | A_bool nc1, A_bool nc2 -> unify_constraint l env goals nc1 nc2
+  | A_enum (id1, nexp1), A_enum (id2, nexp2) when Id.compare id1 id2 = 0 -> unify_nexp l env goals nexp1 nexp2
   | _, _ ->
       unify_error l
         ("Could not unify type arguments " ^ string_of_typ_arg typ_arg1 ^ " and " ^ string_of_typ_arg typ_arg2)
@@ -881,7 +890,7 @@ let rec kid_order kind_map (Typ_aux (aux, l) as typ) =
 and kid_order_arg kind_map (A_aux (aux, _)) =
   match aux with
   | A_typ typ -> kid_order kind_map typ
-  | A_nexp nexp -> kid_order_nexp kind_map nexp
+  | A_nexp nexp | A_enum (_, nexp) -> kid_order_nexp kind_map nexp
   | A_bool nc -> kid_order_constraint kind_map nc
 
 and kid_order_nexp kind_map (Nexp_aux (aux, _)) =
@@ -911,7 +920,7 @@ and kid_order_constraint kind_map (NC_aux (aux, _)) =
   match aux with
   | NC_var kid when KBindings.mem kid kind_map ->
       ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
-  | NC_set (n, _) -> kid_order_nexp kind_map n
+  | NC_set (n, _) | NC_enum_set (n, _) -> kid_order_nexp kind_map n
   | NC_var _ | NC_id _ | NC_true | NC_false -> ([], kind_map)
   | NC_equal (n1, n2)
   | NC_not_equal (n1, n2)
@@ -969,7 +978,7 @@ let alpha_equivalent env typ1 typ2 =
     Typ_aux (relabelled_aux, l)
   and relabel_arg (A_aux (aux, l) as arg) =
     (* FIXME relabel constraint *)
-    match aux with A_nexp _ | A_bool _ -> arg | A_typ typ -> A_aux (A_typ (relabel typ), l)
+    match aux with A_nexp _ | A_enum _ | A_bool _ -> arg | A_typ typ -> A_aux (A_typ (relabel typ), l)
   in
 
   let typ1 = relabel (Env.expand_synonyms env typ1) in
@@ -1048,7 +1057,7 @@ let rec subtyp l env typ1 typ2 =
         KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env)
       in
       begin
-        match Constraint.call_smt l Bindings.empty (nc_eq nexp1 nexp2) with
+        match Constraint.call_smt l (Env.get_enums env) Bindings.empty (nc_eq nexp1 nexp2) with
         | Constraint.Sat ->
             let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
             if prove __POS__ env nc2 then ()
@@ -1061,6 +1070,7 @@ let rec subtyp l env typ1 typ2 =
       | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
       | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" -> ()
       | Typ_id id1, Typ_id id2 when string_of_id id1 = "string_literal" && string_of_id id2 = "string" -> ()
+      | Typ_app (id1, [arg]), Typ_id id2 when Id.compare id1 id2 = 0 && Bindings.mem id1 (Env.get_enums env) -> ()
       | Typ_tuple typs1, Typ_tuple typs2 when List.length typs1 = List.length typs2 ->
           List.iter2 (subtyp l env) typs1 typs2
       | Typ_app (id1, args1), Typ_app (id2, args2) when Id.compare id1 id2 = 0 && List.length args1 = List.length args2
@@ -1118,6 +1128,9 @@ and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
   | A_bool nc1, A_bool nc2 ->
       let check = nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1) in
+      if not (prove __POS__ env check) then raise_failed_constraint check
+  | A_enum (id1, n1), A_enum (id2, n2) when Id.compare id1 id2 = 0 ->
+      let check = nc_eq n1 n2 in
       if not (prove __POS__ env check) then raise_failed_constraint check
   | _, _ -> typ_error l "Mismatched argument types in sub-typing check"
 
@@ -1226,6 +1239,10 @@ and rewrite_nc_aux l env = function
   | NC_set (nexp, int :: ints) ->
       let nexp_eq int = nc_eq nexp (nconstant int) in
       unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (nexp_eq int)) (nexp_eq int) ints))
+  | NC_enum_set (_, []) -> E_lit (mk_lit L_false)
+  | NC_enum_set (nexp, id :: ids) ->
+      let nexp_eq id = nc_eq nexp (nid id) in
+      unaux_exp (rewrite_nc env (List.fold_left (fun nc id -> nc_or nc (nexp_eq id)) (nexp_eq id) ids))
   | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
   | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
   | NC_var v ->
@@ -1269,7 +1286,7 @@ let can_be_undefined ~at:l env typ =
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "unexpected Typ_internal_unknown"
   and check_arg (A_aux (aux, _)) =
     match aux with
-    | A_nexp nexp -> (
+    | A_nexp nexp | A_enum (_, nexp) -> (
         try
           let _ = rewrite_sizeof l env nexp in
           true
@@ -1452,48 +1469,90 @@ let expected_typ_of (l, tannot) =
 
 (* Flow typing *)
 
-type simple_numeric =
-  | Equal of nexp
-  | Constraint of (kid -> n_constraint)
-  | Existential of kid list * n_constraint * nexp
+type simple_constraint =
+  | Equal of destructured_existential
+  | Constraint of id option * (kid -> n_constraint)
+  | Existential of kinded_id list * n_constraint * destructured_existential
 
-let to_simple_numeric kids nc (Nexp_aux (aux, _) as nexp) =
-  match (aux, kids) with
-  | Nexp_var v, [v'] when Kid.compare v v' = 0 -> Constraint (fun subst -> constraint_subst v (arg_nexp (nvar subst)) nc)
-  | _, [] -> Equal nexp
-  | _ -> Existential (kids, nc, nexp)
+let to_simple_constraint kopts nc de =
+  match (de, kopts) with
+  | DE_numeric (Nexp_aux (Nexp_var v, _)), [kopt] when Kid.compare v (kopt_kid kopt) = 0 ->
+      Constraint (None, fun subst -> constraint_subst v (arg_nexp (nvar subst)) nc)
+  | DE_enum (id, Nexp_aux (Nexp_var v, _)), [kopt] when Kid.compare v (kopt_kid kopt) = 0 ->
+      Constraint (Some id, fun subst -> constraint_subst v (arg_enum id (nvar subst)) nc)
+  | _, [] -> Equal de
+  | _ -> Existential (kopts, nc, de)
 
-let rec union_simple_numeric cond ex1 ex2 =
+let rec union_simple_constraint ~at:l cond ex1 ex2 =
+  let to_nexp = function DE_numeric nexp -> nexp | DE_enum (_, nexp) -> nexp in
+  let compatible = function
+    | DE_enum _, DE_numeric _ | DE_numeric _, DE_enum _ ->
+        typ_error l "Cannot union an enumeration type with a numeric type"
+    | DE_enum (enum_id1, _), DE_enum (enum_id2, _) ->
+        if Id.compare enum_id1 enum_id2 <> 0 then
+          typ_error l ("Type mismatch between enumerations " ^ string_of_id enum_id1 ^ " and " ^ string_of_id enum_id2)
+    | _ -> ()
+  in
+  let compatible_constraints = function
+    | Some _, None | None, Some _ -> typ_error l "Cannot union an enumeration type with a numeric type"
+    | Some enum_id1, Some enum_id2 ->
+        if Id.compare enum_id1 enum_id2 <> 0 then
+          typ_error l ("Type mismatch between enumerations " ^ string_of_id enum_id1 ^ " and " ^ string_of_id enum_id2)
+    | _ -> ()
+  in
+  let wrap ~type_of:de nexp = match de with DE_numeric _ -> DE_numeric nexp | DE_enum (id, _) -> DE_enum (id, nexp) in
+  let wrap_from_constraint ~type_of:t nexp = match t with None -> DE_numeric nexp | Some id -> DE_enum (id, nexp) in
+  let constraint_kind = function Some id -> K_enum id | None -> K_int in
+  let is_enum = function DE_enum (id, _) -> Some id | DE_numeric _ -> None in
   match (cond, ex1, ex2) with
-  | Some nc, Equal nexp1, Equal nexp2 -> Equal (nite nc nexp1 nexp2)
-  | None, Equal nexp1, Equal nexp2 -> Constraint (fun kid -> nc_or (nc_eq (nvar kid) nexp1) (nc_eq (nvar kid) nexp2))
-  | _, Equal nexp, Constraint _ -> union_simple_numeric cond (Constraint (fun kid -> nc_eq (nvar kid) nexp)) ex2
-  | _, Constraint _, Equal nexp -> union_simple_numeric cond ex1 (Constraint (fun kid -> nc_eq (nvar kid) nexp))
-  | Some nc, Constraint c1, Constraint c2 ->
-      Constraint (fun kid -> nc_or (nc_and nc (c1 kid)) (nc_and (nc_not nc) (c2 kid)))
-  | None, Constraint c1, Constraint c2 -> Constraint (fun kid -> nc_or (c1 kid) (c2 kid))
-  | _, Existential _, Equal nexp -> union_simple_numeric cond ex1 (Existential ([], nc_true, nexp))
-  | _, Equal nexp, Existential _ -> union_simple_numeric cond (Existential ([], nc_true, nexp)) ex2
-  | _, Existential _, Constraint c ->
-      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
-      union_simple_numeric cond ex1 (Existential ([fresh], c fresh, nvar fresh))
-  | _, Constraint c, Existential _ ->
-      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
-      union_simple_numeric cond (Existential ([fresh], c fresh, nvar fresh)) ex2
-  | Some nc, Existential (kids1, nc1, nexp1), Existential (kids2, nc2, nexp2) ->
-      Existential (kids1 @ kids2, nc_and nc1 nc2, nite nc nexp1 nexp2)
-  | None, Existential (kids1, nc1, nexp1), Existential (kids2, nc2, nexp2) ->
-      let fresh = kopt_kid (fresh_existential Parse_ast.Unknown K_int) in
+  | Some nc, Equal de1, Equal de2 ->
+      compatible (de1, de2);
+      Equal (wrap ~type_of:de1 (nite nc (to_nexp de1) (to_nexp de2)))
+  | None, Equal de1, Equal de2 ->
+      compatible (de1, de2);
+      Constraint (is_enum de1, fun kid -> nc_or (nc_eq (nvar kid) (to_nexp de1)) (nc_eq (nvar kid) (to_nexp de2)))
+  | _, Equal de, Constraint _ ->
+      union_simple_constraint ~at:l cond (Constraint (is_enum de, fun kid -> nc_eq (nvar kid) (to_nexp de))) ex2
+  | _, Constraint _, Equal de ->
+      union_simple_constraint ~at:l cond ex1 (Constraint (is_enum de, fun kid -> nc_eq (nvar kid) (to_nexp de)))
+  | Some nc, Constraint (t1, f1), Constraint (t2, f2) ->
+      compatible_constraints (t1, t2);
+      Constraint (t1, fun kid -> nc_or (nc_and nc (f1 kid)) (nc_and (nc_not nc) (f2 kid)))
+  | None, Constraint (t1, f1), Constraint (t2, f2) ->
+      compatible_constraints (t1, t2);
+      Constraint (t1, fun kid -> nc_or (f1 kid) (f2 kid))
+  | _, Existential _, Equal de -> union_simple_constraint ~at:l cond ex1 (Existential ([], nc_true, de))
+  | _, Equal de, Existential _ -> union_simple_constraint ~at:l cond (Existential ([], nc_true, de)) ex2
+  | _, Existential _, Constraint (t, f) ->
+      let fresh = fresh_existential l (constraint_kind t) in
+      union_simple_constraint ~at:l cond ex1
+        (Existential ([fresh], f (kopt_kid fresh), wrap_from_constraint ~type_of:t (nvar (kopt_kid fresh))))
+  | _, Constraint (t, f), Existential _ ->
+      let fresh = fresh_existential l (constraint_kind t) in
+      union_simple_constraint ~at:l cond
+        (Existential ([fresh], f (kopt_kid fresh), wrap_from_constraint ~type_of:t (nvar (kopt_kid fresh))))
+        ex2
+  | Some nc, Existential (kopts1, nc1, de1), Existential (kopts2, nc2, de2) ->
+      compatible (de1, de2);
+      Existential (kopts1 @ kopts2, nc_and nc1 nc2, wrap ~type_of:de1 (nite nc (to_nexp de1) (to_nexp de2)))
+  | None, Existential (kopts1, nc1, de1), Existential (kopts2, nc2, de2) ->
+      compatible (de1, de2);
+      let fresh = fresh_existential l (de1 |> is_enum |> constraint_kind) in
       Existential
-        ( (fresh :: kids1) @ kids2,
-          nc_and (nc_and nc1 nc2) (nc_or (nc_eq (nvar fresh) nexp1) (nc_eq (nvar fresh) nexp2)),
-          nvar fresh
+        ( (fresh :: kopts1) @ kopts2,
+          nc_and (nc_and nc1 nc2)
+            (nc_or (nc_eq (nvar (kopt_kid fresh)) (to_nexp de1)) (nc_eq (nvar (kopt_kid fresh)) (to_nexp de2))),
+          wrap ~type_of:de1 (nvar (kopt_kid fresh))
         )
 
 let typ_of_simple_numeric = function
-  | Equal nexp -> atom_typ nexp
-  | Constraint c -> exist_typ Parse_ast.Unknown c (fun kid -> atom_typ (nvar kid))
-  | Existential (kids, nc, nexp) -> mk_typ (Typ_exist (List.map (mk_kopt K_int) kids, nc, atom_typ nexp))
+  | Equal (DE_numeric nexp) -> atom_typ nexp
+  | Equal (DE_enum (id, nexp)) -> app_typ id [arg_enum id nexp]
+  | Constraint (None, c) -> exist_typ2 Parse_ast.Unknown K_int c (fun kid -> atom_typ (nvar kid))
+  | Constraint (Some id, c) ->
+      exist_typ2 Parse_ast.Unknown (K_enum id) c (fun kid -> app_typ id [arg_enum id (nvar kid)])
+  | Existential (kopts, nc, DE_numeric nexp) -> mk_typ (Typ_exist (kopts, nc, atom_typ nexp))
+  | Existential (kopts, nc, DE_enum (id, nexp)) -> mk_typ (Typ_exist (kopts, nc, app_typ id [arg_enum id nexp]))
 
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with
@@ -1640,7 +1699,11 @@ let check_pattern_duplicates env pat =
    type equality check. *)
 let check_mapping_typ_equality ~root_env ~other_env ~env ~other_typ ~typ =
   let kopt_arg (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) =
-    match k with K_int -> arg_nexp (nvar v) | K_bool -> arg_bool (nc_var v) | K_type -> arg_typ (mk_typ (Typ_var v))
+    match k with
+    | K_int -> arg_nexp (nvar v)
+    | K_bool -> arg_bool (nc_var v)
+    | K_enum id -> arg_enum id (nvar v)
+    | K_type -> arg_typ (mk_typ (Typ_var v))
   in
   let shared_vars = Env.get_typ_vars root_env in
   let other_vars = KBindings.filter (fun v _ -> not (KBindings.mem v shared_vars)) (Env.get_typ_vars other_env) in
@@ -1670,6 +1733,7 @@ let check_mapping_typ_equality ~root_env ~other_env ~env ~other_typ ~typ =
       (fun v arg env ->
         match arg with
         | A_aux (A_nexp n, _) -> Env.add_constraint (nc_eq (nvar v) n) env
+        | A_aux (A_enum (_, n), _) -> Env.add_constraint (nc_eq (nvar v) n) env
         | A_aux (A_bool nc, _) ->
             Env.add_constraint (nc_or (nc_and (nc_var v) nc) (nc_and (nc_not (nc_var v)) (nc_not nc))) env
         | A_aux (A_typ _, _) -> env
@@ -2047,6 +2111,18 @@ let rec reroll_cons ~at:l elems annots last_tail =
   | elem :: elems, annot :: annots -> E_aux (E_cons (elem, reroll_cons ~at:l elems annots last_tail), annot)
   | [], [] -> last_tail
   | _, _ -> Reporting.unreachable l __POS__ "Could not recreate cons list due to element and annotation length mismatch"
+
+let check_is_enum ~at:l env (Typ_aux (aux, t_l) as typ) =
+  match aux with
+  | Typ_id id when Env.is_enum env id -> ()
+  | Typ_app (id, [A_aux (A_enum (id', _), _)]) when Env.is_enum env id && Id.compare id id' = 0 -> ()
+  | _ -> typ_error (Hint ("Type from", t_l, l)) ("Expected an enumeration type here, got: " ^ string_of_typ typ)
+
+let check_same_enum ~at:l (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+  match (typ1, typ2) with
+  | (Typ_id id1 | Typ_app (id1, _)), (Typ_id id2 | Typ_app (id2, _)) ->
+      if Id.compare id1 id2 <> 0 then
+        typ_error l ("Mismatched enumeration types: " ^ string_of_id id1 ^ " and " ^ string_of_id id2)
 
 type ('a, 'b) pattern_functions = {
   infer : Env.t -> 'a -> 'b * Env.t * uannot exp list;
@@ -2655,7 +2731,8 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
       | Local _ | Unbound _ -> (annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, [])
       | Register _ -> typ_error l ("Cannot shadow register in pattern " ^ string_of_pat pat)
       | Enum enum ->
-          subtyp l env enum typ;
+          check_is_enum ~at:l env typ;
+          check_same_enum ~at:l enum typ;
           (annot_pat (P_id v) typ, env, [])
     end
   | P_var (pat, typ_pat) ->
@@ -3137,8 +3214,10 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
   | TP_wild, _ -> (env, typ)
   | TP_var kid, _ -> begin
       match (typ_nexps typ, typ_constraints typ) with
-      | [nexp], [] ->
-          let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
+      | [(nexp_kind, nexp)], [] ->
+          let env, shadow =
+            Env.add_typ_var_shadow l (mk_kopt (match nexp_kind with None -> K_int | Some id -> K_enum id) kid) env
+          in
           let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
           ( Env.add_constraint ~reason:(l, "type pattern") (nc_eq (nvar kid) nexp) env,
             replace_nexp_typ nexp (Nexp_aux (Nexp_var kid, l)) typ
@@ -3596,48 +3675,48 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
           else annot_exp (E_for (v, inferred_t, inferred_f, checked_step, ord, checked_body)) unit_typ
       | _, _ -> typ_error l "Ranges in foreach overlap"
     end
-  | E_if (cond, then_branch, else_branch) ->
+  | E_if (cond, then_branch, else_branch) -> begin
       let cond' = try irule infer_exp env cond with Type_error _ -> crule check_exp env cond bool_typ in
       let cond_constraint = destruct_atom_bool env (typ_of cond') in
       let then_branch' =
         irule infer_exp (add_opt_constraint l "then branch" (assert_constraint env true cond') env) then_branch
       in
+      let then_typ = Env.expand_synonyms env (typ_of then_branch') in
       (* We don't have generic type union in Sail, but we can union simple numeric types. *)
-      begin
-        match destruct_numeric (Env.expand_synonyms env (typ_of then_branch')) with
-        | Some (kids, nc, then_nexp) ->
-            let then_sn = to_simple_numeric kids nc then_nexp in
-            let else_branch' =
-              irule infer_exp
-                (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
-                else_branch
-            in
-            begin
-              match destruct_numeric (Env.expand_synonyms env (typ_of else_branch')) with
-              | Some (kids, nc, else_nexp) ->
-                  let else_sn = to_simple_numeric kids nc else_nexp in
-                  let typ = typ_of_simple_numeric (union_simple_numeric cond_constraint then_sn else_sn) in
-                  annot_exp (E_if (cond', then_branch', else_branch')) typ
-              | None -> typ_error l ("Could not infer type of " ^ string_of_exp else_branch)
-            end
-        | None -> begin
-            match typ_of then_branch' with
-            | Typ_aux (Typ_app (f, [_]), _) when string_of_id f = "atom_bool" ->
-                let else_branch' =
-                  crule check_exp
-                    (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
-                    else_branch bool_typ
-                in
-                annot_exp (E_if (cond', then_branch', else_branch')) bool_typ
-            | _ ->
-                let else_branch' =
-                  crule check_exp
-                    (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
-                    else_branch (typ_of then_branch')
-                in
-                annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
+      match destruct_numeric_or_enum (Env.is_enum env) then_typ with
+      | Some (kids, nc, then_de) ->
+          let then_sn = to_simple_constraint kids nc then_de in
+          let else_branch' =
+            irule infer_exp
+              (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
+              else_branch
+          in
+          begin
+            match destruct_numeric_or_enum (Env.is_enum env) (Env.expand_synonyms env (typ_of else_branch')) with
+            | Some (kids, nc, else_de) ->
+                let else_sn = to_simple_constraint kids nc else_de in
+                let typ = typ_of_simple_numeric (union_simple_constraint ~at:l cond_constraint then_sn else_sn) in
+                annot_exp (E_if (cond', then_branch', else_branch')) typ
+            | None -> typ_error l ("Could not infer type of " ^ string_of_exp else_branch)
           end
-      end
+      | None -> (
+          match typ_of then_branch' with
+          | Typ_aux (Typ_app (f, [_]), _) when string_of_id f = "atom_bool" ->
+              let else_branch' =
+                crule check_exp
+                  (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
+                  else_branch bool_typ
+              in
+              annot_exp (E_if (cond', then_branch', else_branch')) bool_typ
+          | _ ->
+              let else_branch' =
+                crule check_exp
+                  (add_opt_constraint l "else branch" (Option.map nc_not (assert_constraint env false cond')) env)
+                  else_branch (typ_of then_branch')
+              in
+              annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
+        )
+    end
   | E_vector_access (v, n) -> begin
       try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot))) with
       | Type_error (err_l, err) -> (
@@ -4644,6 +4723,7 @@ let kinded_id_arg kind_id =
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> typ_arg (kid_loc kid) (A_nexp (nvar kid))
   | KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _) -> typ_arg (kid_loc kid) (A_typ (mk_typ (Typ_var kid)))
   | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) -> typ_arg (kid_loc kid) (A_bool (nc_var kid))
+  | KOpt_aux (KOpt_kind (K_aux (K_enum id, _), kid), _) -> typ_arg (kid_loc kid) (A_enum (id, nvar kid))
 
 let fold_union_quant quants (QI_aux (qi, _)) =
   match qi with QI_id kind_id -> quants @ [kinded_id_arg kind_id] | _ -> quants

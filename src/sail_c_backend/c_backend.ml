@@ -343,7 +343,8 @@ end) : CONFIG = struct
         in
         let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
         CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings)
-    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+    | (Typ_id id | Typ_app (id, _)) when Bindings.mem id ctx.enums ->
+        CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
     | Typ_exist _ -> begin
         (* Use Type_check.destruct_exist when optimising with SMT, to

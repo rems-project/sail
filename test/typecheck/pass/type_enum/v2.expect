@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mpass/type_enum/v2.sail[0m:7.15-28:
+7[96m |[0mval f : forall ('e : Enum E), 'e in {A, B}. (my_enum('e)) -> unit
+ [92m |[0m               [92m^-----------^[0m [92mBound here[0m
+[96mpass/type_enum/v2.sail[0m:7.30-32:
+7[96m |[0mval f : forall ('e : Enum E), 'e in {A, B}. (my_enum('e)) -> unit
+ [91m |[0m                              [91m^^[0m
+ [91m |[0m This type variable is for the E enumeration, but we expected the my_enum enumeration

@@ -236,7 +236,7 @@ let set_syntax_deprecated l =
 /*Terminals with no content*/
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
-%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
+%token Enum ENUM Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
@@ -351,12 +351,6 @@ kid:
   | TyVar
     { mk_kid $1 $startpos $endpos }
 
-num_list:
-  | Num
-    { [$1] }
-  | Num Comma num_list
-    { $1 :: $3 }
-
 tyarg:
   | Lparen typ_list Rparen
     { [], $2 }
@@ -405,6 +399,12 @@ infix_typ:
 /* The following implements all nine levels of user-defined precedence for
 operators in types, with both left, right and non-associative operators */
 
+id_or_lit_typ:
+  | id
+    { mk_typ (ATyp_id $1) $startpos $endpos }
+  | lit
+    { mk_typ (ATyp_lit $1) $startpos $endpos }
+
 atomic_typ:
   | id
     { mk_typ (ATyp_id $1) $startpos $endpos }
@@ -427,9 +427,9 @@ atomic_typ:
     { mk_typ (ATyp_parens $2) $startpos $endpos }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tuple ($2 :: $4)) $startpos $endpos }
-  | Lcurly num_list Rcurly
+  | Lcurly separated_nonempty_list(Comma, id_or_lit_typ) Rcurly
     { mk_typ (ATyp_nset $2) $startpos $endpos }
-  | LcurlyBar num_list RcurlyBar
+  | LcurlyBar separated_nonempty_list(Comma, id_or_lit_typ) RcurlyBar
     { set_syntax_deprecated (loc $startpos $endpos);
       mk_typ (ATyp_nset $2) $startpos $endpos }
   | Lcurly kopt_list Dot typ Rcurly
@@ -452,6 +452,8 @@ kind:
     { K_aux (K_order, loc $startpos $endpos) }
   | Bool
     { K_aux (K_bool, loc $startpos $endpos) }
+  | ENUM; id = id
+    { K_aux (K_enum id, loc $startpos $endpos) }
 
 kid_list:
   | kid

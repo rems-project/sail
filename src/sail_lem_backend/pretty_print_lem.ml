@@ -331,7 +331,7 @@ let rec lem_nexps_of_typ params_to_print (Typ_aux (t, l)) =
 
 and lem_nexps_of_typ_arg params_to_print (A_aux (ta, _)) =
   match ta with
-  | A_nexp nexp ->
+  | A_nexp nexp | A_enum (_, nexp) ->
       let nexp = nexp_simp (orig_nexp nexp) in
       if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
   | A_typ typ -> lem_nexps_of_typ params_to_print typ
@@ -412,7 +412,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
          * if we add a new Typ constructor *)
         let tpp = typ params_to_print true ty in
         if atyp_needed then parens tpp else tpp
-    | Typ_exist (kopts, _, ty) when List.for_all is_int_kopt kopts -> begin
+    | Typ_exist (kopts, _, ty) when List.for_all (fun k -> is_int_kopt k || is_enum_kopt k) kopts -> begin
         let kids = List.map kopt_kid kopts in
         let tpp = typ params_to_print true ty in
         let visible_vars = lem_tyvars_of_typ params_to_print ty in
@@ -434,6 +434,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     match t with
     | A_typ t -> app_typ params_to_print true t
     | A_nexp n -> doc_nexp_lem (nexp_simp n)
+    | A_enum (_, n) -> doc_nexp_lem (nexp_simp n)
     | A_bool _ -> empty
   in
   let top atyp_needed params_to_print env ty =

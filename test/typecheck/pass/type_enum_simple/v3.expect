@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/type_enum_simple/v3.sail[0m:7.9-10:
+7[96m |[0mval h : {D, A, B} -> unit
+ [91m |[0m         [91m^[0m
+ [91m |[0m Could not find enumeration containing D

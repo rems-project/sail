@@ -1,0 +1,14 @@
+[93mType error[0m:
+[96mpass/type_enum/v1.sail[0m:13.23-24:
+13[96m |[0mfunction return_ex() = B
+  [91m |[0m                       [91m^[0m
+  [91m |[0m my_enum(B) is not a subtype of my_enum('ex245)
+  [91m |[0m as B == A could not be proven
+  [91m |[0m 
+  [91m |[0m type variable 'ex245:
+  [91m |[0m [96mpass/type_enum/v1.sail[0m:11.24-67:
+  [91m |[0m 11[96m |[0mval return_ex : unit -> {('e : Enum my_enum), 'e == A. my_enum('e)}
+  [91m |[0m   [92m |[0m                        [92m^-----------------------------------------^[0m [92mderived from here[0m
+  [91m |[0m [96mpass/type_enum/v1.sail[0m:13.23-24:
+  [91m |[0m 13[96m |[0mfunction return_ex() = B
+  [91m |[0m   [93m |[0m                       [93m^[0m [93mbound here[0m

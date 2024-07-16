@@ -519,4 +519,5 @@ val initial_env : Env.t
 (** The initial type checking environment, with a specific set of available modules. *)
 val initial_env_with_modules : Project.project_structure -> Env.t
 
-val prove_smt : abstract:kind Bindings.t -> assumptions:n_constraint list -> n_constraint -> bool
+val prove_smt :
+  enums:IdSet.t Bindings.t -> abstract:kind Bindings.t -> assumptions:n_constraint list -> n_constraint -> bool

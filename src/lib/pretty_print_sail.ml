@@ -98,6 +98,8 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_kopt_no_parens = function
     | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
     | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
+    | kopt when is_enum_kopt kopt ->
+        separate space [doc_kid (kopt_kid kopt); colon; string "Enum"; doc_id (Option.get (enum_kopt_id kopt))]
     | kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Bool"]
 
   let doc_kopt = function
@@ -163,6 +165,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | NC_bounded_lt (n1, n2) -> nc_op "<" n1 n2
       | NC_set (nexp, ints) ->
           separate space [doc_nexp nexp; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
+      | NC_enum_set (nexp, ids) ->
+          separate space [doc_nexp nexp; string "in"; braces (separate_map (comma ^^ space) doc_id ids)]
       | NC_app (id, args) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
       | NC_var kid -> doc_kid kid
       | NC_or _ | NC_and _ -> nc0 ~parenthesize:true nc
@@ -221,7 +225,10 @@ module Printer (Config : PRINT_CONFIG) = struct
     | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
   and doc_typ_arg (A_aux (ta_aux, _)) =
-    match ta_aux with A_typ typ -> doc_typ typ | A_nexp nexp -> doc_nexp nexp | A_bool nc -> doc_nc nc
+    match ta_aux with
+    | A_typ typ -> doc_typ typ
+    | A_nexp nexp | A_enum (_, nexp) -> doc_nexp nexp
+    | A_bool nc -> doc_nc nc
 
   and doc_arg_typs = function [typ] -> doc_typ typ | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
@@ -230,7 +237,12 @@ module Printer (Config : PRINT_CONFIG) = struct
     | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ typ
     | IS_id (id1, id2) -> doc_id id1 ^^ space ^^ equals ^^ space ^^ doc_id id2
 
-  let doc_kind (K_aux (k, _)) = string (match k with K_int -> "Int" | K_type -> "Type" | K_bool -> "Bool")
+  let doc_kind (K_aux (k, _)) =
+    match k with
+    | K_int -> string "Int"
+    | K_type -> string "Type"
+    | K_bool -> string "Bool"
+    | K_enum id -> string "Enum" ^^ space ^^ doc_id id
 
   let doc_kopts = separate_map space doc_kopt
 
@@ -253,6 +265,12 @@ module Printer (Config : PRINT_CONFIG) = struct
       match qi_aux with
       | QI_id kopt when is_int_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
       | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
+      | QI_id kopt when is_enum_kopt kopt ->
+          [
+            doc_kid (kopt_kid kopt)
+            ^^ colon ^^ space ^^ string "Enum" ^^ space
+            ^^ doc_id (Option.get (enum_kopt_id kopt));
+          ]
       | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
       | QI_constraint _ -> []
     in
@@ -723,6 +741,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     match aux with
     | A_nexp _ -> space ^^ string sep ^^ space ^^ string "Int"
     | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
+    | A_enum (id, _) -> space ^^ string sep ^^ space ^^ string "Enum" ^^ space ^^ doc_id id
     | A_typ _ -> empty
 
   let doc_type_def (TD_aux (td, _)) =

@@ -228,9 +228,10 @@ grammar
 kind :: 'K_' ::=
   {{ com base kind}}
   {{ aux _ l }}
-  | Type  :: :: type  {{ com kind of types  }}
-  | Int   :: :: int   {{ com kind of natural number size expressions  }}
-  | Bool  :: :: bool  {{ com kind of constraints }}
+  | Type    :: :: type {{ com kind of types  }}
+  | Int     :: :: int  {{ com kind of numeric type expressions  }}
+  | Bool    :: :: bool {{ com kind of constraints }}
+  | Enum id :: :: enum {{ com kind of enumeration members }}
 
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}
@@ -271,9 +272,10 @@ typ :: 'Typ_' ::=
 typ_arg :: 'A_' ::=
   {{ com type constructor arguments of all kinds }}
   {{ aux _ l }}
-  | nexp         :: :: nexp
-  | typ          :: :: typ
-  | n_constraint :: :: bool
+  | nexp             :: :: nexp
+  | enum id nexp     :: :: enum
+  | typ              :: :: typ
+  | n_constraint     :: :: bool
 
 n_constraint :: 'NC_' ::=
   {{ com constraint over kind Int }}
@@ -285,6 +287,7 @@ n_constraint :: 'NC_' ::=
   | nexp '<' nexp'                   :: :: bounded_lt
   | nexp != nexp'                    :: :: not_equal
   | nexp 'IN' { num1 , ... , numn }  :: :: set
+  | nexp 'IN' { id1 , ... , idn }    :: :: enum_set
   | n_constraint & n_constraint'     :: :: or
   | n_constraint | n_constraint'     :: :: and
   | id ( typ_arg0 , ... , typ_argn ) :: :: app
