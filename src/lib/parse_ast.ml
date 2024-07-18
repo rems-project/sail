@@ -170,7 +170,7 @@ and atyp = ATyp_aux of atyp_aux * l
 
 and kinded_id_aux =
   (* optionally kind-annotated identifier *)
-  | KOpt_kind of string option * kid list * kind option (* kind-annotated variable *)
+  | KOpt_kind of string option * kid list * kind option * int option (* kind-annotated variable *)
 
 and kinded_id = KOpt_aux of kinded_id_aux * l
 

@@ -308,7 +308,7 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
       (to_ast_kind ctx k)
   in
   match aux with
-  | P.KOpt_kind (attr, vs, None) ->
+  | P.KOpt_kind (attr, vs, None, _) ->
       let k = P.K_aux (P.K_int, gen_loc l) in
       ( List.fold_left
           (fun (kopts, ctx) v ->
@@ -317,7 +317,7 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
           ([], ctx) vs,
         attr
       )
-  | P.KOpt_kind (attr, vs, Some k) ->
+  | P.KOpt_kind (attr, vs, Some k, _) ->
       ( List.fold_left
           (fun (kopts, ctx) v ->
             match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
@@ -325,6 +325,274 @@ let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
           ([], ctx) vs,
         attr
       )
+
+module KindInference = struct
+  type unification_kind = Unknown | Known of P.kind_aux * l
+
+  type inference_kind = Kind_var of int | Kind of P.kind_aux * l
+
+  type env = { sets : (IntSet.t * unification_kind) list; next_unknown : int; vars : int KBindings.t list }
+
+  let ( let* ) state f env =
+    let y, env' = state env in
+    f y env'
+
+  let sequence f g =
+    let* () = f in
+    g
+
+  let return x env = (x, env)
+
+  let rec mapM f = function
+    | [] -> return []
+    | x :: xs ->
+        let* y = f x in
+        let* ys = mapM f xs in
+        return (y :: ys)
+
+  let get_env env = (env, env)
+
+  let put_env env _ = ((), env)
+
+  let get_var v env =
+    let rec go = function
+      | [] -> (None, env)
+      | top :: stack -> (
+          match KBindings.find_opt v top with
+          | Some n ->
+              let uk = snd (List.find (fun (set, _) -> IntSet.mem n set) env.sets) in
+              (Some (n, uk), env)
+          | None -> go stack
+        )
+    in
+    go env.vars
+
+  let update n uk env =
+    let rec go = function
+      | [] -> []
+      | (set, old_uk) :: sets -> if IntSet.mem n set then (set, uk) :: sets else (set, old_uk) :: go sets
+    in
+    ((), { env with sets = go env.sets })
+
+  let parse_id_compare (P.Id_aux (aux1, _)) (P.Id_aux (aux2, _)) =
+    match (aux1, aux2) with
+    | P.Id s1, P.Id s2 -> String.compare s1 s2
+    | P.Operator op1, P.Operator op2 -> String.compare op1 op2
+    | P.Id _, _ -> -1
+    | _, P.Id _ -> 1
+
+  let to_parse_id = function
+    | Id_aux (Id str, l) -> P.Id_aux (P.Id str, l)
+    | Id_aux (Operator str, l) -> P.Id_aux (P.Operator str, l)
+
+  let string_of_parse_kind_aux = function
+    | P.K_order -> "Order"
+    | P.K_int -> "Int"
+    | P.K_bool -> "Bool"
+    | P.K_type -> "Type"
+    | P.K_enum id -> "Enum " ^ string_of_parse_id id
+
+  let to_parse_kind = function
+    | Some K_int -> P.K_int
+    | Some K_bool -> P.K_bool
+    | Some K_type -> P.K_type
+    | Some (K_enum id) -> P.K_enum (to_parse_id id)
+    | None -> P.K_order
+
+  let unaux_parse_kind (P.K_aux (aux, _)) = aux
+
+  let check_same_kind kind l kind' l' =
+    match (kind, kind') with
+    | P.K_int, P.K_int | P.K_bool, P.K_bool | P.K_type, P.K_type | P.K_order, P.K_order -> ()
+    | P.K_enum id, P.K_enum id' when parse_id_compare id id' = 0 -> ()
+    | _ ->
+        raise
+          (Reporting.err_typ
+             (Hint ("Inferred " ^ string_of_parse_kind_aux kind' ^ " here", l', l))
+             ("Expected this type to have kind " ^ string_of_parse_kind_aux kind ^ " but found kind "
+            ^ string_of_parse_kind_aux kind'
+             )
+          )
+
+  let merge_unification_kind k1 k2 =
+    match (k1, k2) with
+    | Unknown, Unknown -> Unknown
+    | Unknown, known | known, Unknown -> known
+    | Known (kind, l), Known (kind', l') ->
+        check_same_kind kind l kind' l';
+        Known (kind, l)
+
+  let unify n m env =
+    prerr_endline (Printf.sprintf "Unify %d %d" n m);
+    let n_sets, other_sets = List.partition (fun (set, _) -> IntSet.mem n set) env.sets in
+    let n_set, nk = List.hd n_sets in
+    if IntSet.mem m n_set then ((), env)
+    else (
+      let m_sets, other_sets = List.partition (fun (set, _) -> IntSet.mem m set) other_sets in
+      let m_set, mk = List.hd m_sets in
+      ((), { env with sets = (IntSet.union n_set m_set, merge_unification_kind nk mk) :: other_sets })
+    )
+
+  let abstract env =
+    prerr_endline (Printf.sprintf "Abstract %d" env.next_unknown);
+    ( Kind_var env.next_unknown,
+      { env with sets = (IntSet.singleton env.next_unknown, Unknown) :: env.sets; next_unknown = env.next_unknown + 1 }
+    )
+
+  let resolve ~at:l kind ik env =
+    match ik with
+    | Kind_var n ->
+        let n_sets, other_sets = List.partition (fun (set, _) -> IntSet.mem n set) env.sets in
+        let n_set, nk = List.hd n_sets in
+        ((), { env with sets = (n_set, merge_unification_kind nk (Known (kind, l))) :: env.sets })
+    | Kind (kind', l') ->
+        check_same_kind kind l kind' l';
+        ((), env)
+
+  let rec check ctx (P.ATyp_aux (aux, l) as atyp) ik =
+    let wrap aux = return (P.ATyp_aux (aux, l)) in
+    match aux with
+    | P.ATyp_id _ -> return atyp
+    | P.ATyp_var v -> begin
+        let v = to_ast_var v in
+        let* var_info = get_var v in
+        let* () =
+          match (ik, var_info) with
+          | Kind_var n, Some (m, _) -> unify n m
+          | Kind_var n, None -> return ()
+          | Kind (kind, l), Some (m, uk) ->
+              let uk = merge_unification_kind (Known (kind, l)) uk in
+              update m uk
+          | Kind (kind, _), None -> return ()
+        in
+        return atyp
+      end
+    | P.ATyp_if ((P.ATyp_aux (_, i_l) as i), t, e) ->
+        let* i = check ctx i (Kind (P.K_bool, i_l)) in
+        let* t = check ctx t ik in
+        let* e = check ctx e ik in
+        wrap (P.ATyp_if (i, t, e))
+    | P.ATyp_app ((P.Id_aux (P.Operator ("==" | "!="), _) as id), [t1; t2]) ->
+        let* () = resolve ~at:l P.K_bool ik in
+        let* a = abstract in
+        let* t1 = check ctx t1 a in
+        let* t2 = check ctx t2 a in
+        wrap (P.ATyp_app (id, [t1; t2]))
+    | P.ATyp_app ((P.Id_aux (P.Operator (">=" | "<=" | ">" | "<"), _) as id), [t1; t2]) ->
+        let* () = resolve ~at:l P.K_bool ik in
+        let kind = Kind (P.K_int, l) in
+        let* t1 = check ctx t1 kind in
+        let* t2 = check ctx t2 kind in
+        wrap (P.ATyp_app (id, [t1; t2]))
+    | P.ATyp_app ((P.Id_aux (P.Operator ("&" | "|"), _) as id), [t1; t2]) ->
+        let* () = resolve ~at:l P.K_bool ik in
+        let kind = Kind (P.K_bool, l) in
+        let* t1 = check ctx t1 kind in
+        let* t2 = check ctx t2 kind in
+        wrap (P.ATyp_app (id, [t1; t2]))
+    | P.ATyp_app ((P.Id_aux (P.Id "int", _) as id), [arg]) ->
+        let* () = resolve ~at:l K_type ik in
+        let* arg = check ctx arg (Kind (P.K_int, l)) in
+        wrap (P.ATyp_app (id, [arg]))
+    | P.ATyp_app ((P.Id_aux (P.Id "bool", _) as id), [arg]) ->
+        let* () = resolve ~at:l K_type ik in
+        let* arg = check ctx arg (Kind (P.K_bool, l)) in
+        wrap (P.ATyp_app (id, [arg]))
+    | P.ATyp_sum (t1, t2) ->
+        let* t1 = check ctx t1 ik in
+        let* t2 = check ctx t2 ik in
+        wrap (P.ATyp_sum (t1, t2))
+    | P.ATyp_times (t1, t2) ->
+        let* t1 = check ctx t1 ik in
+        let* t2 = check ctx t2 ik in
+        wrap (P.ATyp_times (t1, t2))
+    | P.ATyp_minus (t1, t2) ->
+        let* t1 = check ctx t1 ik in
+        let* t2 = check ctx t2 ik in
+        wrap (P.ATyp_minus (t1, t2))
+    | P.ATyp_exp t ->
+        let* t = check ctx t ik in
+        wrap (P.ATyp_exp t)
+    | P.ATyp_neg t ->
+        let* t = check ctx t ik in
+        wrap (P.ATyp_neg t)
+    | P.ATyp_app (id, args) ->
+        let* () = resolve ~at:l K_type ik in
+        let id' = to_ast_id ctx id in
+        let* args =
+          if Bindings.mem id' ctx.enums then mapM (function arg -> check ctx arg (Kind (K_enum id, l))) args
+          else (
+            match Bindings.find_opt id' ctx.type_constructors with
+            | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id')))
+            | Some kind_opts ->
+                let args_len = List.length args in
+                let kind_opts =
+                  if args_len = List.length kind_opts then kind_opts else List.filter Option.is_some kind_opts
+                in
+                mapM
+                  (function arg, kind -> check ctx arg (Kind (to_parse_kind kind, id_loc id')))
+                  (List.combine args kind_opts)
+          )
+        in
+        wrap (P.ATyp_app (id, args))
+    | P.ATyp_lit (P.L_aux (aux, _)) ->
+        let* () =
+          match aux with
+          | P.L_num _ -> resolve ~at:l P.K_int ik
+          | P.L_true | P.L_false -> resolve ~at:l K_bool ik
+          | _ -> raise (Reporting.err_typ l "Unexpected literal in type")
+        in
+        return atyp
+    | P.ATyp_parens atyp -> check ctx atyp ik
+    | P.ATyp_tuple ts ->
+        let* () = resolve ~at:l P.K_type ik in
+        let* ts = mapM (fun (P.ATyp_aux (_, l) as t) -> check ctx t (Kind (K_type, l))) ts in
+        wrap (P.ATyp_tuple ts)
+    | P.ATyp_in (n, set) ->
+        let* () = resolve ~at:l P.K_bool ik in
+        let* n = check ctx n (Kind (K_int, l)) in
+        wrap (P.ATyp_in (n, set))
+    | P.ATyp_infix _ ->
+        let atyp = parse_infix_atyp ctx atyp in
+        check ctx atyp ik
+    | P.ATyp_nset ts ->
+        let* () = resolve ~at:l K_type ik in
+        let* ts = mapM (fun (P.ATyp_aux (_, l) as t) -> check ctx t (Kind (P.K_int, l))) ts in
+        wrap (P.ATyp_nset ts)
+    | P.ATyp_exist (kopts, nc, atyp) ->
+        let* env = get_env in
+        let unknowns = ref env.next_unknown in
+        let sets = ref [] in
+        let vars = ref KBindings.empty in
+        let kopts =
+          List.map
+            (fun (P.KOpt_aux (P.KOpt_kind (attr, vs, kind_opt, _), l)) ->
+              let u = !unknowns in
+              incr unknowns;
+              begin
+                match kind_opt with
+                | Some k -> sets := (IntSet.singleton u, Known (unaux_parse_kind k, l)) :: !sets
+                | None -> sets := (IntSet.singleton u, Unknown) :: !sets
+              end;
+              List.iter (fun v -> vars := KBindings.add (to_ast_var v) u !vars) vs;
+              P.KOpt_aux (P.KOpt_kind (attr, vs, kind_opt, Some u), l)
+            )
+            kopts
+        in
+        let* () = put_env { sets = !sets @ env.sets; next_unknown = !unknowns; vars = !vars :: env.vars } in
+        let* nc = check ctx nc (Kind (K_bool, l)) in
+        let* atyp = check ctx atyp (Kind (K_type, l)) in
+        let* env = get_env in
+        let* () = put_env { env with vars = List.tl env.vars } in
+        wrap (P.ATyp_exist (kopts, nc, atyp))
+    | P.ATyp_inc | P.ATyp_dec ->
+        let* () = resolve ~at:l P.K_order ik in
+        return atyp
+    | P.ATyp_set _ -> Reporting.unreachable l __POS__ "Unexpected element in type expression inference"
+    | P.ATyp_wild -> raise (Reporting.err_typ l "Wildcard type not allowed here")
+    | P.ATyp_fn _ -> raise (Reporting.err_typ l "Found function type in type expression")
+    | P.ATyp_bidir _ -> raise (Reporting.err_typ l "Found mapping type in type expression")
+end
 
 let rec id_set_members ~last = function
   | [] -> []
@@ -432,6 +700,7 @@ let rec to_ast_typ ctx atyp =
                 )
       )
   | P.ATyp_exist (kopts, nc, atyp) ->
+      let atyp = parse_infix_atyp ctx atyp in
       let kopts, ctx =
         List.fold_right
           (fun kopt (kopts, ctx) ->
@@ -956,7 +1225,7 @@ let anon_rec_constructor_typ record_id = function
   | P.TypQ_aux (P.TypQ_no_forall, l) -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
   | P.TypQ_aux (P.TypQ_tq quants, l) -> (
       let quant_arg = function
-        | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, _), l)), _) ->
+        | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, _, _), l)), _) ->
             List.map (fun v -> P.ATyp_aux (P.ATyp_var v, Generated l)) vs
         | P.QI_aux (P.QI_constraint _, _) -> []
       in

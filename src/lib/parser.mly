@@ -463,11 +463,11 @@ kid_list:
 
 kopt:
   | Lparen Constant kid_list Colon kind Rparen
-    { KOpt_aux (KOpt_kind (Some "constant", $3, Some $5), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (Some "constant", $3, Some $5, None), loc $startpos $endpos) }
   | Lparen kid_list Colon kind Rparen
-    { KOpt_aux (KOpt_kind (None, $2, Some $4), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, $2, Some $4, None), loc $startpos $endpos) }
   | kid
-    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 kopt_list:
   | kopt
@@ -991,9 +991,9 @@ r_def_body:
 
 param_kopt:
   | kid Colon kind
-    { KOpt_aux (KOpt_kind (None, [$1], Some $3), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], Some $3, None), loc $startpos $endpos) }
   | kid
-    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 typaram:
   | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
