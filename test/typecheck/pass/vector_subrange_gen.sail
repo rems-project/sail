@@ -10,7 +10,7 @@ overload __size = {bitvector_length}
 
 default Order inc
 
-val test : forall 'n 'm, 'n >= 5.
+val test : forall 'n, 'n >= 5.
   bitvector('n, inc) -> bitvector('n - 1, inc)
 
 function test v = {

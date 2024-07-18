@@ -169,7 +169,7 @@ and atyp = ATyp_aux of atyp_aux * l
 
 and kinded_id_aux =
   (* optionally kind-annotated identifier *)
-  | KOpt_kind of string option * kid list * kind option (* kind-annotated variable *)
+  | KOpt_kind of string option * kid list * kind option * int option (* kind-annotated variable *)
 
 and kinded_id = KOpt_aux of kinded_id_aux * l
 
@@ -399,7 +399,7 @@ type fundef_aux = (* Function definition *)
 
 type type_def_aux =
   (* Type definition body *)
-  | TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
+  | TD_abbrev of id * typquant * kind option * atyp (* type abbreviation *)
   | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
   | TD_variant of id * typquant * type_union list (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)

@@ -125,6 +125,36 @@ module Option_monad = struct
   let ( let+ ) = Option.map
 end
 
+module State_monad (S : sig
+  type t
+end) =
+struct
+  type 'a monad = S.t -> 'a * S.t
+
+  let ( let* ) state f env =
+    let y, env' = state env in
+    f y env'
+
+  let return x env = (x, env)
+
+  let fmap f m =
+    let* x = m in
+    return (f x)
+
+  let ( let+ ) = fmap
+
+  let rec mapM f = function
+    | [] -> return []
+    | x :: xs ->
+        let* y = f x in
+        let* ys = mapM f xs in
+        return (y :: ys)
+
+  let get_state s = (s, s)
+
+  let put_state s _ = ((), s)
+end
+
 module Duplicate (S : Set.S) = struct
   type dups = No_dups of S.t | Has_dups of S.elt
 

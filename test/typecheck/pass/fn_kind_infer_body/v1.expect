@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mpass/fn_kind_infer_body/v1.sail[0m:14.18-28:
+14[96m |[0mfunction g forall ('b : Int). (b: bool('b)) -> unit = {
+  [92m |[0m                  [92m^--------^[0m [92mInferred kind Int from this[0m
+[96mpass/fn_kind_infer_body/v1.sail[0m:14.39-41:
+14[96m |[0mfunction g forall ('b : Int). (b: bool('b)) -> unit = {
+  [91m |[0m                                       [91m^^[0m
+  [91m |[0m Expected this type to have kind Int but found kind Bool
