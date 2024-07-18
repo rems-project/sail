@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mpass/fn_kind_infer_body/v2.sail[0m:14.15-17:
+14[96m |[0mval g : forall 'b. bool('b) -> unit
+  [92m |[0m               [92m^^[0m [92m'b defined with kind Bool here[0m
+[96mpass/fn_kind_infer_body/v2.sail[0m:16.18-28:
+16[96m |[0mfunction g forall ('b : Int). (b: int('b)) -> unit = {
+  [91m |[0m                  [91m^--------^[0m
+  [91m |[0m 'b defined here with kind Int in the function body, which is inconsistent with the function header

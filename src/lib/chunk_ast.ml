@@ -484,7 +484,7 @@ let string_of_kind (K_aux (k, _)) =
   match k with K_type -> "Type" | K_int -> "Int" | K_order -> "Order" | K_bool -> "Bool"
 
 (* Right now, let's just assume we never break up kinded-identifiers *)
-let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind), l)) =
+let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind, _), l)) =
   match (special, kind) with
   | Some c, Some k ->
       Atom (Printf.sprintf "(%s %s : %s)" c (Util.string_of_list " " string_of_var vars) (string_of_kind k))

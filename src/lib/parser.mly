@@ -461,11 +461,11 @@ kid_list:
 
 kopt:
   | Lparen Constant kid_list Colon kind Rparen
-    { KOpt_aux (KOpt_kind (Some "constant", $3, Some $5), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (Some "constant", $3, Some $5, None), loc $startpos $endpos) }
   | Lparen kid_list Colon kind Rparen
-    { KOpt_aux (KOpt_kind (None, $2, Some $4), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, $2, Some $4, None), loc $startpos $endpos) }
   | kid
-    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 kopt_list:
   | kopt
@@ -989,9 +989,9 @@ r_def_body:
 
 param_kopt:
   | kid Colon kind
-    { KOpt_aux (KOpt_kind (None, [$1], Some $3), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], Some $3, None), loc $startpos $endpos) }
   | kid
-    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 typaram:
   | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
@@ -1002,13 +1002,13 @@ typaram:
 
 type_def:
   | Typedef id typaram Eq typ
-    { mk_td (TD_abbrev ($2, $3, K_aux (K_type, Parse_ast.Unknown), $5)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, $3, None, $5)) $startpos $endpos }
   | Typedef id Eq typ
-    { mk_td (TD_abbrev ($2, mk_typqn, K_aux (K_type, Parse_ast.Unknown), $4)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, mk_typqn, None, $4)) $startpos $endpos }
   | Typedef id typaram MinusGt kind Eq typ
-    { mk_td (TD_abbrev ($2, $3, $5, $7)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, $3, Some $5, $7)) $startpos $endpos }
   | Typedef id Colon kind Eq typ
-    { mk_td (TD_abbrev ($2, mk_typqn, $4, $6)) $startpos $endpos }
+    { mk_td (TD_abbrev ($2, mk_typqn, Some $4, $6)) $startpos $endpos }
   | Typedef id Colon kind
     { mk_td (TD_abstract ($2, $4)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly

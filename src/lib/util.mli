@@ -82,6 +82,25 @@ module Option_monad : sig
   val ( let+ ) : ('a -> 'b) -> 'a option -> 'b option
 end
 
+module State_monad : functor
+  (S : sig
+     type t
+   end)
+  -> sig
+  type 'a monad = S.t -> 'a * S.t
+
+  val get_state : S.t monad
+  val put_state : S.t -> unit monad
+
+  val fmap : ('a -> 'b) -> 'a monad -> 'b monad
+  val return : 'a -> 'a monad
+
+  val ( let* ) : 'a monad -> ('a -> 'b monad) -> 'b monad
+  val ( let+ ) : ('a -> 'b) -> 'a monad -> 'b monad
+
+  val mapM : ('a -> 'b monad) -> 'a list -> 'b list monad
+end
+
 (** Mixed useful things *)
 module Duplicate (S : Set.S) : sig
   type dups = No_dups of S.t | Has_dups of S.elt
