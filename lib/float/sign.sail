@@ -34,16 +34,14 @@ $include <float/common.sail>
 
 val      float_is_positive : fp_bits -> bool
 function float_is_positive (op) = {
-  let struct {sign, _} = float_decompose(op);
-  let is_positive = sign[0] == bitzero;
+  let is_positive = is_highest_zero (op);
 
   is_positive
 }
 
 val      float_is_negative : fp_bits -> bool
 function float_is_negative (op) = {
-  let struct {sign, _} = float_decompose(op);
-  let is_negative = sign[0] == bitone;
+  let is_negative = is_highest_one (op);
 
   is_negative
 }
