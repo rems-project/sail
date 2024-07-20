@@ -4861,7 +4861,11 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
 and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_def list * Env.t =
  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
-  | SD_function _ | SD_end _ | SD_mapping _ -> ([], env)
+  | SD_function (_, _, id) | SD_mapping (id, _) -> ([], Env.add_scattered_id id env)
+  | SD_end id ->
+      if not (Env.is_scattered_id id env) then
+        typ_error l (string_of_id id ^ " is not a scattered definition, so it cannot be ended")
+      else ([], env)
   | SD_enum id ->
       ([DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)], Env.add_scattered_enum id env)
   | SD_enumcl (id, member) ->
@@ -4902,12 +4906,16 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let typq, typ = Env.get_val_spec id env in
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
-      ([DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)], env)
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
+        Env.add_scattered_id id env
+      )
   | SD_mapcl (id, mapcl) ->
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
-      ([DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)], env)
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
+        Env.add_scattered_id id env
+      )
 
 and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =
  fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->

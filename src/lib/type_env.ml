@@ -120,6 +120,7 @@ type global_env = {
   registers : typ env_item Bindings.t;
   overloads : id list multiple_env_item Bindings.t;
   outcomes : (typquant * typ * kinded_id list * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
+  scattered_ids : IdSet.t;
   outcome_instantiation : (Ast.l * typ) KBindings.t;
 }
 
@@ -146,6 +147,7 @@ let empty_global_env =
     registers = Bindings.empty;
     overloads = Bindings.empty;
     outcomes = Bindings.empty;
+    scattered_ids = IdSet.empty;
     outcome_instantiation = KBindings.empty;
   }
 
@@ -1248,10 +1250,17 @@ let add_enum' is_scattered id ids env =
       env
   )
 
-let add_scattered_enum id env = add_enum' true id [] env
+let add_scattered_id id env =
+  update_global (fun global -> { global with scattered_ids = IdSet.add id global.scattered_ids }) env
+
+let is_scattered_id id env = IdSet.mem id env.global.scattered_ids
+
+let add_scattered_enum id env = env |> add_scattered_id id |> add_enum' true id []
+
 let add_enum id ids env = add_enum' false id ids env
 
 let add_enum_clause id member env =
+  let env = add_scattered_id id env in
   match Bindings.find_opt id env.global.enums with
   | Some item ->
       if not (item_in_scope env item) then
@@ -1406,6 +1415,7 @@ let add_variant id (typq, constructors) env =
   )
 
 let add_scattered_variant id typq env =
+  let env = add_scattered_id id env in
   if bound_typ_id env id then already_bound "scattered union" id env
   else (
     typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id)) [@coverage off];
@@ -1421,6 +1431,7 @@ let add_scattered_variant id typq env =
   )
 
 let add_variant_clause id tu env =
+  let env = add_scattered_id id env in
   match Bindings.find_opt id env.global.unions with
   | Some ({ item = typq, tus; _ } as item) ->
       update_global

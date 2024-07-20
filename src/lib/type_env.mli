@@ -235,6 +235,9 @@ val get_enums : t -> IdSet.t Bindings.t
 
 val lookup_id : id -> t -> typ lvar
 
+val add_scattered_id : id -> t -> t
+val is_scattered_id : id -> t -> bool
+
 val expand_synonyms : t -> typ -> typ
 val expand_nexp_synonyms : t -> nexp -> nexp
 val expand_constraint_synonyms : t -> n_constraint -> n_constraint
