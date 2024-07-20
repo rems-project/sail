@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/unknown_end.sail[0m:2.0-18:
+2[96m |[0mend does_not_exist
+ [91m |[0m[91m^----------------^[0m
+ [91m |[0m does_not_exist is not a scattered definition, so it cannot be ended
