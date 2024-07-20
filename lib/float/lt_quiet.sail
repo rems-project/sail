@@ -27,18 +27,38 @@
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*==========================================================================*/
 
-$ifndef _FLOAT_INTERFACE
-$define _FLOAT_INTERFACE
+$ifndef _FLOAT_LT_QUIET
+$define _FLOAT_LT_QUIET
 
 $include <float/common.sail>
-$include <float/nan.sail>
-$include <float/inf.sail>
-$include <float/sign.sail>
 $include <float/zero.sail>
-$include <float/normal.sail>
-$include <float/eq.sail>
-$include <float/ne.sail>
-$include <float/lt.sail>
-$include <float/lt_quiet.sail>
+$include <float/nan.sail>
+
+val      float_is_lt_quiet : fp_bits_x2 -> fp_bool_and_flags
+function float_is_lt_quiet ((op_0, op_1)) = {
+  let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
+  let is_snan = float_is_snan (op_0) | float_is_snan (op_1);
+  let flags   = if   is_snan
+                then fp_eflag_invalid
+                else fp_eflag_none;
+
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+
+  let is_zero      = float_is_zero (op_0) & float_is_zero (op_1);
+  let diff_sign_lt = is_lowest_one (fp_0.sign) & not (is_zero);
+
+  let is_neg       = is_lowest_one (fp_0.sign);
+  let unsigned_lt  = unsigned (op_0) < unsigned (op_1);
+  let is_xor       = (is_neg & not (unsigned_lt)) | (not (is_neg) & unsigned_lt);
+  let same_sign_lt = (op_0 != op_1) & is_xor;
+
+  let is_normal_lt = if   fp_0.sign != fp_1.sign
+                     then diff_sign_lt
+                     else same_sign_lt;
+  let is_lt        = not (is_nan) & is_normal_lt;
+
+  (is_lt, flags);
+}
 
 $endif
