@@ -545,6 +545,7 @@ let rec to_ast_typ_pat ctx (P.ATyp_aux (aux, l)) =
   | P.ATyp_app (P.Id_aux (P.Id "bool", il), typs) ->
       TP_aux (TP_app (Id_aux (Id "atom_bool", il), List.map (to_ast_typ_pat ctx) typs), l)
   | P.ATyp_app (f, typs) -> TP_aux (TP_app (to_ast_id ctx f, List.map (to_ast_typ_pat ctx) typs), l)
+  | P.ATyp_parens atyp -> to_ast_typ_pat ctx atyp
   | _ -> raise (Reporting.err_typ l "Unexpected type in type pattern")
 
 let is_wild_fpat = function P.FP_aux (P.FP_wild, _) -> true | _ -> false
