@@ -158,6 +158,7 @@
   (%{workspace_root}/lib/float/sign.sail as lib/float/sign.sail)
   (%{workspace_root}/lib/float/zero.sail as lib/float/zero.sail)
   (%{workspace_root}/lib/float/normal.sail as lib/float/normal.sail)
+  (%{workspace_root}/lib/float/arith_internal.sail as lib/float/arith_internal.sail)
   (%{workspace_root}/lib/float/eq.sail as lib/float/eq.sail)
   (%{workspace_root}/lib/float/ne.sail as lib/float/ne.sail)
   (%{workspace_root}/lib/float/lt.sail as lib/float/lt.sail)

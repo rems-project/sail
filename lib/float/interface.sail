@@ -36,6 +36,7 @@ $include <float/inf.sail>
 $include <float/sign.sail>
 $include <float/zero.sail>
 $include <float/normal.sail>
+$include <float/arith_internal.sail>
 $include <float/eq.sail>
 $include <float/ne.sail>
 $include <float/lt.sail>
