@@ -71,9 +71,8 @@ open Interactive.State
 
 type version = { major : int; minor : int; patch : int }
 
-(* Current version of Sail. Must be updated manually. CI checks this matches
-   the tag given by `git describe`. *)
-let version = { major = 0; minor = 17; patch = 1 }
+(* Current version of Sail. Must be updated manually. *)
+let version = { major = 0; minor = 18; patch = 0 }
 
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []

@@ -1,6 +1,37 @@
 Changelog
 =========
 
+Sail 0.18
+---------
+
+This release mostly incorporates many small improvements and fixes
+to Sail 0.17.1.
+
+##### Module System
+
+This release introduces a simple module system. See the section of
+the manual for details.
+
+##### Type level if-then-else
+
+If expressions are now permitted in types, so one can write types such
+as
+```
+bits(if XLEN == 32 then 15 else 57)
+```
+this doesn't add any additional expressiveness, as one could
+previously introduce additional type variables and constrain them in
+such a way to guarantee the same thing, but being able to use
+if-then-else directly is usually more clear.
+
+##### Documentation backend
+
+The Sail documentation backend can now produce hyperlinked and syntax
+highlighted source code output with the `--html` option. The
+Asciidoctor plugin can now hyperlink between definitions included in
+the documentation, and otherwise link into a hyperlinked version of
+the source.
+
 Sail 0.17.1
 -----------
 
