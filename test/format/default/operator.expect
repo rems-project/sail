@@ -1,0 +1,97 @@
+default Order dec
+$include <prelude.sail>
+
+// comment
+//comment
+/// line_comment with more than two slash
+///line_comment with more than two slash
+//// line_comment with more than two slash
+////line_comment with more than two slash
+// /*/*/
+/*/ block_comment with slash near  and
+*/
+//* line_block_comment */
+infix 4 ===_u
+infix 4 ===/_u
+infix 4 /=/=/=
+
+infix 4 ===*_u
+val operator ===/_u : forall 'n. (int('n), int('n)) -> bool
+function operator ===/_u(x, y) = x == y
+
+infix 4 =/
+val operator =/ : forall 'n. (int('n), int('n)) -> bool
+function operator =/(x, y) = x == y
+
+infix 4 =
+
+// comment
+infix 4 =/
+
+// comment
+infix 4 ==/
+infix 4 -/-
+
+//comment
+infix 4 -/-/
+
+//comment
+infix 4 /-*
+
+//comment
+infixl 4 =
+
+// comment
+infixl 4 =/
+
+// comment
+infixl 4 ==/
+infixl 4 -/-
+
+//comment
+infixl 4 -/-/
+
+//comment
+infixl 4 /-*
+
+//comment
+infixr 4 =
+
+// comment
+infixr 4 =/
+
+// comment
+infixr 4 ==/
+infixr 4 -/-
+
+//comment
+infixr 4 -/-/
+
+//comment
+infixr 4 /-*
+
+//comment
+function f () = {
+    if op_eq2_with_block_comment == /**/ /**/ 1 then { 1 };
+
+    if op_eq_slash =/ 1 then { 1 };
+    if op_eq_slash_with_block_comment =/ 1 then /**/ { 1 };
+
+    let op_eq_with_line_comment =
+        //
+        1;
+
+    let op_eq_with_line_comment =
+        ///
+        1;
+
+    if op_eq_with_line_comment =
+        // comment
+        if eq_slash = /**/ 1 then { 1 } else { 2 } then { 1 };
+
+    if eq_with_blcok_comment = /**/ 1 then { 1 };
+
+    if eq3_slash ===/_u 1 then { 1 };
+
+    0
+}
