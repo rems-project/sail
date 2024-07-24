@@ -50,3 +50,6 @@ type_div.sail
 XXXXX Need to be built against stdpp version of Sail (for now)
 concurrency_interface_dec.sail
 concurrency_interface_inc.sail
+XXXXX Would need to turn a term with existential type into a dependent pair
+ex_list_infer.sail
+ex_vector_infer.sail

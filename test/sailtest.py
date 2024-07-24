@@ -8,10 +8,17 @@ import argparse
 parser = argparse.ArgumentParser("run_tests.py")
 parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')
 parser.add_argument("--compact", help="Compact output.", action='store_true')
+parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
 args = parser.parse_args()
 
 def is_compact():
     return args.compact
+
+def get_targets(default_targets):
+    if args.targets is None:
+        return default_targets
+    else:
+        return args.targets
 
 def compact_char(code, char):
     print('{}{}{}'.format(code, char, color.END), end='')

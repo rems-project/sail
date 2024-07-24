@@ -13,9 +13,11 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
+targets = get_targets(['c', 'interpreter', 'ocaml'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
+print("Targets: {}".format(targets))
 
 def no_valgrind():
     try:
@@ -155,7 +157,6 @@ def test_coq(name):
     results = Results(name)
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Coq library")
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Coq")
-    results.expect_failure("for_shadow.sail", "Pure loops aren't current supported for Coq (and don't really make sense)")
     results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
     results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
     results.expect_failure("concurrency_interface.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
@@ -167,9 +168,11 @@ def test_coq(name):
     results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
     results.expect_failure("fail_assert_mono_bug.sail", "test output checking not supported for Coq yet")
     results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
-    results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backedn")
+    results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backend")
     results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
     results.expect_failure("tl_pat.sail", "Coq backend doesn't support constructors with the same name as a type")
+    results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
+    results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -200,21 +203,27 @@ def test_coq(name):
 
 xml = '<testsuites>\n'
 
-#xml += test_c2('unoptimized C', '', '', True)
-xml += test_c('unoptimized C', '', '', False)
-xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
-xml += test_c('optimized C', '-O2', '-O', True)
-xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
-xml += test_c('constant folding', '', '-Oconstant_fold', False)
-#xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
-xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+if 'c' in targets:
+    #xml += test_c2('unoptimized C', '', '', True)
+    xml += test_c('unoptimized C', '', '', False)
+    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
+    xml += test_c('optimized C', '-O2', '-O', True)
+    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
+    xml += test_c('constant folding', '', '-Oconstant_fold', False)
+    #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
+    xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
-xml += test_interpreter('interpreter')
+if 'interpreter' in targets:
+    xml += test_interpreter('interpreter')
 
-xml += test_ocaml('OCaml')
+if 'ocaml' in targets:
+    xml += test_ocaml('OCaml')
 
-#xml += test_lem('lem')
-#xml += test_coq('coq')
+if 'lem' in targets:
+    xml += test_lem('lem')
+
+if 'coq' in targets:
+    xml += test_coq('coq')
 
 xml += '</testsuites>\n'
 

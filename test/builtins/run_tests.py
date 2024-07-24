@@ -13,9 +13,11 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
+targets = get_targets(['c', 'ocaml'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
+print("Targets: {}".format(targets))
 
 def test_c_builtins(name, sail_opts):
     banner('Testing builtins: {} Sail options: {}'.format(name, sail_opts))
@@ -144,20 +146,25 @@ def test_isla_builtins(name):
 
 xml = '<testsuites>\n'
 
-xml += test_c_builtins('C, No optimisations', '')
-xml += test_c_builtins('C, Optimisations', '-O')
-xml += test_c_builtins('C, Constant folding', '-Oconstant_fold')
+if 'c' in targets:
+    xml += test_c_builtins('C, No optimisations', '')
+    xml += test_c_builtins('C, Optimisations', '-O')
+    xml += test_c_builtins('C, Constant folding', '-Oconstant_fold')
 
-xml += test_ocaml_builtins('OCaml', '')
+if 'ocaml' in targets:
+    xml += test_ocaml_builtins('OCaml', '')
 
-# Comment this out for most runs because it's really slow
-# xml += test_lem_builtins('Lem to OCaml')
-# xml += test_coq_builtins('Coq')
+# Avoid this for most runs because it's really slow
+if 'lem' in targets:
+    xml += test_lem_builtins('Lem to OCaml')
+if 'coq' in targets:
+    xml += test_coq_builtins('Coq')
 
 # Isla is separate, so don't run by default
 # For testing symbolic operations in Isla it's useful to tweak the primop macros
 # so that the symbolic versions are used even when the values are concrete.
-# xml += test_isla_builtins('Isla')
+if 'isla' in targets:
+    xml += test_isla_builtins('Isla')
 
 xml += '</testsuites>\n'
 
