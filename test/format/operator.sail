@@ -18,7 +18,6 @@ $include <prelude.sail>
 
 infix 4 ===_u
 infix 4 ===/_u
-infix 4 /=/=/=
 
 infix 4 ===*_u
 val operator ===/_u : forall 'n. (int('n), int('n)) -> bool
@@ -29,25 +28,25 @@ val operator =/ : forall 'n. (int('n), int('n)) -> bool
 function operator =/(x, y) = x == y
 
 infix 4 = // comment
+infix 4 </> // comment
 infix 4 =/ // comment
 infix 4 ==/
 infix 4 -/- //comment
-infix 4 -/-/ //comment
-infix 4 /-*//comment
+infix 4 /-- //comment
 
 infixl 4 = // comment
 infixl 4 =/ // comment
 infixl 4 ==/
 infixl 4 -/- //comment
-infixl 4 -/-/ //comment
-infixl 4 /-*//comment
+infixl 4 -/- //comment
+infixl 4 /-- //comment
 
 infixr 4 = // comment
 infixr 4 =/ // comment
 infixr 4 ==/
 infixr 4 -/- //comment
-infixr 4 -/-/ //comment
-infixr 4 /-*//comment
+infixr 4 -/- //comment
+infixr 4 /-- //comment
 
 function f () = {
     if op_eq2_with_block_comment /**/== /**/ 1 then { 1 };
