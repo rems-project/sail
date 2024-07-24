@@ -223,10 +223,10 @@ let extract_set_nc env l var nc =
       in
       begin
         match constraint_conj nc2 with
-        | NC_aux (NC_bounded_le (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
+        | NC_aux (NC_le (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
           when KidSet.mem kid' vars ->
             handle' n' kid' ncs
-        | NC_aux (NC_bounded_lt (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
+        | NC_aux (NC_lt (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs
           when KidSet.mem kid' vars ->
             handle' (Nat_big_num.pred n') kid' ncs
         | _ -> aux2 ()
@@ -238,10 +238,10 @@ let extract_set_nc env l var nc =
     | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var id, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _))
       when KidSet.mem id vars ->
         Some ([n], re NC_true)
-    | NC_and ((NC_aux (NC_bounded_le (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
+    | NC_and ((NC_aux (NC_le (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
         handle_range n kid nc1 nc2
-    | NC_and ((NC_aux (NC_bounded_lt (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
+    | NC_and ((NC_aux (NC_lt (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
         handle_range (Nat_big_num.succ n) kid nc1 nc2
     | NC_and (nc1, nc2) -> (
@@ -2027,10 +2027,7 @@ module Analysis = struct
     match nc with
     | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
         dmerge (deps_of_nexp_arg l kid_deps arg1) (deps_of_nexp_arg l kid_deps arg2)
-    | NC_bounded_ge (nexp1, nexp2)
-    | NC_bounded_gt (nexp1, nexp2)
-    | NC_bounded_le (nexp1, nexp2)
-    | NC_bounded_lt (nexp1, nexp2) ->
+    | NC_ge (nexp1, nexp2) | NC_gt (nexp1, nexp2) | NC_le (nexp1, nexp2) | NC_lt (nexp1, nexp2) ->
         dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
     | NC_set (nexp, _) -> deps_of_nexp l kid_deps [] nexp
     | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
@@ -4517,10 +4514,10 @@ module ToplevelNexpRewrites = struct
         match nc with
         | NC_equal (arg1, arg2) -> rewrap (NC_equal (aux_targ arg1, aux_targ arg2))
         | NC_not_equal (arg1, arg2) -> rewrap (NC_not_equal (aux_targ arg1, aux_targ arg2))
-        | NC_bounded_ge (n1, n2) -> rewrap (NC_bounded_ge (aux_nexp n1, aux_nexp n2))
-        | NC_bounded_gt (n1, n2) -> rewrap (NC_bounded_gt (aux_nexp n1, aux_nexp n2))
-        | NC_bounded_le (n1, n2) -> rewrap (NC_bounded_le (aux_nexp n1, aux_nexp n2))
-        | NC_bounded_lt (n1, n2) -> rewrap (NC_bounded_lt (aux_nexp n1, aux_nexp n2))
+        | NC_ge (n1, n2) -> rewrap (NC_ge (aux_nexp n1, aux_nexp n2))
+        | NC_gt (n1, n2) -> rewrap (NC_gt (aux_nexp n1, aux_nexp n2))
+        | NC_le (n1, n2) -> rewrap (NC_le (aux_nexp n1, aux_nexp n2))
+        | NC_lt (n1, n2) -> rewrap (NC_lt (aux_nexp n1, aux_nexp n2))
         | NC_or (nc1, nc2) -> rewrap (NC_or (aux_nconstraint nc1, aux_nconstraint nc2))
         | NC_and (nc1, nc2) -> rewrap (NC_and (aux_nconstraint nc1, aux_nconstraint nc2))
         | NC_app (id, args) -> rewrap (NC_app (id, List.map aux_targ args))

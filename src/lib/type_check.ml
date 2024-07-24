@@ -163,10 +163,10 @@ and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
       NC_aux (NC_equal (replace_nexp_typ_arg nexp nexp' arg1, replace_nexp_typ_arg nexp nexp' arg2), l)
   | NC_not_equal (arg1, arg2) ->
       NC_aux (NC_not_equal (replace_nexp_typ_arg nexp nexp' arg1, replace_nexp_typ_arg nexp nexp' arg2), l)
-  | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (rep n1, rep n2), l)
-  | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (rep n1, rep n2), l)
-  | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (rep n1, rep n2), l)
-  | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (rep n1, rep n2), l)
+  | NC_ge (n1, n2) -> NC_aux (NC_ge (rep n1, rep n2), l)
+  | NC_le (n1, n2) -> NC_aux (NC_le (rep n1, rep n2), l)
+  | NC_gt (n1, n2) -> NC_aux (NC_gt (rep n1, rep n2), l)
+  | NC_lt (n1, n2) -> NC_aux (NC_lt (rep n1, rep n2), l)
   | NC_set _ | NC_true | NC_false | NC_var _ -> nc
   | NC_or (nc1, nc2) -> NC_aux (NC_or (rep_nc nc1, rep_nc nc2), l)
   | NC_and (nc1, nc2) -> NC_aux (NC_and (rep_nc nc1, rep_nc nc2), l)
@@ -467,10 +467,10 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_equal (arg1a, arg1b), NC_equal (arg2a, arg2b) -> typ_arg_identical arg1a arg2a && typ_arg_identical arg1b arg2b
   | NC_not_equal (arg1a, arg1b), NC_not_equal (arg2a, arg2b) ->
       typ_arg_identical arg1a arg2a && typ_arg_identical arg1b arg2b
-  | NC_bounded_ge (n1a, n1b), NC_bounded_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | NC_bounded_gt (n1a, n1b), NC_bounded_gt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | NC_bounded_le (n1a, n1b), NC_bounded_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | NC_bounded_lt (n1a, n1b), NC_bounded_lt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_ge (n1a, n1b), NC_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_gt (n1a, n1b), NC_gt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_le (n1a, n1b), NC_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_lt (n1a, n1b), NC_lt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_or (nc1a, nc1b), NC_or (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_and (nc1a, nc1b), NC_and (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_true, NC_true -> true
@@ -613,13 +613,13 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
       merge_uvars env l (unify_typ_arg l env goals arg1a arg1b) (unify_typ_arg l env goals arg2a arg2b)
   | NC_not_equal (arg1a, arg2a), NC_not_equal (arg1b, arg2b) ->
       merge_uvars env l (unify_typ_arg l env goals arg1a arg1b) (unify_typ_arg l env goals arg2a arg2b)
-  | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
+  | NC_ge (n1a, n2a), NC_ge (n1b, n2b) ->
       merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_bounded_gt (n1a, n2a), NC_bounded_gt (n1b, n2b) ->
+  | NC_gt (n1a, n2a), NC_gt (n1b, n2b) ->
       merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_bounded_le (n1a, n2a), NC_bounded_le (n1b, n2b) ->
+  | NC_le (n1a, n2a), NC_le (n1b, n2b) ->
       merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_bounded_lt (n1a, n2a), NC_bounded_lt (n1b, n2b) ->
+  | NC_lt (n1a, n2a), NC_lt (n1b, n2b) ->
       merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_true, NC_true -> KBindings.empty
   | NC_false, NC_false -> KBindings.empty
@@ -777,7 +777,7 @@ and ambiguous_arg_vars (A_aux (aux, _)) =
 and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
-  | NC_bounded_le (n1, n2) | NC_bounded_lt (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_gt (n1, n2) ->
+  | NC_le (n1, n2) | NC_lt (n1, n2) | NC_ge (n1, n2) | NC_gt (n1, n2) ->
       KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> KidSet.union (ambiguous_arg_vars arg1) (ambiguous_arg_vars arg2)
   | _ -> KidSet.empty
@@ -916,7 +916,7 @@ and kid_order_constraint kind_map (NC_aux (aux, _)) =
       let ord1, kind_map = kid_order_arg kind_map arg1 in
       let ord2, kind_map = kid_order_arg kind_map arg2 in
       (ord1 @ ord2, kind_map)
-  | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_lt (n1, n2) | NC_bounded_gt (n1, n2) ->
+  | NC_le (n1, n2) | NC_ge (n1, n2) | NC_lt (n1, n2) | NC_gt (n1, n2) ->
       let ord1, kind_map = kid_order_nexp kind_map n1 in
       let ord2, kind_map = kid_order_nexp kind_map n2 in
       (ord1 @ ord2, kind_map)
@@ -1215,10 +1215,10 @@ and rewrite_arg l env = function
   | A_aux (A_typ typ, _) -> Reporting.unreachable l __POS__ "Found Type-kinded parameter during sizeof rewriting"
 
 and rewrite_nc_aux l env = function
-  | NC_bounded_ge (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">=", rewrite_sizeof l env n2)
-  | NC_bounded_gt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">", rewrite_sizeof l env n2)
-  | NC_bounded_le (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<=", rewrite_sizeof l env n2)
-  | NC_bounded_lt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<", rewrite_sizeof l env n2)
+  | NC_ge (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">=", rewrite_sizeof l env n2)
+  | NC_gt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">", rewrite_sizeof l env n2)
+  | NC_le (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<=", rewrite_sizeof l env n2)
+  | NC_lt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<", rewrite_sizeof l env n2)
   | NC_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, mk_id "==", rewrite_arg l env arg2)
   | NC_not_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, mk_id "!=", rewrite_arg l env arg2)
   | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)

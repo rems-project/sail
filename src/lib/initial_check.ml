@@ -941,10 +941,10 @@ module ConvertType = struct
               match op with
               | "==" -> NC_equal (to_ast_typ_arg kenv ctx t1 K_int, to_ast_typ_arg kenv ctx t2 K_int)
               | "!=" -> NC_not_equal (to_ast_typ_arg kenv ctx t1 K_int, to_ast_typ_arg kenv ctx t2 K_int)
-              | ">=" -> NC_bounded_ge (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
-              | "<=" -> NC_bounded_le (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
-              | ">" -> NC_bounded_gt (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
-              | "<" -> NC_bounded_lt (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
+              | ">=" -> NC_ge (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
+              | "<=" -> NC_le (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
+              | ">" -> NC_gt (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
+              | "<" -> NC_lt (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
               | "&" -> NC_and (to_ast_constraint kenv ctx t1, to_ast_constraint kenv ctx t2)
               | "|" -> NC_or (to_ast_constraint kenv ctx t1, to_ast_constraint kenv ctx t2)
               | _ -> (

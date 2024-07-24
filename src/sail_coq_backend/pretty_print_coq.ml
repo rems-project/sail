@@ -301,10 +301,10 @@ let rec orig_nc (NC_aux (nc, l) as full_nc) =
   match nc with
   | NC_equal (arg1, arg2) -> rewrap (NC_equal (orig_typ_arg arg1, orig_typ_arg arg2))
   | NC_not_equal (arg1, arg2) -> rewrap (NC_not_equal (orig_typ_arg arg1, orig_typ_arg arg2))
-  | NC_bounded_ge (nexp1, nexp2) -> rewrap (NC_bounded_ge (orig_nexp nexp1, orig_nexp nexp2))
-  | NC_bounded_gt (nexp1, nexp2) -> rewrap (NC_bounded_gt (orig_nexp nexp1, orig_nexp nexp2))
-  | NC_bounded_le (nexp1, nexp2) -> rewrap (NC_bounded_le (orig_nexp nexp1, orig_nexp nexp2))
-  | NC_bounded_lt (nexp1, nexp2) -> rewrap (NC_bounded_lt (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_ge (nexp1, nexp2) -> rewrap (NC_ge (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_gt (nexp1, nexp2) -> rewrap (NC_gt (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_le (nexp1, nexp2) -> rewrap (NC_le (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_lt (nexp1, nexp2) -> rewrap (NC_lt (orig_nexp nexp1, orig_nexp nexp2))
   | NC_set (nexp, s) -> rewrap (NC_set (orig_nexp nexp, s))
   | NC_or (nc1, nc2) -> rewrap (NC_or (orig_nc nc1, orig_nc nc2))
   | NC_and (nc1, nc2) -> rewrap (NC_and (orig_nc nc1, orig_nc nc2))
@@ -408,7 +408,7 @@ and count_nc_vars (NC_aux (nc, _)) =
   | NC_var kid -> KBindings.singleton kid 1
   | NC_set (n, _) -> count_nexp_vars n
   | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> merge_kid_count (count_arg arg1) (count_arg arg2)
-  | NC_bounded_ge (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_lt (n1, n2) ->
+  | NC_ge (n1, n2) | NC_gt (n1, n2) | NC_le (n1, n2) | NC_lt (n1, n2) ->
       merge_kid_count (count_nexp_vars n1) (count_nexp_vars n2)
   | NC_id _ | NC_true | NC_false -> KBindings.empty
   | NC_app (_, args) -> List.fold_left merge_kid_count KBindings.empty (List.map count_arg args)
@@ -434,14 +434,14 @@ let simplify_atom_bool l kopts nc atom_nc =
       | NC_equal (_, A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)) when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_not_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), _) when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_not_equal (_, A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_ge (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_ge (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_gt (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_gt (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_le (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_le (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_lt (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
-      | NC_bounded_lt (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_ge (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_ge (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_gt (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_gt (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_le (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_le (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_lt (Nexp_aux (Nexp_var kid, _), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_lt (_, Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_set (Nexp_aux (Nexp_var kid, _), _ :: _) when KBindings.mem kid lin_ty_vars -> Some kid
       | _ -> None
     in
@@ -813,10 +813,10 @@ and doc_nc_exp ctx env nc =
   and l70 (NC_aux (nc, _) as nc_full) =
     match nc with
     | NC_equal (arg1, arg2) -> doc_op (string "=?") (doc_typ_arg_exp arg1) (doc_typ_arg_exp arg2)
-    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
-    | NC_bounded_gt (ne1, ne2) -> doc_op (string ">?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
-    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
-    | NC_bounded_lt (ne1, ne2) -> doc_op (string "<?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_gt (ne1, ne2) -> doc_op (string ">?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
+    | NC_lt (ne1, ne2) -> doc_op (string "<?") (doc_nexp ctx env ne1) (doc_nexp ctx env ne2)
     | _ -> l50 nc_full
   and l50 (NC_aux (nc, _) as nc_full) =
     match nc with NC_or (nc1, nc2) -> doc_op (string "||") (newnc l50 nc1) (newnc l40 nc2) | _ -> l40 nc_full
@@ -841,8 +841,7 @@ and doc_nc_exp ctx env nc =
     | NC_true -> string "true"
     | NC_false -> string "false"
     | NC_var kid -> doc_nexp ctx env (nvar kid)
-    | NC_not_equal _ | NC_set _ | NC_app _ | NC_equal _ | NC_bounded_ge _ | NC_bounded_gt _ | NC_bounded_le _
-    | NC_bounded_lt _ | NC_or _ | NC_and _ ->
+    | NC_not_equal _ | NC_set _ | NC_app _ | NC_equal _ | NC_ge _ | NC_gt _ | NC_le _ | NC_lt _ | NC_or _ | NC_and _ ->
         parens (l70 nc_full)
   and doc_typ_arg_exp (A_aux (arg, l)) =
     match arg with

@@ -705,7 +705,7 @@ module Well_formedness = struct
     | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
         wf_typ_arg exs env arg1;
         wf_typ_arg exs env arg2
-    | NC_bounded_ge (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_lt (n1, n2) ->
+    | NC_ge (n1, n2) | NC_gt (n1, n2) | NC_le (n1, n2) | NC_lt (n1, n2) ->
         wf_nexp exs env n1;
         wf_nexp exs env n2
     | NC_set (nexp, _) -> wf_nexp exs env nexp
@@ -745,10 +745,10 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
   | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
   | NC_equal (arg1, arg2) -> NC_aux (NC_equal (expand_arg_synonyms env arg1, expand_arg_synonyms env arg2), l)
   | NC_not_equal (arg1, arg2) -> NC_aux (NC_not_equal (expand_arg_synonyms env arg1, expand_arg_synonyms env arg2), l)
-  | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-  | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-  | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-  | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+  | NC_le (n1, n2) -> NC_aux (NC_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+  | NC_lt (n1, n2) -> NC_aux (NC_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+  | NC_ge (n1, n2) -> NC_aux (NC_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+  | NC_gt (n1, n2) -> NC_aux (NC_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
   | NC_app (id, args) -> (
       try
         begin

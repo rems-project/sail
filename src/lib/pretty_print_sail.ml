@@ -157,10 +157,10 @@ module Printer (Config : PRINT_CONFIG) = struct
       | NC_false -> string "false"
       | NC_equal (t1, t2) -> separate space [doc_typ_arg t1; string "=="; doc_typ_arg t2]
       | NC_not_equal (t1, t2) -> separate space [doc_typ_arg t1; string "!="; doc_typ_arg t2]
-      | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
-      | NC_bounded_gt (n1, n2) -> nc_op ">" n1 n2
-      | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
-      | NC_bounded_lt (n1, n2) -> nc_op "<" n1 n2
+      | NC_ge (n1, n2) -> nc_op ">=" n1 n2
+      | NC_gt (n1, n2) -> nc_op ">" n1 n2
+      | NC_le (n1, n2) -> nc_op "<=" n1 n2
+      | NC_lt (n1, n2) -> nc_op "<" n1 n2
       | NC_set (nexp, ints) ->
           separate space [doc_nexp nexp; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
       | NC_app (id, args) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
