@@ -298,8 +298,8 @@ let doc_typ, doc_atomic_typ, doc_nexp =
 let doc_nexp_constraint (NC_aux (nc, _)) =
   match nc with
   | NC_equal (n1, n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
-  | NC_bounded_ge (n1, n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
-  | NC_bounded_le (n1, n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
+  | NC_ge (n1, n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
+  | NC_le (n1, n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
   | NC_set (v, bounds) -> doc_op (string "IN") (doc_var v) (braces (separate_map comma_sp doc_int bounds))
 
 let doc_qi (QI_aux (qi, _)) =

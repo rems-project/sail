@@ -125,8 +125,7 @@ let builtins =
 let rec constraint_ids' (NC_aux (aux, _)) =
   match aux with
   | NC_equal (a1, a2) | NC_not_equal (a1, a2) -> IdSet.union (typ_arg_ids' a1) (typ_arg_ids' a2)
-  | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_lt (n1, n2) | NC_bounded_gt (n1, n2) ->
-      IdSet.union (nexp_ids' n1) (nexp_ids' n2)
+  | NC_le (n1, n2) | NC_ge (n1, n2) | NC_lt (n1, n2) | NC_gt (n1, n2) -> IdSet.union (nexp_ids' n1) (nexp_ids' n2)
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (constraint_ids' nc1) (constraint_ids' nc2)
   | NC_var _ | NC_true | NC_false | NC_set _ -> IdSet.empty
   | NC_id id -> IdSet.singleton id

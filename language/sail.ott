@@ -280,10 +280,10 @@ n_constraint :: 'NC_' ::=
   {{ aux _ l }}
   | typ_arg == typ_arg'              :: :: equal
   | typ_arg != typ_arg'              :: :: not_equal
-  | nexp >= nexp'                    :: :: bounded_ge
-  | nexp > nexp'                     :: :: bounded_gt
-  | nexp '<=' nexp'                  :: :: bounded_le
-  | nexp '<' nexp'                   :: :: bounded_lt
+  | nexp >= nexp'                    :: :: ge
+  | nexp > nexp'                     :: :: gt
+  | nexp '<=' nexp'                  :: :: le
+  | nexp '<' nexp'                   :: :: lt
   | nexp 'IN' { num1 , ... , numn }  :: :: set
   | n_constraint & n_constraint'     :: :: or
   | n_constraint | n_constraint'     :: :: and
