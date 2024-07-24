@@ -148,12 +148,12 @@ and unloc_nexp = function Nexp_aux (nexp_aux, _) -> Nexp_aux (unloc_nexp_aux nex
 
 and unloc_n_constraint_aux = function
   | NC_id id -> NC_id (unloc_id id)
-  | NC_equal (nexp1, nexp2) -> NC_equal (unloc_nexp nexp1, unloc_nexp nexp2)
+  | NC_equal (arg1, arg2) -> NC_equal (unloc_typ_arg arg1, unloc_typ_arg arg2)
+  | NC_not_equal (arg1, arg2) -> NC_not_equal (unloc_typ_arg arg1, unloc_typ_arg arg2)
   | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_bounded_gt (nexp1, nexp2) -> NC_bounded_gt (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (unloc_nexp nexp1, unloc_nexp nexp2)
-  | NC_not_equal (nexp1, nexp2) -> NC_not_equal (unloc_nexp nexp1, unloc_nexp nexp2)
   | NC_set (nexp, nums) -> NC_set (unloc_nexp nexp, nums)
   | NC_or (nc1, nc2) -> NC_or (unloc_n_constraint nc1, unloc_n_constraint nc2)
   | NC_and (nc1, nc2) -> NC_and (unloc_n_constraint nc1, unloc_n_constraint nc2)
@@ -219,13 +219,8 @@ and typ_arg_nexps (A_aux (typ_arg_aux, _)) =
 
 and constraint_nexps (NC_aux (nc_aux, _)) =
   match nc_aux with
-  | NC_equal (n1, n2)
-  | NC_bounded_ge (n1, n2)
-  | NC_bounded_le (n1, n2)
-  | NC_bounded_gt (n1, n2)
-  | NC_bounded_lt (n1, n2)
-  | NC_not_equal (n1, n2) ->
-      [n1; n2]
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> typ_arg_nexps arg1 @ typ_arg_nexps arg2
+  | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_lt (n1, n2) -> [n1; n2]
   | NC_id _ | NC_true | NC_false | NC_var _ -> []
   | NC_set (n, _) -> [n]
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2

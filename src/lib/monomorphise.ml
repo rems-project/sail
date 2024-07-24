@@ -193,7 +193,9 @@ let extract_set_nc env l var nc =
   let vars = Spec_analysis.equal_kids_ncs var [nc] in
   let rec aux_or (NC_aux (nc, l)) =
     match nc with
-    | NC_equal (Nexp_aux (Nexp_var id, _), Nexp_aux (Nexp_constant n, _)) when KidSet.mem id vars -> Some [n]
+    | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var id, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _))
+      when KidSet.mem id vars ->
+        Some [n]
     | NC_or (nc1, nc2) -> (
         match (aux_or nc1, aux_or nc2) with Some l1, Some l2 -> Some (l1 @ l2) | _, _ -> None
       )
@@ -233,7 +235,8 @@ let extract_set_nc env l var nc =
 
     match nc with
     | NC_set (Nexp_aux (Nexp_var id, _), is) when KidSet.mem id vars -> Some (is, re NC_true)
-    | NC_equal (Nexp_aux (Nexp_var id, _), Nexp_aux (Nexp_constant n, _)) when KidSet.mem id vars ->
+    | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var id, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _))
+      when KidSet.mem id vars ->
         Some ([n], re NC_true)
     | NC_and ((NC_aux (NC_bounded_le (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
@@ -1362,7 +1365,7 @@ module AtomToItself = struct
     let typ = Env.expand_synonyms env typ in
     let replace_size size =
       (* TODO: pick simpler nexp when there's a choice (also in pretty printer) *)
-      let is_equal nexp = prove __POS__ env (NC_aux (NC_equal (size, nexp), Parse_ast.Unknown)) in
+      let is_equal nexp = prove __POS__ env (nc_eq size nexp) in
       if is_nexp_constant size then size
       else (
         match solve_unique env size with
@@ -1456,9 +1459,7 @@ module AtomToItself = struct
                   (* Look for equivalent nexps, but only in consistent type env *)
                   if prove __POS__ env (NC_aux (NC_false, Unknown)) then IntSet.empty
                   else (
-                    match
-                      List.find (fun (nexp, i) -> prove __POS__ env (NC_aux (NC_equal (nexp, size), Unknown))) nexp_list
-                    with
+                    match List.find (fun (nexp, i) -> prove __POS__ env (nc_eq nexp size)) nexp_list with
                     | _, i -> IntSet.singleton i
                     | exception Not_found -> IntSet.empty
                   )
@@ -2024,12 +2025,12 @@ module Analysis = struct
 
   let rec deps_of_nc kid_deps (NC_aux (nc, l)) =
     match nc with
-    | NC_equal (nexp1, nexp2)
+    | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
+        dmerge (deps_of_nexp_arg l kid_deps arg1) (deps_of_nexp_arg l kid_deps arg2)
     | NC_bounded_ge (nexp1, nexp2)
     | NC_bounded_gt (nexp1, nexp2)
     | NC_bounded_le (nexp1, nexp2)
-    | NC_bounded_lt (nexp1, nexp2)
-    | NC_not_equal (nexp1, nexp2) ->
+    | NC_bounded_lt (nexp1, nexp2) ->
         dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
     | NC_set (nexp, _) -> deps_of_nexp l kid_deps [] nexp
     | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> dmerge (deps_of_nc kid_deps nc1) (deps_of_nc kid_deps nc2)
@@ -2037,6 +2038,12 @@ module Analysis = struct
     | NC_app (Id_aux (Id "mod", _), [A_aux (A_nexp nexp1, _); A_aux (A_nexp nexp2, _)]) ->
         dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
     | NC_id _ | NC_var _ | NC_app _ -> dempty
+
+  and deps_of_nexp_arg l kid_deps (A_aux (aux, _)) =
+    match aux with
+    | A_nexp nexp -> deps_of_nexp l kid_deps [] nexp
+    | A_bool nc -> deps_of_nc kid_deps nc
+    | A_typ _ -> Reporting.unreachable l __POS__ "Type-kinded argument found under numeric type expression"
 
   and deps_of_typ l kid_deps arg_deps typ = deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
@@ -2166,10 +2173,7 @@ module Analysis = struct
     | Some n -> nconstant n
     | None -> (
         let is_equal kid =
-          try
-            if Env.get_typ_var kid typ_env = K_int then
-              prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid, Unknown), nexp), Unknown))
-            else false
+          try if Env.get_typ_var kid typ_env = K_int then prove __POS__ typ_env (nc_eq (nvar kid) nexp) else false
           with _ -> false
         in
         match ne with
@@ -2763,7 +2767,8 @@ module Analysis = struct
     in
     let rec set_from_nc_or (NC_aux (nc, _)) =
       match nc with
-      | NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant n, _)) -> Some (kid, [n])
+      | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)) ->
+          Some (kid, [n])
       | NC_or (nc1, nc2) -> (
           match (set_from_nc_or nc1, set_from_nc_or nc2) with
           | Some (kid1, l1), Some (kid2, l2) when Kid.compare kid1 kid2 == 0 -> Some (kid1, l1 @ l2)
@@ -2775,7 +2780,8 @@ module Analysis = struct
       match nc with
       | NC_and (nc1, nc2) -> merge_set_asserts_by_kid (sets_from_nc nc1) (sets_from_nc nc2)
       | NC_set (Nexp_aux (Nexp_var kid, _), is) -> KBindings.singleton kid (l, is)
-      | NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant n, _)) -> KBindings.singleton kid (l, [n])
+      | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)) ->
+          KBindings.singleton kid (l, [n])
       | NC_or _ -> (
           match set_from_nc_or nc_full with
           | Some (kid, is) -> KBindings.singleton kid (l, is)
@@ -3780,7 +3786,7 @@ module BitvectorSizeCasts = struct
       match solve_unique env nexp with
       | Some n -> Some (nconstant n)
       | None -> (
-          let is_equal kid = prove __POS__ env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid, Unknown), nexp), Unknown)) in
+          let is_equal kid = prove __POS__ env (nc_eq (nvar kid) nexp) in
           match List.find is_equal quant_kids with
           | kid -> Some (Nexp_aux (Nexp_var kid, Generated l))
           | exception Not_found -> (
@@ -4170,7 +4176,14 @@ module BitvectorSizeCasts = struct
                               )
                         | ( E_aux
                               ( E_internal_assume
-                                  ((NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc), body'),
+                                  ( ( NC_aux
+                                        ( NC_equal
+                                            (A_aux (A_nexp (Nexp_aux (Nexp_var kid', _)), _), A_aux (A_nexp nexp, _)),
+                                          _
+                                        ) as nc
+                                    ),
+                                    body'
+                                  ),
                                 assume_ann
                               ),
                             _ )
@@ -4244,7 +4257,10 @@ module BitvectorSizeCasts = struct
                           (* First check if the given kid already had a fixed value previously. *)
                           let rec nc_fixes_kid nc =
                             match unaux_constraint nc with
-                            | NC_equal (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant _, _)) ->
+                            | NC_equal
+                                ( A_aux (A_nexp (Nexp_aux (Nexp_var kid', _)), _),
+                                  A_aux (A_nexp (Nexp_aux (Nexp_constant _, _)), _)
+                                ) ->
                                 Kid.compare kid kid' = 0
                             | NC_and (_, _) -> List.exists nc_fixes_kid (constraint_conj nc)
                             | _ -> false
@@ -4306,7 +4322,8 @@ module BitvectorSizeCasts = struct
       let body, restore_assumes = strip_assumes body in
 
       let add_constraint insts = function
-        | NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), nexp), _) -> KBindings.add kid nexp insts
+        | NC_aux (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp nexp, _)), _) ->
+            KBindings.add kid nexp insts
         | _ -> insts
       in
       let defining_eqns = List.fold_left add_constraint KBindings.empty (Env.get_constraints (env_of body)) in
@@ -4498,12 +4515,12 @@ module ToplevelNexpRewrites = struct
       and aux_nconstraint (NC_aux (nc, l)) =
         let rewrap nc = NC_aux (nc, l) in
         match nc with
-        | NC_equal (n1, n2) -> rewrap (NC_equal (aux_nexp n1, aux_nexp n2))
+        | NC_equal (arg1, arg2) -> rewrap (NC_equal (aux_targ arg1, aux_targ arg2))
+        | NC_not_equal (arg1, arg2) -> rewrap (NC_not_equal (aux_targ arg1, aux_targ arg2))
         | NC_bounded_ge (n1, n2) -> rewrap (NC_bounded_ge (aux_nexp n1, aux_nexp n2))
         | NC_bounded_gt (n1, n2) -> rewrap (NC_bounded_gt (aux_nexp n1, aux_nexp n2))
         | NC_bounded_le (n1, n2) -> rewrap (NC_bounded_le (aux_nexp n1, aux_nexp n2))
         | NC_bounded_lt (n1, n2) -> rewrap (NC_bounded_lt (aux_nexp n1, aux_nexp n2))
-        | NC_not_equal (n1, n2) -> rewrap (NC_not_equal (aux_nexp n1, aux_nexp n2))
         | NC_or (nc1, nc2) -> rewrap (NC_or (aux_nconstraint nc1, aux_nconstraint nc2))
         | NC_and (nc1, nc2) -> rewrap (NC_and (aux_nconstraint nc1, aux_nconstraint nc2))
         | NC_app (id, args) -> rewrap (NC_app (id, List.map aux_targ args))

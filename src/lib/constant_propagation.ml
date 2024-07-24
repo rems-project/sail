@@ -819,7 +819,8 @@ let const_props target ast =
         let get_synonyms (kid, nexp) =
           let rec synonyms_of_nc nc =
             match unaux_constraint nc with
-            | NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var kid2, _)) when Kid.compare kid kid1 = 0 ->
+            | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _))
+              when Kid.compare kid kid1 = 0 ->
                 [(kid2, nexp)]
             | NC_and _ -> List.concat (List.map synonyms_of_nc (constraint_conj nc))
             | _ -> []

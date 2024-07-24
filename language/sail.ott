@@ -278,12 +278,12 @@ typ_arg :: 'A_' ::=
 n_constraint :: 'NC_' ::=
   {{ com constraint over kind Int }}
   {{ aux _ l }}
-  | nexp == nexp'                    :: :: equal
+  | typ_arg == typ_arg'              :: :: equal
+  | typ_arg != typ_arg'              :: :: not_equal
   | nexp >= nexp'                    :: :: bounded_ge
   | nexp > nexp'                     :: :: bounded_gt
   | nexp '<=' nexp'                  :: :: bounded_le
   | nexp '<' nexp'                   :: :: bounded_lt
-  | nexp != nexp'                    :: :: not_equal
   | nexp 'IN' { num1 , ... , numn }  :: :: set
   | n_constraint & n_constraint'     :: :: or
   | n_constraint | n_constraint'     :: :: and
