@@ -24,6 +24,25 @@ previously introduce additional type variables and constrain them in
 such a way to guarantee the same thing, but being able to use
 if-then-else directly is usually more clear.
 
+##### Improved kind inference
+
+Previously, type synonyms would require annotation with *kinds* (types
+of types), for example:
+```
+union option('a : Type) = { Some : 'a, None : unit }
+
+type xlen : Int = 64
+```
+Now, type variable kinds are inferred in most places, so the above
+could be written as:
+```
+union option('a) = { Some : 'a, None : unit }
+
+type xlen = 64
+```
+There are still some places where explicit kinds are necessary, such
+as for scattered type definitions or abstract types.
+
 ##### Documentation backend
 
 The Sail documentation backend can now produce hyperlinked and syntax
