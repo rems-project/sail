@@ -241,12 +241,12 @@ let to_smt l abstract vars constr =
   and smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
     match aux with
     | NC_id id -> Atom (Util.zencode_string (string_of_id id))
-    | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
+    | NC_equal (arg1, arg2) -> sfun "=" [smt_typ_arg arg1; smt_typ_arg arg2]
+    | NC_not_equal (arg1, arg2) -> sfun "not" [sfun "=" [smt_typ_arg arg1; smt_typ_arg arg2]]
     | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_lt (nexp1, nexp2) -> sfun "<" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_gt (nexp1, nexp2) -> sfun ">" [smt_nexp nexp1; smt_nexp nexp2]
-    | NC_not_equal (nexp1, nexp2) -> sfun "not" [sfun "=" [smt_nexp nexp1; smt_nexp nexp2]]
     | NC_set (nexp, ints) -> sfun "or" (List.map (fun i -> sfun "=" [smt_nexp nexp; Atom (Big_int.to_string i)]) ints)
     | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
     | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]

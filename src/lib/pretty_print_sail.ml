@@ -155,8 +155,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | NC_id id -> doc_id id
       | NC_true -> string "true"
       | NC_false -> string "false"
-      | NC_equal (n1, n2) -> nc_op "==" n1 n2
-      | NC_not_equal (n1, n2) -> nc_op "!=" n1 n2
+      | NC_equal (t1, t2) -> separate space [doc_typ_arg t1; string "=="; doc_typ_arg t2]
+      | NC_not_equal (t1, t2) -> separate space [doc_typ_arg t1; string "!="; doc_typ_arg t2]
       | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
       | NC_bounded_gt (n1, n2) -> nc_op ">" n1 n2
       | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
@@ -173,13 +173,21 @@ module Printer (Config : PRINT_CONFIG) = struct
       let parens' = if parenthesize then parens else fun x -> x in
       let disjs = constraint_disj nc in
       let collect_constants kid = function
-        | NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant c, _)), _)
+        | NC_aux
+            ( NC_equal
+                (A_aux (A_nexp (Nexp_aux (Nexp_var kid', _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)),
+              _
+            )
           when Kid.compare kid kid' = 0 ->
             Some c
         | _ -> None
       in
       match disjs with
-      | NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant c, _)), _) :: ncs -> begin
+      | NC_aux
+          ( NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)),
+            _
+          )
+        :: ncs -> begin
           match Util.option_all (List.map (collect_constants kid) ncs) with
           | None | Some [] -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
           | Some cs ->

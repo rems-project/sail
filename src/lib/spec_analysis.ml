@@ -153,7 +153,9 @@ let rec flatten_constraints = function
    checking P_var patterns, so we don't do it for now. *)
 let equal_kids_ncs kid ncs =
   let rec add_equal_kids_nc s = function
-    | NC_aux (NC_equal (Nexp_aux (Nexp_var var1, _), Nexp_aux (Nexp_var var2, _)), _) ->
+    | NC_aux
+        (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var var1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var var2, _)), _)), _)
+      ->
         if Kid.compare kid var1 == 0 then KidSet.add var2 s
         else if Kid.compare kid var2 == 0 then KidSet.add var1 s
         else s

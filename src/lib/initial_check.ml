@@ -939,8 +939,8 @@ module ConvertType = struct
           match aux with
           | P.ATyp_app ((Id_aux (Operator op, _) as id), [t1; t2]) -> begin
               match op with
-              | "==" -> NC_equal (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
-              | "!=" -> NC_not_equal (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
+              | "==" -> NC_equal (to_ast_typ_arg kenv ctx t1 K_int, to_ast_typ_arg kenv ctx t2 K_int)
+              | "!=" -> NC_not_equal (to_ast_typ_arg kenv ctx t1 K_int, to_ast_typ_arg kenv ctx t2 K_int)
               | ">=" -> NC_bounded_ge (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
               | "<=" -> NC_bounded_le (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)
               | ">" -> NC_bounded_gt (to_ast_nexp kenv ctx t1, to_ast_nexp kenv ctx t2)

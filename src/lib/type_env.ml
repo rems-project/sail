@@ -687,13 +687,7 @@ module Well_formedness = struct
         if name = "abs" || name = "mod" || name = "div" || Bindings.mem id env.global.synonyms then
           List.iter (fun n -> wf_nexp exs env n) nexps
         else typ_error l ("Unknown type level operator or function " ^ name)
-    | Nexp_times (nexp1, nexp2) ->
-        wf_nexp exs env nexp1;
-        wf_nexp exs env nexp2
-    | Nexp_sum (nexp1, nexp2) ->
-        wf_nexp exs env nexp1;
-        wf_nexp exs env nexp2
-    | Nexp_minus (nexp1, nexp2) ->
+    | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
         wf_nexp exs env nexp1;
         wf_nexp exs env nexp2
     | Nexp_exp nexp -> wf_nexp exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
@@ -708,29 +702,14 @@ module Well_formedness = struct
     match nc_aux with
     | NC_id id when Bindings.mem id env.global.abstract_typs -> ()
     | NC_id id -> typ_error l ("Undefined type synonym " ^ string_of_id id)
-    | NC_equal (n1, n2) ->
-        wf_nexp exs env n1;
-        wf_nexp exs env n2
-    | NC_not_equal (n1, n2) ->
-        wf_nexp exs env n1;
-        wf_nexp exs env n2
-    | NC_bounded_ge (n1, n2) ->
-        wf_nexp exs env n1;
-        wf_nexp exs env n2
-    | NC_bounded_gt (n1, n2) ->
-        wf_nexp exs env n1;
-        wf_nexp exs env n2
-    | NC_bounded_le (n1, n2) ->
-        wf_nexp exs env n1;
-        wf_nexp exs env n2
-    | NC_bounded_lt (n1, n2) ->
+    | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
+        wf_typ_arg exs env arg1;
+        wf_typ_arg exs env arg2
+    | NC_bounded_ge (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_lt (n1, n2) ->
         wf_nexp exs env n1;
         wf_nexp exs env n2
     | NC_set (nexp, _) -> wf_nexp exs env nexp
-    | NC_or (nc1, nc2) ->
-        wf_constraint exs env nc1;
-        wf_constraint exs env nc2
-    | NC_and (nc1, nc2) ->
+    | NC_or (nc1, nc2) | NC_and (nc1, nc2) ->
         wf_constraint exs env nc1;
         wf_constraint exs env nc2
     | NC_app (_, args) -> List.iter (wf_typ_arg exs env) args
@@ -764,8 +743,8 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
   match aux with
   | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
   | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
-  | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-  | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+  | NC_equal (arg1, arg2) -> NC_aux (NC_equal (expand_arg_synonyms env arg1, expand_arg_synonyms env arg2), l)
+  | NC_not_equal (arg1, arg2) -> NC_aux (NC_not_equal (expand_arg_synonyms env arg1, expand_arg_synonyms env arg2), l)
   | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
   | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
   | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)

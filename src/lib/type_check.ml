@@ -159,12 +159,14 @@ and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
   let rep n = if Nexp.compare n nexp == 0 then nexp' else n in
   match nc_aux with
   | NC_id id -> NC_aux (NC_id id, l)
-  | NC_equal (n1, n2) -> NC_aux (NC_equal (rep n1, rep n2), l)
+  | NC_equal (arg1, arg2) ->
+      NC_aux (NC_equal (replace_nexp_typ_arg nexp nexp' arg1, replace_nexp_typ_arg nexp nexp' arg2), l)
+  | NC_not_equal (arg1, arg2) ->
+      NC_aux (NC_not_equal (replace_nexp_typ_arg nexp nexp' arg1, replace_nexp_typ_arg nexp nexp' arg2), l)
   | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (rep n1, rep n2), l)
   | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (rep n1, rep n2), l)
   | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (rep n1, rep n2), l)
   | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (rep n1, rep n2), l)
-  | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (rep n1, rep n2), l)
   | NC_set _ | NC_true | NC_false | NC_var _ -> nc
   | NC_or (nc1, nc2) -> NC_aux (NC_or (rep_nc nc1, rep_nc nc2), l)
   | NC_and (nc1, nc2) -> NC_aux (NC_and (rep_nc nc1, rep_nc nc2), l)
@@ -462,8 +464,9 @@ let prove pos env nc =
 
 let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   match (nc1, nc2) with
-  | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
-  | NC_not_equal (n1a, n1b), NC_not_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_equal (arg1a, arg1b), NC_equal (arg2a, arg2b) -> typ_arg_identical arg1a arg2a && typ_arg_identical arg1b arg2b
+  | NC_not_equal (arg1a, arg1b), NC_not_equal (arg2a, arg2b) ->
+      typ_arg_identical arg1a arg2a && typ_arg_identical arg1b arg2b
   | NC_bounded_ge (n1a, n1b), NC_bounded_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_gt (n1a, n1b), NC_bounded_gt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_le (n1a, n1b), NC_bounded_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
@@ -606,10 +609,10 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
       merge_uvars env l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
   | NC_app (f1, args1), NC_app (f2, args2) when Id.compare f1 f2 = 0 && List.length args1 = List.length args2 ->
       List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
-  | NC_equal (n1a, n2a), NC_equal (n1b, n2b) ->
-      merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_not_equal (n1a, n2a), NC_not_equal (n1b, n2b) ->
-      merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_equal (arg1a, arg2a), NC_equal (arg1b, arg2b) ->
+      merge_uvars env l (unify_typ_arg l env goals arg1a arg1b) (unify_typ_arg l env goals arg2a arg2b)
+  | NC_not_equal (arg1a, arg2a), NC_not_equal (arg1b, arg2b) ->
+      merge_uvars env l (unify_typ_arg l env goals arg1a arg1b) (unify_typ_arg l env goals arg2a arg2b)
   | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
       merge_uvars env l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_gt (n1a, n2a), NC_bounded_gt (n1b, n2b) ->
@@ -632,7 +635,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
       )
       );
   if KidSet.is_empty (KidSet.inter (tyvars_of_nexp nexp1) goals) then begin
-    if prove __POS__ env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown)) then KBindings.empty
+    if prove __POS__ env (nc_eq nexp1 nexp2) then KBindings.empty
     else
       unify_error l ("Integer expressions " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
   end
@@ -685,8 +688,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
             unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a]) *)
         if KidSet.is_empty (tyvars_of_nexp n1a) then begin
           match nexp_aux2 with
-          | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
-              unify_nexp l env goals n1b n2b
+          | Nexp_times (n2a, n2b) when prove __POS__ env (nc_eq n1a n2a) -> unify_nexp l env goals n1b n2b
           | Nexp_constant c2 -> begin
               match n1a with
               | Nexp_aux (Nexp_constant c1, _) when Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
@@ -700,8 +702,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
         end
         else if KidSet.is_empty (tyvars_of_nexp n1b) then begin
           match nexp_aux2 with
-          | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
-              unify_nexp l env goals n1a n2a
+          | Nexp_times (n2a, n2b) when prove __POS__ env (nc_eq n1b n2b) -> unify_nexp l env goals n1a n2a
           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1b ->
               unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
           | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
@@ -776,11 +777,9 @@ and ambiguous_arg_vars (A_aux (aux, _)) =
 and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
-  | NC_bounded_le (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
-  | NC_bounded_lt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
-  | NC_bounded_ge (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
-  | NC_bounded_gt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
-  | NC_equal (n1, n2) | NC_not_equal (n1, n2) -> KidSet.union (ambiguous_nexp_vars n1) (ambiguous_nexp_vars n2)
+  | NC_bounded_le (n1, n2) | NC_bounded_lt (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_gt (n1, n2) ->
+      KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> KidSet.union (ambiguous_arg_vars arg1) (ambiguous_arg_vars arg2)
   | _ -> KidSet.empty
 
 and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
@@ -913,12 +912,11 @@ and kid_order_constraint kind_map (NC_aux (aux, _)) =
       ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
   | NC_set (n, _) -> kid_order_nexp kind_map n
   | NC_var _ | NC_id _ | NC_true | NC_false -> ([], kind_map)
-  | NC_equal (n1, n2)
-  | NC_not_equal (n1, n2)
-  | NC_bounded_le (n1, n2)
-  | NC_bounded_ge (n1, n2)
-  | NC_bounded_lt (n1, n2)
-  | NC_bounded_gt (n1, n2) ->
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
+      let ord1, kind_map = kid_order_arg kind_map arg1 in
+      let ord2, kind_map = kid_order_arg kind_map arg2 in
+      (ord1 @ ord2, kind_map)
+  | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_lt (n1, n2) | NC_bounded_gt (n1, n2) ->
       let ord1, kind_map = kid_order_nexp kind_map n1 in
       let ord2, kind_map = kid_order_nexp kind_map n2 in
       (ord1 @ ord2, kind_map)
@@ -1211,13 +1209,18 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
 
 and rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
 
+and rewrite_arg l env = function
+  | A_aux (A_nexp nexp, _) -> rewrite_sizeof l env nexp
+  | A_aux (A_bool nc, _) -> rewrite_nc env nc
+  | A_aux (A_typ typ, _) -> Reporting.unreachable l __POS__ "Found Type-kinded parameter during sizeof rewriting"
+
 and rewrite_nc_aux l env = function
   | NC_bounded_ge (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">=", rewrite_sizeof l env n2)
   | NC_bounded_gt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id ">", rewrite_sizeof l env n2)
   | NC_bounded_le (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<=", rewrite_sizeof l env n2)
   | NC_bounded_lt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "<", rewrite_sizeof l env n2)
-  | NC_equal (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "==", rewrite_sizeof l env n2)
-  | NC_not_equal (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, mk_id "!=", rewrite_sizeof l env n2)
+  | NC_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, mk_id "==", rewrite_arg l env arg2)
+  | NC_not_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, mk_id "!=", rewrite_arg l env arg2)
   | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
   | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
   | NC_false -> E_lit (mk_lit L_false)
@@ -1362,10 +1365,10 @@ let infer_lit (L_aux (lit_aux, l)) =
 let instantiate_simple_equations =
   let rec find_eqs kid (NC_aux (nc, _)) =
     match nc with
-    | NC_equal (Nexp_aux (Nexp_var kid', _), nexp)
+    | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid', _)), _), A_aux (A_nexp nexp, _))
       when Kid.compare kid kid' == 0 && not (KidSet.mem kid (tyvars_of_nexp nexp)) ->
         [arg_nexp nexp]
-    | NC_and (nexp1, nexp2) -> find_eqs kid nexp1 @ find_eqs kid nexp2
+    | NC_and (nc1, nc2) -> find_eqs kid nc1 @ find_eqs kid nc2
     | _ -> []
   in
   let find_eqs_quant kid (QI_aux (qi, _)) = match qi with QI_id _ -> [] | QI_constraint nc -> find_eqs kid nc in

@@ -491,7 +491,7 @@ and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
       match Type_check.solve_unique env nexp with
       | Some n -> Some (rewrap (A_nexp (nconstant n)))
       | None -> (
-          let is_equal nexp' = prove __POS__ env (NC_aux (NC_equal (nexp, nexp'), Parse_ast.Unknown)) in
+          let is_equal nexp' = prove __POS__ env (nc_eq nexp nexp') in
           match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
           | nexp' -> Some (rewrap (A_nexp nexp'))
           | exception Not_found -> None

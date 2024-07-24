@@ -83,7 +83,8 @@ type ('a, 'b) rewriters = {
 
 let lookup_generated_kid env kid =
   let match_kid_nc kid = function
-    | NC_aux (NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var kid2, _)), _)
+    | NC_aux
+        (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)), _)
       when Kid.compare kid kid2 = 0 && not (is_kid_generated kid1) ->
         kid1
     | _ -> kid

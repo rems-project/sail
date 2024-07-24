@@ -91,10 +91,10 @@ let analyze_unresolved_quant locals ncs = function
            occurs due to how the type-checker introduces new type
            variables. *)
         let is_subst v = function
-          | NC_aux (NC_equal (Nexp_aux (Nexp_var v', _), nexp), _)
+          | NC_aux (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _), A_aux (A_nexp nexp, _)), _)
             when Kid.compare v v' = 0 && not (KidSet.exists is_kid_generated (tyvars_of_nexp nexp)) ->
               [(v, nexp)]
-          | NC_aux (NC_equal (nexp, Nexp_aux (Nexp_var v', _)), _)
+          | NC_aux (NC_equal (A_aux (A_nexp nexp, _), A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)), _)
             when Kid.compare v v' = 0 && not (KidSet.exists is_kid_generated (tyvars_of_nexp nexp)) ->
               [(v, nexp)]
           | _ -> []
@@ -142,7 +142,7 @@ let error_string_of_typ substs typ = string_of_typ (subst_kids_typ substs typ)
 
 let error_string_of_typ_arg substs arg = string_of_typ_arg (subst_kids_typ_arg substs arg)
 
-let has_variable set nexp = not (KidSet.is_empty (KidSet.inter set (tyvars_of_nexp nexp)))
+let has_variable set arg = not (KidSet.is_empty (KidSet.inter set (tyvars_of_typ_arg arg)))
 
 let rewrite_equality preferred_on_right (NC_aux (aux, l) as nc) =
   let equality =
@@ -169,9 +169,9 @@ let subst_preferred_variables prefs constraints =
   let all_substs, constraints =
     Util.map_split
       (function
-        | r, NC_aux (NC_equal (Nexp_aux (Nexp_var v, _), rhs), _)
-          when has_variable prefs rhs && not (KidSet.mem v (tyvars_of_nexp rhs)) ->
-            Ok (r, v, arg_nexp rhs)
+        | r, NC_aux (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _), rhs), _)
+          when has_variable prefs rhs && not (KidSet.mem v (tyvars_of_typ_arg rhs)) ->
+            Ok (r, v, rhs)
         | r, NC_aux (NC_app (id, [A_aux (A_bool (NC_aux (NC_var v, _)), _)]), _) when string_of_id id = "not" ->
             Ok (r, v, arg_bool nc_false)
         | r, NC_aux (NC_var v, _) -> Ok (r, v, arg_bool nc_true)

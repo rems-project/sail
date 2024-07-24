@@ -171,7 +171,10 @@ let lookup_equal_kids env =
     eqs |> KBindings.add kid1 kids |> KBindings.add kid2 kids
   in
   let add_nc eqs = function
-    | NC_aux (NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var kid2, _)), _) -> add_eq_kids kid1 kid2 eqs
+    | NC_aux
+        (NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)), _)
+      ->
+        add_eq_kids kid1 kid2 eqs
     | _ -> eqs
   in
   List.fold_left add_nc KBindings.empty (Env.get_constraints env)
@@ -182,7 +185,12 @@ let lookup_constant_kid env kid =
   in
   let check_nc const nc =
     match (const, nc) with
-    | None, NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant i, _)), _) when KidSet.mem kid kids ->
+    | ( None,
+        NC_aux
+          ( NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)),
+            _
+          ) )
+      when KidSet.mem kid kids ->
         Some i
     | _, _ -> const
   in
