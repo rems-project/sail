@@ -1,0 +1,8 @@
+
+A {
+  files simple/amod.sail
+}
+
+B {
+  files simple/bmod.sail
+}

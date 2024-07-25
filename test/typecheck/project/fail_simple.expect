@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mproject/simple/bmod.sail[0m:3.18-23:
+3[96m |[0mfunction main() = hello()
+ [91m |[0m                  [91m^---^[0m
+ [91m |[0m Not in scope
+ [91m |[0m 
+ [91m |[0m Try requiring module A to bring the following into scope for module B:
+ [91m |[0m [96mproject/simple/amod.sail[0m:5.4-9:
+ [91m |[0m 5[96m |[0mval hello : unit -> unit
+ [91m |[0m  [91m |[0m    [91m^---^[0m [91mdefinition here in A[0m
+ [91m |[0m [96mproject/fail_simple.sail_project[0m:6.0-1:
+ [91m |[0m 6[96m |[0mB {
+ [91m |[0m  [91m |[0m[91m^[0m [91madd 'requires A' within B here[0m
