@@ -474,7 +474,7 @@ let handle_input' istate input =
     istate
   in
 
-  let input = match input with Command (":edit", arg, pos) -> editor_command arg | input -> input in
+  let input = match input with Command (":edit", arg, _) -> editor_command arg | input -> input in
 
   (* First handle commands that are mode-independent *)
   let istate =
@@ -701,7 +701,7 @@ let handle_input' istate input =
     end
   | Evaluation frame -> begin
       match input with
-      | Command (cmd, arg, pos) -> begin
+      | Command (cmd, arg, _) -> begin
           (* Evaluation mode commands *)
           match cmd with
           | ":r" | ":run" -> run istate

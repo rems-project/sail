@@ -77,7 +77,7 @@ let output_sail_options =
     );
   ]
 
-let sail_target out_file { ast; env; _ } =
+let sail_target out_file { ast; _ } =
   let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".sail")) | None -> (false, stdout) in
   Pretty_print_sail.output_ast output_chan (Type_check.strip_ast ast);
   if close then close_out output_chan

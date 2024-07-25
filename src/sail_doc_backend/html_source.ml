@@ -69,7 +69,6 @@ open Libsail
 
 open Ast
 open Ast_defs
-open Ast_util
 
 module Highlight = struct
   type t = Id | Keyword | Kind | Comment | String | Pragma | Internal | Operator | Literal | TyVar
@@ -157,7 +156,7 @@ let hyperlink_targets ast =
 let hyperlinks_for_file ~filename ast =
   let hyperlinks = Queue.create () in
   List.iter
-    (fun (DEF_aux (_, def_annot) as def) ->
+    (fun def ->
       List.iter
         (fun link ->
           let node = Docinfo.hyperlink_target link in
@@ -202,7 +201,6 @@ let output_tags out_chan tags =
 type file_info = { filename : string; prefix : string; contents : string; highlights : (Highlight.t * int * int) array }
 
 let get_span ~current ~index ~access n =
-  let open Lexing in
   match !current with
   | Some (info, s, e) ->
       if e = n then (

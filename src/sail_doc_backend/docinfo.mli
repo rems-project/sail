@@ -67,9 +67,6 @@
 
 open Libsail
 
-open Ast
-open Ast_defs
-open Ast_util
 open Type_check
 
 type embedding = Plain | Base64
