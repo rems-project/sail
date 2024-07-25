@@ -55,14 +55,20 @@ def test_pass():
     return results.finish()
 
 def test_projects():
-    banner('Testing passing projects')
+    banner('Testing multi-file projects')
     results = Results('projects')
     for filenames in project_chunks(os.listdir('project'), parallel()):
         tests = {}
         for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} --no-memo-z3 project/{} --all-modules'.format(sail, filename))
+                if filename.startswith('fail'):
+                    step('{} --no-memo-z3 project/{} --all-modules 2> project/{}.error'.format(sail, filename, basename), expected_status = 1)
+                    step('diff project/{}.error project/{}.expect'.format(basename, basename))
+                    step('rm project/{}.error'.format(basename))
+                else:
+                    step('{} --no-memo-z3 project/{} --all-modules'.format(sail, filename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
