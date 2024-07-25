@@ -768,31 +768,6 @@ let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
     go n
   done
 
-(** Remove p nodes. Assumes the graph is acyclic. *)
-let remove_nodes remove_cf graph =
-  for n = 0 to graph.next - 1 do
-    match graph.nodes.(n) with
-    | Some ((_, cfnode), preds, succs) when remove_cf cfnode ->
-        IntSet.iter
-          (fun pred ->
-            match graph.nodes.(pred) with
-            | Some (content, preds', succs') ->
-                graph.nodes.(pred) <- Some (content, preds', IntSet.remove n (IntSet.union succs succs'))
-            | None -> assert false
-          )
-          preds;
-        IntSet.iter
-          (fun succ ->
-            match graph.nodes.(succ) with
-            | Some (content, preds', succs') ->
-                graph.nodes.(succ) <- Some (content, IntSet.remove n (IntSet.union preds preds'), succs')
-            | None -> assert false
-          )
-          succs;
-        graph.nodes.(n) <- None
-    | _ -> ()
-  done
-
 (* Debugging utilities for outputing Graphviz files. *)
 
 let string_of_ssainstr = function

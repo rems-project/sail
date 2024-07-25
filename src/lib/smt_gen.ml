@@ -253,8 +253,6 @@ let builtin_type_error fn cvals ret_ctyp_opt =
 
 type undefined_mode = Undefined_zeros | Undefined_bits | Undefined_disable
 
-let undefined_enabled = function Undefined_disable -> false | _ -> true
-
 module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let lint_size = Config.max_unknown_integer_width
   let lbits_size = Config.max_unknown_bitvector_width

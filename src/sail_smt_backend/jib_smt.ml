@@ -285,7 +285,7 @@ module Make (Config : CONFIG) = struct
   let smt_lbits =
     mk_record "Bits" [("len", Bitvec lbits_index_width); ("bits", Bitvec Config.max_unknown_bitvector_width)]
 
-  let rec wf_smt_ctyp = function CT_lbits -> Some (fun exp -> Smt.wf_lbits exp) | _ -> None
+  let wf_smt_ctyp = function CT_lbits -> Some (fun exp -> Smt.wf_lbits exp) | _ -> None
 
   let rec smt_ctyp = function
     | CT_constant n -> return (Bitvec (required_width n))

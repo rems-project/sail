@@ -67,7 +67,6 @@
 
 open Libsail
 
-open Ast_defs
 open Jib
 open Type_check
 

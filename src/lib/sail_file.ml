@@ -172,11 +172,6 @@ let edit_file handle edit =
   info.edits.(n) <- Some (edit, size);
   info.next_edit <- n + 1
 
-let apply_edits handle =
-  let info = Hashtbl.find files handle in
-  Array.fill info.edits 0 (Array.length info.edits) None;
-  info.next_edit <- 0
-
 let fold_edits_first_to_last f handle init =
   let info = Hashtbl.find files handle in
   let acc = ref init in
@@ -352,8 +347,6 @@ module In_channel = struct
   type t = { mutable pos : int; buf : string }
 
   let from_file handle = { pos = -1; buf = contents handle }
-
-  let from_string s = { pos = -1; buf = s }
 
   let input_line_opt in_chan =
     if in_chan.pos >= String.length in_chan.buf then None

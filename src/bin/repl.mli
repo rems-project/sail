@@ -69,9 +69,6 @@
 
 open Libsail
 
-open Ast_defs
-open Type_check
-
 (** Start an interactive top-level interpreter.
 
     @param banner If true (default), then print an ASCII-art Sail logo.
@@ -86,7 +83,7 @@ val start_repl :
   config:Yojson.Basic.t option ->
   options:(Arg.key * Arg.spec * Arg.doc) list ->
   Initial_check.ctx ->
-  Env.t ->
+  Type_check.Env.t ->
   Effects.side_effect_info ->
-  typed_ast ->
+  Type_check.typed_ast ->
   unit
