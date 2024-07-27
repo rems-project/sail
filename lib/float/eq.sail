@@ -33,6 +33,7 @@ $define _FLOAT_EQ
 $include <float/common.sail>
 $include <float/nan.sail>
 $include <float/zero.sail>
+$include <float/arith_internal.sail>
 
 val      float_is_eq : fp_bits_x2 -> fp_bool_and_flags
 function float_is_eq ((op_0, op_1)) = {
@@ -42,8 +43,7 @@ function float_is_eq ((op_0, op_1)) = {
                 else fp_eflag_none;
 
   let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
-  let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
-  let is_eq   = not (is_nan) & ((op_0 == op_1) | is_zero);
+  let is_eq   = not (is_nan) & float_is_eq_internal ((op_0, op_1));
 
   (is_eq, flags);
 }
