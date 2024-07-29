@@ -79,6 +79,7 @@ let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : untyp
     Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info =
   let ast, env = Type_error.check env ast in
   let ast = Scattered.descatter ast in
+  let ast, env = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   Effects.check_side_effects side_effects ast;
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) else () in

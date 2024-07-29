@@ -953,4 +953,113 @@ module Make (C : Config) = struct
 
   let is_complete ?(keyword = "match") l ctx cases head_exp_typ =
     Option.is_some (is_complete_wildcarded ~keyword l ctx cases head_exp_typ)
+
+  let rec pat_of_mpat mpat =
+    match mpat with
+    | MP_aux (mpat_aux, l) ->
+        let res =
+          match mpat_aux with
+          | MP_lit lit -> P_lit lit
+          | MP_id id -> P_id id
+          | MP_app (id, mpat_list) -> P_app (id, List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_vector mpat_list -> P_vector (List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_vector_concat mpat_list -> P_vector_concat (List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_vector_subrange (id, l, r) -> P_vector_subrange (id, l, r)
+          | MP_tuple mpat_list -> P_tuple (List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_list mpat_list -> P_list (List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_cons (mpat1, mpat2) -> P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2)
+          | MP_string_append mpat_list -> P_string_append (List.map (fun mpat -> pat_of_mpat mpat) mpat_list)
+          | MP_typ (mp1, atyp) -> P_typ (atyp, pat_of_mpat mp1)
+          | MP_struct id_mpat_list ->
+              let fpl = List.map (fun (id, mpat) -> (id, pat_of_mpat mpat)) id_mpat_list in
+              P_struct (fpl, FP_no_wild)
+          | MP_as (mpat, id) -> (
+              match pat_of_mpat mpat with P_aux (pat, _id) -> pat
+            )
+        in
+        P_aux (res, l)
+
+  let is_complete_matrixs ?(keyword = "match") l ctx have_guard typ2matrixs =
+    List.fold_left
+      (fun all_complete (typ, matrix) ->
+        (* be careful, all_complete && match { ... } will skip after warnings *)
+        let complete =
+          match matrix_is_complete l ctx matrix with
+          | Incomplete (unmatched :: _) ->
+              let guard_info = if have_guard then " by unguarded patterns" else "" in
+              Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
+                ("The following expression is unmatched" ^ guard_info ^ ": "
+                ^ (string_of_exp unmatched |> Util.yellow |> Util.clear)
+                );
+              false
+          | Incomplete [] ->
+              Reporting.warn "Unreachable pattern match type at" (shrink_loc keyword l)
+                ("The following type is unreachable: " ^ (string_of_typ typ |> Util.yellow |> Util.clear));
+              false
+          | Complete cinfo ->
+              List.iter
+                (fun (idx, _) ->
+                  if IntSet.mem idx.num cinfo.redundant then
+                    Reporting.warn "Redundant case" idx.loc "This match case is never used"
+                )
+                (rows_to_list matrix);
+              true
+          | Completeness_unknown -> false
+        in
+        all_complete && complete
+      )
+      true typ2matrixs
+
+  let is_complete_mapcls_wildcarded ?(keyword = "match") l ctx mapcls typl typr =
+    let have_guard = false in
+    let rec lpat_of_mapcl mapcl left =
+      (* We don't consider guarded cases *)
+      let pat_of_mpexp = function
+        | MPat_aux (mpexp_aux, l) -> (
+            match mpexp_aux with MPat_when (mpat, exp) -> None | MPat_pat mpat -> Some (pat_of_mpat mpat)
+          )
+      in
+      let rec pexp_to_pat = function
+        | Pat_aux (Pat_exp ((P_aux (_, (l, _)) as pat), _), _) -> Some pat
+        | Pat_aux (Pat_when _, _) -> None
+      in
+      match mapcl with
+      | MCL_aux (mapcl_aux, _) ->
+          if left then (
+            match mapcl_aux with
+            | MCL_bidir (mpexp, _) -> pat_of_mpexp mpexp
+            | MCL_forwards pexp -> pexp_to_pat pexp
+            | MCL_backwards pexp -> None
+          )
+          else (
+            match mapcl_aux with
+            | MCL_bidir (_, mpexp) -> pat_of_mpexp mpexp
+            | MCL_forwards pexp -> None
+            | MCL_backwards pexp -> pexp_to_pat pexp
+          )
+    in
+    let rec opt_cases_to_pats from have_guard = function
+      | [] -> (have_guard, [])
+      | Some (P_aux (_, (l, _)) as pat) :: cases ->
+          let pat, from = number_pat from pat in
+          let have_guard, pats = opt_cases_to_pats from have_guard cases in
+          (have_guard, (l, pat) :: pats)
+      | _ :: cases -> opt_cases_to_pats from true cases
+    in
+    (* TODO: handle unsupported syntax *)
+    try
+      (* prepare left *)
+      let lpats = List.map (fun mapcl -> lpat_of_mapcl mapcl true) mapcls in
+      let _, lpats = opt_cases_to_pats 0 have_guard lpats in
+      let lmatrix =
+        Rows (List.mapi (fun i (l, pat) -> ({ loc = l; num = i }, Columns [generalize ctx (Some typl) pat])) lpats)
+      in
+      (* prepare right *)
+      let rpats = List.map (fun mapcl -> lpat_of_mapcl mapcl false) mapcls in
+      let _, rpats = opt_cases_to_pats 0 have_guard rpats in
+      let rmatrix =
+        Rows (List.mapi (fun i (l, pat) -> ({ loc = l; num = i }, Columns [generalize ctx (Some typr) pat])) rpats)
+      in
+      is_complete_matrixs ~keyword:"mapping" l ctx have_guard [(typl, lmatrix); (typr, rmatrix)]
+    with _ -> false
 end
