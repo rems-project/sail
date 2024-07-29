@@ -24,7 +24,7 @@ else
   if grep -q 'initial_regstate' "_coqbuild_$1/$1.v"; then
     REGSTATE="initial_regstate"
   else
-    REGSTATE='tt'
+    REGSTATE='init_regstate'
   fi
   cat <<EOF >> "$OUT"
 let result := eval cbv in (liftState register_accessors (main tt) (init_state $REGSTATE) default_choice) in
