@@ -63,11 +63,7 @@ function float_is_eq_internal ((op_0, op_1)) = {
 }
 
 val      float_is_ne_internal : fp_bits_x2 -> bool
-function float_is_ne_internal ((op_0, op_1)) = {
-  let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
-  let is_ne   = (op_0 != op_1) & not (is_zero);
-
-  is_ne;
-}
+function float_is_ne_internal ((op_0, op_1))
+  = not (float_is_eq_internal ((op_0, op_1)))
 
 $endif
