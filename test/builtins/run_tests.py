@@ -104,7 +104,7 @@ def test_coq_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('{} -no_warn -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('{} -no_warn -coq -coq-lib-style stdpp -coq-record-update -coq-all-eq-dec -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))

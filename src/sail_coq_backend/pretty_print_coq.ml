@@ -2321,14 +2321,70 @@ let doc_exp, doc_let =
 (* FIXME: A temporary definition of List.init until 4.06 is more standard *)
 let list_init n f = Array.to_list (Array.init n f)
 
+(* Calculate a transitive type name dependency map *)
+let type_dependencies defs =
+  let rec ids_of_typ (Typ_aux (typ, l) as typ_full) =
+    match typ with
+    | Typ_internal_unknown | Typ_fn _ | Typ_bidir _ ->
+        unreachable l __POS__ ("invalid type in Coq backend: " ^ string_of_typ typ_full)
+    | Typ_id id -> [id]
+    | Typ_app (id, args) -> id :: List.concat (List.map ids_of_arg args)
+    | Typ_var _ -> []
+    | Typ_tuple typs -> List.concat (List.map ids_of_typ typs)
+    | Typ_exist (_, _, typ') -> ids_of_typ typ'
+  and ids_of_arg (A_aux (a, _)) = match a with A_typ typ -> ids_of_typ typ | A_nexp _ | A_bool _ -> [] in
+  let typs_of_arg (A_aux (a, _)) = match a with A_typ typ -> [typ] | A_nexp _ | A_bool _ -> [] in
+  let aux_def depmap (DEF_aux (aux, _)) =
+    match aux with
+    | DEF_type (TD_aux (td, (l, _))) ->
+        let new_def =
+          match td with
+          | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
+          | TD_record (id, tq, fields, _) -> Some (id, List.map fst fields)
+          | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
+          | TD_enum (id, _, _) -> Some (id, [])
+          | TD_abstract _ -> None
+          | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
+        in
+        begin
+          match new_def with
+          | None | Some (_, []) -> depmap
+          | Some (id, reqs) ->
+              let add prev =
+                let s = Option.value ~default:IdSet.empty prev in
+                Some
+                  (List.fold_left
+                     (fun s typ_id ->
+                       if IdSet.mem typ_id s then s
+                       else (
+                         match Bindings.find_opt typ_id depmap with
+                         | None -> IdSet.singleton typ_id
+                         | Some typs -> IdSet.add typ_id (IdSet.union s typs)
+                       )
+                     )
+                     s
+                     (List.concat (List.map ids_of_typ reqs))
+                  )
+              in
+              Bindings.update id add depmap
+        end
+    | _ -> depmap
+  in
+  List.fold_left aux_def Bindings.empty defs
+
 let types_used_with_generic_eq defs =
+  let deps = type_dependencies defs in
   let rec add_typ idset (Typ_aux (typ, _)) =
     match typ with
-    | Typ_id id -> IdSet.add id idset
-    | Typ_app (id, args) -> List.fold_left add_typ_arg (IdSet.add id idset) args
+    | Typ_id id -> add_id id idset
+    | Typ_app (id, args) -> List.fold_left add_typ_arg (add_id id idset) args
     | Typ_tuple ts -> List.fold_left add_typ idset ts
     | _ -> idset
-  and add_typ_arg idset (A_aux (ta, _)) = match ta with A_typ typ -> add_typ idset typ | _ -> idset in
+  and add_typ_arg idset (A_aux (ta, _)) = match ta with A_typ typ -> add_typ idset typ | _ -> idset
+  and add_id id idset =
+    let s = match Bindings.find_opt id deps with None -> idset | Some s -> IdSet.union s idset in
+    IdSet.add id s
+  in
   let alg =
     {
       (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
@@ -2367,6 +2423,86 @@ let types_used_with_generic_eq defs =
         unreachable (def_loc def) __POS__ "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
+
+(* Uses the immediate dependencies rather than the full set above *)
+let countable_types defs =
+  let typs_of_arg (A_aux (a, _)) = match a with A_typ typ -> [typ] | A_nexp _ | A_bool _ -> [] in
+  let aux_def countable (DEF_aux (aux, _)) =
+    let rec check_typ (Typ_aux (typ, l) as typ_full) =
+      match typ with
+      | Typ_internal_unknown | Typ_fn _ | Typ_bidir _ ->
+          unreachable l __POS__ ("invalid type in Coq backend: " ^ string_of_typ typ_full)
+      | Typ_id id -> IdSet.mem id countable
+      | Typ_app (id, args) -> IdSet.mem id countable && List.for_all check_arg args
+      | Typ_var _ -> true
+      | Typ_tuple typs -> List.for_all check_typ typs
+      | Typ_exist (_, _, typ') -> check_typ typ'
+    and check_arg (A_aux (a, _)) = match a with A_typ typ -> check_typ typ | A_nexp _ | A_bool _ -> true in
+    match aux with
+    | DEF_type (TD_aux (td, (l, _))) ->
+        let new_def =
+          match td with
+          | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
+          | TD_record (id, tq, fields, _) -> Some (id, List.map fst fields)
+          | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
+          | TD_enum (id, _, _) -> Some (id, [])
+          | TD_abstract _ -> None
+          | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
+        in
+        begin
+          match new_def with
+          | None -> countable
+          | Some (id, reqs) -> if List.for_all check_typ reqs then IdSet.add id countable else countable
+        end
+    | _ -> countable
+  in
+  (* All the initial types except for real *)
+  let initial_countables =
+    IdSet.of_list
+      (List.map mk_id
+         [
+           "bool";
+           "nat";
+           "int";
+           "unit";
+           "bit";
+           "string";
+           "string_literal";
+           "list";
+           "register";
+           "range";
+           "bitvector";
+           "vector";
+           "atom";
+           "implicit";
+           "itself";
+         ]
+      )
+  in
+  List.fold_left aux_def initial_countables defs
+
+(* Extract the names of integer conversion functions for enum types.  Note that when there is no attribute it returns
+   the default names and the functions might not exist.  We can't check "no_enum_number_conversions" because it is
+   added automatically when the functions are generated. *)
+let enum_fn_names defs =
+  let rec aux (enum_map, fn_set) (DEF_aux (d, def_annot)) =
+    match d with
+    | DEF_type (TD_aux (TD_enum (id, _, _), _)) -> begin
+        let attr_opt = get_def_attribute "enum_number_conversions" def_annot in
+        let names =
+          let open Util.Option_monad in
+          let* fields = Option.bind (Option.join (Option.map snd attr_opt)) attribute_data_object in
+          let* to_enum, to_l = Option.bind (List.assoc_opt "to_enum" fields) attribute_data_string_with_loc in
+          let* from_enum, from_l = Option.bind (List.assoc_opt "from_enum" fields) attribute_data_string_with_loc in
+          prerr_endline ("from attr for " ^ string_of_id id);
+          Some (mk_id ~loc:to_l to_enum, mk_id ~loc:from_l from_enum)
+        in
+        let names = Option.value ~default:(append_id id "_of_num", prepend_id "num_of_" id) names in
+        (Bindings.add id names enum_map, IdSet.add (fst names) (IdSet.add (snd names) fn_set))
+      end
+    | _ -> (enum_map, fn_set)
+  in
+  List.fold_left aux (Bindings.empty, IdSet.empty) defs
 
 let doc_type_union ctxt typ_name (Tu_aux (Tu_ty_id (typ, id), _)) =
   separate space [doc_id_ctor ctxt id; colon; doc_typ ctxt Env.empty typ; arrow; typ_name]
@@ -2421,11 +2557,15 @@ let doc_field_updates ctxt typq record_id fields =
     let typq_ids, _ = typquant_names_separate ctxt typq in
     let name_pp = string "Build_" ^^ type_id_pp in
     let constructor = match typq_ids with [] -> name_pp | _ -> parens (name_pp ^^ space ^^ separate space typq_ids) in
-    string "#[export] Instance eta_" ^^ type_id_pp
-    ^^ separate space (empty :: typq_pps)
-    ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
-    ^^ separate_map (string "; ") (fun (_, fid) -> doc_field_name ctxt record_id fid) fields
-    ^^ string ">."
+    (* The settable! notation needs at least one field *)
+    match fields with
+    | [] -> empty
+    | _ :: _ ->
+        string "#[export] Instance eta_" ^^ type_id_pp
+        ^^ separate space (empty :: typq_pps)
+        ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
+        ^^ separate_map (string "; ") (fun (_, fid) -> doc_field_name ctxt record_id fid) fields
+        ^^ string ">."
   )
   else separate hardline (List.map doc_update_field fields)
 
@@ -2485,7 +2625,7 @@ let doc_enum_eq typ_id_pp num_of_id_pp of_num_id_pp =
   [lemma1; lemma2; eq_pp; beq_pp]
 
 (* TODO: check use of empty_ctxt below doesn't cause problems due to missing info *)
-let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
+let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux (td, (l, annot))) =
   let bare_ctxt = { empty_ctxt with global } in
   let doc_dec_eq_req = function
     | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
@@ -2567,17 +2707,53 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
       let eq_pp =
         if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
           let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
-          let class_pp, final_pp =
+          let class_pp, final_pp, countable_pp =
             match global.library_style with
             | BBV ->
                 ( string "forall (x y : " ^^ full_type_pp ^^ string "), Decidable (x = y).",
-                  string "refine (Build_Decidable _ true _). subst. split; reflexivity."
+                  string "refine (Build_Decidable _ true _). subst. split; reflexivity.",
+                  empty
                 )
             | Stdpp ->
-                ( string "EqDecision "
-                  ^^ (if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp)
-                  ^^ string ".",
-                  string "left; subst; reflexivity."
+                let countable_reqs =
+                  List.filter_map
+                    (function
+                      | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                          Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
+                      | _ -> None
+                      )
+                    (quant_items typq)
+                in
+                let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
+                let tmp_vars = List.mapi (fun i _ -> string ("x" ^ string_of_int i)) fs in
+                ( string "EqDecision " ^^ type_for_class ^^ string ".",
+                  string "left; subst; reflexivity.",
+                  separate hardline
+                    [
+                      empty;
+                      string "#[export]";
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              ([string "Instance Countable_" ^^ type_id_pp]
+                              @ typq_pps @ countable_reqs
+                              @ [colon; string "Countable"; type_for_class ^^ string "."]
+                              )
+                           )
+                        );
+                      string "refine {|";
+                      string "  encode x := encode ("
+                      ^^ separate_map (string ", ") (fun (_typ, fid) -> fname fid ^^ space ^^ string "x") fs
+                      ^^ string ");";
+                      string "  decode x := '(" ^^ separate (string ", ") tmp_vars ^^ string ") ← decode x;";
+                      string "              mret (Build_" ^^ full_type_pp ^^ space ^^ separate space tmp_vars
+                      ^^ string ")";
+                      string "|}.";
+                      string "intros [" ^^ separate space tmp_vars ^^ string "].";
+                      string "rewrite decode_encode.";
+                      string "reflexivity.";
+                      string "Qed.";
+                    ]
                 )
           in
           string "#[export]" ^^ hardline
@@ -2594,7 +2770,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                        )
                   )
                )
-          ^^ hardline ^^ final_pp ^^ hardline ^^ string "Defined." ^^ twice hardline
+          ^^ hardline ^^ final_pp ^^ hardline ^^ string "Defined." ^^ countable_pp ^^ twice hardline
         )
         else empty
       in
@@ -2643,15 +2819,80 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
           let eq_pp =
             if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
               let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
-              let class_pp =
+              let class_pp, proof_start, countable_pp =
                 match global.library_style with
-                | BBV -> string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)"
-                | Stdpp -> string "EqDecision " ^^ if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp
-              in
-              let proof_start =
-                match global.library_style with
-                | BBV -> string "refine (Decidable_eq_from_dec (fun x y => _))."
-                | Stdpp -> string "unfold EqDecision, Decision."
+                | BBV ->
+                    ( string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)",
+                      string "refine (Decidable_eq_from_dec (fun x y => _)).",
+                      empty
+                    )
+                | Stdpp ->
+                    let countable_reqs =
+                      List.filter_map
+                        (function
+                          | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                              Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
+                          | _ -> None
+                          )
+                        (quant_items typq)
+                    in
+                    let type_for_class = if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp in
+                    let encode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
+                      separate space
+                        [
+                          doc_id_ctor bare_ctxt id;
+                          string "x'";
+                          string "=>";
+                          string ("encode (" ^ string_of_int i ^ ", encode x')");
+                        ]
+                    in
+                    let decode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
+                      separate space
+                        [
+                          string ("Some (" ^ string_of_int i ^ ", x') =>");
+                          doc_id_ctor bare_ctxt id;
+                          string "<$> decode x'";
+                        ]
+                    in
+                    ( string "EqDecision " ^^ type_for_class,
+                      string "unfold EqDecision, Decision.",
+                      separate hardline
+                        [
+                          empty;
+                          string "#[export]";
+                          group
+                            (nest 2
+                               (flow (break 1)
+                                  ([string "Instance Countable_" ^^ id_pp]
+                                  @ q_pps @ countable_reqs
+                                  @ [colon; string "Countable"; type_for_class ^^ string "."]
+                                  )
+                               )
+                            );
+                          string "refine {|";
+                          group
+                            (nest 2
+                               (string "  encode x := match x with"
+                               ^^ ifflat space (break 1 ^^ string "| ")
+                               ^^ separate (break 1 ^^ string "| ") (List.mapi encode_arm ar)
+                               ^/^ string "end;"
+                               )
+                            );
+                          group
+                            (nest 2
+                               (string "  decode x := match decode x with"
+                               ^^ ifflat space (break 1 ^^ string "| ")
+                               ^^ separate (break 1 ^^ string "| ") (List.mapi decode_arm ar)
+                               ^/^ string "| _ => None" ^/^ string "end"
+                               )
+                            );
+                          string "|}.";
+                          string "intros ["
+                          ^^ separate_map (string "|") (fun _ -> string "x") ar
+                          ^^ string "]; rewrite !decode_encode; reflexivity.";
+                          string "Qed.";
+                        ]
+                    )
               in
               string "#[export]" ^^ hardline
               ^^ group
@@ -2665,7 +2906,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                    )
               ^^ hardline ^^ proof_start ^^ hardline
               ^^ string "decide equality; refine (generic_dec _ _)."
-              ^^ hardline ^^ string "Defined." ^^ hardline
+              ^^ hardline ^^ string "Defined." ^^ countable_pp ^^ hardline
             )
             else empty
           in
@@ -2703,15 +2944,22 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
       (* If we have conversion functions to Z, put them here and
          derive a decision procedure that's efficient even for
          large enums. *)
-      let eq1_pp =
+      let num_fns, eq1_pp =
         let fallback = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
-        match (Bindings.find_opt id (fst enum_number_defs), Bindings.find_opt id (snd enum_number_defs)) with
-        | Some (num_of_id, num_of_pp), Some (of_num_id, of_num_pp) ->
-            let num_of_id_pp = doc_id bare_ctxt num_of_id in
-            let of_num_id_pp = doc_id bare_ctxt of_num_id in
-            num_of_pp ^^ of_num_pp ^^ separate hardline (doc_enum_eq id_pp num_of_id_pp of_num_id_pp)
-        | Some (_, pp), None | None, Some (_, pp) -> pp ^^ fallback
-        | None, None -> fallback
+        let enum_fn_map, enum_defs = enum_number_defs in
+        match Bindings.find_opt id enum_fn_map with
+        | None -> (None, fallback)
+        | Some (of_num_id, num_of_id) -> (
+            match (Bindings.find_opt of_num_id enum_defs, Bindings.find_opt num_of_id enum_defs) with
+            | Some of_num_pp, Some num_of_pp ->
+                let of_num_id_pp = doc_id bare_ctxt of_num_id in
+                let num_of_id_pp = doc_id bare_ctxt num_of_id in
+                ( Some (of_num_id_pp, num_of_id_pp),
+                  num_of_pp ^^ of_num_pp ^^ separate hardline (doc_enum_eq id_pp num_of_id_pp of_num_id_pp)
+                )
+            | Some pp, None | None, Some pp -> (None, pp ^^ fallback)
+            | None, None -> (None, fallback)
+          )
       in
       let eq2_pp =
         let class_pp, proof_pp =
@@ -2729,6 +2977,26 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
                    [string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon; class_pp ^^ string " :="; proof_pp]
                 )
              )
+      in
+      let countable_pp =
+        match (global.library_style, num_fns) with
+        | BBV, _ -> empty
+        | Stdpp, None -> empty
+        | Stdpp, Some (of_num_id_pp, num_of_id_pp) ->
+            separate hardline
+              [
+                string "#[export]";
+                string "Instance Countable_" ^^ id_pp ^^ string " : Countable " ^^ id_pp ^^ string ".";
+                string "refine {|";
+                string "  encode x := encode (" ^^ num_of_id_pp ^^ string " x);";
+                string "  decode x := z ← decode x; mret (" ^^ of_num_id_pp ^^ string " z);";
+                string "|}.";
+                string "intro s; rewrite decode_encode.";
+                string "simpl.";
+                string "rewrite " ^^ id_pp ^^ string "_num_of_roundtrip.";
+                string "reflexivity.";
+                string "Qed.";
+              ]
       in
       let inhabited_pp =
         match enums with
@@ -2751,7 +3019,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
             Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
             empty
       in
-      typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
+      separate hardline [typ_pp ^^ dot; eq1_pp; eq2_pp; countable_pp; inhabited_pp; empty; empty]
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -3428,14 +3696,14 @@ let doc_val global pat exp =
   ^^ group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."])
   ^^ hardline
 
-let doc_def global unimplemented generic_eq_types enum_number_defs (DEF_aux (aux, def_annot) as def) =
+let doc_def global unimplemented generic_eq_types countable_types enum_number_defs (DEF_aux (aux, def_annot) as def) =
   match aux with
   | DEF_val v_spec -> doc_val_spec global def_annot unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
-      else doc_typdef global generic_eq_types enum_number_defs t_def
+      else doc_typdef global generic_eq_types countable_types enum_number_defs t_def
   | DEF_register dec -> group (doc_dec global dec)
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
@@ -3697,11 +3965,15 @@ end = struct
         empty;
       ]
     ^^
-    if !opt_coq_all_eq_dec then
+    if !opt_coq_all_eq_dec then (
+      let class_pp =
+        match ctxt.global.library_style with
+        | Stdpp -> string "EqDecision T"
+        | BBV -> string "forall x y : T, Decidable (x = y)"
+      in
       separate hardline
         [
-          string
-            "Instance Decidable_eq_register_values {T : Type} `(r : register T) : forall x y : T, Decidable (x = y) :=";
+          string "Instance Decidable_eq_register_values {T : Type} `(r : register T) : " ^^ class_pp ^^ string " :=";
           string "match r with";
           separate_map hardline
             (fun (typ_id, _typ) ->
@@ -3712,6 +3984,7 @@ end = struct
           string "end.";
           empty;
         ]
+    )
     else empty
 
   let regstate ctxt env type_map =
@@ -3889,6 +4162,10 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
     let bare_doc_id = doc_id { empty_ctxt with global } in
     let registers = State.find_registers defs in
     let generic_eq_types = types_used_with_generic_eq defs in
+    let countable_types =
+      (* We only generate these for stdpp, because it has the typeclass for them *)
+      match library_style with Stdpp -> countable_types defs | BBV -> IdSet.empty
+    in
     let interface_defs =
       match concurrency_monad_params with
       | None ->
@@ -3950,37 +4227,27 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             @ mr_m
             )
     in
-    let enums = Type_check.Env.get_enums type_env in
-    let defs, enum_number_defs =
-      let doc_def = doc_def global unimplemented generic_eq_types (Bindings.empty, Bindings.empty) in
-      let num_of_map, of_num_map, rdefs =
-        List.fold_left
-          (fun (num_of_map, of_num_map, rdefs) def ->
-            match def with
-            | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), _) -> begin
-                match Type_check.Env.get_val_spec id type_env with
-                | _, Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
-                    match (arg_typ, ret_typ) with
-                    | Typ_aux (Typ_id arg_id, _), _
-                      when Bindings.mem arg_id enums && string_of_id id = "num_of_" ^ string_of_id arg_id ->
-                        (Bindings.add arg_id (id, doc_def def) num_of_map, of_num_map, rdefs)
-                    | _, Typ_aux (Typ_id ret_id, _)
-                      when Bindings.mem ret_id enums && string_of_id id = string_of_id ret_id ^ "_of_num" ->
-                        (num_of_map, Bindings.add ret_id (id, doc_def def) of_num_map, rdefs)
-                    | _ -> (num_of_map, of_num_map, def :: rdefs)
-                  end
-                | _ -> (num_of_map, of_num_map, def :: rdefs)
-              end
-            | _ -> (num_of_map, of_num_map, def :: rdefs)
-          )
-          (Bindings.empty, Bindings.empty, []) defs
-      in
-      (List.rev rdefs, (num_of_map, of_num_map))
-    in
 
     let typdefs, defs = List.partition is_typ_def defs in
 
-    let doc_def = doc_def global unimplemented generic_eq_types enum_number_defs in
+    let enum_fn_map, enum_fn_set = enum_fn_names typdefs in
+    let enum_number_defs, defs =
+      let doc_def = doc_def global unimplemented generic_eq_types countable_types (Bindings.empty, Bindings.empty) in
+      Util.map_split
+        (fun def ->
+          match def with
+          | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), _)
+            when IdSet.mem id enum_fn_set ->
+              Ok (id, doc_def def)
+          | _ -> Error def
+        )
+        defs
+    in
+    let enum_number_defs =
+      (enum_fn_map, List.fold_left (fun m (id, def_pp) -> Bindings.add id def_pp m) Bindings.empty enum_number_defs)
+    in
+
+    let doc_def = doc_def global unimplemented generic_eq_types countable_types enum_number_defs in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
       else
@@ -3994,7 +4261,10 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
          ([
             string "(*" ^^ string top_line ^^ string "*)";
             hardline;
-            (match library_style with BBV -> empty | Stdpp -> string "From stdpp Require Import base." ^^ hardline);
+            ( match library_style with
+            | BBV -> empty
+            | Stdpp -> string "From stdpp Require Import base countable." ^^ hardline
+            );
             (separate_map hardline)
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
               types_modules;
