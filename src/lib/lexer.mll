@@ -171,11 +171,10 @@ let tyvar_start = '\''
 (* Ensure an operator cannot start with comment openings *)
 let oper_char = ['!''%''&''*''+''-''.''/'':''<''=''>''@''^''|']
 let oper_char_no_slash = ['!''%''&''*''+''-''.'':''<''=''>''@''^''|']
+let oper_char_no_star = ['!''%''&''+''-''.''/'':''<''=''>''@''^''|']
 let oper_char_no_slash_star = ['!''%''&''+''-''.'':''<''=''>''@''^''|']
-let operator1 = oper_char
-let operator2 = oper_char oper_char_no_slash_star | oper_char_no_slash oper_char
-let operatorn = oper_char oper_char_no_slash_star (oper_char* ('_' ident)?) | oper_char_no_slash oper_char (oper_char* ('_' ident)?) | oper_char ('_' ident)?
-let operator = operator1 | operator2 | operatorn
+
+let operator = ((oper_char_no_slash_star* ['/']? oper_char_no_slash_star*) | oper_char_no_slash*) ('_' ident)?
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 let lchar = [^'\n']
 
@@ -188,7 +187,7 @@ rule token comments = parse
       token comments lexbuf }
   | "@"                                 { At }
   | "2" ws "^"                          { TwoCaret }
-  | "^"					{ Caret }
+  | "^"                                 { Caret }
   | "::"                                { ColonColon }
   | ":"                                 { Colon ":" }
   | ","                                 { Comma }
