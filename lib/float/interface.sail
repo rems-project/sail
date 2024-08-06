@@ -41,5 +41,6 @@ $include <float/eq.sail>
 $include <float/ne.sail>
 $include <float/lt.sail>
 $include <float/lt_quiet.sail>
+$include <float/le.sail>
 
 $endif
