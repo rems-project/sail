@@ -31,7 +31,6 @@ $ifndef _FLOAT_LT
 $define _FLOAT_LT
 
 $include <float/common.sail>
-$include <float/zero.sail>
 $include <float/nan.sail>
 $include <float/arith_internal.sail>
 
