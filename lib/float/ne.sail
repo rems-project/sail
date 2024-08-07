@@ -32,7 +32,6 @@ $define _FLOAT_NE
 
 $include <float/common.sail>
 $include <float/nan.sail>
-$include <float/zero.sail>
 $include <float/arith_internal.sail>
 
 val      float_is_ne : fp_bits_x2 -> fp_bool_and_flags
