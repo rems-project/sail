@@ -115,6 +115,8 @@ let ireturn ?loc:(l = Parse_ast.Unknown) cval = I_aux (I_return cval, (instr_num
 
 let iend l = I_aux (I_end (Return (-1)), (instr_number (), l))
 
+let iend_id l id = I_aux (I_end (Name (id, -1)), (instr_number (), l))
+
 let iblock ?loc:(l = Parse_ast.Unknown) instrs = I_aux (I_block instrs, (instr_number (), l))
 
 let itry_block l instrs = I_aux (I_try_block instrs, (instr_number (), l))

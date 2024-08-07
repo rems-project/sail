@@ -2,6 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
+$[sv_module]
 val print = "print_endline" : string -> unit
 
 union exception = {

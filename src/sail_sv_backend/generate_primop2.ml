@@ -76,11 +76,11 @@ module type S = sig
 
   val string_of_fbits : int -> string
 
-  val hex_str : unit -> string
+  val hex_str : ctyp -> string
 
-  val hex_str_upper : unit -> string
+  val hex_str_upper : ctyp -> string
 
-  val dec_str : unit -> string
+  val dec_str : ctyp -> string
 end
 
 module Make
@@ -300,15 +300,16 @@ module Make
           }
     )
 
-  let hex_str () =
-    register_library_def "sail_hex_str" (fun () ->
+  let hex_str ctyp =
+    let name = sprintf "sail_hex_str_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
         SVD_fundef
           {
-            function_name = SVN_string "sail_hex_str";
+            function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", CT_lint)];
+            params = [(mk_id "i", ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -319,15 +320,16 @@ module Make
           }
     )
 
-  let hex_str_upper () =
-    register_library_def "sail_hex_str_upper" (fun () ->
+  let hex_str_upper ctyp =
+    let name = sprintf "sail_hex_str_upper_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
         SVD_fundef
           {
-            function_name = SVN_string "sail_hex_str_upper";
+            function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", CT_lint)];
+            params = [(mk_id "i", ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -343,15 +345,16 @@ module Make
           }
     )
 
-  let dec_str () =
-    register_library_def "sail_dec_str" (fun () ->
+  let dec_str ctyp =
+    let name = sprintf "sail_dec_str_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
         SVD_fundef
           {
-            function_name = SVN_string "sail_dec_str";
+            function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", CT_lint)];
+            params = [(mk_id "i", ctyp)];
             body =
               mk_statement
                 (SVS_block

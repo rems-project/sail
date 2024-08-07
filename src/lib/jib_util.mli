@@ -89,6 +89,7 @@ val icopy : l -> clexp -> cval -> instr
 val iclear : ?loc:l -> ctyp -> name -> instr
 val ireturn : ?loc:l -> cval -> instr
 val iend : l -> instr
+val iend_id : l -> id -> instr
 val iblock : ?loc:l -> instr list -> instr
 val itry_block : l -> instr list -> instr
 val ithrow : l -> cval -> instr

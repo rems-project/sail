@@ -154,11 +154,25 @@ type footprint = {
   need_stderr : bool;
 }
 
+let pure_footprint =
+  {
+    direct_reads = IdSet.empty;
+    direct_writes = IdSet.empty;
+    direct_throws = false;
+    all_reads = IdSet.empty;
+    all_writes = IdSet.empty;
+    throws = false;
+    need_stdout = false;
+    need_stderr = false;
+  }
+
 type spec_info = {
   (* A map from register types to all the registers with that type *)
   register_ctyp_map : IdSet.t CTMap.t;
   (* A map from register names to types *)
   registers : ctyp Bindings.t;
+  (* A list of registers with initial values *)
+  initialized_registers : Ast.id list;
   (* A list of constructor functions *)
   constructors : IdSet.t;
   (* Global letbindings *)
@@ -174,20 +188,23 @@ type spec_info = {
 }
 
 let collect_spec_info ctx cdefs =
-  let register_ctyp_map, registers =
+  let register_ctyp_map, registers, initialized_registers =
     List.fold_left
-      (fun (ctyp_map, regs) cdef ->
+      (fun (ctyp_map, regs, inits) cdef ->
         match cdef with
-        | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+        | CDEF_aux (CDEF_register (id, ctyp, setup), _) ->
+            let setup_id = match setup with [] -> [] | _ -> [id] in
             ( CTMap.update ctyp
                 (function Some ids -> Some (IdSet.add id ids) | None -> Some (IdSet.singleton id))
                 ctyp_map,
-              Bindings.add id ctyp regs
+              Bindings.add id ctyp regs,
+              setup_id @ inits
             )
-        | _ -> (ctyp_map, regs)
+        | _ -> (ctyp_map, regs, inits)
       )
-      (CTMap.empty, Bindings.empty) cdefs
+      (CTMap.empty, Bindings.empty, []) cdefs
   in
+  let initialized_registers = List.rev initialized_registers in
   let constructors =
     List.fold_left
       (fun acc cdef ->
@@ -296,6 +313,7 @@ let collect_spec_info ctx cdefs =
   {
     register_ctyp_map;
     registers;
+    initialized_registers;
     constructors;
     global_lets;
     global_let_numbers;
@@ -442,23 +460,11 @@ module Make (Config : CONFIG) = struct
           | CT_fbits sz -> Primops.string_of_fbits sz
           | _ -> Reporting.unreachable l __POS__ "string_of_bits"
 
-        let dec_str l = function
-          | CT_lint -> Primops.dec_str ()
-          | CT_fint sz when Config.nostrings -> Generate_primop.dec_str_fint_stub sz
-          | CT_fint sz -> Generate_primop.dec_str_fint sz
-          | _ -> Reporting.unreachable l __POS__ "dec_str"
+        let dec_str _ = Primops.dec_str
 
-        let hex_str l = function
-          | CT_lint -> Primops.hex_str ()
-          | CT_fint sz when Config.nostrings -> Generate_primop.hex_str_fint_stub sz
-          | CT_fint sz -> Generate_primop.hex_str_fint sz
-          | _ -> Reporting.unreachable l __POS__ "hex_str"
+        let hex_str _ = Primops.hex_str
 
-        let hex_str_upper l = function
-          | CT_lint -> Primops.hex_str_upper ()
-          | CT_fint sz when Config.nostrings -> Generate_primop.hex_str_upper_fint_stub sz
-          | CT_fint sz -> Generate_primop.hex_str_upper_fint sz
-          | _ -> Reporting.unreachable l __POS__ "hex_str_upper"
+        let hex_str_upper _ = Primops.hex_str_upper
 
         let count_leading_zeros _l sz = Generate_primop.count_leading_zeros sz
 
@@ -498,20 +504,6 @@ module Make (Config : CONFIG) = struct
     match sv_ctyp ctyp with
     | ty, None -> string ty ^^ space ^^ doc
     | ty, Some index -> string ty ^^ space ^^ doc ^^ space ^^ string index
-
-  (*
-  let sv_ctyp_dummy = function
-    | CT_bool -> string "0"
-    | CT_fbits width ->
-      ksprintf string "%d'b%s" width (String.make width 'X')
-    | CT_lbits ->
-      let index = ksprintf string "%d'b%s" lbits_index_width (String.make lbits_index_width 'X') in
-      let sz = Config.max_unknown_bitvector_width in
-      let contents = ksprintf string "%d'b%s" sz (String.make sz 'X') in
-      squote ^^ lbrace ^^ index ^^ comma ^^ space ^^ ksprintf string ^^ rbrace
-    | CT_bit -> string "1'bX"
-    | _ -> string "DEFAULT"
-     *)
 
   let pp_type_def = function
     | CTD_enum (id, ids) ->
@@ -1457,9 +1449,14 @@ module Make (Config : CONFIG) = struct
       (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
       preds
 
-  let svir_module debug_attr spec_info ctx f params param_ctyps ret_ctyp body =
-    prerr_endline Util.(string_of_id f |> red |> clear);
-    let footprint = Bindings.find f spec_info.footprints in
+  let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_var = Jib_util.return) spec_info ctx name params
+      param_ctyps ret_ctyp body =
+    prerr_endline Util.(string_of_sv_name name |> red |> clear);
+    let footprint =
+      match name with
+      | SVN_id id -> Bindings.find_opt id spec_info.footprints |> Option.value ~default:footprint
+      | SVN_string _ -> footprint
+    in
     let always_comb = Queue.create () in
     let declvars = ref Bindings.empty in
     let ssa_vars = ref NameMap.empty in
@@ -1476,20 +1473,20 @@ module Make (Config : CONFIG) = struct
     let open Jib_ssa in
     let _, end_node, cfg =
       ssa ~globals:spec_info.global_lets
-        ?debug_prefix:(Option.map (fun _ -> string_of_id f) debug_attr)
+        ?debug_prefix:(Option.map (fun _ -> string_of_sv_name name) debug_attr)
         (visit_instrs (new thread_registers ctx spec_info) body)
     in
 
     if never_returns end_node cfg then prerr_endline "NEVER RETURNS";
 
-    if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_id f) cfg;
+    if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_sv_name name) cfg;
 
     let visit_order =
       try topsort cfg
       with Not_a_DAG n ->
         raise
           (Reporting.err_general Parse_ast.Unknown
-             (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_id f) n)
+             (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_sv_name name) n)
           )
     in
 
@@ -1512,7 +1509,7 @@ module Make (Config : CONFIG) = struct
               return ()
         )
         visit_order
-      |> fun m -> Smt_gen.run m (id_loc f)
+      |> fun m -> Smt_gen.run m Parse_ast.Unknown
     in
 
     let final_names = get_final_names !ssa_vars cfg in
@@ -1589,7 +1586,7 @@ module Make (Config : CONFIG) = struct
     let get_final_name name = match NameMap.find_opt name final_names with Some n -> n | None -> name in
 
     let output_ports : sv_module_port list =
-      [{ name = get_final_name Jib_util.return; external_name = "sail_return"; typ = ret_ctyp }]
+      [{ name = get_final_name return_var; external_name = "sail_return"; typ = ret_ctyp }]
       @ List.map
           (fun id ->
             {
@@ -1677,7 +1674,7 @@ module Make (Config : CONFIG) = struct
     let defs =
       passthroughs @ List.of_seq (Queue.to_seq module_vars) @ List.rev module_instantiation_defs @ always_comb_def
     in
-    { name = SVN_id f; input_ports; output_ports; defs }
+    { name; input_ports; output_ports; defs }
 
   let toplevel_module spec_info =
     match Bindings.find_opt (mk_id "main") spec_info.footprints with
@@ -1761,6 +1758,20 @@ module Make (Config : CONFIG) = struct
                (SVS_block (let_initializers @ unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")]))
             )
         in
+        let initialize_registers =
+          List.mapi
+            (fun i reg ->
+              let name = sprintf "sail_setup_reg_%s" (pp_id_string reg) in
+              SVD_instantiate
+                {
+                  module_name = SVN_string name;
+                  instance_name = sprintf "reg_init_%d" i;
+                  input_connections = [];
+                  output_connections = [SVP_id (Name (prepend_id "in_" reg, -1))];
+                }
+            )
+            spec_info.initialized_registers
+        in
         Some
           {
             name = SVN_string "sail_toplevel";
@@ -1769,7 +1780,7 @@ module Make (Config : CONFIG) = struct
             defs =
               register_inputs @ register_outputs @ throws_outputs @ channel_outputs
               @ [SVD_var (Jib_util.return, CT_unit)]
-              @ [instantiate_main; always_comb];
+              @ initialize_registers @ [instantiate_main; always_comb];
           }
 
   let rec pp_module m =
@@ -1858,7 +1869,7 @@ module Make (Config : CONFIG) = struct
     ^^ hardline ^^ string "endfunction"
 
   let sv_fundef spec_info ctx f params param_ctyps ret_ctyp body =
-    pp_module (svir_module None spec_info ctx f params param_ctyps ret_ctyp body)
+    pp_module (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 
@@ -1887,6 +1898,9 @@ module Make (Config : CONFIG) = struct
     ^^ string "()" ^^ semi
     ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
+
+  let svir_setup_module spec_info ctx name out ctyp setup =
+    svir_module ~return_var:out spec_info ctx name [] [] ctyp setup
 
   let svir_setup_function l ctx name setup =
     let setup =
@@ -2040,13 +2054,33 @@ module Make (Config : CONFIG) = struct
           );
           match Bindings.find_opt f fn_ctyps with
           | Some (param_ctyps, ret_ctyp) ->
-              ([SVD_module (svir_module debug_attr spec_info ctx f params param_ctyps ret_ctyp body)], fn_ctyps)
+              ( [SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps ret_ctyp body)],
+                fn_ctyps
+              )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
     | CDEF_type type_def -> ([SVD_type type_def], fn_ctyps)
     | CDEF_let (n, bindings, setup) ->
         let setup_function = svir_setup_function def_annot.loc ctx (sprintf "sail_setup_let_%d" n) setup in
         (List.map (fun (id, ctyp) -> SVD_var (name id, ctyp)) bindings @ [setup_function], fn_ctyps)
+    | CDEF_register (id, ctyp, setup) -> begin
+        match setup with
+        | [] -> ([], fn_ctyps)
+        | _ ->
+            let setup =
+              Jib_optimize.(
+                setup |> remove_undefined |> remove_functions_to_references |> flatten_instrs |> remove_dead_code
+                |> variable_decls_to_top |> filter_clear
+              )
+            in
+            let setup_function =
+              svir_setup_module spec_info ctx
+                (SVN_string (sprintf "sail_setup_reg_%s" (pp_id_string id)))
+                (name id) ctyp
+                (setup @ [iend_id def_annot.loc id])
+            in
+            ([SVD_module setup_function], fn_ctyps)
+      end
     | _ -> ([], fn_ctyps)
 
   let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
@@ -2075,7 +2109,8 @@ module Make (Config : CONFIG) = struct
             | Some (param_ctyps, ret_ctyp) ->
                 ( {
                     empty_cdef_doc with
-                    inside_module = sv_fundef spec_info ctx f params param_ctyps ret_ctyp body ^^ twice hardline;
+                    inside_module =
+                      sv_fundef spec_info ctx (SVN_id f) params param_ctyps ret_ctyp body ^^ twice hardline;
                   },
                   fn_ctyps,
                   setup_calls
