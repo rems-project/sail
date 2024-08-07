@@ -33,7 +33,7 @@ depends: [
   "dune" {>= "3.0"}
   "dune-site" {>= "3.0.2"}
   "bisect_ppx" {dev & >= "2.5.0"}
-  "menhir" {>= "20180523" & build}
+  "menhir" {>= "20240715" & build}
   "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}

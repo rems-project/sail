@@ -31,7 +31,9 @@
 
 (package
   (synopsis "Helper tool for compiling Sail")
-  (name sail_manifest))
+  (name sail_manifest)
+  (depends
+    (ocaml (>= 4.08.1))))
 
 (package
   (sites (share plugins))
@@ -50,7 +52,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (depends
     (dune-site (>= 3.0.2))
     (bisect_ppx (and :dev (>= "2.5.0")))
-    (menhir (and (>= 20180523) :build))
+    (menhir (and (>= 20240715) :build))
     (ott (and (>= 0.28) :build))
     (lem (>= "2018-12-14"))
     (linksem (>= "0.3"))
