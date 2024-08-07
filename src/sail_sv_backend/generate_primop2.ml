@@ -81,6 +81,12 @@ module type S = sig
   val hex_str_upper : ctyp -> string
 
   val dec_str : ctyp -> string
+
+  val is_empty : ctyp -> string
+
+  val hd : ctyp -> string
+
+  val tl : ctyp -> string
 end
 
 module Make
@@ -360,6 +366,74 @@ module Make
                 (SVS_block
                    (List.map mk_statement
                       [SVS_var (s, CT_string, None); svs_raw "s.itoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                   )
+                );
+          }
+    )
+
+  let is_empty ctyp =
+    let name = sprintf "sail_is_empty_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let t = primop_name "t" in
+        let xs = primop_name "xs" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some CT_bool;
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (t, CT_bool, None);
+                        svs_raw "t = (xs.size() == 0)" ~inputs:[xs] ~outputs:[t];
+                        SVS_return (Var t);
+                      ]
+                   )
+                );
+          }
+    )
+
+  let hd ctyp =
+    let name = sprintf "sail_hd_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let x = primop_name "x" in
+        let xs = primop_name "xs" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some ctyp;
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [SVS_var (x, ctyp, None); svs_raw "x = xs[0]" ~inputs:[xs] ~outputs:[x]; SVS_return (Var x)]
+                   )
+                );
+          }
+    )
+
+  let tl ctyp =
+    let name = sprintf "sail_tl_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let xs = primop_name "xs" in
+        let ys = primop_name "ys" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some (CT_list ctyp);
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (ys, CT_list ctyp, None);
+                        svs_raw "xs = (xs.size() > 1) ? xs[1:$] : ys" ~inputs:[xs; ys] ~outputs:[xs];
+                        SVS_return (Var xs);
+                      ]
                    )
                 );
           }

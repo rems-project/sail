@@ -472,16 +472,12 @@ module Make (Config : CONFIG) = struct
           Generate_primop.fvector_store len (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
 
         let is_empty l = function
-          | CT_list ctyp -> Generate_primop.is_empty (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+          | CT_list ctyp -> Primops.is_empty ctyp
           | _ -> Reporting.unreachable l __POS__ "is_empty"
 
-        let hd l = function
-          | CT_list ctyp -> Generate_primop.hd (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
-          | _ -> Reporting.unreachable l __POS__ "hd"
+        let hd l = function CT_list ctyp -> Primops.hd ctyp | _ -> Reporting.unreachable l __POS__ "hd"
 
-        let tl l = function
-          | CT_list ctyp -> Generate_primop.tl (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
-          | _ -> Reporting.unreachable l __POS__ "tl"
+        let tl l = function CT_list ctyp -> Primops.tl ctyp | _ -> Reporting.unreachable l __POS__ "tl"
       end)
 
   let ( let* ) = Smt_gen.bind

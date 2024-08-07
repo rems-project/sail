@@ -31,7 +31,6 @@ skip_tests = {
     'large_bitvector', # This requires -sv_bits_size >= 204
     'list_rec_functions1', # lists
     'list_rec_functions2',
-    'list_torture',
     'loop_exception',
     'poly_mapping', # length
     'poly_mapping2',
@@ -46,11 +45,6 @@ skip_tests = {
     'warl_undef',
     'xlen_val', # Calls external C function
     'spc_mappings',
-    'list_test', # lists
-    'list_scope', # lists
-    'list_scope2', # lists
-    'list_scope3', # lists
-    'list_cons_cons', # lists
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
     'issue202_1', # lists
