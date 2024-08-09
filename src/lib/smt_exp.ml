@@ -152,24 +152,33 @@ let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
 
 let smt_disj = function [] -> Bool_lit false | [x] -> x | xs -> Fn ("or", xs)
 
-let simp_and xs =
+let rec simp_and xs =
   let xs = List.filter (function Bool_lit true -> false | _ -> true) xs in
   match xs with
   | [] -> Bool_lit true
   | [x] -> x
   | _ -> if List.exists (function Bool_lit false -> true | _ -> false) xs then Bool_lit false else Fn ("and", xs)
 
-let simp_or xs =
+and simp_or vars xs =
   let xs = List.filter (function Bool_lit false -> false | _ -> true) xs in
   match xs with
   | [] -> Bool_lit false
+  | _ when List.exists (function Bool_lit true -> true | _ -> false) xs -> Bool_lit true
   | [x] -> x
-  | _ -> if List.exists (function Bool_lit true -> true | _ -> false) xs then Bool_lit true else Fn ("or", xs)
+  | Var v :: xs -> begin
+      let make_constant v lit v' = if Jib_util.Name.compare v v' = 0 then Some lit else vars v' in
+      match simp_or vars (List.map (simp (make_constant v (Bool_lit false))) xs) with
+      | Bool_lit true -> Bool_lit true
+      | Bool_lit false -> Var v
+      | Fn ("or", xs) -> Fn ("or", Var v :: xs)
+      | _ -> Fn ("or", Var v :: xs)
+    end
+  | _ -> Fn ("or", xs)
 
-let simp_eq x y =
+and simp_eq x y =
   match (x, y) with Bool_lit x, Bool_lit y -> Some (x = y) | Bitvec_lit x, Bitvec_lit y -> Some (x = y) | _ -> None
 
-let simp_fn f args =
+and simp_fn vars f args =
   let open Sail2_operators_bitlists in
   match (f, args) with
   | "=", [x; y] -> begin match simp_eq x y with Some b -> Bool_lit b | None -> Fn (f, args) end
@@ -177,7 +186,7 @@ let simp_fn f args =
   | "not", [Bool_lit b] -> Bool_lit (not b)
   | "contents", [Fn ("Bits", [_; bv])] -> bv
   | "len", [Fn ("Bits", [len; _])] -> len
-  | "or", _ -> simp_or args
+  | "or", _ -> simp_or vars args
   | "and", _ -> simp_and args
   | "concat", _ ->
       let chunks, bv =
@@ -212,13 +221,13 @@ let simp_fn f args =
     end
   | _, _ -> Fn (f, args)
 
-let rec simp vars exp =
+and simp vars exp =
   let open Sail2_operators_bitlists in
   match exp with
   | Var v -> begin match vars v with Some exp -> simp vars exp | None -> Var v end
   | Fn (f, args) ->
       let args = List.map (simp vars) args in
-      simp_fn f args
+      simp_fn vars f args
   | ZeroExtend (to_len, by_len, arg) ->
       let arg = simp vars arg in
       begin
@@ -240,11 +249,18 @@ let rec simp vars exp =
     end
   | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp vars arr, simp vars i, simp vars x)
   | Ite (cond, then_exp, else_exp) -> begin
-      match Ite (simp vars cond, simp vars then_exp, simp vars else_exp) with
-      | Ite (Bool_lit true, then_exp, _) -> then_exp
-      | Ite (Bool_lit false, _, else_exp) -> else_exp
-      | Ite (Fn ("not", [cond]), then_exp, else_exp) -> Ite (cond, else_exp, then_exp)
-      | exp -> exp
+      let cond = simp vars cond in
+      let make_constant v lit v' = if Jib_util.Name.compare v v' = 0 then Some lit else vars v' in
+      let mk_ite i t e = match simp_eq t e with Some true -> t | Some false | None -> Ite (i, t, e) in
+      match cond with
+      | Bool_lit true -> simp vars then_exp
+      | Bool_lit false -> simp vars else_exp
+      | Var v ->
+          mk_ite (Var v)
+            (simp (make_constant v (Bool_lit true)) then_exp)
+            (simp (make_constant v (Bool_lit false)) else_exp)
+      | Fn ("not", [cond]) -> simp vars (Ite (cond, else_exp, then_exp))
+      | _ -> mk_ite cond (simp vars then_exp) (simp vars else_exp)
     end
   | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
   | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)

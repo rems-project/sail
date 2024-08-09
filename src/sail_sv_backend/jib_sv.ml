@@ -81,6 +81,7 @@ open Generate_primop
 open Sv_ir
 
 module IntSet = Util.IntSet
+module IntMap = Util.IntMap
 
 class footprint_visitor ctx registers references reads writes throws need_stdout need_stderr : jib_visitor =
   object
@@ -95,7 +96,6 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
             match Bindings.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                prerr_endline Util.(string_of_id id |> green |> clear);
                 reads := IdSet.add id !reads
             | None -> ()
           end;
@@ -124,8 +124,8 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
 
     method! vclexp =
       function
-      | CL_addr clexp ->
-          references := CTSet.add (clexp_ctyp clexp) !references;
+      | CL_addr (CL_id (_, CT_ref ctyp)) ->
+          references := CTSet.add ctyp !references;
           DoChildren
       | CL_id (Have_exception _, _) ->
           throws := true;
@@ -135,7 +135,6 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
             match Bindings.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                prerr_endline Util.(string_of_id id |> yellow |> clear);
                 writes := IdSet.add id !writes
             | None -> ()
           end;
@@ -178,7 +177,7 @@ type spec_info = {
   (* Global letbindings *)
   global_lets : NameSet.t;
   (* Global let numbers *)
-  global_let_numbers : IntSet.t;
+  global_let_numbers : Ast.id list IntMap.t;
   (* Function footprint information *)
   footprints : footprint Bindings.t;
   (* Specification callgraph *)
@@ -220,10 +219,12 @@ let collect_spec_info ctx cdefs =
       (fun (names, nums) cdef ->
         match cdef with
         | CDEF_aux (CDEF_let (n, bindings, _), _) ->
-            (List.fold_left (fun acc (id, _) -> NameSet.add (name id) acc) names bindings, IntSet.add n nums)
+            ( List.fold_left (fun acc (id, _) -> NameSet.add (name id) acc) names bindings,
+              IntMap.add n (List.map fst bindings) nums
+            )
         | _ -> (names, nums)
       )
-      (NameSet.empty, IntSet.empty) cdefs
+      (NameSet.empty, IntMap.empty) cdefs
   in
   let footprints =
     List.fold_left
@@ -960,7 +961,11 @@ module Make (Config : CONFIG) = struct
                 let clexp =
                   match creturn with
                   | CR_one clexp -> clexp
-                  | CR_multi _ -> Reporting.unreachable l __POS__ "Multiple return generator primitive found"
+                  | CR_multi clexps ->
+                      Reporting.unreachable l __POS__
+                        (sprintf "Multiple return generator primitive found: %s (%s)" name
+                           (Util.string_of_list ", " string_of_clexp clexps)
+                        )
                 in
                 let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
                 begin
@@ -1138,34 +1143,23 @@ module Make (Config : CONFIG) = struct
     let v, _ = Smt_gen.run (sv_instr ctx instr) l in
     v
 
-  let smt_ssanode cfg preds =
+  let smt_ssanode cfg pathconds =
     let open Jib_ssa in
     function
     | Pi _ -> return None
     | Phi (id, ctyp, ids) -> (
-        let ids, preds =
-          List.combine ids (IntSet.elements preds)
-          |> List.filter (fun (id, pred) ->
-                 match Option.get (get_vertex cfg pred) with (_, CF_block (_, T_exit _)), _, _ -> false | _ -> true
-             )
-          |> List.split
+        let ids, pathconds =
+          List.combine ids pathconds |> List.filter (fun (_, pc) -> Option.is_some pc) |> List.split
         in
-        let get_pi n =
-          match get_vertex cfg n with
-          | Some ((ssa_elems, _), _, _) -> List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
-          | None -> failwith "Predecessor node does not exist"
-        in
-        let pis = List.map get_pi preds in
-        let* mux =
+        let mux =
           List.fold_right2
-            (fun pi id chain ->
-              let* chain = chain in
-              let* pi = mapM Smt.smt_cval pi in
-              let pathcond = smt_conj pi in
-              match chain with Some smt -> return (Some (Ite (pathcond, Var id, smt))) | None -> return (Some (Var id))
+            (fun pathcond id chain ->
+              let pathcond = Option.get pathcond in
+              match chain with Some smt -> Some (Ite (pathcond, Var id, smt)) | None -> Some (Var id)
             )
-            pis ids (return None)
+            pathconds ids None
         in
+        let mux = Option.map (Smt_exp.simp (fun _ -> None)) mux in
         match mux with None -> assert false | Some mux -> return (Some (id, ctyp, mux))
       )
 
@@ -1242,10 +1236,11 @@ module Make (Config : CONFIG) = struct
                 in
                 let input_channels = List.map (fun c -> V_id (c, CT_string)) channels in
                 let output_channels = List.map (fun c -> CL_id (c, CT_string)) channels in
+                let cr_multi x = function [] -> CR_one x | xs -> CR_multi (x :: xs) in
                 ChangeTo
                   (I_aux
                      ( I_funcall
-                         ( CR_multi ((clexp :: writes) @ throws @ output_channels),
+                         ( cr_multi clexp (writes @ throws @ output_channels),
                            ext,
                            (f, []),
                            args @ reads @ input_channels
@@ -1445,8 +1440,8 @@ module Make (Config : CONFIG) = struct
       (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
       preds
 
-  let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_var = Jib_util.return) spec_info ctx name params
-      param_ctyps ret_ctyp body =
+  let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_vars = [Jib_util.return]) spec_info ctx name params
+      param_ctyps ret_ctyps body =
     prerr_endline Util.(string_of_sv_name name |> red |> clear);
     let footprint =
       match name with
@@ -1486,6 +1481,12 @@ module Make (Config : CONFIG) = struct
           )
     in
 
+    let phivars = ref (-1) in
+    let phivar () =
+      incr phivars;
+      Jib_util.name (mk_id ("phi#" ^ string_of_int !phivars))
+    in
+
     (* Generate the contents of the always_comb block *)
     let _ =
       Smt_gen.iterM
@@ -1493,7 +1494,44 @@ module Make (Config : CONFIG) = struct
           match get_vertex cfg n with
           | None -> return ()
           | Some ((ssa_elems, cfnode), preds, _) ->
-              let* muxers = fmap Util.option_these (mapM (smt_ssanode cfg preds) ssa_elems) in
+              let preds =
+                List.map
+                  (fun pred ->
+                    match Option.get (get_vertex cfg pred) with
+                    | (_, CF_block (_, T_exit _)), _, _ -> None
+                    | _ -> Some pred
+                  )
+                  (IntSet.elements preds)
+              in
+              let get_pi n =
+                match get_vertex cfg n with
+                | Some ((ssa_elems, _), _, _) ->
+                    List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
+                | None -> failwith "Predecessor node does not exist"
+              in
+              let pis = List.map (Option.map get_pi) preds in
+              let* pathconds =
+                mapM
+                  (function
+                    | Some pi ->
+                        let* pi = mapM Smt.smt_cval pi in
+                        return (Some (Smt_exp.simp (fun _ -> None) (smt_conj pi)))
+                    | None -> return None
+                    )
+                  pis
+              in
+              let pathcond_vars =
+                List.map
+                  (function
+                    | Some pathcond ->
+                        let id = phivar () in
+                        add_comb_statement (SVS_aux (SVS_var (id, CT_bool, Some pathcond), Parse_ast.Unknown));
+                        Some (Var id)
+                    | None -> None
+                    )
+                  pathconds
+              in
+              let* muxers = fmap Util.option_these (mapM (smt_ssanode cfg pathcond_vars) ssa_elems) in
               List.iter
                 (fun (id, ctyp, mux) ->
                   add_comb_statement
@@ -1582,7 +1620,9 @@ module Make (Config : CONFIG) = struct
     let get_final_name name = match NameMap.find_opt name final_names with Some n -> n | None -> name in
 
     let output_ports : sv_module_port list =
-      [{ name = get_final_name return_var; external_name = "sail_return"; typ = ret_ctyp }]
+      List.map2
+        (fun var ret_ctyp -> { name = get_final_name var; external_name = ""; typ = ret_ctyp })
+        return_vars ret_ctyps
       @ List.map
           (fun id ->
             {
@@ -1626,7 +1666,7 @@ module Make (Config : CONFIG) = struct
     NameMap.iter
       (fun name nums ->
         let get_ctyp = function
-          | Return _ -> Some ret_ctyp
+          | Return _ -> Some (List.hd ret_ctyps)
           | Name (id, _) -> begin
               match Bindings.find_opt id spec_info.registers with
               | Some ctyp -> Some ctyp
@@ -1716,13 +1756,21 @@ module Make (Config : CONFIG) = struct
                 );
             }
         in
+        let initialize_letbindings =
+          List.map
+            (fun (n, ids) ->
+              let module_name = SVN_string (sprintf "sail_setup_let_%d" n) in
+              SVD_instantiate
+                {
+                  module_name;
+                  instance_name = sprintf "sail_inst_let_%d" n;
+                  input_connections = [];
+                  output_connections = List.map (fun id -> SVP_id (name id)) ids;
+                }
+            )
+            (IntMap.bindings spec_info.global_let_numbers)
+        in
         let always_comb =
-          let let_initializers =
-            IntSet.fold
-              (fun n stmts -> mk_statement (svs_raw (sprintf "sail_setup_let_%d()" n)) :: stmts)
-              spec_info.global_let_numbers []
-            |> List.rev
-          in
           let unchanged_registers =
             Bindings.fold
               (fun reg _ unchanged ->
@@ -1750,9 +1798,7 @@ module Make (Config : CONFIG) = struct
             else []
           in
           SVD_always_comb
-            (mk_statement
-               (SVS_block (let_initializers @ unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")]))
-            )
+            (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
         in
         let initialize_registers =
           List.mapi
@@ -1776,7 +1822,7 @@ module Make (Config : CONFIG) = struct
             defs =
               register_inputs @ register_outputs @ throws_outputs @ channel_outputs
               @ [SVD_var (Jib_util.return, CT_unit)]
-              @ initialize_registers @ [instantiate_main; always_comb];
+              @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb];
           }
 
   let rec pp_module m =
@@ -1896,7 +1942,7 @@ module Make (Config : CONFIG) = struct
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
 
   let svir_setup_module spec_info ctx name out ctyp setup =
-    svir_module ~return_var:out spec_info ctx name [] [] ctyp setup
+    svir_module ~return_vars:[out] spec_info ctx name [] [] [ctyp] setup
 
   let svir_setup_function l ctx name setup =
     let setup =
@@ -2050,15 +2096,27 @@ module Make (Config : CONFIG) = struct
           );
           match Bindings.find_opt f fn_ctyps with
           | Some (param_ctyps, ret_ctyp) ->
-              ( [SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps ret_ctyp body)],
+              ( [SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body)],
                 fn_ctyps
               )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
     | CDEF_type type_def -> ([SVD_type type_def], fn_ctyps)
     | CDEF_let (n, bindings, setup) ->
-        let setup_function = svir_setup_function def_annot.loc ctx (sprintf "sail_setup_let_%d" n) setup in
-        (List.map (fun (id, ctyp) -> SVD_var (name id, ctyp)) bindings @ [setup_function], fn_ctyps)
+        let setup =
+          Jib_optimize.(
+            setup |> remove_undefined |> remove_functions_to_references |> flatten_instrs |> remove_dead_code
+            |> variable_decls_to_top |> filter_clear
+          )
+        in
+        let module_name = SVN_string (sprintf "sail_setup_let_%d" n) in
+        let setup_module =
+          svir_module
+            ~return_vars:(List.map (fun (id, _) -> name id) bindings)
+            spec_info ctx module_name [] [] (List.map snd bindings)
+            (setup @ [iundefined CT_unit])
+        in
+        (List.map (fun (id, ctyp) -> SVD_var (name id, ctyp)) bindings @ [SVD_module setup_module], fn_ctyps)
     | CDEF_register (id, ctyp, setup) -> begin
         match setup with
         | [] -> ([], fn_ctyps)
@@ -2069,13 +2127,13 @@ module Make (Config : CONFIG) = struct
                 |> variable_decls_to_top |> filter_clear
               )
             in
-            let setup_function =
+            let setup_module =
               svir_setup_module spec_info ctx
                 (SVN_string (sprintf "sail_setup_reg_%s" (pp_id_string id)))
                 (name id) ctyp
                 (setup @ [iend_id def_annot.loc id])
             in
-            ([SVD_module setup_function], fn_ctyps)
+            ([SVD_module setup_module], fn_ctyps)
       end
     | _ -> ([], fn_ctyps)
 
@@ -2106,7 +2164,7 @@ module Make (Config : CONFIG) = struct
                 ( {
                     empty_cdef_doc with
                     inside_module =
-                      sv_fundef spec_info ctx (SVN_id f) params param_ctyps ret_ctyp body ^^ twice hardline;
+                      sv_fundef spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body ^^ twice hardline;
                   },
                   fn_ctyps,
                   setup_calls

@@ -404,8 +404,6 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let sail_sv_libdir = Filename.concat (Filename.concat sail_dir "lib") "sv" in
   let out = match out_opt with None -> "out" | Some name -> name in
 
-  prerr_endline "SPEC PASSES";
-
   let ast, env, effect_info =
     let open Specialize in
     match !opt_int_specialize with
@@ -413,11 +411,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     | None -> (ast, env, effect_info)
   in
 
-  prerr_endline "FINISHED SPEC PASSES";
-
   let cdefs, ctx = jib_of_ast SV.make_call_precise env ast effect_info in
-
-  prerr_endline "COMPILING...";
 
   let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in
   let registers = register_types cdefs in
@@ -438,11 +432,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
 
-  prerr_endline "COLLECTING SPEC INFO";
-
   let spec_info = Jib_sv.collect_spec_info ctx cdefs in
-
-  print_endline "GOT SPEC INFO";
 
   let doc, fn_ctyps =
     List.fold_left
@@ -598,7 +588,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   in
      *)
   let sv_output = Pretty_print_sail.Document.to_string doc in
-  make_genlib_file (sprintf "sail_genlib_%s.sv" out);
+  make_genlib_file (Filename.concat (Filename.dirname out) (sprintf "sail_genlib_%s.sv" (Filename.basename out)));
 
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir (out ^ ".sv") in
   output_string out_chan sv_output;

@@ -19,14 +19,12 @@ skip_tests = {
     'assign_rename_bug',
     'bitvector', # This requires -sv_bits_size >= 200
     'cheri128_hsb',
-    'cheri_capreg', # behavior?
     'empty_list', # recursion
+    'list_torture', # recursion
     'flow_restrict', # contains very large integer literal
     'for_shadow',
-    'foreach_none',
     'gvector',
     'inc_tests',
-    'int64_vector_literal',
     'issue136', # recursion
     'large_bitvector', # This requires -sv_bits_size >= 204
     'list_rec_functions1', # lists
@@ -38,16 +36,12 @@ skip_tests = {
     'real',
     'real_prop', # reals
     'split', # generic vectors
-    'string_of_bits',
     'string_take',
     'vector_example',
-    'warl',
-    'warl_undef',
     'xlen_val', # Calls external C function
     'spc_mappings',
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
-    'issue202_1', # lists
 }
 
 print("Sail is {}".format(sail))

@@ -33,7 +33,7 @@ module print_endline
    end
 endmodule // print_endline
 
-function automatic logic sail_valid_hex_bits(int n, string hex);
+function automatic bit sail_valid_hex_bits(int n, string hex);
    int  len = hex.len();
    int  non_zero = 2;
    int  fnz_width;
