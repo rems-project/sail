@@ -1,6 +1,6 @@
 
 $[sv_module { stdout = true }]
-val print = "print_endline" : string -> unit
+val "print_endline" : string -> unit
 
 val main : unit -> unit
 
@@ -11,5 +11,5 @@ function main() = {
       ()
     }
   };
-  print("ok")
+  print_endline("ok")
 }

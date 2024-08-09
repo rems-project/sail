@@ -1,0 +1,15 @@
+val print_endline = impure "print_endline_effect" : string -> unit
+
+val prerr_endline = impure "prerr_endline_effect" : string -> unit
+
+val print = impure "print_effect" : string -> unit
+
+val prerr = impure "prerr_effect" : string -> unit
+
+val print_bits = impure "print_bits_effect" : forall 'n. (string, bitvector('n)) -> unit
+
+val prerr_bits = impure "prerr_bits_effect" : forall 'n. (string, bitvector('n)) -> unit
+
+val print_int = impure "print_int_effect" : (string, int) -> unit
+
+val prerr_int = impure "prerr_int_effect" : (string, int) -> unit

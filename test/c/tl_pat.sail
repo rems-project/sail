@@ -1,19 +1,19 @@
 default Order dec
 
 $[sv_module { stdout = true }]
-val print = "print_endline" : string -> unit
+val print_endline = "print_endline" : string -> unit
 
 newtype X = X : string
 
 val f : X -> string
 
 function f X(str) = {
-  print(str);
+  print_endline(str);
   "Test"
 }
 
 val main : unit -> unit
 
 function main () = {
-  print(f(X("Hello, World")));
+  print_endline(f(X("Hello, World")));
 }

@@ -5,7 +5,7 @@ $sail_internal
 $include <flow.sail>
 
 $[sv_module { stdout = true }]
-val print = "print_endline" : string -> unit
+val print_endline = "print_endline" : string -> unit
 
 val "print_int" : (string, int) -> unit
 val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
@@ -29,12 +29,12 @@ function main () = {
 
   match x {
     Some(a) => print_int("a = ", 5),
-    None()  => print("None")
+    None()  => print_endline("None")
   };
 
   match z {
     Some(b) => print_bits("b = ", b),
-    None()  => print("None")
+    None()  => print_endline("None")
   };
 
   let q : soption(bitvector(4, dec)) = sSome(0xA);

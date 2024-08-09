@@ -91,11 +91,21 @@ val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq
 
 overload operator * = {mult_atom, mult_int}
 
+$ifndef PRINT_EFFECTS
+
 $[sv_module { stdout = true }]
 val print_int = pure "print_int" : (string, int) -> unit
 
 $[sv_module { stderr = true }]
 val prerr_int = pure "prerr_int" : (string, int) -> unit
+
+$else
+
+val print_int = impure "print_int_effect" : (string, int) -> unit
+
+val prerr_int = impure "prerr_int_effect" : (string, int) -> unit
+
+$endif
 
 /*!
 We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.

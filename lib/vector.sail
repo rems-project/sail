@@ -98,11 +98,21 @@ overload length = {bitvector_length, vector_length}
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 val count_trailing_zeros = pure "count_trailing_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
+$ifndef PRINT_EFFECTS
+
 $[sv_module { stdout = true }]
 val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit
 
 $[sv_module { stderr = true }]
 val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
+
+$else
+
+val print_bits = impure "print_bits_effect" : forall 'n. (string, bits('n)) -> unit
+
+val prerr_bits = impure "prerr_bits_effect" : forall 'n. (string, bits('n)) -> unit
+
+$endif
 
 val sail_sign_extend = pure {
   lean: "Sail.BitVec.signExtend",

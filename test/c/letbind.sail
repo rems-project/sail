@@ -6,6 +6,7 @@ let (y, z) = (20, 300000000000000000000000)
 let (size as atom('size)) : {|32, 64|} = 32
 
 $[sv_module { stdout = true }]
+val print_endline = "print_endline" : string -> unit
 val print = "print_endline" : string -> unit
 
 $[sv_module { stdout = true }]
