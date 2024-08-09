@@ -317,6 +317,12 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         IdSet.iter (fun typ_id -> graph := G.add_edge self (Type typ_id) !graph) (typ_ids typ)
   in
 
+  let is_mapping_fn id =
+    Option.bind
+      (Util.option_first (remove_id_suffix id) ["_forwards"; "_forwards_matches"; "_backwards"; "_backwards_matches"])
+      (fun id -> if Env.is_mapping id def_annot.env then Some id else None)
+  in
+
   begin
     match def with
     | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _))
@@ -339,6 +345,9 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     | DEF_fundef fdef ->
         let id = id_of_fundef fdef in
         graph := G.add_edges (Function id) [] !graph;
+        (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
+           in the same component as the val_spec *)
+        Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
         scan_fundef_tannot (Function id) fdef;
         ignore (rewrite_fun (rewriters (Function id)) fdef)
     | DEF_mapdef mdef ->

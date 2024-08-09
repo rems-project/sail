@@ -516,6 +516,7 @@ val kid_of_id : id -> kid
 
 val prepend_id : string -> id -> id
 val append_id : id -> string -> id
+val remove_id_suffix : id -> string -> id option
 val prepend_kid : string -> kid -> kid
 
 (** {1 Misc functions} *)

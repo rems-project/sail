@@ -252,6 +252,9 @@ val list_init : int -> (int -> 'a) -> 'a list
 (** Alternative to String.starts_with for OCaml < 4.13 *)
 val starts_with : prefix:string -> string -> bool
 
+(** [remove_suffix s suffix] checks if [s] ends with [suffix] and returns the rest of the string if so *)
+val remove_suffix : string -> string -> string option
+
 (** Compute the levenshtein distance between two strings using the
     Wagner–Fischer algorithm. If [~osa] is true computes the optimal
     string alignment distance, which is similar but allows swaps as a

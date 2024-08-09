@@ -507,6 +507,13 @@ let starts_with ~prefix s =
   let prefix_len = String.length prefix in
   prefix_len <= String.length s && String.sub s 0 prefix_len = prefix
 
+let remove_suffix s suffix =
+  let s_len = String.length s in
+  let suffix_len = String.length suffix in
+  if suffix_len <= s_len && String.sub s (s_len - suffix_len) suffix_len = suffix then
+    Some (String.sub s 0 (s_len - suffix_len))
+  else None
+
 let levenshtein_distance ?(osa = false) str1 str2 =
   let dist = Array.make_matrix (String.length str1 + 1) (String.length str2 + 1) 0 in
 
