@@ -92,6 +92,13 @@ val concat_str_dec : (string, int) -> string
 
 function concat_str_dec(str, x) = concat_str(str, dec_str(x))
 
+/* Usually printing is used for diagnostic messages that are not part of the architecture and can
+   be ignored during theorem proving.  It is often helpful to do this to reduce the amount of
+   side-effects present in the model, but we also provide an alternative version that collects
+   messages (currently supported by the Coq back-end). */
+
+$ifndef PRINT_EFFECTS
+
 val print_endline = pure "print_endline" : string -> unit
 
 val prerr_endline = pure "prerr_endline" : string -> unit
@@ -99,5 +106,17 @@ val prerr_endline = pure "prerr_endline" : string -> unit
 val print = pure "print" : string -> unit
 
 val prerr = pure "prerr" : string -> unit
+
+$else
+
+val print_endline = impure "print_endline_effect" : string -> unit
+
+val prerr_endline = impure "prerr_endline_effect" : string -> unit
+
+val print = impure "print_effect" : string -> unit
+
+val prerr = impure "prerr_effect" : string -> unit
+
+$endif
 
 $endif

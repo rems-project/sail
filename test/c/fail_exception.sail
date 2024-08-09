@@ -1,6 +1,6 @@
 $include <flow.sail>
 
-val print = "print_endline" : string -> unit
+val print_endline = "print_endline" : string -> unit
 val print_int = "print_int" : (string, int) -> unit
 
 union exception = {
@@ -16,7 +16,7 @@ function f () = throw(Estring("test"))
 val g : unit -> string effect {escape}
 
 function g () = {
-  print("in g()");
+  print_endline("in g()");
   return("g return");
   throw(Estring("never thrown from g"));
 }
@@ -25,31 +25,31 @@ val main : unit -> unit effect {escape}
 
 function main () = {
   try {
-    print(g());
+    print_endline(g());
     f(); // will throw Estring
     throw(Epair(42, 24));
     throw(Eunknown());
   } catch {
-    Eunknown()   => print("Caught Eunknown"),
-    Epair(x, y)  => print("Caught Epair"),
+    Eunknown()   => print_endline("Caught Eunknown"),
+    Epair(x, y)  => print_endline("Caught Epair"),
     Estring(str) => {
-      print("Caught Estring");
-      print(str)
+      print_endline("Caught Estring");
+      print_endline(str)
     }
   };
   try () catch {
-    _ => print("Unreachable!")
+    _ => print_endline("Unreachable!")
   };
   try throw(Epair(33, 1)) catch {
     Epair(x, _)  => {
-      print("2nd try Caught Epair");
+      print_endline("2nd try Caught Epair");
       print_int("x = ", x);
     },
     _            => ()
   };
   try throw(Eunknown()) catch {
     _ => try let _ = g() in () catch {
-      _ => print("caught old exception")
+      _ => print_endline("caught old exception")
     }
   };
   try
@@ -57,7 +57,7 @@ function main () = {
       Estring(_) => ()
     }
   catch {
-    Eunknown() => print("Fall through OK"),
+    Eunknown() => print_endline("Fall through OK"),
     _ => ()
   };
   f();

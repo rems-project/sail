@@ -2,7 +2,7 @@
 $include <exception_basic.sail>
 $include <flow.sail>
 
-val print = "print_endline" : string -> unit
+val print_endline = "print_endline" : string -> unit
 
 val test : unit -> bool effect {escape}
 
@@ -15,8 +15,8 @@ val main : unit -> unit effect {escape}
 
 function main () = {
   if false & test() then {
-    print("unreachable");
+    print_endline("unreachable");
   } else {
-    print("ok");
+    print_endline("ok");
   }
 }

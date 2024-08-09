@@ -165,6 +165,7 @@ def test_coq(name):
     results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
+    results.expect_failure("real.sail", "print_real not available for Coq at present")
     results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
     results.expect_failure("fail_assert_mono_bug.sail", "test output checking not supported for Coq yet")
     results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
@@ -173,6 +174,9 @@ def test_coq(name):
     results.expect_failure("tl_pat.sail", "Coq backend doesn't support constructors with the same name as a type")
     results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
+    results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
+    results.expect_failure("config.sail","bug: configuration register initialisation missing")
+    results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -180,7 +184,7 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('{} -coq -coq-lib-style stdpp -coq-record-update -coq-all-eq-dec -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('{} -coq -coq-lib-style stdpp -coq-record-update -coq-all-eq-dec -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))
@@ -191,7 +195,11 @@ def test_coq(name):
                 # TODO: find bbv properly
                 step('coqc {}_types.v'.format(basename))
                 step('coqc {}.v'.format(basename))
-                step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
+                step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename), expected_status = 1 if basename.startswith('fail') else 0)
+                filter_command = '''ocaml ../filter.ml < '''
+                step('''{} output.out | diff - ../{}.expect'''.format(filter_command, basename, basename))
+                if os.path.exists('../{}.err_expect'.format(basename)):
+                    step('''{} error.out | diff - ../{}.err_expect'''.format(filter_command, basename, basename))
 
                 os.chdir('..')
                 step('rm -r _coqbuild_{}'.format(basename))
