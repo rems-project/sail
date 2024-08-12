@@ -470,6 +470,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits n, CT_lbits ->
         let* x = unsigned_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
+    | CT_fvector _, CT_vector _ -> return x
+    | CT_vector _, CT_fvector _ -> return x
     | _, _ ->
         let* l = current_location in
         Reporting.unreachable l __POS__
@@ -713,6 +715,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_lbits, _ ->
         let* bv = smt_cval v in
         unsigned_size ~into:(int_size ret_ctyp) ~from:lbits_index (Fn ("len", [bv]))
+    | CT_fvector (len, _), _ -> return (bvpint (int_size ret_ctyp) (Big_int.of_int len))
+    | CT_vector _, _ ->
+        let* v = smt_cval v in
+        return (Fn ("vlen", [v]))
     | _ -> builtin_type_error "length" [v] (Some ret_ctyp)
 
   let builtin_arith_bits op v1 v2 ret_ctyp =
@@ -920,6 +926,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
         return (Fn ("select", [vec; i]))
+    | CT_vector _, i_ctyp, _ ->
+        let* vec = smt_cval vec in
+        let* i = bind (smt_cval i) (unsigned_size ~checked:false ~into:32 ~from:(int_size i_ctyp)) in
+        return (Fn ("vaccess", [vec; i]))
         (*
     | CT_vector _, CT_constant i, _ -> Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
     | CT_vector _, index_ctyp, _ ->

@@ -71,10 +71,17 @@ $define _MAPPING
 $include <arith.sail>
 $include <option.sail>
 
+$[sv_function { arguments = ["string", "int"], return_type = "string" }]
 val string_take = pure "string_take" : (string, nat) -> string
+
+$[sv_function { arguments = ["string", "int"], return_type = "string" }]
 val string_drop = pure "string_drop" : (string, nat) -> string
+
+$[sv_function { arguments = "string", return_type = "int" }]
 val string_length = pure "string_length" : string -> nat
+
 val string_append = pure {coq: "String.append", c: "concat_str", _: "string_append"} : (string, string) -> string
+
 val string_startswith = pure "string_startswith" : (string, string) -> bool
 
 val n_leading_spaces = pure { coq: "n_leading_spaces_Z" } : string -> nat

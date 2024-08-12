@@ -66,6 +66,10 @@ function automatic bit sail_valid_hex_bits(int n, string hex);
    end;
 
    return 1'h1;
-endfunction
+endfunction // sail_valid_hex_bits
+
+function automatic string sail_string_take(string str, int n);
+   return str.substr(0, n - 1);
+endfunction // sail_string_take
 
 `endif

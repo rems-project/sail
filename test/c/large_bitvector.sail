@@ -3,6 +3,8 @@ default Order dec
 $include <arith.sail>
 $include <vector_dec.sail>
 
+$option --sv-int-size 256
+
 val "zeros" : forall 'n. int('n) -> bits('n)
 
 val main : unit -> unit

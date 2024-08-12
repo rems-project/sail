@@ -2,6 +2,8 @@ default Order dec
 
 $include <vector_dec.sail>
 
+$option --sv-bits-size 256
+
 val test : (bitvector(16, dec), bitvector(200, dec)) -> bool
 
 function test (x, y)  = {

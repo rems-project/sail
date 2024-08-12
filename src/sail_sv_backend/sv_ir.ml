@@ -346,6 +346,8 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
   in
   do_visit vis (vis#vdef outer_def) aux outer_def
 
+let visit_sv_defs vis defs = map_no_copy (visit_sv_def vis) defs
+
 class empty_svir_visitor : svir_visitor =
   object
     method vid _ = None

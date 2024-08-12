@@ -17,26 +17,22 @@ sail = get_sail()
 skip_tests = {
     'all_even_vector_length',
     'assign_rename_bug',
-    'bitvector', # This requires -sv_bits_size >= 200
     'cheri128_hsb',
     'empty_list', # recursion
     'list_torture', # recursion
-    'flow_restrict', # contains very large integer literal
     'for_shadow',
     'gvector',
     'inc_tests',
     'issue136', # recursion
-    'large_bitvector', # This requires -sv_bits_size >= 204
     'list_rec_functions1', # lists
     'list_rec_functions2',
     'loop_exception',
     'poly_mapping', # length
     'poly_mapping2',
     'read_write_ram',
-    'real',
+    'real', # reals
     'real_prop', # reals
     'split', # generic vectors
-    'string_take',
     'vector_example',
     'xlen_val', # Calls external C function
     'spc_mappings',
@@ -77,10 +73,6 @@ xml += test_sv('SystemVerilog', '', skip_tests)
 # xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests) */
 # xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests) */
 # xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests) */
-
-skip_tests.remove('bitvector')
-
-# xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
 xml += '</testsuites>\n'
 

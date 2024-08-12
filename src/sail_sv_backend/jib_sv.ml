@@ -955,6 +955,14 @@ module Make (Config : CONFIG) = struct
                 let arg1 = Extract (31, 0, arg1) in
                 wrap (with_updates l updates (SVS_assign (ret, Fn ("sail_valid_hex_bits", [arg1; arg2]))))
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_valid_hex_bits"
+          else if name = "string_take" then
+            let* args = mapM Smt.smt_cval args in
+            let updates, ret = svir_creturn creturn in
+            match args with
+            | [arg1; arg2] ->
+                let arg2 = Extract (31, 0, arg2) in
+                wrap (with_updates l updates (SVS_assign (ret, Fn ("sail_string_take", [arg1; arg2]))))
+            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_valid_hex_bits"
           else (
             match Smt.builtin ~allow_io:false name with
             | Some generator ->

@@ -66,117 +66,71 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** This file defines an intermediate representation that is roughly
-    equivalent to the subset of SystemVerilog that we target. This
-    enables us to perform SystemVerilog to SystemVerilog rewrites -
-    for this purpose we also define a vistor-pattern rewriter
-    [svir_visitor], much like it's [jib_visitor] equivalent. *)
-
 open Libsail
 
-open Jib_visitor
-open Smt_exp
+open Jib_util
+open Sv_ir
 
-type sv_name = SVN_id of Ast.id | SVN_string of string
+module RemoveUnitPorts = struct
+  type port_action = Keep_port | Remove_port
 
-module SVName : sig
-  type t = sv_name
-  val compare : sv_name -> sv_name -> int
+  let is_unit_port (port : sv_module_port) = match port.typ with CT_unit -> true | _ -> false
+
+  let port_var (port : sv_module_port) = SVD_var (port.name, port.typ)
+
+  let scan_ports ports = List.map (fun port -> if is_unit_port port then Remove_port else Keep_port) ports
+
+  let apply_port_action action x = match action with Keep_port -> Some x | Remove_port -> None
+
+  class unit_port_visitor port_actions : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vdef =
+        function
+        | SVD_module { name; input_ports; output_ports; defs } ->
+            port_actions := SVNameMap.add name (scan_ports input_ports, scan_ports output_ports) !port_actions;
+            let unit_inputs, input_ports = List.partition is_unit_port input_ports in
+            let unit_outputs, output_ports = List.partition is_unit_port output_ports in
+            ChangeDoChildrenPost
+              ( SVD_module
+                  {
+                    name;
+                    input_ports;
+                    output_ports;
+                    defs = List.map port_var unit_inputs @ List.map port_var unit_outputs @ defs;
+                  },
+                fun def -> def
+              )
+        | _ -> SkipChildren
+    end
+
+  class unit_connection_visitor port_actions : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vdef =
+        function
+        | SVD_instantiate { module_name; instance_name; input_connections; output_connections } -> begin
+            match SVNameMap.find_opt module_name port_actions with
+            | Some (input_port_action, output_port_action) ->
+                let input_connections =
+                  List.map2 apply_port_action input_port_action input_connections |> Util.option_these
+                in
+                let output_connections =
+                  List.map2 apply_port_action output_port_action output_connections |> Util.option_these
+                in
+                ChangeTo (SVD_instantiate { module_name; instance_name; input_connections; output_connections })
+            | None -> SkipChildren
+          end
+        | SVD_module _ -> DoChildren
+        | _ -> DoChildren
+    end
+
+  let rewrite defs =
+    let port_actions = ref SVNameMap.empty in
+    let defs = visit_sv_defs (new unit_port_visitor port_actions) defs in
+    visit_sv_defs (new unit_connection_visitor !port_actions) defs
 end
 
-module SVNameMap : sig
-  include Map.S with type key = sv_name
-end
-
-val modify_sv_name : ?prefix:string -> ?suffix:string -> sv_name -> sv_name
-
-val string_of_sv_name : sv_name -> string
-
-type sv_module_port = { name : Jib.name; external_name : string; typ : Jib.ctyp }
-
-val mk_port : Jib.name -> Jib.ctyp -> sv_module_port
-
-type sv_module = {
-  name : sv_name;
-  input_ports : sv_module_port list;
-  output_ports : sv_module_port list;
-  defs : sv_def list;
-}
-
-and sv_function = {
-  function_name : sv_name;
-  return_type : Jib.ctyp option;
-  params : (Ast.id * Jib.ctyp) list;
-  body : sv_statement;
-}
-
-and sv_def =
-  | SVD_type of Jib.ctype_def
-  | SVD_module of sv_module
-  | SVD_var of Jib.name * Jib.ctyp
-  | SVD_fundef of sv_function
-  | SVD_instantiate of {
-      module_name : sv_name;
-      instance_name : string;
-      input_connections : smt_exp list;
-      output_connections : sv_place list;
-    }
-  | SVD_always_comb of sv_statement
-
-and sv_place =
-  | SVP_id of Jib.name
-  | SVP_index of sv_place * smt_exp
-  | SVP_field of sv_place * Ast.id
-  | SVP_multi of sv_place list
-  | SVP_void
-
-and sv_statement = SVS_aux of sv_statement_aux * Ast.l
-
-and sv_statement_aux =
-  | SVS_comment of string
-  | SVS_skip
-  | SVS_split_comb
-  | SVS_var of Jib.name * Jib.ctyp * smt_exp option
-  | SVS_return of smt_exp
-  | SVS_assign of sv_place * smt_exp
-  | SVS_call of sv_place * sv_name * smt_exp list
-  | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
-  | SVS_if of smt_exp * sv_statement option * sv_statement option
-  | SVS_block of sv_statement list
-  | SVS_assert of smt_exp * smt_exp
-  | SVS_foreach of sv_name * smt_exp * sv_statement
-  | SVS_raw of string * Jib.name list * Jib.name list
-
-val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_statement_aux
-
-val is_split_comb : sv_statement -> bool
-
-val filter_skips : sv_statement list -> sv_statement list
-
-val svs_block : sv_statement list -> sv_statement_aux
-
-val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
-
-class type svir_visitor = object
-  (** Note that despite inheriting from common_visitor, we don't use
-      [vid]. Instead specific types of identifiers should be
-      re-written by matching on their containing node. *)
-  inherit common_visitor
-
-  method vsmt_exp : smt_exp -> smt_exp visit_action
-  method vplace : sv_place -> sv_place visit_action
-  method vstatement : sv_statement -> sv_statement visit_action
-  method vdef : sv_def -> sv_def visit_action
-end
-
-class empty_svir_visitor : svir_visitor
-
-val visit_smt_exp : svir_visitor -> smt_exp -> smt_exp
-
-val visit_sv_place : svir_visitor -> sv_place -> sv_place
-
-val visit_sv_statement : svir_visitor -> sv_statement -> sv_statement
-
-val visit_sv_def : svir_visitor -> sv_def -> sv_def
-
-val visit_sv_defs : svir_visitor -> sv_def list -> sv_def list
+let remove_unit_ports defs = RemoveUnitPorts.rewrite defs

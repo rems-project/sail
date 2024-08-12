@@ -80,6 +80,7 @@ open Smt_exp
 open Interactive.State
 
 open Generate_primop
+open Sv_optimize
 
 module R = Jib_sv
 
@@ -434,24 +435,27 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   let spec_info = Jib_sv.collect_spec_info ctx cdefs in
 
-  let doc, fn_ctyps =
+  let svir, fn_ctyps =
     List.fold_left
-      (fun (doc, fn_ctyps) cdef ->
-        let svir_defs, fn_ctyps = svir_cdef spec_info ctx fn_ctyps cdef in
-        match svir_defs with
-        | [] -> (doc, fn_ctyps)
-        | _ -> (doc ^^ separate_map (twice hardline) pp_def svir_defs ^^ twice hardline, fn_ctyps)
+      (fun (defs, fn_ctyps) cdef ->
+        let defs', fn_ctyps = svir_cdef spec_info ctx fn_ctyps cdef in
+        (List.rev defs' @ defs, fn_ctyps)
       )
-      (empty, Bindings.empty) cdefs
+      ([], Bindings.empty) cdefs
   in
+  let svir = List.rev svir in
+  let library_svir = SV.Primops.get_generated_library_defs () in
+  let toplevel_svir = Option.fold ~none:[] ~some:(fun m -> [Sv_ir.SVD_module m]) (SV.toplevel_module spec_info) in
+
+  let svir = library_svir @ svir @ toplevel_svir in
+
+  let svir = remove_unit_ports svir in
+
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    let library_defs = SV.Primops.get_generated_library_defs () in
-    let top_doc = Option.fold ~none:empty ~some:(fun m -> pp_def (SVD_module m)) (SV.toplevel_module spec_info) in
     string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base ^^ reg_ref_enums ^^ reg_ref_functions
-    ^^ separate_map (twice hardline) pp_def library_defs
-    ^^ twice hardline ^^ doc ^^ top_doc
+    ^^ separate_map (twice hardline) pp_def svir
   in
 
   (*
