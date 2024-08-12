@@ -230,6 +230,8 @@ let rec map_split f = function
 
 let list_empty = function [] -> true | _ -> false
 
+let rec list_contains e l = match l with [] -> false | hd :: tl -> hd = e || list_contains e tl
+
 let list_index p l =
   let rec aux i l = match l with [] -> None | x :: xs -> if p x then Some i else aux (i + 1) xs in
   aux 0 l
