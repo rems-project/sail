@@ -198,9 +198,10 @@ let name_gen prefix =
 
 (* Take a arm like "<pat> => <exp>" and turn it into "<pat> => Some(<exp>)" *)
 let some_arm = function
-  | Pat_aux (Pat_exp (pat, exp), annot) -> Pat_aux (Pat_exp (pat, mk_exp (E_app (mk_id "Some", [exp]))), annot)
-  | Pat_aux (Pat_when (pat, guard, exp), annot) ->
-      Pat_aux (Pat_when (pat, guard, mk_exp (E_app (mk_id "Some", [exp]))), annot)
+  | Pat_aux (Pat_exp (pat, exp), ((l, _) as annot)) ->
+      Pat_aux (Pat_exp (pat, mk_exp ~loc:l (E_app (mk_id "Some", [exp]))), annot)
+  | Pat_aux (Pat_when (pat, guard, exp), ((l, _) as annot)) ->
+      Pat_aux (Pat_when (pat, guard, mk_exp ~loc:l (E_app (mk_id "Some", [exp]))), annot)
 
 let wildcard_none = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))))
 
