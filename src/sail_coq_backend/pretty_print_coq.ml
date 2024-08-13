@@ -3822,39 +3822,60 @@ end = struct
     let reg_type_pp = doc_id ctxt reg_type_id in
     let num_of_pp = doc_id ctxt (prepend_id "num_of_" reg_type_id) in
     let of_num_pp = doc_id ctxt (append_id reg_type_id "_of_num") in
+    let stdpp_instances =
+      match ctxt.global.library_style with
+      | BBV -> []
+      | Stdpp ->
+          [
+            string "Instance "
+            ^^ doc_id ctxt (prepend_id "Decidable_eq_" reg_type_id)
+            ^^ string " : EqDecision " ^^ reg_type_pp ^^ string " := " ^^ reg_type_pp ^^ string "_eq_dec.";
+            string "Instance "
+            ^^ doc_id ctxt (prepend_id "Countable_" reg_type_id)
+            ^^ string " : Countable " ^^ reg_type_pp ^^ string ". refine {|";
+            string "  encode x := encode (" ^^ num_of_pp ^^ string " x);";
+            string "  decode x := " ^^ of_num_pp ^^ string " <$> decode x";
+            string "|}.";
+            string "  intro s; rewrite decode_encode; simpl.";
+            string "  rewrite " ^^ reg_type_pp ^^ string "_num_of_roundtrip.";
+            string "  reflexivity.";
+            string "Defined.";
+            empty;
+          ]
+    in
     separate hardline
-      [
-        string "Variant " ^^ reg_type_pp ^^ string " :=";
-        separate_map hardline (fun r -> string "  | " ^^ doc_id_ctor ctxt r) registers;
-        string ".";
-        empty;
-        string "Definition " ^^ num_of_pp ^^ string " (r : " ^^ reg_type_pp ^^ string ") : Z :=";
-        string "  match r with";
-        separate hardline
-          (List.mapi (fun i r -> string "  | " ^^ doc_id_ctor ctxt r ^^ string (" => " ^ string_of_int i)) registers);
-        string "  end.";
-        string "Definition " ^^ of_num_pp ^^ string " (i : Z) : " ^^ reg_type_pp ^^ string " :=";
-        string "  match i with";
-        separate hardline
-          (List.mapi (fun i r -> string ("  | " ^ string_of_int i ^ " => ") ^^ doc_id_ctor ctxt r) registers);
-        string "  | _ => " ^^ doc_id_ctor ctxt (List.hd registers);
-        string "  end.";
-        separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
-        string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_iff : register_beq_iffs.";
-        string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_refl : register_beq_refls.";
-        string "Definition "
-        ^^ doc_id ctxt (append_id reg_type_id "_list")
-        ^^ string " : list (string * " ^^ reg_type_pp ^^ string ") := [";
-        separate_map
-          (string ";" ^^ hardline)
-          (fun r ->
-            string "  (" ^^ dquotes (string_of_id r |> string) ^^ string ", " ^^ doc_id_ctor ctxt r ^^ string ")"
-          )
-          registers;
-        string "].";
-        empty;
-        empty;
-      ]
+    @@ [
+         string "Variant " ^^ reg_type_pp ^^ string " :=";
+         separate_map hardline (fun r -> string "  | " ^^ doc_id_ctor ctxt r) registers;
+         string ".";
+         empty;
+         string "Definition " ^^ num_of_pp ^^ string " (r : " ^^ reg_type_pp ^^ string ") : Z :=";
+         string "  match r with";
+         separate hardline
+           (List.mapi (fun i r -> string "  | " ^^ doc_id_ctor ctxt r ^^ string (" => " ^ string_of_int i)) registers);
+         string "  end.";
+         string "Definition " ^^ of_num_pp ^^ string " (i : Z) : " ^^ reg_type_pp ^^ string " :=";
+         string "  match i with";
+         separate hardline
+           (List.mapi (fun i r -> string ("  | " ^ string_of_int i ^ " => ") ^^ doc_id_ctor ctxt r) registers);
+         string "  | _ => " ^^ doc_id_ctor ctxt (List.hd registers);
+         string "  end.";
+         separate hardline (doc_enum_eq reg_type_pp num_of_pp of_num_pp);
+         string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_iff : register_beq_iffs.";
+         string "Hint Rewrite " ^^ reg_type_pp ^^ string "_beq_refl : register_beq_refls.";
+         string "Definition "
+         ^^ doc_id ctxt (append_id reg_type_id "_list")
+         ^^ string " : list (string * " ^^ reg_type_pp ^^ string ") := [";
+         separate_map
+           (string ";" ^^ hardline)
+           (fun r ->
+             string "  (" ^^ dquotes (string_of_id r |> string) ^^ string ", " ^^ doc_id_ctor ctxt r ^^ string ")"
+           )
+           registers;
+         string "].";
+         empty;
+       ]
+    @ stdpp_instances @ [empty]
 
   (* The overall register type is called register, the cases are
      R_<type>, and uses coercions so that the raw register names
@@ -3864,106 +3885,245 @@ end = struct
     (* A model with a single type of registers is unusual, but handy for testing. *)
     let is_single = match type_map with [_] -> true | _ -> false in
     separate hardline
-      [
-        string "Variant register : Type -> Type :=";
-        separate_map hardline
-          (fun (typ_id, typ) ->
-            string "  | "
-            ^^ doc_id_ctor ctxt (reg_case_name typ_id)
-            ^^ string " :> "
-            ^^ doc_id ctxt (reg_type_name typ_id)
-            ^^ string " -> register " ^^ doc_atomic_typ ctxt env true typ
-          )
-          type_map;
-        string ".";
-        empty;
-        string "Definition register_beq {T T'} (r : register T) (r' : register T') : bool :=";
-        string "  match r, r' with";
-        separate_map hardline
-          (fun (typ_id, _typ) ->
-            let id = doc_id_ctor ctxt (reg_case_name typ_id) in
-            string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => "
-            ^^ doc_id ctxt (reg_type_name typ_id)
-            ^^ string "_beq r r'"
-          )
-          type_map;
-        (if is_single then empty else string "  | _, _ => false");
-        string "  end.";
-        empty;
-        string "Lemma register_beq_refl {T} (r : register T) : register_beq r r = true.";
-        string "destruct r; simpl; autorewrite with register_beq_refls; reflexivity.";
-        string "Qed.";
-        empty;
-        string
-          "Definition register_eq_cast {T T'} (P : Type -> Type) (r : register T) (r' : register T') : P T -> option \
-           (P T') :=";
-        string "  match r, r' with";
-        separate_map hardline
-          (fun (typ_id, _typ) ->
-            let id = doc_id_ctor ctxt (reg_case_name typ_id) in
-            string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => fun p => if "
-            ^^ doc_id ctxt (reg_type_name typ_id)
-            ^^ string "_beq r r' then Some p else None"
-          )
-          type_map;
-        (if is_single then empty else string "  | _, _ => fun _ => None");
-        string "  end.";
-        empty;
-        string "Definition register_list : list (string * sigT register) := List.concat [";
-        (* NB: use @existT below because ordinary and stdpp contexts have different implicit arguments *)
-        separate_map
-          (string ";" ^^ hardline)
-          (fun (typ_id, _typ) ->
-            let constr_id = doc_id_ctor ctxt (reg_case_name typ_id) in
-            let list_id = doc_id ctxt (append_id (reg_type_name typ_id) "_list") in
-            string "  List.map (fun '(s, r) => (s, @existT _ _ _ "
-            ^^ parens (constr_id ^^ string " r")
-            ^^ string ")) " ^^ list_id
-          )
-          type_map;
-        string "].";
-        empty;
-        string "Definition string_of_register {T} (r : register T) : string :=";
-        string "  match List.find (fun '(_s, @existT _ _ _ r') => register_beq r r') register_list with";
-        string "  | Some (s, _r) => s";
-        string "  | None => \"<impossible>\"";
-        string "  end.";
-        empty;
-        string "Definition register_of_string (s : string) : option (sigT register) :=";
-        string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
-        string "  | Some (_s, r) => Some r";
-        string "  | None => None";
-        string "  end.";
-        empty;
-        string "Lemma string_of_register_roundtrip {T} (r : register T) :";
-        string "  register_of_string (string_of_register r) = Some (@existT _ _ _ r).";
-        string "case r; intro r'; destruct r'; reflexivity.";
-        string "Qed.";
-        empty;
-        string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
-        string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
-        string
-          "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
-        string "* rewrite H, String.eqb_refl.";
-        string "  specialize (string_of_register_roundtrip r) as H1.";
-        string "  specialize (string_of_register_roundtrip r') as H2.";
-        string "  rewrite H in H1.";
-        string "  rewrite H2 in H1.";
-        string "  assert (E : @existT _ _ T' r' = @existT _ _ T r). { congruence. }";
-        string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
-        string "  change (register_beq r r') with (f (@existT _ register T r) (@existT _ register T' r')).";
-        string "  rewrite <- E.";
-        string "  unfold f.";
-        string "  apply register_beq_refl.";
-        string "* apply String.eqb_neq in H as H'.";
-        string "  rewrite H'.";
-        string "  apply Bool.not_true_is_false.";
-        string "  contradict H.";
-        string
-          "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
-        string "Qed.";
-        empty;
-      ]
+      ([
+         string "Variant register : Type -> Type :=";
+         separate_map hardline
+           (fun (typ_id, typ) ->
+             string "  | "
+             ^^ doc_id_ctor ctxt (reg_case_name typ_id)
+             ^^ string " :> "
+             ^^ doc_id ctxt (reg_type_name typ_id)
+             ^^ string " -> register " ^^ doc_atomic_typ ctxt env true typ
+           )
+           type_map;
+         string ".";
+         (* Prevent injection failing when there's only one register *)
+         string "Add Keep Equalities register.";
+         empty;
+         string "Module GRegister.";
+         string "  Inductive greg := GReg [T : Type] (r : register T).";
+         empty;
+         string "(* The injection tactic can do too much, so prove a one-step lemma. *)";
+         string "Lemma greg_inj {T} {r r' : register T} : GReg r = GReg r' -> r = r'.";
+         string "Proof.";
+         string "  intro e. injection e as e'.";
+         string "  apply Eqdep.EqdepTheory.inj_pair2 in e'.";
+         string "  assumption.";
+         string "Qed.";
+         empty;
+       ]
+      @ ( match ctxt.global.library_style with
+        | BBV -> [string "End GRegister."; empty] (* No Countable, but we could sort this out if there's demand *)
+        | Stdpp when type_map = [] -> [string "End GRegister."; empty]
+        | Stdpp ->
+            [
+              string "  Definition greg_encode (r : greg) : positive :=";
+              string "    match r with";
+              separate hardline
+              @@ List.mapi
+                   (fun i (typ_id, _typ) ->
+                     let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+                     string "    | GReg (" ^^ id ^^ string " r) => encode ("
+                     ^^ string (string_of_int i)
+                     ^^ string ", encode r)"
+                   )
+                   type_map;
+              string "    end.";
+              string "  Definition greg_type_encode (r : greg) : positive :=";
+              string "    match r with";
+              separate hardline
+              @@ List.mapi
+                   (fun i (typ_id, _typ) ->
+                     let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+                     string "    | GReg (" ^^ id ^^ string " _r) => " ^^ string (string_of_int (i + 1))
+                   )
+                   type_map;
+              string "    end.";
+              string "  Definition greg_decode (x : positive) : option greg :=";
+              string "    match decode x with";
+              separate hardline
+              @@ List.mapi
+                   (fun i (typ_id, _typ) ->
+                     let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+                     string "    | Some ("
+                     ^^ string (string_of_int i)
+                     ^^ string ", y) => r ← decode y; mret (GReg ("
+                     ^^ id ^^ string " r))"
+                   )
+                   type_map;
+              string "    | _ => None";
+              string "    end.";
+              string "  Lemma greg_decode_encode r : greg_decode (greg_encode r) = Some r.";
+              string "  Proof.";
+              string "    destruct r as [T r']; destruct r';";
+              string "    unfold greg_decode, greg_encode;";
+              string "    rewrite !decode_encode;";
+              string "    reflexivity.";
+              string "  Qed.";
+              string "  Lemma greg_encode_inj r r' : greg_encode r = greg_encode r' -> r = r'.";
+              string "  Proof.";
+              string "    intro H.";
+              string "    enough (Some r = Some r') by congruence.";
+              string "    rewrite <- (greg_decode_encode r).";
+              string "    rewrite <- (greg_decode_encode r').";
+              string "    congruence.";
+              string "  Qed.";
+              string "  #[export] Instance Decidable_eq_greg : EqDecision greg.";
+              string "  refine (fun r r' => match Pos.eq_dec (greg_encode r) (greg_encode r') with";
+              string "  | left e => left (greg_encode_inj _ _ e)";
+              string "  | right ne => right _";
+              string "  end).";
+              string "  congruence.";
+              string "  Defined.";
+              string "  #[export] Instance Countable_greg : Countable greg := {|";
+              string "    encode := greg_encode;";
+              string "    decode := greg_decode;";
+              string "    decode_encode := greg_decode_encode;";
+              string "  |}.";
+              string "End GRegister.";
+              empty;
+              (*TODO*)
+              string "Require Import Eqdep.";
+              empty;
+              string "Instance Decidable_eq_register {T} : EqDecision (register T).";
+              string "refine (fun r r' => match GRegister.Decidable_eq_greg (GRegister.GReg r) (GRegister.GReg r') with";
+              string "| left e => left _";
+              string "| right ne => right _";
+              string "end).";
+              string "* by apply GRegister.greg_inj in e.";
+              string "* intros e; subst; congruence.";
+              string "Defined.";
+              empty;
+              string
+                "Definition register_transport {T T'} {P : Type -> Type} {r : register T} {r' : register T'} : \
+                 GRegister.GReg r = GRegister.GReg r' -> P T -> P T'.";
+              string "refine (";
+              string "  match r, r' with";
+              separate_map hardline
+                (fun (typ_id, _typ) ->
+                  let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+                  string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => fun _ x => x"
+                )
+                type_map;
+              (if is_single then empty else string "  | _, _ => fun e _ => _");
+              string "  end";
+              string ").";
+              ( if is_single then string "(* no wildcard case *)"
+                else
+                  separate hardline
+                    [
+                      string "  all:";
+                      string
+                        "  enough (H : GRegister.greg_type_encode (GRegister.GReg r0) = GRegister.greg_type_encode \
+                         (GRegister.GReg r1));";
+                      string "  [ simpl in H; congruence";
+                      string "  | rewrite e; reflexivity].";
+                    ]
+              );
+              string "Defined.";
+              empty;
+              string
+                "Lemma register_transport_sound {T P} {r r' : register T} (e : GRegister.GReg r = GRegister.GReg r') \
+                 (p : P T) :";
+              string "  register_transport e p = p.";
+              string "Proof.";
+              string "  pose proof (e' := GRegister.greg_inj e).";
+              string "  subst r'.";
+              string "  destruct r; reflexivity.";
+              string "Qed.";
+            ]
+        )
+      @ [
+          empty;
+          string "Definition register_beq {T T'} (r : register T) (r' : register T') : bool :=";
+          string "  match r, r' with";
+          separate_map hardline
+            (fun (typ_id, _typ) ->
+              let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+              string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => "
+              ^^ doc_id ctxt (reg_type_name typ_id)
+              ^^ string "_beq r r'"
+            )
+            type_map;
+          (if is_single then empty else string "  | _, _ => false");
+          string "  end.";
+          empty;
+          string "Lemma register_beq_refl {T} (r : register T) : register_beq r r = true.";
+          string "destruct r; simpl; autorewrite with register_beq_refls; reflexivity.";
+          string "Qed.";
+          empty;
+          string
+            "Definition register_eq_cast {T T'} (P : Type -> Type) (r : register T) (r' : register T') : P T -> option \
+             (P T') :=";
+          string "  match r, r' with";
+          separate_map hardline
+            (fun (typ_id, _typ) ->
+              let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+              string "  | " ^^ id ^^ string " r, " ^^ id ^^ string " r' => fun p => if "
+              ^^ doc_id ctxt (reg_type_name typ_id)
+              ^^ string "_beq r r' then Some p else None"
+            )
+            type_map;
+          (if is_single then empty else string "  | _, _ => fun _ => None");
+          string "  end.";
+          empty;
+          string "Definition register_list : list (string * sigT register) := List.concat [";
+          (* NB: use @existT below because ordinary and stdpp contexts have different implicit arguments *)
+          separate_map
+            (string ";" ^^ hardline)
+            (fun (typ_id, _typ) ->
+              let constr_id = doc_id_ctor ctxt (reg_case_name typ_id) in
+              let list_id = doc_id ctxt (append_id (reg_type_name typ_id) "_list") in
+              string "  List.map (fun '(s, r) => (s, @existT _ _ _ "
+              ^^ parens (constr_id ^^ string " r")
+              ^^ string ")) " ^^ list_id
+            )
+            type_map;
+          string "].";
+          empty;
+          string "Definition string_of_register {T} (r : register T) : string :=";
+          string "  match List.find (fun '(_s, @existT _ _ _ r') => register_beq r r') register_list with";
+          string "  | Some (s, _r) => s";
+          string "  | None => \"<impossible>\"";
+          string "  end.";
+          empty;
+          string "Definition register_of_string (s : string) : option (sigT register) :=";
+          string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
+          string "  | Some (_s, r) => Some r";
+          string "  | None => None";
+          string "  end.";
+          empty;
+          string "Lemma string_of_register_roundtrip {T} (r : register T) :";
+          string "  register_of_string (string_of_register r) = Some (@existT _ _ _ r).";
+          string "case r; intro r'; destruct r'; reflexivity.";
+          string "Qed.";
+          empty;
+          string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
+          string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
+          string
+            "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
+          string "* rewrite H, String.eqb_refl.";
+          string "  specialize (string_of_register_roundtrip r) as H1.";
+          string "  specialize (string_of_register_roundtrip r') as H2.";
+          string "  rewrite H in H1.";
+          string "  rewrite H2 in H1.";
+          string "  assert (E : @existT _ _ T' r' = @existT _ _ T r). { congruence. }";
+          string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
+          string "  change (register_beq r r') with (f (@existT _ register T r) (@existT _ register T' r')).";
+          string "  rewrite <- E.";
+          string "  unfold f.";
+          string "  apply register_beq_refl.";
+          string "* apply String.eqb_neq in H as H'.";
+          string "  rewrite H'.";
+          string "  apply Bool.not_true_is_false.";
+          string "  contradict H.";
+          string
+            "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; \
+             reflexivity.";
+          string "Qed.";
+          empty;
+        ]
+      )
     ^^
     if !opt_coq_all_eq_dec then (
       let class_pp, countable_pp =
@@ -4004,6 +4164,15 @@ end = struct
           string "#[export] Instance Decidable_eq_register_values {T : Type} `(r : register T) : "
           ^^ class_pp ^^ string " :=";
           string "match r with";
+          separate_map hardline
+            (fun (typ_id, _typ) ->
+              let id = doc_id_ctor ctxt (reg_case_name typ_id) in
+              string "  | " ^^ id ^^ string " _ => _"
+            )
+            type_map;
+          string "end.";
+          string "#[export] Instance Inhabited_register_values {T : Type} `(r : register T) : Inhabited T :=";
+          string "  match r with";
           separate_map hardline
             (fun (typ_id, _typ) ->
               let id = doc_id_ctor ctxt (reg_case_name typ_id) in
@@ -4234,8 +4403,16 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                empty;
                string "Module Arch <: Arch.";
                string "  Definition reg := register.";
-               (* string "  Definition reg_eq : EqDecision reg := _.";
-                  string "  Definition reg_countable : Countable reg := _.";*)
+               string "  Definition reg_eq := @Decidable_eq_register.";
+               string "  Include GRegister.";
+               string "  Definition greg_eq := @Decidable_eq_greg.";
+               string "  Definition greg_cnt := @Countable_greg.";
+               string "  Definition regval_inhabited := @Inhabited_register_values.";
+               string "  Definition regval_eq := @Decidable_eq_register_values.";
+               string "  Definition regval_cnt := @Countable_register_values.";
+               string "  Definition regval_transport A B := @register_transport A B (fun x => x).";
+               string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
+               (*   string "  Definition reg_countable : Countable reg := _.";*)
                string "  Definition va_size := 64%N.";
                (* FIXME *)
                string "  Definition pa := " ^^ pp_typ params.pa_type ^^ string ".";
@@ -4292,7 +4469,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             hardline;
             ( match library_style with
             | BBV -> empty
-            | Stdpp -> string "From stdpp Require Import base countable." ^^ hardline
+            | Stdpp -> separate hardline [string "From stdpp Require Import base countable."; string "Require Eqdep."]
             );
             (separate_map hardline)
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
