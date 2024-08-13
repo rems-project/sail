@@ -1003,12 +1003,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* l = current_location in
         let store_fn = Primop_gen.fvector_store l len ctyp in
         let* vec = smt_cval vec in
-        let* x = smt_cval x in
+        let* x = bind (smt_cval x) (smt_conversion ~into:ctyp ~from:(cval_ctyp x)) in
         let* i =
           bind (smt_cval i)
             (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
-        return (Store (Fixed len, store_fn, vec, i, x))
+        return (Store (Fixed (len, ctyp), store_fn, vec, i, x))
     (*
        | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
          Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
@@ -1156,6 +1156,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
+  let builtin_vector_init len elem ret_ctyp =
+    match ret_ctyp with
+    | CT_fvector (len, elem_ctyp) ->
+        let* smt = smt_cval elem in
+        let* smt = smt_conversion ~into:elem_ctyp ~from:(cval_ctyp elem) smt in
+        return (Fn ("Array", List.init len (fun _ -> smt)))
+    | _ -> builtin_type_error "vector_init" [len; elem] (Some ret_ctyp)
+
   let unary_smt op v _ =
     let* smt = smt_cval v in
     return (Fn (op, [smt]))
@@ -1222,6 +1230,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "and_bits" -> binary_primop (builtin_bitwise "bvand")
     | "or_bits" -> binary_primop (builtin_bitwise "bvor")
     | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
+    | "vector_init" -> binary_primop builtin_vector_init
     | "vector_access" -> binary_primop builtin_vector_access
     | "vector_subrange" -> ternary_primop builtin_vector_subrange
     | "vector_update" -> ternary_primop builtin_vector_update

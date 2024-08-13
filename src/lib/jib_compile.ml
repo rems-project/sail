@@ -1799,7 +1799,39 @@ module Make (C : CONFIG) = struct
 
   let is_struct id = function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false
 
-  let is_variant id = function CT_variant (id', _) -> Id.compare id id' = 0 | _ -> false
+  class contains_struct_visitor id found =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp =
+        function
+        | CT_struct (id', _) when Id.compare id id' = 0 ->
+            found := true;
+            SkipChildren
+        | _ -> DoChildren
+    end
+
+  let contains_struct id cdef =
+    let found = ref false in
+    let _ = visit_cdef (new contains_struct_visitor id found) cdef in
+    !found
+
+  class contains_variant_visitor id found =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp =
+        function
+        | CT_variant (id', _) when Id.compare id id' = 0 ->
+            found := true;
+            SkipChildren
+        | _ -> DoChildren
+    end
+
+  let contains_variant id cdef =
+    let found = ref false in
+    let _ = visit_cdef (new contains_variant_visitor id found) cdef in
+    !found
 
   class fix_variants_visitor ctx var_id =
     object
@@ -1953,8 +1985,8 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
-        let cdefs = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
+        let prior = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
+        let cdefs = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
 
         let ctx =
           {
@@ -2010,12 +2042,8 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior =
-          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) prior
-        in
-        let cdefs =
-          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs
-        in
+        let prior = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
+        let cdefs = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
         let ctx =
           {
             ctx with

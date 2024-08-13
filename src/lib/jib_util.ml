@@ -1111,18 +1111,6 @@ let cdef_ctyps (CDEF_aux (aux, _)) =
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
 
-let cdef_ctyps_exist pred (CDEF_aux (aux, _)) =
-  match aux with
-  | CDEF_register (_, ctyp, instrs) -> pred ctyp || instrs_ctyps_exist pred instrs
-  | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
-  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps_exist pred instrs
-  | CDEF_type tdef -> List.exists pred (ctype_def_ctyps tdef)
-  | CDEF_let (_, bindings, instrs) ->
-      List.exists (fun (_, ctyp) -> pred ctyp) bindings || instrs_ctyps_exist pred instrs
-  | CDEF_pragma (_, _) -> false
-
-let cdef_ctyps_has pred cdef = cdef_ctyps_exist (ctyp_has pred) cdef
-
 let rec c_ast_registers = function
   | CDEF_aux (CDEF_register (id, ctyp, instrs), _) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
   | _ :: ast -> c_ast_registers ast

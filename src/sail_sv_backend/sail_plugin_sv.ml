@@ -444,6 +444,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
       ([], Bindings.empty) cdefs
   in
   let svir = List.rev svir in
+  let svir_types, svir = List.partition Sv_ir.is_typedef svir in
   let library_svir = SV.Primops.get_generated_library_defs () in
   let toplevel_svir = Option.fold ~none:[] ~some:(fun m -> [Sv_ir.SVD_module m]) (SV.toplevel_module spec_info) in
 
@@ -454,7 +455,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base ^^ reg_ref_enums ^^ reg_ref_functions
+    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
+    ^^ separate_map (twice hardline) pp_def svir_types
+    ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
     ^^ separate_map (twice hardline) pp_def svir
   in
 

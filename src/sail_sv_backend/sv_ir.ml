@@ -161,6 +161,8 @@ let svs_raw ?(inputs = []) ?(outputs = []) s = SVS_raw (s, inputs, outputs)
 
 let mk_statement ?(loc = Parse_ast.Unknown) aux = SVS_aux (aux, loc)
 
+let is_typedef = function SVD_type _ -> true | _ -> false
+
 class type svir_visitor = object
   inherit common_visitor
   method vsmt_exp : smt_exp -> smt_exp visit_action

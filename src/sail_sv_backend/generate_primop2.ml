@@ -87,6 +87,8 @@ module type S = sig
   val hd : ctyp -> string
 
   val tl : ctyp -> string
+
+  val fvector_store : int -> ctyp -> string
 end
 
 module Make
@@ -110,6 +112,34 @@ module Make
   let get_generated_library_defs () = List.rev (snd !generated_library_defs)
 
   let primop_name s = Jib_util.name (mk_id s)
+
+  let fvector_store len elem_ctyp =
+    let name = sprintf "sail_array_store_%d_%s" len (Util.zencode_string (string_of_ctyp elem_ctyp)) in
+    register_library_def name (fun () ->
+        let arr_ctyp = CT_fvector (len, elem_ctyp) in
+        let ix_width = Generate_primop.required_width (Big_int.of_int (len - 1)) - 1 in
+        let r = primop_name "r" in
+        let arr = primop_name "arr" in
+        let i = primop_name "i" in
+        let x = primop_name "x" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some (CT_fvector (len, elem_ctyp));
+            params = [(mk_id "arr", arr_ctyp); (mk_id "i", CT_fbits ix_width); (mk_id "x", elem_ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   ([
+                      SVS_var (r, arr_ctyp, Some (Var arr));
+                      SVS_assign (SVP_index (SVP_id r, Var i), Var x);
+                      SVS_return (Var r);
+                    ]
+                   |> List.map mk_statement
+                   )
+                );
+          }
+    )
 
   let print_fbits width =
     let name = sprintf "sail_print_fixed_bits_%d" width in

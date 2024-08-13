@@ -85,7 +85,7 @@ let mk_record name fields = Datatype (name, [(name, fields)])
 
 let mk_variant name ctors = Datatype (name, List.map (fun (ctor, ty) -> (ctor, [("un" ^ ctor, ty)])) ctors)
 
-type smt_array_info = Fixed of int
+type smt_array_info = Fixed of int * Jib.ctyp
 
 type smt_exp =
   | Bool_lit of bool

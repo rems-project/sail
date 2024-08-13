@@ -21,7 +21,6 @@ skip_tests = {
     'empty_list', # recursion
     'list_torture', # recursion
     'for_shadow',
-    'gvector',
     'inc_tests',
     'issue136', # recursion
     'list_rec_functions1', # lists
@@ -32,8 +31,8 @@ skip_tests = {
     'read_write_ram',
     'real', # reals
     'real_prop', # reals
-    'split', # generic vectors
-    'vector_example',
+    'split', # generic vectors, loops
+    'vector_example', # loops
     'xlen_val', # Calls external C function
     'spc_mappings',
     'lib_hex_bits', # bitvector parsing

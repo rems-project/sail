@@ -157,6 +157,8 @@ val svs_block : sv_statement list -> sv_statement_aux
 
 val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
 
+val is_typedef : sv_def -> bool
+
 class type svir_visitor = object
   (** Note that despite inheriting from common_visitor, we don't use
       [vid]. Instead specific types of identifiers should be

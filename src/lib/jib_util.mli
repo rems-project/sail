@@ -190,8 +190,6 @@ val clexp_ctyp : clexp -> ctyp
 val creturn_ctyp : creturn -> ctyp
 val cdef_ctyps : cdef -> CTSet.t
 
-val cdef_ctyps_has : (ctyp -> bool) -> cdef -> bool
-
 (** {2 Type definitions} *)
 
 val ctype_def_id : ctype_def -> id

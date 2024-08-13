@@ -237,6 +237,7 @@ let collect_spec_info ctx cdefs =
             let references = ref CTSet.empty in
             let need_stdout = ref false in
             let need_stderr = ref false in
+            prerr_endline ("visit " ^ string_of_id f);
             let _ =
               visit_cdef
                 (new footprint_visitor ctx registers references reads writes throws need_stdout need_stderr)
@@ -469,8 +470,7 @@ module Make (Config : CONFIG) = struct
 
         let count_leading_zeros _l sz = Generate_primop.count_leading_zeros sz
 
-        let fvector_store _l len ctyp =
-          Generate_primop.fvector_store len (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
+        let fvector_store _l len ctyp = Primops.fvector_store len ctyp
 
         let is_empty l = function
           | CT_list ctyp -> Primops.is_empty ctyp
@@ -719,6 +719,10 @@ module Make (Config : CONFIG) = struct
 
   let string_of_bitU = function Sail2_values.B0 -> "0" | Sail2_values.B1 -> "1" | Sail2_values.BU -> "X"
 
+  let all_ones = List.for_all (function Sail2_values.B1 -> true | _ -> false)
+
+  let all_zeros = List.for_all (function Sail2_values.B0 -> true | _ -> false)
+
   let has_undefined_bit = List.exists (function Sail2_values.BU -> true | _ -> false)
 
   let rec hex_bitvector bits =
@@ -803,6 +807,7 @@ module Make (Config : CONFIG) = struct
     | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pp_smt x)
     | Fn ("cons", [x; xs]) -> lbrace ^^ pp_smt x ^^ comma ^^ space ^^ pp_smt xs ^^ rbrace
     | Fn ("str.++", xs) -> lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
+    | Fn ("Array", xs) -> squote ^^ lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
     | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) pp_smt args)
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pp_smt [arr; i; x])
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pp_smt x ^^ string "})))"
