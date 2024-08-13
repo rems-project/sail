@@ -101,29 +101,41 @@ let is_if_stmt chunk = is_if_then_else chunk || is_if_then chunk
 let is_block_like chunk = is_block chunk || is_match chunk || is_tuple chunk
 
 (* multi chunk *)
-let rec is_chunks_match ?(end_rule = fun c -> is_delim c) ?(skip_rule = is_blcok_comment) start_rule chunks =
+let rec is_chunks_match ?(tl_rule = fun c -> is_delim c) ?(skip_hd_rule = is_blcok_comment) hd_rule chunks =
   let skip_index = ref 0 in
-  Seq.fold_lefti
-    (fun acc i chunk ->
-      match i with
-      | i when i = !skip_index ->
-          if skip_rule chunk then (
-            skip_index := !skip_index + 1;
-            acc
-          )
-          else start_rule chunk
-      | _ -> acc && end_rule chunk
-    )
-    false (Queue.to_seq chunks)
-
+  let acc, _ =
+    Queue.fold
+      (fun (acc, i) chunk ->
+        let res =
+          match i with
+          | i when i = !skip_index ->
+              if skip_hd_rule chunk then (
+                skip_index := !skip_index + 1;
+                acc
+              )
+              else hd_rule chunk
+          | _ -> acc && tl_rule chunk
+        in
+        (res, i + 1)
+      )
+      (false, 0) chunks
+  in
+  acc
 let rec is_chunks_block_like =
-  is_chunks_match ~end_rule:(fun c -> is_delim c || is_blcok_comment c || is_spacer c) is_block_like
+  is_chunks_match ~tl_rule:(fun c -> is_delim c || is_blcok_comment c || is_spacer c) is_block_like
 
 let rec is_chunks_if_then_else = is_chunks_match is_if_then_else
 
-let find_rtrim_index rule chunks =
-  let seq = Queue.to_seq chunks in
-  Seq.fold_lefti (fun acc i chunk -> if not (rule chunk) then i + 1 else i) 0 seq
+let find_rtrim_index match_rule chunks =
+  let acc, _ =
+    Queue.fold
+      (fun (acc, i) chunk ->
+        let acc = if not (match_rule chunk) then i + 1 else i in
+        (acc, i + 1)
+      )
+      (0, 0) chunks
+  in
+  acc
 
 (* Remove additional (> 1) trailing newlines at the end of a string *)
 let discard_extra_trailing_newlines s =
@@ -637,7 +649,7 @@ module Make (Config : CONFIG) = struct
     | App (id, args) ->
         doc_id id
         ^^ group
-             ( if List.is_empty args then (* avoid `let foo = bar(\n)` *)
+             ( if Util.list_empty args then (* avoid `let foo = bar(\n)` *)
                  string "()"
                else
                  surround indent 0 (char '(')
@@ -1050,10 +1062,13 @@ module Make (Config : CONFIG) = struct
   *)
   and doc_chunks_rhs ?(opt = default_opt) opts chunks =
     let rtrim_index = find_rtrim_index is_spacer chunks in
-    let doc =
-      Seq.fold_lefti
-        (fun doc i chunk -> if opt.skip_spacer && i >= rtrim_index then doc else doc ^^ doc_chunk ~opt opts chunk)
-        empty (Queue.to_seq chunks)
+    let doc, _ =
+      Queue.fold
+        (fun (doc, i) chunk ->
+          let res = if opt.skip_spacer && i >= rtrim_index then doc else doc ^^ doc_chunk ~opt opts chunk in
+          (res, i + 1)
+        )
+        (empty, 0) chunks
     in
     (* test if can nowrap with optional strict mode *)
     let doc =
