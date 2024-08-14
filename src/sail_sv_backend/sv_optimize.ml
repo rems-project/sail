@@ -227,9 +227,7 @@ module RemoveUnusedVariables = struct
   let rec smt_uses stack uses = function
     | Var name -> begin
         match get_num name !stack with
-        | Some num ->
-            prerr_endline ("USE " ^ string_of_name name);
-            uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
+        | Some num -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
         | None -> ()
       end
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
@@ -255,9 +253,7 @@ module RemoveUnusedVariables = struct
   let rec place_uses stack uses = function
     | SVP_id name -> begin
         match get_num name !stack with
-        | Some num ->
-            prerr_endline ("USE " ^ string_of_name name);
-            uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
+        | Some num -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
         | None -> ()
       end
     | SVP_index (place, exp) ->
@@ -265,7 +261,7 @@ module RemoveUnusedVariables = struct
         smt_uses stack uses exp
     | SVP_field (place, _) -> place_uses stack uses place
     | SVP_multi places -> List.iter (place_uses stack uses) places
-    | SVP_void -> ()
+    | SVP_void _ -> ()
 
   let rec statement_uses stack uses (SVS_aux (aux, l)) =
     match aux with

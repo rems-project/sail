@@ -323,7 +323,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let track_throw = false
   let branch_coverage = None
   let use_real = false
-  let use_void = false
+  let use_void = true
 end
 
 let register_types cdefs =

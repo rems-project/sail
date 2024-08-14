@@ -75,16 +75,16 @@ let optimize_unit instrs =
   let unit_instr = function
     | I_aux (I_funcall (CR_one clexp, extern, id, args), annot) as instr -> begin
         match clexp_ctyp clexp with
-        | CT_unit -> I_aux (I_funcall (CR_one CL_void, extern, id, List.map unit_cval args), annot)
+        | CT_unit -> I_aux (I_funcall (CR_one (CL_void CT_unit), extern, id, List.map unit_cval args), annot)
         | _ -> instr
       end
     | I_aux (I_copy (clexp, cval), annot) as instr -> begin
-        match clexp_ctyp clexp with CT_unit -> I_aux (I_copy (CL_void, unit_cval cval), annot) | _ -> instr
+        match clexp_ctyp clexp with CT_unit -> I_aux (I_copy (CL_void CT_unit, unit_cval cval), annot) | _ -> instr
       end
     | instr -> instr
   in
   let non_pointless_copy (I_aux (aux, _)) =
-    match aux with I_decl (CT_unit, _) -> false | I_copy (CL_void, _) -> false | _ -> true
+    match aux with I_decl (CT_unit, _) -> false | I_copy (CL_void _, _) -> false | _ -> true
   in
   filter_instrs non_pointless_copy (map_instr_list unit_instr instrs)
 
@@ -303,7 +303,7 @@ let rec clexp_subst id subst = function
   | CL_field (clexp, field) -> CL_field (clexp_subst id subst clexp, field)
   | CL_addr clexp -> CL_addr (clexp_subst id subst clexp)
   | CL_tuple (clexp, n) -> CL_tuple (clexp_subst id subst clexp, n)
-  | CL_void -> CL_void
+  | CL_void ctyp -> CL_void ctyp
   | CL_rmw _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot substitute into read-modify-write construct"
 
 let creturn_subst id subst = function
@@ -536,7 +536,7 @@ let remove_tuples cdefs ctx =
         in
         CL_field (clexp, field)
     | CL_field (clexp, field) -> CL_field (fix_clexp clexp, field)
-    | CL_void -> CL_void
+    | CL_void ctyp -> CL_void ctyp
     | CL_rmw (read, write, ctyp) -> CL_rmw (read, write, ctyp)
   in
   let fix_creturn = function

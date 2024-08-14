@@ -131,7 +131,7 @@ and sv_place =
   | SVP_index of sv_place * smt_exp
   | SVP_field of sv_place * Ast.id
   | SVP_multi of sv_place list
-  | SVP_void
+  | SVP_void of Jib.ctyp
 
 and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 

@@ -1189,7 +1189,7 @@ module Make (C : CONFIG) = struct
     | (AE_aux (_, { loc = l; _ }) as exp) :: exps ->
         let setup, call, cleanup = compile_aexp ctx exp in
         let rest = compile_block ctx exps in
-        if C.use_void then iblock (setup @ [call CL_void] @ cleanup) :: rest
+        if C.use_void then iblock (setup @ [call (CL_void CT_unit)] @ cleanup) :: rest
         else (
           let gs = ngensym () in
           iblock (setup @ [idecl l CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest

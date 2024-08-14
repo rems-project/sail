@@ -135,7 +135,7 @@ and sv_place =
   | SVP_index of sv_place * smt_exp
   | SVP_field of sv_place * Ast.id
   | SVP_multi of sv_place list
-  | SVP_void
+  | SVP_void of Jib.ctyp
 
 and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 
@@ -241,7 +241,9 @@ let rec visit_sv_place (vis : svir_visitor) outer_place =
     | SVP_multi places ->
         let places' = map_no_copy (visit_sv_place vis) places in
         if places == places' then no_change else SVP_multi places'
-    | SVP_void -> no_change
+    | SVP_void ctyp ->
+        let ctyp' = visit_ctyp (vis :> common_visitor) ctyp in
+        if ctyp == ctyp' then no_change else SVP_void ctyp'
   in
   do_visit vis (vis#vplace outer_place) aux outer_place
 

@@ -350,7 +350,7 @@ let rec string_of_clexp = function
   | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_id field
   | CL_addr clexp -> string_of_clexp clexp ^ "*"
   | CL_tuple (clexp, n) -> string_of_clexp clexp ^ "." ^ string_of_int n
-  | CL_void -> "void"
+  | CL_void _ -> "void"
   | CL_rmw (id1, id2, ctyp) -> Printf.sprintf "rmw(%s, %s)" (string_of_name id1) (string_of_name id2)
 
 let string_of_creturn = function
@@ -670,7 +670,7 @@ let rec clexp_deps = function
   | CL_field (clexp, _) -> clexp_deps clexp
   | CL_tuple (clexp, _) -> clexp_deps clexp
   | CL_addr clexp -> clexp_deps clexp
-  | CL_void -> (NameSet.empty, NameSet.empty)
+  | CL_void _ -> (NameSet.empty, NameSet.empty)
 
 let creturn_deps = function
   | CR_one clexp -> clexp_deps clexp
@@ -721,7 +721,7 @@ let rec clexp_typed_writes = function
   | CL_field (clexp, _) -> clexp_typed_writes clexp
   | CL_tuple (clexp, _) -> clexp_typed_writes clexp
   | CL_addr clexp -> clexp_typed_writes clexp
-  | CL_void -> NameCTSet.empty
+  | CL_void _ -> NameCTSet.empty
 
 let creturn_typed_writes = function
   | CR_one clexp -> clexp_typed_writes clexp
@@ -742,7 +742,7 @@ let rec map_clexp_ctyp f = function
   | CL_field (clexp, id) -> CL_field (map_clexp_ctyp f clexp, id)
   | CL_tuple (clexp, n) -> CL_tuple (map_clexp_ctyp f clexp, n)
   | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
-  | CL_void -> CL_void
+  | CL_void ctyp -> CL_void (f ctyp)
 
 let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
@@ -1052,7 +1052,7 @@ let rec clexp_ctyp = function
       | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
       | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
     end
-  | CL_void -> CT_unit
+  | CL_void ctyp -> ctyp
 
 let creturn_ctyp = function CR_one clexp -> clexp_ctyp clexp | CR_multi clexps -> CT_tup (List.map clexp_ctyp clexps)
 

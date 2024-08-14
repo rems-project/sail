@@ -892,7 +892,7 @@ module Make (Config : CONFIG) = struct
     | CL_field (clexp, field) ->
         let updates, lexp = svir_clexp ~parents:(field :: parents) clexp in
         (updates, SVP_field (lexp, field))
-    | CL_void -> ([], SVP_void)
+    | CL_void ctyp -> ([], SVP_void ctyp)
     | CL_rmw (id_from, id, ctyp) ->
         let rec assignments lexp subpart ctyp = function
           | parent :: parents -> begin
@@ -933,7 +933,7 @@ module Make (Config : CONFIG) = struct
         wrap (SVS_return value)
     | I_end id -> wrap (SVS_return (Var id))
     | I_exit _ -> wrap (svs_raw "$finish")
-    | I_copy (CL_void, cval) -> return None
+    | I_copy (CL_void _, cval) -> return None
     | I_copy (clexp, cval) ->
         let* value =
           Smt_gen.bind (Smt.smt_cval cval) (Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval))
@@ -1090,7 +1090,7 @@ module Make (Config : CONFIG) = struct
     | SVP_index (place, i) -> pp_place place ^^ lbracket ^^ pp_smt i ^^ rbracket
     | SVP_field (place, field) -> pp_place place ^^ dot ^^ pp_id field
     | SVP_multi places -> parens (separate_map (comma ^^ space) pp_place places)
-    | SVP_void -> string "void"
+    | SVP_void _ -> string "void"
 
   let pp_sv_name = function SVN_id id -> pp_id id | SVN_string s -> string s
 

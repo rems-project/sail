@@ -1118,7 +1118,7 @@ let rec sgen_clexp l = function
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_id field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
-  | CL_void -> assert false
+  | CL_void _ -> assert false
   | CL_rmw _ -> assert false
 
 let rec sgen_clexp_pure l = function
@@ -1131,7 +1131,7 @@ let rec sgen_clexp_pure l = function
   | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_id field
   | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
   | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
-  | CL_void -> assert false
+  | CL_void _ -> assert false
   | CL_rmw _ -> assert false
 
 (** Generate instructions to copy from a cval to a clexp. This will
