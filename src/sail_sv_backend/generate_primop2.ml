@@ -103,7 +103,7 @@ module Make
     let names, _ = !generated_library_defs in
     if StringSet.mem name names then name
     else (
-      let source = def () in
+      let source = mk_def (def ()) in
       let names, defs = !generated_library_defs in
       generated_library_defs := (StringSet.add name names, source :: defs);
       name
@@ -194,7 +194,7 @@ module Make
             name = SVN_string name;
             input_ports = [mk_port s CT_string; mk_port b (CT_fbits width); mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs = [SVD_always_comb (mk_statement (SVS_block always_comb))];
+            defs = [mk_def (SVD_always_comb (mk_statement (SVS_block always_comb)))];
           }
     )
 
@@ -280,7 +280,7 @@ module Make
             name = SVN_string "sail_print_bits";
             input_ports = [mk_port s CT_string; mk_port b CT_lbits; mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs;
+            defs = List.map mk_def defs;
           }
     )
 
@@ -332,7 +332,7 @@ module Make
             name = SVN_string name;
             input_ports = [mk_port s CT_string; mk_port i CT_lint; mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs = [SVD_always_comb (mk_statement always_comb)];
+            defs = [mk_def (SVD_always_comb (mk_statement always_comb))];
           }
     )
 

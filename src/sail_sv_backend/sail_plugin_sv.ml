@@ -446,11 +446,13 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let svir = List.rev svir in
   let svir_types, svir = List.partition Sv_ir.is_typedef svir in
   let library_svir = SV.Primops.get_generated_library_defs () in
-  let toplevel_svir = Option.fold ~none:[] ~some:(fun m -> [Sv_ir.SVD_module m]) (SV.toplevel_module spec_info) in
+  let toplevel_svir =
+    Option.fold ~none:[] ~some:(fun m -> [Sv_ir.mk_def (Sv_ir.SVD_module m)]) (SV.toplevel_module spec_info)
+  in
 
   let svir = library_svir @ svir @ toplevel_svir in
 
-  let svir = remove_unit_ports svir in
+  let svir = remove_unused_variables (remove_unit_ports svir) in
 
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in

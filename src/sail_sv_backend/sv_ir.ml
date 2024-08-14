@@ -114,7 +114,10 @@ and sv_function = {
   body : sv_statement;
 }
 
-and sv_def =
+and sv_def = SVD_aux of sv_def_aux * Ast.l
+
+and sv_def_aux =
+  | SVD_null
   | SVD_type of Jib.ctype_def
   | SVD_module of sv_module
   | SVD_var of Jib.name * Jib.ctyp
@@ -155,13 +158,17 @@ let filter_skips = List.filter (function SVS_aux (SVS_skip, _) -> false | _ -> t
 
 let is_split_comb = function SVS_aux (SVS_split_comb, _) -> true | _ -> false
 
+let is_skip = function SVS_aux (SVS_skip, _) -> true | _ -> false
+
 let svs_block stmts = SVS_block (filter_skips stmts)
 
 let svs_raw ?(inputs = []) ?(outputs = []) s = SVS_raw (s, inputs, outputs)
 
+let mk_def ?(loc = Parse_ast.Unknown) aux = SVD_aux (aux, loc)
+
 let mk_statement ?(loc = Parse_ast.Unknown) aux = SVS_aux (aux, loc)
 
-let is_typedef = function SVD_type _ -> true | _ -> false
+let is_typedef = function SVD_aux (SVD_type _, _) -> true | _ -> false
 
 class type svir_visitor = object
   inherit common_visitor
@@ -298,8 +305,9 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
   do_visit vis (vis#vstatement outer_statement) aux outer_statement
 
 let rec visit_sv_def (vis : svir_visitor) outer_def =
-  let aux (vis : svir_visitor) no_change =
-    match no_change with
+  let aux (vis : svir_visitor) (SVD_aux (def, l) as no_change) =
+    match def with
+    | SVD_null -> no_change
     | SVD_type _ -> no_change
     | SVD_module { name; input_ports; output_ports; defs } ->
         let visit_port ({ name; external_name; typ } as no_change) =
@@ -311,23 +319,26 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
         let output_ports' = map_no_copy visit_port output_ports in
         let defs' = map_no_copy (visit_sv_def vis) defs in
         if input_ports == input_ports' && output_ports == output_ports' && defs == defs' then no_change
-        else SVD_module { name; input_ports = input_ports'; output_ports = output_ports'; defs = defs' }
+        else SVD_aux (SVD_module { name; input_ports = input_ports'; output_ports = output_ports'; defs = defs' }, l)
     | SVD_var (name, ctyp) ->
         let name' = visit_name (vis :> common_visitor) name in
         let ctyp' = visit_ctyp (vis :> common_visitor) ctyp in
-        if name == name' && ctyp == ctyp' then no_change else SVD_var (name', ctyp')
+        if name == name' && ctyp == ctyp' then no_change else SVD_aux (SVD_var (name', ctyp'), l)
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
         let input_connections' = map_no_copy (visit_smt_exp vis) input_connections in
         let output_connections' = map_no_copy (visit_sv_place vis) output_connections in
         if input_connections == input_connections' && output_connections == output_connections' then no_change
         else
-          SVD_instantiate
-            {
-              module_name;
-              instance_name;
-              input_connections = input_connections';
-              output_connections = output_connections';
-            }
+          SVD_aux
+            ( SVD_instantiate
+                {
+                  module_name;
+                  instance_name;
+                  input_connections = input_connections';
+                  output_connections = output_connections';
+                },
+              l
+            )
     | SVD_fundef { function_name; return_type; params; body } ->
         let return_type' = map_no_copy_opt (visit_ctyp (vis :> common_visitor)) return_type in
         let params' =
@@ -341,10 +352,10 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
         in
         let body' = visit_sv_statement vis body in
         if return_type == return_type' && params == params' && body == body' then no_change
-        else SVD_fundef { function_name; return_type = return_type'; params = params'; body = body' }
+        else SVD_aux (SVD_fundef { function_name; return_type = return_type'; params = params'; body = body' }, l)
     | SVD_always_comb statement ->
         let statement' = visit_sv_statement vis statement in
-        if statement == statement' then no_change else SVD_always_comb statement'
+        if statement == statement' then no_change else SVD_aux (SVD_always_comb statement', l)
   in
   do_visit vis (vis#vdef outer_def) aux outer_def
 

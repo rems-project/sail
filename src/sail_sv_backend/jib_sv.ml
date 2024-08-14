@@ -1138,6 +1138,7 @@ module Make (Config : CONFIG) = struct
         ^^ nest 4 (hardline ^^ separate_map hardline pp_case cases ^^ pp_fallthrough fallthrough)
         ^^ hardline ^^ string "endcase" ^^ terminator
     | SVS_block statements ->
+        let statements = List.filter (fun stmt -> not (is_skip stmt)) statements in
         let block_terminator last = if last then semi else semi ^^ hardline in
         string "begin"
         ^^ nest 4
@@ -1723,7 +1724,7 @@ module Make (Config : CONFIG) = struct
     let defs =
       passthroughs @ List.of_seq (Queue.to_seq module_vars) @ List.rev module_instantiation_defs @ always_comb_def
     in
-    { name; input_ports; output_ports; defs }
+    { name; input_ports; output_ports; defs = List.map mk_def defs }
 
   let toplevel_module spec_info =
     match Bindings.find_opt (mk_id "main") spec_info.footprints with
@@ -1827,16 +1828,12 @@ module Make (Config : CONFIG) = struct
             )
             spec_info.initialized_registers
         in
-        Some
-          {
-            name = SVN_string "sail_toplevel";
-            input_ports = [];
-            output_ports = [];
-            defs =
-              register_inputs @ register_outputs @ throws_outputs @ channel_outputs
-              @ [SVD_var (Jib_util.return, CT_unit)]
-              @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb];
-          }
+        let defs =
+          register_inputs @ register_outputs @ throws_outputs @ channel_outputs
+          @ [SVD_var (Jib_util.return, CT_unit)]
+          @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb]
+        in
+        Some { name = SVN_string "sail_toplevel"; input_ports = []; output_ports = []; defs = List.map mk_def defs }
 
   let rec pp_module m =
     let ports =
@@ -1888,7 +1885,9 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ pp_body f.body)
     ^^ hardline ^^ string "endfunction"
 
-  and pp_def = function
+  and pp_def (SVD_aux (aux, _)) =
+    match aux with
+    | SVD_null -> empty
     | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
     | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
@@ -2109,12 +2108,17 @@ module Make (Config : CONFIG) = struct
           );
           match Bindings.find_opt f fn_ctyps with
           | Some (param_ctyps, ret_ctyp) ->
-              ( [SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body)],
+              ( [
+                  SVD_aux
+                    ( SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body),
+                      def_annot.loc
+                    );
+                ],
                 fn_ctyps
               )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
-    | CDEF_type type_def -> ([SVD_type type_def], fn_ctyps)
+    | CDEF_type type_def -> ([SVD_aux (SVD_type type_def, def_annot.loc)], fn_ctyps)
     | CDEF_let (n, bindings, setup) ->
         let setup =
           Jib_optimize.(
@@ -2129,7 +2133,10 @@ module Make (Config : CONFIG) = struct
             spec_info ctx module_name [] [] (List.map snd bindings)
             (setup @ [iundefined CT_unit])
         in
-        (List.map (fun (id, ctyp) -> SVD_var (name id, ctyp)) bindings @ [SVD_module setup_module], fn_ctyps)
+        ( List.map (fun (id, ctyp) -> SVD_aux (SVD_var (name id, ctyp), def_annot.loc)) bindings
+          @ [SVD_aux (SVD_module setup_module, def_annot.loc)],
+          fn_ctyps
+        )
     | CDEF_register (id, ctyp, setup) -> begin
         match setup with
         | [] -> ([], fn_ctyps)
@@ -2146,7 +2153,7 @@ module Make (Config : CONFIG) = struct
                 (name id) ctyp
                 (setup @ [iend_id def_annot.loc id])
             in
-            ([SVD_module setup_module], fn_ctyps)
+            ([SVD_aux (SVD_module setup_module, def_annot.loc)], fn_ctyps)
       end
     | _ -> ([], fn_ctyps)
 

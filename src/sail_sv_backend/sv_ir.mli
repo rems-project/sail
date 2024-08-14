@@ -110,7 +110,10 @@ and sv_function = {
   body : sv_statement;
 }
 
-and sv_def =
+and sv_def = SVD_aux of sv_def_aux * Ast.l
+
+and sv_def_aux =
+  | SVD_null
   | SVD_type of Jib.ctype_def
   | SVD_module of sv_module
   | SVD_var of Jib.name * Jib.ctyp
@@ -151,9 +154,13 @@ val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_st
 
 val is_split_comb : sv_statement -> bool
 
+val is_skip : sv_statement -> bool
+
 val filter_skips : sv_statement list -> sv_statement list
 
 val svs_block : sv_statement list -> sv_statement_aux
+
+val mk_def : ?loc:Parse_ast.l -> sv_def_aux -> sv_def
 
 val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
 
