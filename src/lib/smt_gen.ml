@@ -450,6 +450,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_max_int = builtin_choose_int "bvsgt" max
   let builtin_min_int = builtin_choose_int "bvslt" min
 
+  let builtin_tdiv_int = builtin_arith "bvsdiv" Big_int.div (fun x -> x)
+  let builtin_tmod_int = builtin_arith "bvsrem" Big_int.div (fun x -> x)
+
   let smt_conversion ~into:to_ctyp ~from:from_ctyp x =
     match (from_ctyp, to_ctyp) with
     | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
@@ -1205,6 +1208,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "abs_int" -> unary_primop builtin_abs_int
     | "max_int" -> binary_primop builtin_max_int
     | "min_int" -> binary_primop builtin_min_int
+    | "tdiv_int" -> binary_primop builtin_tdiv_int
+    | "tmod_int" -> binary_primop builtin_tmod_int
     | "pow2" -> unary_primop builtin_pow2
     | "zeros" -> unary_primop builtin_zeros
     | "ones" -> unary_primop builtin_ones

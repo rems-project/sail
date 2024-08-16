@@ -800,6 +800,8 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvshl", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "<<"; sv_signed (pp_smt y)])
     | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>"; sv_signed (pp_smt y)])
     | Fn ("bvashr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>>"; sv_signed (pp_smt y)])
+    | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "/"; pp_smt_parens y])
+    | Fn ("bvsmod", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "%"; pp_smt_parens y])
     | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
     | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "bits"
     | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)
@@ -1100,7 +1102,8 @@ module Make (Config : CONFIG) = struct
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
     | SVS_assert (cond, msg) ->
-        separate space [string "assert"; parens (pp_smt cond); string "else"; string "$error" ^^ parens (pp_smt msg)]
+        separate space
+          [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
         ^^ terminator
     | SVS_foreach (i, exp, stmt) ->
         separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
