@@ -12,7 +12,7 @@ jobs:
       matrix:
         version: [5.0.0]
         os: [ubuntu-latest]
-        fmt: [0.26.0]
+        fmt: [0.26.2]
 
     runs-on: ${{ matrix.os }}
 
