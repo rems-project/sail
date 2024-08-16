@@ -4,7 +4,7 @@ import os
 import re
 import sys
 import hashlib
-import distutils.spawn
+import shutil
 
 
 mydir = os.path.dirname(__file__)
@@ -61,12 +61,12 @@ def test_smt(name, solver, sail_opts):
 
 xml = '<testsuites>\n'
 
-if distutils.spawn.find_executable('cvc4'):
+if shutil.which('cvc4') is not None:
     xml += test_smt('cvc4', 'cvc4 --lang=smt2.6', '')
 else:
     print('{}Cannot find SMT solver cvc4 skipping tests{}'.format(color.WARNING, color.END))
 
-if distutils.spawn.find_executable('z3'):
+if shutil.which('z3') is not None:
     xml += test_smt('z3', 'z3', '')
 else:
     print('{}Cannot find SMT solver z3 skipping tests{}'.format(color.WARNING, color.END))
