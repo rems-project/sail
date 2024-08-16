@@ -120,6 +120,13 @@ let rec mapM f = function
       let* xs = mapM f xs in
       return (x :: xs)
 
+let rec sequence = function
+  | [] -> return []
+  | x :: xs ->
+      let* x = x in
+      let* xs = sequence xs in
+      return (x :: xs)
+
 let rec iterM f = function
   | [] -> return ()
   | x :: xs ->
@@ -1159,6 +1166,31 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
+  let rec builtin_eq_anything x y =
+    match (cval_ctyp x, cval_ctyp y) with
+    | CT_struct (xid, xfields), CT_struct (yid, yfields) ->
+        let compare_field (f1, _) (f2, _) = Id.compare f1 f2 in
+        let xfields = List.stable_sort compare_field xfields in
+        let yfields = List.stable_sort compare_field yfields in
+        let* l = current_location in
+        let* fields =
+          if List.compare_lengths xfields yfields <> 0 then
+            Reporting.unreachable l __POS__ "Tried comparing struct with different number of fields"
+          else
+            List.map2
+              (fun (f1, ctyp1) (f2, ctyp2) ->
+                if Id.compare f1 f2 <> 0 then
+                  Reporting.unreachable l __POS__ "Tried comparing struct with different fields"
+                else builtin_eq_anything (V_field (x, f1)) (V_field (y, f2))
+              )
+              xfields yfields
+            |> sequence
+        in
+        return (Fn ("and", fields))
+    | (CT_fbits _ | CT_lbits), (CT_fbits _ | CT_lbits) -> builtin_eq_bits x y
+    | (CT_constant _ | CT_fint _ | CT_lint), (CT_constant _ | CT_fint _ | CT_lint) -> builtin_eq_int x y
+    | _, _ -> builtin_type_error "eq_anything" [x; y] None
+
   let builtin_vector_init len elem ret_ctyp =
     match ret_ctyp with
     | CT_fvector (len, elem_ctyp) ->
@@ -1322,11 +1354,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let* xs = smt_cval xs in
             return (Fn ("cons", [x; xs]))
         )
-    | "eq_anything" ->
-        binary_primop_simple (fun a b ->
-            let* a = smt_cval a in
-            let* b = smt_cval b in
-            return (Fn ("=", [a; b]))
-        )
+    | "eq_anything" -> binary_primop_simple builtin_eq_anything
     | _ -> None
 end

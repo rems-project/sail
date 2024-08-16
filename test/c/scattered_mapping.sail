@@ -4,7 +4,7 @@ $include <prelude.sail>
 $include <string.sail>
 $include <mapping.sail>
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 val unit_str_map : unit <-> string

@@ -8,7 +8,7 @@ infixl 1 ++
 
 overload operator ++ = {concat_str}
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 val BitStr = "string_of_bits" : forall 'n. bits('n) -> string

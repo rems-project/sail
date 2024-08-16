@@ -620,13 +620,12 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
         (* Verilator sometimes just spuriously returns non-zero exit
            codes even when it suceeds, so we don't use system_checked
            here, and just hope for the best. *)
-        let _ =
-          Unix.system
-            (sprintf
-               "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
-               sail_sv_libdir out out out
-            )
+        let verilator_command =
+          sprintf "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
+            sail_sv_libdir out out out
         in
+        print_endline ("Verilator command: " ^ verilator_command);
+        let _ = Unix.system verilator_command in
         begin
           match !opt_verilate with
           | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")

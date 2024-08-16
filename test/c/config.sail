@@ -3,7 +3,7 @@ default Order dec
 $include <arith.sail>
 $include <vector_dec.sail>
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print" : string -> unit
 
 register q : int

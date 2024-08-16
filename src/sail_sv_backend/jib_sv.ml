@@ -83,7 +83,32 @@ open Sv_ir
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
 
-class footprint_visitor ctx registers references reads writes throws need_stdout need_stderr : jib_visitor =
+(* The direct footprint contains information about the effects
+   directly performed by the function itself, i.e. not those from any
+   transitive function calls. It is constructed by the footprint
+   visitor below as it scans the body of the function. *)
+type direct_footprint = {
+  mutable reads : IdSet.t;
+  mutable writes : IdSet.t;
+  mutable throws : bool;
+  mutable stdout : bool;
+  mutable stderr : bool;
+  mutable contains_assert : bool;
+  mutable references : CTSet.t;
+}
+
+let empty_direct_footprint () : direct_footprint =
+  {
+    reads = IdSet.empty;
+    writes = IdSet.empty;
+    throws = false;
+    stdout = false;
+    stderr = false;
+    contains_assert = false;
+    references = CTSet.empty;
+  }
+
+class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visitor =
   object
     inherit empty_jib_visitor
 
@@ -96,7 +121,7 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
             match Bindings.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                reads := IdSet.add id !reads
+                footprint.reads <- IdSet.add id footprint.reads
             | None -> ()
           end;
           SkipChildren
@@ -104,20 +129,41 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
 
     method! vinstr =
       function
-      | I_aux (I_funcall (_, _, (id, _), args), _) ->
+      | I_aux (I_funcall (_, _, (id, _), args), (l, _)) ->
+          let open Util.Option_monad in
           if ctx_is_extern id ctx then (
             let name = ctx_get_extern id ctx in
-            if name = "print" || name = "print_endline" || name = "print_bits" || name = "print_int" then
-              need_stdout := true
-            else if name = "prerr" || name = "prerr_endline" || name = "prerr_bits" || name = "prerr_int" then
-              need_stderr := true
-            else if name = "reg_deref" then (
+            Option.value ~default:()
+              (let* _, _, _, uannot = Bindings.find_opt id ctx.valspecs in
+               let* attr_object =
+                 Option.bind (Option.bind (get_attribute "sv_module" uannot) snd) attribute_data_object
+               in
+               begin
+                 match List.assoc_opt "stdout" attr_object with
+                 | Some (AD_aux (AD_bool true, _)) -> footprint.stdout <- true
+                 | Some (AD_aux (AD_bool false, _)) | None -> ()
+                 | Some (AD_aux (_, l)) ->
+                     raise (Reporting.err_general l "Expected boolean for stdout key on sv_module attribute")
+               end;
+               begin
+                 match List.assoc_opt "stderr" attr_object with
+                 | Some (AD_aux (AD_bool true, _)) -> footprint.stderr <- true
+                 | Some (AD_aux (AD_bool false, _)) | None -> ()
+                 | Some (AD_aux (_, l)) ->
+                     raise (Reporting.err_general l "Expected boolean for stderr key on sv_module attribute")
+               end;
+               Some ()
+              );
+            if name = "reg_deref" then (
               match args with
               | [cval] -> begin
-                  match cval_ctyp cval with CT_ref reg_ctyp -> references := CTSet.add reg_ctyp !references | _ -> ()
+                  match cval_ctyp cval with
+                  | CT_ref reg_ctyp -> footprint.references <- CTSet.add reg_ctyp footprint.references
+                  | _ -> ()
                 end
               | _ -> ()
             )
+            else if name = "sail_assert" then footprint.contains_assert <- true
           );
           DoChildren
       | _ -> DoChildren
@@ -125,17 +171,17 @@ class footprint_visitor ctx registers references reads writes throws need_stdout
     method! vclexp =
       function
       | CL_addr (CL_id (_, CT_ref ctyp)) ->
-          references := CTSet.add ctyp !references;
+          footprint.references <- CTSet.add ctyp footprint.references;
           DoChildren
       | CL_id (Have_exception _, _) ->
-          throws := true;
+          footprint.throws <- true;
           SkipChildren
       | CL_id (Name (id, _), local_ctyp) ->
           begin
             match Bindings.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                writes := IdSet.add id !writes
+                footprint.writes <- IdSet.add id footprint.writes
             | None -> ()
           end;
           SkipChildren
@@ -151,6 +197,7 @@ type footprint = {
   throws : bool;
   need_stdout : bool;
   need_stderr : bool;
+  contains_assert : bool;
 }
 
 let pure_footprint =
@@ -163,6 +210,7 @@ let pure_footprint =
     throws = false;
     need_stdout = false;
     need_stderr = false;
+    contains_assert = false;
   }
 
 type spec_info = {
@@ -231,35 +279,27 @@ let collect_spec_info ctx cdefs =
       (fun footprints cdef ->
         match cdef with
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
-            let reads = ref IdSet.empty in
-            let writes = ref IdSet.empty in
-            let throws = ref false in
-            let references = ref CTSet.empty in
-            let need_stdout = ref false in
-            let need_stderr = ref false in
+            let direct_footprint = empty_direct_footprint () in
             prerr_endline ("visit " ^ string_of_id f);
-            let _ =
-              visit_cdef
-                (new footprint_visitor ctx registers references reads writes throws need_stdout need_stderr)
-                cdef
-            in
+            let _ = visit_cdef (new footprint_visitor ctx registers direct_footprint) cdef in
             CTSet.iter
               (fun ctyp ->
                 IdSet.iter
-                  (fun reg -> writes := IdSet.add reg !writes)
+                  (fun reg -> direct_footprint.writes <- IdSet.add reg direct_footprint.writes)
                   (Option.value ~default:IdSet.empty (CTMap.find_opt ctyp register_ctyp_map))
               )
-              !references;
+              direct_footprint.references;
             Bindings.add f
               {
-                direct_reads = !reads;
-                direct_writes = !writes;
-                direct_throws = !throws;
+                direct_reads = direct_footprint.reads;
+                direct_writes = direct_footprint.writes;
+                direct_throws = direct_footprint.throws;
                 all_reads = IdSet.empty;
                 all_writes = IdSet.empty;
                 throws = false;
-                need_stdout = !need_stdout;
-                need_stderr = !need_stderr;
+                need_stdout = direct_footprint.stdout;
+                need_stderr = direct_footprint.stderr;
+                contains_assert = direct_footprint.contains_assert;
               }
               footprints
         | _ -> footprints
@@ -274,29 +314,31 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let footprint = Bindings.find f footprints in
             let callees = cfg |> IdGraph.reachable (IdSet.singleton f) IdSet.empty |> IdSet.remove f in
-            let all_reads, all_writes, throws, need_stdout, need_stderr =
+            let all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert =
               List.fold_left
-                (fun (all_reads, all_writes, throws, need_stdout, need_stderr) callee ->
+                (fun (all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert) callee ->
                   match Bindings.find_opt callee footprints with
                   | Some footprint ->
                       ( IdSet.union all_reads footprint.direct_reads,
                         IdSet.union all_writes footprint.direct_writes,
                         throws || footprint.direct_throws,
                         need_stdout || footprint.need_stdout,
-                        need_stderr || footprint.need_stderr
+                        need_stderr || footprint.need_stderr,
+                        contains_assert || footprint.contains_assert
                       )
-                  | _ -> (all_reads, all_writes, throws, need_stdout, need_stderr)
+                  | _ -> (all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert)
                 )
                 ( footprint.direct_reads,
                   footprint.direct_writes,
                   footprint.direct_throws,
                   footprint.need_stdout,
-                  footprint.need_stderr
+                  footprint.need_stderr,
+                  footprint.contains_assert
                 )
                 (IdSet.elements callees)
             in
             Bindings.update f
-              (fun _ -> Some { footprint with all_reads; all_writes; throws; need_stdout; need_stderr })
+              (fun _ -> Some { footprint with all_reads; all_writes; throws; need_stdout; need_stderr; contains_assert })
               footprints
         | _ -> footprints
       )
@@ -922,7 +964,7 @@ module Make (Config : CONFIG) = struct
     let wrap aux = SVS_aux (aux, l) in
     match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
-  let rec svir_instr ctx (I_aux (aux, (_, l))) =
+  let rec svir_instr ?pathcond spec_info ctx (I_aux (aux, (_, l))) =
     let wrap aux = return (Some (SVS_aux (aux, l))) in
     match aux with
     | I_comment str -> wrap (SVS_comment str)
@@ -951,6 +993,14 @@ module Make (Config : CONFIG) = struct
             | [cond; msg] ->
                 let* cond = Smt.smt_cval cond in
                 let* msg = Smt.smt_cval msg in
+                (* If the assert is only reachable under some path-condition, then the assert should pass
+                   whenever the path-condition is not true. *)
+                let cond =
+                  match pathcond with
+                  | Some pathcond ->
+                      Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
+                  | None -> cond
+                in
                 wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
@@ -1058,13 +1108,18 @@ module Make (Config : CONFIG) = struct
             end
           | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
         )
-        else
+        else (
+          let footprint = Bindings.find_opt id spec_info.footprints |> Option.value ~default:pure_footprint in
           let* args = mapM Smt.smt_cval args in
+          let args =
+            args @ if footprint.contains_assert then [Option.value ~default:(Bool_lit true) pathcond] else []
+          in
           let updates, ret = svir_creturn creturn in
           if preserve_name then wrap (with_updates l updates (SVS_call (ret, SVN_string (string_of_id id), args)))
           else wrap (with_updates l updates (SVS_call (ret, SVN_id id, args)))
+        )
     | I_block instrs ->
-        let* statements = fmap Util.option_these (mapM (svir_instr ctx) instrs) in
+        let* statements = fmap Util.option_these (mapM (svir_instr ?pathcond spec_info ctx) instrs) in
         wrap (svs_block statements)
     | I_if (cond, then_instrs, else_instrs, _) ->
         let* cond = Smt.smt_cval cond in
@@ -1074,8 +1129,8 @@ module Make (Config : CONFIG) = struct
           | [statement] -> Some statement
           | statements -> Some (SVS_aux (SVS_block statements, Parse_ast.Unknown))
         in
-        let* then_block = fmap to_block (mapM (svir_instr ctx) then_instrs) in
-        let* else_block = fmap to_block (mapM (svir_instr ctx) else_instrs) in
+        let* then_block = fmap to_block (mapM (svir_instr ?pathcond spec_info ctx) then_instrs) in
+        let* else_block = fmap to_block (mapM (svir_instr ?pathcond spec_info ctx) else_instrs) in
         wrap (SVS_if (cond, then_block, else_block))
     | I_raw str -> wrap (svs_raw str)
     | I_undefined ctyp ->
@@ -1152,12 +1207,12 @@ module Make (Config : CONFIG) = struct
     | SVS_raw (s, _, _) -> string s ^^ terminator
     | SVS_skip -> string "begin" ^^ hardline ^^ string "end" ^^ terminator
 
-  let sv_instr ctx instr =
-    let* statement_opt = svir_instr ctx instr in
+  let sv_instr spec_info ctx instr =
+    let* statement_opt = svir_instr spec_info ctx instr in
     match statement_opt with Some statement -> return (pp_statement statement) | None -> return empty
 
-  let sv_checked_instr ctx (I_aux (_, (_, l)) as instr) =
-    let v, _ = Smt_gen.run (sv_instr ctx instr) l in
+  let sv_checked_instr spec_info ctx (I_aux (_, (_, l)) as instr) =
+    let v, _ = Smt_gen.run (sv_instr spec_info ctx instr) l in
     v
 
   let smt_ssanode cfg pathconds =
@@ -1180,7 +1235,7 @@ module Make (Config : CONFIG) = struct
         match mux with None -> assert false | Some mux -> return (Some (id, ctyp, mux))
       )
 
-  let svir_cfnode spec_info ctx =
+  let svir_cfnode spec_info ctx pathcond =
     let open Jib_ssa in
     function
     | CF_start inits ->
@@ -1188,7 +1243,7 @@ module Make (Config : CONFIG) = struct
         let svir_inits = List.map svir_start (NameMap.bindings inits) in
         return svir_inits
     | CF_block (instrs, _) ->
-        let* statements = fmap Util.option_these (mapM (svir_instr ctx) instrs) in
+        let* statements = fmap Util.option_these (mapM (svir_instr ~pathcond spec_info ctx) instrs) in
         return statements
     | _ -> return []
 
@@ -1555,7 +1610,11 @@ module Make (Config : CONFIG) = struct
                     (SVS_aux (SVS_assign (SVP_id id, Smt_exp.simp (fun _ -> None) mux), Parse_ast.Unknown))
                 )
                 muxers;
-              let* block = svir_cfnode spec_info ctx cfnode in
+              let* this_pathcond =
+                let* pi = mapM Smt.smt_cval (get_pi n) in
+                return (Smt_exp.simp (fun _ -> None) (smt_conj pi))
+              in
+              let* block = svir_cfnode spec_info ctx this_pathcond cfnode in
               List.iter add_comb_statement block;
               return ()
         )
@@ -1618,8 +1677,13 @@ module Make (Config : CONFIG) = struct
             [{ name = Channel (Chan_stdout, 0); external_name = "in_stdout"; typ = CT_string }]
           else []
         )
+      @ ( if footprint.need_stderr then
+            [{ name = Channel (Chan_stderr, 0); external_name = "in_stderr"; typ = CT_string }]
+          else []
+        )
       @
-      if footprint.need_stderr then [{ name = Channel (Chan_stderr, 0); external_name = "in_stderr"; typ = CT_string }]
+      if footprint.contains_assert then
+        [{ name = Name (mk_id "assert_reachable#", -1); external_name = "assert_reachable"; typ = CT_bool }]
       else []
     in
 
@@ -1762,7 +1826,8 @@ module Make (Config : CONFIG) = struct
                     (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
                     (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
                 @ (if footprint.need_stdout then [String_lit ""] else [])
-                @ if footprint.need_stderr then [String_lit ""] else []
+                @ (if footprint.need_stderr then [String_lit ""] else [])
+                @ if footprint.contains_assert then [Bool_lit true] else []
                 );
               output_connections =
                 ([SVP_id Jib_util.return]
@@ -1944,7 +2009,7 @@ module Make (Config : CONFIG) = struct
     in
     List.rev decls @ List.rev others
 
-  let sv_setup_function ctx name setup =
+  let sv_setup_function spec_info ctx name setup =
     let setup =
       Jib_optimize.(
         setup |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top
@@ -1953,20 +2018,20 @@ module Make (Config : CONFIG) = struct
     in
     separate space [string "function"; string "automatic"; string "void"; string name]
     ^^ string "()" ^^ semi
-    ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr ctx) setup)
+    ^^ nest 4 (hardline ^^ separate_map hardline (sv_checked_instr spec_info ctx) setup)
     ^^ hardline ^^ string "endfunction" ^^ twice hardline
 
   let svir_setup_module spec_info ctx name out ctyp setup =
     svir_module ~return_vars:[out] spec_info ctx name [] [] [ctyp] setup
 
-  let svir_setup_function l ctx name setup =
+  let svir_setup_function l spec_info ctx name setup =
     let setup =
       Jib_optimize.(
         setup |> remove_undefined |> flatten_instrs |> remove_dead_code |> variable_decls_to_top
         |> structure_control_flow_block |> filter_clear
       )
     in
-    let statements, _ = Smt_gen.run (fmap Util.option_these (mapM (svir_instr ctx) setup)) (gen_loc l) in
+    let statements, _ = Smt_gen.run (fmap Util.option_these (mapM (svir_instr spec_info ctx) setup)) (gen_loc l) in
     SVD_fundef
       {
         function_name = SVN_string name;
@@ -2165,7 +2230,11 @@ module Make (Config : CONFIG) = struct
     | CDEF_register (id, ctyp, setup) ->
         let binding_doc = wrap_type ctyp (pp_id id) ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (pp_id_string id) in
-        ( { empty_cdef_doc with inside_module_prefix = binding_doc; inside_module = sv_setup_function ctx name setup },
+        ( {
+            empty_cdef_doc with
+            inside_module_prefix = binding_doc;
+            inside_module = sv_setup_function spec_info ctx name setup;
+          },
           fn_ctyps,
           name :: setup_calls
         )
@@ -2201,7 +2270,7 @@ module Make (Config : CONFIG) = struct
           ^^ semi ^^ twice hardline
         in
         let name = sprintf "sail_setup_let_%d" n in
-        ( { empty_cdef_doc with inside_module = bindings_doc ^^ sv_setup_function ctx name setup },
+        ( { empty_cdef_doc with inside_module = bindings_doc ^^ sv_setup_function spec_info ctx name setup },
           fn_ctyps,
           name :: setup_calls
         )

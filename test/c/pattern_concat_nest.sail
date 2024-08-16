@@ -14,6 +14,7 @@ function doesnt bv = match bv {
   (a : bits(3) @ b : bits(2)) @ 0b000 => a
 }
 
+$[sv_module { stdout = true }]
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
 val main : unit -> unit

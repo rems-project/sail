@@ -11,7 +11,7 @@ struct S = {
   field2: bitvector(8, dec)
 }
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print" : string -> unit
 
 val main : unit -> unit effect {escape}

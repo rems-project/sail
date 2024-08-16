@@ -2,7 +2,7 @@ default Order dec
 
 $include <vector_dec.sail>
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val print = "print_endline" : string -> unit
 
 val test : bits(8) -> unit

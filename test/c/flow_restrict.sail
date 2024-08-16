@@ -5,7 +5,7 @@ $include <exception_basic.sail>
 
 $option --sv-int-size 256
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 register R : bool

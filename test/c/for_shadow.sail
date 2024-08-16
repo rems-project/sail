@@ -1,5 +1,5 @@
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print_int" : (string, int) -> unit
 
 function main(() : unit) -> unit = {

@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 union U('a: Type) = {

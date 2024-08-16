@@ -112,8 +112,10 @@ val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: 
 
 overload operator * = {mult_atom, mult_int}
 
+$[sv_module { stdout = true }]
 val print_int = pure "print_int" : (string, int) -> unit
 
+$[sv_module { stderr = true }]
 val prerr_int = pure "prerr_int" : (string, int) -> unit
 
 /*!

@@ -2,7 +2,7 @@
 $include <exception_basic.sail>
 $include <flow.sail>
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val print = "print_endline" : string -> unit
 
 val test : unit -> bool effect {escape}

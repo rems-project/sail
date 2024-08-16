@@ -174,6 +174,10 @@ module RemoveUnusedVariables = struct
         | SVS_aux (SVS_var (name, ctyp, init_opt), l) ->
             num <- num + 1;
             ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), Unique (num - 1, l)))
+        (* We also number blocks, to keep track of where variable uses occur *)
+        | SVS_aux (SVS_block statements, l) ->
+            num <- num + 1;
+            change_do_children (SVS_aux (SVS_block statements, Unique (num - 1, l)))
         | _ -> DoChildren
     end
 
@@ -201,18 +205,21 @@ module RemoveUnusedVariables = struct
             | Some count when count > 0 -> ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), l))
             | _ -> ChangeTo (SVS_aux (SVS_skip, l))
           end
+        | SVS_aux (SVS_block statements, Unique (bnum, l)) -> change_do_children (SVS_aux (SVS_block statements, l))
         | _ -> DoChildren
     end
 
-  type frame = Block of int NameMap.t | Foreach of Jib.name | Ports of NameSet.t | Function of NameSet.t
+  type frame = Block of int * int NameMap.t | Foreach of Jib.name | Ports of NameSet.t | Function of NameSet.t
 
-  let add_var name num = function Block head :: tail -> Block (NameMap.add name num head) :: tail | stack -> stack
+  let add_var name num = function
+    | Block (n, vars) :: tail -> Block (n, NameMap.add name num vars) :: tail
+    | stack -> stack
 
   let rec get_num name = function
     | head :: tail -> begin
         match head with
-        | Block vars -> begin
-            match NameMap.find_opt name vars with Some num -> Some num | None -> get_num name tail
+        | Block (bnum, vars) -> begin
+            match NameMap.find_opt name vars with Some vnum -> Some (bnum, vnum) | None -> get_num name tail
           end
         | Foreach var -> if Name.compare name var = 0 then None else get_num name tail
         | Ports ports -> if NameSet.mem name ports then None else get_num name tail
@@ -227,7 +234,7 @@ module RemoveUnusedVariables = struct
   let rec smt_uses stack uses = function
     | Var name -> begin
         match get_num name !stack with
-        | Some num -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
+        | Some (_, num) -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
         | None -> ()
       end
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
@@ -253,7 +260,7 @@ module RemoveUnusedVariables = struct
   let rec place_uses stack uses = function
     | SVP_id name -> begin
         match get_num name !stack with
-        | Some num -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
+        | Some (_, num) -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
         | None -> ()
       end
     | SVP_index (place, exp) ->
@@ -274,7 +281,10 @@ module RemoveUnusedVariables = struct
           match l with Unique (num, _) -> stack := add_var name num !stack | _ -> ()
         end
     | SVS_block statements ->
-        push (Block NameMap.empty) stack;
+        let bnum =
+          match l with Unique (num, _) -> num | _ -> Reporting.unreachable l __POS__ "Un-numbered block found"
+        in
+        push (Block (bnum, NameMap.empty)) stack;
         List.iter (statement_uses stack uses) statements;
         pop stack
     | SVS_assign (place, exp) ->
@@ -307,7 +317,8 @@ module RemoveUnusedVariables = struct
         List.iter
           (fun name ->
             match get_num name !stack with
-            | Some num -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
+            | Some (_, num) ->
+                uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
             | None -> ()
           )
           (inputs @ outputs)
@@ -338,7 +349,7 @@ module RemoveUnusedVariables = struct
     | SVD_always_comb stmt -> statement_uses stack uses stmt
 
   and defs_uses stack uses defs =
-    push (Block NameMap.empty) stack;
+    push (Block (-1, NameMap.empty)) stack;
     List.iter (def_uses stack uses) defs;
     pop stack
 

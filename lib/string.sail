@@ -92,16 +92,16 @@ val concat_str_dec : (string, int) -> string
 
 function concat_str_dec(str, x) = concat_str(str, dec_str(x))
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val print_endline = pure "print_endline" : string -> unit
 
-$[sv_module]
+$[sv_module { stderr = true }]
 val prerr_endline = pure "prerr_endline" : string -> unit
 
-$[sv_module]
+$[sv_module { stdout = true }]
 val print = pure "print" : string -> unit
 
-$[sv_module]
+$[sv_module { stderr = true }]
 val prerr = pure "prerr" : string -> unit
 
 $endif
