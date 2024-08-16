@@ -82,14 +82,14 @@ let kw_table =
      ("bitzero",                 (fun _ -> Bitzero));
      ("bitone",                  (fun _ -> Bitone));
      ("by",                      (fun _ -> By));
-     ("match",			 (fun _ -> Match));
+     ("match",                   (fun _ -> Match));
      ("clause",                  (fun _ -> Clause));
      ("dec",                     (fun _ -> Dec));
      ("operator",                (fun _ -> Op));
-     ("default",		 (fun _ -> Default));
+     ("default",                 (fun _ -> Default));
      ("effect",                  (fun _ -> Effect));
      ("end",                     (fun _ -> End));
-     ("enum",		         (fun _ -> Enum));
+     ("enum",                    (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
      ("exit",                    (fun _ -> Exit));
      ("cast",                    (fun _ -> Cast));
@@ -103,7 +103,7 @@ let kw_table =
      ("try",                     (fun _ -> Try));
      ("catch",                   (fun _ -> Catch));
      ("if",                      (fun _ -> If_));
-     ("in",			 (fun _ -> In));
+     ("in",                      (fun _ -> In));
      ("inc",                     (fun _ -> Inc));
      ("let",                     (fun _ -> Let_));
      ("var",                     (fun _ -> Var));
@@ -114,7 +114,7 @@ let kw_table =
      ("pure",                    (fun _ -> Pure));
      ("impure",                  (fun _ -> Impure));
      ("monadic",                 (fun _ -> Monadic));
-     ("register",		 (fun _ -> Register));
+     ("register",                (fun _ -> Register));
      ("return",                  (fun _ -> Return));
      ("scattered",               (fun _ -> Scattered));
      ("sizeof",                  (fun _ -> Sizeof));
@@ -124,9 +124,9 @@ let kw_table =
      ("then",                    (fun _ -> Then));
      ("true",                    (fun _ -> True));
      ("Type",                    (fun _ -> TYPE));
-     ("type",		         (fun _ -> Typedef));
+     ("type",                    (fun _ -> Typedef));
      ("undefined",               (fun _ -> Undefined));
-     ("union",			 (fun _ -> Union));
+     ("union",                   (fun _ -> Union));
      ("newtype",                 (fun _ -> Newtype));
      ("with",                    (fun _ -> With));
      ("val",                     (fun _ -> Val));
@@ -187,8 +187,8 @@ rule token comments = parse
     { Lexing.new_line lexbuf;
       token comments lexbuf }
   | "@"                                 { At }
-  | "2" ws "^"                          { TwoCaret }
-  | "^"					{ Caret }
+  | "2" wsc* "^"                        { TwoCaret }
+  | "^"                                 { Caret }
   | "::"                                { ColonColon }
   | ":"                                 { Colon ":" }
   | ","                                 { Comma }
@@ -240,7 +240,7 @@ rule token comments = parse
   | "~"                                   { Id "~" }
   | startident ident* as i                { if M.mem i kw_table then
                                               (M.find i kw_table) (Lexing.lexeme_start_p lexbuf)
-					    else
+                                            else
                                               Id i }
   | (digit+ as i1) "." (digit+ as i2)     { Real (i1 ^ "." ^ i2) }
   | "-" (digit* as i1) "." (digit+ as i2) { Real ("-" ^ i1 ^ "." ^ i2) }
@@ -294,10 +294,10 @@ and doc_comment pos b depth lstart = parse
   | "/*!"                               { Buffer.add_string b "/*!"; doc_comment pos b (depth + 1) false lexbuf }
   | "/*"                                { Buffer.add_string b "/*"; doc_comment pos b (depth + 1) false lexbuf }
   | "*/"                                { if depth = 0 then Buffer.contents b
-					  else (
+                                          else (
                                             Buffer.add_string b "*/";
                                             doc_comment pos b (depth - 1) false lexbuf
-					  ) }
+                                          ) }
   | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth true lexbuf }
   | wsc+ "*\n" as prefix                { let s = if lstart then "\n" else prefix in
                                           Buffer.add_string b s;
