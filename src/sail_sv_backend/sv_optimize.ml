@@ -74,6 +74,7 @@ open Jib_visitor
 open Smt_exp
 open Sv_ir
 
+module IntSet = Util.IntSet
 module IntMap = Util.IntMap
 
 module RemoveUnitPorts = struct
@@ -181,31 +182,81 @@ module RemoveUnusedVariables = struct
         | _ -> DoChildren
     end
 
+  type usage = { reads : int; writes : int; outputs : int; raws : int; locations : IntSet.t }
+
+  let no_usage = { reads = 0; writes = 0; outputs = 0; raws = 0; locations = IntSet.empty }
+
   class remove_unused_visitor uses : svir_visitor =
-    object
+    object (self)
       inherit empty_svir_visitor
 
+      val mutable stack = [NameMap.empty]
+
+      method private push () = stack <- NameMap.empty :: stack
+      method private pop () = stack <- List.tl stack
+
+      method private add_var name vnum ctyp =
+        match stack with
+        | head :: tail -> stack <- NameMap.add name (vnum, ctyp) head :: tail
+        | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty stack"
+
+      method private get_vnum name =
+        let rec go = function
+          | head :: tail -> begin match NameMap.find_opt name head with Some vnum -> Some vnum | None -> go tail end
+          | [] -> None
+        in
+        go stack
+
       method! vctyp _ = SkipChildren
-      method! vplace _ = SkipChildren
       method! vsmt_exp _ = SkipChildren
+
+      method! vplace =
+        function
+        | SVP_id name -> begin
+            match self#get_vnum name with
+            | Some (vnum, ctyp) ->
+                let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
+                if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+                  ChangeTo (SVP_void ctyp)
+                else SkipChildren
+            | None -> SkipChildren
+          end
+        | _ -> DoChildren
 
       method! vdef =
         function
-        | SVD_aux (SVD_var (name, ctyp), Unique (vnum, l)) -> begin
-            match IntMap.find_opt vnum uses with
-            | Some count when count > 0 -> ChangeTo (SVD_aux (SVD_var (name, ctyp), l))
-            | _ -> ChangeTo (SVD_aux (SVD_null, l))
-          end
+        | SVD_aux (SVD_var (name, ctyp), Unique (vnum, l)) ->
+            self#add_var name vnum ctyp;
+            let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
+            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+              ChangeTo (SVD_aux (SVD_null, l))
+            else ChangeTo (SVD_aux (SVD_var (name, ctyp), l))
+        | SVD_aux (SVD_module _, _) | SVD_aux (SVD_fundef _, _) ->
+            self#push ();
+            DoChildrenPost self#pop
         | _ -> DoChildren
 
       method! vstatement =
         function
-        | SVS_aux (SVS_var (name, ctyp, init_opt), Unique (vnum, l)) -> begin
-            match IntMap.find_opt vnum uses with
-            | Some count when count > 0 -> ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), l))
-            | _ -> ChangeTo (SVS_aux (SVS_skip, l))
-          end
-        | SVS_aux (SVS_block statements, Unique (bnum, l)) -> change_do_children (SVS_aux (SVS_block statements, l))
+        | SVS_aux (SVS_var (name, ctyp, init_opt), Unique (vnum, l)) ->
+            let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
+            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+              ChangeTo (SVS_aux (SVS_skip, l))
+            else ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), l))
+        | SVS_aux (SVS_block statements, Unique (bnum, l)) ->
+            self#push ();
+            ChangeDoChildrenPost
+              ( SVS_aux (SVS_block statements, l),
+                fun stmt ->
+                  self#pop ();
+                  stmt
+              )
+        | SVS_aux (SVS_assign _, _) as assign ->
+            ChangeDoChildrenPost
+              (assign, function SVS_aux (SVS_assign (SVP_void _, _), l) -> SVS_aux (SVS_skip, l) | assign -> assign)
+        | SVS_aux (SVS_call _, _) as call ->
+            ChangeDoChildrenPost
+              (call, function SVS_aux (SVS_call (SVP_void _, _, _), l) -> SVS_aux (SVS_skip, l) | call -> call)
         | _ -> DoChildren
     end
 
@@ -215,15 +266,18 @@ module RemoveUnusedVariables = struct
     | Block (n, vars) :: tail -> Block (n, NameMap.add name num vars) :: tail
     | stack -> stack
 
-  let rec get_num name = function
+  let rec get_num ?first_block name = function
     | head :: tail -> begin
         match head with
         | Block (bnum, vars) -> begin
-            match NameMap.find_opt name vars with Some vnum -> Some (bnum, vnum) | None -> get_num name tail
+            let bnum = Option.value ~default:bnum first_block in
+            match NameMap.find_opt name vars with
+            | Some vnum -> Some (bnum, vnum)
+            | None -> get_num ~first_block:bnum name tail
           end
-        | Foreach var -> if Name.compare name var = 0 then None else get_num name tail
-        | Ports ports -> if NameSet.mem name ports then None else get_num name tail
-        | Function params -> if NameSet.mem name params then None else get_num name tail
+        | Foreach var -> if Name.compare name var = 0 then None else get_num ?first_block name tail
+        | Ports ports -> if NameSet.mem name ports then None else get_num ?first_block name tail
+        | Function params -> if NameSet.mem name params then None else get_num ?first_block name tail
       end
     | [] -> None
 
@@ -231,12 +285,27 @@ module RemoveUnusedVariables = struct
 
   let pop stack = stack := List.tl !stack
 
+  let add_use ?(read = false) ?(write = false) ?(output = false) ?(raw = false) name stack uses =
+    match get_num name !stack with
+    | Some (bnum, vnum) ->
+        uses :=
+          IntMap.update vnum
+            (fun usage_opt ->
+              let usage = Option.value ~default:no_usage usage_opt in
+              Some
+                {
+                  reads = (if read then usage.reads + 1 else usage.reads);
+                  writes = (if write then usage.writes + 1 else usage.writes);
+                  outputs = (if output then usage.outputs + 1 else usage.outputs);
+                  raws = (if raw then usage.raws + 1 else usage.raws);
+                  locations = IntSet.add bnum usage.locations;
+                }
+            )
+            !uses
+    | None -> ()
+
   let rec smt_uses stack uses = function
-    | Var name -> begin
-        match get_num name !stack with
-        | Some (_, num) -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
-        | None -> ()
-      end
+    | Var name -> add_use ~read:true name stack uses
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
     | SignExtend (_, _, exp)
     | ZeroExtend (_, _, exp)
@@ -257,17 +326,13 @@ module RemoveUnusedVariables = struct
         smt_uses stack uses i;
         smt_uses stack uses x
 
-  let rec place_uses stack uses = function
-    | SVP_id name -> begin
-        match get_num name !stack with
-        | Some (_, num) -> uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
-        | None -> ()
-      end
+  let rec place_uses ?(output = false) stack uses = function
+    | SVP_id name -> add_use ~write:true ~output name stack uses
     | SVP_index (place, exp) ->
-        place_uses stack uses place;
+        place_uses ~output stack uses place;
         smt_uses stack uses exp
-    | SVP_field (place, _) -> place_uses stack uses place
-    | SVP_multi places -> List.iter (place_uses stack uses) places
+    | SVP_field (place, _) -> place_uses ~output stack uses place
+    | SVP_multi places -> List.iter (place_uses ~output stack uses) places
     | SVP_void _ -> ()
 
   let rec statement_uses stack uses (SVS_aux (aux, l)) =
@@ -314,14 +379,8 @@ module RemoveUnusedVariables = struct
         smt_uses stack uses exp;
         statement_uses stack uses stmt
     | SVS_raw (_, inputs, outputs) ->
-        List.iter
-          (fun name ->
-            match get_num name !stack with
-            | Some (_, num) ->
-                uses := IntMap.update num (function None -> Some 1 | Some count -> Some (count + 1)) !uses
-            | None -> ()
-          )
-          (inputs @ outputs)
+        List.iter (fun name -> add_use ~raw:true ~read:true name stack uses) inputs;
+        List.iter (fun name -> add_use ~raw:true ~write:true name stack uses) outputs
     | SVS_return exp -> smt_uses stack uses exp
 
   let rec def_uses stack uses (SVD_aux (aux, l)) =
@@ -345,7 +404,7 @@ module RemoveUnusedVariables = struct
     | SVD_var (name, _) -> begin match l with Unique (num, _) -> stack := add_var name num !stack | _ -> () end
     | SVD_instantiate { input_connections; output_connections; _ } ->
         List.iter (smt_uses stack uses) input_connections;
-        List.iter (place_uses stack uses) output_connections
+        List.iter (place_uses ~output:true stack uses) output_connections
     | SVD_always_comb stmt -> statement_uses stack uses stmt
 
   and defs_uses stack uses defs =

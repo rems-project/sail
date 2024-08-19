@@ -4,7 +4,10 @@ type 'a visit_action =
   | SkipChildren  (** Do not visit the children. Return the node as it is. *)
   | DoChildren
       (** Continue with the children of this node. Rebuild the node on
-     return if any of the children changes (use == test) *)
+          return if any of the children changes (use == test) *)
+  | DoChildrenPost of (unit -> unit)
+      (** Continue with the chuldren of the node the same as DoChildren.
+          However run the provided function after visiting the children *)
   | ChangeTo of 'a  (** Replace the expression with the given one *)
   | ChangeDoChildrenPost of 'a * ('a -> 'a)
       (** First consider that the entire exp is replaced by the first

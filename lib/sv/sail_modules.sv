@@ -62,7 +62,7 @@ function automatic bit sail_valid_hex_bits(int n, string hex);
 
    for (int i = non_zero; i < len; i++) begin
       byte c = hex[i];
-      if (!((c >= 49 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102))) return 1'h0;
+      if (!((c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102))) return 1'h0;
    end;
 
    return 1'h1;

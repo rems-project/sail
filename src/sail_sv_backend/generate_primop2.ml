@@ -183,7 +183,7 @@ module Make
                 (sprintf "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
                    (width - 1)
                 )
-                ~inputs:[in_str; s; bstr] ~outputs:[out_str];
+                ~inputs:[in_str; s; bstr; zeros] ~outputs:[out_str];
               SVS_assign (SVP_id Jib_util.return, Unit);
             ]
             |> List.map mk_statement
