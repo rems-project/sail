@@ -1187,8 +1187,41 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             |> sequence
         in
         return (Fn ("and", fields))
+    | CT_variant (xid, xctors), CT_variant (yid, yctors) ->
+        let compare_ctor (ctor1, _) (ctor2, _) = Id.compare ctor1 ctor2 in
+        let xctors = List.stable_sort compare_ctor xctors in
+        let yctors = List.stable_sort compare_ctor yctors in
+        let* l = current_location in
+        let* constructors =
+          if List.compare_lengths xctors yctors <> 0 then
+            Reporting.unreachable l __POS__ "Tried comparing unions with different number of constructors"
+          else
+            List.map2
+              (fun (f1, ctyp1) (f2, ctyp2) ->
+                if Id.compare f1 f2 <> 0 then
+                  Reporting.unreachable l __POS__ "Tried comparing union with different constructors"
+                else
+                  let* xsmt = smt_cval x in
+                  let* ysmt = smt_cval y in
+                  let same_ctor =
+                    Fn ("and", [Tester (zencode_uid (f1, []), xsmt); Tester (zencode_uid (f2, []), ysmt)])
+                  in
+                  let* ctor_cmp =
+                    builtin_eq_anything (V_ctor_unwrap (x, (f1, []), ctyp1)) (V_ctor_unwrap (y, (f2, []), ctyp2))
+                  in
+                  return (Fn ("and", [same_ctor; ctor_cmp]))
+              )
+              xctors yctors
+            |> sequence
+        in
+        return (Fn ("or", constructors))
     | (CT_fbits _ | CT_lbits), (CT_fbits _ | CT_lbits) -> builtin_eq_bits x y
     | (CT_constant _ | CT_fint _ | CT_lint), (CT_constant _ | CT_fint _ | CT_lint) -> builtin_eq_int x y
+    | CT_unit, CT_unit -> return (Bool_lit true)
+    | CT_enum _, CT_enum _ ->
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        return (Fn ("=", [x; y]))
     | _, _ -> builtin_type_error "eq_anything" [x; y] None
 
   let builtin_vector_init len elem ret_ctyp =

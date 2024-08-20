@@ -66,6 +66,7 @@
 (****************************************************************************)
 
 open Ast_util
+open Jib_util
 
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
@@ -144,30 +145,81 @@ let bvzero n = Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int n))
 
 let bvones n = Bitvec_lit (Sail2_operators_bitlists.ones (Big_int.of_int n))
 
-let bvone n =
-  if n > 0 then Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int (n - 1)) @ [Sail2_values.B1])
-  else Bitvec_lit []
+let bvone' n = if n > 0 then Sail2_operators_bitlists.zeros (Big_int.of_int (n - 1)) @ [Sail2_values.B1] else []
+
+let bvone n = Bitvec_lit (bvone' n)
+
+let bv_is_zero = List.for_all (function Sail2_values.B0 -> true | _ -> false)
 
 let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
 
 let smt_disj = function [] -> Bool_lit false | [x] -> x | xs -> Fn ("or", xs)
 
-let rec simp_and xs =
+let is_literal = function Member _ | Bool_lit _ | Bitvec_lit _ | String_lit _ | Unit -> true | _ -> false
+
+module SimpSet = struct
+  type t = { var_fn : Jib.name -> smt_exp option; vars : smt_exp NameMap.t; is_ctor : string NameMap.t }
+
+  let empty = { var_fn = (fun _ -> None); vars = NameMap.empty; is_ctor = NameMap.empty }
+
+  let from_function f = { empty with var_fn = f }
+
+  let add_var v exp simpset = { simpset with vars = NameMap.add v exp simpset.vars }
+
+  let add_var_is_ctor v ctor simpset = { simpset with is_ctor = NameMap.add v ctor simpset.is_ctor }
+
+  let is_ctor v ctor simpset =
+    match NameMap.find_opt v simpset.is_ctor with Some ctor' -> Some (ctor = ctor') | None -> None
+
+  let find_opt v simpset = match NameMap.find_opt v simpset.vars with Some exp -> Some exp | None -> simpset.var_fn v
+end
+
+let and_prefer = function
+  | Tester (_, Var _) -> true
+  | Fn ("=", [lit; Var _]) when is_literal lit -> true
+  | Fn ("=", [Var _; lit]) when is_literal lit -> true
+  | _ -> false
+
+let and_order x y =
+  match (and_prefer x, and_prefer y) with true, true -> 0 | true, false -> -1 | false, true -> 1 | false, false -> 0
+
+let rec simp_and simpset xs =
   let xs = List.filter (function Bool_lit true -> false | _ -> true) xs in
+  let xs = List.stable_sort and_order xs in
   match xs with
   | [] -> Bool_lit true
   | [x] -> x
+  | Tester (ctor, Var v) :: xs -> begin
+      match simp_and simpset (List.map (simp (SimpSet.add_var_is_ctor v ctor simpset)) xs) with
+      | Bool_lit false -> Bool_lit false
+      | Bool_lit true -> Tester (ctor, Var v)
+      | Fn ("and", xs) -> Fn ("and", Tester (ctor, Var v) :: xs)
+      | x -> Fn ("and", [Tester (ctor, Var v); x])
+    end
+  | (Fn ("=", [lit; Var v]) as equality) :: xs when is_literal lit -> begin
+      match simp_and simpset (List.map (simp (SimpSet.add_var v lit simpset)) xs) with
+      | Bool_lit false -> Bool_lit false
+      | Bool_lit true -> equality
+      | Fn ("and", xs) -> Fn ("and", equality :: xs)
+      | x -> Fn ("and", [equality; x])
+    end
+  | (Fn ("=", [Var v; lit]) as equality) :: xs when is_literal lit -> begin
+      match simp_and simpset (List.map (simp (SimpSet.add_var v lit simpset)) xs) with
+      | Bool_lit false -> Bool_lit false
+      | Bool_lit true -> equality
+      | Fn ("and", xs) -> Fn ("and", equality :: xs)
+      | x -> Fn ("and", [equality; x])
+    end
   | _ -> if List.exists (function Bool_lit false -> true | _ -> false) xs then Bool_lit false else Fn ("and", xs)
 
-and simp_or vars xs =
+and simp_or simpset xs =
   let xs = List.filter (function Bool_lit false -> false | _ -> true) xs in
   match xs with
   | [] -> Bool_lit false
   | _ when List.exists (function Bool_lit true -> true | _ -> false) xs -> Bool_lit true
   | [x] -> x
   | Var v :: xs -> begin
-      let make_constant v lit v' = if Jib_util.Name.compare v v' = 0 then Some lit else vars v' in
-      match simp_or vars (List.map (simp (make_constant v (Bool_lit false))) xs) with
+      match simp_or simpset (List.map (simp (SimpSet.add_var v (Bool_lit false) simpset)) xs) with
       | Bool_lit true -> Bool_lit true
       | Bool_lit false -> Var v
       | Fn ("or", xs) -> Fn ("or", Var v :: xs)
@@ -176,9 +228,15 @@ and simp_or vars xs =
   | _ -> Fn ("or", xs)
 
 and simp_eq x y =
-  match (x, y) with Bool_lit x, Bool_lit y -> Some (x = y) | Bitvec_lit x, Bitvec_lit y -> Some (x = y) | _ -> None
+  match (x, y) with
+  | Bool_lit x, Bool_lit y -> Some (x = y)
+  | Bitvec_lit x, Bitvec_lit y -> Some (x = y)
+  | Var x, Var y when Jib_util.Name.compare x y = 0 -> Some true
+  | Member x, Member y -> Some (Id.compare x y = 0)
+  | Unit, Unit -> Some true
+  | _ -> None
 
-and simp_fn vars f args =
+and simp_fn simpset f args =
   let open Sail2_operators_bitlists in
   match (f, args) with
   | "=", [x; y] -> begin match simp_eq x y with Some b -> Bool_lit b | None -> Fn (f, args) end
@@ -186,8 +244,8 @@ and simp_fn vars f args =
   | "not", [Bool_lit b] -> Bool_lit (not b)
   | "contents", [Fn ("Bits", [_; bv])] -> bv
   | "len", [Fn ("Bits", [len; _])] -> len
-  | "or", _ -> simp_or vars args
-  | "and", _ -> simp_and args
+  | "or", _ -> simp_or simpset args
+  | "and", _ -> simp_and simpset args
   | "concat", _ ->
       let chunks, bv =
         List.fold_left
@@ -206,65 +264,78 @@ and simp_fn vars f args =
         | chunks, Some bv -> Fn ("concat", List.rev (Bitvec_lit bv :: chunks))
         | chunks, None -> Fn ("concat", List.rev chunks)
       end
+  | "bvadd", [x; y] -> begin
+      match (x, y) with
+      | Bitvec_lit x, _ when bv_is_zero x -> y
+      | _, Bitvec_lit y when bv_is_zero y -> x
+      | _, _ -> Fn (f, args)
+    end
+  | "bvneg", [Bitvec_lit bv] ->
+      let len = List.length bv in
+      Bitvec_lit (add_vec (not_vec bv) (bvone' len))
   | "bvnot", [Bitvec_lit bv] -> Bitvec_lit (not_vec bv)
   | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (and_vec lhs rhs)
   | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (or_vec lhs rhs)
   | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (xor_vec lhs rhs)
+  | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> lhs
   | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
       match sint_maybe rhs with Some shift -> Bitvec_lit (shiftl lhs shift) | None -> Fn (f, args)
     end
+  | "bvlshr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> lhs
   | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
       match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
     end
   | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
+      match sint_maybe rhs with Some shift -> Bitvec_lit (arith_shiftr lhs shift) | None -> Fn (f, args)
     end
   | _, _ -> Fn (f, args)
 
-and simp vars exp =
+and simp simpset exp =
   let open Sail2_operators_bitlists in
   match exp with
-  | Var v -> begin match vars v with Some exp -> simp vars exp | None -> Var v end
+  | Var v -> begin match SimpSet.find_opt v simpset with Some exp -> simp simpset exp | None -> Var v end
   | Fn (f, args) ->
-      let args = List.map (simp vars) args in
-      simp_fn vars f args
+      let args = List.map (simp simpset) args in
+      simp_fn simpset f args
   | ZeroExtend (to_len, by_len, arg) ->
-      let arg = simp vars arg in
+      let arg = simp simpset arg in
       begin
         match arg with
         | Bitvec_lit bv -> Bitvec_lit (zero_extend bv (Big_int.of_int to_len))
         | _ -> ZeroExtend (to_len, by_len, arg)
       end
   | SignExtend (to_len, by_len, arg) ->
-      let arg = simp vars arg in
+      let arg = simp simpset arg in
       begin
         match arg with
         | Bitvec_lit bv -> Bitvec_lit (sign_extend bv (Big_int.of_int to_len))
         | _ -> SignExtend (to_len, by_len, arg)
       end
   | Extract (n, m, arg) -> begin
-      match simp vars arg with
+      match simp simpset arg with
       | Bitvec_lit bv -> Bitvec_lit (subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m))
       | exp -> Extract (n, m, exp)
     end
-  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp vars arr, simp vars i, simp vars x)
+  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp simpset arr, simp simpset i, simp simpset x)
   | Ite (cond, then_exp, else_exp) -> begin
-      let cond = simp vars cond in
-      let make_constant v lit v' = if Jib_util.Name.compare v v' = 0 then Some lit else vars v' in
+      let cond = simp simpset cond in
       let mk_ite i t e = match simp_eq t e with Some true -> t | Some false | None -> Ite (i, t, e) in
       match cond with
-      | Bool_lit true -> simp vars then_exp
-      | Bool_lit false -> simp vars else_exp
+      | Bool_lit true -> simp simpset then_exp
+      | Bool_lit false -> simp simpset else_exp
       | Var v ->
           mk_ite (Var v)
-            (simp (make_constant v (Bool_lit true)) then_exp)
-            (simp (make_constant v (Bool_lit false)) else_exp)
-      | Fn ("not", [cond]) -> simp vars (Ite (cond, else_exp, then_exp))
-      | _ -> mk_ite cond (simp vars then_exp) (simp vars else_exp)
+            (simp (SimpSet.add_var v (Bool_lit true) simpset) then_exp)
+            (simp (SimpSet.add_var v (Bool_lit false) simpset) else_exp)
+      | Fn ("not", [cond]) -> simp simpset (Ite (cond, else_exp, then_exp))
+      | _ -> mk_ite cond (simp simpset then_exp) (simp simpset else_exp)
     end
-  | Tester (ctor, exp) -> Tester (ctor, simp vars exp)
-  | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp vars exp)
-  | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp vars exp)
+  | Tester (ctor, Var v) -> begin
+      match SimpSet.is_ctor v ctor simpset with Some b -> Bool_lit b | None -> Tester (ctor, simp simpset (Var v))
+    end
+  | Tester (ctor, exp) -> Tester (ctor, simp simpset exp)
+  | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp simpset exp)
+  | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp simpset exp)
   | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Hd _ | Tl _ -> exp
 
 type smt_def =

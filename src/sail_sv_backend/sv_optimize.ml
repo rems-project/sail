@@ -77,6 +77,12 @@ open Sv_ir
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
 
+let profile_rewrite ~message f defs =
+  let p = Profile.start () in
+  let defs = f defs in
+  Profile.finish message p;
+  defs
+
 module RemoveUnitPorts = struct
   type port_action = Keep_port | Remove_port
 
@@ -150,7 +156,47 @@ module RemoveUnitPorts = struct
     visit_sv_defs (new unit_connection_visitor !port_actions) defs
 end
 
-let remove_unit_ports defs = RemoveUnitPorts.rewrite defs
+let remove_unit_ports = profile_rewrite RemoveUnitPorts.rewrite ~message:"Removing unit ports"
+
+module SimpSMT = struct
+  class simp_smt_visitor : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vsmt_exp exp = ChangeTo (Smt_exp.simp SimpSet.empty exp)
+    end
+
+  let rewrite defs = visit_sv_defs (new simp_smt_visitor) defs
+end
+
+let simplify_smt = profile_rewrite SimpSMT.rewrite ~message:"Simplifying SMT"
+
+module RemoveNulls = struct
+  class remove_null_visitor : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vplace _ = SkipChildren
+      method! vsmt_exp _ = SkipChildren
+
+      method! vstatement _ = DoChildren
+
+      method! vdef =
+        function
+        | SVD_aux (SVD_module m, l) ->
+            if List.exists is_null_def m.defs then
+              change_do_children
+                (SVD_aux (SVD_module { m with defs = List.filter (fun def -> not (is_null_def def)) m.defs }, l))
+            else DoChildren
+        | _ -> DoChildren
+    end
+
+  let rewrite defs = visit_sv_defs (new remove_null_visitor) defs
+end
+
+let remove_nulls = profile_rewrite RemoveNulls.rewrite ~message:"Removing null definitions"
 
 module RemoveUnusedVariables = struct
   class number_var_visitor : svir_visitor =
@@ -168,6 +214,12 @@ module RemoveUnusedVariables = struct
         | SVD_aux (SVD_var (name, ctyp), l) ->
             num <- num + 1;
             ChangeTo (SVD_aux (SVD_var (name, ctyp), Unique (num - 1, l)))
+        | SVD_aux (SVD_module m, l) ->
+            num <- num + 1;
+            change_do_children (SVD_aux (SVD_module m, Unique (num - 1, l)))
+        | SVD_aux (SVD_fundef f, l) ->
+            num <- num + 1;
+            change_do_children (SVD_aux (SVD_fundef f, Unique (num - 1, l)))
         | _ -> DoChildren
 
       method! vstatement =
@@ -182,40 +234,136 @@ module RemoveUnusedVariables = struct
         | _ -> DoChildren
     end
 
-  type usage = { reads : int; writes : int; outputs : int; raws : int; locations : IntSet.t }
+  class unnumber_var_visitor : svir_visitor =
+    object
+      inherit empty_svir_visitor
 
-  let no_usage = { reads = 0; writes = 0; outputs = 0; raws = 0; locations = IntSet.empty }
+      method! vctyp _ = SkipChildren
+      method! vplace _ = SkipChildren
+      method! vsmt_exp _ = SkipChildren
 
-  class remove_unused_visitor uses : svir_visitor =
+      method! vdef =
+        function
+        | SVD_aux (SVD_var (name, ctyp), Unique (_, l)) -> ChangeTo (SVD_aux (SVD_var (name, ctyp), l))
+        | SVD_aux (SVD_module m, Unique (_, l)) -> ChangeTo (SVD_aux (SVD_module m, l))
+        | SVD_aux (SVD_fundef f, Unique (_, l)) -> ChangeTo (SVD_aux (SVD_fundef f, l))
+        | _ -> DoChildren
+
+      method! vstatement =
+        function
+        | SVS_aux (SVS_var (name, ctyp, init_opt), Unique (_, l)) ->
+            ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), l))
+        | SVS_aux (SVS_block statements, Unique (_, l)) -> change_do_children (SVS_aux (SVS_block statements, l))
+        | _ -> DoChildren
+    end
+
+  let simplify_empty_block = function
+    | SVS_aux (SVS_block stmts, l) when List.for_all is_skip stmts -> SVS_aux (SVS_skip, l)
+    | no_change -> no_change
+
+  let simplify_empty_always_comb = function
+    | SVD_aux (SVD_always_comb (SVS_aux (SVS_skip, _)), l) -> SVD_aux (SVD_null, l)
+    | no_change -> no_change
+
+  type constant_write = No_write | Single_write of smt_exp | Multi_write
+
+  type usage = {
+    mutable reads : int;
+    mutable writes : int;
+    mutable outputs : int;
+    mutable raws : int;
+    mutable constant_write : constant_write;
+    mutable locations : IntSet.t;
+  }
+
+  let single_constant_write usage =
+    usage.writes = 1 && usage.outputs = 0 && usage.raws = 0
+    && match usage.constant_write with Single_write _ -> true | _ -> false
+
+  let create_usage () =
+    { reads = 0; writes = 0; outputs = 0; raws = 0; constant_write = No_write; locations = IntSet.empty }
+
+  let no_usage = create_usage ()
+
+  type frame =
+    | Block of int * (int * ctyp) NameMap.t
+    | Foreach of Jib.name
+    | Ports of NameSet.t
+    | Function of NameSet.t
+
+  let rec is_constant stack = function
+    | Bitvec_lit _ -> true
+    | Bool_lit _ -> true
+    | String_lit _ -> true
+    | Member _ -> true
+    | Fn ("Bits", [len; bv]) -> is_constant stack len && is_constant stack bv
+    | Fn ("=", [x; y]) -> is_constant stack x && is_constant stack y
+    | Var v ->
+        let rec walk = function
+          | Block (_, vars) :: tail -> if NameMap.mem v vars then false else walk tail
+          | Foreach v' :: tail -> Name.compare v v' = 0 || walk tail
+          | (Function args | Ports args) :: tail -> NameSet.mem v args || walk tail
+          | [] -> false
+        in
+        walk stack
+    | _ -> false
+
+  let add_var name num ctyp = function
+    | Block (n, vars) :: tail -> Block (n, NameMap.add name (num, ctyp) vars) :: tail
+    | stack -> stack
+
+  let rec get_num ?first_block name = function
+    | head :: tail -> begin
+        match head with
+        | Block (bnum, vars) -> begin
+            let bnum = Option.value ~default:bnum first_block in
+            match NameMap.find_opt name vars with
+            | Some (vnum, ctyp) -> Some (bnum, vnum, ctyp)
+            | None -> get_num ~first_block:bnum name tail
+          end
+        | Foreach var -> if Name.compare name var = 0 then None else get_num ?first_block name tail
+        | Ports ports -> if NameSet.mem name ports then None else get_num ?first_block name tail
+        | Function params -> if NameSet.mem name params then None else get_num ?first_block name tail
+      end
+    | [] -> None
+
+  class remove_unused_visitor uses changes skip : svir_visitor =
     object (self)
       inherit empty_svir_visitor
 
-      val mutable stack = [NameMap.empty]
+      val mutable stack = [Block (-1, NameMap.empty)]
 
-      method private push () = stack <- NameMap.empty :: stack
+      method private push_frame frame = stack <- frame :: stack
+      method private push bnum = stack <- Block (bnum, NameMap.empty) :: stack
       method private pop () = stack <- List.tl stack
 
-      method private add_var name vnum ctyp =
-        match stack with
-        | head :: tail -> stack <- NameMap.add name (vnum, ctyp) head :: tail
-        | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty stack"
+      method private add_var name num ctyp = stack <- add_var name num ctyp stack
 
-      method private get_vnum name =
-        let rec go = function
-          | head :: tail -> begin match NameMap.find_opt name head with Some vnum -> Some vnum | None -> go tail end
-          | [] -> None
-        in
-        go stack
+      method private get_vnum name = get_num name stack
 
       method! vctyp _ = SkipChildren
-      method! vsmt_exp _ = SkipChildren
+
+      method! vsmt_exp =
+        function
+        | Var name -> begin
+            match self#get_vnum name with
+            | Some (_, vnum, ctyp) ->
+                let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
+                begin
+                  match usage.constant_write with
+                  | Single_write constant_exp -> ChangeTo constant_exp
+                  | _ -> SkipChildren
+                end
+            | None -> SkipChildren
+          end
+        | _ -> DoChildren
 
       method! vplace =
         function
         | SVP_id name -> begin
             match self#get_vnum name with
-            | Some (vnum, ctyp) ->
-                let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
+            | Some (_, vnum, ctyp) ->
+                let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
                 if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
                   ChangeTo (SVP_void ctyp)
                 else SkipChildren
@@ -227,30 +375,85 @@ module RemoveUnusedVariables = struct
         function
         | SVD_aux (SVD_var (name, ctyp), Unique (vnum, l)) ->
             self#add_var name vnum ctyp;
-            let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
-            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+            let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
+            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then (
+              incr changes;
               ChangeTo (SVD_aux (SVD_null, l))
-            else ChangeTo (SVD_aux (SVD_var (name, ctyp), l))
-        | SVD_aux (SVD_module _, _) | SVD_aux (SVD_fundef _, _) ->
-            self#push ();
-            DoChildrenPost self#pop
+            )
+            else if single_constant_write usage then (
+              incr changes;
+              ChangeTo (SVD_aux (SVD_null, l))
+            )
+            else DoChildren
+        | SVD_aux (((SVD_module _ | SVD_fundef _) as aux), l) -> begin
+            let frame =
+              match aux with
+              | SVD_fundef f ->
+                  let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty f.params in
+                  Function paramset
+              | SVD_module m ->
+                  let portset =
+                    List.fold_left
+                      (fun set (port : sv_module_port) -> NameSet.add port.name set)
+                      NameSet.empty m.input_ports
+                  in
+                  let portset =
+                    List.fold_left (fun set (port : sv_module_port) -> NameSet.add port.name set) portset m.output_ports
+                  in
+                  Ports portset
+              | _ -> assert false
+            in
+            match l with
+            | Unique (n, _) ->
+                if Hashtbl.mem skip n then SkipChildren
+                else (
+                  let before_changes = !changes in
+                  self#push_frame frame;
+                  self#push n;
+                  DoChildrenPost
+                    (fun () ->
+                      let after_changes = !changes in
+                      if before_changes = after_changes then Hashtbl.add skip n ();
+                      self#pop ();
+                      self#pop ()
+                    )
+                )
+            | _ -> Reporting.unreachable l __POS__ "Un-numbered module or function"
+          end
+        | SVD_aux (SVD_always_comb _, _) as comb -> ChangeDoChildrenPost (comb, simplify_empty_always_comb)
         | _ -> DoChildren
 
       method! vstatement =
         function
         | SVS_aux (SVS_var (name, ctyp, init_opt), Unique (vnum, l)) ->
-            let usage = Option.value ~default:no_usage (IntMap.find_opt vnum uses) in
-            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+            let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
+            if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then (
+              incr changes;
               ChangeTo (SVS_aux (SVS_skip, l))
-            else ChangeTo (SVS_aux (SVS_var (name, ctyp, init_opt), l))
-        | SVS_aux (SVS_block statements, Unique (bnum, l)) ->
-            self#push ();
+            )
+            else if single_constant_write usage then (
+              incr changes;
+              ChangeTo (SVS_aux (SVS_skip, l))
+            )
+            else DoChildren
+        | SVS_aux (SVS_block _, Unique (bnum, _)) as block ->
+            self#push bnum;
             ChangeDoChildrenPost
-              ( SVS_aux (SVS_block statements, l),
-                fun stmt ->
+              ( block,
+                fun block ->
                   self#pop ();
-                  stmt
+                  simplify_empty_block block
               )
+        | SVS_aux (SVS_assign (SVP_id name, exp), l) when is_constant stack exp -> begin
+            match self#get_vnum name with
+            | Some (_, vnum, ctyp) ->
+                let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
+                if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+                  ChangeTo (SVS_aux (SVS_skip, l))
+                else if single_constant_write usage then ChangeTo (SVS_aux (SVS_skip, l))
+                else DoChildren
+            | None -> DoChildren
+          end
         | SVS_aux (SVS_assign _, _) as assign ->
             ChangeDoChildrenPost
               (assign, function SVS_aux (SVS_assign (SVP_void _, _), l) -> SVS_aux (SVS_skip, l) | assign -> assign)
@@ -260,48 +463,32 @@ module RemoveUnusedVariables = struct
         | _ -> DoChildren
     end
 
-  type frame = Block of int * int NameMap.t | Foreach of Jib.name | Ports of NameSet.t | Function of NameSet.t
-
-  let add_var name num = function
-    | Block (n, vars) :: tail -> Block (n, NameMap.add name num vars) :: tail
-    | stack -> stack
-
-  let rec get_num ?first_block name = function
-    | head :: tail -> begin
-        match head with
-        | Block (bnum, vars) -> begin
-            let bnum = Option.value ~default:bnum first_block in
-            match NameMap.find_opt name vars with
-            | Some vnum -> Some (bnum, vnum)
-            | None -> get_num ~first_block:bnum name tail
-          end
-        | Foreach var -> if Name.compare name var = 0 then None else get_num ?first_block name tail
-        | Ports ports -> if NameSet.mem name ports then None else get_num ?first_block name tail
-        | Function params -> if NameSet.mem name params then None else get_num ?first_block name tail
-      end
-    | [] -> None
-
   let push frame stack = stack := frame :: !stack
 
   let pop stack = stack := List.tl !stack
 
-  let add_use ?(read = false) ?(write = false) ?(output = false) ?(raw = false) name stack uses =
+  let add_use ?(read = false) ?(write = false) ?(output = false) ?(raw = false) ?constant_write name stack uses =
     match get_num name !stack with
-    | Some (bnum, vnum) ->
-        uses :=
-          IntMap.update vnum
-            (fun usage_opt ->
-              let usage = Option.value ~default:no_usage usage_opt in
-              Some
-                {
-                  reads = (if read then usage.reads + 1 else usage.reads);
-                  writes = (if write then usage.writes + 1 else usage.writes);
-                  outputs = (if output then usage.outputs + 1 else usage.outputs);
-                  raws = (if raw then usage.raws + 1 else usage.raws);
-                  locations = IntSet.add bnum usage.locations;
-                }
-            )
-            !uses
+    | Some (bnum, vnum, _) ->
+        let usage =
+          match Hashtbl.find_opt uses vnum with
+          | Some usage -> usage
+          | None ->
+              let usage = create_usage () in
+              Hashtbl.add uses vnum usage;
+              usage
+        in
+        if read then usage.reads <- usage.reads + 1;
+        if write then usage.writes <- usage.writes + 1;
+        if output then usage.outputs <- usage.outputs + 1;
+        if raw then usage.raws <- usage.raws + 1;
+        usage.constant_write <-
+          ( match (usage.constant_write, constant_write) with
+          | write, None -> write
+          | No_write, Some write -> Single_write write
+          | _, Some _ -> Multi_write
+          );
+        usage.locations <- IntSet.add bnum usage.locations
     | None -> ()
 
   let rec smt_uses stack uses = function
@@ -338,12 +525,12 @@ module RemoveUnusedVariables = struct
   let rec statement_uses stack uses (SVS_aux (aux, l)) =
     match aux with
     | SVS_comment _ | SVS_skip | SVS_split_comb -> ()
-    | SVS_var (name, _, init_opt) ->
+    | SVS_var (name, ctyp, init_opt) ->
         begin
           match init_opt with Some init -> smt_uses stack uses init | None -> ()
         end;
         begin
-          match l with Unique (num, _) -> stack := add_var name num !stack | _ -> ()
+          match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> ()
         end
     | SVS_block statements ->
         let bnum =
@@ -352,6 +539,8 @@ module RemoveUnusedVariables = struct
         push (Block (bnum, NameMap.empty)) stack;
         List.iter (statement_uses stack uses) statements;
         pop stack
+    | SVS_assign (SVP_id name, exp) when is_constant !stack exp ->
+        add_use ~write:true ~constant_write:exp name stack uses
     | SVS_assign (place, exp) ->
         place_uses stack uses place;
         smt_uses stack uses exp
@@ -401,7 +590,7 @@ module RemoveUnusedVariables = struct
         push (Ports portset) stack;
         defs_uses stack uses defs;
         pop stack
-    | SVD_var (name, _) -> begin match l with Unique (num, _) -> stack := add_var name num !stack | _ -> () end
+    | SVD_var (name, ctyp) -> begin match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> () end
     | SVD_instantiate { input_connections; output_connections; _ } ->
         List.iter (smt_uses stack uses) input_connections;
         List.iter (place_uses ~output:true stack uses) output_connections
@@ -414,9 +603,20 @@ module RemoveUnusedVariables = struct
 
   let rewrite defs =
     let defs = visit_sv_defs (new number_var_visitor) defs in
-    let uses = ref IntMap.empty in
-    defs_uses (ref []) uses defs;
-    visit_sv_defs (new remove_unused_visitor !uses) defs
+    let skip = Hashtbl.create 4096 in
+    let rec go defs =
+      let changes = ref 0 in
+      let uses = Hashtbl.create 4096 in
+      defs_uses (ref []) uses defs;
+      let defs = visit_sv_defs (new remove_unused_visitor uses changes skip) defs in
+      if !changes > 0 then (
+        prerr_endline (Printf.sprintf "Made %d changes" !changes);
+        go defs
+      )
+      else defs
+    in
+    let defs = go defs in
+    visit_sv_defs (new unnumber_var_visitor) defs
 end
 
-let remove_unused_variables = RemoveUnusedVariables.rewrite
+let remove_unused_variables = profile_rewrite RemoveUnusedVariables.rewrite ~message:"Removing unused variables"

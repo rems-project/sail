@@ -173,15 +173,18 @@ module Make_optimizer (S : Sequence) = struct
       | Declare_const _ as def -> S.add def seq
       | Declare_fun _ as def -> S.add def seq
       | Define_const (var, typ, exp) ->
-          let exp = Smt_exp.simp (NameHashtbl.find_opt vars) exp in
+          let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
+          let exp = Smt_exp.simp simpset exp in
           begin
-            match (NameHashtbl.find_opt uses var, Smt_exp.simp (NameHashtbl.find_opt vars) exp) with
+            match (NameHashtbl.find_opt uses var, Smt_exp.simp simpset exp) with
             | _, (Bitvec_lit _ | Bool_lit _) -> NameHashtbl.add vars var exp
             | Some 1, _ -> NameHashtbl.add vars var exp
             | Some _, exp -> S.add (Define_const (var, typ, exp)) seq
             | None, _ -> assert false
           end
-      | Assert exp -> S.add (Assert (Smt_exp.simp (NameHashtbl.find_opt vars) exp)) seq
+      | Assert exp ->
+          let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
+          S.add (Assert (Smt_exp.simp simpset exp)) seq
       | Declare_datatypes _ as def -> S.add def seq
       | Define_fun _ -> assert false
     in

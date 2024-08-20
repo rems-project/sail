@@ -452,7 +452,10 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   let svir = library_svir @ svir @ toplevel_svir in
 
-  let svir = remove_unused_variables (remove_unit_ports svir) in
+  let svir =
+    svir |> remove_unit_ports |> remove_unused_variables |> simplify_smt |> remove_unused_variables |> simplify_smt
+    |> remove_unused_variables |> remove_nulls
+  in
 
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in

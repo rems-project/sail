@@ -158,6 +158,8 @@ let filter_skips = List.filter (function SVS_aux (SVS_skip, _) -> false | _ -> t
 
 let is_split_comb = function SVS_aux (SVS_split_comb, _) -> true | _ -> false
 
+let is_null_def = function SVD_aux (SVD_null, _) -> true | _ -> false
+
 let is_skip = function SVS_aux (SVS_skip, _) -> true | _ -> false
 
 let svs_block stmts = SVS_block (filter_skips stmts)

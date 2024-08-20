@@ -1032,7 +1032,7 @@ module Make (Config : CONFIG) = struct
                            (Util.string_of_list ", " string_of_clexp clexps)
                         )
                 in
-                let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
+                let* value = Smt_gen.fmap (Smt_exp.simp SimpSet.empty) (generator args (clexp_ctyp clexp)) in
                 begin
                   (* We can optimize R = store(R, i x) into R[i] = x *)
                   match (clexp, value) with
@@ -1231,7 +1231,7 @@ module Make (Config : CONFIG) = struct
             )
             pathconds ids None
         in
-        let mux = Option.map (Smt_exp.simp (fun _ -> None)) mux in
+        let mux = Option.map (Smt_exp.simp SimpSet.empty) mux in
         match mux with None -> assert false | Some mux -> return (Some (id, ctyp, mux))
       )
 
@@ -1587,7 +1587,7 @@ module Make (Config : CONFIG) = struct
                   (function
                     | Some pi ->
                         let* pi = mapM Smt.smt_cval pi in
-                        return (Some (Smt_exp.simp (fun _ -> None) (smt_conj pi)))
+                        return (Some (Smt_exp.simp SimpSet.empty (smt_conj pi)))
                     | None -> return None
                     )
                   pis
@@ -1607,12 +1607,12 @@ module Make (Config : CONFIG) = struct
               List.iter
                 (fun (id, ctyp, mux) ->
                   add_comb_statement
-                    (SVS_aux (SVS_assign (SVP_id id, Smt_exp.simp (fun _ -> None) mux), Parse_ast.Unknown))
+                    (SVS_aux (SVS_assign (SVP_id id, Smt_exp.simp SimpSet.empty mux), Parse_ast.Unknown))
                 )
                 muxers;
               let* this_pathcond =
                 let* pi = mapM Smt.smt_cval (get_pi n) in
-                return (Smt_exp.simp (fun _ -> None) (smt_conj pi))
+                return (Smt_exp.simp SimpSet.empty (smt_conj pi))
               in
               let* block = svir_cfnode spec_info ctx this_pathcond cfnode in
               List.iter add_comb_statement block;

@@ -154,6 +154,8 @@ val svs_raw : ?inputs:Jib.name list -> ?outputs:Jib.name list -> string -> sv_st
 
 val is_split_comb : sv_statement -> bool
 
+val is_null_def : sv_def -> bool
+
 val is_skip : sv_statement -> bool
 
 val filter_skips : sv_statement list -> sv_statement list
