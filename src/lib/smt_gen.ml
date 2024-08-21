@@ -1222,6 +1222,20 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* x = smt_cval x in
         let* y = smt_cval y in
         return (Fn ("=", [x; y]))
+    | CT_fvector (n, _), CT_fvector (m, _) ->
+        if n <> m then return (Bool_lit false)
+        else
+          let* x = smt_cval x in
+          let* y = smt_cval y in
+          return
+            (Fn
+               ( "and",
+                 List.init n (fun i ->
+                     let i = bvpint (required_width (Big_int.of_int (n - 1)) - 1) (Big_int.of_int i) in
+                     Fn ("=", [Fn ("select", [x; i]); Fn ("select", [y; i])])
+                 )
+               )
+            )
     | _, _ -> builtin_type_error "eq_anything" [x; y] None
 
   let builtin_vector_init len elem ret_ctyp =
