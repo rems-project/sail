@@ -350,7 +350,11 @@ module Make
               mk_statement
                 (SVS_block
                    (List.map mk_statement
-                      [SVS_var (s, CT_string, None); svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                      [
+                        SVS_var (s, CT_string, None);
+                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
+                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
+                      ]
                    )
                 );
           }
@@ -374,7 +378,7 @@ module Make
                         SVS_var (s, CT_string, None);
                         svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
                         svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
-                        SVS_return (Var s);
+                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
                       ]
                    )
                 );
