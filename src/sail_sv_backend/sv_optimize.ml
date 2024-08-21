@@ -265,23 +265,24 @@ module RemoveUnusedVariables = struct
     | SVD_aux (SVD_always_comb (SVS_aux (SVS_skip, _)), l) -> SVD_aux (SVD_null, l)
     | no_change -> no_change
 
-  type constant_write = No_write | Single_write of smt_exp | Multi_write
+  type write_value = No_write | Single_write of smt_exp | Multi_write
 
   type usage = {
     mutable reads : int;
     mutable writes : int;
     mutable outputs : int;
     mutable raws : int;
-    mutable constant_write : constant_write;
+    mutable propagated : int;
+    mutable write_value : write_value;
     mutable locations : IntSet.t;
   }
 
-  let single_constant_write usage =
-    usage.writes = 1 && usage.outputs = 0 && usage.raws = 0
-    && match usage.constant_write with Single_write _ -> true | _ -> false
+  let single_write_value usage =
+    usage.writes = 1 && usage.outputs = 0 && usage.raws = 0 && usage.propagated = 0
+    && match usage.write_value with Single_write _ -> true | _ -> false
 
   let create_usage () =
-    { reads = 0; writes = 0; outputs = 0; raws = 0; constant_write = No_write; locations = IntSet.empty }
+    { reads = 0; writes = 0; outputs = 0; raws = 0; propagated = 0; write_value = No_write; locations = IntSet.empty }
 
   let no_usage = create_usage ()
 
@@ -291,22 +292,33 @@ module RemoveUnusedVariables = struct
     | Ports of NameSet.t
     | Function of NameSet.t
 
-  let rec is_constant stack = function
-    | Bitvec_lit _ -> true
-    | Bool_lit _ -> true
-    | String_lit _ -> true
-    | Member _ -> true
-    | Fn ("Bits", [len; bv]) -> is_constant stack len && is_constant stack bv
-    | Fn ("=", [x; y]) -> is_constant stack x && is_constant stack y
+  type propagation_type = Forbid | Variable | Literal
+
+  let combine x y =
+    match (x, y) with
+    | Forbid, _ -> Forbid
+    | _, Forbid -> Forbid
+    | Variable, _ -> Variable
+    | _, Variable -> Variable
+    | _ -> Literal
+
+  let rec can_propagate stack name = function
+    | Bitvec_lit _ | Bool_lit _ | String_lit _ | Member _ -> Literal
+    | Fn ("Bits", [len; bv]) -> combine (can_propagate stack name len) (can_propagate stack name bv)
+    | Fn ("=", [x; y]) -> combine (can_propagate stack name x) (can_propagate stack name y)
+    | Field (_, _, x) -> can_propagate stack name x
+    | Unwrap (_, _, x) -> can_propagate stack name x
     | Var v ->
-        let rec walk = function
-          | Block (_, vars) :: tail -> if NameMap.mem v vars then false else walk tail
-          | Foreach v' :: tail -> Name.compare v v' = 0 || walk tail
-          | (Function args | Ports args) :: tail -> NameSet.mem v args || walk tail
-          | [] -> false
+        let rec walk found = function
+          | Block (_, vars) :: tail ->
+              let found = found || NameMap.mem name vars in
+              if NameMap.mem v vars then if found then Variable else Forbid else walk found tail
+          | Foreach v' :: tail -> if Name.compare v v' = 0 then Literal else walk found tail
+          | (Function args | Ports args) :: tail -> if NameSet.mem v args then Literal else walk found tail
+          | [] -> Forbid
         in
-        walk stack
-    | _ -> false
+        walk false stack
+    | _ -> Forbid
 
   let add_var name num ctyp = function
     | Block (n, vars) :: tail -> Block (n, NameMap.add name (num, ctyp) vars) :: tail
@@ -350,8 +362,10 @@ module RemoveUnusedVariables = struct
             | Some (_, vnum, ctyp) ->
                 let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
                 begin
-                  match usage.constant_write with
-                  | Single_write constant_exp -> ChangeTo constant_exp
+                  match usage.write_value with
+                  | Single_write exp ->
+                      incr changes;
+                      ChangeTo exp
                   | _ -> SkipChildren
                 end
             | None -> SkipChildren
@@ -380,7 +394,7 @@ module RemoveUnusedVariables = struct
               incr changes;
               ChangeTo (SVD_aux (SVD_null, l))
             )
-            else if single_constant_write usage then (
+            else if single_write_value usage then (
               incr changes;
               ChangeTo (SVD_aux (SVD_null, l))
             )
@@ -431,7 +445,7 @@ module RemoveUnusedVariables = struct
               incr changes;
               ChangeTo (SVS_aux (SVS_skip, l))
             )
-            else if single_constant_write usage then (
+            else if single_write_value usage then (
               incr changes;
               ChangeTo (SVS_aux (SVS_skip, l))
             )
@@ -444,15 +458,23 @@ module RemoveUnusedVariables = struct
                   self#pop ();
                   simplify_empty_block block
               )
-        | SVS_aux (SVS_assign (SVP_id name, exp), l) when is_constant stack exp -> begin
-            match self#get_vnum name with
-            | Some (_, vnum, ctyp) ->
-                let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
-                if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
-                  ChangeTo (SVS_aux (SVS_skip, l))
-                else if single_constant_write usage then ChangeTo (SVS_aux (SVS_skip, l))
-                else DoChildren
-            | None -> DoChildren
+        | SVS_aux (SVS_assign (SVP_id name, exp), l) as assign -> begin
+            match can_propagate stack name exp with
+            | Forbid ->
+                ChangeDoChildrenPost
+                  ( assign,
+                    function SVS_aux (SVS_assign (SVP_void _, _), l) -> SVS_aux (SVS_skip, l) | assign -> assign
+                  )
+            | Literal | Variable -> begin
+                match self#get_vnum name with
+                | Some (_, vnum, _) ->
+                    let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
+                    if usage.reads = 0 && usage.writes <= 1 && usage.outputs = 0 && usage.raws = 0 then
+                      ChangeTo (SVS_aux (SVS_skip, l))
+                    else if single_write_value usage then ChangeTo (SVS_aux (SVS_skip, l))
+                    else DoChildren
+                | None -> DoChildren
+              end
           end
         | SVS_aux (SVS_assign _, _) as assign ->
             ChangeDoChildrenPost
@@ -467,7 +489,8 @@ module RemoveUnusedVariables = struct
 
   let pop stack = stack := List.tl !stack
 
-  let add_use ?(read = false) ?(write = false) ?(output = false) ?(raw = false) ?constant_write name stack uses =
+  let add_use ?(read = false) ?(write = false) ?(output = false) ?(raw = false) ?(propagated = false) ?write_value name
+      stack uses =
     match get_num name !stack with
     | Some (bnum, vnum, _) ->
         let usage =
@@ -482,8 +505,9 @@ module RemoveUnusedVariables = struct
         if write then usage.writes <- usage.writes + 1;
         if output then usage.outputs <- usage.outputs + 1;
         if raw then usage.raws <- usage.raws + 1;
-        usage.constant_write <-
-          ( match (usage.constant_write, constant_write) with
+        if propagated then usage.propagated <- usage.propagated + 1;
+        usage.write_value <-
+          ( match (usage.write_value, write_value) with
           | write, None -> write
           | No_write, Some write -> Single_write write
           | _, Some _ -> Multi_write
@@ -491,8 +515,8 @@ module RemoveUnusedVariables = struct
         usage.locations <- IntSet.add bnum usage.locations
     | None -> ()
 
-  let rec smt_uses stack uses = function
-    | Var name -> add_use ~read:true name stack uses
+  let rec smt_uses ?(propagated = false) stack uses = function
+    | Var name -> add_use ~read:true ~propagated name stack uses
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
     | SignExtend (_, _, exp)
     | ZeroExtend (_, _, exp)
@@ -502,16 +526,16 @@ module RemoveUnusedVariables = struct
     | Field (_, _, exp)
     | Hd (_, exp)
     | Tl (_, exp) ->
-        smt_uses stack uses exp
+        smt_uses ~propagated stack uses exp
     | Ite (i, t, e) ->
-        smt_uses stack uses i;
-        smt_uses stack uses t;
-        smt_uses stack uses e
-    | Fn (_, args) -> List.iter (smt_uses stack uses) args
+        smt_uses ~propagated stack uses i;
+        smt_uses ~propagated stack uses t;
+        smt_uses ~propagated stack uses e
+    | Fn (_, args) -> List.iter (smt_uses ~propagated stack uses) args
     | Store (_, _, arr, i, x) ->
-        smt_uses stack uses arr;
-        smt_uses stack uses i;
-        smt_uses stack uses x
+        smt_uses ~propagated stack uses arr;
+        smt_uses ~propagated stack uses i;
+        smt_uses ~propagated stack uses x
 
   let rec place_uses ?(output = false) stack uses = function
     | SVP_id name -> add_use ~write:true ~output name stack uses
@@ -539,8 +563,16 @@ module RemoveUnusedVariables = struct
         push (Block (bnum, NameMap.empty)) stack;
         List.iter (statement_uses stack uses) statements;
         pop stack
-    | SVS_assign (SVP_id name, exp) when is_constant !stack exp ->
-        add_use ~write:true ~constant_write:exp name stack uses
+    | SVS_assign (SVP_id name, exp) -> begin
+        match can_propagate !stack name exp with
+        | Variable ->
+            add_use ~write:true ~write_value:exp name stack uses;
+            smt_uses ~propagated:true stack uses exp
+        | Literal -> add_use ~write:true ~write_value:exp name stack uses
+        | Forbid ->
+            add_use ~write:true name stack uses;
+            smt_uses stack uses exp
+      end
     | SVS_assign (place, exp) ->
         place_uses stack uses place;
         smt_uses stack uses exp
