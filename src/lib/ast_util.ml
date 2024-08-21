@@ -1046,6 +1046,63 @@ let rec map_def_def_annot f (DEF_aux (aux, annot)) =
 
 let def_loc (DEF_aux (_, annot)) = annot.loc
 
+type id_chunk = Id_chunk_int of int | Id_chunk_string of string
+
+let split_id =
+  let open Ast in
+  function
+  | Id_aux (Id id, _) ->
+      let pos = ref 0 in
+      let is_number = ref false in
+      let chunks = ref [] in
+      let parse_chunk n =
+        let chunk = String.sub id !pos (n - !pos) in
+        if !is_number then (
+          match int_of_string_opt chunk with Some n -> Id_chunk_int n | None -> Id_chunk_string chunk
+        )
+        else Id_chunk_string chunk
+      in
+      String.iteri
+        (fun n c ->
+          let c = Char.code c in
+          match (!is_number, 48 <= c && c <= 57) with
+          | false, true ->
+              if n > !pos then (
+                chunks := parse_chunk n :: !chunks;
+                pos := n
+              );
+              is_number := true
+          | true, true -> ()
+          | false, false -> ()
+          | true, false ->
+              chunks := parse_chunk n :: !chunks;
+              pos := n;
+              is_number := false
+        )
+        id;
+      chunks := parse_chunk (String.length id) :: !chunks;
+      List.rev !chunks
+  | Id_aux (Operator id, _) -> [Id_chunk_string id]
+
+let rec compare_natural x y =
+  match (x, y) with
+  | [], [] -> 0
+  | [], _ -> -1
+  | _, [] -> 1
+  | Id_chunk_int x :: xs, Id_chunk_int y :: ys ->
+      let c = Int.compare x y in
+      if c = 0 then compare_natural xs ys else c
+  | Id_chunk_string x :: xs, Id_chunk_string y :: ys ->
+      let c = String.compare x y in
+      if c = 0 then compare_natural xs ys else c
+  | Id_chunk_int _ :: _, Id_chunk_string _ :: _ -> -1
+  | Id_chunk_string _ :: _, Id_chunk_int _ :: _ -> 1
+
+let natural_sort_ids ids =
+  let ids = List.map (fun id -> (split_id id, id)) ids in
+  let ids = List.stable_sort (fun (n1, _) (n2, _) -> compare_natural n1 n2) ids in
+  List.map snd ids
+
 let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
 
 let infix_swap = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Id v, l)

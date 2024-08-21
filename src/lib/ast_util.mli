@@ -510,6 +510,8 @@ val id_of_dec_spec : 'a dec_spec -> id
 
 (** {2 Functions for manipulating identifiers} *)
 
+val natural_sort_ids : id list -> id list
+
 val deinfix : id -> id
 val infix_swap : id -> id
 

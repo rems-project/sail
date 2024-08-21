@@ -270,19 +270,38 @@ module RemoveUnusedVariables = struct
   type usage = {
     mutable reads : int;
     mutable writes : int;
+    (* If the variable is in the outputs of a module instantiation, we
+       don't want to remove it. *)
     mutable outputs : int;
+    (* If the variable is in the inputs or output list of a SVS_raw
+       statement, likewise, we can't remove it. *)
     mutable raws : int;
+    (* The variable might be propagated, in which case we can't remove
+       it (at least within the same simplification pass). This means
+       the variable appears in other variable's propagate_write_value
+       fields. *)
     mutable propagated : int;
-    mutable write_value : write_value;
+    (* A write value that can be propagated. A variable usage might
+       have multiple writes (i.e. writes > 0), but none that can be
+       propagated. *)
+    mutable propagate_write_value : write_value;
     mutable locations : IntSet.t;
   }
 
   let single_write_value usage =
     usage.writes = 1 && usage.outputs = 0 && usage.raws = 0 && usage.propagated = 0
-    && match usage.write_value with Single_write _ -> true | _ -> false
+    && match usage.propagate_write_value with Single_write _ -> true | _ -> false
 
   let create_usage () =
-    { reads = 0; writes = 0; outputs = 0; raws = 0; propagated = 0; write_value = No_write; locations = IntSet.empty }
+    {
+      reads = 0;
+      writes = 0;
+      outputs = 0;
+      raws = 0;
+      propagated = 0;
+      propagate_write_value = No_write;
+      locations = IntSet.empty;
+    }
 
   let no_usage = create_usage ()
 
@@ -362,7 +381,7 @@ module RemoveUnusedVariables = struct
             | Some (_, vnum, ctyp) ->
                 let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
                 begin
-                  match usage.write_value with
+                  match usage.propagate_write_value with
                   | Single_write exp ->
                       incr changes;
                       ChangeTo exp
@@ -506,8 +525,8 @@ module RemoveUnusedVariables = struct
         if output then usage.outputs <- usage.outputs + 1;
         if raw then usage.raws <- usage.raws + 1;
         if propagated then usage.propagated <- usage.propagated + 1;
-        usage.write_value <-
-          ( match (usage.write_value, write_value) with
+        usage.propagate_write_value <-
+          ( match (usage.propagate_write_value, write_value) with
           | write, None -> write
           | No_write, Some write -> Single_write write
           | _, Some _ -> Multi_write

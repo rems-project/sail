@@ -1274,8 +1274,10 @@ module Make (Config : CONFIG) = struct
             let regs = Option.value ~default:IdSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map) in
 
             let encoded = "sail_reg_assign_" ^ Util.zencode_string (string_of_ctyp reg_ctyp) in
-            let reads = List.map (fun id -> V_id (Name (id, -1), reg_ctyp)) (IdSet.elements regs) in
-            let writes = List.map (fun id -> CL_id (Name (id, -1), reg_ctyp)) (IdSet.elements regs) in
+            let reads = List.map (fun id -> V_id (Name (id, -1), reg_ctyp)) (natural_sort_ids (IdSet.elements regs)) in
+            let writes =
+              List.map (fun id -> CL_id (Name (id, -1), reg_ctyp)) (natural_sort_ids (IdSet.elements regs))
+            in
             ChangeTo
               (I_aux
                  ( I_funcall (CR_multi writes, true, (mk_id encoded, []), V_id (id, CT_ref reg_ctyp) :: cval :: reads),
@@ -1290,12 +1292,12 @@ module Make (Config : CONFIG) = struct
                 let reads =
                   List.map
                     (fun id -> V_id (Name (id, -1), Bindings.find id spec_info.registers))
-                    (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
+                    (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
                 in
                 let writes =
                   List.map
                     (fun id -> CL_id (Name (id, -1), Bindings.find id spec_info.registers))
-                    (IdSet.elements footprint.all_writes)
+                    (natural_sort_ids (IdSet.elements footprint.all_writes))
                 in
                 let throws =
                   if footprint.throws then
@@ -1344,7 +1346,11 @@ module Make (Config : CONFIG) = struct
                               Option.value ~default:IdSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map)
                             in
                             let encoded = "sail_reg_deref_" ^ Util.zencode_string (string_of_ctyp reg_ctyp) in
-                            let reads = List.map (fun id -> V_id (Name (id, -1), reg_ctyp)) (IdSet.elements regs) in
+                            let reads =
+                              List.map
+                                (fun id -> V_id (Name (id, -1), reg_ctyp))
+                                (natural_sort_ids (IdSet.elements regs))
+                            in
                             ChangeTo (I_aux (I_funcall (CR_one clexp, true, (mk_id encoded, []), cval :: reads), iannot))
                         | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid type for reg_deref argument"
                       end
@@ -1672,7 +1678,7 @@ module Make (Config : CONFIG) = struct
               typ = Bindings.find id spec_info.registers;
             }
           )
-          (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
+          (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
       @ ( if footprint.need_stdout then
             [{ name = Channel (Chan_stdout, 0); external_name = "in_stdout"; typ = CT_string }]
           else []
@@ -1712,7 +1718,7 @@ module Make (Config : CONFIG) = struct
               typ = Bindings.find id spec_info.registers;
             }
           )
-          (IdSet.elements footprint.all_writes)
+          (natural_sort_ids (IdSet.elements footprint.all_writes))
       @ ( if footprint.throws then
             [
               { name = get_final_name (Have_exception (-1)); external_name = "have_exception"; typ = CT_bool };
@@ -1824,14 +1830,16 @@ module Make (Config : CONFIG) = struct
                 ([Unit]
                 @ List.map
                     (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
-                    (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads))
+                    (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
                 @ (if footprint.need_stdout then [String_lit ""] else [])
                 @ (if footprint.need_stderr then [String_lit ""] else [])
                 @ if footprint.contains_assert then [Bool_lit true] else []
                 );
               output_connections =
                 ([SVP_id Jib_util.return]
-                @ List.map (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1))) (IdSet.elements footprint.all_writes)
+                @ List.map
+                    (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1)))
+                    (natural_sort_ids (IdSet.elements footprint.all_writes))
                 @ (if footprint.throws then [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))] else [])
                 @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
                 @ if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else []
@@ -2057,7 +2065,7 @@ module Make (Config : CONFIG) = struct
     let reg_ref_enums =
       List.map
         (fun (ctyp, regs) ->
-          let regs = IdSet.elements regs in
+          let regs = natural_sort_ids (IdSet.elements regs) in
           separate space [string "typedef"; string "enum"; lbrace]
           ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) (fun r -> string (reg_ref r)) regs)
           ^^ hardline ^^ rbrace ^^ space
@@ -2070,7 +2078,7 @@ module Make (Config : CONFIG) = struct
     let reg_ref_functions =
       List.map
         (fun (ctyp, regs) ->
-          let regs = IdSet.elements regs in
+          let regs = natural_sort_ids (IdSet.elements regs) in
           let encoded = Util.zencode_string (string_of_ctyp ctyp) in
           let sv_ty, index_ty = sv_ctyp ctyp in
           let sv_ty, typedef =
