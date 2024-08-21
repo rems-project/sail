@@ -2038,6 +2038,7 @@ let initial_ctx =
           ("bitvector", ([Some K_int; None], K_type));
           ("vector", ([Some K_int; None; Some K_type], K_type));
           ("atom", ([Some K_int], K_type));
+          ("atom_bool", ([Some K_bool], K_type));
           ("implicit", ([Some K_int], K_type));
           ("itself", ([Some K_int], K_type));
           ("not", ([Some K_bool], K_bool));
@@ -2045,6 +2046,11 @@ let initial_ctx =
           ("abs", ([Some K_int], K_int));
           ("mod", ([Some K_int; Some K_int], K_int));
           ("div", ([Some K_int; Some K_int], K_int));
+          ("float16", ([], K_type));
+          ("float32", ([], K_type));
+          ("float64", ([], K_type));
+          ("float128", ([], K_type));
+          ("float_rounding_mode", ([], K_type));
         ];
     function_type_variables = Bindings.empty;
     kinds = KBindings.empty;
