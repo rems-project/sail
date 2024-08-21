@@ -415,6 +415,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let cdefs, ctx = jib_of_ast SV.make_call_precise env ast effect_info in
 
   let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in
+  let cdefs = Jib_optimize.remove_mutrec cdefs in
   let registers = register_types cdefs in
 
   let include_doc =
@@ -461,9 +462,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
     string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
-    ^^ separate_map (twice hardline) pp_def svir_types
+    ^^ separate_map (twice hardline) (pp_def None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
-    ^^ separate_map (twice hardline) pp_def svir
+    ^^ separate_map (twice hardline) (pp_def None) svir
   in
 
   (*

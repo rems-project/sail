@@ -1521,11 +1521,19 @@ module Make (Config : CONFIG) = struct
   let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_vars = [Jib_util.return]) spec_info ctx name params
       param_ctyps ret_ctyps body =
     prerr_endline Util.(string_of_sv_name name |> red |> clear);
-    let footprint =
+    let footprint, is_recursive =
       match name with
-      | SVN_id id -> Bindings.find_opt id spec_info.footprints |> Option.value ~default:footprint
-      | SVN_string _ -> footprint
+      | SVN_id id ->
+          let footprint = Bindings.find_opt id spec_info.footprints |> Option.value ~default:footprint in
+          let is_recursive =
+            IdGraph.children spec_info.callgraph id
+            |> List.find_opt (fun callee -> Id.compare id callee = 0)
+            |> Option.is_some
+          in
+          (footprint, is_recursive)
+      | SVN_string _ -> (footprint, false)
     in
+
     let always_comb = Queue.create () in
     let declvars = ref Bindings.empty in
     let ssa_vars = ref NameMap.empty in
@@ -1797,7 +1805,7 @@ module Make (Config : CONFIG) = struct
     let defs =
       passthroughs @ List.of_seq (Queue.to_seq module_vars) @ List.rev module_instantiation_defs @ always_comb_def
     in
-    { name; input_ports; output_ports; defs = List.map mk_def defs }
+    { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
   let toplevel_module spec_info =
     match Bindings.find_opt (mk_id "main") spec_info.footprints with
@@ -1909,9 +1917,17 @@ module Make (Config : CONFIG) = struct
           @ [SVD_var (Jib_util.return, CT_unit)]
           @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb]
         in
-        Some { name = SVN_string "sail_toplevel"; input_ports = []; output_ports = []; defs = List.map mk_def defs }
+        Some
+          {
+            name = SVN_string "sail_toplevel";
+            recursive = false;
+            input_ports = [];
+            output_ports = [];
+            defs = List.map mk_def defs;
+          }
 
   let rec pp_module m =
+    let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
     let ports =
       match (m.input_ports, m.output_ports) with
       | [], [] -> semi
@@ -1926,8 +1942,15 @@ module Make (Config : CONFIG) = struct
           nest 4 (char '(' ^^ hardline ^^ separate_map (comma ^^ hardline) pp_port ports)
           ^^ hardline ^^ char ')' ^^ semi
     in
-    string "module" ^^ space ^^ pp_sv_name m.name ^^ ports
-    ^^ nest 4 (hardline ^^ separate_map hardline pp_def m.defs)
+    let generate doc =
+      if m.recursive then (
+        let wrap_generate doc = nest 4 (hardline ^^ string "generate" ^^ doc ^^ hardline ^^ string "endgenerate") in
+        wrap_generate (nest 4 (hardline ^^ string "if (RECURSION_DEPTH > 0) begin" ^^ doc ^^ hardline ^^ string "end"))
+      )
+      else doc
+    in
+    string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def (Some m.name)) m.defs))
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f =
@@ -1961,18 +1984,23 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ pp_body f.body)
     ^^ hardline ^^ string "endfunction"
 
-  and pp_def (SVD_aux (aux, _)) =
+  and pp_def in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
     | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
     | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
+        let params =
+          match in_module with
+          | Some name when SVName.compare module_name name = 0 -> space ^^ string "#(RECURSION_DEPTH - 1)"
+          | _ -> empty
+        in
         let inputs = List.map (fun exp -> pp_smt exp) input_connections in
         let outputs = List.map pp_place output_connections in
         let connections =
           match inputs @ outputs with [] -> empty | connections -> parens (separate (comma ^^ space) connections)
         in
-        pp_sv_name module_name ^^ space ^^ string instance_name ^^ connections ^^ semi
+        pp_sv_name module_name ^^ params ^^ space ^^ string instance_name ^^ connections ^^ semi
     | SVD_fundef f -> pp_fundef f
     | SVD_module m -> pp_module m
     | SVD_type type_def -> pp_type_def type_def

@@ -404,6 +404,25 @@ let inline cdefs should_inline instrs =
   in
   go instrs
 
+let remove_mutrec cdefs =
+  let components = IdGraph.scc (callgraph cdefs) in
+  let mutrecs =
+    List.filter_map (function [] | [_] -> None | component -> Some (IdSet.of_list component)) components
+  in
+  let get_mutrec id = List.find_opt (fun component -> IdSet.mem id component) mutrecs in
+  List.map
+    (function
+      | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot) as cdef -> begin
+          match get_mutrec function_id with
+          | None -> cdef
+          | Some component ->
+              let body = inline cdefs (fun call -> Id.compare call function_id <> 0 && IdSet.mem call component) body in
+              CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot)
+        end
+      | cdef -> cdef
+      )
+    cdefs
+
 let remove_pointless_goto instrs =
   let rec go acc = function
     | I_aux (I_goto label, _) :: I_aux (I_label label', aux) :: instrs when label = label' ->

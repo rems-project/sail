@@ -98,6 +98,7 @@ val mk_port : Jib.name -> Jib.ctyp -> sv_module_port
 
 type sv_module = {
   name : sv_name;
+  recursive : bool;
   input_ports : sv_module_port list;
   output_ports : sv_module_port list;
   defs : sv_def list;

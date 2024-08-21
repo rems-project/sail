@@ -110,7 +110,7 @@ module Make (Config : CONFIG) : sig
     Jib.cdef ->
     Sv_ir.sv_def list * (Jib.ctyp list * Jib.ctyp) Bindings.t
 
-  val pp_def : Sv_ir.sv_def -> PPrint.document
+  val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
   val toplevel_module : spec_info -> Sv_ir.sv_module option
 

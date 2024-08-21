@@ -18,13 +18,8 @@ skip_tests = {
     'all_even_vector_length',
     'assign_rename_bug',
     'cheri128_hsb',
-    'empty_list', # recursion
-    'list_torture', # recursion
     'for_shadow',
     'inc_tests',
-    'issue136', # recursion
-    'list_rec_functions1', # lists
-    'list_rec_functions2',
     'loop_exception',
     'poly_mapping', # length
     'poly_mapping2',

@@ -102,6 +102,7 @@ let mk_port name ctyp = { name; external_name = ""; typ = ctyp }
 
 type sv_module = {
   name : sv_name;
+  recursive : bool;
   input_ports : sv_module_port list;
   output_ports : sv_module_port list;
   defs : sv_def list;
@@ -313,7 +314,7 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
     match def with
     | SVD_null -> no_change
     | SVD_type _ -> no_change
-    | SVD_module { name; input_ports; output_ports; defs } ->
+    | SVD_module { name; recursive; input_ports; output_ports; defs } ->
         let visit_port ({ name; external_name; typ } as no_change) =
           let name' = visit_name (vis :> common_visitor) name in
           let typ' = visit_ctyp (vis :> common_visitor) typ in
@@ -323,7 +324,9 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
         let output_ports' = map_no_copy visit_port output_ports in
         let defs' = map_no_copy (visit_sv_def vis) defs in
         if input_ports == input_ports' && output_ports == output_ports' && defs == defs' then no_change
-        else SVD_aux (SVD_module { name; input_ports = input_ports'; output_ports = output_ports'; defs = defs' }, l)
+        else
+          SVD_aux
+            (SVD_module { name; recursive; input_ports = input_ports'; output_ports = output_ports'; defs = defs' }, l)
     | SVD_var (name, ctyp) ->
         let name' = visit_name (vis :> common_visitor) name in
         let ctyp' = visit_ctyp (vis :> common_visitor) ctyp in

@@ -105,7 +105,7 @@ module RemoveUnitPorts = struct
 
       method! vdef =
         function
-        | SVD_aux (SVD_module { name; input_ports; output_ports; defs }, l) ->
+        | SVD_aux (SVD_module { name; recursive; input_ports; output_ports; defs }, l) ->
             port_actions := SVNameMap.add name (scan_ports input_ports, scan_ports output_ports) !port_actions;
             let unit_inputs, input_ports = List.partition is_unit_port input_ports in
             let unit_outputs, output_ports = List.partition is_unit_port output_ports in
@@ -113,6 +113,7 @@ module RemoveUnitPorts = struct
               ( SVD_module
                   {
                     name;
+                    recursive;
                     input_ports;
                     output_ports;
                     defs = List.map port_var unit_inputs @ List.map port_var unit_outputs @ defs;
@@ -323,7 +324,6 @@ module RemoveUnusedVariables = struct
 
   let rec can_propagate stack name = function
     | Bitvec_lit _ | Bool_lit _ | String_lit _ | Member _ -> Literal
-    | Fn ("Bits", [len; bv]) -> combine (can_propagate stack name len) (can_propagate stack name bv)
     | Fn ("=", [x; y]) -> combine (can_propagate stack name x) (can_propagate stack name y)
     | Field (_, _, x) -> can_propagate stack name x
     | Unwrap (_, _, x) -> can_propagate stack name x

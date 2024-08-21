@@ -84,6 +84,8 @@ val unique_per_function_ids : cdef list -> cdef list
 
 val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
 
+val remove_mutrec : cdef list -> cdef list
+
 val remove_undefined : instr list -> instr list
 
 val remove_functions_to_references : instr list -> instr list
