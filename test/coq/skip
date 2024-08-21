@@ -53,3 +53,5 @@ concurrency_interface_inc.sail
 XXXXX Would need to turn a term with existential type into a dependent pair
 ex_list_infer.sail
 ex_vector_infer.sail
+XXXXX Would need float types in coq-sail
+float_prelude.sail
