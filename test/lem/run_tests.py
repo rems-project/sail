@@ -28,6 +28,8 @@ skip_tests = {
     'abstract_bool',
     'abstract_bool2',
     'constraint_syn',
+    # Requires types that aren't currently in the library
+    'float_prelude',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -60,6 +62,8 @@ skip_tests_mwords = {
     'ex_vector_infer',
     'ex_list_infer',
     'ex_cons_infer',
+    # Requires types that aren't currently in the library
+    'float_prelude',
 }
 
 print('Sail is {}'.format(sail))
