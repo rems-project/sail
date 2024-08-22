@@ -1,7 +1,7 @@
 default Order dec
 $include <prelude.sail>
 
-$target_set emulator c ocaml interpreter lem
+$target_set emulator c ocaml interpreter lem systemverilog
 
 outcome test_ev1 : forall 'n, 'n > 0. ('a, bits('n)) -> unit
 with

@@ -28,7 +28,6 @@ skip_tests = {
     'real_prop', # reals
     'split', # generic vectors, loops
     'vector_example', # loops
-    'xlen_val', # Calls external C function
     'spc_mappings',
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing

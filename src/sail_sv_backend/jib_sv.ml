@@ -510,7 +510,7 @@ module Make (Config : CONFIG) = struct
 
         let hex_str_upper _ = Primops.hex_str_upper
 
-        let count_leading_zeros _l sz = Generate_primop.count_leading_zeros sz
+        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
 
         let fvector_store _l len ctyp = Primops.fvector_store len ctyp
 
@@ -521,6 +521,8 @@ module Make (Config : CONFIG) = struct
         let hd l = function CT_list ctyp -> Primops.hd ctyp | _ -> Reporting.unreachable l __POS__ "hd"
 
         let tl l = function CT_list ctyp -> Primops.tl ctyp | _ -> Reporting.unreachable l __POS__ "tl"
+
+        let eq_list _ eq_elem ctyp1 ctyp2 = Primops.eq_list eq_elem ctyp1 ctyp2
       end)
 
   let ( let* ) = Smt_gen.bind
@@ -1164,6 +1166,19 @@ module Make (Config : CONFIG) = struct
         separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
         ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
         ^^ terminator
+    | SVS_for (loop, stmt) ->
+        let vars =
+          let i, ctyp, init = loop.for_var in
+          separate space [wrap_type ctyp (pp_name i); equals; pp_smt init]
+        in
+        let modifier =
+          match loop.for_modifier with
+          | SVF_increment i -> pp_name i ^^ string "++"
+          | SVF_decrement i -> pp_name i ^^ string "--"
+        in
+        separate space [string "for"; parens (separate (semi ^^ space) [vars; pp_smt loop.for_cond; modifier])]
+        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
+        ^^ terminator
     | SVS_var (id, ctyp, init_opt) -> begin
         match init_opt with
         | Some init -> ld ^^ separate space [wrap_type ctyp (pp_name id); equals; pp_smt init] ^^ terminator
@@ -1549,7 +1564,8 @@ module Make (Config : CONFIG) = struct
 
     let open Jib_ssa in
     let _, end_node, cfg =
-      ssa ~globals:spec_info.global_lets
+      ssa
+        ~globals:(NameSet.diff spec_info.global_lets (NameSet.of_list (List.map Jib_util.name params)))
         ?debug_prefix:(Option.map (fun _ -> string_of_sv_name name) debug_attr)
         (visit_instrs (new thread_registers ctx spec_info) body)
     in

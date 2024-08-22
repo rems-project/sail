@@ -271,6 +271,8 @@ module Make (Config : CONFIG) = struct
         let hd l = function _ -> Reporting.unreachable l __POS__ "hd"
 
         let tl l = function _ -> Reporting.unreachable l __POS__ "tl"
+
+        let eq_list _ _ _ _ = Smt_gen.return "="
       end)
 
   let ( let* ) = Smt_gen.bind

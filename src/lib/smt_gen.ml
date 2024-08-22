@@ -137,6 +137,10 @@ let run m l =
   let state = m l in
   (state.value, state.checks)
 
+let mk_check_writer f l =
+  let value, checks = f l in
+  { value; checks }
+
 let overflow_check check (_ : Parse_ast.l) = { value = (); checks = { empty_checks with overflows = [check] } }
 
 let string_used (_ : Parse_ast.l) = { value = (); checks = { empty_checks with strings_used = true } }
@@ -247,6 +251,7 @@ module type PRIMOP_GEN = sig
   val is_empty : Parse_ast.l -> ctyp -> string
   val hd : Parse_ast.l -> ctyp -> string
   val tl : Parse_ast.l -> ctyp -> string
+  val eq_list : Parse_ast.l -> (cval -> cval -> smt_exp check_writer) -> ctyp -> ctyp -> string check_writer
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -1236,6 +1241,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                  )
                )
             )
+    | CT_list ctyp1, CT_list ctyp2 ->
+        let* l = current_location in
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        let* f = Primop_gen.eq_list l builtin_eq_anything ctyp1 ctyp2 in
+        return (Fn (f, [x; y]))
     | _, _ -> builtin_type_error "eq_anything" [x; y] None
 
   let builtin_vector_init len elem ret_ctyp =

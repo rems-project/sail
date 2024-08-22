@@ -157,7 +157,9 @@ let ctx_is_extern id ctx =
   match Bindings.find_opt id ctx.valspecs with
   | Some (Some _, _, _, _) -> true
   | Some (None, _, _, _) -> false
-  | None -> Env.is_extern id ctx.tc_env "c"
+  | None -> (
+      match Target.get_the_target () with Some tgt -> Env.is_extern id ctx.tc_env (Target.name tgt) | None -> false
+    )
 
 let ctx_get_extern id ctx =
   match Bindings.find_opt id ctx.valspecs with
@@ -165,7 +167,13 @@ let ctx_get_extern id ctx =
   | Some (None, _, _, _) ->
       Reporting.unreachable (id_loc id) __POS__
         ("Tried to get extern information for non-extern function " ^ string_of_id id)
-  | None -> Env.get_extern id ctx.tc_env "c"
+  | None -> (
+      match Target.get_the_target () with
+      | Some tgt -> Env.get_extern id ctx.tc_env (Target.name tgt)
+      | None ->
+          Reporting.unreachable (id_loc id) __POS__
+            ("Tried to get extern information without a set target for " ^ string_of_id id)
+    )
 
 let ctx_has_val_spec id ctx = Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
 

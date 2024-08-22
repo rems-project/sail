@@ -89,6 +89,8 @@ module type S = sig
   val tl : ctyp -> string
 
   val fvector_store : int -> ctyp -> string
+
+  val eq_list : (cval -> cval -> Smt_exp.smt_exp Smt_gen.check_writer) -> ctyp -> ctyp -> string Smt_gen.check_writer
 end
 
 module Make
@@ -107,6 +109,21 @@ module Make
       let names, defs = !generated_library_defs in
       generated_library_defs := (StringSet.add name names, source :: defs);
       name
+    )
+
+  let register_monadic_library_def name def =
+    let open Smt_gen in
+    mk_check_writer (fun l ->
+        run
+          (let names, _ = !generated_library_defs in
+           if StringSet.mem name names then return name
+           else
+             let* source = fmap mk_def (def ()) in
+             let names, defs = !generated_library_defs in
+             generated_library_defs := (StringSet.add name names, source :: defs);
+             return name
+          )
+          l
     )
 
   let get_generated_library_defs () = List.rev (snd !generated_library_defs)
@@ -474,6 +491,65 @@ module Make
                    )
                 );
           }
+    )
+
+  let eq_list eq_elem ctyp1 ctyp2 =
+    let open Smt_gen in
+    let t1 = Util.zencode_string (string_of_ctyp ctyp1) in
+    let t2 = Util.zencode_string (string_of_ctyp ctyp2) in
+    let name = sprintf "sail_eq_list_%s_and_%s" t1 t2 in
+    register_monadic_library_def name (fun () ->
+        let i = primop_name "i" in
+        let len = primop_name "len" in
+        let r = primop_name "r" in
+        let x = primop_name "x" in
+        let xs = primop_name "xs" in
+        let y = primop_name "y" in
+        let ys = primop_name "ys" in
+        let* body_cmp = eq_elem (V_id (x, ctyp1)) (V_id (y, ctyp2)) in
+        let loop =
+          SVS_for
+            ( {
+                for_var = (i, CT_fint 32, Smt_exp.bvzero 32);
+                for_cond = Fn ("bvslt", [Var i; Var len]);
+                for_modifier = SVF_increment i;
+              },
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (x, ctyp1, None);
+                        SVS_var (y, ctyp2, None);
+                        svs_raw "x = xs[i]" ~inputs:[xs; i] ~outputs:[x];
+                        svs_raw "y = ys[i]" ~inputs:[ys; i] ~outputs:[y];
+                        SVS_assign (SVP_id r, Fn ("and", [Var r; body_cmp]));
+                      ]
+                   )
+                )
+            )
+        in
+        return
+          (SVD_fundef
+             {
+               function_name = SVN_string name;
+               return_type = Some CT_bool;
+               params = [(mk_id "xs", CT_list ctyp1); (mk_id "ys", CT_list ctyp2)];
+               body =
+                 mk_statement
+                   (SVS_block
+                      (List.map mk_statement
+                         [
+                           SVS_var (r, CT_bool, Some (Bool_lit true));
+                           SVS_var (len, CT_fint 32, None);
+                           svs_raw "len = xs.size()" ~inputs:[xs] ~outputs:[len];
+                           svs_raw "if (ys.size() != len) return 0" ~inputs:[ys; len];
+                           loop;
+                           SVS_return (Var r);
+                         ]
+                      )
+                   );
+             }
+          )
     )
 
   let unary_module l gen =

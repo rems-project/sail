@@ -618,6 +618,7 @@ module RemoveUnusedVariables = struct
     | SVS_foreach (_, exp, stmt) ->
         smt_uses stack uses exp;
         statement_uses stack uses stmt
+    | SVS_for (_, stmt) -> statement_uses stack uses stmt
     | SVS_raw (_, inputs, outputs) ->
         List.iter (fun name -> add_use ~raw:true ~read:true name stack uses) inputs;
         List.iter (fun name -> add_use ~raw:true ~write:true name stack uses) outputs

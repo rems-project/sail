@@ -113,6 +113,8 @@ let opt_fun2wires = ref []
 
 let opt_int_specialize = ref None
 
+let opt_disable_optimizations = ref false
+
 let verilog_options =
   [
     ( "-sv_output_dir",
@@ -165,12 +167,13 @@ let verilog_options =
       Arg.Int (fun i -> opt_int_specialize := Some i),
       "<n> Run n specialization passes on Sail Int-kinded type variables"
     );
+    ("-sv_disable_optimizations", Arg.Set opt_disable_optimizations, " disable SystemVerilog specific optimizations");
   ]
 
 let verilog_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "c"]);
+    ("instantiate_outcomes", [String_arg "systemverilog"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
@@ -180,8 +183,8 @@ let verilog_rewrites =
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "c"; If_mono_arg]);
-    ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
+    ("monomorphise", [String_arg "systemverilog"; If_mono_arg]);
+    ("atoms_to_singletons", [String_arg "systemverilog"; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
@@ -196,7 +199,7 @@ let verilog_rewrites =
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("recheck_defs", []);
-    ("constant_fold", [String_arg "c"]);
+    ("constant_fold", [String_arg "systemverilog"]);
   ]
 
 module type JIB_CONFIG = sig
@@ -454,8 +457,10 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let svir = library_svir @ svir @ toplevel_svir in
 
   let svir =
-    svir |> remove_unit_ports |> remove_unused_variables |> simplify_smt |> remove_unused_variables |> simplify_smt
-    |> remove_unused_variables |> remove_nulls
+    if not !opt_disable_optimizations then
+      svir |> remove_unit_ports |> remove_unused_variables |> simplify_smt |> remove_unused_variables |> simplify_smt
+      |> remove_unused_variables |> remove_nulls
+    else svir
   in
 
   let doc =

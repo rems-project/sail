@@ -138,6 +138,10 @@ and sv_place =
   | SVP_multi of sv_place list
   | SVP_void of Jib.ctyp
 
+and sv_for_modifier = SVF_increment of Jib.name | SVF_decrement of Jib.name
+
+and sv_for = { for_var : Jib.name * Jib.ctyp * smt_exp; for_cond : smt_exp; for_modifier : sv_for_modifier }
+
 and sv_statement = SVS_aux of sv_statement_aux * Ast.l
 
 and sv_statement_aux =
@@ -153,6 +157,7 @@ and sv_statement_aux =
   | SVS_block of sv_statement list
   | SVS_assert of smt_exp * smt_exp
   | SVS_foreach of sv_name * smt_exp * sv_statement
+  | SVS_for of sv_for * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list
 
 let filter_skips = List.filter (function SVS_aux (SVS_skip, _) -> false | _ -> true)
@@ -299,6 +304,14 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
         let exp' = visit_smt_exp vis exp in
         let stmt' = visit_sv_statement vis stmt in
         if exp == exp' && stmt == stmt' then no_change else SVS_aux (SVS_foreach (i, exp', stmt'), l)
+    | SVS_for ({ for_var = v, ctyp, init; for_cond; for_modifier }, stmt) ->
+        let v' = visit_name (vis :> common_visitor) v in
+        let ctyp' = visit_ctyp (vis :> common_visitor) ctyp in
+        let init' = visit_smt_exp vis init in
+        let for_cond' = visit_smt_exp vis for_cond in
+        let stmt' = visit_sv_statement vis stmt in
+        if v == v' && ctyp == ctyp' && init == init' && for_cond == for_cond' && stmt == stmt' then no_change
+        else SVS_aux (SVS_for ({ for_var = (v', ctyp', init'); for_cond = for_cond'; for_modifier }, stmt'), l)
     | SVS_if (exp, then_stmt_opt, else_stmt_opt) ->
         let exp' = visit_smt_exp vis exp in
         let then_stmt_opt' = map_no_copy_opt (visit_sv_statement vis) then_stmt_opt in
