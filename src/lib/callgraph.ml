@@ -554,3 +554,45 @@ let top_sort_defs ast =
     | [], defs -> List.rev_append acc defs
   in
   { ast with defs = reorder NS.empty [] (components, defs) }
+
+let filter_library_files sail_dir ast =
+  let lib_dir = Filename.concat (Reporting.get_sail_dir sail_dir) "lib" in
+  let rec include_defs defs =
+    match defs with
+    | [] -> []
+    | DEF_aux (DEF_pragma ("include_start", file_name, _), _) :: ds when Util.starts_with ~prefix:lib_dir file_name ->
+        exclude_defs file_name defs
+    | d :: ds -> d :: include_defs ds
+  and exclude_defs file_name defs =
+    match defs with
+    | [] -> []
+    | DEF_aux (DEF_pragma ("include_end", file_name', _), _) :: ds when file_name = file_name' -> include_defs ds
+    | _d :: ds -> exclude_defs file_name ds
+  in
+  { ast with defs = include_defs ast.defs }
+
+(* This is presented as a command line option rather than an interactive command in Callgraph_commands because the interpreter
+   setup will get upset if the bitfield desugaring hasn't happened. *)
+let slice_instantiation_types sail_dir ast =
+  let module NodeSet = Set.Make (Node) in
+  let module NodeMap = Map.Make (Node) in
+  let module G = Graph.Make (Node) in
+  let g = graph_of_ast ast in
+  let roots =
+    ast.defs
+    |> List.filter_map (function
+         | DEF_aux (DEF_instantiation (_, substs), _) ->
+             Some
+               (List.filter_map
+                  (function IS_aux (IS_typ (_, typ), _) -> Some typ | IS_aux (IS_id _, _) -> None)
+                  substs
+               )
+         | _ -> None
+         )
+    |> List.concat |> List.map typ_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
+    |> List.map (fun id -> Type id)
+    |> NodeSet.of_list
+  in
+  let g = G.prune roots NodeSet.empty g in
+  let ast = filter_ast_extra NodeSet.empty g ast false in
+  filter_library_files sail_dir ast
