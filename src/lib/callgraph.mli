@@ -115,3 +115,5 @@ val filter_ast : Set.Make(Node).t -> callgraph -> ('a, 'b) ast -> ('a, 'b) ast
 val filter_ast_extra : Set.Make(Node).t -> callgraph -> ('a, 'b) ast -> bool -> ('a, 'b) ast
 
 val top_sort_defs : Type_check.typed_ast -> Type_check.typed_ast
+
+val slice_instantiation_types : string -> Type_check.typed_ast -> Type_check.typed_ast

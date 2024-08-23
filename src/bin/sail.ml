@@ -95,6 +95,7 @@ let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
+let opt_slice_instantiation_types : bool ref = ref false
 
 (* Allow calling all options as either -foo_bar, -foo-bar, or
    --foo-bar (for long options). The standard long-opt version
@@ -252,6 +253,10 @@ let rec options =
       ( "-fmt_skip",
         Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
         "<file> skip formatting this file"
+      );
+      ( "-slice_instantiation_types",
+        Arg.Tuple [Arg.Set Type_check.opt_no_bitfield_expansion; Arg.Set opt_slice_instantiation_types],
+        " (experimental) produce a Sail file containing all of the types that are used in instantiations"
       );
       ( "-D",
         Arg.String (fun symbol -> Preprocess.add_symbol symbol),
@@ -624,6 +629,15 @@ let main () =
   in
 
   if !opt_memo_z3 then Constraint.save_digests ();
+
+  if !opt_slice_instantiation_types then (
+    let sail_dir = Reporting.get_sail_dir Locations.sail_dir in
+    let ast = Callgraph.slice_instantiation_types sail_dir ast in
+    let filename = Option.value ~default:"out.sail" !opt_file_out in
+    let chan = open_out filename in
+    Pretty_print_sail.output_ast chan (Type_check.strip_ast ast);
+    close_out chan
+  );
 
   if !Interactive.opt_interactive then (
     let script =
