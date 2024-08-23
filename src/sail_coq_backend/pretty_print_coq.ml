@@ -4419,12 +4419,19 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                (* string "  Definition pa_eq : EqDecision pa := _.";
                   string "  Definition pa_countable : Countable pa := _.";*)
                string "  Definition arch_ak := " ^^ pp_typ params.arch_ak_type ^^ string ".";
+               string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
                string "  Definition translation := " ^^ pp_typ params.translation_summary_type ^^ string ".";
+               string "  Definition translation_eq : EqDecision translation := _.";
                string "  Definition abort := " ^^ pp_typ params.abort_type ^^ string ".";
+               string "  Definition abort_eq : EqDecision abort := _.";
                string "  Definition barrier := " ^^ pp_typ params.barrier_type ^^ string ".";
+               string "  Definition barrier_eq : EqDecision barrier := _.";
                string "  Definition cache_op := " ^^ pp_typ params.cache_op_type ^^ string ".";
+               string "  Definition cache_op_eq : EqDecision cache_op := _.";
                string "  Definition tlb_op := " ^^ pp_typ params.tlbi_type ^^ string ".";
+               string "  Definition tlb_op_eq : EqDecision tlb_op := _.";
                string "  Definition fault (deps : Type) := " ^^ pp_typ params.fault_type ^^ string ".";
+               string "  Definition fault_eq : ∀`{EqDecision T}, EqDecision (fault T) := _.";
                string "End Arch.";
                empty;
                string "Module Interface := Interface Arch.";
