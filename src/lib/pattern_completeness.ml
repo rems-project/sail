@@ -310,6 +310,8 @@ module Make (C : Config) = struct
     in
     go false pat
 
+  type gpat_num = GPN_var of kid | GPN_constant of Big_int.num
+
   type gpat =
     | GP_wild
     | GP_unknown
@@ -317,7 +319,7 @@ module Make (C : Config) = struct
     | GP_tuple of gpat list
     | GP_app of id * id * gpat list
     | GP_bitvector of int * int * (bv_constraint -> bv_constraint)
-    | GP_num of int * Big_int.num * kid option
+    | GP_num of int * Big_int.num * gpat_num option
     | GP_enum of id * id
     | GP_vector of gpat list
     | GP_bool of bool
@@ -428,9 +430,19 @@ module Make (C : Config) = struct
     | P_lit (L_aux (L_false, _)) -> GP_bool false
     | P_lit (L_aux (L_num n, _)) -> begin
         match head_exp_typ with
-        | Some (Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), _))
-          when string_of_id f = "atom" || string_of_id f = "implicit" ->
-            GP_num (pnum, n, Some v)
+        | Some (Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (nexp, _)), _)]), _))
+          when string_of_id f = "atom" || string_of_id f = "implicit" -> begin
+            match nexp with
+            | Nexp_var v -> GP_num (pnum, n, Some (GPN_var v))
+            | Nexp_constant m ->
+                (* When n = m we could return GP_wild as a literal pattern
+                   N will always match a value of type int(N), however
+                   this might produce extra warnings if N was defined by a
+                   type synonym that is chosen via $ifdef like xlen in
+                   Sail RISC-V. **)
+                GP_num (pnum, n, Some (GPN_constant m))
+            | _ -> GP_num (pnum, n, None)
+          end
         | _ -> GP_num (pnum, n, None)
       end
     | P_lit lit -> GP_lit lit
@@ -557,7 +569,12 @@ module Make (C : Config) = struct
                     match (var, gpat) with
                     | Some (i, _), GP_bitvector (_, _, bvc) ->
                         Some (string_of_bv_constraint (bvc (BVC_lit ("p" ^ string_of_int i))))
-                    | Some (i, _), GP_num (_, n, Some v) ->
+                    | Some (i, _), GP_num (_, n, Some (GPN_constant c)) ->
+                        Some
+                          (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i
+                             (Big_int.to_string c)
+                          )
+                    | Some (i, _), GP_num (_, n, Some (GPN_var v)) ->
                         let smt_var, created = var_map v in
                         (* If the variable was not already in the map (and has therefore just been created), then it is unconstrained *)
                         if created then created_vars := KidSet.add v !created_vars;
