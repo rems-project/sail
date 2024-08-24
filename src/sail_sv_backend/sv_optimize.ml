@@ -325,6 +325,15 @@ module RemoveUnusedVariables = struct
   let rec can_propagate stack name = function
     | Bitvec_lit _ | Bool_lit _ | String_lit _ | Member _ -> Literal
     | Fn ("=", [x; y]) -> combine (can_propagate stack name x) (can_propagate stack name y)
+    | Fn ("not", [Fn ("=", [x; y])]) -> combine (can_propagate stack name x) (can_propagate stack name y)
+    | Ite (i, t, e) ->
+        combine (combine (can_propagate stack name i) (can_propagate stack name t)) (can_propagate stack name e)
+    | Fn (("or" | "and"), xs) ->
+        if List.for_all (fun x -> match can_propagate stack name x with Literal -> true | _ -> false) xs then Literal
+        else if
+          List.for_all (fun x -> match can_propagate stack name x with Literal | Variable -> true | _ -> false) xs
+        then Variable
+        else Forbid
     | Field (_, _, x) -> can_propagate stack name x
     | Unwrap (_, _, x) -> can_propagate stack name x
     | Var v ->
@@ -672,3 +681,94 @@ module RemoveUnusedVariables = struct
 end
 
 let remove_unused_variables = profile_rewrite RemoveUnusedVariables.rewrite ~message:"Removing unused variables"
+
+module SimpSMT2 = struct
+  open Smt_exp.Simplifier
+
+  let wrap exp = Fn ("wrap#", [exp])
+
+  let unwrap = function Fn ("wrap#", [exp]) -> exp | _ -> assert false
+
+  class simp_smt_visitor iteration changes : svir_visitor =
+    object (self)
+      inherit empty_svir_visitor
+
+      val mutable the_simpset = SimpSet.empty
+
+      method private run exp strategy =
+        match run_strategy strategy the_simpset exp with
+        | NoChange -> DoChildren
+        | Change (n, exp') ->
+            changes := !changes + n;
+            if iteration > 100 then
+              prerr_endline
+                (Pretty_print_sail.Document.to_string (pp_smt_exp exp)
+                ^ " -> "
+                ^ Pretty_print_sail.Document.to_string (pp_smt_exp exp')
+                );
+            change_do_children exp'
+        | Reconstruct (n, simpset, exp, post) ->
+            changes := !changes + n;
+            let old_simpset = the_simpset in
+            the_simpset <- simpset;
+            ChangeDoChildrenPost
+              ( Fn ("wrap#", [exp]),
+                fun exp' ->
+                  the_simpset <- old_simpset;
+                  post (unwrap exp')
+              )
+
+      method! vctyp _ = SkipChildren
+
+      method! vsmt_exp exp =
+        match exp with
+        | Ite _ ->
+            self#run exp
+              (Then
+                 [
+                   Repeat (Rule rule_squash_ite);
+                   Rule rule_squash_ite2;
+                   Rule rule_squash_ite;
+                   Rule rule_or_ite;
+                   Rule rule_ite_lit;
+                 ]
+              )
+        | Fn ("and", _) ->
+            self#run exp
+              (Then
+                 [
+                   Rule rule_flatten_and;
+                   Rule rule_false_and;
+                   Rule rule_true_and;
+                   Rule rule_and_inequalities;
+                   Rule rule_order_and;
+                   Repeat (Rule rule_and_assume);
+                 ]
+              )
+        | Fn ("or", _) -> self#run exp (Then [Rule rule_false_or; Rule rule_or_equalities])
+        | Var _ -> self#run exp (Rule rule_var)
+        | Fn ("=", _) -> self#run exp (Then [Rule rule_inequality; Rule rule_simp_eq])
+        | Fn ("not", _) ->
+            self#run exp (Then [Repeat (Rule rule_not_not); Repeat (Rule rule_not_push); Rule rule_inequality])
+        | Fn ("bvnot", _) -> self#run exp (Rule rule_bvnot)
+        | Fn ("select", _) -> self#run exp (Rule rule_access_ite)
+        | Field _ -> self#run exp (Rule rule_access_ite)
+        | Unwrap _ -> self#run exp (Rule rule_access_ite)
+        | Tester _ -> self#run exp (Rule rule_access_ite)
+        | exp -> DoChildren
+    end
+
+  let rec rewrite n defs =
+    let changes = ref 0 in
+    let defs = visit_sv_defs (new simp_smt_visitor n changes) defs in
+    if !changes > 0 then (
+      prerr_endline (Printf.sprintf "SMT simp %d" !changes);
+      rewrite (n + 1) defs
+    )
+    else (
+      let defs = visit_sv_defs (new simp_smt_visitor n changes) defs in
+      defs
+    )
+end
+
+let simplify_smt2 = profile_rewrite (SimpSMT2.rewrite 0) ~message:"Simplifying SMT 2"

@@ -72,6 +72,8 @@ val remove_unit_ports : sv_def list -> sv_def list
 
 val simplify_smt : sv_def list -> sv_def list
 
+val simplify_smt2 : sv_def list -> sv_def list
+
 val remove_nulls : sv_def list -> sv_def list
 
 val remove_unused_variables : sv_def list -> sv_def list

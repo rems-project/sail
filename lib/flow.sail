@@ -124,7 +124,9 @@ by rewriting it to __size(x).
 
 */
 
-function __id forall 'n. (x: int('n)) -> int('n) = x
+val __id = pure { c: "id" } : forall 'n. int('n) -> int('n)
+
+function __id(x) = x
 
 overload __size = {__id}
 

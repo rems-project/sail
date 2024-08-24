@@ -1533,6 +1533,11 @@ module Make (Config : CONFIG) = struct
       (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
       preds
 
+  let natural_name_compare n1 n2 =
+    match (n1, n2) with
+    | Name (id1, ssa_num1), Name (id2, ssa_num2) when ssa_num1 = ssa_num2 -> natural_id_compare id1 id2
+    | _ -> Name.compare n1 n2
+
   let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_vars = [Jib_util.return]) spec_info ctx name params
       param_ctyps ret_ctyps body =
     prerr_endline Util.(string_of_sv_name name |> red |> clear);

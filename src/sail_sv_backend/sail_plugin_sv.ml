@@ -459,7 +459,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let svir =
     if not !opt_disable_optimizations then
       svir |> remove_unit_ports |> remove_unused_variables |> simplify_smt |> remove_unused_variables |> simplify_smt
-      |> remove_unused_variables |> remove_nulls
+      |> remove_unused_variables |> remove_nulls |> simplify_smt2
     else svir
   in
 

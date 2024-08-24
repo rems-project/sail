@@ -1413,5 +1413,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             return (Fn ("cons", [x; xs]))
         )
     | "eq_anything" -> binary_primop_simple builtin_eq_anything
+    | "id" -> unary_primop_simple smt_cval
     | _ -> None
 end

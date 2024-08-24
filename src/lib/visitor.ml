@@ -114,7 +114,7 @@ type 'a visit_action =
 
 (*** Define the visiting engine ****)
 (* visit all the nodes in an tree *)
-let do_visit (vis : 'v) (action : 'a visit_action) (children : 'v -> 'a -> 'a) (node : 'a) : 'a =
+let rec do_visit (vis : 'v) (action : 'a visit_action) (children : 'v -> 'a -> 'a) (node : 'a) : 'a =
   match action with
   | SkipChildren -> node
   | ChangeTo node' -> node'

@@ -1084,23 +1084,25 @@ let split_id =
       List.rev !chunks
   | Id_aux (Operator id, _) -> [Id_chunk_string id]
 
-let rec compare_natural x y =
+let rec split_id_compare x y =
   match (x, y) with
   | [], [] -> 0
   | [], _ -> -1
   | _, [] -> 1
   | Id_chunk_int x :: xs, Id_chunk_int y :: ys ->
       let c = Int.compare x y in
-      if c = 0 then compare_natural xs ys else c
+      if c = 0 then split_id_compare xs ys else c
   | Id_chunk_string x :: xs, Id_chunk_string y :: ys ->
       let c = String.compare x y in
-      if c = 0 then compare_natural xs ys else c
+      if c = 0 then split_id_compare xs ys else c
   | Id_chunk_int _ :: _, Id_chunk_string _ :: _ -> -1
   | Id_chunk_string _ :: _, Id_chunk_int _ :: _ -> 1
 
+let natural_id_compare id1 id2 = split_id_compare (split_id id1) (split_id id2)
+
 let natural_sort_ids ids =
   let ids = List.map (fun id -> (split_id id, id)) ids in
-  let ids = List.stable_sort (fun (n1, _) (n2, _) -> compare_natural n1 n2) ids in
+  let ids = List.stable_sort (fun (n1, _) (n2, _) -> split_id_compare n1 n2) ids in
   List.map snd ids
 
 let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
