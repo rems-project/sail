@@ -771,7 +771,8 @@ prec :: '' ::=
    | infixl :: :: InfixL
    | infixr :: :: InfixR
 
-loop_measure :: '' ::=
+% The measure expression will remain explicitly untyped until it is moved into the loop itself
+loop_measure :: '' ::= {{ lem (loop * exp unit) }}
    {{ auxparam 'a }}
    | loop exp :: :: Loop
 

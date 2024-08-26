@@ -193,9 +193,7 @@ module SailHandler : FILE_HANDLER = struct
     let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(filename, defs)]) in
     ({ ast with comments = [(filename, comments)] }, ctx)
 
-  let check env ast =
-    let ast = Rewrites.move_loop_measures ast in
-    Type_error.check env ast
+  let check env ast = Type_error.check env ast
 end
 
 let handlers : (string, (module FILE_HANDLER)) Hashtbl.t = Hashtbl.create 8

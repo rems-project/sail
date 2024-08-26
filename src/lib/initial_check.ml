@@ -1857,9 +1857,10 @@ let to_ast_subst ctx = function
   | P.IS_aux (P.IS_id (id_from, id_to), l) -> IS_aux (IS_id (to_ast_id ctx id_from, to_ast_id ctx id_to), l)
   | P.IS_aux (P.IS_typ (kid, typ), l) -> IS_aux (IS_typ (to_ast_var kid, to_ast_typ ctx typ), l)
 
+(* To avoid awkward dependencies, loop measures don't have any annotations except locations. *)
 let to_ast_loop_measure ctx = function
-  | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
-  | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
+  | P.Loop (P.While, exp) -> (While, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
+  | P.Loop (P.Until, exp) -> (Until, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
 
 (* Annotations on some scattered constructs will not be preserved after de-scattering, so warn about this *)
 let check_annotation (DEF_aux (aux, def_annot)) =
