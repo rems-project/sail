@@ -3840,6 +3840,59 @@ let minimise_recursive_functions env ast =
   in
   { ast with defs = List.map rewrite_def ast.defs }
 
+(* Move loop termination measures into loop AST nodes.  The expressions for them aren't type
+   checked yet (because providing suitable type environments is awkward), so we must check them
+   here. *)
+let move_loop_measures ast =
+  let loop_measures =
+    List.fold_left
+      (fun m d ->
+        match d with
+        | DEF_aux (DEF_loop_measures (id, measures), _) ->
+            (* Allow multiple measure definitions, concatenating them *)
+            Bindings.add id (match Bindings.find_opt id m with None -> measures | Some m -> m @ measures) m
+        | _ -> m
+      )
+      Bindings.empty ast.defs
+  in
+  let do_exp exp_rec measures (E_aux (e, ann) as exp) =
+    match (e, measures) with
+    | E_loop (loop, _, e1, e2), (loop', exp) :: t when loop = loop' ->
+        let t, e1 = exp_rec t e1 in
+        let t, e2 = exp_rec t e2 in
+        let exp = check_exp (env_of_annot ann) (map_exp_annot (fun (l, _) -> (l, empty_uannot)) exp) int_typ in
+        (t, E_aux (E_loop (loop, Measure_aux (Measure_some exp, exp_loc exp), e1, e2), ann))
+    | _ -> exp_rec measures exp
+  in
+  let do_funcl (m, acc) (FCL_aux (FCL_funcl (id, pexp), ann) as fcl) =
+    match Bindings.find_opt id m with
+    | Some measures ->
+        let measures, pexp = foldin_pexp do_exp measures pexp in
+        (Bindings.add id measures m, FCL_aux (FCL_funcl (id, pexp), ann) :: acc)
+    | None -> (m, fcl :: acc)
+  in
+  let unused, rev_defs =
+    List.fold_left
+      (fun (m, acc) d ->
+        match d with
+        | DEF_aux (DEF_loop_measures _, _) -> (m, acc)
+        | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), ann)), def_annot) ->
+            let m, rfcls = List.fold_left do_funcl (m, []) fcls in
+            (m, DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.rev rfcls), ann)), def_annot) :: acc)
+        | _ -> (m, d :: acc)
+      )
+      (loop_measures, []) ast.defs
+  in
+  let () =
+    Bindings.iter
+      (fun id -> function
+        | [] -> ()
+        | _ :: _ -> Reporting.print_err (id_loc id) "Warning" ("unused loop measure for function " ^ string_of_id id)
+      )
+      unused
+  in
+  { ast with defs = List.rev rev_defs }
+
 (* Move recursive function termination measures into the function definitions. *)
 let move_termination_measures env ast =
   let measures =
@@ -3867,7 +3920,8 @@ let move_termination_measures env ast =
     | DEF_aux (DEF_measure _, _) :: t -> aux acc t
     | h :: t -> aux (h :: acc) t
   in
-  { ast with defs = aux [] ast.defs }
+  let ast = { ast with defs = aux [] ast.defs } in
+  move_loop_measures ast
 
 (* Make recursive functions with a measure use the measure as an
    explicit recursion limit, enforced by an assertion. *)
@@ -4099,58 +4153,6 @@ let remove_duplicate_valspecs env ast =
         | _ -> (set, def :: defs)
       )
       (IdSet.empty, []) ast.defs
-  in
-  { ast with defs = List.rev rev_defs }
-
-(* Move loop termination measures into loop AST nodes.  This is used before
-   type checking so that we avoid the complexity of type checking separate
-   measures. *)
-let move_loop_measures ast =
-  let loop_measures =
-    List.fold_left
-      (fun m d ->
-        match d with
-        | DEF_aux (DEF_loop_measures (id, measures), _) ->
-            (* Allow multiple measure definitions, concatenating them *)
-            Bindings.add id (match Bindings.find_opt id m with None -> measures | Some m -> m @ measures) m
-        | _ -> m
-      )
-      Bindings.empty ast.defs
-  in
-  let do_exp exp_rec measures (E_aux (e, ann) as exp) =
-    match (e, measures) with
-    | E_loop (loop, _, e1, e2), Loop (loop', exp) :: t when loop = loop' ->
-        let t, e1 = exp_rec t e1 in
-        let t, e2 = exp_rec t e2 in
-        (t, E_aux (E_loop (loop, Measure_aux (Measure_some exp, exp_loc exp), e1, e2), ann))
-    | _ -> exp_rec measures exp
-  in
-  let do_funcl (m, acc) (FCL_aux (FCL_funcl (id, pexp), ann) as fcl) =
-    match Bindings.find_opt id m with
-    | Some measures ->
-        let measures, pexp = foldin_pexp do_exp measures pexp in
-        (Bindings.add id measures m, FCL_aux (FCL_funcl (id, pexp), ann) :: acc)
-    | None -> (m, fcl :: acc)
-  in
-  let unused, rev_defs =
-    List.fold_left
-      (fun (m, acc) d ->
-        match d with
-        | DEF_aux (DEF_loop_measures _, _) -> (m, acc)
-        | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), ann)), def_annot) ->
-            let m, rfcls = List.fold_left do_funcl (m, []) fcls in
-            (m, DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.rev rfcls), ann)), def_annot) :: acc)
-        | _ -> (m, d :: acc)
-      )
-      (loop_measures, []) ast.defs
-  in
-  let () =
-    Bindings.iter
-      (fun id -> function
-        | [] -> ()
-        | _ :: _ -> Reporting.print_err (id_loc id) "Warning" ("unused loop measure for function " ^ string_of_id id)
-      )
-      unused
   in
   { ast with defs = List.rev rev_defs }
 

@@ -89,9 +89,6 @@ val opt_ddump_rewrite_ast : (string * int) option ref
 (** Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
 
-(** Move loop termination measures into loop AST nodes *)
-val move_loop_measures : ('a, 'b) ast -> ('a, 'b) ast
-
 (** Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> Env.t -> typed_ast -> typed_ast
 

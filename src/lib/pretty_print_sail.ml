@@ -808,9 +808,12 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_prec = function Infix -> string "infix" | InfixL -> string "infixl" | InfixR -> string "infixr"
 
   let doc_loop_measures l =
+    let fixup_annot e = map_exp_annot (fun (l, _) -> (l, empty_uannot)) e in
     separate_map
       (comma ^^ break 1)
-      (function Loop (l, e) -> string (match l with While -> "while" | Until -> "until") ^^ space ^^ doc_exp e)
+      (function
+        | l, e -> string (match l with While -> "while" | Until -> "until") ^^ space ^^ doc_exp (fixup_annot e)
+        )
       l
 
   let doc_scattered (SD_aux (sd_aux, _)) =

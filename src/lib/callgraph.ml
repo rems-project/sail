@@ -269,8 +269,6 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     match aux with TypQ_no_forall -> () | TypQ_tq quants -> List.iter (scan_quant_item self) quants
   in
 
-  let scan_loop_measure self (Loop (_, exp)) = ignore (fold_exp (rw_exp self) exp) in
-
   let add_type_def_to_graph (TD_aux (aux, (l, _))) =
     match aux with
     | TD_abbrev (id, typq, arg) ->
@@ -363,8 +361,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         ignore (fold_pat (rw_pat (FunctionMeasure id)) pat);
         ignore (fold_exp (rw_exp (FunctionMeasure id)) exp)
     | DEF_loop_measures (id, measures) ->
-        graph := G.add_edges (LoopMeasures id) [Function id] !graph;
-        List.iter (scan_loop_measure (LoopMeasures id)) measures
+        (* We can't scan loop measures here because they aren't typed until they're moved into the loop expression *)
+        graph := G.add_edges (LoopMeasures id) [Function id] !graph
     | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), _), l), outcome_defs) ->
         graph := G.add_edges (Outcome id) [] !graph;
         scan_typquant (Outcome id) typq;

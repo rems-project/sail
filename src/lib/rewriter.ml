@@ -341,8 +341,10 @@ let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
     | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
     | DEF_measure (id, pat, exp) ->
         DEF_measure (id, rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
-    | DEF_loop_measures (id, _) ->
-        raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
+    | DEF_loop_measures (id, measures) ->
+        (* We can't rewrite in here because the measure expressions haven't been typechecked, so
+           the rewrite needs to run early. *)
+        aux
   in
   DEF_aux (aux, def_annot)
 

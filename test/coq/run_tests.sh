@@ -65,6 +65,22 @@ function check_tests_dir {
 check_tests_dir "$TYPECHECKTESTSDIR"
 check_tests_dir "$EXTRATESTSDIR"
 
+for i in `ls $DIR/complex/ | grep '\.test$'`; do
+  if $SAIL -coq -dcoq_undef_axioms -o out `cat $DIR/complex/$i` &>/dev/null;
+  then
+  if coqc $COQOPTS out_types.v &>/dev/null &&
+     coqc $COQOPTS out.v &>/dev/null;
+  then
+      green "tested $i expecting pass" "pass"
+  else
+      yellow "tested $i expecting pass" "failed to typecheck generated Coq"
+  fi
+  else
+  red "tested $i expecting pass" "failed to generate Coq"
+  fi
+done
+
+
 finish_suite "Coq tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml

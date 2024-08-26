@@ -5127,9 +5127,9 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
-  | DEF_loop_measures (id, _) ->
-      Reporting.unreachable (id_loc id) __POS__
-        "Loop termination measures should have been rewritten before type checking"
+  | DEF_loop_measures (id, measures) ->
+      (* These will be checked during the move_loop_measures rewrite *)
+      ([DEF_aux (DEF_loop_measures (id, measures), def_annot)], env)
 
 and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def list * Env.t =
  fun n total env defs ->
