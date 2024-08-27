@@ -120,9 +120,9 @@ let coq_options =
       " select which style of Coq library to use (default: stdpp when the concurrency interfaces is used, bbv \
        otherwise)"
     );
-    ( "-coq_all_eq_dec",
-      Arg.Set Pretty_print_coq.opt_coq_all_eq_dec,
-      " generate decidable equality instances for all types"
+    ( "-coq_minimal_eq_dec",
+      Arg.Clear Pretty_print_coq.opt_coq_all_eq_dec,
+      " generate decidable equality instances only when necessary"
     );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,

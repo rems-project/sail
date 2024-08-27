@@ -98,7 +98,7 @@ let opt_debug_on : string list ref = ref []
 let opt_extern_types : string list ref = ref []
 let opt_generate_extern_types : bool ref = ref false
 let opt_coq_record_update : bool ref = ref false
-let opt_coq_all_eq_dec : bool ref = ref false
+let opt_coq_all_eq_dec : bool ref = ref true
 
 let prefix_recordtype = true
 
