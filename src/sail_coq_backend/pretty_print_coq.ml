@@ -4414,10 +4414,9 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
                (*   string "  Definition reg_countable : Countable reg := _.";*)
                string "  Definition va_size := 64%N.";
-               (* FIXME *)
                string "  Definition pa := " ^^ pp_typ params.pa_type ^^ string ".";
-               (* string "  Definition pa_eq : EqDecision pa := _.";
-                  string "  Definition pa_countable : Countable pa := _.";*)
+               string "  Definition pa_eq : EqDecision pa := _.";
+               string "  Definition pa_countable : Countable pa := _.";
                string "  Definition arch_ak := " ^^ pp_typ params.arch_ak_type ^^ string ".";
                string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
                string "  Definition translation := " ^^ pp_typ params.translation_summary_type ^^ string ".";
