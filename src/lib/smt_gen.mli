@@ -192,6 +192,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
 
   val wf_lbits : Smt_exp.smt_exp -> Smt_exp.smt_exp
 
+  val builtin_vector_update : cval -> cval -> cval -> ctyp -> Smt_exp.smt_exp check_writer
+
   (** Create an SMT expression that converts an expression of the jib
       type [from] into an SMT expression for the jib type [into]. Note
       that this function assumes that the input is of the correct
