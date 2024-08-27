@@ -585,6 +585,12 @@ module Make (Config : CONFIG) = struct
               singleton (define_const id ret_ctyp (Fn ("store", [vec; i; x])))
           | _ -> Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
         end
+        else if extern && string_of_id function_id = "update_fbits" then
+          match args with
+          | [vec; i; x] ->
+            let* smt = Smt.builtin_vector_update vec i x ret_ctyp in
+            singleton (define_const id ret_ctyp smt)
+          | _ -> Reporting.unreachable l __POS__ "Bad arguments for update_fbits"
         else if not extern then
           let* smt_args = mapM Smt.smt_cval args in
           singleton (define_const id ret_ctyp (Fn (zencode_id function_id, smt_args)))

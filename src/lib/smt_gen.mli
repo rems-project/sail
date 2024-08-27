@@ -193,6 +193,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
 
   val generic_vector_length : ctyp -> int
 
+  val builtin_vector_update : cval -> cval -> cval -> ctyp -> Smt_exp.smt_exp check_writer
+
   val wf_lbits : Smt_exp.smt_exp -> Smt_exp.smt_exp
 
   (** Create an SMT expression that converts an expression of the jib
