@@ -100,7 +100,9 @@ let rec visit_clexp vis outer_clexp =
     | CL_tuple (clexp, n) ->
         let clexp' = visit_clexp vis clexp in
         if clexp == clexp' then no_change else CL_tuple (clexp', n)
-    | CL_void -> no_change
+    | CL_void ctyp ->
+        let ctyp' = visit_ctyp vis ctyp in
+        if ctyp == ctyp' then no_change else CL_void ctyp'
   in
   do_visit vis (vis#vclexp outer_clexp) aux outer_clexp
 

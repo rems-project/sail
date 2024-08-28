@@ -115,6 +115,8 @@ let ireturn ?loc:(l = Parse_ast.Unknown) cval = I_aux (I_return cval, (instr_num
 
 let iend l = I_aux (I_end (Return (-1)), (instr_number (), l))
 
+let iend_id l id = I_aux (I_end (Name (id, -1)), (instr_number (), l))
+
 let iblock ?loc:(l = Parse_ast.Unknown) instrs = I_aux (I_block instrs, (instr_number (), l))
 
 let itry_block l instrs = I_aux (I_try_block instrs, (instr_number (), l))
@@ -348,7 +350,7 @@ let rec string_of_clexp = function
   | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_id field
   | CL_addr clexp -> string_of_clexp clexp ^ "*"
   | CL_tuple (clexp, n) -> string_of_clexp clexp ^ "." ^ string_of_int n
-  | CL_void -> "void"
+  | CL_void _ -> "void"
   | CL_rmw (id1, id2, ctyp) -> Printf.sprintf "rmw(%s, %s)" (string_of_name id1) (string_of_name id2)
 
 let string_of_creturn = function
@@ -668,7 +670,7 @@ let rec clexp_deps = function
   | CL_field (clexp, _) -> clexp_deps clexp
   | CL_tuple (clexp, _) -> clexp_deps clexp
   | CL_addr clexp -> clexp_deps clexp
-  | CL_void -> (NameSet.empty, NameSet.empty)
+  | CL_void _ -> (NameSet.empty, NameSet.empty)
 
 let creturn_deps = function
   | CR_one clexp -> clexp_deps clexp
@@ -719,7 +721,7 @@ let rec clexp_typed_writes = function
   | CL_field (clexp, _) -> clexp_typed_writes clexp
   | CL_tuple (clexp, _) -> clexp_typed_writes clexp
   | CL_addr clexp -> clexp_typed_writes clexp
-  | CL_void -> NameCTSet.empty
+  | CL_void _ -> NameCTSet.empty
 
 let creturn_typed_writes = function
   | CR_one clexp -> clexp_typed_writes clexp
@@ -740,7 +742,7 @@ let rec map_clexp_ctyp f = function
   | CL_field (clexp, id) -> CL_field (map_clexp_ctyp f clexp, id)
   | CL_tuple (clexp, n) -> CL_tuple (map_clexp_ctyp f clexp, n)
   | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
-  | CL_void -> CL_void
+  | CL_void ctyp -> CL_void (f ctyp)
 
 let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
@@ -1050,7 +1052,7 @@ let rec clexp_ctyp = function
       | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
       | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
     end
-  | CL_void -> CT_unit
+  | CL_void ctyp -> ctyp
 
 let creturn_ctyp = function CR_one clexp -> clexp_ctyp clexp | CR_multi clexps -> CT_tup (List.map clexp_ctyp clexps)
 
@@ -1108,18 +1110,6 @@ let cdef_ctyps (CDEF_aux (aux, _)) =
       List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map snd bindings)
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
-
-let cdef_ctyps_exist pred (CDEF_aux (aux, _)) =
-  match aux with
-  | CDEF_register (_, ctyp, instrs) -> pred ctyp || instrs_ctyps_exist pred instrs
-  | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
-  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) -> instrs_ctyps_exist pred instrs
-  | CDEF_type tdef -> List.exists pred (ctype_def_ctyps tdef)
-  | CDEF_let (_, bindings, instrs) ->
-      List.exists (fun (_, ctyp) -> pred ctyp) bindings || instrs_ctyps_exist pred instrs
-  | CDEF_pragma (_, _) -> false
-
-let cdef_ctyps_has pred cdef = cdef_ctyps_exist (ctyp_has pred) cdef
 
 let rec c_ast_registers = function
   | CDEF_aux (CDEF_register (id, ctyp, instrs), _) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast

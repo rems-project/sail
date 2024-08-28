@@ -476,6 +476,8 @@ module Make (Config : CONFIG) = struct
         let tl l = function
           | CT_list ctyp -> Generate_primop.tl (sv_ctyp ctyp) (Util.zencode_string (string_of_ctyp ctyp))
           | _ -> Reporting.unreachable l __POS__ "tl"
+
+        let eq_list l _ _ _ = Reporting.unreachable l __POS__ "eq_list"
       end)
 
   let ( let* ) = Smt_gen.bind
@@ -898,7 +900,7 @@ module Make (Config : CONFIG) = struct
     | CL_field (clexp, field) ->
         let updates, lexp = svir_clexp ~parents:(field :: parents) clexp in
         (updates, SVP_field (lexp, field))
-    | CL_void -> ([], SVP_void)
+    | CL_void _ -> ([], SVP_void)
     | CL_rmw (id_from, id, ctyp) ->
         let rec assignments lexp subpart ctyp = function
           | parent :: parents -> begin
@@ -939,7 +941,7 @@ module Make (Config : CONFIG) = struct
         wrap (SVS_return value)
     | I_end id -> wrap (SVS_return (Var id))
     | I_exit _ -> wrap (svs_raw "$finish")
-    | I_copy (CL_void, cval) -> return None
+    | I_copy (CL_void _, cval) -> return None
     | I_copy (clexp, cval) ->
         let* value =
           Smt_gen.bind (Smt.smt_cval cval) (Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval))
@@ -966,7 +968,7 @@ module Make (Config : CONFIG) = struct
                   | CR_one clexp -> clexp
                   | CR_multi _ -> Reporting.unreachable l __POS__ "Multiple return generator primitive found"
                 in
-                let* value = Smt_gen.fmap (Smt_exp.simp (fun _ -> None)) (generator args (clexp_ctyp clexp)) in
+                let* value = Smt_gen.fmap (Smt_exp.simp SimpSet.empty) (generator args (clexp_ctyp clexp)) in
                 begin
                   (* We can optimize R = store(R, i x) into R[i] = x *)
                   match (clexp, value) with
@@ -1492,7 +1494,7 @@ module Make (Config : CONFIG) = struct
               List.iter
                 (fun (id, ctyp, mux) ->
                   add_comb_statement
-                    (SVS_aux (SVS_assign (SVP_id id, Smt_exp.simp (fun _ -> None) mux), Parse_ast.Unknown))
+                    (SVS_aux (SVS_assign (SVP_id id, Smt_exp.simp SimpSet.empty mux), Parse_ast.Unknown))
                 )
                 muxers;
               let* block = svir_cfnode spec_info ctx cfnode in

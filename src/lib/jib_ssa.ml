@@ -585,7 +585,7 @@ let rename_variables globals graph root children =
     | CL_field (clexp, field) -> CL_field (fold_clexp true clexp, field)
     | CL_addr clexp -> CL_addr (fold_clexp false clexp)
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
-    | CL_void -> CL_void
+    | CL_void ctyp -> CL_void ctyp
   in
   let fold_creturn = function
     | CR_one clexp -> CR_one (fold_clexp false clexp)
