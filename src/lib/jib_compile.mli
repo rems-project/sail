@@ -94,6 +94,7 @@ val opt_memo_cache : bool ref
    (global) typechecking environment given by checking the full
    AST. *)
 type ctx = {
+  target_name : string;
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
@@ -115,7 +116,16 @@ val ctx_get_extern : id -> ctx -> string
 
 val ctx_has_val_spec : id -> ctx -> bool
 
-val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
+(** Create an inital Jib compilation context.
+
+    The target is the name that would appear in a valspec extern section, i.e.
+
+    val foo = { systemverilog: "bar", c: "baz" } = ...
+
+    would mean "systemverilog" and "c" would be valid for_target parameters.
+    If unspecified it will get the current target name from the Target module.
+    If unspecified and there is no current target, it defaults to "c". *)
+val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
 
 (** {2 Compilation functions} *)
 
