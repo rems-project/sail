@@ -383,14 +383,34 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let union_ctyp = cval_ctyp union in
             let* union = smt_cval union in
             return (Unwrap (ctor, Config.union_ctyp_classify union_ctyp, union))
-        | V_field (record, field) -> begin
+        | V_field (record, field) -> (
             match cval_ctyp record with
             | CT_struct (struct_id, _) ->
                 let* record = smt_cval record in
                 return (Field (struct_id, field, record))
-            | _ -> failwith "Field for non-struct type"
-          end
-        | cval -> return (Var (Name (mk_id "UNKNOWN", -1))) (* failwith ("Unrecognised cval " ^ string_of_cval cval) *)
+            | _ ->
+                let* l = current_location in
+                Reporting.unreachable l __POS__ "Field for non-struct type found"
+          )
+        | V_struct (fields, ctyp) -> (
+            match ctyp with
+            | CT_struct (struct_id, _) ->
+                let* fields =
+                  mapM
+                    (fun (field_id, field) ->
+                      let* field = smt_cval field in
+                      return (field_id, field)
+                    )
+                    fields
+                in
+                return (Struct (struct_id, fields))
+            | _ ->
+                let* l = current_location in
+                Reporting.unreachable l __POS__ "Struct literal with non-struct type found"
+          )
+        | V_tuple _ | V_tuple_member _ ->
+            let* l = current_location in
+            Reporting.unreachable l __POS__ "Found tuple value, which should have been removed before SMT generation"
       )
 
   (* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval

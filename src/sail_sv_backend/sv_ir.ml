@@ -206,6 +206,9 @@ let rec visit_smt_exp (vis : svir_visitor) outer_smt_exp =
     | Field (struct_id, field_id, exp) ->
         let exp' = visit_smt_exp vis exp in
         if exp == exp' then no_change else Field (struct_id, field_id, exp')
+    | Struct (struct_id, fields) ->
+        let fields' = map_no_copy (fun (field_id, exp) -> (field_id, visit_smt_exp vis exp)) fields in
+        if fields == fields' then no_change else Struct (struct_id, fields)
     | Fn (f, args) ->
         let args' = map_no_copy (visit_smt_exp vis) args in
         if args == args' then no_change else Fn (f, args')

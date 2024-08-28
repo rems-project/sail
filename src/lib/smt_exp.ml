@@ -106,6 +106,7 @@ type smt_exp =
   | Tester of string * smt_exp
   | Unwrap of Ast.id * bool * smt_exp
   | Field of Ast.id * Ast.id * smt_exp
+  | Struct of Ast.id * (Ast.id * smt_exp) list
   | Store of smt_array_info * string * smt_exp * smt_exp * smt_exp
   | Empty_list
   | Hd of string * smt_exp
@@ -126,6 +127,8 @@ let rec fold_smt_exp f = function
       f (Store (info, store_fn, fold_smt_exp f arr, fold_smt_exp f index, fold_smt_exp f x))
   | Hd (hd_op, xs) -> f (Hd (hd_op, fold_smt_exp f xs))
   | Tl (tl_op, xs) -> f (Tl (tl_op, fold_smt_exp f xs))
+  | Struct (struct_id, fields) ->
+      f (Struct (struct_id, List.map (fun (field_id, exp) -> (field_id, fold_smt_exp f exp)) fields))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list) as exp -> f exp
 
 let extract i j x = Extract (i, j, x)
@@ -725,6 +728,8 @@ and simp simpset exp =
   | Tester (ctor, exp) -> Tester (ctor, simp simpset exp)
   | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp simpset exp)
   | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp simpset exp)
+  | Struct (struct_id, fields) ->
+      Struct (struct_id, List.map (fun (field_id, exp) -> (field_id, simp simpset exp)) fields)
   | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Hd _ | Tl _ -> exp
 
 type smt_def =
@@ -768,6 +773,8 @@ let rec pp_smt_exp =
   | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
   | Field (struct_id, field_id, exp) ->
       parens (string (zencode_upper_id struct_id ^ "_" ^ zencode_id field_id) ^^ space ^^ pp_smt_exp exp)
+  | Struct (struct_id, fields) ->
+      parens (string (zencode_upper_id struct_id) ^^ space ^^ separate_map space (fun (_, exp) -> pp_smt_exp exp) fields)
   | Unwrap (ctor, _, exp) -> parens (string ("un" ^ zencode_id ctor) ^^ space ^^ pp_smt_exp exp)
   | Ite (cond, then_exp, else_exp) ->
       parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])

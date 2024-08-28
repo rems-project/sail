@@ -144,6 +144,7 @@ module Make_optimizer (S : Sequence) = struct
           uses_in_exp arr;
           uses_in_exp index;
           uses_in_exp x
+      | Struct (_, fields) -> List.iter (fun (_, field) -> uses_in_exp field) fields
     in
 
     let remove_unused () = function
