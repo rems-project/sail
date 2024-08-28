@@ -1285,7 +1285,7 @@ let compile ~unroll_limit env effect_info ast =
       let unroll_limit = unroll_limit
     end)) in
     let env, effect_info = Jib_compile.add_special_functions env effect_info in
-    let ctx = Jib_compile.initial_ctx env effect_info in
+    let ctx = Jib_compile.initial_ctx ~for_target:"c" env effect_info in
     let t = Profile.start () in
     let cdefs, ctx = Jibc.compile_ast ctx ast in
     let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in

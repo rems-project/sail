@@ -138,6 +138,7 @@ let iblock1 = function [instr] -> instr | instrs -> iblock instrs
    in ctx.locals, so we know when their type changes due to flow
    typing. *)
 type ctx = {
+  target_name : string;
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
@@ -177,7 +178,7 @@ let ctx_get_extern id ctx =
 
 let ctx_has_val_spec id ctx = Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
 
-let initial_ctx env effect_info =
+let initial_ctx ?for_target env effect_info =
   let initial_valspecs =
     [
       (mk_id "size_itself_int", (Some "size_itself_int", [CT_lint], CT_lint, empty_uannot));
@@ -185,7 +186,13 @@ let initial_ctx env effect_info =
     ]
     |> List.to_seq |> Bindings.of_seq
   in
+  let target_name =
+    match for_target with
+    | Some name -> name
+    | None -> Option.map Target.name (Target.get_the_target ()) |> Option.value ~default:"c"
+  in
   {
+    target_name;
     records = Bindings.empty;
     enums = Bindings.empty;
     variants = Bindings.empty;
@@ -1588,7 +1595,10 @@ module Make (C : CONFIG) = struct
         ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, instrs), def_annot)], ctx)
     | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
         let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
-        let extern = if Env.is_extern id ctx.tc_env "c" then Some (Env.get_extern id ctx.tc_env "c") else None in
+        let extern =
+          if Env.is_extern id ctx.tc_env ctx.target_name then Some (Env.get_extern id ctx.tc_env ctx.target_name)
+          else None
+        in
         let arg_typs, ret_typ =
           match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false
         in
