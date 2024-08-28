@@ -80,16 +80,16 @@ val eq_bits = pure {
   ocaml: "eq_list",
   interpreter: "eq_list",
   lem: "eq_vec",
-  c: "eq_bits",
-  coq: "eq_vec"
+  coq: "eq_vec",
+  _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 overload operator == = {eq_bit, eq_bits}
 
 val neq_bits = pure {
   lem: "neq_vec",
-  c: "neq_bits",
-  coq: "neq_vec"
+  coq: "neq_vec",
+  c: "neq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
@@ -102,8 +102,8 @@ val vector_length = pure {
   ocaml: "length",
   interpreter: "length",
   lem: "length_list",
-  c: "length",
-  coq: "vec_length"
+  coq: "vec_length",
+  _: "length"
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
 val vector_init = pure "vector_init" : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
@@ -112,8 +112,10 @@ overload length = {bitvector_length, vector_length}
 
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
+$[sv_module { stdout = true }]
 val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit
 
+$[sv_module { stderr = true }]
 val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
 val sail_sign_extend = pure "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
@@ -128,7 +130,7 @@ val truncate = pure {
   interpreter: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
-  c: "sail_truncate"
+  _: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
 /*!
@@ -139,7 +141,7 @@ val truncateLSB = pure {
   interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
-  c: "sail_truncateLSB"
+  _: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
 val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (int('len), bits('v)) -> bits('len)
@@ -148,7 +150,7 @@ function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail
 
 overload operator ^ = {sail_mask}
 
-val bitvector_concat = pure {ocaml: "append", interpreter: "append", lem: "concat_vec", c: "append", coq: "concat_vec"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = pure {ocaml: "append", interpreter: "append", lem: "concat_vec", coq: "concat_vec", _: "append"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
 overload append = {bitvector_concat}
@@ -162,7 +164,7 @@ val bitvector_access = pure {
   interpreter: "access",
   lem: "access_vec_dec",
   coq: "access_vec_dec",
-  c: "vector_access"
+  _: "vector_access"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $else
 val bitvector_access = pure {
@@ -170,7 +172,7 @@ val bitvector_access = pure {
   interpreter: "access_inc",
   lem: "access_vec_inc",
   coq: "access_vec_inc",
-  c: "vector_access_inc"
+  _: "vector_access_inc"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $endif
 
@@ -179,7 +181,7 @@ val plain_vector_access = pure {
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
-  c: "vector_access"
+  _: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m)) -> 'a
 
 overload vector_access = {bitvector_access, plain_vector_access}
@@ -190,7 +192,7 @@ val bitvector_update = pure {
   interpreter: "update",
   lem: "update_vec_dec",
   coq: "update_vec_dec",
-  c: "vector_update"
+  _: "vector_update"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $else
 val bitvector_update = pure {
@@ -198,7 +200,7 @@ val bitvector_update = pure {
   interpreter: "update_inc",
   lem: "update_vec_inc",
   coq: "update_vec_inc",
-  c: "vector_update_inc"
+  _: "vector_update_inc"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $endif
 
@@ -207,7 +209,7 @@ val plain_vector_update = pure {
   interpreter: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",
-  c: "vector_update"
+  _: "vector_update"
 } : forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m), 'a) -> vector('n, dec, 'a)
 
 overload vector_update = {bitvector_update, plain_vector_update}
@@ -216,16 +218,16 @@ val add_bits = pure {
   ocaml: "add_vec",
   interpreter: "add_vec",
   lem: "add_vec",
-  c: "add_bits",
-  coq: "add_vec"
+  coq: "add_vec",
+  _: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = pure {
   ocaml: "add_vec_int",
   interpreter: "add_vec_int",
   lem: "add_vec_int",
-  c: "add_bits_int",
-  coq: "add_vec_int"
+  coq: "add_vec_int",
+  _: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
 overload operator + = {add_bits, add_bits_int}
@@ -234,38 +236,38 @@ val sub_bits = pure {
   ocaml: "sub_vec",
   interpreter: "sub_vec",
   lem: "sub_vec",
-  c: "sub_bits",
-  coq: "sub_vec"
+  coq: "sub_vec",
+  _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val not_vec = pure {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
+val not_vec = pure {ocaml: "not_vec", lem: "not_vec", coq: "not_vec", interpreter: "not_vec", _: "not_bits"} : forall 'n. bits('n) -> bits('n)
 
 val and_vec = pure {
   lem: "and_vec",
-  c: "and_bits",
   coq: "and_vec",
   ocaml: "and_vec",
-  interpreter: "and_vec"
+  interpreter: "and_vec",
+  _: "and_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 overload operator & = {and_vec}
 
 val or_vec = pure {
   lem: "or_vec",
-  c: "or_bits",
   coq: "or_vec",
   ocaml: "or_vec",
-  interpreter: "or_vec"
+  interpreter: "or_vec",
+  _: "or_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 overload operator | = {or_vec}
 
 val xor_vec = pure {
   lem: "xor_vec",
-  c: "xor_bits",
   coq: "xor_vec",
   ocaml: "xor_vec",
-  interpreter: "xor_vec"
+  interpreter: "xor_vec",
+  _: "xor_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 $ifdef _DEFAULT_DEC
@@ -273,8 +275,8 @@ val subrange_bits = pure {
   ocaml: "subrange",
   interpreter: "subrange",
   lem: "subrange_vec_dec",
-  c: "vector_subrange",
-  coq: "subrange_vec_dec"
+  coq: "subrange_vec_dec",
+  _: "vector_subrange"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
   (bits('n), int('m), int('o)) -> bits('m - 'o + 1)
 $else
@@ -282,8 +284,8 @@ val subrange_bits = pure {
   ocaml: "subrange_inc",
   interpreter: "subrange_inc",
   lem: "subrange_vec_Inc",
-  c: "vector_subrange_inc",
-  coq: "subrange_vec_Inc"
+  coq: "subrange_vec_Inc",
+  _: "vector_subrange_inc"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n.
   (bits('n), int('m), int('o)) -> bits('o - 'm + 1)
 $endif
@@ -295,16 +297,16 @@ val update_subrange_bits = pure {
   ocaml: "update_subrange",
   interpreter: "update_subrange",
   lem: "update_subrange_vec_dec",
-  c: "vector_update_subrange",
-  coq: "update_subrange_vec_dec"
+  coq: "update_subrange_vec_dec",
+  _: "vector_update_subrange"
 } : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), int('m), int('o), bits('m - ('o - 1))) -> bits('n)
 $else
 val update_subrange_bits = pure {
   ocaml: "update_subrange_inc",
   interpreter: "update_subrange_inc",
   lem: "update_subrange_vec_inc",
-  c: "vector_update_subrange_inc",
-  coq: "update_subrange_vec_inc"
+  coq: "update_subrange_vec_inc",
+  _: "vector_update_subrange_inc"
 } : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o), bits('o - ('m - 1))) -> bits('n)
 $endif
 
@@ -362,8 +364,8 @@ val unsigned = pure {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_unsigned",
-  coq: "uint"
+  coq: "uint",
+  _: "sail_unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 /* We need a non-empty vector so that the range makes sense */
@@ -371,8 +373,11 @@ val unsigned = pure {
 converts a bit vector of length $n$ to an integer in the range $-2^{n-1}$ to $2^{n-1} - 1$ using twos-complement.
  */
 val signed = pure {
-  c: "sail_signed",
-  _: "sint"
+  ocaml: "sint",
+  lem: "sint",
+  interpreter: "sint",
+  coq: "sint",
+  _: "sail_signed"
 } : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 $endif

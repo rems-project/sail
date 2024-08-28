@@ -10,6 +10,7 @@ val test : forall ('a : Type). 'a -> option('a)
 function test(x) =
   let y : 'a = x in Some(y)
 
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 val main : unit -> unit

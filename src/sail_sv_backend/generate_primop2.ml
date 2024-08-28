@@ -76,9 +76,21 @@ module type S = sig
 
   val string_of_fbits : int -> string
 
-  val hex_str : unit -> string
+  val hex_str : ctyp -> string
 
-  val dec_str : unit -> string
+  val hex_str_upper : ctyp -> string
+
+  val dec_str : ctyp -> string
+
+  val is_empty : ctyp -> string
+
+  val hd : ctyp -> string
+
+  val tl : ctyp -> string
+
+  val fvector_store : int -> ctyp -> string
+
+  val eq_list : (cval -> cval -> Smt_exp.smt_exp Smt_gen.check_writer) -> ctyp -> ctyp -> string Smt_gen.check_writer
 end
 
 module Make
@@ -93,15 +105,58 @@ module Make
     let names, _ = !generated_library_defs in
     if StringSet.mem name names then name
     else (
-      let source = def () in
+      let source = mk_def (def ()) in
       let names, defs = !generated_library_defs in
       generated_library_defs := (StringSet.add name names, source :: defs);
       name
     )
 
+  let register_monadic_library_def name def =
+    let open Smt_gen in
+    mk_check_writer (fun l ->
+        run
+          (let names, _ = !generated_library_defs in
+           if StringSet.mem name names then return name
+           else
+             let* source = fmap mk_def (def ()) in
+             let names, defs = !generated_library_defs in
+             generated_library_defs := (StringSet.add name names, source :: defs);
+             return name
+          )
+          l
+    )
+
   let get_generated_library_defs () = List.rev (snd !generated_library_defs)
 
   let primop_name s = Jib_util.name (mk_id s)
+
+  let fvector_store len elem_ctyp =
+    let name = sprintf "sail_array_store_%d_%s" len (Util.zencode_string (string_of_ctyp elem_ctyp)) in
+    register_library_def name (fun () ->
+        let arr_ctyp = CT_fvector (len, elem_ctyp) in
+        let ix_width = Generate_primop.required_width (Big_int.of_int (len - 1)) - 1 in
+        let r = primop_name "r" in
+        let arr = primop_name "arr" in
+        let i = primop_name "i" in
+        let x = primop_name "x" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some (CT_fvector (len, elem_ctyp));
+            params = [(mk_id "arr", arr_ctyp); (mk_id "i", CT_fbits ix_width); (mk_id "x", elem_ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   ([
+                      SVS_var (r, arr_ctyp, Some (Var arr));
+                      SVS_assign (SVP_index (SVP_id r, Var i), Var x);
+                      SVS_return (Var r);
+                    ]
+                   |> List.map mk_statement
+                   )
+                );
+          }
+    )
 
   let print_fbits width =
     let name = sprintf "sail_print_fixed_bits_%d" width in
@@ -145,7 +200,7 @@ module Make
                 (sprintf "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
                    (width - 1)
                 )
-                ~inputs:[in_str; s; bstr] ~outputs:[out_str];
+                ~inputs:[in_str; s; bstr; zeros] ~outputs:[out_str];
               SVS_assign (SVP_id Jib_util.return, Unit);
             ]
             |> List.map mk_statement
@@ -154,9 +209,10 @@ module Make
         SVD_module
           {
             name = SVN_string name;
+            recursive = false;
             input_ports = [mk_port s CT_string; mk_port b (CT_fbits width); mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs = [SVD_always_comb (mk_statement (SVS_block always_comb))];
+            defs = [mk_def (SVD_always_comb (mk_statement (SVS_block always_comb)))];
           }
     )
 
@@ -240,9 +296,10 @@ module Make
         SVD_module
           {
             name = SVN_string "sail_print_bits";
+            recursive = false;
             input_ports = [mk_port s CT_string; mk_port b CT_lbits; mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs;
+            defs = List.map mk_def defs;
           }
     )
 
@@ -292,40 +349,72 @@ module Make
         SVD_module
           {
             name = SVN_string name;
+            recursive = false;
             input_ports = [mk_port s CT_string; mk_port i CT_lint; mk_port in_str CT_string];
             output_ports = [mk_port Jib_util.return CT_unit; mk_port out_str CT_string];
-            defs = [SVD_always_comb (mk_statement always_comb)];
+            defs = [mk_def (SVD_always_comb (mk_statement always_comb))];
           }
     )
 
-  let hex_str () =
-    register_library_def "sail_hex_str" (fun () ->
+  let hex_str ctyp =
+    let name = sprintf "sail_hex_str_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
         SVD_fundef
           {
-            function_name = SVN_string "sail_hex_str";
+            function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", CT_lint)];
+            params = [(mk_id "i", ctyp)];
             body =
               mk_statement
                 (SVS_block
                    (List.map mk_statement
-                      [SVS_var (s, CT_string, None); svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
+                      [
+                        SVS_var (s, CT_string, None);
+                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
+                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
+                      ]
                    )
                 );
           }
     )
 
-  let dec_str () =
-    register_library_def "sail_dec_str" (fun () ->
+  let hex_str_upper ctyp =
+    let name = sprintf "sail_hex_str_upper_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
         SVD_fundef
           {
-            function_name = SVN_string "sail_dec_str";
+            function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", CT_lint)];
+            params = [(mk_id "i", ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (s, CT_string, None);
+                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
+                        svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
+                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
+                      ]
+                   )
+                );
+          }
+    )
+
+  let dec_str ctyp =
+    let name = sprintf "sail_dec_str_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let i = primop_name "i" in
+        let s = primop_name "s" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some CT_string;
+            params = [(mk_id "i", ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -334,6 +423,133 @@ module Make
                    )
                 );
           }
+    )
+
+  let is_empty ctyp =
+    let name = sprintf "sail_is_empty_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let t = primop_name "t" in
+        let xs = primop_name "xs" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some CT_bool;
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (t, CT_bool, None);
+                        svs_raw "t = (xs.size() == 0)" ~inputs:[xs] ~outputs:[t];
+                        SVS_return (Var t);
+                      ]
+                   )
+                );
+          }
+    )
+
+  let hd ctyp =
+    let name = sprintf "sail_hd_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let x = primop_name "x" in
+        let xs = primop_name "xs" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some ctyp;
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [SVS_var (x, ctyp, None); svs_raw "x = xs[0]" ~inputs:[xs] ~outputs:[x]; SVS_return (Var x)]
+                   )
+                );
+          }
+    )
+
+  let tl ctyp =
+    let name = sprintf "sail_tl_%s" (Util.zencode_string (string_of_ctyp ctyp)) in
+    register_library_def name (fun () ->
+        let xs = primop_name "xs" in
+        let ys = primop_name "ys" in
+        SVD_fundef
+          {
+            function_name = SVN_string name;
+            return_type = Some (CT_list ctyp);
+            params = [(mk_id "xs", CT_list ctyp)];
+            body =
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (ys, CT_list ctyp, None);
+                        svs_raw "xs = (xs.size() > 1) ? xs[1:$] : ys" ~inputs:[xs; ys] ~outputs:[xs];
+                        SVS_return (Var xs);
+                      ]
+                   )
+                );
+          }
+    )
+
+  let eq_list eq_elem ctyp1 ctyp2 =
+    let open Smt_gen in
+    let t1 = Util.zencode_string (string_of_ctyp ctyp1) in
+    let t2 = Util.zencode_string (string_of_ctyp ctyp2) in
+    let name = sprintf "sail_eq_list_%s_and_%s" t1 t2 in
+    register_monadic_library_def name (fun () ->
+        let i = primop_name "i" in
+        let len = primop_name "len" in
+        let r = primop_name "r" in
+        let x = primop_name "x" in
+        let xs = primop_name "xs" in
+        let y = primop_name "y" in
+        let ys = primop_name "ys" in
+        let* body_cmp = eq_elem (V_id (x, ctyp1)) (V_id (y, ctyp2)) in
+        let loop =
+          SVS_for
+            ( {
+                for_var = (i, CT_fint 32, Smt_exp.bvzero 32);
+                for_cond = Fn ("bvslt", [Var i; Var len]);
+                for_modifier = SVF_increment i;
+              },
+              mk_statement
+                (SVS_block
+                   (List.map mk_statement
+                      [
+                        SVS_var (x, ctyp1, None);
+                        SVS_var (y, ctyp2, None);
+                        svs_raw "x = xs[i]" ~inputs:[xs; i] ~outputs:[x];
+                        svs_raw "y = ys[i]" ~inputs:[ys; i] ~outputs:[y];
+                        SVS_assign (SVP_id r, Fn ("and", [Var r; body_cmp]));
+                      ]
+                   )
+                )
+            )
+        in
+        return
+          (SVD_fundef
+             {
+               function_name = SVN_string name;
+               return_type = Some CT_bool;
+               params = [(mk_id "xs", CT_list ctyp1); (mk_id "ys", CT_list ctyp2)];
+               body =
+                 mk_statement
+                   (SVS_block
+                      (List.map mk_statement
+                         [
+                           SVS_var (r, CT_bool, Some (Bool_lit true));
+                           SVS_var (len, CT_fint 32, None);
+                           svs_raw "len = xs.size()" ~inputs:[xs] ~outputs:[len];
+                           svs_raw "if (ys.size() != len) return 0" ~inputs:[ys; len];
+                           loop;
+                           SVS_return (Var r);
+                         ]
+                      )
+                   );
+             }
+          )
     )
 
   let unary_module l gen =

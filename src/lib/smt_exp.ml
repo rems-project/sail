@@ -157,6 +157,46 @@ let rec fold_smt_exp f = function
       f (Struct (struct_id, List.map (fun (field_id, exp) -> (field_id, fold_smt_exp f exp)) fields))
   | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list) as exp -> f exp
 
+let rec iter_smt_exp f exp =
+  f exp;
+  match exp with
+  | Fn (_, args) -> List.iter (iter_smt_exp f) args
+  | Ite (i, t, e) ->
+      iter_smt_exp f i;
+      iter_smt_exp f t;
+      iter_smt_exp f e
+  | SignExtend (_, _, exp)
+  | ZeroExtend (_, _, exp)
+  | Extract (_, _, exp)
+  | Tester (_, exp)
+  | Unwrap (_, _, exp)
+  | Hd (_, exp)
+  | Tl (_, exp)
+  | Field (_, _, exp) ->
+      iter_smt_exp f exp
+  | Store (_, _, arr, index, exp) ->
+      iter_smt_exp f arr;
+      iter_smt_exp f index;
+      iter_smt_exp f exp
+  | Struct (_, fields) -> List.iter (fun (_, field) -> iter_smt_exp f field) fields
+  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> ()
+
+let rec smt_exp_size = function
+  | Fn (_, args) -> 1 + List.fold_left (fun n arg -> n + smt_exp_size arg) 0 args
+  | Ite (i, t, e) -> 1 + smt_exp_size i + smt_exp_size t + smt_exp_size e
+  | SignExtend (_, _, exp)
+  | ZeroExtend (_, _, exp)
+  | Extract (_, _, exp)
+  | Tester (_, exp)
+  | Unwrap (_, _, exp)
+  | Hd (_, exp)
+  | Tl (_, exp)
+  | Field (_, _, exp) ->
+      1 + smt_exp_size exp
+  | Store (_, _, arr, index, exp) -> 1 + smt_exp_size arr + smt_exp_size index + smt_exp_size exp
+  | Struct (_, fields) -> 1 + List.fold_left (fun n (_, field) -> n + smt_exp_size field) 0 fields
+  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> 1
+
 let extract i j x = Extract (i, j, x)
 
 let bvnot x = Fn ("bvnot", [x])
@@ -214,6 +254,7 @@ module SimpSet = struct
     | _ -> None
 
   module SimpVarMap = Map.Make (SimpVar)
+  module SimpVarSet = Set.Make (SimpVar)
 
   type t = {
     var_fn : Jib.name -> smt_exp option;
@@ -369,23 +410,29 @@ module Simplifier = struct
         )
         else NoChange
 
+  let append_to_or or_cond cond =
+    match or_cond with Fn ("or", conds) -> Fn ("or", conds @ [cond]) | _ -> Fn ("or", [or_cond; cond])
+
+  let append_to_and and_cond cond =
+    match and_cond with Fn ("and", conds) -> Fn ("and", conds @ [cond]) | _ -> Fn ("and", [and_cond; cond])
+
   let rule_squash_ite =
-    let append_to_or or_cond cond =
-      match or_cond with Fn ("or", conds) -> Fn ("or", conds @ [cond]) | _ -> Fn ("or", [or_cond; cond])
-    in
     mk_simple_rule __LOC__ @@ function
-    | Ite (cond, x, Ite (cond', y, z)) when identical x y -> Change (1, Ite (append_to_or cond cond', x, z))
+    | Ite (cond, x, Ite (cond', y, z)) when identical x z -> change (Ite (Fn ("and", [cond'; Fn ("not", [cond])]), y, x))
+    | Ite (cond, x, Ite (cond', y, z)) when identical x y -> change (Ite (append_to_or cond cond', x, z))
+    | Ite (cond, Ite (cond', x, y), z) when identical x z -> change (Ite (Fn ("or", [Fn ("not", [cond]); cond']), x, y))
+    | Ite (cond, Ite (cond', x, y), z) when identical y z -> change (Ite (append_to_and cond cond', x, z))
     | _ -> NoChange
 
-  let rule_squash_ite2 =
+  let rule_same_ite =
     mk_simple_rule __LOC__ @@ function
-    | Ite (cond, x, Ite (cond', y, z)) when identical x z ->
-        Change (1, Ite (Fn ("and", [cond'; Fn ("not", [cond])]), y, x))
-    | Ite (cond, x, Ite (cond', y, z)) when identical x y -> Change (1, Ite (Fn ("or", [cond; cond']), x, z))
-    | Ite (cond, Ite (cond', x, y), z) when identical x z ->
-        Change (1, Ite (Fn ("or", [Fn ("not", [cond]); cond']), x, y))
-    | Ite (cond, Ite (cond', x, y), z) when identical y z -> Change (1, Ite (Fn ("and", [cond; cond']), x, z))
+    | Ite (cond, x, y) -> (
+        match simp_eq x y with Some true -> change x | _ -> NoChange
+      )
     | _ -> NoChange
+
+  let rule_ite_literal =
+    mk_simple_rule __LOC__ @@ function Ite (Bool_lit b, x, y) -> change (if b then x else y) | _ -> NoChange
 
   let rule_and_inequalities =
     mk_simple_rule __LOC__ @@ function
@@ -420,7 +467,7 @@ module Simplifier = struct
           for v = 0 to max do
             if not (IntSet.mem v lits) then unused := IntSet.add v !unused
           done;
-          if IntSet.cardinal !unused <= IntSet.cardinal lits then
+          if IntSet.cardinal !unused < IntSet.cardinal lits then
             Some
               (List.map
                  (fun i ->
@@ -433,7 +480,7 @@ module Simplifier = struct
         in
         begin
           match check_inequalities with
-          | Some equalities -> Change (1, smt_conj (smt_disj equalities :: others))
+          | Some equalities -> change (smt_conj (smt_disj equalities :: others))
           | None -> NoChange
         end
     | _ -> NoChange
@@ -483,7 +530,7 @@ module Simplifier = struct
         in
         begin
           match check_equalities with
-          | Some inequalities -> Change (1, smt_disj (smt_conj inequalities :: others))
+          | Some inequalities -> change (smt_disj (smt_conj inequalities :: others))
           | None -> NoChange
         end
     | _ -> NoChange
@@ -496,10 +543,10 @@ module Simplifier = struct
   (* Simplify ite expressions with a boolean literal as either the then or else branch *)
   let rule_ite_lit =
     mk_simple_rule __LOC__ @@ function
-    | Ite (i, Bool_lit true, e) -> Change (1, Fn ("or", [i; e]))
-    | Ite (i, Bool_lit false, e) -> Change (1, Fn ("and", [Fn ("not", [i]); e]))
-    | Ite (i, t, Bool_lit true) -> Change (1, Fn ("or", [Fn ("not", [i]); t]))
-    | Ite (i, t, Bool_lit false) -> Change (1, Fn ("and", [i; t]))
+    | Ite (i, Bool_lit true, e) -> change (Fn ("or", [i; e]))
+    | Ite (i, Bool_lit false, e) -> change (Fn ("and", [Fn ("not", [i]); e]))
+    | Ite (i, t, Bool_lit true) -> change (Fn ("or", [Fn ("not", [i]); t]))
+    | Ite (i, t, Bool_lit false) -> change (Fn ("and", [i; t]))
     | _ -> NoChange
 
   let rule_concat_literal_eq =
@@ -515,7 +562,7 @@ module Simplifier = struct
         let nested_and = List.exists (function Fn ("and", _) -> true | _ -> false) xs in
         if nested_and then (
           let xs = List.map (function Fn ("and", xs) -> xs | x -> [x]) xs |> List.concat in
-          Change (1, Fn ("and", xs))
+          change (Fn ("and", xs))
         )
         else NoChange
     | _ -> NoChange
@@ -526,14 +573,14 @@ module Simplifier = struct
         let nested_or = List.exists (function Fn ("or", _) -> true | _ -> false) xs in
         if nested_or then (
           let xs = List.map (function Fn ("or", xs) -> xs | x -> [x]) xs |> List.concat in
-          Change (1, Fn ("or", xs))
+          change (Fn ("or", xs))
         )
         else NoChange
     | _ -> NoChange
 
   let rule_false_and =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("and", xs) when List.exists (function Bool_lit false -> true | _ -> false) xs -> Change (1, Bool_lit false)
+    | Fn ("and", xs) when List.exists (function Bool_lit false -> true | _ -> false) xs -> change (Bool_lit false)
     | _ -> NoChange
 
   let rule_true_and =
@@ -552,11 +599,16 @@ module Simplifier = struct
         in
         begin
           match xs with
-          | [] -> Change (1, Bool_lit true)
-          | [x] -> Change (1, x)
-          | _ when !filtered -> Change (1, Fn ("and", xs))
+          | [] -> change (Bool_lit true)
+          | [x] -> change x
+          | _ when !filtered -> change (Fn ("and", xs))
           | _ -> NoChange
         end
+    | _ -> NoChange
+
+  let rule_true_or =
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("or", xs) when List.exists (function Bool_lit true -> true | _ -> false) xs -> change (Bool_lit true)
     | _ -> NoChange
 
   let rule_false_or =
@@ -575,9 +627,9 @@ module Simplifier = struct
         in
         begin
           match xs with
-          | [] -> Change (1, Bool_lit false)
-          | [x] -> Change (1, x)
-          | _ when !filtered -> Change (1, Fn ("or", xs))
+          | [] -> change (Bool_lit false)
+          | [x] -> change x
+          | _ when !filtered -> change (Fn ("or", xs))
           | _ -> NoChange
         end
     | _ -> NoChange
@@ -609,6 +661,48 @@ module Simplifier = struct
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
         Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
 
+  let is_equality = function
+    | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some (v, lit)
+    | _ -> None
+
+  let apply_equality (v, exp) = fold_smt_exp (fun exp' -> if identical v exp' then exp else exp')
+
+  let rule_distribute_or_equality_in_and =
+    let module Vars = SimpSet.SimpVarSet in
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("and", xs) -> begin
+        let vars = ref Vars.empty in
+        List.iter
+          (fun x ->
+            iter_smt_exp
+              (fun exp -> match SimpSet.to_simp_var exp with Some v -> vars := Vars.add v !vars | None -> ())
+              x
+          )
+          xs;
+        if Vars.cardinal !vars = 1 then (
+          let or_equalities, others =
+            Util.map_split
+              (function
+                | Fn ("or", ys) as other -> (
+                    match Util.option_all (List.map is_equality ys) with Some ys -> Ok ys | None -> Error other
+                  )
+                | other -> Error other
+                )
+              xs
+          in
+          match List.stable_sort List.compare_lengths or_equalities with
+          | [] -> NoChange
+          | or_equality :: rest ->
+              let mk_eq (v, exp) = Fn ("=", [v; exp]) in
+              let rest = List.map (fun eqs -> Fn ("or", List.map mk_eq eqs)) rest in
+              let others = rest @ others in
+              change
+                (Fn ("or", List.map (fun eq -> Fn ("and", mk_eq eq :: List.map (apply_equality eq) others)) or_equality))
+        )
+        else NoChange
+      end
+    | _ -> NoChange
+
   let add_to_or x = function Fn ("or", xs) -> Fn ("or", x :: xs) | y -> Fn ("or", [x; y])
 
   let rule_or_assume =
@@ -619,16 +713,16 @@ module Simplifier = struct
   let rule_var =
     mk_rule __LOC__ @@ fun simpset -> function
     | v when SimpSet.is_simp_var v -> (
-        match SimpSet.find_opt v simpset with Some exp -> Change (1, exp) | None -> NoChange
+        match SimpSet.find_opt v simpset with Some exp -> change exp | None -> NoChange
       ) | _ -> NoChange
 
   let rule_access_ite =
     mk_simple_rule __LOC__ @@ function
     | Field (struct_id, field, Ite (i, t, e)) ->
-        Change (1, Ite (i, Field (struct_id, field, t), Field (struct_id, field, t)))
-    | Unwrap (ctor, b, Ite (i, t, e)) -> Change (1, Ite (i, Unwrap (ctor, b, t), Unwrap (ctor, b, t)))
-    | Tester (ctor, Ite (i, t, e)) -> Change (1, Ite (i, Tester (ctor, t), Tester (ctor, e)))
-    | Fn ("select", [Ite (i, t, e); ix]) -> Change (1, Ite (i, Fn ("select", [t; ix]), Fn ("select", [e; ix])))
+        change (Ite (i, Field (struct_id, field, t), Field (struct_id, field, t)))
+    | Unwrap (ctor, b, Ite (i, t, e)) -> change (Ite (i, Unwrap (ctor, b, t), Unwrap (ctor, b, t)))
+    | Tester (ctor, Ite (i, t, e)) -> change (Ite (i, Tester (ctor, t), Tester (ctor, e)))
+    | Fn ("select", [Ite (i, t, e); ix]) -> change (Ite (i, Fn ("select", [t; ix]), Fn ("select", [e; ix])))
     | _ -> NoChange
 
   let rule_inequality =
@@ -638,24 +732,23 @@ module Simplifier = struct
         List.iter
           (fun exp -> match simp_eq lit exp with Some true -> inequal := true | _ -> ())
           (SimpSet.inequalities v simpset);
-        if !inequal then Change (1, Bool_lit false) else NoChange
+        if !inequal then change (Bool_lit false) else NoChange
     | Fn ("not", [Fn ("=", [v; lit])]) when is_literal lit && SimpSet.is_simp_var v ->
         if
           List.exists
             (fun exp -> match simp_eq lit exp with Some true -> true | _ -> false)
             (SimpSet.inequalities v simpset)
-        then Change (1, Bool_lit true)
+        then change (Bool_lit true)
         else NoChange | _ -> NoChange
 
-  let rule_not_not =
-    mk_simple_rule __LOC__ @@ function Fn ("not", [Fn ("not", [exp])]) -> Change (1, exp) | _ -> NoChange
+  let rule_not_not = mk_simple_rule __LOC__ @@ function Fn ("not", [Fn ("not", [exp])]) -> change exp | _ -> NoChange
 
   let rule_not_push =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("not", [Fn ("or", xs)]) -> Change (1, Fn ("and", List.map (fun x -> Fn ("not", [x])) xs))
-    | Fn ("not", [Fn ("and", xs)]) -> Change (1, Fn ("or", List.map (fun x -> Fn ("not", [x])) xs))
-    | Fn ("not", [Ite (i, t, e)]) -> Change (1, Ite (i, Fn ("not", [t]), Fn ("not", [e])))
-    | Fn ("not", [Bool_lit b]) -> Change (1, Bool_lit (not b))
+    | Fn ("not", [Fn ("or", xs)]) -> change (Fn ("and", List.map (fun x -> Fn ("not", [x])) xs))
+    | Fn ("not", [Fn ("and", xs)]) -> change (Fn ("or", List.map (fun x -> Fn ("not", [x])) xs))
+    | Fn ("not", [Ite (i, t, e)]) -> change (Ite (i, Fn ("not", [t]), Fn ("not", [e])))
+    | Fn ("not", [Bool_lit b]) -> change (Bool_lit (not b))
     | _ -> NoChange
 
   let is_bvfunction = function
@@ -703,8 +796,10 @@ module Simplifier = struct
 
   let rule_simp_eq =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("=", [x; y]) -> begin match simp_eq x y with Some b -> Change (1, Bool_lit b) | None -> NoChange end
+    | Fn ("=", [x; y]) -> begin match simp_eq x y with Some b -> change (Bool_lit b) | None -> NoChange end
     | _ -> NoChange
+
+  let rule_do_nothing = mk_simple_rule __LOC__ (fun _ -> NoChange)
 
   let apply simpset f exp =
     let open Jib_visitor in
@@ -713,12 +808,12 @@ module Simplifier = struct
       match f simpset exp with
       | Change (n, exp) ->
           changes := !changes + n;
-          children exp
-      | Reconstruct (n, simpset, exp, recon) ->
+          children simpset exp
+      | Reconstruct (n, simpset', exp, recon) ->
           changes := !changes + n;
-          children (recon (go simpset exp))
-      | NoChange -> children exp
-    and children no_change =
+          children simpset (recon (go simpset' exp))
+      | NoChange -> children simpset exp
+    and children simpset no_change =
       match no_change with
       | Fn (f, args) ->
           let args' = map_no_copy (go simpset) args in
@@ -774,7 +869,7 @@ let simp simpset exp =
     match exp with
     | Ite _ ->
         run_strategy simpset exp
-          (Then [Repeat rule_squash_ite; rule_squash_ite2; rule_squash_ite; rule_or_ite; rule_ite_lit])
+          (Then [rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal])
     | Fn ("and", _) ->
         run_strategy simpset exp
           (Then
@@ -785,11 +880,12 @@ let simp simpset exp =
                rule_and_inequalities;
                rule_order_and;
                Repeat rule_and_assume;
+               rule_distribute_or_equality_in_and;
              ]
           )
     | Fn ("or", _) ->
         run_strategy simpset exp
-          (Then [rule_flatten_or; rule_false_or; rule_or_equalities; rule_order_or; Repeat rule_or_assume])
+          (Then [rule_flatten_or; rule_true_or; rule_false_or; rule_or_equalities; rule_order_or; Repeat rule_or_assume])
     | Var _ -> run_strategy simpset exp rule_var
     | Fn ("=", _) -> run_strategy simpset exp (Then [rule_inequality; rule_simp_eq; rule_concat_literal_eq])
     | Fn ("not", _) -> run_strategy simpset exp (Then [Repeat rule_not_not; Repeat rule_not_push; rule_inequality])

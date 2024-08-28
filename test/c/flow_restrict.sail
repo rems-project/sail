@@ -3,6 +3,9 @@ default Order dec
 $include <flow.sail>
 $include <exception_basic.sail>
 
+$option --sv-int-size 256
+
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 register R : bool

@@ -1,5 +1,6 @@
 default Order dec
 
+$[sv_module { stdout = true }]
 val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
 
 struct test = {
@@ -7,6 +8,7 @@ struct test = {
   B : bitvector(2, dec),
 }
 
+$[jib_debug]
 function main (() : unit) -> unit = {
   x : test = struct { A = 0b1010, B = 0b11 };
   x.A = 0b1000;

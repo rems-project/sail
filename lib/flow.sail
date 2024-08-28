@@ -92,9 +92,9 @@ val and_bool_no_flow = pure {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
 val or_bool = pure {coq: "orb", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
-val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
+val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 
-val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", c: "eq_bool", coq: "Bool.eqb"} : (bool, bool) -> bool
+val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", _: "eq_bool"} : (bool, bool) -> bool
 
 val neq_int = pure {lem: "neq"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
 function neq_int (x, y) = not_bool(eq_int(x, y))
@@ -124,7 +124,9 @@ by rewriting it to __size(x).
 
 */
 
-function __id forall 'n. (x: int('n)) -> int('n) = x
+val __id = pure { systemverilog: "id" } : forall 'n. int('n) -> int('n)
+
+function __id(x) = x
 
 overload __size = {__id}
 

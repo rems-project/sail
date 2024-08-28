@@ -80,6 +80,7 @@ open Smt_exp
 open Interactive.State
 
 open Generate_primop
+open Sv_optimize
 
 module R = Jib_sv
 
@@ -111,6 +112,8 @@ let opt_unreachable = ref []
 let opt_fun2wires = ref []
 
 let opt_int_specialize = ref None
+
+let opt_disable_optimizations = ref false
 
 let verilog_options =
   [
@@ -164,12 +167,13 @@ let verilog_options =
       Arg.Int (fun i -> opt_int_specialize := Some i),
       "<n> Run n specialization passes on Sail Int-kinded type variables"
     );
+    ("-sv_disable_optimizations", Arg.Set opt_disable_optimizations, " disable SystemVerilog specific optimizations");
   ]
 
 let verilog_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "c"]);
+    ("instantiate_outcomes", [String_arg "systemverilog"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
@@ -179,8 +183,8 @@ let verilog_rewrites =
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "c"; If_mono_arg]);
-    ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
+    ("monomorphise", [String_arg "systemverilog"; If_mono_arg]);
+    ("atoms_to_singletons", [String_arg "systemverilog"; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
@@ -195,7 +199,7 @@ let verilog_rewrites =
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("recheck_defs", []);
-    ("constant_fold", [String_arg "c"]);
+    ("constant_fold", [String_arg "systemverilog"]);
   ]
 
 module type JIB_CONFIG = sig
@@ -313,7 +317,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
 
   let optimize_anf _ aexp = aexp
 
-  let unroll_loops = None
+  let unroll_loops = Some 64
   let specialize_calls = false
   let make_call_precise = C.make_call_precise
   let ignore_64 = true
@@ -412,7 +416,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   in
 
   let cdefs, ctx = jib_of_ast SV.make_call_precise env ast effect_info in
+
   let cdefs, ctx = Jib_optimize.remove_tuples cdefs ctx in
+  let cdefs = Jib_optimize.remove_mutrec cdefs in
   let registers = register_types cdefs in
 
   let include_doc =
@@ -433,24 +439,37 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   let spec_info = Jib_sv.collect_spec_info ctx cdefs in
 
-  let doc, fn_ctyps =
+  let svir, fn_ctyps =
     List.fold_left
-      (fun (doc, fn_ctyps) cdef ->
-        let svir_defs, fn_ctyps = svir_cdef spec_info ctx fn_ctyps cdef in
-        match svir_defs with
-        | [] -> (doc, fn_ctyps)
-        | _ -> (doc ^^ separate_map (twice hardline) pp_def svir_defs ^^ twice hardline, fn_ctyps)
+      (fun (defs, fn_ctyps) cdef ->
+        let defs', fn_ctyps = svir_cdef spec_info ctx fn_ctyps cdef in
+        (List.rev defs' @ defs, fn_ctyps)
       )
-      (empty, Bindings.empty) cdefs
+      ([], Bindings.empty) cdefs
   in
+  let svir = List.rev svir in
+  let svir_types, svir = List.partition Sv_ir.is_typedef svir in
+  let library_svir = SV.Primops.get_generated_library_defs () in
+  let toplevel_svir =
+    Option.fold ~none:[] ~some:(fun m -> [Sv_ir.mk_def (Sv_ir.SVD_module m)]) (SV.toplevel_module spec_info)
+  in
+
+  let svir = library_svir @ svir @ toplevel_svir in
+
+  let svir =
+    if not !opt_disable_optimizations then
+      svir |> remove_unit_ports |> remove_unused_variables |> simplify_smt |> remove_unused_variables |> simplify_smt
+      |> remove_unused_variables |> remove_nulls |> simplify_smt
+    else svir
+  in
+
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    let library_defs = SV.Primops.get_generated_library_defs () in
-    let top_doc = Option.fold ~none:empty ~some:(fun m -> pp_def (SVD_module m)) (SV.toplevel_module spec_info) in
-    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base ^^ reg_ref_enums ^^ reg_ref_functions
-    ^^ separate_map (twice hardline) pp_def library_defs
-    ^^ twice hardline ^^ doc ^^ top_doc
+    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
+    ^^ separate_map (twice hardline) (pp_def None) svir_types
+    ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
+    ^^ separate_map (twice hardline) (pp_def None) svir
   in
 
   (*
@@ -587,7 +606,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   in
      *)
   let sv_output = Pretty_print_sail.Document.to_string doc in
-  make_genlib_file (sprintf "sail_genlib_%s.sv" out);
+  make_genlib_file (Filename.concat (Filename.dirname out) (sprintf "sail_genlib_%s.sv" (Filename.basename out)));
 
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir (out ^ ".sv") in
   output_string out_chan sv_output;
@@ -610,13 +629,12 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
         (* Verilator sometimes just spuriously returns non-zero exit
            codes even when it suceeds, so we don't use system_checked
            here, and just hope for the best. *)
-        let _ =
-          Unix.system
-            (sprintf
-               "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
-               sail_sv_libdir out out out
-            )
+        let verilator_command =
+          sprintf "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
+            sail_sv_libdir out out out
         in
+        print_endline ("Verilator command: " ^ verilator_command);
+        let _ = Unix.system verilator_command in
         begin
           match !opt_verilate with
           | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")

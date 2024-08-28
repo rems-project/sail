@@ -14,6 +14,7 @@ struct test = {
   bits2 : bits(32)
 }
 
+$[sv_module { stdout = true }]
 val "print_int" : (string, int) -> unit
 
 val main : unit -> unit
