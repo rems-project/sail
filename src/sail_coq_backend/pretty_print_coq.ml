@@ -3903,13 +3903,16 @@ end = struct
          string "Module GRegister.";
          string "  Inductive greg := GReg [T : Type] (r : register T).";
          empty;
-         string "(* The injection tactic can do too much, so prove a one-step lemma. *)";
-         string "Lemma greg_inj {T} {r r' : register T} : GReg r = GReg r' -> r = r'.";
-         string "Proof.";
-         string "  intro e. injection e as e'.";
-         string "  apply Eqdep.EqdepTheory.inj_pair2 in e'.";
-         string "  assumption.";
-         string "Qed.";
+         string "  (* The injection tactic can do too much, so prove a one-step lemma. *)";
+         string "  Lemma greg_inj {T} {r r' : register T} : GReg r = GReg r' -> r = r'.";
+         string "  Proof.";
+         string "    intro e. injection e as e'.";
+         string "    apply Eqdep.EqdepTheory.inj_pair2 in e'.";
+         string "    assumption.";
+         string "  Qed.";
+         empty;
+         string "  Definition greg_proj1 (r : greg) : Type := match r with @GReg T _ => T end.";
+         string "  Definition greg_proj2 (r : greg) : register (greg_proj1 r) := match r with @GReg _ r => r end.";
          empty;
        ]
       @ ( match ctxt.global.library_style with
@@ -4067,14 +4070,14 @@ end = struct
           (if is_single then empty else string "  | _, _ => fun _ => None");
           string "  end.";
           empty;
-          string "Definition register_list : list (string * sigT register) := List.concat [";
+          string "Definition register_list : list (string * GRegister.greg) := List.concat [";
           (* NB: use @existT below because ordinary and stdpp contexts have different implicit arguments *)
           separate_map
             (string ";" ^^ hardline)
             (fun (typ_id, _typ) ->
               let constr_id = doc_id_ctor ctxt (reg_case_name typ_id) in
               let list_id = doc_id ctxt (append_id (reg_type_name typ_id) "_list") in
-              string "  List.map (fun '(s, r) => (s, @existT _ _ _ "
+              string "  List.map (fun '(s, r) => (s, GRegister.GReg "
               ^^ parens (constr_id ^^ string " r")
               ^^ string ")) " ^^ list_id
             )
@@ -4082,19 +4085,19 @@ end = struct
           string "].";
           empty;
           string "Definition string_of_register {T} (r : register T) : string :=";
-          string "  match List.find (fun '(_s, @existT _ _ _ r') => register_beq r r') register_list with";
+          string "  match List.find (fun '(_s, GRegister.GReg r') => register_beq r r') register_list with";
           string "  | Some (s, _r) => s";
           string "  | None => \"<impossible>\"";
           string "  end.";
           empty;
-          string "Definition register_of_string (s : string) : option (sigT register) :=";
+          string "Definition register_of_string (s : string) : option GRegister.greg :=";
           string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
           string "  | Some (_s, r) => Some r";
           string "  | None => None";
           string "  end.";
           empty;
           string "Lemma string_of_register_roundtrip {T} (r : register T) :";
-          string "  register_of_string (string_of_register r) = Some (@existT _ _ _ r).";
+          string "  register_of_string (string_of_register r) = Some (GRegister.GReg r).";
           string "case r; intro r'; destruct r'; reflexivity.";
           string "Qed.";
           empty;
@@ -4107,9 +4110,9 @@ end = struct
           string "  specialize (string_of_register_roundtrip r') as H2.";
           string "  rewrite H in H1.";
           string "  rewrite H2 in H1.";
-          string "  assert (E : @existT _ _ T' r' = @existT _ _ T r). { congruence. }";
-          string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
-          string "  change (register_beq r r') with (f (@existT _ register T r) (@existT _ register T' r')).";
+          string "  assert (E : @GRegister.GReg T' r' = @GRegister.GReg T r). { congruence. }";
+          string "  set (f := fun (r r' : GRegister.greg) => register_beq (GRegister.greg_proj2 r) (GRegister.greg_proj2 r')).";
+          string "  change (register_beq r r') with (f (GRegister.GReg r) (GRegister.GReg r')).";
           string "  rewrite <- E.";
           string "  unfold f.";
           string "  apply register_beq_refl.";
