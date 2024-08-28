@@ -4111,7 +4111,9 @@ end = struct
           string "  rewrite H in H1.";
           string "  rewrite H2 in H1.";
           string "  assert (E : @GRegister.GReg T' r' = @GRegister.GReg T r). { congruence. }";
-          string "  set (f := fun (r r' : GRegister.greg) => register_beq (GRegister.greg_proj2 r) (GRegister.greg_proj2 r')).";
+          string
+            "  set (f := fun (r r' : GRegister.greg) => register_beq (GRegister.greg_proj2 r) (GRegister.greg_proj2 \
+             r')).";
           string "  change (register_beq r r') with (f (GRegister.GReg r) (GRegister.GReg r')).";
           string "  rewrite <- E.";
           string "  unfold f.";
