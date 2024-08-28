@@ -1,4 +1,5 @@
 
+$[sv_module { stdout = true }]
 val "print_int" : (string, int) -> unit
 
 val hd : forall ('a : Type). ('a, list('a)) -> 'a

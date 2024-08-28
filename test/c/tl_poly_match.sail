@@ -2,6 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
+$[sv_module { stdout = true }]
 val "print" : string -> unit
 
 val f : option(int) -> string

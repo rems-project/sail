@@ -1,5 +1,6 @@
 default Order dec
 
+$[sv_module { stdout = true }]
 val "print" : string -> unit
 
 union Poly ('a : Type) = {

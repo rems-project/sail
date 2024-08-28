@@ -4,6 +4,7 @@ $sail_internal
 
 $include <flow.sail>
 
+$[sv_module { stdout = true }]
 val print = "print_endline" : string -> unit
 
 union option ('a : Type) = {

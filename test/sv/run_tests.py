@@ -17,45 +17,20 @@ sail = get_sail()
 skip_tests = {
     'all_even_vector_length',
     'assign_rename_bug',
-    'bitvector', # This requires -sv_bits_size >= 200
     'cheri128_hsb',
-    'cheri_capreg', # behavior?
-    'empty_list', # recursion
-    'flow_restrict', # contains very large integer literal
     'for_shadow',
-    'foreach_none',
-    'gvector',
     'inc_tests',
-    'int64_vector_literal',
-    'issue136', # recursion
-    'large_bitvector', # This requires -sv_bits_size >= 204
-    'list_rec_functions1', # lists
-    'list_rec_functions2',
-    'list_torture',
     'loop_exception',
-    'pointer_assign',
     'poly_mapping', # length
     'poly_mapping2',
     'read_write_ram',
-    'real',
+    'real', # reals
     'real_prop', # reals
-    'split', # generic vectors
-    'string_of_bits',
-    'string_take',
-    'vector_example',
-    'warl',
-    'warl_undef',
-    'xlen_val', # Calls external C function
+    'split', # generic vectors, loops
+    'vector_example', # loops
     'spc_mappings',
-    'list_test', # lists
-    'list_scope', # lists
-    'list_scope2', # lists
-    'list_scope3', # lists
-    'list_cons_cons', # lists
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
-    'lib_valid_hex_bits', # bitvector parsing
-    'issue202_1', # lists
 }
 
 print("Sail is {}".format(sail))
@@ -91,10 +66,6 @@ xml += test_sv('SystemVerilog', '', skip_tests)
 # xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests) */
 # xml += test_sv('SystemVerilog', ' -Oconstant_fold', skip_tests) */
 # xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests) */
-
-skip_tests.remove('bitvector')
-
-# xml += test_sv('SystemVerilog', ' -sv_int_size 128 -sv_bits_size 256', skip_tests)
 
 xml += '</testsuites>\n'
 

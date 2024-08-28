@@ -13,6 +13,7 @@ function f2(width) =
     f1(width)
   else ()
 
+$[sv_module { stdout = true }]
 val "print" : string -> unit
 
 val main : unit -> unit

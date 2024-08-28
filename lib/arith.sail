@@ -72,19 +72,19 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
+val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -97,23 +97,25 @@ val sub_nat = pure {
 
 // ***** Negation *****
 
-val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
+val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
 
-val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
+val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", _: "neg_int"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", _: "mult_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
+val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", _: "mult_int"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
+$[sv_module { stdout = true }]
 val print_int = pure "print_int" : (string, int) -> unit
 
+$[sv_module { stderr = true }]
 val prerr_int = pure "prerr_int" : (string, int) -> unit
 
 /*!
@@ -171,8 +173,8 @@ val _tmod_int = pure {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",
-  c: "tmod_int",
-  coq: "Z.rem"
+  coq: "Z.rem",
+  c: "tmod_int"
 } : (int, int) -> int
 
 /*! If we know the second argument is positive, we know the result is positive */
@@ -180,8 +182,8 @@ val _tmod_int_positive = pure {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",
-  c: "tmod_int",
-  coq: "Z.rem"
+  coq: "Z.rem",
+  _: "tmod_int"
 } : forall 'n, 'n >= 1. (int, int('n)) -> nat
 
 overload tmod_int = {_tmod_int_positive, _tmod_int}
@@ -205,8 +207,8 @@ val abs_int_plain = pure {
   ocaml: "abs_int",
   interpreter: "abs_int",
   lem: "integerAbs",
-  c: "abs_int",
-  coq: "Z.abs"
+  coq: "Z.abs",
+  _: "abs_int"
 } : int -> int
 
 overload abs_int = {abs_int_plain}

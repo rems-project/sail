@@ -7,6 +7,7 @@ mapping bool_bits : bool <-> bits(1) = {
   false  <-> 0b0
 }
 
+$[sv_module { stdout = true }]
 val "print_endline" : string -> unit
 
 function main((): unit) -> unit = {

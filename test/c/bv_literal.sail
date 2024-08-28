@@ -1,6 +1,7 @@
 
 default Order dec
 
+$[sv_module { stdout = true }]
 val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
 
 val main : unit -> unit

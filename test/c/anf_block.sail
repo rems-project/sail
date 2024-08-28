@@ -1,4 +1,5 @@
 
+$[sv_module { stdout = true }]
 val print = "print_endline" : string -> unit
 
 val main : unit -> unit
