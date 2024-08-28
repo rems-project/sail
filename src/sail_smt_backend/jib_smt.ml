@@ -177,8 +177,10 @@ module Make_optimizer (S : Sequence) = struct
           let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
           let exp = Smt_exp.simp simpset exp in
           begin
-            match (NameHashtbl.find_opt uses var, Smt_exp.simp simpset exp) with
+            match (NameHashtbl.find_opt uses var, exp) with
             | _, (Bitvec_lit _ | Bool_lit _) -> NameHashtbl.add vars var exp
+            | _, Fn ("=", [Var _; Bitvec_lit _]) -> NameHashtbl.add vars var exp
+            | _, Fn ("concat", [Bitvec_lit _; Var _]) -> NameHashtbl.add vars var exp
             | Some 1, _ -> NameHashtbl.add vars var exp
             | Some _, exp -> S.add (Define_const (var, typ, exp)) seq
             | None, _ -> assert false
@@ -396,7 +398,7 @@ module Make (Config : CONFIG) = struct
             (fun pi id chain ->
               let* chain = chain in
               let* pi = mapM Smt.smt_cval pi in
-              let pathcond = smt_conj pi in
+              let pathcond = Smt_exp.simp SimpSet.empty (smt_conj pi) in
               match chain with Some smt -> return (Some (Ite (pathcond, Var id, smt))) | None -> return (Some (Var id))
             )
             pis ids (return None)
@@ -853,7 +855,9 @@ module Make (Config : CONFIG) = struct
             (* Include custom SMT definitions. *)
             List.iter (fun include_file -> output_string out_chan (Util.read_whole_file include_file)) smt_includes;
 
+            let t = Profile.start () in
             let queue = Queue_optimizer.optimize stack in
+            Profile.finish "SMT optimization" t;
 
             (* let queue = Queue.of_seq (List.to_seq (List.rev (List.of_seq (Stack.to_seq stack)))) in *)
             Queue.iter
