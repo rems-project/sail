@@ -112,6 +112,32 @@ type smt_exp =
   | Hd of string * smt_exp
   | Tl of string * smt_exp
 
+let rec pp_smt_exp =
+  let open PPrint in
+  function
+  | Bool_lit b -> string (string_of_bool b)
+  | Real_lit str -> string str
+  | String_lit str -> string ("\"" ^ str ^ "\"")
+  | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
+  | Var id -> string (zencode_name id)
+  | Member id -> string (zencode_id id)
+  | Unit -> string "unit"
+  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
+  | Field (struct_id, field_id, exp) ->
+      parens (string (zencode_upper_id struct_id ^ "_" ^ zencode_id field_id) ^^ space ^^ pp_smt_exp exp)
+  | Struct (struct_id, fields) ->
+      parens (string (zencode_upper_id struct_id) ^^ space ^^ separate_map space (fun (_, exp) -> pp_smt_exp exp) fields)
+  | Unwrap (ctor, _, exp) -> parens (string ("un" ^ zencode_id ctor) ^^ space ^^ pp_smt_exp exp)
+  | Ite (cond, then_exp, else_exp) ->
+      parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
+  | Extract (i, j, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
+  | Tester (kind, exp) -> parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
+  | SignExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+  | ZeroExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ zero_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+  | Store (_, _, arr, index, x) -> parens (string "store" ^^ space ^^ separate_map space pp_smt_exp [arr; index; x])
+  | Hd (op, exp) | Tl (op, exp) -> parens (string op ^^ space ^^ pp_smt_exp exp)
+  | Empty_list -> string "empty_list"
+
 let var_id id = Var (Name (id, -1))
 
 let rec fold_smt_exp f = function
@@ -234,6 +260,7 @@ module SimpSet = struct
 end
 
 let and_prefer = function
+  | Var _ -> Some 0
   | Tester (_, Var _) -> Some 1
   | Fn ("=", [lit; Var _]) when is_literal lit -> Some 1
   | Fn ("=", [Var _; lit]) when is_literal lit -> Some 1
@@ -242,6 +269,15 @@ let and_prefer = function
 
 let and_order x y =
   match (and_prefer x, and_prefer y) with
+  | Some a, Some b -> a - b
+  | Some _, None -> -1
+  | None, Some _ -> 1
+  | None, None -> 0
+
+let or_prefer = function Var _ -> Some 0 | _ -> None
+
+let or_order x y =
+  match (or_prefer x, or_prefer y) with
   | Some a, Some b -> a - b
   | Some _, None -> -1
   | None, Some _ -> 1
@@ -261,12 +297,16 @@ let simp_eq x y =
 module Simplifier = struct
   type rule = NoChange | Change of int * smt_exp | Reconstruct of int * SimpSet.t * smt_exp * (smt_exp -> smt_exp)
 
-  type strategy = Skip | Rule of (SimpSet.t -> smt_exp -> rule) | Repeat of strategy | Then of strategy list
+  let change exp = Change (1, exp)
 
-  let rec run_strategy strategy simpset exp =
-    match strategy with
+  type strategy = Skip | Rule of string * (SimpSet.t -> smt_exp -> rule) | Repeat of strategy | Then of strategy list
+
+  let mk_simple_rule loc f = Rule (loc, fun _ -> f)
+  let mk_rule loc f = Rule (loc, f)
+
+  let rec run_strategy simpset exp = function
     | Skip -> NoChange
-    | Rule f -> f simpset exp
+    | Rule (name, f) -> f simpset exp
     | Repeat strategy ->
         let exp = ref exp in
         let simpset = ref simpset in
@@ -275,7 +315,7 @@ module Simplifier = struct
         let continue = ref true in
         let reconstructor = ref None in
         while !continue do
-          match run_strategy strategy !simpset !exp with
+          match run_strategy !simpset !exp strategy with
           | Change (n, exp') ->
               changed := true;
               changes := !changes + n;
@@ -305,7 +345,7 @@ module Simplifier = struct
         let reconstructor = ref None in
         List.iter
           (fun strategy ->
-            match run_strategy strategy !simpset !exp with
+            match run_strategy !simpset !exp strategy with
             | Change (n, exp') ->
                 changed := true;
                 changes := !changes + n;
@@ -329,15 +369,16 @@ module Simplifier = struct
         )
         else NoChange
 
-  let rule_squash_ite _ =
+  let rule_squash_ite =
     let append_to_or or_cond cond =
       match or_cond with Fn ("or", conds) -> Fn ("or", conds @ [cond]) | _ -> Fn ("or", [or_cond; cond])
     in
-    function
+    mk_simple_rule __LOC__ @@ function
     | Ite (cond, x, Ite (cond', y, z)) when identical x y -> Change (1, Ite (append_to_or cond cond', x, z))
     | _ -> NoChange
 
-  let rule_squash_ite2 _ = function
+  let rule_squash_ite2 =
+    mk_simple_rule __LOC__ @@ function
     | Ite (cond, x, Ite (cond', y, z)) when identical x z ->
         Change (1, Ite (Fn ("and", [cond'; Fn ("not", [cond])]), y, x))
     | Ite (cond, x, Ite (cond', y, z)) when identical x y -> Change (1, Ite (Fn ("or", [cond; cond']), x, z))
@@ -346,11 +387,8 @@ module Simplifier = struct
     | Ite (cond, Ite (cond', x, y), z) when identical y z -> Change (1, Ite (Fn ("and", [cond; cond']), x, z))
     | _ -> NoChange
 
-  let mk_and = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
-
-  let mk_or = function [] -> Bool_lit false | [x] -> x | xs -> Fn ("or", xs)
-
-  let rule_and_inequalities _ = function
+  let rule_and_inequalities =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("and", xs) ->
         let open Util.Option_monad in
         let open Sail2_operators_bitlists in
@@ -382,7 +420,7 @@ module Simplifier = struct
           for v = 0 to max do
             if not (IntSet.mem v lits) then unused := IntSet.add v !unused
           done;
-          if IntSet.cardinal !unused < IntSet.cardinal lits then
+          if IntSet.cardinal !unused <= IntSet.cardinal lits then
             Some
               (List.map
                  (fun i ->
@@ -395,12 +433,13 @@ module Simplifier = struct
         in
         begin
           match check_inequalities with
-          | Some equalities -> Change (1, mk_and (mk_or equalities :: others))
+          | Some equalities -> Change (1, smt_conj (smt_disj equalities :: others))
           | None -> NoChange
         end
     | _ -> NoChange
 
-  let rule_or_equalities _ = function
+  let rule_or_equalities =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("or", xs) ->
         let open Util.Option_monad in
         let open Sail2_operators_bitlists in
@@ -444,24 +483,34 @@ module Simplifier = struct
         in
         begin
           match check_equalities with
-          | Some inequalities -> Change (1, mk_or (mk_and inequalities :: others))
+          | Some inequalities -> Change (1, smt_disj (smt_conj inequalities :: others))
           | None -> NoChange
         end
     | _ -> NoChange
 
-  let rule_or_ite _ = function
+  let rule_or_ite =
+    mk_simple_rule __LOC__ @@ function
     | Ite (Fn ("or", xs), y, z) -> Change (0, Ite (Fn ("and", List.map (fun x -> Fn ("not", [x])) xs), z, y))
     | _ -> NoChange
 
   (* Simplify ite expressions with a boolean literal as either the then or else branch *)
-  let rule_ite_lit _ = function
+  let rule_ite_lit =
+    mk_simple_rule __LOC__ @@ function
     | Ite (i, Bool_lit true, e) -> Change (1, Fn ("or", [i; e]))
     | Ite (i, Bool_lit false, e) -> Change (1, Fn ("and", [Fn ("not", [i]); e]))
     | Ite (i, t, Bool_lit true) -> Change (1, Fn ("or", [Fn ("not", [i]); t]))
     | Ite (i, t, Bool_lit false) -> Change (1, Fn ("and", [i; t]))
     | _ -> NoChange
 
-  let rule_flatten_and _ = function
+  let rule_concat_literal_eq =
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("=", [Fn ("concat", [Bitvec_lit xs; exp]); Bitvec_lit ys]) ->
+        let ys_prefix, ys_suffix = Util.split_after (List.length xs) ys in
+        if xs = ys_prefix then change (Fn ("=", [exp; Bitvec_lit ys_suffix])) else change (Bool_lit false)
+    | _ -> NoChange
+
+  let rule_flatten_and =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("and", xs) ->
         let nested_and = List.exists (function Fn ("and", _) -> true | _ -> false) xs in
         if nested_and then (
@@ -471,11 +520,24 @@ module Simplifier = struct
         else NoChange
     | _ -> NoChange
 
-  let rule_false_and _ = function
+  let rule_flatten_or =
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("or", xs) ->
+        let nested_or = List.exists (function Fn ("or", _) -> true | _ -> false) xs in
+        if nested_or then (
+          let xs = List.map (function Fn ("or", xs) -> xs | x -> [x]) xs |> List.concat in
+          Change (1, Fn ("or", xs))
+        )
+        else NoChange
+    | _ -> NoChange
+
+  let rule_false_and =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("and", xs) when List.exists (function Bool_lit false -> true | _ -> false) xs -> Change (1, Bool_lit false)
     | _ -> NoChange
 
-  let rule_true_and _ = function
+  let rule_true_and =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("and", xs) ->
         let filtered = ref false in
         let xs =
@@ -497,7 +559,8 @@ module Simplifier = struct
         end
     | _ -> NoChange
 
-  let rule_false_or _ = function
+  let rule_false_or =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("or", xs) ->
         let filtered = ref false in
         let xs =
@@ -519,30 +582,48 @@ module Simplifier = struct
         end
     | _ -> NoChange
 
-  let rule_order_and _ = function
+  let rule_order_and =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("and", xs) -> Change (0, Fn ("and", List.stable_sort and_order xs))
     | _ -> NoChange
 
-  let mk_and = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
+  let rule_order_or =
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("or", xs) -> Change (0, Fn ("or", List.stable_sort or_order xs))
+    | _ -> NoChange
 
   let add_to_and x = function Fn ("and", xs) -> Fn ("and", x :: xs) | y -> Fn ("and", [x; y])
 
-  let rule_and_assume simpset = function
+  let rule_and_assume =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Fn ("and", v :: xs) when SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var v (Bool_lit true) simpset, smt_conj xs, add_to_and v)
     | Fn ("and", (Fn ("=", [v; lit]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
-        Reconstruct (0, SimpSet.add_var v lit simpset, mk_and xs, add_to_and x)
+        Reconstruct (0, SimpSet.add_var v lit simpset, smt_conj xs, add_to_and x)
+    | Fn ("and", (Fn ("=", [lit; v]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var v lit simpset, smt_conj xs, add_to_and x)
     | Fn ("and", (Fn ("not", [Fn ("=", [v; lit])]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
-        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, mk_and xs, add_to_and x)
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, smt_conj xs, add_to_and x)
+    | Fn ("and", (Fn ("not", [Fn ("=", [lit; v])]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, smt_conj xs, add_to_and x)
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
-        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, mk_and xs, add_to_and x)
-    | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
 
-  let rule_var simpset = function
-    | v when SimpSet.is_simp_var v -> begin
+  let add_to_or x = function Fn ("or", xs) -> Fn ("or", x :: xs) | y -> Fn ("or", [x; y])
+
+  let rule_or_assume =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Fn ("or", v :: xs) when SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var v (Bool_lit false) simpset, smt_disj xs, add_to_or v) | _ -> NoChange
+
+  let rule_var =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | v when SimpSet.is_simp_var v -> (
         match SimpSet.find_opt v simpset with Some exp -> Change (1, exp) | None -> NoChange
-      end
-    | _ -> NoChange
+      ) | _ -> NoChange
 
-  let rule_access_ite _ = function
+  let rule_access_ite =
+    mk_simple_rule __LOC__ @@ function
     | Field (struct_id, field, Ite (i, t, e)) ->
         Change (1, Ite (i, Field (struct_id, field, t), Field (struct_id, field, t)))
     | Unwrap (ctor, b, Ite (i, t, e)) -> Change (1, Ite (i, Unwrap (ctor, b, t), Unwrap (ctor, b, t)))
@@ -550,7 +631,8 @@ module Simplifier = struct
     | Fn ("select", [Ite (i, t, e); ix]) -> Change (1, Ite (i, Fn ("select", [t; ix]), Fn ("select", [e; ix])))
     | _ -> NoChange
 
-  let rule_inequality simpset = function
+  let rule_inequality =
+    mk_rule __LOC__ @@ fun simpset -> function
     | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v ->
         let inequal = ref false in
         List.iter
@@ -563,174 +645,169 @@ module Simplifier = struct
             (fun exp -> match simp_eq lit exp with Some true -> true | _ -> false)
             (SimpSet.inequalities v simpset)
         then Change (1, Bool_lit true)
-        else NoChange
-    | _ -> NoChange
+        else NoChange | _ -> NoChange
 
-  let rule_not_not _ = function Fn ("not", [Fn ("not", [exp])]) -> Change (1, exp) | _ -> NoChange
+  let rule_not_not =
+    mk_simple_rule __LOC__ @@ function Fn ("not", [Fn ("not", [exp])]) -> Change (1, exp) | _ -> NoChange
 
-  let rule_not_push _ = function
+  let rule_not_push =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("not", [Fn ("or", xs)]) -> Change (1, Fn ("and", List.map (fun x -> Fn ("not", [x])) xs))
     | Fn ("not", [Fn ("and", xs)]) -> Change (1, Fn ("or", List.map (fun x -> Fn ("not", [x])) xs))
     | Fn ("not", [Ite (i, t, e)]) -> Change (1, Ite (i, Fn ("not", [t]), Fn ("not", [e])))
     | Fn ("not", [Bool_lit b]) -> Change (1, Bool_lit (not b))
     | _ -> NoChange
 
-  let rule_bvnot _ = function
-    | Fn ("bvnot", [Bitvec_lit bv]) -> Change (1, Bitvec_lit (Sail2_operators_bitlists.not_vec bv))
+  let is_bvfunction = function
+    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" -> true
+    | _ -> false
+
+  let rule_bvfunction_literal =
+    let open Sail2_operators_bitlists in
+    mk_simple_rule __LOC__ @@ function
+    | Fn (f, args) -> (
+        match (f, args) with
+        | "bvnot", [Bitvec_lit bv] -> change (Bitvec_lit (not_vec bv))
+        | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (and_vec lhs rhs))
+        | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (or_vec lhs rhs))
+        | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (xor_vec lhs rhs))
+        | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
+        | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> change (Bitvec_lit (shiftl lhs shift)) | None -> NoChange
+          end
+        | "bvlshr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
+        | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> change (Bitvec_lit (shiftr lhs shift)) | None -> NoChange
+          end
+        | "bvashr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
+        | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+            match sint_maybe rhs with Some shift -> change (Bitvec_lit (arith_shiftr lhs shift)) | None -> NoChange
+          end
+        | _ -> NoChange
+      )
     | _ -> NoChange
 
-  let rule_simp_eq _ = function
+  let rule_extend_literal =
+    mk_simple_rule __LOC__ @@ function
+    | ZeroExtend (to_len, by_len, Bitvec_lit bv) ->
+        change (Bitvec_lit (Sail2_operators_bitlists.zero_extend bv (Big_int.of_int to_len)))
+    | SignExtend (to_len, by_len, Bitvec_lit bv) ->
+        change (Bitvec_lit (Sail2_operators_bitlists.sign_extend bv (Big_int.of_int to_len)))
+    | _ -> NoChange
+
+  let rule_extract =
+    mk_simple_rule __LOC__ @@ function
+    | Extract (n, m, Bitvec_lit bv) ->
+        change (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m)))
+    | _ -> NoChange
+
+  let rule_simp_eq =
+    mk_simple_rule __LOC__ @@ function
     | Fn ("=", [x; y]) -> begin match simp_eq x y with Some b -> Change (1, Bool_lit b) | None -> NoChange end
     | _ -> NoChange
+
+  let apply simpset f exp =
+    let open Jib_visitor in
+    let changes = ref 0 in
+    let rec go simpset exp =
+      match f simpset exp with
+      | Change (n, exp) ->
+          changes := !changes + n;
+          children exp
+      | Reconstruct (n, simpset, exp, recon) ->
+          changes := !changes + n;
+          children (recon (go simpset exp))
+      | NoChange -> children exp
+    and children no_change =
+      match no_change with
+      | Fn (f, args) ->
+          let args' = map_no_copy (go simpset) args in
+          if args == args' then no_change else Fn (f, args')
+      | Hd (f, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Tl (f, exp')
+      | Tl (f, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Hd (f, exp')
+      | Ite (i, t, e) ->
+          let i' = go simpset i in
+          let t' = go simpset t in
+          let e' = go simpset e in
+          if i == i' && t == t' && e == e' then no_change else Ite (i', t', e')
+      | ZeroExtend (n, m, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else ZeroExtend (n, m, exp')
+      | SignExtend (n, m, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else SignExtend (n, m, exp')
+      | Extract (n, m, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Extract (n, m, exp')
+      | Store (info, store_fn, arr, i, x) ->
+          let arr' = go simpset arr in
+          let i' = go simpset i in
+          let x' = go simpset x in
+          if arr == arr' && i == i' && x == x' then no_change else Store (info, store_fn, arr', i', x')
+      | Unwrap (ctor, b, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Unwrap (ctor, b, exp')
+      | Tester (ctor, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Tester (ctor, exp')
+      | Field (struct_id, field_id, exp) ->
+          let exp' = go simpset exp in
+          if exp == exp' then no_change else Field (struct_id, field_id, exp')
+      | Struct (struct_id, fields) ->
+          let fields' = map_no_copy (fun (field_id, exp) -> (field_id, go simpset exp)) fields in
+          if fields == fields' then no_change else Struct (struct_id, fields')
+      | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> no_change
+    in
+    let exp = go simpset exp in
+    (!changes, exp)
 end
 
-let rec simp_and simpset xs =
-  let xs = List.filter (function Bool_lit true -> false | _ -> true) xs in
-  let xs = List.stable_sort and_order xs in
-  match xs with
-  | [] -> Bool_lit true
-  | [x] -> x
-  | Tester (ctor, Var v) :: xs -> begin
-      match simp_and simpset (List.map (simp (SimpSet.add_var_is_ctor v ctor simpset)) xs) with
-      | Bool_lit false -> Bool_lit false
-      | Bool_lit true -> Tester (ctor, Var v)
-      | Fn ("and", xs) -> Fn ("and", Tester (ctor, Var v) :: xs)
-      | x -> Fn ("and", [Tester (ctor, Var v); x])
-    end
-  | (Fn ("=", [lit; Var v]) as equality) :: xs when is_literal lit -> begin
-      match simp_and simpset (List.map (simp (SimpSet.add_var (Var v) lit simpset)) xs) with
-      | Bool_lit false -> Bool_lit false
-      | Bool_lit true -> equality
-      | Fn ("and", xs) -> Fn ("and", equality :: xs)
-      | x -> Fn ("and", [equality; x])
-    end
-  | (Fn ("=", [Var v; lit]) as equality) :: xs when is_literal lit -> begin
-      match simp_and simpset (List.map (simp (SimpSet.add_var (Var v) lit simpset)) xs) with
-      | Bool_lit false -> Bool_lit false
-      | Bool_lit true -> equality
-      | Fn ("and", xs) -> Fn ("and", equality :: xs)
-      | x -> Fn ("and", [equality; x])
-    end
-  | _ -> if List.exists (function Bool_lit false -> true | _ -> false) xs then Bool_lit false else Fn ("and", xs)
+let count = ref 0
 
-and simp_or simpset xs =
-  let xs = List.filter (function Bool_lit false -> false | _ -> true) xs in
-  match xs with
-  | [] -> Bool_lit false
-  | _ when List.exists (function Bool_lit true -> true | _ -> false) xs -> Bool_lit true
-  | [x] -> x
-  | Var v :: xs -> begin
-      match simp_or simpset (List.map (simp (SimpSet.add_var (Var v) (Bool_lit false) simpset)) xs) with
-      | Bool_lit true -> Bool_lit true
-      | Bool_lit false -> Var v
-      | Fn ("or", xs) -> Fn ("or", Var v :: xs)
-      | _ -> Fn ("or", Var v :: xs)
-    end
-  | _ -> Fn ("or", xs)
-
-and simp_fn simpset f args =
-  let open Sail2_operators_bitlists in
-  match (f, args) with
-  | "=", [x; y] -> begin match simp_eq x y with Some b -> Bool_lit b | None -> Fn (f, args) end
-  | "not", [Fn ("not", [exp])] -> exp
-  | "not", [Bool_lit b] -> Bool_lit (not b)
-  | "contents", [Fn ("Bits", [_; bv])] -> bv
-  | "len", [Fn ("Bits", [len; _])] -> len
-  | "or", _ -> simp_or simpset args
-  | "and", _ -> simp_and simpset args
-  | "concat", _ ->
-      let chunks, bv =
-        List.fold_left
-          (fun (chunks, current_literal) arg ->
-            match (current_literal, arg) with
-            | Some bv1, Bitvec_lit bv2 -> (chunks, Some (bv1 @ bv2))
-            | None, Bitvec_lit bv -> (chunks, Some bv)
-            | Some bv, exp -> (exp :: Bitvec_lit bv :: chunks, None)
-            | None, exp -> (exp :: chunks, None)
+let simp simpset exp =
+  let open Simplifier in
+  let visit simpset exp =
+    match exp with
+    | Ite _ ->
+        run_strategy simpset exp
+          (Then [Repeat rule_squash_ite; rule_squash_ite2; rule_squash_ite; rule_or_ite; rule_ite_lit])
+    | Fn ("and", _) ->
+        run_strategy simpset exp
+          (Then
+             [
+               rule_flatten_and;
+               rule_false_and;
+               rule_true_and;
+               rule_and_inequalities;
+               rule_order_and;
+               Repeat rule_and_assume;
+             ]
           )
-          ([], None) args
-      in
-      begin
-        match (chunks, bv) with
-        | [], Some bv -> Bitvec_lit bv
-        | chunks, Some bv -> Fn ("concat", List.rev (Bitvec_lit bv :: chunks))
-        | chunks, None -> Fn ("concat", List.rev chunks)
-      end
-  | "bvadd", [x; y] -> begin
-      match (x, y) with
-      | Bitvec_lit x, _ when bv_is_zero x -> y
-      | _, Bitvec_lit y when bv_is_zero y -> x
-      | _, _ -> Fn (f, args)
-    end
-  | "bvneg", [Bitvec_lit bv] ->
-      let len = List.length bv in
-      Bitvec_lit (add_vec (not_vec bv) (bvone' len))
-  | "bvnot", [Bitvec_lit bv] -> Bitvec_lit (not_vec bv)
-  | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (and_vec lhs rhs)
-  | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (or_vec lhs rhs)
-  | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> Bitvec_lit (xor_vec lhs rhs)
-  | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> lhs
-  | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftl lhs shift) | None -> Fn (f, args)
-    end
-  | "bvlshr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> lhs
-  | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-      match sint_maybe rhs with Some shift -> Bitvec_lit (shiftr lhs shift) | None -> Fn (f, args)
-    end
-  | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
-      match sint_maybe rhs with Some shift -> Bitvec_lit (arith_shiftr lhs shift) | None -> Fn (f, args)
-    end
-  | _, _ -> Fn (f, args)
-
-and simp simpset exp =
-  let open Sail2_operators_bitlists in
-  match exp with
-  | Var v -> begin match SimpSet.find_opt (Var v) simpset with Some exp -> simp simpset exp | None -> Var v end
-  | Fn (f, args) ->
-      let args = List.map (simp simpset) args in
-      simp_fn simpset f args
-  | ZeroExtend (to_len, by_len, arg) ->
-      let arg = simp simpset arg in
-      begin
-        match arg with
-        | Bitvec_lit bv -> Bitvec_lit (zero_extend bv (Big_int.of_int to_len))
-        | _ -> ZeroExtend (to_len, by_len, arg)
-      end
-  | SignExtend (to_len, by_len, arg) ->
-      let arg = simp simpset arg in
-      begin
-        match arg with
-        | Bitvec_lit bv -> Bitvec_lit (sign_extend bv (Big_int.of_int to_len))
-        | _ -> SignExtend (to_len, by_len, arg)
-      end
-  | Extract (n, m, arg) -> begin
-      match simp simpset arg with
-      | Bitvec_lit bv -> Bitvec_lit (subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m))
-      | exp -> Extract (n, m, exp)
-    end
-  | Store (info, store_fn, arr, i, x) -> Store (info, store_fn, simp simpset arr, simp simpset i, simp simpset x)
-  | Ite (cond, then_exp, else_exp) -> begin
-      let cond = simp simpset cond in
-      let mk_ite i t e = match simp_eq t e with Some true -> t | Some false | None -> Ite (i, t, e) in
-      match cond with
-      | Bool_lit true -> simp simpset then_exp
-      | Bool_lit false -> simp simpset else_exp
-      | Var v ->
-          mk_ite (Var v)
-            (simp (SimpSet.add_var (Var v) (Bool_lit true) simpset) then_exp)
-            (simp (SimpSet.add_var (Var v) (Bool_lit false) simpset) else_exp)
-      | Fn ("not", [cond]) -> simp simpset (Ite (cond, else_exp, then_exp))
-      | _ -> mk_ite cond (simp simpset then_exp) (simp simpset else_exp)
-    end
-  | Tester (ctor, Var v) -> begin
-      match SimpSet.is_ctor v ctor simpset with Some b -> Bool_lit b | None -> Tester (ctor, simp simpset (Var v))
-    end
-  | Tester (ctor, exp) -> Tester (ctor, simp simpset exp)
-  | Unwrap (ctor, b, exp) -> Unwrap (ctor, b, simp simpset exp)
-  | Field (struct_id, field_id, exp) -> Field (struct_id, field_id, simp simpset exp)
-  | Struct (struct_id, fields) ->
-      Struct (struct_id, List.map (fun (field_id, exp) -> (field_id, simp simpset exp)) fields)
-  | Empty_list | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Hd _ | Tl _ -> exp
+    | Fn ("or", _) ->
+        run_strategy simpset exp
+          (Then [rule_flatten_or; rule_false_or; rule_or_equalities; rule_order_or; Repeat rule_or_assume])
+    | Var _ -> run_strategy simpset exp rule_var
+    | Fn ("=", _) -> run_strategy simpset exp (Then [rule_inequality; rule_simp_eq; rule_concat_literal_eq])
+    | Fn ("not", _) -> run_strategy simpset exp (Then [Repeat rule_not_not; Repeat rule_not_push; rule_inequality])
+    | Fn ("select", _) -> run_strategy simpset exp rule_access_ite
+    | Fn (bvf, _) when is_bvfunction bvf -> run_strategy simpset exp rule_bvfunction_literal
+    | ZeroExtend _ -> run_strategy simpset exp rule_extend_literal
+    | SignExtend _ -> run_strategy simpset exp rule_extend_literal
+    | Extract _ -> run_strategy simpset exp rule_extract
+    | Field _ -> run_strategy simpset exp rule_access_ite
+    | Unwrap _ -> run_strategy simpset exp rule_access_ite
+    | Tester _ -> run_strategy simpset exp rule_access_ite
+    | exp -> NoChange
+  in
+  let rec go exp =
+    let changes, exp = apply simpset visit exp in
+    if changes > 0 then go exp else exp
+  in
+  go exp
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
@@ -759,32 +836,6 @@ let rec pp_smt_typ =
 let pp_str_smt_typ (str, ty) =
   let open PPrint in
   parens (string str ^^ space ^^ pp_smt_typ ty)
-
-let rec pp_smt_exp =
-  let open PPrint in
-  function
-  | Bool_lit b -> string (string_of_bool b)
-  | Real_lit str -> string str
-  | String_lit str -> string ("\"" ^ str ^ "\"")
-  | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
-  | Var id -> string (zencode_name id)
-  | Member id -> string (zencode_id id)
-  | Unit -> string "unit"
-  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
-  | Field (struct_id, field_id, exp) ->
-      parens (string (zencode_upper_id struct_id ^ "_" ^ zencode_id field_id) ^^ space ^^ pp_smt_exp exp)
-  | Struct (struct_id, fields) ->
-      parens (string (zencode_upper_id struct_id) ^^ space ^^ separate_map space (fun (_, exp) -> pp_smt_exp exp) fields)
-  | Unwrap (ctor, _, exp) -> parens (string ("un" ^ zencode_id ctor) ^^ space ^^ pp_smt_exp exp)
-  | Ite (cond, then_exp, else_exp) ->
-      parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
-  | Extract (i, j, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
-  | Tester (kind, exp) -> parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
-  | SignExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
-  | ZeroExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ zero_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
-  | Store (_, _, arr, index, x) -> parens (string "store" ^^ space ^^ separate_map space pp_smt_exp [arr; index; x])
-  | Hd (op, exp) | Tl (op, exp) -> parens (string op ^^ space ^^ pp_smt_exp exp)
-  | Empty_list -> string "empty_list"
 
 let pp_smt_def =
   let open PPrint in

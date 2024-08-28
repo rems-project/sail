@@ -194,8 +194,17 @@ let bvpint ?(loc = Parse_ast.Unknown) sz x =
     | Some nibbles ->
         let bin = List.map (fun (a, b, c, d) -> [a; b; c; d]) nibbles |> List.concat in
         let _, bin = Util.take_drop (function B0 -> true | _ -> false) bin in
-        let padding = List.init (sz - List.length bin) (fun _ -> B0) in
-        Bitvec_lit (padding @ bin)
+        let padding_amount = sz - List.length bin in
+        if padding_amount >= 0 then (
+          let padding = List.init padding_amount (fun _ -> B0) in
+          Bitvec_lit (padding @ bin)
+        )
+        else (
+          (* Negative padding can happen if sz is not a multiple of 4 *)
+          let extra_zeros, bin = Util.split_after padding_amount bin in
+          assert (List.for_all (function B0 -> true | _ -> false) extra_zeros);
+          Bitvec_lit bin
+        )
     | None -> assert false
   )
   else if Big_int.greater x (Big_int.of_int max_int) then (
@@ -641,6 +650,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | ctyp, CT_lbits when int_size ctyp >= lbits_index ->
         let* v = smt_cval v in
         return (Fn ("Bits", [extract (lbits_index - 1) 0 v; bvzero lbits_size]))
+    | ctyp, CT_lbits when int_size ctyp < lbits_index ->
+        let* v = smt_cval v in
+        return (Fn ("Bits", [ZeroExtend (lbits_index, lbits_index - int_size ctyp, v); bvzero lbits_size]))
     | _ -> builtin_type_error "zeros" [v] (Some ret_ctyp)
 
   let builtin_ones cval = function
@@ -1137,8 +1149,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
   let builtin_count_leading_zeros v ret_ctyp =
-    let ret_sz = int_size ret_ctyp in
-    let rec lzcnt sz smt =
+    let rec lzcnt ret_sz sz smt =
       if sz == 1 then
         Ite
           ( Fn ("=", [Extract (0, 0, smt); Bitvec_lit [Sail2_values.B0]]),
@@ -1150,8 +1161,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let hsz = sz / 2 in
         Ite
           ( Fn ("=", [Extract (sz - 1, hsz, smt); bvzero hsz]),
-            Fn ("bvadd", [bvint ret_sz (Big_int.of_int hsz); lzcnt hsz (Extract (hsz - 1, 0, smt))]),
-            lzcnt hsz (Extract (sz - 1, hsz, smt))
+            Fn ("bvadd", [bvint ret_sz (Big_int.of_int hsz); lzcnt ret_sz hsz (Extract (hsz - 1, 0, smt))]),
+            lzcnt ret_sz hsz (Extract (sz - 1, hsz, smt))
           )
       )
     in
@@ -1163,32 +1174,49 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
       assert (!m land (!m - 1) = 0);
       !m
     in
+    let ret_sz = int_size ret_ctyp in
     let* smt = smt_cval v in
     match cval_ctyp v with
-    | CT_fbits sz when sz land (sz - 1) = 0 -> return (lzcnt sz smt)
+    | CT_fbits sz when sz land (sz - 1) = 0 -> return (lzcnt ret_sz sz smt)
     | CT_fbits sz ->
         let padded_sz = smallest_greater_power_of_two sz in
         let padding = bvzero (padded_sz - sz) in
-        return
-          (Fn
-             ("bvsub", [lzcnt padded_sz (Fn ("concat", [padding; smt])); bvint ret_sz (Big_int.of_int (padded_sz - sz))])
-          )
-    | CT_lbits ->
+        assert (padded_sz > sz);
         return
           (Fn
              ( "bvsub",
-               [
-                 lzcnt lbits_size (Fn ("contents", [smt]));
-                 Fn
-                   ( "bvsub",
-                     [
-                       bvint ret_sz (Big_int.of_int lbits_size);
-                       Fn ("concat", [bvzero (ret_sz - lbits_index); Fn ("len", [smt])]);
-                     ]
-                   );
-               ]
+               [lzcnt ret_sz padded_sz (Fn ("concat", [padding; smt])); bvint ret_sz (Big_int.of_int (padded_sz - sz))]
              )
           )
+    | CT_lbits ->
+        if ret_sz > lbits_index then
+          return
+            (Fn
+               ( "bvsub",
+                 [
+                   lzcnt ret_sz lbits_size (Fn ("contents", [smt]));
+                   Fn
+                     ( "bvsub",
+                       [
+                         bvint ret_sz (Big_int.of_int lbits_size);
+                         Fn ("concat", [bvzero (ret_sz - lbits_index); Fn ("len", [smt])]);
+                       ]
+                     );
+                 ]
+               )
+            )
+        else (
+          let leading_zeros =
+            Fn
+              ( "bvsub",
+                [
+                  lzcnt lbits_index lbits_size (Fn ("contents", [smt]));
+                  Fn ("bvsub", [bvint lbits_index (Big_int.of_int lbits_size); Fn ("len", [smt])]);
+                ]
+              )
+          in
+          return (Extract (ret_sz - 1, 0, leading_zeros))
+        )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
   let rec builtin_eq_anything x y =
