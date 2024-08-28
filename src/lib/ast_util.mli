@@ -124,6 +124,8 @@ val find_attribute_opt : string -> (l * string * attribute_data option) list -> 
 val mk_def_annot :
   ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> 'a -> 'a def_annot
 
+val uannot_of_def_annot : 'a def_annot -> uannot
+
 val add_def_attribute : l -> string -> attribute_data option -> 'a def_annot -> 'a def_annot
 
 val get_def_attribute : string -> 'a def_annot -> (l * attribute_data option) option
@@ -507,6 +509,9 @@ val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id
 
 (** {2 Functions for manipulating identifiers} *)
+
+val natural_id_compare : id -> id -> int
+val natural_sort_ids : id list -> id list
 
 val deinfix : id -> id
 val infix_swap : id -> id

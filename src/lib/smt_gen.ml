@@ -120,6 +120,13 @@ let rec mapM f = function
       let* xs = mapM f xs in
       return (x :: xs)
 
+let rec sequence = function
+  | [] -> return []
+  | x :: xs ->
+      let* x = x in
+      let* xs = sequence xs in
+      return (x :: xs)
+
 let rec iterM f = function
   | [] -> return ()
   | x :: xs ->
@@ -129,6 +136,10 @@ let rec iterM f = function
 let run m l =
   let state = m l in
   (state.value, state.checks)
+
+let mk_check_writer f l =
+  let value, checks = f l in
+  { value; checks }
 
 let overflow_check check (_ : Parse_ast.l) = { value = (); checks = { empty_checks with overflows = [check] } }
 
@@ -240,6 +251,7 @@ module type PRIMOP_GEN = sig
   val is_empty : Parse_ast.l -> ctyp -> string
   val hd : Parse_ast.l -> ctyp -> string
   val tl : Parse_ast.l -> ctyp -> string
+  val eq_list : Parse_ast.l -> (cval -> cval -> smt_exp check_writer) -> ctyp -> ctyp -> string check_writer
 end
 
 let builtin_type_error fn cvals ret_ctyp_opt =
@@ -450,6 +462,9 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_max_int = builtin_choose_int "bvsgt" max
   let builtin_min_int = builtin_choose_int "bvslt" min
 
+  let builtin_tdiv_int = builtin_arith "bvsdiv" Big_int.div (fun x -> x)
+  let builtin_tmod_int = builtin_arith "bvsrem" Big_int.div (fun x -> x)
+
   let smt_conversion ~into:to_ctyp ~from:from_ctyp x =
     match (from_ctyp, to_ctyp) with
     | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
@@ -470,6 +485,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits n, CT_lbits ->
         let* x = unsigned_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
+    | CT_fvector _, CT_vector _ -> return x
+    | CT_vector _, CT_fvector _ -> return x
     | _, _ ->
         let* l = current_location in
         Reporting.unreachable l __POS__
@@ -713,6 +730,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_lbits, _ ->
         let* bv = smt_cval v in
         unsigned_size ~into:(int_size ret_ctyp) ~from:lbits_index (Fn ("len", [bv]))
+    | CT_fvector (len, _), _ -> return (bvpint (int_size ret_ctyp) (Big_int.of_int len))
+    | CT_vector _, _ ->
+        let* v = smt_cval v in
+        return (Fn ("vlen", [v]))
     | _ -> builtin_type_error "length" [v] (Some ret_ctyp)
 
   let builtin_arith_bits op v1 v2 ret_ctyp =
@@ -920,6 +941,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
         return (Fn ("select", [vec; i]))
+    | CT_vector _, i_ctyp, _ ->
+        let* vec = smt_cval vec in
+        let* i = bind (smt_cval i) (unsigned_size ~checked:false ~into:32 ~from:(int_size i_ctyp)) in
+        return (Fn ("vaccess", [vec; i]))
         (*
     | CT_vector _, CT_constant i, _ -> Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
     | CT_vector _, index_ctyp, _ ->
@@ -993,12 +1018,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* l = current_location in
         let store_fn = Primop_gen.fvector_store l len ctyp in
         let* vec = smt_cval vec in
-        let* x = smt_cval x in
+        let* x = bind (smt_cval x) (smt_conversion ~into:ctyp ~from:(cval_ctyp x)) in
         let* i =
           bind (smt_cval i)
             (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
-        return (Store (Fixed len, store_fn, vec, i, x))
+        return (Store (Fixed (len, ctyp), store_fn, vec, i, x))
     (*
        | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
          Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
@@ -1146,6 +1171,92 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
+  let rec builtin_eq_anything x y =
+    match (cval_ctyp x, cval_ctyp y) with
+    | CT_struct (xid, xfields), CT_struct (yid, yfields) ->
+        let compare_field (f1, _) (f2, _) = Id.compare f1 f2 in
+        let xfields = List.stable_sort compare_field xfields in
+        let yfields = List.stable_sort compare_field yfields in
+        let* l = current_location in
+        let* fields =
+          if List.compare_lengths xfields yfields <> 0 then
+            Reporting.unreachable l __POS__ "Tried comparing struct with different number of fields"
+          else
+            List.map2
+              (fun (f1, ctyp1) (f2, ctyp2) ->
+                if Id.compare f1 f2 <> 0 then
+                  Reporting.unreachable l __POS__ "Tried comparing struct with different fields"
+                else builtin_eq_anything (V_field (x, f1)) (V_field (y, f2))
+              )
+              xfields yfields
+            |> sequence
+        in
+        return (Fn ("and", fields))
+    | CT_variant (xid, xctors), CT_variant (yid, yctors) ->
+        let compare_ctor (ctor1, _) (ctor2, _) = Id.compare ctor1 ctor2 in
+        let xctors = List.stable_sort compare_ctor xctors in
+        let yctors = List.stable_sort compare_ctor yctors in
+        let* l = current_location in
+        let* constructors =
+          if List.compare_lengths xctors yctors <> 0 then
+            Reporting.unreachable l __POS__ "Tried comparing unions with different number of constructors"
+          else
+            List.map2
+              (fun (f1, ctyp1) (f2, ctyp2) ->
+                if Id.compare f1 f2 <> 0 then
+                  Reporting.unreachable l __POS__ "Tried comparing union with different constructors"
+                else
+                  let* xsmt = smt_cval x in
+                  let* ysmt = smt_cval y in
+                  let same_ctor =
+                    Fn ("and", [Tester (zencode_uid (f1, []), xsmt); Tester (zencode_uid (f2, []), ysmt)])
+                  in
+                  let* ctor_cmp =
+                    builtin_eq_anything (V_ctor_unwrap (x, (f1, []), ctyp1)) (V_ctor_unwrap (y, (f2, []), ctyp2))
+                  in
+                  return (Fn ("and", [same_ctor; ctor_cmp]))
+              )
+              xctors yctors
+            |> sequence
+        in
+        return (Fn ("or", constructors))
+    | (CT_fbits _ | CT_lbits), (CT_fbits _ | CT_lbits) -> builtin_eq_bits x y
+    | (CT_constant _ | CT_fint _ | CT_lint), (CT_constant _ | CT_fint _ | CT_lint) -> builtin_eq_int x y
+    | CT_unit, CT_unit -> return (Bool_lit true)
+    | CT_enum _, CT_enum _ ->
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        return (Fn ("=", [x; y]))
+    | CT_fvector (n, _), CT_fvector (m, _) ->
+        if n <> m then return (Bool_lit false)
+        else
+          let* x = smt_cval x in
+          let* y = smt_cval y in
+          return
+            (Fn
+               ( "and",
+                 List.init n (fun i ->
+                     let i = bvpint (required_width (Big_int.of_int (n - 1)) - 1) (Big_int.of_int i) in
+                     Fn ("=", [Fn ("select", [x; i]); Fn ("select", [y; i])])
+                 )
+               )
+            )
+    | CT_list ctyp1, CT_list ctyp2 ->
+        let* l = current_location in
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        let* f = Primop_gen.eq_list l builtin_eq_anything ctyp1 ctyp2 in
+        return (Fn (f, [x; y]))
+    | _, _ -> builtin_type_error "eq_anything" [x; y] None
+
+  let builtin_vector_init len elem ret_ctyp =
+    match ret_ctyp with
+    | CT_fvector (len, elem_ctyp) ->
+        let* smt = smt_cval elem in
+        let* smt = smt_conversion ~into:elem_ctyp ~from:(cval_ctyp elem) smt in
+        return (Fn ("Array", List.init len (fun _ -> smt)))
+    | _ -> builtin_type_error "vector_init" [len; elem] (Some ret_ctyp)
+
   let unary_smt op v _ =
     let* smt = smt_cval v in
     return (Fn (op, [smt]))
@@ -1187,6 +1298,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "abs_int" -> unary_primop builtin_abs_int
     | "max_int" -> binary_primop builtin_max_int
     | "min_int" -> binary_primop builtin_min_int
+    | "tdiv_int" -> binary_primop builtin_tdiv_int
+    | "tmod_int" -> binary_primop builtin_tmod_int
     | "pow2" -> unary_primop builtin_pow2
     | "zeros" -> unary_primop builtin_zeros
     | "ones" -> unary_primop builtin_ones
@@ -1212,6 +1325,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "and_bits" -> binary_primop (builtin_bitwise "bvand")
     | "or_bits" -> binary_primop (builtin_bitwise "bvor")
     | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
+    | "vector_init" -> binary_primop builtin_vector_init
     | "vector_access" -> binary_primop builtin_vector_access
     | "vector_subrange" -> ternary_primop builtin_vector_subrange
     | "vector_update" -> ternary_primop builtin_vector_update
@@ -1298,11 +1412,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let* xs = smt_cval xs in
             return (Fn ("cons", [x; xs]))
         )
-    | "eq_anything" ->
-        binary_primop_simple (fun a b ->
-            let* a = smt_cval a in
-            let* b = smt_cval b in
-            return (Fn ("=", [a; b]))
-        )
+    | "eq_anything" -> binary_primop_simple builtin_eq_anything
+    | "id" -> unary_primop_simple smt_cval
     | _ -> None
 end

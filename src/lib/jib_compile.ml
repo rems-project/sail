@@ -141,7 +141,7 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
-  valspecs : (string option * ctyp list * ctyp) Bindings.t;
+  valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
   tc_env : Env.t;
@@ -155,25 +155,33 @@ type ctx = {
 
 let ctx_is_extern id ctx =
   match Bindings.find_opt id ctx.valspecs with
-  | Some (Some _, _, _) -> true
-  | Some (None, _, _) -> false
-  | None -> Env.is_extern id ctx.tc_env "c"
+  | Some (Some _, _, _, _) -> true
+  | Some (None, _, _, _) -> false
+  | None -> (
+      match Target.get_the_target () with Some tgt -> Env.is_extern id ctx.tc_env (Target.name tgt) | None -> false
+    )
 
 let ctx_get_extern id ctx =
   match Bindings.find_opt id ctx.valspecs with
-  | Some (Some extern, _, _) -> extern
-  | Some (None, _, _) ->
+  | Some (Some extern, _, _, _) -> extern
+  | Some (None, _, _, _) ->
       Reporting.unreachable (id_loc id) __POS__
         ("Tried to get extern information for non-extern function " ^ string_of_id id)
-  | None -> Env.get_extern id ctx.tc_env "c"
+  | None -> (
+      match Target.get_the_target () with
+      | Some tgt -> Env.get_extern id ctx.tc_env (Target.name tgt)
+      | None ->
+          Reporting.unreachable (id_loc id) __POS__
+            ("Tried to get extern information without a set target for " ^ string_of_id id)
+    )
 
 let ctx_has_val_spec id ctx = Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
 
 let initial_ctx env effect_info =
   let initial_valspecs =
     [
-      (mk_id "size_itself_int", (Some "size_itself_int", [CT_lint], CT_lint));
-      (mk_id "make_the_value", (Some "make_the_value", [CT_lint], CT_lint));
+      (mk_id "size_itself_int", (Some "size_itself_int", [CT_lint], CT_lint, empty_uannot));
+      (mk_id "make_the_value", (Some "make_the_value", [CT_lint], CT_lint, empty_uannot));
     ]
     |> List.to_seq |> Bindings.of_seq
   in
@@ -1076,6 +1084,44 @@ module Make (C : CONFIG) = struct
           | _ -> raise (Reporting.err_unreachable l __POS__ "Field access on non-struct type in ANF representation!")
         in
         (setup, (fun clexp -> icopy l clexp (V_field (cval, id))), cleanup)
+    (* If unrolling is enabled, and all the loop bounds are fixed then just unroll the exact required amount *)
+    | AE_for
+        ( loop_var,
+          AE_aux (AE_val (AV_lit (L_aux (L_num loop_from, _), _)), _),
+          AE_aux (AE_val (AV_lit (L_aux (L_num loop_to, _), _)), _),
+          AE_aux (AE_val (AV_lit (L_aux (L_num loop_step, _), _)), _),
+          Ord_aux (ord, _),
+          body
+        )
+      when Option.is_some C.unroll_loops ->
+        let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
+
+        let is_inc = match ord with Ord_inc -> true | Ord_dec -> false in
+
+        let loop_var = name loop_var in
+        let body_setup, body_call, body_cleanup = compile_aexp ctx body in
+        let body_gs = ngensym () in
+
+        let loop_iteration i =
+          let loop_body () =
+            [icopy l (CL_id (loop_var, CT_fint 64)) (V_lit (VL_int i, CT_fint 64))]
+            @ body_setup
+            @ [body_call (CL_id (body_gs, CT_unit))]
+            @ body_cleanup
+          in
+          if is_inc then
+            if Big_int.greater i loop_to then None else Some (Big_int.add i loop_step, iblock (loop_body ()))
+          else if Big_int.less i loop_to then None
+          else Some (Big_int.sub i loop_step, iblock (loop_body ()))
+        in
+        let rec unroll acc i =
+          match loop_iteration i with None -> List.rev acc | Some (next, instr) -> unroll (instr :: acc) next
+        in
+
+        ( [idecl l (CT_fint 64) loop_var; idecl l CT_unit body_gs] @ unroll [] loop_from,
+          (fun clexp -> icopy l clexp unit_cval),
+          []
+        )
     | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
         (* We assume that all loop indices are safe to put in a CT_fint. *)
         let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
@@ -1151,7 +1197,7 @@ module Make (C : CONFIG) = struct
     | (AE_aux (_, { loc = l; _ }) as exp) :: exps ->
         let setup, call, cleanup = compile_aexp ctx exp in
         let rest = compile_block ctx exps in
-        if C.use_void then iblock (setup @ [call CL_void] @ cleanup) :: rest
+        if C.use_void then iblock (setup @ [call (CL_void CT_unit)] @ cleanup) :: rest
         else (
           let gs = ngensym () in
           iblock (setup @ [idecl l CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
@@ -1549,7 +1595,10 @@ module Make (C : CONFIG) = struct
         let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
         let arg_ctyps, ret_ctyp = (List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ) in
         ( [CDEF_aux (CDEF_val (id, extern, arg_ctyps, ret_ctyp), def_annot)],
-          { ctx with valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp) ctx.valspecs }
+          {
+            ctx with
+            valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
+          }
         )
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
         Util.progress "Compiling " (string_of_id id) n total;
@@ -1686,8 +1735,12 @@ module Make (C : CONFIG) = struct
             List.fold_left
               (fun ctx cdef ->
                 match cdef with
-                | CDEF_aux (CDEF_val (id, _, param_ctyps, ret_ctyp), _) ->
-                    { ctx with valspecs = Bindings.add id (extern, param_ctyps, ret_ctyp) ctx.valspecs }
+                | CDEF_aux (CDEF_val (id, _, param_ctyps, ret_ctyp), def_annot) ->
+                    {
+                      ctx with
+                      valspecs =
+                        Bindings.add id (extern, param_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
+                    }
                 | cdef -> ctx
               )
               ctx specialized_specs
@@ -1754,7 +1807,39 @@ module Make (C : CONFIG) = struct
 
   let is_struct id = function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false
 
-  let is_variant id = function CT_variant (id', _) -> Id.compare id id' = 0 | _ -> false
+  class contains_struct_visitor id found =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp =
+        function
+        | CT_struct (id', _) when Id.compare id id' = 0 ->
+            found := true;
+            SkipChildren
+        | _ -> DoChildren
+    end
+
+  let contains_struct id cdef =
+    let found = ref false in
+    let _ = visit_cdef (new contains_struct_visitor id found) cdef in
+    !found
+
+  class contains_variant_visitor id found =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp =
+        function
+        | CT_variant (id', _) when Id.compare id id' = 0 ->
+            found := true;
+            SkipChildren
+        | _ -> DoChildren
+    end
+
+  let contains_variant id cdef =
+    let found = ref false in
+    let _ = visit_cdef (new contains_variant_visitor id found) cdef in
+    !found
 
   class fix_variants_visitor ctx var_id =
     object
@@ -1908,16 +1993,16 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
-        let cdefs = Util.map_if (cdef_ctyps_has (is_variant var_id)) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
+        let prior = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
+        let cdefs = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
 
         let ctx =
           {
             ctx with
             valspecs =
               Bindings.map
-                (fun (extern, param_ctyps, ret_ctyp) ->
-                  (extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp)
+                (fun (extern, param_ctyps, ret_ctyp, uannot) ->
+                  (extern, List.map (fix_variants ctx var_id) param_ctyps, fix_variants ctx var_id ret_ctyp, uannot)
                 )
                 ctx.valspecs;
           }
@@ -1965,19 +2050,19 @@ module Make (C : CONFIG) = struct
           |> List.concat
         in
 
-        let prior =
-          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) prior
-        in
-        let cdefs =
-          Util.map_if (cdef_ctyps_has (is_struct struct_id)) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs
-        in
+        let prior = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
+        let cdefs = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
         let ctx =
           {
             ctx with
             valspecs =
               Bindings.map
-                (fun (extern, param_ctyps, ret_ctyp) ->
-                  (extern, List.map (fix_variants ctx struct_id) param_ctyps, fix_variants ctx struct_id ret_ctyp)
+                (fun (extern, param_ctyps, ret_ctyp, uannot) ->
+                  ( extern,
+                    List.map (fix_variants ctx struct_id) param_ctyps,
+                    fix_variants ctx struct_id ret_ctyp,
+                    uannot
+                  )
                 )
                 ctx.valspecs;
           }
@@ -2012,7 +2097,7 @@ module Make (C : CONFIG) = struct
     let get_function_typ id =
       match Bindings.find_opt id ctx.valspecs with
       | None -> Bindings.find_opt id !constructor_types
-      | Some (_, param_ctyps, ret_ctyp) -> Some (param_ctyps, ret_ctyp)
+      | Some (_, param_ctyps, ret_ctyp, _) -> Some (param_ctyps, ret_ctyp)
     in
 
     let precise_call call tail =

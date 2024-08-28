@@ -173,15 +173,18 @@ module Make_optimizer (S : Sequence) = struct
       | Declare_const _ as def -> S.add def seq
       | Declare_fun _ as def -> S.add def seq
       | Define_const (var, typ, exp) ->
-          let exp = Smt_exp.simp (NameHashtbl.find_opt vars) exp in
+          let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
+          let exp = Smt_exp.simp simpset exp in
           begin
-            match (NameHashtbl.find_opt uses var, Smt_exp.simp (NameHashtbl.find_opt vars) exp) with
+            match (NameHashtbl.find_opt uses var, Smt_exp.simp simpset exp) with
             | _, (Bitvec_lit _ | Bool_lit _) -> NameHashtbl.add vars var exp
             | Some 1, _ -> NameHashtbl.add vars var exp
             | Some _, exp -> S.add (Define_const (var, typ, exp)) seq
             | None, _ -> assert false
           end
-      | Assert exp -> S.add (Assert (Smt_exp.simp (NameHashtbl.find_opt vars) exp)) seq
+      | Assert exp ->
+          let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
+          S.add (Assert (Smt_exp.simp simpset exp)) seq
       | Declare_datatypes _ as def -> S.add def seq
       | Define_fun _ -> assert false
     in
@@ -268,6 +271,8 @@ module Make (Config : CONFIG) = struct
         let hd l = function _ -> Reporting.unreachable l __POS__ "hd"
 
         let tl l = function _ -> Reporting.unreachable l __POS__ "tl"
+
+        let eq_list _ _ _ _ = Smt_gen.return "="
       end)
 
   let ( let* ) = Smt_gen.bind
@@ -568,7 +573,7 @@ module Make (Config : CONFIG) = struct
           )
         )
         else if extern && string_of_id function_id = "internal_vector_init" then singleton (declare_const id ret_ctyp)
-        else if extern && string_of_id function_id = "internal_vector_update" then begin
+        else if extern && string_of_id function_id = "internal_vector_update" then (
           match args with
           | [vec; i; x] ->
               let sz = required_width (Big_int.of_int (Smt.generic_vector_length (cval_ctyp vec) - 1)) - 1 in
@@ -579,14 +584,14 @@ module Make (Config : CONFIG) = struct
               let* x = Smt.smt_cval x in
               singleton (define_const id ret_ctyp (Fn ("store", [vec; i; x])))
           | _ -> Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
-        end
-        else if extern && string_of_id function_id = "update_fbits" then begin
+        )
+        else if extern && string_of_id function_id = "update_fbits" then (
           match args with
           | [vec; i; x] ->
               let* smt = Smt.builtin_vector_update vec i x ret_ctyp in
               singleton (define_const id ret_ctyp smt)
           | _ -> Reporting.unreachable l __POS__ "Bad arguments for update_fbits"
-        end
+        )
         else if not extern then
           let* smt_args = mapM Smt.smt_cval args in
           singleton (define_const id ret_ctyp (Fn (zencode_id function_id, smt_args)))

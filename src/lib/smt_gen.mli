@@ -105,6 +105,8 @@ val iterM : ('a -> unit check_writer) -> 'a list -> unit check_writer
 
 val run : 'a check_writer -> Parse_ast.l -> 'a * checks
 
+val mk_check_writer : (Parse_ast.l -> 'a * checks) -> 'a check_writer
+
 val string_used : unit check_writer
 
 val real_used : unit check_writer
@@ -156,10 +158,10 @@ module type CONFIG = sig
 end
 
 (** Some Sail primitives we can't directly convert to pure SMT
-    bitvectors, either because they don't exist in SMTLIB (like
+    definitions, either because they don't exist in SMTLIB (like
     count_leading_zeros), or they involve input/output. In these cases
-    we provide a module so the backend can generate the required
-    implementations for these primitives. *)
+    we provide a module so the backend can provide callbacks to
+    generate the required implementations for these primitives. *)
 module type PRIMOP_GEN = sig
   val print_bits : Parse_ast.l -> ctyp -> string
   val string_of_bits : Parse_ast.l -> ctyp -> string
@@ -171,6 +173,7 @@ module type PRIMOP_GEN = sig
   val is_empty : Parse_ast.l -> ctyp -> string
   val hd : Parse_ast.l -> ctyp -> string
   val tl : Parse_ast.l -> ctyp -> string
+  val eq_list : Parse_ast.l -> (cval -> cval -> Smt_exp.smt_exp check_writer) -> ctyp -> ctyp -> string check_writer
 end
 
 (** We have various options for handling undefined bits for SMT
@@ -189,6 +192,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
   val bv_size : ctyp -> int
 
   val generic_vector_length : ctyp -> int
+
+  val builtin_vector_update : cval -> cval -> cval -> ctyp -> Smt_exp.smt_exp check_writer
 
   val wf_lbits : Smt_exp.smt_exp -> Smt_exp.smt_exp
 
