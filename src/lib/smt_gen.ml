@@ -359,6 +359,33 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | List_hd, [arg] -> Fn ("hd", [arg])
     | op, _ -> failwith (string_of_op op)
 
+  let smt_conversion ~into:to_ctyp ~from:from_ctyp x =
+    match (from_ctyp, to_ctyp) with
+    | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
+    | _, CT_constant c -> return (bvint (required_width c) c)
+    | CT_constant c, CT_fint sz -> return (bvint sz c)
+    | CT_constant c, CT_lint -> return (bvint lint_size c)
+    | CT_fint sz, CT_lint -> signed_size ~into:lint_size ~from:sz x
+    | CT_lint, CT_fint sz -> signed_size ~into:sz ~from:lint_size x
+    | CT_lint, CT_fbits n -> signed_size ~into:n ~from:lint_size x
+    | CT_lint, CT_lbits ->
+        let* x = signed_size ~into:lbits_size ~from:lint_size x in
+        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int lint_size); x]))
+    | CT_fint n, CT_lbits ->
+        let* x = signed_size ~into:lbits_size ~from:n x in
+        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
+    | CT_lbits, CT_fbits n -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [x]))
+    | CT_fbits n, CT_fbits m -> unsigned_size ~into:m ~from:n x
+    | CT_fbits n, CT_lbits ->
+        let* x = unsigned_size ~into:lbits_size ~from:n x in
+        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
+    | CT_fvector _, CT_vector _ -> return x
+    | CT_vector _, CT_fvector _ -> return x
+    | _, _ ->
+        let* l = current_location in
+        Reporting.unreachable l __POS__
+          (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
+
   let rec smt_cval cval =
     match cval_ctyp cval with
     | CT_constant n -> return (bvint (required_width n) n)
@@ -402,20 +429,23 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 Reporting.unreachable l __POS__ "Field for non-struct type found"
           )
         | V_struct (fields, ctyp) -> (
+            let* l = current_location in
             match ctyp with
-            | CT_struct (struct_id, _) ->
+            | CT_struct (struct_id, field_ctyps) ->
                 let* fields =
                   mapM
                     (fun (field_id, field) ->
-                      let* field = smt_cval field in
-                      return (field_id, field)
+                      match List.find_opt (fun (field_id', _) -> Id.compare field_id field_id' = 0) field_ctyps with
+                      | None -> Reporting.unreachable l __POS__ "Unknown field in struct"
+                      | Some (_, ctyp) ->
+                          let* smt = smt_cval field in
+                          let* smt = smt_conversion ~into:ctyp ~from:(cval_ctyp field) smt in
+                          return (field_id, smt)
                     )
                     fields
                 in
                 return (Struct (struct_id, fields))
-            | _ ->
-                let* l = current_location in
-                Reporting.unreachable l __POS__ "Struct literal with non-struct type found"
+            | _ -> Reporting.unreachable l __POS__ "Struct literal with non-struct type found"
           )
         | V_tuple _ | V_tuple_member _ ->
             let* l = current_location in
@@ -493,33 +523,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_tdiv_int = builtin_arith "bvsdiv" Big_int.div (fun x -> x)
   let builtin_tmod_int = builtin_arith "bvsrem" Big_int.div (fun x -> x)
-
-  let smt_conversion ~into:to_ctyp ~from:from_ctyp x =
-    match (from_ctyp, to_ctyp) with
-    | _, _ when ctyp_equal from_ctyp to_ctyp -> return x
-    | _, CT_constant c -> return (bvint (required_width c) c)
-    | CT_constant c, CT_fint sz -> return (bvint sz c)
-    | CT_constant c, CT_lint -> return (bvint lint_size c)
-    | CT_fint sz, CT_lint -> signed_size ~into:lint_size ~from:sz x
-    | CT_lint, CT_fint sz -> signed_size ~into:sz ~from:lint_size x
-    | CT_lint, CT_fbits n -> signed_size ~into:n ~from:lint_size x
-    | CT_lint, CT_lbits ->
-        let* x = signed_size ~into:lbits_size ~from:lint_size x in
-        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int lint_size); x]))
-    | CT_fint n, CT_lbits ->
-        let* x = signed_size ~into:lbits_size ~from:n x in
-        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
-    | CT_lbits, CT_fbits n -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [x]))
-    | CT_fbits n, CT_fbits m -> unsigned_size ~into:m ~from:n x
-    | CT_fbits n, CT_lbits ->
-        let* x = unsigned_size ~into:lbits_size ~from:n x in
-        return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
-    | CT_fvector _, CT_vector _ -> return x
-    | CT_vector _, CT_fvector _ -> return x
-    | _, _ ->
-        let* l = current_location in
-        Reporting.unreachable l __POS__
-          (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
   let int_comparison fn big_int_fn v1 v2 =
     let* sv1 = smt_cval v1 in
