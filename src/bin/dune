@@ -167,6 +167,7 @@
   (%{workspace_root}/lib/float/lt.sail as lib/float/lt.sail)
   (%{workspace_root}/lib/float/lt_quiet.sail as lib/float/lt_quiet.sail)
   (%{workspace_root}/lib/float/le.sail as lib/float/le.sail)
+  (%{workspace_root}/lib/float/le_quiet.sail as lib/float/le_quiet.sail)
   (%{workspace_root}/lib/float/interface.sail as lib/float/interface.sail)
   (%{workspace_root}/lib/reverse_endianness.sail
    as
