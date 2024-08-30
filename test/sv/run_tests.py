@@ -19,7 +19,6 @@ skip_tests = {
     'assign_rename_bug',
     'cheri128_hsb',
     'for_shadow',
-    'inc_tests',
     'loop_exception',
     'poly_mapping', # length
     'poly_mapping2',

@@ -646,6 +646,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         return (Fn ("Bits", [smt3; Fn ("bvand", [Fn ("bvlshr", [smt1; smt2]); bvmask smt3])]))
     | _ -> builtin_type_error "slice" [v1; v2; v3] (Some ret_ctyp)
 
+  let builtin_slice_inc v1 v2 v3 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
+    | CT_fbits width, CT_constant start, CT_constant len, CT_fbits _ ->
+        let bot = width - Big_int.to_int (Big_int.add start len) in
+        let* v1 = smt_cval v1 in
+        return (Extract (width - 1 - Big_int.to_int start, bot, v1))
+    | _ -> builtin_type_error "slice_inc" [v1; v2; v3] (Some ret_ctyp)
+
   let builtin_zeros v ret_ctyp =
     match (cval_ctyp v, ret_ctyp) with
     | _, CT_fbits n -> return (bvzero n)
@@ -987,6 +995,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
       *)
     | _ -> builtin_type_error "vector_access" [vec; i] (Some ret_ctyp)
 
+  let builtin_vector_access_inc vec i ret_ctyp =
+    match (cval_ctyp vec, cval_ctyp i, ret_ctyp) with
+    | CT_fbits n, CT_constant i, CT_bit ->
+        let* bv = smt_cval vec in
+        let top = n - 1 in
+        return (Extract (top - Big_int.to_int i, top - Big_int.to_int i, bv))
+    | _ -> builtin_type_error "vector_access_inc" [vec; i] (Some ret_ctyp)
+
   let builtin_vector_subrange vec i j ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp) with
     | CT_fbits n, CT_constant i, CT_constant j, CT_fbits _ ->
@@ -1009,6 +1025,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let len = bvadd (bvadd i' (bvneg j')) (bvint sz (Big_int.of_int 1)) in
         let extracted = bvand (bvlshr vec j') (fbits_mask sz len) in
         smt_conversion ~into:ret_ctyp ~from:(CT_fbits sz) extracted
+
+  let builtin_vector_subrange_inc vec i j ret_ctyp =
+    match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp) with
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits _ ->
+        let top = n - 1 in
+        let* vec = smt_cval vec in
+        return (Extract (top - Big_int.to_int i, top - Big_int.to_int j, vec))
+    | _ -> builtin_type_error "vector_subrange_inc" [vec; i; j] (Some ret_ctyp)
 
   let builtin_vector_update vec i x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
@@ -1070,6 +1094,32 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     *)
     | _ -> builtin_type_error "vector_update" [vec; i; x] (Some ret_ctyp)
 
+  let builtin_vector_update_inc vec i x ret_ctyp =
+    match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
+    (*
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
+        assert (n = m);
+        let i = (n - 1) - Big_int.to_int i in
+        let* bv = smt_cval vec in
+        let* x = smt_cval x in
+        let top = Extract (n - 1, i + 1, bv) in
+        let bot = Extract (i - 1, 0, bv) in
+        return (Fn ("concat", [top; Fn ("concat", [x; bot])]))
+       *)
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
+        let* bv = smt_cval vec in
+        let* x = smt_cval x in
+        let top = Extract (n - 1, 1, bv) in
+        return (Fn ("concat", [top; x]))
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
+        let i = n - 1 - Big_int.to_int i in
+        let* bv = smt_cval vec in
+        let* x = smt_cval x in
+        let bot = Extract (i - 1, 0, bv) in
+        return (Fn ("concat", [x; bot]))
+    | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = 0 && Big_int.to_int i = 0 -> smt_cval x
+    | _ -> builtin_type_error "vector_update_inc" [vec; i; x] (Some ret_ctyp)
+
   let builtin_vector_update_subrange vec i j x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp) with
     | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
@@ -1117,6 +1167,31 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* index = signed_size ~into:lbits_index ~from:sz len in
         return (Fn ("Bits", [index; contents]))
     | _ -> builtin_type_error "vector_update_subrange" [vec; i; j; x] (Some ret_ctyp)
+
+  let builtin_vector_update_subrange_inc vec i j x ret_ctyp =
+    match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp) with
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
+      when 0 < Big_int.to_int i && Big_int.to_int j < n - 1 ->
+        assert (n = m);
+        let* vec = smt_cval vec in
+        let* x = smt_cval x in
+        let top = Extract (n - 1, n - 1 - Big_int.to_int i, vec) in
+        let bot = Extract (n - 1 - (Big_int.to_int j + 1), 0, vec) in
+        return (Fn ("concat", [top; Fn ("concat", [x; bot])]))
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
+      when Big_int.to_int i = 0 && Big_int.to_int j < n - 1 ->
+        let* vec = smt_cval vec in
+        let* x = smt_cval x in
+        let bot = Extract (n - 1 - (Big_int.to_int j + 1), 0, vec) in
+        return (Fn ("concat", [x; bot]))
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits sz, CT_fbits m
+      when 0 < Big_int.to_int i && Big_int.to_int j = n - 1 ->
+        assert (n = m);
+        let* vec = smt_cval vec in
+        let* x = smt_cval x in
+        let top = Extract (n - 1, n - 1 - (Big_int.to_int i - 1), vec) in
+        return (Fn ("concat", [top; x]))
+    | _ -> builtin_type_error "vector_update_subrange_inc" [vec; i; j; x] (Some ret_ctyp)
 
   let builtin_get_slice_int v1 v2 v3 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp) with
@@ -1359,6 +1434,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "sail_signed" -> unary_primop builtin_signed
     | "sail_unsigned" -> unary_primop builtin_unsigned
     | "slice" -> ternary_primop builtin_slice
+    | "slice_inc" -> ternary_primop builtin_slice_inc
     | "add_bits" -> binary_primop (builtin_arith_bits "bvadd")
     | "add_bits_int" -> binary_primop (builtin_arith_bits_int "bvadd")
     | "sub_bits" -> binary_primop (builtin_arith_bits "bvsub")
@@ -1378,12 +1454,22 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
     | "vector_init" -> binary_primop builtin_vector_init
     | "vector_access" -> binary_primop builtin_vector_access
+    | "vector_access_inc" -> binary_primop builtin_vector_access_inc
     | "vector_subrange" -> ternary_primop builtin_vector_subrange
+    | "vector_subrange_inc" -> ternary_primop builtin_vector_subrange_inc
     | "vector_update" -> ternary_primop builtin_vector_update
+    | "vector_update_inc" -> ternary_primop builtin_vector_update_inc
     | "vector_update_subrange" ->
         Some
           (fun args ret_ctyp ->
             match args with [v1; v2; v3; v4] -> builtin_vector_update_subrange v1 v2 v3 v4 ret_ctyp | _ -> arity_error
+          )
+    | "vector_update_subrange_inc" ->
+        Some
+          (fun args ret_ctyp ->
+            match args with
+            | [v1; v2; v3; v4] -> builtin_vector_update_subrange_inc v1 v2 v3 v4 ret_ctyp
+            | _ -> arity_error
           )
     | "length" -> unary_primop builtin_length
     | "replicate_bits" -> binary_primop builtin_replicate_bits
