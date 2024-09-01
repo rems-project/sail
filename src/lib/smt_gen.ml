@@ -412,10 +412,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         | V_call (op, args) ->
             let* args = mapM smt_cval args in
             return (smt_cval_call op args)
-        | V_ctor_kind (union, ctor, _) ->
+        | V_ctor_kind (union, (ctor, _), ctyp) ->
             let* union = smt_cval union in
-            return (Fn ("not", [Tester (zencode_uid ctor, union)]))
-        | V_ctor_unwrap (union, (ctor, _), _) ->
+            return (Fn ("not", [Tester (zencode_id ctor, union)]))
+        | V_ctor_unwrap (union, (ctor, _), ctyp) ->
             let union_ctyp = cval_ctyp union in
             let* union = smt_cval union in
             return (Unwrap (ctor, Config.union_ctyp_classify union_ctyp, union))
