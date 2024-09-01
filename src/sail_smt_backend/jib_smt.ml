@@ -595,9 +595,23 @@ module Make (Config : CONFIG) = struct
               singleton (define_const id ret_ctyp smt)
           | _ -> Reporting.unreachable l __POS__ "Bad arguments for update_fbits"
         )
-        else if not extern then
-          let* smt_args = mapM Smt.smt_cval args in
-          singleton (define_const id ret_ctyp (Fn (zencode_id function_id, smt_args)))
+        else if not extern then (
+          let is_ctor =
+            match ret_ctyp with
+            | CT_variant (union_id, ctors) ->
+                Option.map snd (List.find_opt (fun (ctor, _) -> Id.compare ctor function_id = 0) ctors)
+            | _ -> None
+          in
+          match (is_ctor, args) with
+          | Some ctyp, [arg] ->
+              let* smt_arg = Smt.smt_cval arg in
+              let* smt_arg = Smt.smt_conversion ~into:ctyp ~from:(cval_ctyp arg) smt_arg in
+              singleton (define_const id ret_ctyp (Fn (zencode_id function_id, [smt_arg])))
+          | Some _, _ -> Reporting.unreachable l __POS__ "Found constructor without a single argument"
+          | None, _ ->
+              let* smt_args = mapM Smt.smt_cval args in
+              singleton (define_const id ret_ctyp (Fn (zencode_id function_id, smt_args)))
+        )
         else failwith ("Unrecognised function " ^ string_of_id function_id)
     | I_init (ctyp, id, cval) | I_copy (CL_id (id, ctyp), cval) ->
         let* cval_smt = Smt.smt_cval cval in
