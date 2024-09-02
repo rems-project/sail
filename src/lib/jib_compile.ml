@@ -266,7 +266,7 @@ module type CONFIG = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp
   val unroll_loops : int option
-  val make_call_precise : ctx -> id -> bool
+  val make_call_precise : ctx -> id -> ctyp list -> ctyp -> bool
   val ignore_64 : bool
   val struct_value : bool
   val tuple_value : bool
@@ -2137,7 +2137,7 @@ module Make (C : CONFIG) = struct
                   Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
             end
           | None -> instr :: tail
-          | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id ->
+          | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id param_ctyps ret_ctyp ->
               if List.compare_lengths args param_ctyps <> 0 then
                 Reporting.unreachable (id_loc id) __POS__
                   ("Function call found with incorrect arity: " ^ string_of_id id);

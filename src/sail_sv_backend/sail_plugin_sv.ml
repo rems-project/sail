@@ -319,7 +319,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
 
   let unroll_loops = Some 64
   let specialize_calls = false
-  let make_call_precise = C.make_call_precise
+  let make_call_precise ctx id _ _ = C.make_call_precise ctx id
   let ignore_64 = true
   let struct_value = false
   let tuple_value = false

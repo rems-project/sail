@@ -586,7 +586,7 @@ end) : CONFIG = struct
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
   let unroll_loops = None
-  let make_call_precise _ _ = true
+  let make_call_precise _ _ _ _ = true
   let ignore_64 = false
   let struct_value = false
   let tuple_value = false

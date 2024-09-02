@@ -145,7 +145,7 @@ module type CONFIG = sig
   (** A call is precise if the function arguments match the function
       type exactly. Leaving functions imprecise can allow later passes
       to specialize implementations. *)
-  val make_call_precise : ctx -> id -> bool
+  val make_call_precise : ctx -> id -> ctyp list -> ctyp -> bool
 
   (** If false, will ensure that fixed size bitvectors are
        specifically less that 64-bits. If true this restriction will

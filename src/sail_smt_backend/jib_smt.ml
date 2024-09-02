@@ -1272,7 +1272,16 @@ end) : Jib_compile.CONFIG = struct
 
   let optimize_anf ctx aexp = aexp |> analyze ctx |> smt_literals ctx |> fold_aexp (unroll_static_foreach ctx)
 
-  let make_call_precise _ _ = false
+  (* If a function has a tuple anywhere in its argument or return
+     types we must convert to the exact tuple type expected by the
+     function, otherwise after the tuple to struct conversion we won't
+     be able to apply the right conversions at the SMT level, as the
+     structural tuple types become different nominal struct types we
+     can't convert between. See issue 683 for an example. *)
+  let make_call_precise _ _ param_ctyps ret_ctyp =
+    let has_tuple = ctyp_has (function CT_tup _ -> true | _ -> false) in
+    List.exists has_tuple param_ctyps || has_tuple ret_ctyp
+
   let ignore_64 = true
   let unroll_loops = Some Opts.unroll_limit
   let struct_value = true
