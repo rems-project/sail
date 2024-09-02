@@ -614,11 +614,12 @@ module Make (Config : CONFIG) = struct
         )
         else failwith ("Unrecognised function " ^ string_of_id function_id)
     | I_init (ctyp, id, cval) | I_copy (CL_id (id, ctyp), cval) ->
-        let* cval_smt = Smt.smt_cval cval in
-        let* converted_smt = Smt.smt_conversion ~into:ctyp ~from:(cval_ctyp cval) cval_smt in
-        singleton (define_const id ctyp converted_smt)
+        let* smt = Smt.smt_cval cval in
+        let* smt = Smt.smt_conversion ~into:ctyp ~from:(cval_ctyp cval) smt in
+        singleton (define_const id ctyp smt)
     | I_copy (clexp, cval) ->
         let* smt = Smt.smt_cval cval in
+        let* smt = Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval) smt in
         let write, ctyp = rmw_write clexp in
         singleton (define_const write ctyp (rmw_modify smt clexp))
     | I_decl (ctyp, id) -> begin
