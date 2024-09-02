@@ -144,6 +144,7 @@ val full_string_of_ctyp : ctyp -> string
 (** {1. Functions and modules for working with ctyps} *)
 
 val map_ctyp : (ctyp -> ctyp) -> ctyp -> ctyp
+val ctyp_has : (ctyp -> bool) -> ctyp -> bool
 val ctyp_equal : ctyp -> ctyp -> bool
 val ctyp_compare : ctyp -> ctyp -> int
 
