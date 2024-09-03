@@ -25,6 +25,7 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
+(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -65,101 +66,62 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** Initial desugaring pass over AST after parsing *)
+{
 
-open Ast
-open Ast_defs
-open Ast_util
+open Libsail
 
-(** {2 Options} *)
+open Sv_type_parser
 
-(** Enable abstract types in the AST. If unset, will report an error
-    if they are encountered. *)
-val opt_abstract_types : bool ref
+module M = Map.Make (String)
 
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
-val opt_fast_undefined : bool ref
+let kw_table =
+  List.fold_left
+    (fun r (x, y) -> M.add x y r)
+    M.empty
+    [
+      ("bit",       (fun _ -> Bit));
+      ("int",       (fun _ -> Int));
+      ("logic",     (fun _ -> Logic));
+      ("string",    (fun _ -> String));
+      ("sail_bits", (fun _ -> SailBits));
+      ("sail_int",  (fun _ -> SailInt));
+      ("sail_list", (fun _ -> SailList));
+    ]
 
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
-val opt_magic_hash : bool ref
+}
 
-(** {2 Contexts} *)
+let wsc = [' ''\t']
+let ws = wsc+
+let letter = ['a'-'z''A'-'Z']
+let digit = ['0'-'9']
+let alphanum = letter|digit
+let startident = letter|'_'
+let ident = alphanum|'_'
 
-type ctx
-
-val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
-
-val initial_ctx : ctx
-
-(** {2 Desugar and process AST } *)
-
-val get_uninitialized_registers : untyped_def list -> (id * typ) list
-
-val generate_undefined_record_context : typquant -> (id * typ) list
-
-val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
-
-val generate_undefined_enum : id -> id list -> untyped_def list
-
-(** Val specs of undefined functions for builtin types that get added
-    to the AST by generate_undefinds (minus those functions that
-    already exist in the AST). *)
-val undefined_builtin_val_specs : untyped_def list
-
-val generate_undefineds : IdSet.t -> untyped_def list
-
-val generate_initialize_registers : IdSet.t -> (id * typ) list -> untyped_def list
-
-val generate_enum_number_conversions : untyped_def list -> untyped_def list
-
-val generate : untyped_ast -> untyped_ast
-
-val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
-
-(** {2 Parsing expressions and definitions from strings} *)
-
-val extern_of_string : ?pure:bool -> id -> string -> untyped_def
-
-val val_spec_of_string : id -> string -> untyped_def
-
-val defs_of_string : string * int * int * int -> ctx -> string -> untyped_def list * ctx
-
-val ast_of_def_string : ?inline:Lexing.position -> string * int * int * int -> ctx -> string -> untyped_ast * ctx
-
-val ast_of_def_string_with :
-  ?inline:Lexing.position ->
-  string * int * int * int ->
-  ctx ->
-  (Parse_ast.def list -> Parse_ast.def list) ->
-  string ->
-  untyped_ast * ctx
-
-val exp_of_string : ?inline:Lexing.position -> string -> uannot exp
-
-val typ_of_string : ?inline:Lexing.position -> string -> typ
-
-val constraint_of_string : ?inline:Lexing.position -> string -> n_constraint
-
-val parse_from_string : (Lexing.lexbuf -> 'a) -> ?inline:Lexing.position -> string -> 'a
-
-(** {2 Parsing files } *)
-
-(** Parse a file into a sequence of comments and a parse AST
-
-   @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
-
-val get_lexbuf_from_string : filename:string -> contents:string -> Lexing.lexbuf
-
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
-
-val parse_project :
-  ?inline:Lexing.position -> ?filename:string -> contents:string -> unit -> Project.def Project.spanned list
+rule token = parse
+  | ws                     { token lexbuf}
+  | "\n"
+  | "\r\n"                 { Lexing.new_line lexbuf; token lexbuf }
+  | "["                    { Lsquare }
+  | "]"                    { Rsquare }
+  | "_"                    { Underscore }
+  | ":"                    { Colon }
+  | digit+ as n            { match int_of_string_opt n with
+                             | Some n -> Nat n
+                             | None ->
+                                 raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf)
+                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
+  | '#' (digit+ as n)      { match int_of_string_opt n with
+                             | Some n -> HashNat n
+                             | None ->
+                                 raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf)
+                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
+  | startident ident* as i { let p = Lexing.lexeme_start_p lexbuf in
+                             match M.find_opt i kw_table with
+                             | Some kw -> kw p
+                             | None ->
+                                 raise (Reporting.err_lex p ("Unknown keyword: " ^ i)) }
+  | eof                    { Eof }
+  | _  as c                { raise (Reporting.err_lex
+                                     (Lexing.lexeme_start_p lexbuf)
+                                     (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }

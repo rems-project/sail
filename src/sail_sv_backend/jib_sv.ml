@@ -73,15 +73,65 @@ open Jib
 open Jib_compile
 open Jib_util
 open Jib_visitor
+open Parse_ast.Attribute_data
 open PPrint
 open Printf
 open Smt_exp
 
-open Generate_primop
+open Generate_primop2
 open Sv_ir
 
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
+
+let sv_type_of_string = Initial_check.parse_from_string (Sv_type_parser.sv_type Sv_type_lexer.token)
+
+let parse_sv_type = function
+  | AD_aux (AD_string s, l) ->
+      let open Lexing in
+      let p =
+        match Reporting.simp_loc l with Some (p, _) -> Some { p with pos_cnum = p.pos_cnum + 1 } | None -> None
+      in
+      let num_opt, ctyp = sv_type_of_string ?inline:p s in
+      (l, num_opt, ctyp)
+  | AD_aux (_, l) -> raise (Reporting.err_general l "Cannot parse systemverilog type from attribute")
+
+let sv_types_from_attribute ~arity attr_data_opt =
+  let open Util.Option_monad in
+  let* attr_data = attr_data_opt in
+  let* fields = attribute_data_object attr_data in
+  let* types = List.assoc_opt "types" fields in
+  let l = match types with AD_aux (_, l) -> l in
+  let ctyps =
+    match types with
+    | AD_aux (AD_string _, _) as s -> [parse_sv_type s]
+    | AD_aux (AD_list types, _) -> List.map parse_sv_type types
+    | _ -> raise (Reporting.err_general l "types field must be either a string, or an array of strings")
+  in
+  if List.for_all (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps then
+    Some
+      (List.init arity (fun n ->
+           let* _, _, ctyp = List.find_opt (fun (_, num_opt, _) -> Option.get num_opt = n) ctyps in
+           Some ctyp
+       )
+      )
+  else if List.for_all (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps then
+    if List.length ctyps <> arity then
+      raise
+        (Reporting.err_general l
+           "Number of items of types key must match number of function arguments, unless argument positions are \
+            explicit"
+        )
+    else Some (List.map (fun (_, _, ctyp) -> Some ctyp) ctyps)
+  else (
+    let l1, _, _ = List.find (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps in
+    let l2, _, _ = List.find (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps in
+    raise
+      (Reporting.err_general
+         (Hint ("Non-positional type specified here", l2, l1))
+         "Mixed use of types with specified positions and non-specified positions"
+      )
+  )
 
 (* The direct footprint contains information about the effects
    directly performed by the function itself, i.e. not those from any
@@ -93,6 +143,8 @@ type direct_footprint = {
   mutable throws : bool;
   mutable stdout : bool;
   mutable stderr : bool;
+  mutable reads_mem : bool;
+  mutable writes_mem : bool;
   mutable contains_assert : bool;
   mutable references : CTSet.t;
 }
@@ -104,9 +156,19 @@ let empty_direct_footprint () : direct_footprint =
     throws = false;
     stdout = false;
     stderr = false;
+    reads_mem = false;
+    writes_mem = false;
     contains_assert = false;
     references = CTSet.empty;
   }
+
+let check_attribute name attr_object f =
+  let open Parse_ast.Attribute_data in
+  match List.assoc_opt name attr_object with
+  | Some (AD_aux (AD_bool true, _)) -> f ()
+  | Some (AD_aux (AD_bool false, _)) | None -> ()
+  | Some (AD_aux (_, l)) ->
+      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
 
 class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visitor =
   object
@@ -138,20 +200,10 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
                let* attr_object =
                  Option.bind (Option.bind (get_attribute "sv_module" uannot) snd) attribute_data_object
                in
-               begin
-                 match List.assoc_opt "stdout" attr_object with
-                 | Some (AD_aux (AD_bool true, _)) -> footprint.stdout <- true
-                 | Some (AD_aux (AD_bool false, _)) | None -> ()
-                 | Some (AD_aux (_, l)) ->
-                     raise (Reporting.err_general l "Expected boolean for stdout key on sv_module attribute")
-               end;
-               begin
-                 match List.assoc_opt "stderr" attr_object with
-                 | Some (AD_aux (AD_bool true, _)) -> footprint.stderr <- true
-                 | Some (AD_aux (AD_bool false, _)) | None -> ()
-                 | Some (AD_aux (_, l)) ->
-                     raise (Reporting.err_general l "Expected boolean for stderr key on sv_module attribute")
-               end;
+               check_attribute "stdout" attr_object (fun () -> footprint.stdout <- true);
+               check_attribute "stderr" attr_object (fun () -> footprint.stdout <- true);
+               check_attribute "reads_memory" attr_object (fun () -> footprint.reads_mem <- true);
+               check_attribute "writes_memory" attr_object (fun () -> footprint.writes_mem <- true);
                Some ()
               );
             if name = "reg_deref" then (
@@ -197,6 +249,8 @@ type footprint = {
   throws : bool;
   need_stdout : bool;
   need_stderr : bool;
+  reads_mem : bool;
+  writes_mem : bool;
   contains_assert : bool;
 }
 
@@ -210,6 +264,8 @@ let pure_footprint =
     throws = false;
     need_stdout = false;
     need_stderr = false;
+    reads_mem = false;
+    writes_mem = false;
     contains_assert = false;
   }
 
@@ -299,6 +355,8 @@ let collect_spec_info ctx cdefs =
                 throws = false;
                 need_stdout = direct_footprint.stdout;
                 need_stderr = direct_footprint.stderr;
+                reads_mem = direct_footprint.reads_mem;
+                writes_mem = direct_footprint.writes_mem;
                 contains_assert = direct_footprint.contains_assert;
               }
               footprints
@@ -314,9 +372,10 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let footprint = Bindings.find f footprints in
             let callees = cfg |> IdGraph.reachable (IdSet.singleton f) IdSet.empty |> IdSet.remove f in
-            let all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert =
+            let all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert =
               List.fold_left
-                (fun (all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert) callee ->
+                (fun (all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert)
+                     callee ->
                   match Bindings.find_opt callee footprints with
                   | Some footprint ->
                       ( IdSet.union all_reads footprint.direct_reads,
@@ -324,21 +383,39 @@ let collect_spec_info ctx cdefs =
                         throws || footprint.direct_throws,
                         need_stdout || footprint.need_stdout,
                         need_stderr || footprint.need_stderr,
+                        reads_mem || footprint.reads_mem,
+                        writes_mem || footprint.writes_mem,
                         contains_assert || footprint.contains_assert
                       )
-                  | _ -> (all_reads, all_writes, throws, need_stdout, need_stderr, contains_assert)
+                  | _ ->
+                      (all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert)
                 )
                 ( footprint.direct_reads,
                   footprint.direct_writes,
                   footprint.direct_throws,
                   footprint.need_stdout,
                   footprint.need_stderr,
+                  footprint.reads_mem,
+                  footprint.writes_mem,
                   footprint.contains_assert
                 )
                 (IdSet.elements callees)
             in
             Bindings.update f
-              (fun _ -> Some { footprint with all_reads; all_writes; throws; need_stdout; need_stderr; contains_assert })
+              (fun _ ->
+                Some
+                  {
+                    footprint with
+                    all_reads;
+                    all_writes;
+                    throws;
+                    need_stdout;
+                    need_stderr;
+                    reads_mem;
+                    writes_mem;
+                    contains_assert;
+                  }
+              )
               footprints
         | _ -> footprints
       )
@@ -492,15 +569,10 @@ module Make (Config : CONFIG) = struct
         let register_ref reg_name = Fn ("reg_ref", [String_lit reg_name])
       end)
       (struct
-        let print_bits l = function
-          | CT_lbits -> "sail_print_bits"
-          | CT_fbits sz when Config.nostrings -> Generate_primop.print_fbits_stub sz
-          | CT_fbits sz -> Generate_primop.print_fbits sz
-          | _ -> Reporting.unreachable l __POS__ "print_bits"
+        let print_bits l = function CT_lbits -> "sail_print_bits" | _ -> Reporting.unreachable l __POS__ "print_bits"
 
         let string_of_bits l = function
           | CT_lbits -> "sail_string_of_bits"
-          | CT_fbits sz when Config.nostrings -> Generate_primop.string_of_fbits_stub sz
           | CT_fbits sz -> Primops.string_of_fbits sz
           | _ -> Reporting.unreachable l __POS__ "string_of_bits"
 
@@ -510,7 +582,7 @@ module Make (Config : CONFIG) = struct
 
         let hex_str_upper _ = Primops.hex_str_upper
 
-        let count_leading_zeros _ sz = Generate_primop.count_leading_zeros sz
+        let count_leading_zeros l _ = Reporting.unreachable l __POS__ "count_leading_zeros"
 
         let fvector_store _l len ctyp = Primops.fvector_store len ctyp
 
@@ -769,10 +841,12 @@ module Make (Config : CONFIG) = struct
 
   let has_undefined_bit = List.exists (function Sail2_values.BU -> true | _ -> false)
 
-  let rec hex_bitvector bits =
+  let rec hex_bitvector ?(drop_leading_zeros = false) bits =
     let open Sail2_values in
     match bits with
-    | B0 :: B0 :: B0 :: B0 :: rest -> "0" ^ hex_bitvector rest
+    | B0 :: B0 :: B0 :: B0 :: rest ->
+        if drop_leading_zeros then hex_bitvector ~drop_leading_zeros rest
+        else "0" ^ hex_bitvector ~drop_leading_zeros rest
     | B0 :: B0 :: B0 :: B1 :: rest -> "1" ^ hex_bitvector rest
     | B0 :: B0 :: B1 :: B0 :: rest -> "2" ^ hex_bitvector rest
     | B0 :: B0 :: B1 :: B1 :: rest -> "3" ^ hex_bitvector rest
@@ -803,7 +877,9 @@ module Make (Config : CONFIG) = struct
     | Bitvec_lit [] -> string "SAIL_ZWBV"
     | Bitvec_lit bits ->
         let len = List.length bits in
-        if len mod 4 = 0 && not (has_undefined_bit bits) then ksprintf string "%d'h%s" len (hex_bitvector bits)
+        if all_zeros bits then ksprintf string "%d'h0" len
+        else if len mod 4 = 0 && not (has_undefined_bit bits) then
+          ksprintf string "%d'h%s" len (hex_bitvector ~drop_leading_zeros:true bits)
         else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
     | Bool_lit true -> string "1'h1"
     | Bool_lit false -> string "1'h0"
@@ -966,6 +1042,22 @@ module Make (Config : CONFIG) = struct
     let wrap aux = SVS_aux (aux, l) in
     match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
+  let convert_arguments args attr_data_opt =
+    let args_len = List.length args in
+    match sv_types_from_attribute ~arity:args_len attr_data_opt with
+    | None -> mapM Smt.smt_cval args
+    | Some conversions ->
+        let arg_ctyps = List.map cval_ctyp args in
+        mapM
+          (fun (arg, (ctyp, convert)) ->
+            match convert with
+            | None -> Smt.smt_cval arg
+            | Some ctyp' ->
+                let* smt = Smt.smt_cval arg in
+                Smt.smt_conversion ~into:ctyp' ~from:ctyp smt
+          )
+          (List.combine args (List.combine arg_ctyps conversions))
+
   let rec svir_instr ?pathcond spec_info ctx (I_aux (aux, (_, l))) =
     let wrap aux = return (Some (SVS_aux (aux, l))) in
     match aux with
@@ -1006,22 +1098,6 @@ module Make (Config : CONFIG) = struct
                 wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
-          else if name = "valid_hex_bits" then
-            let* args = mapM Smt.smt_cval args in
-            let updates, ret = svir_creturn creturn in
-            match args with
-            | [arg1; arg2] ->
-                let arg1 = Extract (31, 0, arg1) in
-                wrap (with_updates l updates (SVS_assign (ret, Fn ("sail_valid_hex_bits", [arg1; arg2]))))
-            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_valid_hex_bits"
-          else if name = "string_take" then
-            let* args = mapM Smt.smt_cval args in
-            let updates, ret = svir_creturn creturn in
-            match args with
-            | [arg1; arg2] ->
-                let arg2 = Extract (31, 0, arg2) in
-                wrap (with_updates l updates (SVS_assign (ret, Fn ("sail_string_take", [arg1; arg2]))))
-            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_valid_hex_bits"
           else (
             match Smt.builtin ~allow_io:false name with
             | Some generator ->
@@ -1053,11 +1129,14 @@ module Make (Config : CONFIG) = struct
                     wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
                 | None -> (
                     let _, _, _, uannot = Bindings.find id ctx.valspecs in
-                    let* args = mapM Smt.smt_cval args in
                     let updates, ret = svir_creturn creturn in
                     match get_attribute "sv_module" uannot with
-                    | Some _ -> wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
-                    | None -> wrap (with_updates l updates (SVS_assign (ret, Fn (name, args))))
+                    | Some (_, attr_data_opt) ->
+                        let* args = convert_arguments args attr_data_opt in
+                        wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
+                    | None ->
+                        let* args = convert_arguments args (Option.bind (get_attribute "sv_function" uannot) snd) in
+                        wrap (with_updates l updates (SVS_assign (ret, Fn (name, args))))
                   )
               )
           )

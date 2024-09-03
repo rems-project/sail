@@ -12,6 +12,11 @@
   (native plugin))
  (libraries libsail))
 
+(menhir
+ (modules sv_type_parser))
+
+(ocamllex sv_type_lexer)
+
 (install
  (section
   (site

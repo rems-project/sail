@@ -110,6 +110,8 @@ let attribute_data_string = function AD_aux (AD_string s, _) -> Some s | _ -> No
 
 let attribute_data_string_with_loc = function AD_aux (AD_string s, l) -> Some (s, l) | _ -> None
 
+let attribute_data_list = function AD_aux (AD_list xs, _) -> Some xs | _ -> None
+
 let json_of_attribute attr = function
   | None -> `String attr
   | Some data -> `List [`String attr; json_of_attribute_data data]

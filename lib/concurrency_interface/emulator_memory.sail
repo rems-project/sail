@@ -100,6 +100,7 @@ val read_mem# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
+$[sv_module { reads_memory = true }]
 val __read_mem# = impure "emulator_read_mem" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
@@ -116,6 +117,7 @@ val read_mem_ifetch# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {3
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
+$[sv_module { reads_memory = true }]
 val __read_mem_ifetch# = impure "emulator_read_mem_ifetch" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
@@ -132,6 +134,7 @@ val read_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in
     ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
+$[sv_module { reads_memory = true }]
 val __read_mem_exclusive# = impure "emulator_read_mem_exclusive" : forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
@@ -148,6 +151,7 @@ val write_mem# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
+$[sv_module { writes_memory = true }]
 val __write_mem# = impure "emulator_write_mem" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
@@ -164,6 +168,7 @@ val write_mem_exclusive# : forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in
     ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 $ifdef _EMULATOR_MEMORY_PRIMOPS
+$[sv_module { writes_memory = true }]
 val __write_mem_exclusive# = impure "emulator_write_mem_exclusive" : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
@@ -171,8 +176,10 @@ function write_mem_exclusive#(_, addrsize, addr, n, value) = __write_mem_exclusi
 $endif
 $endif
 
+$[sv_module { reads_memory = true }]
 val read_tag# = impure "emulator_read_tag"  : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool
 
+$[sv_module { writes_memory = true }]
 val write_tag# = impure "emulator_write_tag" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit
 
 $endif
