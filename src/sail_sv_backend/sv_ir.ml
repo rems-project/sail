@@ -74,8 +74,6 @@ open Jib_visitor
 open PPrint
 open Smt_exp
 
-open Generate_primop
-
 type sv_name = SVN_id of Ast.id | SVN_string of string
 
 module SVName = struct

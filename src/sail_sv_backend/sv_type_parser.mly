@@ -1,4 +1,4 @@
-/*==========================================================================*/
+/****************************************************************************/
 /*     Sail                                                                 */
 /*                                                                          */
 /*  Sail and the Sail architecture models here, comprising all files and    */
@@ -25,6 +25,7 @@
 /*    Stephen Kell                                                          */
 /*    Mark Wassell                                                          */
 /*    Alastair Reid (Arm Ltd)                                               */
+/*    Louis-Emile Ploix                                                     */
 /*                                                                          */
 /*  All rights reserved.                                                    */
 /*                                                                          */
@@ -63,77 +64,65 @@
 /*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      */
 /*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      */
 /*  SUCH DAMAGE.                                                            */
-/*==========================================================================*/
+/****************************************************************************/
 
-$ifndef _MAPPING
-$define _MAPPING
+%{
 
-$include <arith.sail>
-$include <option.sail>
+[@@@coverage exclude_file]
 
-$[sv_function { types = "int #1" }]
-val string_take = pure "string_take" : (string, nat) -> string
+open Libsail.Jib
 
-$[sv_function { types = "int #1" }]
-val string_drop = pure "string_drop" : (string, nat) -> string
+%}
 
-val string_length = pure "string_length" : string -> nat
+%token Colon Lsquare Rsquare Underscore
+%token Bit Int Logic String
+%token SailBits SailInt SailList
+%token Eof
 
-val string_append = pure {coq: "String.append", c: "concat_str", _: "string_append"} : (string, string) -> string
+%token <int> Nat
+%token <int> HashNat
 
-val string_startswith = pure "string_startswith" : (string, string) -> bool
+%start sv_type
+%type <int option * ctyp> sv_type
 
-val n_leading_spaces = pure { coq: "n_leading_spaces_Z" } : string -> nat
-function n_leading_spaces s =
-  match s {
-    "" => 0,
-    _ => match string_take(s, 1) {
-      " " => 1 + n_leading_spaces(string_drop(s, 1)),
-      _ => 0
-    }
-  }
+%%
 
-/*!
-In a string mapping this is treated as `[ ]+`, i.e one or more space
-characters. It is printed as a single space `" "`.
-*/
-val spc : unit <-> string
+sv_type:
+  | p = packed_type; u = unpacked_type_opt; Eof
+    { let (n, f) = u in (n, f p) }
 
-function spc_forwards() = " "
-function spc_forwards_matches() = true
+packed_type:
+  | Bit
+    { CT_bool }
+  | SailInt
+    { CT_lint }
+  | SailBits
+    { CT_lbits }
+  | Int
+    { CT_fint 32 }
+  | String
+    { CT_string }
+  | Logic; Lsquare; d = dimensions; Rsquare
+    { CT_fbits d }
 
-function spc_backwards _ = ()
-function spc_backwards_matches s = {
-  let len = string_length(s);
-  n_leading_spaces(s) == len & len > 0
-}
+dimensions:
+  | hi = Nat; Colon; lo = Nat
+    { (hi + 1) - lo }
+  | len = Nat
+    { len }
 
-/*!
-In a string mapping this is treated as `[ ]*`, i.e. zero or more space
-characters. It is printed as the empty string.
-*/
-val opt_spc : unit <-> string
+unpacked_type_opt:
+  |
+    { (None, fun ty -> ty) }
+  | n = HashNat
+    { (Some n, fun ty -> ty) }
+  | Underscore; u = unpacked_type
+    { (None, u) }
+  | n = HashNat; u = unpacked_type
+    { (Some n, u) }
 
-function opt_spc_forwards() = ""
-function opt_spc_forwards_matches() = true
-
-function opt_spc_backwards _ = ()
-function opt_spc_backwards_matches s = n_leading_spaces(s) == string_length(s)
-
-/*!
-Like `opt_spc`, in a string mapping this is treated as `[ ]*`, i.e. zero or more space
-characters. It differs however in that it is printed as a single space `" "`.
-*/
-val def_spc : unit <-> string
-
-function def_spc_forwards() = " "
-function def_spc_forwards_matches() = true
-
-function def_spc_backwards _ = ()
-function def_spc_backwards_matches s = n_leading_spaces(s) == string_length(s)
-
-mapping sep : unit <-> string = {
-  () <-> opt_spc() ^ "," ^ def_spc()
-}
-
-$endif
+unpacked_type:
+  | SailList
+    { fun ty -> CT_list ty }
+  | Lsquare; d = dimensions; Rsquare
+    { fun ty -> CT_fvector (d, ty) }

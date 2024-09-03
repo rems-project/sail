@@ -104,6 +104,8 @@ val attribute_data_string : attribute_data -> string option
 
 val attribute_data_string_with_loc : attribute_data -> (string * Parse_ast.l) option
 
+val attribute_data_list : attribute_data -> attribute_data list option
+
 (** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
     {@sail[
     $[attribute argument] expression

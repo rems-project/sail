@@ -324,7 +324,12 @@ let or_order x y =
   | None, Some _ -> 1
   | None, None -> 0
 
-let identical x y = match (x, y) with Var x, Var y -> Name.compare x y = 0 | _ -> false
+let rec identical x y =
+  match (x, y) with
+  | Var x, Var y -> Name.compare x y = 0
+  | Fn (f1, args1), Fn (f2, args2) ->
+      String.compare f1 f2 = 0 && List.compare_lengths args1 args2 = 0 && List.for_all2 identical args1 args2
+  | _ -> false
 
 let simp_eq x y =
   match (x, y) with
@@ -433,6 +438,18 @@ module Simplifier = struct
 
   let rule_ite_literal =
     mk_simple_rule __LOC__ @@ function Ite (Bool_lit b, x, y) -> change (if b then x else y) | _ -> NoChange
+
+  let rec remove_duplicates = function
+    | x :: xs ->
+        let xs' = List.filter (fun x' -> not (identical x x')) xs in
+        x :: remove_duplicates xs'
+    | [] -> []
+
+  let rule_and_duplicates =
+    mk_simple_rule __LOC__ @@ function Fn ("and", xs) -> Change (0, Fn ("and", remove_duplicates xs)) | _ -> NoChange
+
+  let rule_or_duplicates =
+    mk_simple_rule __LOC__ @@ function Fn ("or", xs) -> Change (0, Fn ("or", remove_duplicates xs)) | _ -> NoChange
 
   let rule_and_inequalities =
     mk_simple_rule __LOC__ @@ function
@@ -749,6 +766,10 @@ module Simplifier = struct
     | Fn ("not", [Fn ("and", xs)]) -> change (Fn ("or", List.map (fun x -> Fn ("not", [x])) xs))
     | Fn ("not", [Ite (i, t, e)]) -> change (Ite (i, Fn ("not", [t]), Fn ("not", [e])))
     | Fn ("not", [Bool_lit b]) -> change (Bool_lit (not b))
+    | Fn ("not", [Fn ("bvslt", [x; y])]) -> change (Fn ("bvsge", [x; y]))
+    | Fn ("not", [Fn ("bvsle", [x; y])]) -> change (Fn ("bvsgt", [x; y]))
+    | Fn ("not", [Fn ("bvsgt", [x; y])]) -> change (Fn ("bvsle", [x; y]))
+    | Fn ("not", [Fn ("bvsge", [x; y])]) -> change (Fn ("bvslt", [x; y]))
     | _ -> NoChange
 
   let is_bvfunction = function
@@ -877,6 +898,7 @@ let simp simpset exp =
                rule_flatten_and;
                rule_false_and;
                rule_true_and;
+               rule_and_duplicates;
                rule_and_inequalities;
                rule_order_and;
                Repeat rule_and_assume;
@@ -885,7 +907,17 @@ let simp simpset exp =
           )
     | Fn ("or", _) ->
         run_strategy simpset exp
-          (Then [rule_flatten_or; rule_true_or; rule_false_or; rule_or_equalities; rule_order_or; Repeat rule_or_assume])
+          (Then
+             [
+               rule_flatten_or;
+               rule_true_or;
+               rule_false_or;
+               rule_or_duplicates;
+               rule_or_equalities;
+               rule_order_or;
+               Repeat rule_or_assume;
+             ]
+          )
     | Var _ -> run_strategy simpset exp rule_var
     | Fn ("=", _) -> run_strategy simpset exp (Then [rule_inequality; rule_simp_eq; rule_concat_literal_eq])
     | Fn ("not", _) -> run_strategy simpset exp (Then [Repeat rule_not_not; Repeat rule_not_push; rule_inequality])

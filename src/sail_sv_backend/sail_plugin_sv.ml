@@ -79,7 +79,6 @@ open Printf
 open Smt_exp
 open Interactive.State
 
-open Generate_primop
 open Sv_optimize
 
 module R = Jib_sv
@@ -365,6 +364,7 @@ let verilator_cpp_wrapper name =
     "}";
   ]
 
+(*
 let make_genlib_file filename =
   let common_primops =
     if !opt_nostrings then
@@ -389,6 +389,7 @@ let make_genlib_file filename =
     defs;
   output_string out_chan "`endif\n";
   Util.close_output_with_check file_info
+   *)
 
 let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let module SV = Jib_sv.Make (struct
@@ -606,8 +607,8 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   in
      *)
   let sv_output = Pretty_print_sail.Document.to_string doc in
-  make_genlib_file (Filename.concat (Filename.dirname out) (sprintf "sail_genlib_%s.sv" (Filename.basename out)));
 
+  (* make_genlib_file (Filename.concat (Filename.dirname out) (sprintf "sail_genlib_%s.sv" (Filename.basename out))); *)
   let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir (out ^ ".sv") in
   output_string out_chan sv_output;
   Util.close_output_with_check file_info;

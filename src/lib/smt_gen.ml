@@ -1083,15 +1083,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:(int_size i_ctyp))
         in
         return (Store (Fixed (len, ctyp), store_fn, vec, i, x))
-    (*
-       | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
-         Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
-       | CT_vector _, index_ctyp, _, CT_vector _ ->
-         Fn
-           ( "store",
-             [smt_cval ctx vec; force_size ctx !vector_index (int_size ctx index_ctyp) (smt_cval ctx i); smt_cval ctx x]
-           )
-    *)
+    | CT_vector _, i_ctyp, _, CT_vector _ ->
+        let* vec = smt_cval vec in
+        let* i = bind (smt_cval i) (unsigned_size ~checked:false ~into:32 ~from:(int_size i_ctyp)) in
+        let* x = smt_cval x in
+        return (Fn ("vupdate", [vec; i; x]))
     | _ -> builtin_type_error "vector_update" [vec; i; x] (Some ret_ctyp)
 
   let builtin_vector_update_inc vec i x ret_ctyp =

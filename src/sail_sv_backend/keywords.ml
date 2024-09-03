@@ -68,7 +68,7 @@
 
 open Libsail
 
-open Generate_primop
+module StringSet = Set.Make (String)
 
 (** We use some words in the compilation process, so treat them as
     Systemverilog reserveds even though they are not. *)

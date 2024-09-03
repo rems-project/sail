@@ -33,7 +33,7 @@ module print_endline
    end
 endmodule // print_endline
 
-function automatic bit sail_valid_hex_bits(int n, string hex);
+function automatic bit valid_hex_bits(int n, string hex);
    int  len = hex.len();
    int  non_zero = 2;
    int  fnz_width;
@@ -66,10 +66,10 @@ function automatic bit sail_valid_hex_bits(int n, string hex);
    end;
 
    return 1'h1;
-endfunction // sail_valid_hex_bits
+endfunction // valid_hex_bits
 
-function automatic string sail_string_take(string str, int n);
+function automatic string string_take(string str, int n);
    return str.substr(0, n - 1);
-endfunction // sail_string_take
+endfunction // string_take
 
 `endif
