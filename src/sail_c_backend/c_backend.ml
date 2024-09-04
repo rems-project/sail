@@ -594,6 +594,7 @@ end) : CONFIG = struct
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
   let use_void = false
+  let eager_control_flow = false
 end
 
 (** Functions that have heap-allocated return types are implemented by

@@ -178,6 +178,19 @@ let ctx_get_extern id ctx =
 
 let ctx_has_val_spec id ctx = Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
 
+let rec is_pure_aexp ctx (AE_aux (aexp, { uannot; _ })) =
+  match get_attribute "anf_pure" uannot with
+  | Some _ -> true
+  | None -> (
+      match aexp with
+      | AE_app (f, _, _) -> Effects.function_is_pure f ctx.effect_info
+      | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2
+      | AE_val _ -> true
+      | _ -> false
+    )
+
+let is_pure_case ctx (_, guard, body) = is_pure_aexp ctx guard && is_pure_aexp ctx body
+
 let initial_ctx ?for_target env effect_info =
   let initial_valspecs =
     [
@@ -274,6 +287,7 @@ module type CONFIG = sig
   val branch_coverage : out_channel option
   val track_throw : bool
   val use_void : bool
+  val eager_control_flow : bool
 end
 
 module IdGraph = Graph.Make (Id)
@@ -642,7 +656,7 @@ module Make (C : CONFIG) = struct
     | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
     | AP_struct (_, typ) -> ctyp_of_typ ctx typ
 
-  let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
+  let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval on_failure =
     let ctx = { ctx with local_env = env } in
     let ctyp = cval_ctyp cval in
     match apat_aux with
@@ -652,7 +666,7 @@ module Make (C : CONFIG) = struct
     | AP_id (pid, _) when is_ct_enum ctyp -> begin
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
-        | _ -> ([ijump l (V_call (Neq, [V_member (pid, ctyp); cval])) case_label], [], [], ctx)
+        | _ -> ([on_failure l (V_call (Neq, [V_member (pid, ctyp); cval]))], [], [], ctx)
       end
     | AP_id (pid, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
@@ -660,7 +674,7 @@ module Make (C : CONFIG) = struct
         ([], [idecl l id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx)
     | AP_as (apat, id, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
-        let pre, instrs, cleanup, ctx = compile_match ctx apat cval case_label in
+        let pre, instrs, cleanup, ctx = compile_match ctx apat cval on_failure in
         let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
         ( pre,
           instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval],
@@ -669,7 +683,7 @@ module Make (C : CONFIG) = struct
         )
     | AP_struct (afpats, _) -> begin
         let fold (pre, instrs, cleanup, ctx) (field, apat) =
-          let pre', instrs', cleanup', ctx = compile_match ctx apat (V_field (cval, field)) case_label in
+          let pre', instrs', cleanup', ctx = compile_match ctx apat (V_field (cval, field)) on_failure in
           (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
         in
         let pre, instrs, cleanup, ctx = List.fold_left fold ([], [], [], ctx) afpats in
@@ -678,7 +692,7 @@ module Make (C : CONFIG) = struct
     | AP_tuple apats -> begin
         let get_tup n = V_tuple_member (cval, List.length apats, n) in
         let fold (pre, instrs, cleanup, n, ctx) apat ctyp =
-          let pre', instrs', cleanup', ctx = compile_match ctx apat (get_tup n) case_label in
+          let pre', instrs', cleanup', ctx = compile_match ctx apat (get_tup n) on_failure in
           (pre @ pre', instrs @ instrs', cleanup' @ cleanup, n + 1, ctx)
         in
         match ctyp with
@@ -718,9 +732,9 @@ module Make (C : CONFIG) = struct
                 end
             in
             let pre, instrs, cleanup, ctx =
-              compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) case_label
+              compile_match ctx apat (V_ctor_unwrap (cval, (ctor, unifiers), ctor_ctyp)) on_failure
             in
-            ([ijump l (V_ctor_kind (cval, (ctor, unifiers), pat_ctyp)) case_label] @ pre, instrs, cleanup, ctx)
+            ([on_failure l (V_ctor_kind (cval, (ctor, unifiers), pat_ctyp))] @ pre, instrs, cleanup, ctx)
         | ctyp ->
             raise
               (Reporting.err_general l
@@ -733,16 +747,16 @@ module Make (C : CONFIG) = struct
     | AP_cons (hd_apat, tl_apat) -> begin
         match ctyp with
         | CT_list ctyp ->
-            let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
-            let tl_pre, tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-            ( [ijump l (V_call (List_is_empty, [cval])) case_label] @ hd_pre @ tl_pre,
+            let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) on_failure in
+            let tl_pre, tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) on_failure in
+            ( [on_failure l (V_call (List_is_empty, [cval]))] @ hd_pre @ tl_pre,
               hd_setup @ tl_setup,
               tl_cleanup @ hd_cleanup,
               ctx
             )
         | _ -> raise (Reporting.err_general l "Tried to pattern match cons on non list type")
       end
-    | AP_nil _ -> ([ijump l (V_call (Bnot, [V_call (List_is_empty, [cval])])) case_label], [], [], ctx)
+    | AP_nil _ -> ([on_failure l (V_call (Bnot, [V_call (List_is_empty, [cval])]))], [], [], ctx)
 
   let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -775,6 +789,63 @@ module Make (C : CONFIG) = struct
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
     (* Compile case statements *)
+    | AE_match (aval, cases, typ)
+      when C.eager_control_flow
+           && Option.is_some (get_attribute "complete" uannot)
+           && List.for_all (is_pure_case ctx) cases ->
+        let ctyp = ctyp_of_typ ctx typ in
+        let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
+        let compile_case case_match_id case_return_id (apat, guard, body) =
+          let trivial_guard =
+            match guard with
+            | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
+            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
+                true
+            | _ -> false
+          in
+          let pre_destructure, destructure, destructure_cleanup, ctx =
+            compile_match ctx apat cval (fun l b -> icopy l (CL_id (case_match_id, CT_bool)) (V_call (Bnot, [b])))
+          in
+          let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
+          let body_setup, body_call, body_cleanup = compile_aexp ctx body in
+          [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool)); idecl l ctyp case_return_id]
+          @ pre_destructure @ destructure
+          @ ( if not trivial_guard then (
+                let gs = ngensym () in
+                guard_setup
+                @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))]
+                @ guard_cleanup
+                @ [
+                    iif l
+                      (V_call (Bnot, [V_id (gs, CT_bool)]))
+                      (destructure_cleanup @ [icopy l (CL_id (case_match_id, CT_bool)) (V_lit (VL_bool false, CT_bool))])
+                      [] CT_unit;
+                  ]
+              )
+              else []
+            )
+          @ body_setup
+          @ [body_call (CL_id (case_return_id, ctyp))]
+          @ body_cleanup @ destructure_cleanup
+        in
+        let case_ids, cases =
+          List.map
+            (fun case ->
+              let case_match_id = ngensym () in
+              let case_return_id = ngensym () in
+              ( (V_id (case_match_id, CT_bool), V_id (case_return_id, ctyp)),
+                compile_case case_match_id case_return_id case
+              )
+            )
+            cases
+          |> List.split
+        in
+        let rec build_ite = function
+          | [(_, ret)] -> ret
+          | (b, ret) :: rest -> V_call (Ite, [b; ret; build_ite rest])
+          | [] -> Reporting.unreachable l __POS__ "Empty match found"
+        in
+        (aval_setup @ List.concat cases, (fun clexp -> icopy l clexp (build_ite case_ids)), aval_cleanup)
     | AE_match (aval, cases, typ) ->
         let ctx = update_coverage_override uannot ctx in
         let ctyp = ctyp_of_typ ctx typ in
@@ -796,7 +867,9 @@ module Make (C : CONFIG) = struct
                   true
               | _ -> false
             in
-            let pre_destructure, destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
+            let pre_destructure, destructure, destructure_cleanup, ctx =
+              compile_match ctx apat cval (fun l b -> ijump l b case_label)
+            in
             let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
             let body_setup, body_call, body_cleanup = compile_aexp ctx body in
             let gs = ngensym () in
@@ -846,7 +919,9 @@ module Make (C : CONFIG) = struct
           in
           let try_label = label "try_" in
           let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
-          let pre_destructure, destructure, destructure_cleanup, ctx = compile_match ctx apat exn_cval try_label in
+          let pre_destructure, destructure, destructure_cleanup, ctx =
+            compile_match ctx apat exn_cval (fun l b -> ijump l b try_label)
+          in
           let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
           let body_setup, body_call, body_cleanup = compile_aexp ctx body in
           let gs = ngensym () in
@@ -1487,7 +1562,9 @@ module Make (C : CONFIG) = struct
     let ret_ctyp = ctyp_of_typ ctx ret_typ in
 
     (* Compile the function arguments as patterns. *)
-    let arg_setup, compiled_args, arg_cleanup = compile_arg_pats ctx fundef_label pat arg_ctyps in
+    let arg_setup, compiled_args, arg_cleanup =
+      compile_arg_pats ctx (fun l b -> ijump l b fundef_label) pat arg_ctyps
+    in
     let ctx =
       (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
       List.fold_left2
@@ -1634,7 +1711,9 @@ module Make (C : CONFIG) = struct
         let apat = anf_pat ~global:true pat in
         let gs = ngensym () in
         let end_label = label "let_end_" in
-        let pre_destructure, destructure, destructure_cleanup, _ = compile_match ctx apat (V_id (gs, ctyp)) end_label in
+        let pre_destructure, destructure, destructure_cleanup, _ =
+          compile_match ctx apat (V_id (gs, ctyp)) (fun l b -> ijump l b end_label)
+        in
         let gs_setup, gs_cleanup = ([idecl (exp_loc exp) ctyp gs], [iclear ctyp gs]) in
         let bindings = List.map (fun (id, typ) -> (id, ctyp_of_typ ctx typ)) (apat_globals apat) in
         let n = !letdef_count in

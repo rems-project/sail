@@ -116,6 +116,8 @@ val ctx_get_extern : id -> ctx -> string
 
 val ctx_has_val_spec : id -> ctx -> bool
 
+val is_pure_aexp : ctx -> 'a aexp -> bool
+
 (** Create an inital Jib compilation context.
 
     The target is the name that would appear in a valspec extern section, i.e.
@@ -139,7 +141,7 @@ module type CONFIG = sig
   val optimize_anf : ctx -> typ aexp -> typ aexp
 
   (** Unroll all for loops a bounded number of times. Used for SMT
-       generation. *)
+      generation. *)
   val unroll_loops : int option
 
   (** A call is precise if the function arguments match the function
@@ -148,8 +150,8 @@ module type CONFIG = sig
   val make_call_precise : ctx -> id -> ctyp list -> ctyp -> bool
 
   (** If false, will ensure that fixed size bitvectors are
-       specifically less that 64-bits. If true this restriction will
-       be ignored. *)
+      specifically less that 64-bits. If true this restriction will
+      be ignored. *)
   val ignore_64 : bool
 
   (** If false we won't generate any V_struct values *)
@@ -165,11 +167,25 @@ module type CONFIG = sig
   val branch_coverage : out_channel option
 
   (** If true track the location of the last exception thrown, useful
-     for debugging C but we want to turn it off for SMT generation
-     where we can't use strings *)
+      for debugging C but we want to turn it off for SMT generation
+      where we can't use strings *)
   val track_throw : bool
 
   val use_void : bool
+
+  (** Convert control flow where all branches are pure into, into eager variants, i.e.
+
+      let x = if b else y then z
+
+      becomes
+
+      let x = eager_if(b, y, z)
+
+      so `y` and `z` are eagerly evaluated before the if-statement
+      which just becomes like a function call. Reducing the
+      control-flow like this is useful for the Sail->SV and Sail->SMT
+      backends. *)
+  val eager_control_flow : bool
 end
 
 module IdGraph : sig

@@ -10,45 +10,45 @@ overload operator ++ = concat_str
 function main() -> unit = {
   match " " {
     spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 1"),
   };
   match "" {
-    spc() => print_endline("fail"),
+    spc() => print_endline("fail 2"),
     _ => print_endline("ok"),
   };
   match " not spaces" {
-    spc() => print_endline("fail"),
+    spc() => print_endline("fail 3"),
     _ => print_endline("ok"),
   };
   match "    " {
     spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 4"),
   };
 
   match " " {
     opt_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 5"),
   };
   match "" {
     opt_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 6"),
   };
   match "    " {
     opt_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 7"),
   };
 
   match " " {
     def_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 8"),
   };
   match "" {
     def_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 9"),
   };
   match "    " {
     def_spc() => print_endline("ok"),
-    _ => print_endline("fail"),
+    _ => print_endline("fail 10"),
   };
 
   match ((), (), ()) {
@@ -57,6 +57,6 @@ function main() -> unit = {
       print_endline(">" ++ s2 ++ "<");
       print_endline(">" ++ s3 ++ "<");
     },
-    _ => print_endline("fail"),
+    _ => print_endline("fail 11"),
   }
 }
