@@ -285,8 +285,8 @@ n_constraint :: 'NC_' ::=
   | nexp '<=' nexp'                  :: :: le
   | nexp '<' nexp'                   :: :: lt
   | nexp 'IN' { num1 , ... , numn }  :: :: set
-  | n_constraint & n_constraint'     :: :: or
-  | n_constraint | n_constraint'     :: :: and
+  | n_constraint & n_constraint'     :: :: and
+  | n_constraint | n_constraint'     :: :: or
   | id ( typ_arg0 , ... , typ_argn ) :: :: app
   | id                               :: :: id
   | kid                              :: :: var
