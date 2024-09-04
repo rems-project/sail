@@ -1202,17 +1202,6 @@ end) : Jib_compile.CONFIG = struct
       end
     | aexp -> aexp
 
-  let rec is_pure_aexp ctx (AE_aux (aexp, { uannot; _ })) =
-    match get_attribute "anf_pure" uannot with
-    | Some _ -> true
-    | None -> (
-        match aexp with
-        | AE_app (f, _, _) -> Effects.function_is_pure f ctx.effect_info
-        | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2
-        | AE_val _ -> true
-        | _ -> false
-      )
-
   (* Map over all the functions in an aexp. *)
   let rec analyze ctx (AE_aux (aexp, ({ env; uannot; loc } as annot))) =
     let ctx = { ctx with local_env = env } in
@@ -1290,6 +1279,7 @@ end) : Jib_compile.CONFIG = struct
   let branch_coverage = None
   let track_throw = false
   let use_void = false
+  let eager_control_flow = true
 end
 
 (* In order to support register references, we need to build a map

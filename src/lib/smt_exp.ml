@@ -329,6 +329,7 @@ let rec identical x y =
   | Var x, Var y -> Name.compare x y = 0
   | Fn (f1, args1), Fn (f2, args2) ->
       String.compare f1 f2 = 0 && List.compare_lengths args1 args2 = 0 && List.for_all2 identical args1 args2
+  | Tester (sx, x), Tester (sy, y) -> String.compare sx sy = 0 && identical x y
   | _ -> false
 
 let simp_eq x y =
@@ -733,6 +734,12 @@ module Simplifier = struct
         match SimpSet.find_opt v simpset with Some exp -> change exp | None -> NoChange
       ) | _ -> NoChange
 
+  let rule_tester =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Tester (ctor, Var v) -> (
+        match SimpSet.is_ctor v ctor simpset with Some b -> change (Bool_lit b) | _ -> NoChange
+      ) | _ -> NoChange
+
   let rule_access_ite =
     mk_simple_rule __LOC__ @@ function
     | Field (struct_id, field, Ite (i, t, e)) ->
@@ -928,7 +935,7 @@ let simp simpset exp =
     | Extract _ -> run_strategy simpset exp rule_extract
     | Field _ -> run_strategy simpset exp rule_access_ite
     | Unwrap _ -> run_strategy simpset exp rule_access_ite
-    | Tester _ -> run_strategy simpset exp rule_access_ite
+    | Tester _ -> run_strategy simpset exp (Then [rule_tester; rule_access_ite])
     | exp -> NoChange
   in
   let rec go exp =
@@ -1116,10 +1123,10 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
 
   let rec run frame =
     match frame with
-    | Interpreter.Done (state, v) -> Some v
+    | Interpreter.Done (state, v) -> Result.Ok v
     | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
     | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
-    | Interpreter.Fail (_, _, _, _, msg) -> None
+    | Interpreter.Fail (_, _, _, _, msg) -> Result.Error msg
     | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp state eff)
 
   let check ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
@@ -1160,8 +1167,13 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
           let result = run (Step (lazy "", istate, return call, [])) in
           begin
             match result with
-            | Some (V_bool false) | None ->
+            | Result.Ok (V_bool false) | Result.Ok V_unit ->
                 ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
+            | Result.Ok (V_bool true) ->
+                ksprintf print_endline "Failed to replay counterexample: %s\n  Function returned true"
+                  Util.("error" |> red |> clear)
+            | Result.Error msg ->
+                ksprintf print_endline "Failed to replay counterexample: %s\n  %s" Util.("error" |> red |> clear) msg
             | _ -> ()
           end
       | Some (Atom "unsat" :: _) ->
