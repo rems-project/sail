@@ -893,9 +893,7 @@ module Make (C : CONFIG) = struct
             [iblock case_instrs; ilabel case_label]
           )
         in
-        ( aval_setup
-          @ [icomment ("Case with num_cases: " ^ string_of_int num_cases)]
-          @ on_reached
+        ( aval_setup @ on_reached
           @ [idecl l ctyp case_return_id]
           @ List.concat (List.map compile_case cases)
           @ (if Option.is_some (get_attribute "complete" uannot) then [] else [imatch_failure l])
@@ -1254,7 +1252,17 @@ module Make (C : CONFIG) = struct
         (* We can either generate an actual loop body for C, or unroll the body for SMT *)
         let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
         let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure l]) in
-        let body = match C.unroll_loops with Some times -> unroll times 0 | None -> actual in
+        let body =
+          match (get_attribute "unroll" uannot, C.unroll_loops) with
+          | Some attr_data_opt, Some _ -> (
+              match attr_data_opt with
+              | _, Some (AD_aux (AD_num times, _)) -> unroll (Big_int.to_int times) 0
+              | _, Some (AD_aux (_, l)) -> raise (Reporting.err_general l "Invalid argument on unroll attribute")
+              | l, None -> raise (Reporting.err_general l "Expected numeric argument for unroll attribute")
+            )
+          | None, Some times -> unroll times 0
+          | _ -> actual
+        in
 
         ( variable_init from_gs from_setup from_call from_cleanup
           @ variable_init to_gs to_setup to_call to_cleanup

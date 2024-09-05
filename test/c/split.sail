@@ -11,6 +11,7 @@ val split : forall 'n 'm, 'n * 'm == 64 & 'n in {1, 2, 4, 8}. (int('n), int('m),
 function split(n, m, bv) = {
     var result: vector('n, dec, bits('m)) = undefined;
 
+    $[unroll 8]
     foreach (i from 0 to (n - 1)) {
         result[i] = sail_shiftright(bv, i * m)[m - 1 .. 0]
     };
