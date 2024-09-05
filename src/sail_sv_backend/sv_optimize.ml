@@ -671,11 +671,7 @@ module RemoveUnusedVariables = struct
       let uses = Hashtbl.create 4096 in
       defs_uses (ref []) uses defs;
       let defs = visit_sv_defs (new remove_unused_visitor uses changes skip) defs in
-      if !changes > 0 then (
-        prerr_endline (Printf.sprintf "Made %d changes" !changes);
-        go defs
-      )
-      else defs
+      if !changes > 0 then go defs else defs
     in
     let defs = go defs in
     visit_sv_defs (new unnumber_var_visitor) defs

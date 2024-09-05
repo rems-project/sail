@@ -336,7 +336,6 @@ let collect_spec_info ctx cdefs =
         match cdef with
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let direct_footprint = empty_direct_footprint () in
-            prerr_endline ("visit " ^ string_of_id f);
             let _ = visit_cdef (new footprint_visitor ctx registers direct_footprint) cdef in
             CTSet.iter
               (fun ctyp ->
@@ -1382,7 +1381,6 @@ module Make (Config : CONFIG) = struct
         | I_funcall (CR_one clexp, ext, (f, []), args) -> begin
             match Bindings.find_opt f spec_info.footprints with
             | Some footprint ->
-                prerr_endline ("Threading " ^ string_of_id f);
                 let reads =
                   List.map
                     (fun id -> V_id (Name (id, -1), Bindings.find id spec_info.registers))
@@ -1452,10 +1450,7 @@ module Make (Config : CONFIG) = struct
                   )
                   else SkipChildren
                 )
-                else (
-                  prerr_endline ("No footprint: " ^ string_of_id f);
-                  SkipChildren
-                )
+                else SkipChildren
           end
         | _ -> DoChildren
     end
@@ -1612,14 +1607,25 @@ module Make (Config : CONFIG) = struct
       (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
       preds
 
-  let natural_name_compare n1 n2 =
+  let natural_name_compare variable_locations n1 n2 =
+    let open Lexing in
+    let name_compare id1 id2 ssa_num1 ssa_num2 =
+      let c = natural_id_compare id1 id2 in
+      if c <> 0 then c else Int.compare ssa_num1 ssa_num2
+    in
     match (n1, n2) with
-    | Name (id1, ssa_num1), Name (id2, ssa_num2) when ssa_num1 = ssa_num2 -> natural_id_compare id1 id2
+    | Name (id1, ssa_num1), Name (id2, ssa_num2) -> (
+        let get_pos id = Option.bind (Bindings.find_opt id variable_locations) Reporting.simp_loc in
+        match (get_pos id1, get_pos id2) with
+        | Some (p1, _), Some (p2, _) ->
+            let c = Int.compare p1.pos_cnum p2.pos_cnum in
+            if c <> 0 then c else name_compare id1 id2 ssa_num1 ssa_num2
+        | _ -> name_compare id1 id2 ssa_num1 ssa_num2
+      )
     | _ -> Name.compare n1 n2
 
   let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_vars = [Jib_util.return]) spec_info ctx name params
       param_ctyps ret_ctyps body =
-    prerr_endline Util.(string_of_sv_name name |> red |> clear);
     let footprint, is_recursive =
       match name with
       | SVN_id id ->
@@ -1643,9 +1649,6 @@ module Make (Config : CONFIG) = struct
       Queue.add stmt always_comb
     in
 
-    List.iter prerr_endline
-      (List.map (fun (I_aux (_, (_, l)) as instr) -> string_of_instr instr ^ " " ^ Reporting.short_loc_to_string l) body);
-
     let open Jib_ssa in
     let _, end_node, cfg =
       ssa
@@ -1666,6 +1669,16 @@ module Make (Config : CONFIG) = struct
              (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_sv_name name) n)
           )
     in
+
+    let variable_locations = ref Bindings.empty in
+    List.iter
+      (iter_instr (function
+        | I_aux (I_decl (_, Name (id, _)), (_, l)) | I_aux (I_init (_, Name (id, _), _), (_, l)) ->
+            variable_locations := Bindings.add id l !variable_locations
+        | _ -> ()
+        )
+        )
+      body;
 
     let phivars = ref (-1) in
     let phivar () =
@@ -1718,6 +1731,11 @@ module Make (Config : CONFIG) = struct
                   pathconds
               in
               let* muxers = fmap Util.option_these (mapM (smt_ssanode cfg pathcond_vars) ssa_elems) in
+              let muxers =
+                List.stable_sort
+                  (fun (id1, _, _) (id2, _, _) -> natural_name_compare !variable_locations id1 id2)
+                  muxers
+              in
               List.iter
                 (fun (id, ctyp, mux) ->
                   add_comb_statement
@@ -1737,7 +1755,6 @@ module Make (Config : CONFIG) = struct
     in
 
     let final_names = get_final_names !ssa_vars cfg in
-    NameMap.iter (fun x y -> prerr_endline (string_of_name x ^ " -> " ^ string_of_name y)) final_names;
 
     (* Create the always_comb definition, lifting/hoisting the module instantations out of the block *)
     let module_instantiations = Queue.create () in
