@@ -15,19 +15,17 @@ sail_dir = get_sail_dir()
 sail = get_sail()
 
 skip_tests = {
-    'all_even_vector_length',
-    'assign_rename_bug',
-    'cheri128_hsb',
-    'for_shadow',
-    'loop_exception',
-    'poly_mapping', # length
-    'poly_mapping2',
-    'read_write_ram',
+    'all_even_vector_length', # loops
+    'assign_rename_bug', # loops
+    'cheri128_hsb', # loops
+    'for_shadow', # loops
+    'loop_exception', # loops
+    'poly_mapping', # bitvector parsing
+    'read_write_ram', # memory
     'real', # reals
     'real_prop', # reals
-    'split', # generic vectors, loops
+    'split', # loops
     'vector_example', # loops
-    'spc_mappings',
     'lib_hex_bits', # bitvector parsing
     'lib_hex_bits_signed', # bitvector parsing
 }

@@ -330,6 +330,7 @@ let rec identical x y =
   | Fn (f1, args1), Fn (f2, args2) ->
       String.compare f1 f2 = 0 && List.compare_lengths args1 args2 = 0 && List.for_all2 identical args1 args2
   | Tester (sx, x), Tester (sy, y) -> String.compare sx sy = 0 && identical x y
+  | Ite (ix, tx, ex), Ite (iy, ty, ey) -> identical ix iy && identical tx ty && identical ex ey
   | _ -> false
 
 let simp_eq x y =
@@ -428,6 +429,12 @@ module Simplifier = struct
     | Ite (cond, x, Ite (cond', y, z)) when identical x y -> change (Ite (append_to_or cond cond', x, z))
     | Ite (cond, Ite (cond', x, y), z) when identical x z -> change (Ite (Fn ("or", [Fn ("not", [cond]); cond']), x, y))
     | Ite (cond, Ite (cond', x, y), z) when identical y z -> change (Ite (append_to_and cond cond', x, z))
+    | _ -> NoChange
+
+  let rule_chain_right_ite =
+    mk_simple_rule __LOC__ @@ function
+    | Ite (cond, Ite (cond', x, y), z) ->
+        change (Ite (Fn ("and", [cond; cond']), x, Ite (Fn ("and", [cond; Fn ("not", [cond'])]), y, z)))
     | _ -> NoChange
 
   let rule_same_ite =
@@ -743,8 +750,8 @@ module Simplifier = struct
   let rule_access_ite =
     mk_simple_rule __LOC__ @@ function
     | Field (struct_id, field, Ite (i, t, e)) ->
-        change (Ite (i, Field (struct_id, field, t), Field (struct_id, field, t)))
-    | Unwrap (ctor, b, Ite (i, t, e)) -> change (Ite (i, Unwrap (ctor, b, t), Unwrap (ctor, b, t)))
+        change (Ite (i, Field (struct_id, field, t), Field (struct_id, field, e)))
+    | Unwrap (ctor, b, Ite (i, t, e)) -> change (Ite (i, Unwrap (ctor, b, t), Unwrap (ctor, b, e)))
     | Tester (ctor, Ite (i, t, e)) -> change (Ite (i, Tester (ctor, t), Tester (ctor, e)))
     | Fn ("select", [Ite (i, t, e); ix]) -> change (Ite (i, Fn ("select", [t; ix]), Fn ("select", [e; ix])))
     | _ -> NoChange
