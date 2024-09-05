@@ -898,7 +898,7 @@ module Make (C : CONFIG) = struct
           @ on_reached
           @ [idecl l ctyp case_return_id]
           @ List.concat (List.map compile_case cases)
-          @ [imatch_failure l]
+          @ (if Option.is_some (get_attribute "complete" uannot) then [] else [imatch_failure l])
           @ [ilabel finish_match_label],
           (fun clexp -> icopy l clexp (V_id (case_return_id, ctyp))),
           [iclear ctyp case_return_id] @ aval_cleanup
