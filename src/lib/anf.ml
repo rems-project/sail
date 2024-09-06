@@ -458,18 +458,19 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
   | AE_short_circuit (SC_or, aval, aexp) -> pp_aval aval ^^ string " || " ^^ pp_aexp aexp
   | AE_short_circuit (SC_and, aval, aexp) -> pp_aval aval ^^ string " && " ^^ pp_aexp aexp
   | AE_let (mut, id, id_typ, binding, body, typ) ->
+      let keyword = match mut with Mutable -> string "var" | Immutable -> string "let" in
       group
         begin
           match binding with
           | AE_aux (AE_let _, _) ->
-              (pp_annot typ (separate space [string "let"; pp_annot id_typ (pp_id id); string "="])
+              (pp_annot typ (separate space [keyword; pp_annot id_typ (pp_id id); string "="])
               ^^ hardline
               ^^ nest 2 (pp_aexp binding)
               )
               ^^ hardline ^^ string "in" ^^ space ^^ pp_aexp body
           | _ ->
               pp_annot typ
-                (separate space [string "let"; pp_annot id_typ (pp_id id); string "="; pp_aexp binding; string "in"])
+                (separate space [keyword; pp_annot id_typ (pp_id id); string "="; pp_aexp binding; string "in"])
               ^^ hardline ^^ pp_aexp body
         end
   | AE_if (cond, then_aexp, else_aexp, typ) ->
@@ -752,10 +753,14 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       mk_aexp (AE_val (AV_ref (id, lvar)))
   | E_match (match_exp, pexps) ->
       let match_aval, match_wrap = to_aval (anf match_exp) in
-      let anf_pexp (Pat_aux (pat_aux, _)) =
+      let anf_pexp (Pat_aux (pat_aux, (l, _))) =
         match pat_aux with
         | Pat_when (pat, guard, body) -> (anf_pat pat, anf guard, anf body)
-        | Pat_exp (pat, body) -> (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit L_true, bool_typ))), anf body)
+        | Pat_exp (pat, body) ->
+            ( anf_pat pat,
+              AE_aux (AE_val (AV_lit (mk_lit L_true, bool_typ)), { loc = l; env = env_of body; uannot = empty_uannot }),
+              anf body
+            )
       in
       match_wrap (mk_aexp (AE_match (match_aval, List.map anf_pexp pexps, typ_of exp)))
   | E_try (match_exp, pexps) ->
@@ -766,13 +771,14 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
         | Pat_exp (pat, body) -> (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit L_true, bool_typ))), anf body)
       in
       mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
-  | E_var (LE_aux (LE_id id, _), binding, body)
-  | E_var (LE_aux (LE_typ (_, id), _), binding, body)
-  | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
-  | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ->
+  | ( E_var (LE_aux (LE_id id, _), binding, body)
+    | E_var (LE_aux (LE_typ (_, id), _), binding, body)
+    | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
+    | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ) as binder ->
+      let mut = match binder with E_var _ -> Mutable | E_let _ -> Immutable | _ -> assert false in
       let env = env_of body in
       let lvar = Env.lookup_id id env in
-      mk_aexp (AE_let (Mutable, id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
+      mk_aexp (AE_let (mut, id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
   | E_var (lexp, _, _) ->
       Reporting.unreachable l __POS__
         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF") [@coverage off]

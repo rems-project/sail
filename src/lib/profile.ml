@@ -86,12 +86,18 @@ let start () =
   Sys.time ()
 
 let finish msg t =
-  if !opt_profile then begin
+  let open Printf in
+  if !opt_profile then (
+    let depth = 2 * (List.length !profile_stack - 1) in
     match !profile_stack with
     | p :: ps ->
-        prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t));
-        prerr_endline (Printf.sprintf "  SMT calls: %d, SMT time: %fs" p.smt_calls p.smt_time);
+        let indent =
+          if depth > 0 then String.init depth (fun i -> if i land 1 = 0 then '|' else ' ') |> Util.magenta |> Util.clear
+          else ""
+        in
+        (* Note ksprintf prerr_endline flushes unlike eprintf so the profiling output occurs immediately *)
+        ksprintf prerr_endline "%s%s %s: %fs" indent Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t);
+        ksprintf prerr_endline "%s  SMT calls: %d, SMT time: %fs" indent p.smt_calls p.smt_time;
         profile_stack := ps
     | [] -> ()
-  end
-  else ()
+  )

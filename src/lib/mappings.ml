@@ -215,7 +215,7 @@ let match_completeness c (E_aux (aux, (l, uannot))) =
   in
   match aux with
   | E_match _ -> E_aux (aux, (l, uannot))
-  | _ -> Reporting.unreachable l __POS__ "Non-match in match_complete"
+  | _ -> Reporting.unreachable l __POS__ "Non-match in match_completeness"
 
 let match_complete = match_completeness "complete"
 let match_incomplete = match_completeness "incomplete"

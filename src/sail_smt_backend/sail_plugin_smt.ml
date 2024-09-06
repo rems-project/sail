@@ -166,7 +166,9 @@ let smt_target out_file { ast; effect_info; env; _ } =
   let module Counterexample = Smt_exp.Counterexample (struct
     let max_unknown_integer_width = !opt_smt_unknown_integer_width
   end) in
+  let t = Profile.start () in
   let generated_smt = SMTGen.generate_smt ~properties ~name_file ~smt_includes:!opt_smt_includes ctx cdefs in
+  Profile.finish "Generating SMT" t;
   if !opt_smt_auto then
     List.iter
       (fun ({ file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
