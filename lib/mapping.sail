@@ -77,6 +77,7 @@ val string_take = pure "string_take" : (string, nat) -> string
 $[sv_function { types = "int #1" }]
 val string_drop = pure "string_drop" : (string, nat) -> string
 
+$[sv_function { return_type = "int" }]
 val string_length = pure "string_length" : string -> nat
 
 val string_append = pure {coq: "String.append", c: "concat_str", _: "string_append"} : (string, string) -> string

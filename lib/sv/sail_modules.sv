@@ -76,8 +76,8 @@ function automatic string string_drop(string str, int n);
    return str.substr(n, str.len() - 1);
 endfunction // string_drop
 
-function automatic logic [127:0] string_length(string str);
-   return {96'h0, str.len()};
+function automatic int string_length(string str);
+   return str.len();
 endfunction // string_length
 
 `endif
