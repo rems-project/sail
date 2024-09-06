@@ -185,6 +185,9 @@ let rec is_pure_aexp ctx (AE_aux (aexp, { uannot; _ })) =
       match aexp with
       | AE_app (f, _, _) -> Effects.function_is_pure f ctx.effect_info
       | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2
+      | AE_match (_, arms, _) ->
+          List.for_all (fun (_, guard, aexp) -> is_pure_aexp ctx guard && is_pure_aexp ctx aexp) arms
+      | AE_short_circuit (_, _, aexp) -> is_pure_aexp ctx aexp
       | AE_val _ -> true
       | _ -> false
     )

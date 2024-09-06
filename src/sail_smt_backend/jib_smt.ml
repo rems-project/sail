@@ -739,7 +739,10 @@ module Make (Config : CONFIG) = struct
     let stack = Stack.create () in
 
     let open Jib_ssa in
+    let t = Profile.start () in
     let start, _, cfg = ssa ?debug_prefix:(Option.map (fun _ -> name) debug_attr) instrs in
+    Profile.finish (Printf.sprintf "SSA conversion (%s)" name) t;
+
     let visit_order =
       try topsort cfg
       with Not_a_DAG n ->
@@ -819,6 +822,7 @@ module Make (Config : CONFIG) = struct
     | CDEF_val (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props -> begin
         match find_function [] function_id all_cdefs with
         | intervening_lets, Some (None, args, instrs, function_def_annot) ->
+            let function_id_string = string_of_id function_id in
             let debug_attr = get_def_attribute "jib_debug" function_def_annot in
             let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
 
@@ -844,18 +848,20 @@ module Make (Config : CONFIG) = struct
             in
 
             if Option.is_some debug_attr then (
-              prerr_endline Util.("Pre-SMT IR for " ^ string_of_id function_id ^ ":" |> yellow |> bold |> clear);
+              prerr_endline Util.("Pre-SMT IR for " ^ function_id_string ^ ":" |> yellow |> bold |> clear);
               List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
             );
 
+            let t = Profile.start () in
             let (stack, state), _ =
-              Smt_gen.run (smt_instr_list debug_attr (string_of_id function_id) ctx all_cdefs instrs) pragma_l
+              Smt_gen.run (smt_instr_list debug_attr function_id_string ctx all_cdefs instrs) pragma_l
             in
+            Profile.finish (Printf.sprintf "SMT conversion (%s)" function_id_string) t;
 
             let query = smt_query state pragma.query in
             push_smt_defs stack [Assert (Fn ("not", [query]))];
 
-            let fname = name_file (string_of_id function_id) in
+            let fname = name_file function_id_string in
             let out_chan = open_out fname in
             if prop_type = "counterexample" then output_string out_chan "(set-option :produce-models true)\n";
 
@@ -872,7 +878,7 @@ module Make (Config : CONFIG) = struct
 
             let t = Profile.start () in
             let queue = Queue_optimizer.optimize stack in
-            Profile.finish "SMT optimization" t;
+            Profile.finish (Printf.sprintf "SMT optimization (%s)" function_id_string) t;
 
             (* let queue = Queue.of_seq (List.to_seq (List.rev (List.of_seq (Stack.to_seq stack)))) in *)
             Queue.iter
