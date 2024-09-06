@@ -84,6 +84,9 @@ open Sv_ir
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
 
+let gensym, _ = symbol_generator "sv"
+let ngensym () = name (gensym ())
+
 let sv_type_of_string = Initial_check.parse_from_string (Sv_type_parser.sv_type Sv_type_lexer.token)
 
 let parse_sv_type = function
@@ -132,6 +135,20 @@ let sv_types_from_attribute ~arity attr_data_opt =
          "Mixed use of types with specified positions and non-specified positions"
       )
   )
+
+let sv_return_type_from_attribute attr_data_opt =
+  let open Util.Option_monad in
+  let* attr_data = attr_data_opt in
+  let* fields = attribute_data_object attr_data in
+  let* return_type = List.assoc_opt "return_type" fields in
+  let l, num_opt, ctyp =
+    match return_type with
+    | AD_aux (AD_string _, _) as s -> parse_sv_type s
+    | AD_aux (_, l) -> raise (Reporting.err_general l "return_type field must be a string")
+  in
+  match num_opt with
+  | None -> Some ctyp
+  | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
 
 (* The direct footprint contains information about the effects
    directly performed by the function itself, i.e. not those from any
@@ -1041,6 +1058,26 @@ module Make (Config : CONFIG) = struct
     let wrap aux = SVS_aux (aux, l) in
     match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
+  let convert_return l creturn to_aux attr_data_opt =
+    let wrap aux = SVS_aux (aux, l) in
+    let ctyp = creturn_ctyp creturn in
+    let updates, ret = svir_creturn creturn in
+    match sv_return_type_from_attribute attr_data_opt with
+    | Some ctyp' ->
+        let temp = ngensym () in
+        let* converted = Smt.smt_conversion ~into:ctyp ~from:ctyp' (Var temp) in
+        return
+          (SVS_block
+             ((wrap (SVS_var (temp, ctyp', None)) :: List.map wrap updates)
+             @ [wrap (to_aux (SVP_id temp)); wrap (SVS_assign (ret, converted))]
+             )
+          )
+    | None -> (
+        match updates with
+        | [] -> return (to_aux ret)
+        | _ -> return (SVS_block (List.map wrap updates @ [wrap (to_aux ret)]))
+      )
+
   let convert_arguments args attr_data_opt =
     let args_len = List.length args in
     match sv_types_from_attribute ~arity:args_len attr_data_opt with
@@ -1128,14 +1165,20 @@ module Make (Config : CONFIG) = struct
                     wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
                 | None -> (
                     let _, _, _, uannot = Bindings.find id ctx.valspecs in
-                    let updates, ret = svir_creturn creturn in
                     match get_attribute "sv_module" uannot with
                     | Some (_, attr_data_opt) ->
                         let* args = convert_arguments args attr_data_opt in
-                        wrap (with_updates l updates (SVS_call (ret, SVN_string name, args)))
+                        let* aux =
+                          convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) attr_data_opt
+                        in
+                        wrap aux
                     | None ->
-                        let* args = convert_arguments args (Option.bind (get_attribute "sv_function" uannot) snd) in
-                        wrap (with_updates l updates (SVS_assign (ret, Fn (name, args))))
+                        let attr_data_opt = Option.bind (get_attribute "sv_function" uannot) snd in
+                        let* args = convert_arguments args attr_data_opt in
+                        let* aux =
+                          convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) attr_data_opt
+                        in
+                        wrap aux
                   )
               )
           )

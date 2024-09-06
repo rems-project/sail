@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/tuple_lexp1.sail[0m:10.11-20:
+10[96m |[0m  (x, y) = (2, 3, 4)
+  [91m |[0m           [91m^-------^[0m
+  [91m |[0m Type mismatch between (int('ex248#), int('ex249#)) and (int(2), int(3), int(4))
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/tuple_lexp1.sail[0m:10.2-8:
+  [91m |[0m 10[96m |[0m  (x, y) = (2, 3, 4)
+  [91m |[0m   [91m |[0m  [91m^----^[0m
+  [91m |[0m   [91m |[0m Tuple l-expression and tuple type have different length
