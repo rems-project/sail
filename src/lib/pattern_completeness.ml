@@ -488,7 +488,15 @@ module Make (C : Config) = struct
                   field_typs
               in
               (struct_id, field_typs)
-          | _ -> Reporting.unreachable l __POS__ "P_struct pattern with non-struct type"
+          | Some typ -> Reporting.unreachable l __POS__ ("P_struct pattern with non-struct type: " ^ string_of_typ typ)
+          | None ->
+              let struct_id =
+                match typ with
+                | Typ_aux (Typ_app (id, _), _) -> id
+                | Typ_aux (Typ_id id, _) -> id
+                | _ -> Reporting.unreachable l __POS__ ("P_struct pattern with non-struct type: " ^ string_of_typ typ)
+              in
+              (struct_id, [])
         in
         let field_typs = List.fold_left (fun m (typ, field) -> Bindings.add field typ m) Bindings.empty field_typs in
         GP_struct
