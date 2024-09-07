@@ -1556,6 +1556,11 @@ module Make (C : CONFIG) = struct
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
 
+    if Option.is_some debug_attr then (
+      prerr_endline Util.("Rewritten source for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      prerr_endline (Document.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp exp)))
+    );
+
     (* Find the function's type. *)
     let quant, Typ_aux (fn_typ, _) =
       try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
