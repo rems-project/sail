@@ -80,6 +80,7 @@ type ctx = {
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
   constraints : n_constraint list;
+  is_mapping : id -> bool;
 }
 
 module type Config = sig

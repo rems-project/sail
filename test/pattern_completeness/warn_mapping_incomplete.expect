@@ -1,0 +1,6 @@
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_mapping_incomplete.sail[0m:16.4-9:
+16[96m |[0m    match A {
+  [91m |[0m    [91m^---^[0m
+  [91m |[0m 
+The following expression is unmatched by mapping-free patterns: [93mA[0m
+

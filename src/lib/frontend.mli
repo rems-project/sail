@@ -70,6 +70,7 @@ open Ast_defs
 open Ast_util
 
 val opt_ddump_initial_ast : bool ref
+val opt_ddump_side_effect : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_list_files : bool ref
 val opt_reformat : string option ref

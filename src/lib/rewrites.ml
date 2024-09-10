@@ -925,6 +925,7 @@ let pats_complete l env ps typ =
       Pattern_completeness.structs = Env.get_records env;
       Pattern_completeness.enums = Env.get_enums env;
       Pattern_completeness.constraints = Env.get_constraints env;
+      Pattern_completeness.is_mapping = (fun id -> Env.is_mapping id env);
     }
   in
   PC.is_complete l ctx ps typ
