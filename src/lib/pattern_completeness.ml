@@ -79,6 +79,7 @@ type ctx = {
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
   constraints : n_constraint list;
+  is_mapping : id -> bool;
 }
 
 module type Config = sig
@@ -214,6 +215,16 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
   let counter = ref from in
   let pat = go counter pat in
   (pat, !counter)
+
+let rec contains_mapping ctx (P_aux (aux, _)) =
+  match aux with
+  | P_app (id, ps) -> ctx.is_mapping id || List.exists (contains_mapping ctx) ps
+  | P_id _ | P_lit _ | P_wild | P_vector_subrange _ -> false
+  | P_not p | P_as (p, _) | P_var (p, _) | P_typ (_, p) -> contains_mapping ctx p
+  | P_or (p1, p2) | P_cons (p1, p2) -> contains_mapping ctx p1 || contains_mapping ctx p2
+  | P_tuple ps | P_vector ps | P_vector_concat ps | P_string_append ps | P_list ps ->
+      List.exists (contains_mapping ctx) ps
+  | P_struct (fps, _) -> List.exists (fun (_, p) -> contains_mapping ctx p) fps
 
 let preserved_explanation =
   "Sail cannot simplify the above pattern match:\n"
@@ -915,14 +926,18 @@ module Make (C : Config) = struct
     | Parse_ast.Range (n, m) -> Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + String.length keyword }))
     | l -> l
 
-  let rec cases_to_pats from have_guard = function
-    | [] -> (have_guard, [])
+  let rec cases_to_pats ctx from ~have_guard ~have_mapping = function
+    | [] -> (have_guard, have_mapping, [])
     | Pat_aux (Pat_exp ((P_aux (_, (l, _)) as pat), _), _) :: cases ->
         let pat, from = number_pat from pat in
-        let have_guard, pats = cases_to_pats from have_guard cases in
-        (have_guard, (l, pat) :: pats)
-    (* We don't consider guarded cases *)
-    | Pat_aux (Pat_when _, _) :: cases -> cases_to_pats from true cases
+        (* If a pattern contains a mapping, we don't consider it *)
+        if contains_mapping ctx pat then cases_to_pats ctx from ~have_guard ~have_mapping:true cases
+        else (
+          let have_guard, have_mapping, pats = cases_to_pats ctx from ~have_guard ~have_mapping cases in
+          (have_guard, have_mapping, (l, pat) :: pats)
+        )
+    (* We also don't consider guarded cases *)
+    | Pat_aux (Pat_when _, _) :: cases -> cases_to_pats ctx from ~have_guard:true ~have_mapping cases
 
   let rec update_cases l new_pats cases =
     match (new_pats, cases) with
@@ -934,9 +949,9 @@ module Make (C : Config) = struct
 
   let is_complete_wildcarded ?(keyword = "match") l ctx cases head_exp_typ =
     try
-      match cases_to_pats 0 false cases with
-      | _, [] -> None
-      | have_guard, pats ->
+      match cases_to_pats ctx 0 ~have_guard:false ~have_mapping:false cases with
+      | _, _, [] -> None
+      | have_guard, have_mapping, pats ->
           let matrix =
             Rows
               (List.mapi
@@ -947,7 +962,12 @@ module Make (C : Config) = struct
           begin
             match matrix_is_complete l ctx matrix with
             | Incomplete (unmatched :: _) ->
-                let guard_info = if have_guard then " by unguarded patterns" else "" in
+                let guard_info =
+                  if have_guard && have_mapping then " by unguarded or mapping-free patterns"
+                  else if have_guard then " by unguarded patterns"
+                  else if have_mapping then " by mapping-free patterns"
+                  else ""
+                in
                 Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
                   ("The following expression is unmatched" ^ guard_info ^ ": "
                   ^ (string_of_exp unmatched |> Util.yellow |> Util.clear)

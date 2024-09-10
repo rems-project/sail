@@ -71,6 +71,7 @@ open Ast_defs
 module StringMap = Map.Make (String)
 
 let opt_ddump_initial_ast = ref false
+let opt_ddump_side_effect = ref false
 let opt_ddump_tc_ast = ref false
 let opt_list_files = ref false
 let opt_reformat : string option ref = ref None
@@ -79,6 +80,7 @@ let finalize_ast asserts_termination ctx env ast =
   Lint.warn_unmodified_variables ast;
   let ast = Scattered.descatter ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
+  if !opt_ddump_side_effect then Effects.dump_effects side_effects;
   Effects.check_side_effects side_effects ast;
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) else () in
   (ctx, ast, Type_check.Env.open_all_modules env, side_effects)
