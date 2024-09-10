@@ -328,6 +328,7 @@ let format_warn ?once_from short_str l explanation =
           let open Error_format in
           prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str);
           format_message (Location ("", None, l, explanation)) err_formatter;
+          prerr_endline "";
           seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
         )
     | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n")
