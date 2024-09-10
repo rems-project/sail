@@ -76,6 +76,7 @@ let opt_list_files = ref false
 let opt_reformat : string option ref = ref None
 
 let finalize_ast asserts_termination ctx env ast =
+  Lint.warn_unmodified_variables ast;
   let ast = Scattered.descatter ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   Effects.check_side_effects side_effects ast;
