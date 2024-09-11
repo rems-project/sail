@@ -414,7 +414,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             return (smt_cval_call op args)
         | V_ctor_kind (union, (ctor, _), ctyp) ->
             let* union = smt_cval union in
-            return (Fn ("not", [Tester (zencode_id ctor, union)]))
+            return (Fn ("not", [Tester (ctor, union)]))
         | V_ctor_unwrap (union, (ctor, _), ctyp) ->
             let union_ctyp = cval_ctyp union in
             let* union = smt_cval union in
@@ -1330,9 +1330,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 else
                   let* xsmt = smt_cval x in
                   let* ysmt = smt_cval y in
-                  let same_ctor =
-                    Fn ("and", [Tester (zencode_uid (f1, []), xsmt); Tester (zencode_uid (f2, []), ysmt)])
-                  in
+                  let same_ctor = Fn ("and", [Tester (f1, xsmt); Tester (f2, ysmt)]) in
                   let* ctor_cmp =
                     builtin_eq_anything (V_ctor_unwrap (x, (f1, []), ctyp1)) (V_ctor_unwrap (y, (f2, []), ctyp2))
                   in

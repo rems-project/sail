@@ -961,7 +961,9 @@ module Make (Config : CONFIG) = struct
     | Var v -> pp_name v
     | Tester (ctor, v) ->
         opt_parens
-          (separate space [pp_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> String.uppercase_ascii)])
+          (separate space
+             [pp_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> zencode_id |> String.uppercase_ascii)]
+          )
     | Unwrap (ctor, packed, v) ->
         let packed_ctor = if Config.union_padding then pp_id ctor ^^ dot ^^ pp_id ctor else pp_id ctor in
         if packed then pp_smt v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else pp_smt v ^^ dot ^^ pp_id ctor

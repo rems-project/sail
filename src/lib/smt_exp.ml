@@ -103,7 +103,7 @@ type smt_exp =
   | SignExtend of int * int * smt_exp
   | ZeroExtend of int * int * smt_exp
   | Extract of int * int * smt_exp
-  | Tester of string * smt_exp
+  | Tester of Ast.id * smt_exp
   | Unwrap of Ast.id * bool * smt_exp
   | Field of Ast.id * Ast.id * smt_exp
   | Struct of Ast.id * (Ast.id * smt_exp) list
@@ -131,7 +131,7 @@ let rec pp_smt_exp =
   | Ite (cond, then_exp, else_exp) ->
       parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
   | Extract (i, j, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
-  | Tester (kind, exp) -> parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
+  | Tester (ctor, exp) -> parens (string (Printf.sprintf "(_ is %s)" (zencode_id ctor)) ^^ space ^^ pp_smt_exp exp)
   | SignExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
   | ZeroExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ zero_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
   | Store (_, _, arr, index, x) -> parens (string "store" ^^ space ^^ separate_map space pp_smt_exp [arr; index; x])
@@ -260,7 +260,7 @@ module SimpSet = struct
     var_fn : Jib.name -> smt_exp option;
     vars : smt_exp SimpVarMap.t;
     inequalities : smt_exp list SimpVarMap.t;
-    is_ctor : string NameMap.t;
+    is_ctor : Ast.id NameMap.t;
   }
 
   let empty =
@@ -329,7 +329,7 @@ let rec identical x y =
   | Var x, Var y -> Name.compare x y = 0
   | Fn (f1, args1), Fn (f2, args2) ->
       String.compare f1 f2 = 0 && List.compare_lengths args1 args2 = 0 && List.for_all2 identical args1 args2
-  | Tester (sx, x), Tester (sy, y) -> String.compare sx sy = 0 && identical x y
+  | Tester (ctorx, x), Tester (ctory, y) -> Id.compare ctorx ctory = 0 && identical x y
   | Ite (ix, tx, ex), Ite (iy, ty, ey) -> identical ix iy && identical tx ty && identical ex ey
   | _ -> false
 
