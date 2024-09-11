@@ -382,29 +382,25 @@ module Make (Config : CONFIG) = struct
 
      (define-const v/o (ite cond_1 v/n v/m))
   *)
-  let smt_ssanode cfg preds =
+  let smt_ssanode cfg pathconds =
     let open Jib_ssa in
     function
-    | Pi _ -> return []
+    | Pi _ -> return None
     | Phi (id, ctyp, ids) -> (
-        let get_pi n =
-          match get_vertex cfg n with
-          | Some ((ssa_elems, _), _, _) -> List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
-          | None -> failwith "Predecessor node does not exist"
+        let ids, pathconds =
+          List.combine ids pathconds |> List.filter (fun (_, pc) -> Option.is_some pc) |> List.split
         in
-        let pis = List.map get_pi (IntSet.elements preds) in
-        let* mux =
+        let mux =
           List.fold_right2
-            (fun pi id chain ->
-              let* chain = chain in
-              let* pi = mapM Smt.smt_cval pi in
-              let pathcond = Smt_exp.simp SimpSet.empty (smt_conj pi) in
-              match chain with Some smt -> return (Some (Ite (pathcond, Var id, smt))) | None -> return (Some (Var id))
+            (fun pathcond id chain ->
+              let pathcond = Option.get pathcond in
+              match chain with Some smt -> Some (Ite (pathcond, Var id, smt)) | None -> Some (Var id)
             )
-            pis ids (return None)
+            pathconds ids None
         in
-        let* ctyp = smt_ctyp ctyp in
-        match mux with None -> assert false | Some mux -> return [Define_const (id, ctyp, mux)]
+        let mux = Option.map (Smt_exp.simp SimpSet.empty) mux in
+        let* ty = smt_ctyp ctyp in
+        match mux with None -> assert false | Some mux -> return (Some (id, ty, mux))
       )
 
   (* The pi condition are computed by traversing the dominator tree,
@@ -758,17 +754,60 @@ module Make (Config : CONFIG) = struct
 
     let state = { events = ref EventMap.empty; cfg; node = -1; arg_stack = Stack.create () } in
 
+    let phivars = ref (-1) in
+    let phivar () =
+      incr phivars;
+      Jib_util.name (mk_id ("phi#" ^ string_of_int !phivars))
+    in
+
     List.iter
       (fun n ->
         match get_vertex cfg n with
         | None -> ()
-        | Some ((ssa_elems, cfnode), preds, succs) ->
+        | Some ((ssa_elems, cfnode), preds, _) ->
             let pathcond, checks =
               Smt_gen.run
-                (let* muxers = Smt_gen.fmap List.concat (mapM (smt_ssanode cfg preds) ssa_elems) in
+                (let preds =
+                   List.map
+                     (fun pred ->
+                       match Option.get (get_vertex cfg pred) with
+                       | (_, CF_block (_, T_exit _)), _, _ -> None
+                       | _ -> Some pred
+                     )
+                     (IntSet.elements preds)
+                 in
+                 let get_pi n =
+                   match get_vertex cfg n with
+                   | Some ((ssa_elems, _), _, _) ->
+                       List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
+                   | None -> failwith "Predecessor node does not exist"
+                 in
+                 let pis = List.map (Option.map get_pi) preds in
+                 let* pathconds =
+                   mapM
+                     (function
+                       | Some pi ->
+                           let* pi = mapM Smt.smt_cval pi in
+                           return (Some (Smt_exp.simp SimpSet.empty (smt_conj pi)))
+                       | None -> return None
+                       )
+                     pis
+                 in
+                 let pathcond_vars =
+                   List.map
+                     (function
+                       | Some pathcond ->
+                           let id = phivar () in
+                           push_smt_defs stack [Define_const (id, Bool, pathcond)];
+                           Some (Var id)
+                       | None -> None
+                       )
+                     pathconds
+                 in
+                 let* muxers = Smt_gen.fmap Util.option_these (mapM (smt_ssanode cfg pathcond_vars) ssa_elems) in
+                 List.iter (fun (id, ty, mux) -> push_smt_defs stack [Define_const (id, ty, mux)]) muxers;
                  let state = { state with node = n } in
                  let* basic_block = smt_cfnode all_cdefs ctx state cfnode in
-                 push_smt_defs stack muxers;
                  push_smt_defs stack basic_block;
                  get_pathcond state.node state.cfg
                 )
