@@ -2599,6 +2599,7 @@ pre.rouge .gs {
 <li><a href="#_automatic_formatting_experimental">Automatic formatting (Experimental)</a></li>
 <li><a href="#_interactive_mode">Interactive mode</a></li>
 <li><a href="#_other_options">Other options</a></li>
+<li><a href="#_debug_options">Debug options</a></li>
 </ul>
 </li>
 <li><a href="#_the_sail_language">The Sail Language</a>
@@ -2613,14 +2614,36 @@ pre.rouge .gs {
 <li><a href="#_the_list_type">The list type</a></li>
 <li><a href="#_tuples">Tuples</a></li>
 <li><a href="#_strings">Strings</a></li>
-<li><a href="#_user_defined_types">User-defined types</a></li>
-<li><a href="#_pattern_matching">Pattern matching</a></li>
+<li><a href="#_user_defined_types">User-defined types</a>
+<ul class="sectlevel3">
+<li><a href="#_structs">Structs</a></li>
+<li><a href="#_enums">Enums</a></li>
+<li><a href="#_unions">Unions</a></li>
+</ul>
+</li>
+<li><a href="#_pattern_matching">Pattern matching</a>
+<ul class="sectlevel3">
+<li><a href="#_guards">Guards</a></li>
+<li><a href="#_matching_on_literals">Matching on literals</a></li>
+<li><a href="#_matching_on_enumerations">Matching on enumerations</a></li>
+<li><a href="#_matching_on_tuples">Matching on tuples</a></li>
+<li><a href="#_matching_on_unions">Matching on unions</a></li>
+<li><a href="#_matching_on_lists">Matching on lists</a></li>
+<li><a href="#_matching_on_structs">Matching on structs</a></li>
+<li><a href="#_as_patterns">As patterns</a></li>
+<li><a href="#_automatic_wildcard_insertion">Automatic wildcard insertion</a></li>
+</ul>
+</li>
 <li><a href="#_matching_in_let_and_function_arguments">Matching in let and function arguments</a></li>
 <li><a href="#_type_patterns">Type patterns</a></li>
 <li><a href="#_mutable_variables">Mutable variables</a></li>
 <li><a href="#_assignment_and_l_values">Assignment and l-values</a></li>
 <li><a href="#_bitfields">Bitfields</a></li>
-<li><a href="#_operators">Operators</a></li>
+<li><a href="#_operators">Operators</a>
+<ul class="sectlevel3">
+<li><a href="#_built_in_precedences">Built-in precedences</a></li>
+</ul>
+</li>
 <li><a href="#_ad_hoc_overloading">Ad-hoc overloading</a></li>
 <li><a href="#_mappings">Mappings</a></li>
 <li><a href="#_sizeof_and_constraint">Sizeof and constraint</a></li>
@@ -3050,17 +3073,13 @@ handled after the AST is parsed.</p>
 <div class="sect2">
 <h3 id="_sail_options">Sail options</h3>
 <div class="paragraph">
-<p>For command line arguments, by default Sail accepts arguments of
-the form <code>&#8209;long_opt</code>, i.e. leading with a single <code>-</code> and words
-separated by <code>_</code>. For those who find this departure from standard
-convention distasteful, you can define the <code>SAIL_NEW_CLI</code> environment
-variable, and all such options will be formatted as
-<code>&#8209;&#8209;long&#8209;opt</code> (short opts like <code>&#8209;o</code> will remain
-unchanged). For backwards compatibility reasons, this default is hard
-to change.</p>
+<p>For backwards compatibility reasons, Sail accepts arguments of the
+form <code>-long_opt</code>, i.e. leading with a single <code>-</code> and words
+separated by <code>_</code>. Such an option will be treated the same as
+<code>--long-opt</code>.</p>
 </div>
 <div class="paragraph">
-<p>For a list of all options, one can call Sail as <code>sail -help</code>.</p>
+<p>For a list of all options, one can call Sail as <code>sail --help</code>.</p>
 </div>
 <div style="page-break-after: always;"></div>
 </div>
@@ -3107,17 +3126,17 @@ arithmetic, as well as <a href="https://zlib.net/">zlib</a> for working with com
 unless this flag is set.</p>
 </li>
 <li>
-<p><code>-Oconstant_fold</code> apply constant folding optimisations.</p>
+<p><code>--Oconstant-fold</code> apply constant folding optimisations.</p>
 </li>
 <li>
-<p><code>-c_include</code> Supply additional header files to be included in the
+<p><code>--c-include</code> Supply additional header files to be included in the
 generated C.</p>
 </li>
 <li>
-<p><code>-c_no_main</code> Do not generate a <code>main()</code> function.</p>
+<p><code>--c-no-main</code> Do not generate a <code>main()</code> function.</p>
 </li>
 <li>
-<p><code>-static</code> Mark generated C functions as static where possible. This
+<p><code>--static</code> Mark generated C functions as static where possible. This
 is useful for measuring code coverage.</p>
 </li>
 </ul>
@@ -3142,7 +3161,7 @@ hardware description language!
 </table>
 </div>
 <div class="paragraph">
-<p>To compile Sail into SystemVerilog, the <code>-sv</code> option is used. The <code>-o</code>
+<p>To compile Sail into SystemVerilog, the <code>--sv</code> option is used. The <code>-o</code>
 option provides a prefix that is used on the various generated files.</p>
 </div>
 <div class="paragraph">
@@ -3151,28 +3170,28 @@ option provides a prefix that is used on the various generated files.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><code>-sv_output_dir</code> Generate all files in the specified directory</p>
+<p><code>--sv-output-dir</code> Generate all files in the specified directory</p>
 </li>
 <li>
-<p><code>-sv_include</code> Add an include directive to the generated SystemVerilog</p>
+<p><code>--sv-include</code> Add an include directive to the generated SystemVerilog</p>
 </li>
 <li>
-<p><code>-sv_verilate</code> Can be used as either <code>-sv_verilate run</code> or
-<code>-sv_verilate compile</code>. If used Sail will automatically invoke
+<p><code>--sv-verilate</code> Can be used as either <code>--sv-verilate run</code> or
+<code>--sv-verilate compile</code>. If used Sail will automatically invoke
 <a href="https://www.veripool.org/verilator/">verilator</a> on the generated
 SystemVerilog</p>
 </li>
 <li>
-<p><code>-sv_lines</code> Output SystemVerilog `line directives to aid debugging.</p>
+<p><code>--sv-lines</code> Output SystemVerilog `line directives to aid debugging.</p>
 </li>
 <li>
-<p><code>-sv_int_size</code> Set the maximum integer size allowed in the specification.</p>
+<p><code>--sv-int-size</code> Set the maximum integer size allowed in the specification.</p>
 </li>
 <li>
-<p><code>-sv_bits_size</code> Bound the maximum bitvector width on the generated SystemVerilog.</p>
+<p><code>--sv-bits-size</code> Bound the maximum bitvector width on the generated SystemVerilog.</p>
 </li>
 <li>
-<p><code>-sv_specialize</code> The <code>-sv_specialize n</code> option will perform <code>n</code>
+<p><code>--sv-specialize</code> The <code>--sv-specialize n</code> option will perform <code>n</code>
 rounds of specialisation on the Sail code before generating
 SystemVerilog. This will make bitvectors more monomorphic, but at
 the cost of code duplication.</p>
@@ -3181,7 +3200,7 @@ the cost of code duplication.</p>
 </div>
 <div class="paragraph">
 <p>The are various other options that control various minutae about the
-generated SystemVerilog, see <code>sail -help</code> for more details.</p>
+generated SystemVerilog, see <code>sail --help</code> for more details.</p>
 </div>
 <div style="page-break-after: always;"></div>
 </div>
@@ -3203,11 +3222,11 @@ changes to source made by the tool and use at your own risk!
 <div class="paragraph">
 <p>Sail supports automatic code formatting similar to tools like <code>go fmt</code>
 or <code>rustfmt</code>. This is built into Sail itself, and can be used via the
-<code>-fmt</code> flag. To format a file <code>my_file.sail</code>, we would use the command:</p>
+<code>--fmt</code> flag. To format a file <code>my_file.sail</code>, we would use the command:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-fmt</span> my_file.sail</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--fmt</span> my_file.sail</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -3219,7 +3238,7 @@ so:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-fmt</span> file1.sail file2.sail file3.sail</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--fmt</span> file1.sail file2.sail file3.sail</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -3231,24 +3250,24 @@ expressions correctly), we would be required to do:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-fmt</span> operator.sail my_file.sail</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--fmt</span> operator.sail my_file.sail</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p>This will format both files. If we want to avoid formatting
-<code>operator.sail</code>, we could either use <code>-fmt_skip</code>, like so:</p>
+<code>operator.sail</code>, we could either use <code>--fmt-skip</code>, like so:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-fmt_skip</span> operator.sail <span class="nt">-fmt</span> operator.sail my_file.sail</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--fmt-skip</span> operator.sail <span class="nt">--fmt</span> operator.sail my_file.sail</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>or the <code>-fmt_only</code> option, like so:</p>
+<p>or the <code>--fmt-only</code> option, like so:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-fmt_only</span> my_file.sail <span class="nt">-fmt</span> operator.sail my_file.sail</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--fmt-only</span> my_file.sail <span class="nt">--fmt</span> operator.sail my_file.sail</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -3272,7 +3291,7 @@ as:</p>
 </div>
 </div>
 <div class="paragraph">
-<p>which is passed to sail with the <code>-config</code> flag.</p>
+<p>which is passed to sail with the <code>--config</code> flag.</p>
 </div>
 <div class="paragraph">
 <p>The various keys supported under the <code>"fmt"</code> key are as follows:</p>
@@ -3317,11 +3336,11 @@ starting Sail with <code>sail -i</code>.  Sail will still handle any other
 command line arguments as per usual. To use Sail files within the
 interpreter they must be passed on the command line as if they were
 being compiled normally. One can also pass a list of commands to the
-interpreter by using the <code>-is</code> flag, as</p>
+interpreter by using the <code>--is</code> flag, as</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">-is</span> &lt;file&gt;</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail <span class="nt">--is</span> &lt;file&gt;</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -3348,33 +3367,46 @@ indicated by starting with the letter <code>d</code>.</p>
 <p><code>-help</code> Print a list of options.</p>
 </li>
 <li>
-<p><code>-no_warn</code> Turn off warnings.</p>
+<p><code>--no-warn</code> Turn off warnings.</p>
 </li>
 <li>
-<p><code>-enum_casts</code> Allow elements of enumerations to be
+<p><code>--enum-casts</code> Allow elements of enumerations to be
 automatically cast to numbers.</p>
 </li>
 <li>
-<p><code>-memo_z3</code> Memoize calls to the Z3 solver. This can greatly improve
+<p><code>--memo-z3</code> Memoize calls to the Z3 solver. This can greatly improve
 typechecking times if you are repeatedly typechecking the same
 specification while developing it.</p>
 </li>
 <li>
-<p><code>-no_lexp_bounds_check</code> Turn off bounds checking in the left hand
-side of assignments.</p>
+<p><code>--no-lexp-bounds-check</code> Turn off bounds checking in the left hand
+side of assignments. This option only exists for some Sail translated
+from ASL (as ASL does not do compile-time bounds checking here).</p>
 </li>
 <li>
-<p><code>-undefined_gen</code> Generate functions that create undefined values of
-user-defined types. Every type <code>T</code> will get a <code>undefined_T</code> function
-created for it. This flag is set automatically by some backends that
-want to re-write <code>undefined</code>.</p>
-</li>
-<li>
-<p><code>-just_check</code> Force Sail to terminate immediately after
+<p><code>--just-check</code> Force Sail to terminate immediately after
 typechecking.</p>
 </li>
 <li>
-<p><code>-dtc_verbose &lt;verbosity&gt;</code> Make the typechecker print a
+<p><code>--require-version</code>. Check that the Sail version is newer than the
+specified version, if not Sail will print an error and exit with a
+non-zero exit code.</p>
+</li>
+</ul>
+</div>
+<div style="page-break-after: always;"></div>
+</div>
+<div class="sect2">
+<h3 id="_debug_options">Debug options</h3>
+<div class="paragraph">
+<p>These options are mostly used for debugging the Sail compiler itself.
+They are included as they might be useful for those writing custom Sail
+plugins. These options are all prefixed with <code>d</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>--dtc-verbose &lt;verbosity&gt;</code> Make the typechecker print a
 trace of typing judgements. If the verbosity level is 1, then this
 should only include fairly readable judgements about checking and
 inference rules. If verbosity is 2 then it will include a large
@@ -3383,16 +3415,24 @@ diagnose tricky type-errors, especially if the error message isn&#8217;t
 very good.</p>
 </li>
 <li>
-<p><code>-ddump_tc_ast</code> Write the typechecked AST to stdout after
+<p><code>--ddump-initial-ast</code> Write the AST out immediately after parsing
+and desugaring.</p>
+</li>
+<li>
+<p><code>--ddump-tc-ast</code> Write the typechecked AST to stdout after
 typechecking</p>
 </li>
 <li>
-<p><code>-ddump_rewrite_ast &lt;prefix&gt;</code> Write the AST out after each
+<p><code>--ddump-side-effects</code> Print inferred information about function
+side effects</p>
+</li>
+<li>
+<p><code>--ddump-rewrite-ast &lt;prefix&gt;</code> Write the AST out after each
 re-writing pass. The output from each pass is placed in a file
 starting with <code>prefix</code>.</p>
 </li>
 <li>
-<p><code>-dmagic_hash</code> Allow the <code>#</code> symbol in identifiers. It&#8217;s
+<p><code>--dmagic-hash</code> Allow the <code>#</code> symbol in identifiers. It&#8217;s
 currently used as a magic symbol to separate generated identifiers
 from those the user can write, so this option allows for the output
 of the various other debugging options to be fed back into Sail. The
@@ -4157,12 +4197,142 @@ names can be provided using the <code>enum_number_conversions</code> attribute.<
 generation of these functions entirely.</p>
 </div>
 </div>
+<div class="sect3">
+<h4 id="_unions">Unions</h4>
+<div class="paragraph">
+<p>Structs provide us a way to group multiple pieces of related data, for example</p>
+</div>
+<div id="union-type-rectangle" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">rectangle</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">width</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w">
+    </span><span class="n">height</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>defines a type <code>rectangle</code> that has both a width <em>and</em> a height. The
+other logical way to combine data is if we want to say we have some
+data <em>or</em> some other data, like if we wanted to represent a shape that
+could be a circle <em>or</em> a rectangle. In Sail, we use a <em>union</em> for this.</p>
+</div>
+<div id="union-span-SHAPE" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">circle</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">radius</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">}</span><span class="w">
+
+</span><span class="k">union</span><span class="w"> </span><span class="n">shape</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">Rectangle</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">rectangle</span><span class="p">,</span><span class="w">
+    </span><span class="n">Circle</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">circle</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+While structs are ubiquitous in programming languages, the
+equivalent feature for safely representing disjunctions of types is
+often a second-class afterthought or even absent entirely. The
+requirement to safely represent disjunctions of types is why C&#8217;s
+<code>union</code> feature is something different to what we want here, which is
+sometimes called <em>tagged</em> unions or <em>variants</em> to distinguish them
+from the unsafe C construct. C++ is therefore a good example of a
+language where structs are first class, but <code>std::variant</code> is
+relegated to a library feature.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>This defines a type with two <em>constructors</em> <code>Rectangle</code> and <code>Circle</code>.
+Constructors are used like functions with a single argument, as so:</p>
+</div>
+<div id="union-example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">function</span><span class="w"> </span><span class="nf">example</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="c">// Construct a shape using the Rectangle constructor</span><span class="w">
+    </span><span class="k">let</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">shape</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Rectangle</span><span class="p">(</span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">20</span><span class="w"> </span><span class="p">});</span><span class="w">
+
+    </span><span class="c">// Construct a shape using the Circle constructor</span><span class="w">
+    </span><span class="c">// Note that we can allow the 'shape' type to be inferred</span><span class="w">
+    </span><span class="k">let</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Circle</span><span class="p">(</span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">radius</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">15</span><span class="w"> </span><span class="p">});</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To destructure unions, we typically use <em>pattern matching</em> to handle
+each case in the union separately. This will be discussed in detail in
+<a href="#_pattern_matching">Pattern matching</a>.</p>
+</div>
+<div class="paragraph">
+<p>Constructors in Sail always have a single argument. If we want a
+constructor in a union type to contain no information, then we can use
+the <code>unit</code> type. For a constructor with multiple arguments we can use
+a tuple type. We provide some syntax sugar that allows writing
+constructor applications with either tuple or unit argument types as
+if they were functions with multiple arguments or no arguments
+respectively.</p>
+</div>
+<div id="union-span-EX_UNIT" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">union</span><span class="w"> </span><span class="n">example_unit_constructor</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">Foo</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">),</span><span class="w">
+  </span><span class="n">Bar</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">unit</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="c">// Using a constructor with a tuple type</span><span class="w">
+</span><span class="k">let</span><span class="w"> </span><span class="n">x1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Foo</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="s">"a string"</span><span class="p">)</span><span class="w">
+
+</span><span class="c">// Note that the above is equivalent to</span><span class="w">
+</span><span class="k">let</span><span class="w"> </span><span class="n">x2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Foo</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="s">"a string"</span><span class="p">))</span><span class="w">
+
+</span><span class="c">// Using a unit-type constructor</span><span class="w">
+</span><span class="k">let</span><span class="w"> </span><span class="n">y1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Bar</span><span class="p">()</span><span class="w">
+
+</span><span class="c">// Similarly, equivalent to</span><span class="w">
+</span><span class="k">let</span><span class="w"> </span><span class="n">y2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Bar</span><span class="p">(())</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In our shape example, we defined <code>rectangle</code> and <code>circle</code> as two
+separate structs, but if we wanted we could declare those structs
+inline</p>
+</div>
+<div id="union-type-shape2" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">union</span><span class="w"> </span><span class="n">shape2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">Rectangle2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="n">Circle2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">radius</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">},</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Behind the scenes, Sail will just generate separate struct
+definitions, so we use this type in exactly the same was as we did
+previously.</p>
+</div>
+<div class="paragraph">
+<p>As with structs, we can define polymorphic union types, like</p>
+</div>
+<div id="union-type-either" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">union</span><span class="w"> </span><span class="n">either</span><span class="p">(</span><span class="nv">'a</span><span class="p">,</span><span class="w"> </span><span class="nv">'b</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">Left</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'a</span><span class="p">,</span><span class="w">
+    </span><span class="n">Right</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'b</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_pattern_matching">Pattern matching</h3>
 <div class="paragraph">
-<p>Like most functional languages, Sail supports pattern matching via the
-<code>match</code> keyword. For example:</p>
+<p>Like most functional languages, and an increasing number of imperative
+languages like Rust, Sail supports <em>pattern matching</em> via the <code>match</code>
+keyword. For example:</p>
 </div>
 <div id="pattern-match-example" class="listingblock">
 <div class="content">
@@ -4674,7 +4844,7 @@ keyword within a block.</p>
 they only exist within the block that declared them.</p>
 </div>
 <div class="paragraph">
-<p>Technically, unless the <code>-strict_var</code> option is used Sail also allows
+<p>Technically, unless the <code>--strict-var</code> option is used Sail also allows
 mutable variables to be implicitly declared, like so:</p>
 </div>
 <div class="listingblock">
@@ -5645,7 +5815,7 @@ sense in this example.</p>
 <div class="sect2">
 <h3 id="_working_with_makefiles">Working with Makefiles</h3>
 <div class="paragraph">
-<p>The <code>-list_files</code> option can be used to list all the files within a
+<p>The <code>--list-files</code> option can be used to list all the files within a
 project file, which allows them to be used in a Makefile prerequisite.
 As an example, to build the module examples in this very manual, we
 use the rule below to generate documentation indexes (which our
@@ -5658,7 +5828,7 @@ file.</p>
 
 <span class="nl">module_sail_doc/%.json</span><span class="o">:</span> <span class="nf">../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)</span>
 	<span class="nb">mkdir</span> <span class="nt">-p</span> module_sail_doc
-	sail <span class="nt">-doc</span> <span class="p">$(</span>addprefix <span class="nt">-doc_file</span> ,<span class="p">$(</span>shell sail <span class="nv">$&lt;</span> <span class="nt">-list_files</span><span class="p">))</span> <span class="nt">-doc_embed</span> plain <span class="nt">-doc_bundle</span> <span class="p">$(</span>notdir <span class="nv">$@</span><span class="p">)</span> <span class="nt">-o</span> module_sail_doc <span class="nv">$&lt;</span></code></pre>
+	sail <span class="nt">--doc</span> <span class="p">$(</span>addprefix <span class="nt">-doc_file</span> ,<span class="p">$(</span>shell sail <span class="nv">$&lt;</span> <span class="nt">--list-files</span><span class="p">))</span> <span class="nt">--doc-embed</span> plain <span class="nt">--doc-bundle</span> <span class="p">$(</span>notdir <span class="nv">$@</span><span class="p">)</span> <span class="nt">-o</span> module_sail_doc <span class="nv">$&lt;</span></code></pre>
 </div>
 </div>
 </div>
@@ -6268,7 +6438,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2024-06-21 16:39:03 +0100
+Last updated 2024-09-12 18:46:28 +0100
 </div>
 </div>
 </body>

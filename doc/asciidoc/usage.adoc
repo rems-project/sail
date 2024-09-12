@@ -42,16 +42,12 @@ For more complex projects, a module hierarchy can be defined. See the
 
 === Sail options
 
-For command line arguments, by default Sail accepts arguments of
-the form `&#8209;long_opt`, i.e. leading with a single `-` and words
-separated by `_`. For those who find this departure from standard
-convention distasteful, you can define the `SAIL_NEW_CLI` environment
-variable, and all such options will be formatted as
-`&#8209;&#8209;long&#8209;opt` (short opts like `&#8209;o` will remain
-unchanged). For backwards compatibility reasons, this default is hard
-to change.
+For backwards compatibility reasons, Sail accepts arguments of the
+form `-long_opt`, i.e. leading with a single `-` and words
+separated by `_`. Such an option will be treated the same as
+`--long-opt`.
 
-For a list of all options, one can call Sail as `sail -help`.
+For a list of all options, one can call Sail as `sail --help`.
 
 <<<
 === C compilation
@@ -82,14 +78,14 @@ There are several Sail options that affect the C output:
 * `-O` turns on optimisations. The generated C code will be quite slow
     unless this flag is set.
 
-* `-Oconstant_fold` apply constant folding optimisations.
+* `--Oconstant-fold` apply constant folding optimisations.
 
-* `-c_include` Supply additional header files to be included in the
+* `--c-include` Supply additional header files to be included in the
     generated C.
 
-* `-c_no_main` Do not generate a `main()` function.
+* `--c-no-main` Do not generate a `main()` function.
 
-* `-static` Mark generated C functions as static where possible. This
+* `--static` Mark generated C functions as static where possible. This
     is useful for measuring code coverage.
 
 <<<
@@ -100,34 +96,34 @@ to provide working SystemVerilog. Furthermore, it is intended for
 hardware model checking against a hand-written design. Sail is not a
 hardware description language!
 
-To compile Sail into SystemVerilog, the `-sv` option is used. The `-o`
+To compile Sail into SystemVerilog, the `--sv` option is used. The `-o`
 option provides a prefix that is used on the various generated files.
 
 There are several options for the SystemVerilog output:
 
-* `-sv_output_dir` Generate all files in the specified directory
+* `--sv-output-dir` Generate all files in the specified directory
 
-* `-sv_include` Add an include directive to the generated SystemVerilog
+* `--sv-include` Add an include directive to the generated SystemVerilog
 
-* `-sv_verilate` Can be used as either `-sv_verilate run` or
-  `-sv_verilate compile`. If used Sail will automatically invoke
+* `--sv-verilate` Can be used as either `--sv-verilate run` or
+  `--sv-verilate compile`. If used Sail will automatically invoke
   https://www.veripool.org/verilator/[verilator] on the generated
   SystemVerilog
 
 
-* `-sv_lines` Output SystemVerilog `line directives to aid debugging.
+* `--sv-lines` Output SystemVerilog `line directives to aid debugging.
 
-* `-sv_int_size` Set the maximum integer size allowed in the specification.
+* `--sv-int-size` Set the maximum integer size allowed in the specification.
 
-* `-sv_bits_size` Bound the maximum bitvector width on the generated SystemVerilog.
+* `--sv-bits-size` Bound the maximum bitvector width on the generated SystemVerilog.
 
-* `-sv_specialize` The `-sv_specialize n` option will perform `n`
+* `--sv-specialize` The `--sv-specialize n` option will perform `n`
   rounds of specialisation on the Sail code before generating
   SystemVerilog. This will make bitvectors more monomorphic, but at
   the cost of code duplication.
 
 The are various other options that control various minutae about the
-generated SystemVerilog, see `sail -help` for more details.
+generated SystemVerilog, see `sail --help` for more details.
 
 
 <<<
@@ -138,10 +134,10 @@ changes to source made by the tool and use at your own risk!
 
 Sail supports automatic code formatting similar to tools like `go fmt`
 or `rustfmt`. This is built into Sail itself, and can be used via the
-`-fmt` flag. To format a file `my_file.sail`, we would use the command:
+`--fmt` flag. To format a file `my_file.sail`, we would use the command:
 [source,sh]
 ----
-sail -fmt my_file.sail
+sail --fmt my_file.sail
 ----
 
 Note that Sail does not attempt to type-check files when formatting
@@ -151,7 +147,7 @@ type-check. However, it is perfectly fine to pass multiple files like
 so:
 [source,sh]
 ----
-sail -fmt file1.sail file2.sail file3.sail
+sail --fmt file1.sail file2.sail file3.sail
 ----
 
 The one exception is if a file uses a custom infix operator, then the
@@ -161,18 +157,18 @@ uses it. So if `my_file.sail` uses an operator declared in
 expressions correctly), we would be required to do:
 [source,sh]
 ----
-sail -fmt operator.sail my_file.sail
+sail --fmt operator.sail my_file.sail
 ----
 This will format both files. If we want to avoid formatting
-`operator.sail`, we could either use `-fmt_skip`, like so:
+`operator.sail`, we could either use `--fmt-skip`, like so:
 [source,sh]
 ----
-sail -fmt_skip operator.sail -fmt operator.sail my_file.sail
+sail --fmt-skip operator.sail --fmt operator.sail my_file.sail
 ----
-or the `-fmt_only` option, like so:
+or the `--fmt-only` option, like so:
 [source,sh]
 ----
-sail -fmt_only my_file.sail -fmt operator.sail my_file.sail
+sail --fmt-only my_file.sail --fmt operator.sail my_file.sail
 ----
 Both of these options can be passed multiple times if required.
 
@@ -182,7 +178,7 @@ as:
 ----
 include::../../test/format/default/config.json[]
 ----
-which is passed to sail with the `-config` flag.
+which is passed to sail with the `--config` flag.
 
 The various keys supported under the `"fmt"` key are as follows:
 
@@ -215,10 +211,10 @@ starting Sail with `sail -i`.  Sail will still handle any other
 command line arguments as per usual. To use Sail files within the
 interpreter they must be passed on the command line as if they were
 being compiled normally. One can also pass a list of commands to the
-interpreter by using the `-is` flag, as
+interpreter by using the `--is` flag, as
 [source,sh]
 ----
-sail -is <file>
+sail --is <file>
 ----
 where `<file>` contains a list of commands. Once inside the
 interactive mode, a list of available commands can be accessed by
@@ -236,27 +232,34 @@ indicated by starting with the letter `d`.
 
 * `-help` Print a list of options.
 
-* `-no_warn` Turn off warnings.
+* `--no-warn` Turn off warnings.
 
-* `-enum_casts` Allow elements of enumerations to be
+* `--enum-casts` Allow elements of enumerations to be
   automatically cast to numbers.
 
-* `-memo_z3` Memoize calls to the Z3 solver. This can greatly improve
+* `--memo-z3` Memoize calls to the Z3 solver. This can greatly improve
   typechecking times if you are repeatedly typechecking the same
   specification while developing it.
 
-* `-no_lexp_bounds_check` Turn off bounds checking in the left hand
-  side of assignments.
+* `--no-lexp-bounds-check` Turn off bounds checking in the left hand
+  side of assignments. This option only exists for some Sail translated
+  from ASL (as ASL does not do compile-time bounds checking here).
 
-* `-undefined_gen` Generate functions that create undefined values of
-  user-defined types. Every type `T` will get a `undefined_T` function
-  created for it. This flag is set automatically by some backends that
-  want to re-write `undefined`.
-
-* `-just_check` Force Sail to terminate immediately after
+* `--just-check` Force Sail to terminate immediately after
   typechecking.
 
-* `-dtc_verbose <verbosity>` Make the typechecker print a
+* `--require-version`. Check that the Sail version is newer than the
+  specified version, if not Sail will print an error and exit with a
+  non-zero exit code.
+
+<<<
+=== Debug options
+
+These options are mostly used for debugging the Sail compiler itself.
+They are included as they might be useful for those writing custom Sail
+plugins. These options are all prefixed with `d`.
+
+* `--dtc-verbose <verbosity>` Make the typechecker print a
   trace of typing judgements. If the verbosity level is 1, then this
   should only include fairly readable judgements about checking and
   inference rules. If verbosity is 2 then it will include a large
@@ -264,14 +267,20 @@ indicated by starting with the letter `d`.
   diagnose tricky type-errors, especially if the error message isn't
   very good.
 
-* `-ddump_tc_ast` Write the typechecked AST to stdout after
+* `--ddump-initial-ast` Write the AST out immediately after parsing
+  and desugaring.
+
+* `--ddump-tc-ast` Write the typechecked AST to stdout after
   typechecking
 
-* `-ddump_rewrite_ast <prefix>` Write the AST out after each
+* `--ddump-side-effects` Print inferred information about function
+  side effects
+
+* `--ddump-rewrite-ast <prefix>` Write the AST out after each
   re-writing pass. The output from each pass is placed in a file
   starting with `prefix`.
 
-* `-dmagic_hash` Allow the `#` symbol in identifiers. It's
+* `--dmagic-hash` Allow the `#` symbol in identifiers. It's
   currently used as a magic symbol to separate generated identifiers
   from those the user can write, so this option allows for the output
   of the various other debugging options to be fed back into Sail. The

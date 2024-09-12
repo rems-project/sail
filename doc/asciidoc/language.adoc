@@ -439,12 +439,70 @@ sail::ENUM_CONV[from=enum,type=span]
 The `no_enum_number_conversions` attribute can be used to disable the
 generation of these functions entirely.
 
+==== Unions
+:union: sail_doc/union.json
+
+Structs provide us a way to group multiple pieces of related data, for example
+
+sail::rectangle[from=union,type=type]
+
+defines a type `rectangle` that has both a width _and_ a height. The
+other logical way to combine data is if we want to say we have some
+data _or_ some other data, like if we wanted to represent a shape that
+could be a circle _or_ a rectangle. In Sail, we use a _union_ for this.
+
+sail::SHAPE[from=union,type=span]
+
+NOTE: While structs are ubiquitous in programming languages, the
+equivalent feature for safely representing disjunctions of types is
+often a second-class afterthought or even absent entirely. The
+requirement to safely represent disjunctions of types is why C's
+`union` feature is something different to what we want here, which is
+sometimes called _tagged_ unions or _variants_ to distinguish them
+from the unsafe C construct. C++ is therefore a good example of a
+language where structs are first class, but `std::variant` is
+relegated to a library feature.
+
+This defines a type with two _constructors_ `Rectangle` and `Circle`.
+Constructors are used like functions with a single argument, as so:
+
+sail::example[from=union]
+
+To destructure unions, we typically use _pattern matching_ to handle
+each case in the union separately. This will be discussed in detail in
+<<Pattern matching>>.
+
+Constructors in Sail always have a single argument. If we want a
+constructor in a union type to contain no information, then we can use
+the `unit` type. For a constructor with multiple arguments we can use
+a tuple type. We provide some syntax sugar that allows writing
+constructor applications with either tuple or unit argument types as
+if they were functions with multiple arguments or no arguments
+respectively.
+
+sail::EX_UNIT[from=union,type=span]
+
+In our shape example, we defined `rectangle` and `circle` as two
+separate structs, but if we wanted we could declare those structs
+inline
+
+sail::shape2[from=union,type=type]
+
+Behind the scenes, Sail will just generate separate struct
+definitions, so we use this type in exactly the same was as we did
+previously.
+
+As with structs, we can define polymorphic union types, like
+
+sail::either[from=union,type=type]
+
 === Pattern matching
 :pattern-match: sail_doc/pattern_matching.json
 :cannot-wildcard: sail_doc/cannot_wildcard.json
 
-Like most functional languages, Sail supports pattern matching via the
-`match` keyword. For example:
+Like most functional languages, and an increasing number of imperative
+languages like Rust, Sail supports _pattern matching_ via the `match`
+keyword. For example:
 
 sail::example[from=pattern-match,part=body,dedent]
 
@@ -706,7 +764,7 @@ keyword within a block.
 Like let-bound variables, mutable variables are lexically scoped, so
 they only exist within the block that declared them.
 
-Technically, unless the `-strict_var` option is used Sail also allows
+Technically, unless the `--strict-var` option is used Sail also allows
 mutable variables to be implicitly declared, like so:
 
 [source,sail]

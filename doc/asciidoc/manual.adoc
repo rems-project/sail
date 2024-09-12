@@ -8,6 +8,7 @@ Alasdair Armstrong; Thomas Bauereiss; Brian Campbell; Shaked Flur; Kathryn E. Gr
 :title-logo-image: image:../../etc/logo/sail_logo_square.svg[top=25%,align=center,pdfwidth=2in]
 :docinfo: shared
 :toc: left
+:toclevels: 4
 :stylesheet: manual.css
 
 == Introduction
