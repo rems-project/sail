@@ -1322,12 +1322,11 @@ module Make (Config : CONFIG) = struct
         string "if" ^^ space ^^ parens (pp_smt cond) ^^ space ^^ pp_statement then_block
     | SVS_if (cond, Some then_block, Some else_block) -> empty
     | SVS_case { head_exp; cases; fallthrough } ->
-        let pp_case (ids, statement) =
-          separate space [separate_map (comma ^^ space) pp_id ids; colon; pp_statement statement]
-        in
+        let pp_case (exp, statement) = separate space [pp_smt exp; colon; pp_statement ~terminator:semi statement] in
         let pp_fallthrough = function
           | None -> empty
-          | Some statement -> hardline ^^ separate space [string "default"; colon; pp_statement statement]
+          | Some statement ->
+              hardline ^^ separate space [string "default"; colon; pp_statement ~terminator:semi statement]
         in
         string "case" ^^ space
         ^^ parens (pp_smt head_exp)
