@@ -74,4 +74,8 @@ val      float_is_gt_internal : fp_bits_x2 -> bool
 function float_is_gt_internal ((op_0, op_1))
   = not (float_is_le_internal ((op_0, op_1)))
 
+val      float_is_ge_internal : fp_bits_x2 -> bool
+function float_is_ge_internal ((op_0, op_1))
+  = not (float_is_lt_internal ((op_0, op_1)))
+
 $endif
