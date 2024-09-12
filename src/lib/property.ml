@@ -68,6 +68,7 @@
 open Ast
 open Ast_defs
 open Ast_util
+open Parse_ast.Attribute_data
 open Parser_combinators
 
 let find_properties { defs; _ } =
@@ -76,6 +77,16 @@ let find_properties { defs; _ } =
         match Util.find_next (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs with
         | _, Some (DEF_aux (DEF_val vs, _), defs) -> find_prop ((prop_type, command, l, vs) :: acc) defs
         | _, _ -> raise (Reporting.err_general l "Property is not attached to any function signature")
+      end
+    | DEF_aux (DEF_val vs, def_annot) :: defs -> begin
+        let attrs = get_attributes (uannot_of_def_annot def_annot) in
+        match List.find_opt (fun (_, name, _) -> name = "property" || name = "counterexample") attrs with
+        | Some (l, prop_type, Some (AD_aux (AD_string command, _))) ->
+            find_prop ((prop_type, command, l, vs) :: acc) defs
+        | Some (_, _, Some (AD_aux (_, l))) ->
+            raise (Reporting.err_general l "Expected string argument for property or counterexample")
+        | Some (l, prop_type, None) -> find_prop ((prop_type, "", l, vs) :: acc) defs
+        | None -> find_prop acc defs
       end
     | def :: defs -> find_prop acc defs
     | [] -> acc

@@ -3412,7 +3412,11 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
             in
             let field_typ' = subst_unifiers unifiers field_typ in
             annot_lexp (LE_field (inferred_lexp, field_id)) field_typ'
-        | _ -> typ_error l "Field l-expression has invalid type"
+        | typ ->
+            typ_raise l
+              (Err_with_hint
+                 ("Has type " ^ string_of_typ typ, Err_other "Type set using field l-expression must be a struct type")
+              )
       end
   | LE_deref exp ->
       let inferred_exp = infer_exp env exp in
@@ -3471,8 +3475,9 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
           | _ -> assert false (* Unreachable *)
         end
       | _ ->
-          typ_error l
-            ("Field expression " ^ string_of_exp exp ^ " :: " ^ string_of_typ (typ_of inferred_exp) ^ " is not valid")
+          typ_error
+            (Hint ("Has type " ^ string_of_typ (typ_of inferred_exp), exp_loc exp, l))
+            ("Type accessed by field expression is not a struct, it has type " ^ string_of_typ (typ_of inferred_exp))
     end
   | E_tuple exps ->
       let inferred_exps = List.map (irule infer_exp env) exps in

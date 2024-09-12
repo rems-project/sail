@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/union_field.sail[0m:14.18-19:
+14[96m |[0m    print_endline(x.B)
+  [92m |[0m                  [92m^[0m [92mHas type Foo[0m
+[96mfail/union_field.sail[0m:14.18-21:
+14[96m |[0m    print_endline(x.B)
+  [91m |[0m                  [91m^-^[0m [91mchecking function argument has type string[0m
+  [91m |[0m Type accessed by field expression is not a struct, it has type Foo
