@@ -850,6 +850,7 @@ module Make (C : CONFIG) = struct
         in
         (aval_setup @ List.concat cases, (fun clexp -> icopy l clexp (build_ite case_ids)), aval_cleanup)
     | AE_match (aval, cases, typ) ->
+        let is_complete = Option.is_some (get_attribute "complete" uannot) in
         let ctx = update_coverage_override uannot ctx in
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
@@ -859,7 +860,7 @@ module Make (C : CONFIG) = struct
         let branch_id, on_reached = if num_cases > 1 then coverage_branch_reached ctx l else (0, []) in
         let case_return_id = ngensym () in
         let finish_match_label = label "finish_match_" in
-        let compile_case (apat, guard, body) =
+        let compile_case is_last (apat, guard, body) =
           let case_label = label "case_" in
           if is_dead_aexp body then [ilabel case_label]
           else (
@@ -870,8 +871,14 @@ module Make (C : CONFIG) = struct
                   true
               | _ -> false
             in
+            (* If we are at the last case of a complete match, the final destructuring can never fail
+               so just make it a no-op. Note that it is important we do this, rather than just keep the
+               jump that is never taken, otherwise we confuse targets like Sail->SV which linearize the
+               control flow graph. *)
             let pre_destructure, destructure, destructure_cleanup, ctx =
-              compile_match ctx apat cval (fun l b -> ijump l b case_label)
+              compile_match ctx apat cval (fun l b ->
+                  if is_last && is_complete then icomment "complete" else ijump l b case_label
+              )
             in
             let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
             let body_setup, body_call, body_cleanup = compile_aexp ctx body in
@@ -898,8 +905,8 @@ module Make (C : CONFIG) = struct
         in
         ( aval_setup @ on_reached
           @ [idecl l ctyp case_return_id]
-          @ List.concat (List.map compile_case cases)
-          @ (if Option.is_some (get_attribute "complete" uannot) then [] else [imatch_failure l])
+          @ List.concat (Util.map_last compile_case cases)
+          @ (if is_complete then [] else [imatch_failure l])
           @ [ilabel finish_match_label],
           (fun clexp -> icopy l clexp (V_id (case_return_id, ctyp))),
           [iclear ctyp case_return_id] @ aval_cleanup

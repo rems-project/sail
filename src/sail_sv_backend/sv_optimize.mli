@@ -75,3 +75,5 @@ val simplify_smt : sv_def list -> sv_def list
 val remove_nulls : sv_def list -> sv_def list
 
 val remove_unused_variables : sv_def list -> sv_def list
+
+val insert_case_expressions : sv_def list -> sv_def list

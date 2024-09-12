@@ -148,7 +148,7 @@ and sv_statement_aux =
   | SVS_return of smt_exp
   | SVS_assign of sv_place * smt_exp
   | SVS_call of sv_place * sv_name * smt_exp list
-  | SVS_case of { head_exp : smt_exp; cases : (Ast.id list * sv_statement) list; fallthrough : sv_statement option }
+  | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
   | SVS_assert of smt_exp * smt_exp

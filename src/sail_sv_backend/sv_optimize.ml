@@ -678,3 +678,44 @@ module RemoveUnusedVariables = struct
 end
 
 let remove_unused_variables = profile_rewrite RemoveUnusedVariables.rewrite ~message:"Removing unused variables"
+
+module CaseInsertion = struct
+  let rec can_be_case = function
+    | Ite (Fn ("=", [Var v; Bitvec_lit bv]), t, (Ite _ as e)) -> begin
+        match can_be_case e with
+        | None -> None
+        | Some (n, v', cases, e) -> if Name.compare v v' = 0 then Some (n + 1, v, (bv, t) :: cases, e) else None
+      end
+    | Ite (Fn ("=", [Var v; Bitvec_lit bv]), t, e) -> Some (0, v, [(bv, t)], e)
+    | exp -> None
+
+  class case_insertion_visitor : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vstatement =
+        function
+        | SVS_aux (SVS_assign (place, exp), l) -> begin
+            match can_be_case exp with
+            | Some (n, v, cases, default) when n > 2 ->
+                ChangeTo
+                  (SVS_aux
+                     ( SVS_case
+                         {
+                           head_exp = Var v;
+                           cases =
+                             List.map (fun (bv, exp) -> (Bitvec_lit bv, SVS_aux (SVS_assign (place, exp), l))) cases;
+                           fallthrough = Some (SVS_aux (SVS_assign (place, default), l));
+                         },
+                       l
+                     )
+                  )
+            | _ -> DoChildren
+          end
+        | _ -> DoChildren
+    end
+
+  let rewrite defs = visit_sv_defs (new case_insertion_visitor) defs
+end
+
+let insert_case_expressions = profile_rewrite CaseInsertion.rewrite ~message:"Inserting case expressions"
