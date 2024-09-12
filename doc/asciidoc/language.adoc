@@ -496,6 +496,95 @@ As with structs, we can define polymorphic union types, like
 
 sail::either[from=union,type=type]
 
+=== Type synonyms
+:type_syn: sail_doc/type_syn.json
+:type_syn_xlen: sail_doc/type_syn_xlen.json
+
+We have now described all the various types available in Sail.
+However, in order to create more descriptive and self-documenting
+specifications, we might want to give types new names that better
+inform the reader of the intent behind the types. We can do this using
+_type synonyms_, which are created with the `type` keyword.
+
+For example, if we have an architecture with 32 general purpose
+registers, we might want to index them using a 5-bit type. Rather than
+using `bits(5)` directly, we create a synonym:
+
+sail::regbits[from=type_syn,type=type]
+
+We can now write functions that use this type:
+
+sail::EX_REGBITS[from=type_syn,type=span]
+
+Sail types also include numbers, as in `bits(32)` above. We can
+therefore write a type synonym for just such a number:
+
+sail::xlen[from=type_syn_xlen,type=type]
+
+In which case, we could re-write our example as
+
+sail::EX_REGBITS[from=type_syn_xlen,type=span]
+
+Type synonyms are completely transparent to the Sail type-checker, so
+a type synonym can be used exactly the same as the original type.
+
+We can also write type-synonyms that have arguments, for example:
+
+sail::square[from=type_syn,type=type]
+
+=== Type kinds
+
+Throughout the previous section we have seen many different types. For
+example we could have a type like `list(int)`, or a type like
+`range(2, 5)`. The `range` type takes two numbers as an arguments,
+whereas list takes a type as an argument. We've also seen polymorphic
+user-defined types like:
+
+[source,sail]
+----
+
+struct foo('n, 'a) = {
+  some_bits : bits('n),
+  some_a : 'a,
+}
+----
+
+Which we could use as the type `foo(32, string)`, or `foo(16, int)`.
+What stops us from writing `foo(string, int)` or even `range(int,
+int)` or `list(3)` however? Those should clearly be type errors, and
+if they are type errors _does that mean types have types_? The answer
+to this is yes, and we call the types of types _kinds_. Sail has three
+different kinds of types, which we denote as `Int`, `Bool`, and
+`Type`. The `Int` kind is for type-level integers, `Bool` is for
+type-level (boolean) constraints, and `Type` is for ordinary types.
+Type constructors therefore have types much like functions, with
+`list` having the type `Type -> Type` and `range` having the type
+`(Int, Int) -> Type`.
+
+NOTE: From a type-theory perspective, one really can think of type
+constructors as just functions at the type level. As functions are
+applied to terms, type constructors are applied to types. This is
+partly why we use parentheses for type constructor application in Sail
+-- not only does it neatly sidestep the notoriously thorny parsing
+problems of `<` and `>` in types (see Rust's
+https://github.com/rust-lang/rust/blob/master/tests/ui/parser/bastion-of-the-turbofish.rs[infamous turbofish operator], or requiring extra spaces in C++ templates to
+avoid ambiguities with `>>`), but it really is the same concept when
+viewed in the right way.
+
+Sail allows writing the kinds explicitly in type definitions, so we
+could write:
+
+[source,sail]
+----
+struct foo('n : Int, 'a : Type) = {
+  some_bits : bits('n),
+  some_a : 'a,
+}
+----
+
+but in practice we don't need to do this, as Sail has kind-inference
+to avoid us having to think about this particular detail.
+
 === Pattern matching
 :pattern-match: sail_doc/pattern_matching.json
 :cannot-wildcard: sail_doc/cannot_wildcard.json
@@ -1188,7 +1277,7 @@ down to the value level, for example:
 [source,sail]
 ----
 // xlen is a type of kind 'Int'
-type xlen : Int = 64
+type xlen = 64
 
 val f : int -> unit
 

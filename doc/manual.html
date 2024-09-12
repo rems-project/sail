@@ -2621,6 +2621,8 @@ pre.rouge .gs {
 <li><a href="#_unions">Unions</a></li>
 </ul>
 </li>
+<li><a href="#_type_synonyms">Type synonyms</a></li>
+<li><a href="#_type_kinds">Type kinds</a></li>
 <li><a href="#_pattern_matching">Pattern matching</a>
 <ul class="sectlevel3">
 <li><a href="#_guards">Guards</a></li>
@@ -4073,7 +4075,7 @@ has an integer parameter <code>'n</code> and a type parameter <code>'a</code>.</
 </div>
 <div id="struct-type-My_other_struct" class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">My_other_struct</span><span class="p">(</span><span class="nv">'n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Type</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">My_other_struct</span><span class="p">(</span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
   </span><span class="n">a_bitvector</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">),</span><span class="w">
   </span><span class="n">something</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'a</span><span class="w">
 </span><span class="p">}</span></code></pre>
@@ -4325,6 +4327,150 @@ previously.</p>
 </span><span class="p">}</span></code></pre>
 </div>
 </div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_type_synonyms">Type synonyms</h3>
+<div class="paragraph">
+<p>We have now described all the various types available in Sail.
+However, in order to create more descriptive and self-documenting
+specifications, we might want to give types new names that better
+inform the reader of the intent behind the types. We can do this using
+<em>type synonyms</em>, which are created with the <code>type</code> keyword.</p>
+</div>
+<div class="paragraph">
+<p>For example, if we have an architecture with 32 general purpose
+registers, we might want to index them using a 5-bit type. Rather than
+using <code>bits(5)</code> directly, we create a synonym:</p>
+</div>
+<div id="type_syn-type-regbits" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">regbits</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can now write functions that use this type:</p>
+</div>
+<div id="type_syn-span-EX_REGBITS" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">register</span><span class="w"> </span><span class="n">R1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w">
+</span><span class="k">register</span><span class="w"> </span><span class="n">R2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w">
+
+</span><span class="k">function</span><span class="w"> </span><span class="nf">access_register</span><span class="p">(</span><span class="n">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">regbits</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="k">match</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="p">{</span><span class="w">
+     </span><span class="mb">0b00000</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="mh">0x0000_0000</span><span class="p">,</span><span class="w"> </span><span class="c">// zero register</span><span class="w">
+     </span><span class="mb">0b00001</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">R1</span><span class="p">,</span><span class="w">
+     </span><span class="mb">0b00010</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">R2</span><span class="p">,</span><span class="w">
+     </span><span class="c">// and so on</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Sail types also include numbers, as in <code>bits(32)</code> above. We can
+therefore write a type synonym for just such a number:</p>
+</div>
+<div id="type_syn_xlen-type-xlen" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">32</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In which case, we could re-write our example as</p>
+</div>
+<div id="type_syn_xlen-span-EX_REGBITS" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">register</span><span class="w"> </span><span class="n">R1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="n">xlen</span><span class="p">)</span><span class="w">
+</span><span class="k">register</span><span class="w"> </span><span class="n">R2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="n">xlen</span><span class="p">)</span><span class="w">
+
+</span><span class="k">function</span><span class="w"> </span><span class="nf">access_register</span><span class="p">(</span><span class="n">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">regbits</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="n">xlen</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="k">match</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="p">{</span><span class="w">
+     </span><span class="mb">0b00000</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="mh">0x0000_0000</span><span class="p">,</span><span class="w"> </span><span class="c">// zero register</span><span class="w">
+     </span><span class="mb">0b00001</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">R1</span><span class="p">,</span><span class="w">
+     </span><span class="mb">0b00010</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">R2</span><span class="p">,</span><span class="w">
+     </span><span class="c">// and so on</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Type synonyms are completely transparent to the Sail type-checker, so
+a type synonym can be used exactly the same as the original type.</p>
+</div>
+<div class="paragraph">
+<p>We can also write type-synonyms that have arguments, for example:</p>
+</div>
+<div id="type_syn-type-square" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">square</span><span class="p">(</span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">vector</span><span class="p">(</span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="n">vector</span><span class="p">(</span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="p">))</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_type_kinds">Type kinds</h3>
+<div class="paragraph">
+<p>Throughout the previous section we have seen many different types. For
+example we could have a type like <code>list(int)</code>, or a type like
+<code>range(2, 5)</code>. The <code>range</code> type takes two numbers as an arguments,
+whereas list takes a type as an argument. We&#8217;ve also seen polymorphic
+user-defined types like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="w">
+</span><span class="k">struct</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="nv">'n</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">some_bits</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">),</span><span class="w">
+  </span><span class="n">some_a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'a</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which we could use as the type <code>foo(32, string)</code>, or <code>foo(16, int)</code>.
+What stops us from writing <code>foo(string, int)</code> or even <code>range(int,
+int)</code> or <code>list(3)</code> however? Those should clearly be type errors, and
+if they are type errors <em>does that mean types have types</em>? The answer
+to this is yes, and we call the types of types <em>kinds</em>. Sail has three
+different kinds of types, which we denote as <code>Int</code>, <code>Bool</code>, and
+<code>Type</code>. The <code>Int</code> kind is for type-level integers, <code>Bool</code> is for
+type-level (boolean) constraints, and <code>Type</code> is for ordinary types.
+Type constructors therefore have types much like functions, with
+<code>list</code> having the type <code>Type &#8594; Type</code> and <code>range</code> having the type
+<code>(Int, Int) &#8594; Type</code>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+From a type-theory perspective, one really can think of type
+constructors as just functions at the type level. As functions are
+applied to terms, type constructors are applied to types. This is
+partly why we use parentheses for type constructor application in Sail&#8201;&#8212;&#8201;not only does it neatly sidestep the notoriously thorny parsing
+problems of <code>&lt;</code> and <code>&gt;</code> in types (see Rust&#8217;s
+<a href="https://github.com/rust-lang/rust/blob/master/tests/ui/parser/bastion-of-the-turbofish.rs">infamous turbofish operator</a>, or requiring extra spaces in C++ templates to
+avoid ambiguities with <code>&gt;&gt;</code>), but it really is the same concept when
+viewed in the right way.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Sail allows writing the kinds explicitly in type definitions, so we
+could write:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="nv">'n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">'a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Type</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">some_bits</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="nv">'n</span><span class="p">),</span><span class="w">
+  </span><span class="n">some_a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'a</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>but in practice we don&#8217;t need to do this, as Sail has kind-inference
+to avoid us having to think about this particular detail.</p>
 </div>
 </div>
 <div class="sect2">
@@ -5481,7 +5627,7 @@ down to the value level, for example:</p>
 <div class="listingblock">
 <div class="content">
 <pre class="rouge highlight"><code data-lang="sail"><span class="c">// xlen is a type of kind 'Int'</span><span class="w">
-</span><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">64</span><span class="w">
+</span><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">64</span><span class="w">
 
 </span><span class="k">val</span><span class="w"> </span><span class="nf">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">unit</span><span class="w">
 
