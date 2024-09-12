@@ -17,6 +17,7 @@ SAIL_DOCS += sail_doc/list.json
 SAIL_DOCS += sail_doc/bitvector_and_generic.json
 SAIL_DOCS += sail_doc/struct.json
 SAIL_DOCS += sail_doc/enum.json
+SAIL_DOCS += sail_doc/union.json
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
 SAIL_DOCS += module_sail_doc/cond.sail_project
