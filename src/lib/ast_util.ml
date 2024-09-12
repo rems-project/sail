@@ -1155,6 +1155,7 @@ and string_of_typ_aux = function
       "int(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_app (id, args) when Id.compare id (mk_id "atom_bool") = 0 ->
       "bool(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
+  | Typ_app (id, []) -> string_of_id id
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn ([typ_arg], typ_ret) -> string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret
   | Typ_fn (typ_args, typ_ret) -> "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> " ^ string_of_typ typ_ret
