@@ -36,7 +36,7 @@ function example() = {
   print_endline(s2.field3)
 }
 
-struct My_other_struct('n : Int, 'a : Type) = {
+struct My_other_struct('n, 'a) = {
   a_bitvector : bits('n),
   something : 'a
 }
