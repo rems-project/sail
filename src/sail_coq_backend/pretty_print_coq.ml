@@ -4434,8 +4434,8 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                string "  Definition cache_op_eq : EqDecision cache_op := _.";
                string "  Definition tlb_op := " ^^ pp_typ params.tlbi_type ^^ string ".";
                string "  Definition tlb_op_eq : EqDecision tlb_op := _.";
-               string "  Definition fault (deps : Type) := " ^^ pp_typ params.fault_type ^^ string ".";
-               string "  Definition fault_eq : ∀`{EqDecision T}, EqDecision (fault T) := _.";
+               string "  Definition fault := " ^^ pp_typ params.fault_type ^^ string ".";
+               string "  Definition fault_eq : EqDecision fault := _.";
                string "End Arch.";
                empty;
                string "Module Interface := Interface Arch.";
