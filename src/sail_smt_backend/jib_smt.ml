@@ -669,6 +669,7 @@ module Make (Config : CONFIG) = struct
     | _ -> return []
 
   let smt_ctype_def = function
+    | CTD_abstract (id, _) -> Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SMT target"
     | CTD_enum (id, elems) -> return (declare_datatypes (mk_enum (zencode_upper_id id) (List.map zencode_id elems)))
     | CTD_struct (id, fields) ->
         let* fields =

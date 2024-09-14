@@ -1100,6 +1100,7 @@ and sgen_call op cvals =
       | CT_sbits 64, CT_sbits 64 -> sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
       | _ -> assert false
     end
+  | Get_abstract, [v] -> sgen_cval v
   | _, _ -> failwith "Could not generate cval primop"
 
 let sgen_cval_param cval =
@@ -1392,6 +1393,16 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
 let codegen_type_def =
   let open Printf in
   function
+  | CTD_abstract (id, ctyp) ->
+      ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id)
+      ^^ twice hardline
+      ^^ c_function ~return:"void"
+           (ksprintf string "sail_set_abstract_%s(%s v)" (string_of_id id) (sgen_ctyp ctyp))
+           [
+             ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = v" (sgen_id id)
+               else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v" (sgen_id id)
+             );
+           ]
   | CTD_enum (id, (first_id :: _ as ids)) ->
       let enum_name = sgen_id id in
       let enum_eq =
@@ -2211,9 +2222,22 @@ let compile_ast env effect_info output_chan c_includes ast =
     in
 
     let model_main =
+      let extra =
+        List.filter_map
+          (function
+            | CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg)
+            | CDEF_aux (CDEF_pragma (p, _), _) ->
+                prerr_endline p;
+                None
+            | _ -> None
+            )
+          cdefs
+      in
       separate hardline
         ( if !opt_no_main then []
-          else List.map string ["int main(int argc, char *argv[])"; "{"; "  return model_main(argc, argv);"; "}"]
+          else
+            List.map string
+              (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
         )
     in
     let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in

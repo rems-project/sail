@@ -769,7 +769,8 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
         end
       with Not_found -> nc
     )
-  | NC_true | NC_false | NC_var _ | NC_set _ -> nc
+  | NC_set (nexp, set) -> NC_aux (NC_set (expand_nexp_synonyms env nexp, set), l)
+  | NC_true | NC_false | NC_var _ -> nc
 
 and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
   match aux with

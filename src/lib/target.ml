@@ -80,6 +80,7 @@ type target = {
   rewrites : (string * Rewrites.rewriter_arg list) list;
   action : string option -> istate -> unit;
   asserts_termination : bool;
+  supports_abstract_types : bool;
 }
 
 let name tgt = tgt.name
@@ -96,6 +97,8 @@ let rewrites tgt = Rewrites.instantiate_rewrites tgt.rewrites
 
 let asserts_termination tgt = tgt.asserts_termination
 
+let supports_abstract_types tgt = tgt.supports_abstract_types
+
 let registered = ref []
 let targets = ref StringMap.empty
 
@@ -103,7 +106,7 @@ let the_target = ref None
 
 let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fun () -> ())
     ?(pre_initial_check_hook = fun _ -> ()) ?(pre_rewrites_hook = fun _ _ _ -> ()) ?(rewrites = [])
-    ?(asserts_termination = false) action =
+    ?(asserts_termination = false) ?(supports_abstract_types = false) action =
   let set_target () =
     match !the_target with
     | None -> the_target := Some name
@@ -123,6 +126,7 @@ let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fu
       rewrites;
       action;
       asserts_termination;
+      supports_abstract_types;
     }
   in
   registered := name :: !registered;

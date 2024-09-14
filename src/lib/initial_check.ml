@@ -1048,6 +1048,11 @@ let to_ast_typ ctx (P.ATyp_aux (_, l) as atyp) =
   let atyp, kenv = check ctx atyp (Kind (P.K_type, l)) initial_env in
   ConvertType.to_ast_typ kenv ctx atyp
 
+let to_ast_typ_arg kind ctx (P.ATyp_aux (_, l) as atyp) =
+  let open KindInference in
+  let atyp, kenv = check ctx atyp (Kind (to_parse_kind (Some kind), l)) initial_env in
+  ConvertType.to_ast_typ_arg kenv ctx atyp kind
+
 let to_ast_constraint = ConvertType.to_ast_constraint KindInference.initial_env
 
 let to_ast_order = ConvertType.to_ast_order

@@ -80,6 +80,7 @@ let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
 let opt_just_parse_project : bool ref = ref false
 let opt_auto_interpreter_rewrites : bool ref = ref false
+let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_util.Bindings.t ref = ref Ast_util.Bindings.empty
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
@@ -172,6 +173,25 @@ let load_plugin opts plugin =
     opts := add_target_header plugin !opts @ plugin_opts
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
+let parse_instantiation inst =
+  let open Ast in
+  let open Ast_util in
+  match String.split_on_char '=' inst with
+  | abstract_type :: value ->
+      let value = String.concat "=" value in
+      let abstract_type = mk_id (String.trim abstract_type) in
+      let parse_value kind =
+        let open Initial_check in
+        parse_from_string
+          (fun lexbuf ->
+            let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
+            to_ast_typ_arg kind initial_ctx atyp
+          )
+          value
+      in
+      opt_instantiations := Bindings.add abstract_type parse_value !opt_instantiations
+  | _ -> raise (Reporting.err_general Parse_ast.Unknown "Failed to parse command-line instantiate flag")
+
 (* Version as a string, e.g. "1.2.3". *)
 let version_string = Printf.sprintf "%d.%d.%d" version.major version.minor version.patch
 
@@ -239,6 +259,10 @@ let rec options =
       ( "-variable",
         Arg.String (fun assignment -> opt_variable_assignments := assignment :: !opt_variable_assignments),
         "<variable=value> assign a module variable to a value"
+      );
+      ( "-instantiate",
+        Arg.String (fun inst -> parse_instantiation inst),
+        " <type variable=value> instantiate an abstract type variable"
       );
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
       ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
@@ -398,7 +422,7 @@ let rec options =
       ("--help", Arg.Unit (fun () -> help !options), " display this list of options");
     ]
 
-let register_default_target () = Target.register ~name:"default" Target.empty_action
+let register_default_target () = Target.register ~name:"default" ~supports_abstract_types:true Target.empty_action
 
 let file_to_string filename =
   let chan = open_in filename in
@@ -473,6 +497,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
               arguments with the appropriate extension, but not both!"
           )
   in
+  let ast = Frontend.instantiate_abstract_types tgt !opt_instantiations ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in

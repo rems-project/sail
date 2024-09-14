@@ -635,6 +635,8 @@ module Make (Config : CONFIG) = struct
     | ty, Some index -> string ty ^^ space ^^ doc ^^ space ^^ string index
 
   let pp_type_def = function
+    | CTD_abstract (id, _) ->
+        Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
     | CTD_enum (id, ids) ->
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
@@ -1701,7 +1703,7 @@ module Make (Config : CONFIG) = struct
         (visit_instrs (new thread_registers ctx spec_info) body)
     in
 
-    if never_returns end_node cfg then prerr_endline "NEVER RETURNS";
+    if never_returns end_node cfg then prerr_endline ("NEVER RETURNS: " ^ string_of_sv_name name);
 
     if Option.is_some debug_attr && not (debug_attr_skip_graph debug_attr) then dump_graph (string_of_sv_name name) cfg;
 
