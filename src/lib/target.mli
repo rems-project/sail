@@ -94,6 +94,10 @@ val action : target -> string option -> Interactive.State.istate -> unit
 
 val asserts_termination : target -> bool
 
+(** If a target does not support abstract types, then the user must
+    provide a concrete instantiation for Sail. *)
+val supports_abstract_types : target -> bool
+
 (** {2 Target registration} *)
 
 (** Used for plugins to register custom Sail targets/backends.
@@ -114,6 +118,7 @@ val asserts_termination : target -> bool
    @param ?pre_rewrites_hook A function to call before doing any rewrites
    @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
    @param ?asserts_termination Whether termination measures are enforced by assertions in the target
+   @param ?supports_abstract_types Whether the target supports abstract types to be passed to the target
 
    The final unnamed parameter is the main backend function that is called after the frontend
    has finished processing the input.
@@ -128,6 +133,7 @@ val register :
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
+  ?supports_abstract_types:bool ->
   (string option -> Interactive.State.istate -> unit) ->
   target
 

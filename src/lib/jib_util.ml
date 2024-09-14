@@ -256,6 +256,7 @@ let string_of_op = function
   | Set_slice -> "@set_slice"
   | Concat -> "@concat"
   | Ite -> "@ite"
+  | Get_abstract -> "@get_abstract"
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
@@ -882,6 +883,7 @@ let cdef_aux_concatmap_instr f = function
 let cdef_concatmap_instr f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_concatmap_instr f aux, def_annot)
 
 let ctype_def_map_ctyp f = function
+  | CTD_abstract (id, ctyp) -> CTD_abstract (id, f ctyp)
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
@@ -1004,6 +1006,7 @@ let rec infer_call op vs =
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
     end
   | Ite, [_; t; _] -> cval_ctyp t
+  | Get_abstract, [v] -> cval_ctyp v
   | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
 
 and cval_ctyp = function
@@ -1089,13 +1092,17 @@ let rec instr_ctyps_exist pred (I_aux (instr, aux)) =
 and instrs_ctyps_exist pred instrs = List.exists (instr_ctyps_exist pred) instrs
 
 let ctype_def_ctyps = function
-  | CTD_enum _ -> []
+  | CTD_enum _ | CTD_abstract _ -> []
   | CTD_struct (_, fields) -> List.map snd fields
   | CTD_variant (_, ctors) -> List.map snd ctors
 
-let ctype_def_id = function CTD_enum (id, _) -> id | CTD_struct (id, _) -> id | CTD_variant (id, _) -> id
+let ctype_def_id = function
+  | CTD_abstract (id, _) | CTD_enum (id, _) -> id
+  | CTD_struct (id, _) -> id
+  | CTD_variant (id, _) -> id
 
 let ctype_def_to_ctyp = function
+  | CTD_abstract (id, ctyp) -> ctyp
   | CTD_enum (id, ids) -> CT_enum (id, ids)
   | CTD_struct (id, fields) -> CT_struct (id, fields)
   | CTD_variant (id, ctors) -> CT_variant (id, ctors)

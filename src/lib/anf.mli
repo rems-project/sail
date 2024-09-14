@@ -142,6 +142,7 @@ and 'a apat_aux =
 and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
+  | AV_abstract of id * 'a
   | AV_ref of id * 'a lvar
   | AV_tuple of 'a aval list
   | AV_list of 'a aval list * 'a

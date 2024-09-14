@@ -101,6 +101,8 @@ val initial_ctx : ctx
 
 (** {2 Desugar and process AST } *)
 
+val to_ast_typ_arg : kind_aux -> ctx -> Parse_ast.atyp -> typ_arg
+
 val get_uninitialized_registers : untyped_def list -> (id * typ) list
 
 val generate_undefined_record_context : typquant -> (id * typ) list

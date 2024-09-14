@@ -77,6 +77,10 @@ let visit_ctype_def vis no_change =
       let id' = visit_id vis id in
       let ctors' = map_no_copy (visit_binding vis) ctors in
       if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
+  | CTD_abstract (id, ctyp) ->
+      let id' = visit_id vis id in
+      let ctyp' = visit_ctyp vis ctyp in
+      if id == id' && ctyp == ctyp' then no_change else CTD_abstract (id', ctyp')
 
 let rec visit_clexp vis outer_clexp =
   let aux vis no_change =

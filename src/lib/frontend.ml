@@ -82,24 +82,16 @@ let finalize_ast asserts_termination ctx env ast =
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   if !opt_ddump_side_effect then Effects.dump_effects side_effects;
   Effects.check_side_effects side_effects ast;
-  let () = if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) else () in
+  if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
   (ctx, ast, Type_check.Env.open_all_modules env, side_effects)
 
-let instantiate_abstract_types insts ast =
+let instantiate_abstract_types tgt insts ast =
   let open Ast in
   let instantiate = function
     | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, _))), def_annot) as def -> begin
         match Bindings.find_opt id insts with
-        | Some arg ->
-            let arg_kind = typ_arg_kind arg in
-            if Kind.compare arg_kind kind <> 0 then
-              raise
-                (Reporting.err_general l
-                   (Printf.sprintf
-                      "Failed to instantiate abstract type. Abstract type has kind %s, but instantiation has kind %s"
-                      (string_of_kind kind) (string_of_kind arg_kind)
-                   )
-                );
+        | Some arg_fun ->
+            let arg = arg_fun (unaux_kind kind) in
             DEF_aux
               ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
                 def_annot
@@ -108,7 +100,20 @@ let instantiate_abstract_types insts ast =
       end
     | def -> def
   in
-  { ast with defs = List.map instantiate ast.defs }
+  let defs = List.map instantiate ast.defs in
+  if Target.supports_abstract_types tgt then { ast with defs }
+  else (
+    match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
+    | Some (DEF_aux (_, def_annot)) ->
+        raise
+          (Reporting.err_general def_annot.loc
+             (Printf.sprintf
+                "Abstract types must be removed using the --instantiate option when generating code for target '%s'"
+                (Target.name tgt)
+             )
+          )
+    | None -> { ast with defs }
+  )
 
 type parse_continuation = {
   check : Type_check.Env.t -> Type_check.typed_ast * Type_check.Env.t;

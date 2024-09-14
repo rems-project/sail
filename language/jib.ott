@@ -94,6 +94,7 @@ op :: '' ::=
   | eq                :: :: eq
   | neq               :: :: neq
   | ite               :: :: ite
+  | get_abstract      :: :: get_abstract
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq
@@ -206,6 +207,7 @@ ctype_def :: 'CTD_' ::=
   | enum id = id0 '|' ... '|' idn                    :: :: enum
   | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
   | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | abstract id : ctyp                               :: :: abstract
 
 iannot :: '' ::=
   {{ phantom }}

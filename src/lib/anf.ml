@@ -119,6 +119,7 @@ and 'a apat_aux =
 and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
+  | AV_abstract of id * 'a
   | AV_ref of id * 'a lvar
   | AV_tuple of 'a aval list
   | AV_list of 'a aval list * 'a
@@ -189,6 +190,7 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
 let rec aval_typ = function
   | AV_lit (_, typ) -> typ
   | AV_id (_, lvar) -> lvar_typ lvar
+  | AV_abstract (id, typ) -> typ
   | AV_ref (_, lvar) -> lvar_typ lvar
   | AV_tuple avals -> tuple_typ (List.map aval_typ avals)
   | AV_list (_, typ) -> typ
@@ -222,6 +224,8 @@ let rec aval_rename from_id to_id = function
   | AV_id (id, lvar) -> AV_id (id, lvar)
   | AV_ref (id, lvar) when Id.compare id from_id = 0 -> AV_ref (to_id, lvar)
   | AV_ref (id, lvar) -> AV_ref (id, lvar)
+  | AV_abstract (id, typ) ->
+      AV_abstract (id, typ) (* This id is an abstract type variable, so we don't rename it here *)
   | AV_tuple avals -> AV_tuple (List.map (aval_rename from_id to_id) avals)
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
@@ -540,6 +544,7 @@ and pp_block = function
 and pp_aval = function
   | AV_lit (lit, typ) -> pp_annot typ (string (string_of_lit lit))
   | AV_id (id, lvar) -> pp_lvar lvar (pp_id id)
+  | AV_abstract (id, typ) -> string "sizeof" ^^ parens (pp_annot typ (pp_id id))
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
   | AV_cval (cval, typ) -> pp_annot typ (string (string_of_cval cval |> Util.cyan |> Util.clear))
@@ -800,6 +805,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       wrap (mk_aexp (AE_val (AV_record (record, typ_of exp))))
   | E_typ (typ, exp) -> mk_aexp (AE_typ (anf exp, typ))
   | E_internal_assume (_nc, exp) -> anf exp
+  | E_sizeof (Nexp_aux (Nexp_id id, _)) -> mk_aexp (AE_val (AV_abstract (id, typ_of exp)))
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
       (* Should be re-written by type checker *)
       Reporting.unreachable l __POS__ "encountered raw vector operation when converting to ANF" [@coverage off]

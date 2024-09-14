@@ -400,6 +400,7 @@ module Make (C : CONFIG) = struct
         | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
         | None -> ([], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
+    | AV_abstract (id, typ) -> ([], V_call (Get_abstract, [V_id (name id, ctyp_of_typ ctx typ)]), [])
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
     | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), [])
     | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (VL_int n, ctyp_of_typ ctx typ), [])
@@ -1339,7 +1340,14 @@ module Make (C : CONFIG) = struct
     | TD_bitfield _ -> Reporting.unreachable l __POS__ "Cannot compile TD_bitfield"
     (* All type abbreviations are filtered out in compile_def  *)
     | TD_abbrev _ -> Reporting.unreachable l __POS__ "Found TD_abbrev in compile_type_def"
-    | TD_abstract _ -> Reporting.unreachable l __POS__ "Abstract type not supported yet"
+    | TD_abstract (id, K_aux (kind, _)) -> begin
+        match kind with
+        | K_int ->
+            let ctyp = ctyp_of_typ ctx (atom_typ (nid id)) in
+            (CTD_abstract (id, ctyp), ctx)
+        | K_bool -> (CTD_abstract (id, CT_bool), ctx)
+        | _ -> Reporting.unreachable l __POS__ "Found abstract type that was neither an integer nor a boolean"
+      end
 
   let generate_cleanup instrs =
     let generate_cleanup' (I_aux (instr, _)) =
@@ -1759,6 +1767,7 @@ module Make (C : CONFIG) = struct
     (* Only the parser and sail pretty printer care about this. *)
     | DEF_fixity _ -> ([], ctx)
     | DEF_pragma ("abstract", id_str, _) -> ([CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
+    | DEF_pragma ("c_in_main", source, _) -> ([CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
     (* We just ignore any pragmas we don't want to deal with. *)
     | DEF_pragma _ -> ([], ctx)
     (* Termination measures only needed for Coq, and other theorem prover output *)
@@ -1772,11 +1781,11 @@ module Make (C : CONFIG) = struct
             (cdefs @ cdefs', ctx)
           )
           ([], ctx) defs
+    | DEF_constraint _ -> ([], ctx)
     (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
     | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
         Reporting.unreachable (def_loc def) __POS__
           ("Could not compile:\n" ^ Document.to_string (Pretty_print_sail.doc_def (strip_def def)))
-    | DEF_constraint _ -> Reporting.unreachable (def_loc def) __POS__ "Toplevel constraint not supported"
 
   let mangle_mono_id id ctx ctyps = append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
 
@@ -2304,10 +2313,12 @@ module Make (C : CONFIG) = struct
     let ctype_defs = List.map unwrap (List.filter is_ctype_def cdefs) in
     let cdefs = List.filter (fun cdef -> not (is_ctype_def cdef)) cdefs in
 
-    let ctdef_id = function CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id in
+    let ctdef_id = function
+      | CTD_abstract (id, _) | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
+    in
 
     let ctdef_ids = function
-      | CTD_enum _ -> IdSet.empty
+      | CTD_enum _ | CTD_abstract _ -> IdSet.empty
       | CTD_struct (_, ctors) | CTD_variant (_, ctors) ->
           List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors
     in

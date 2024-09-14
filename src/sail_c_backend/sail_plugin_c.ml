@@ -166,4 +166,4 @@ let c_target out_file { ast; effect_info; env; _ } =
   flush output_chan;
   if close then close_out output_chan
 
-let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites c_target
+let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
