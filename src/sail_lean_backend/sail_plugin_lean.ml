@@ -96,7 +96,7 @@ let lean_options =
       "<filename> provide additional alternative modules to open only in main (non-_types) Lean output, and suppress \
        default definitions of MR and M monads"
     );
-    ( "-lean_extern_type",
+    (*( "-lean_extern_type",
       Arg.String Pretty_print_lean.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
       "<typename> do not generate a definition for the type"
     );
@@ -111,7 +111,7 @@ let lean_options =
     ( "-lean_record_update",
       Arg.Set Pretty_print_lean.opt_coq_record_update,
       " use lean-record-update package's syntax for record updates"
-    );
+    );*)
     ( "-lean_lib_style",
       Arg.Symbol
         ( ["bbv"; "stdpp"],
@@ -225,16 +225,16 @@ let output_lean opt_dir filename alt_modules alt_modules2 libs ctx env effect_in
     | [] -> base_imports_default
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules)
   in
-  let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted opt_dir (types_module ^ ".v") in
-  let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (filename ^ ".v") in
+  let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted opt_dir (types_module ^ ".lean") in
+  let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (filename ^ ".lean") in
   let oi, ext_oi =
     match !opt_lean_isla with
     | None -> (None, None)
     | Some fname ->
-        let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (fname ^ ".v") in
+        let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (fname ^ ".lean") in
         (Some o, Some ext_o)
   in
-  (Pretty_print_lean.pp_ast_coq library_style (ot, base_imports)
+  (Pretty_print_lean.pp_ast_lean library_style (ot, base_imports)
      (o, base_imports @ (types_module :: libs) @ alt_modules2)
      types_module oi ctx effect_info env ast concurrency_monad_params generated_line
   )
