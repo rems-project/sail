@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/abstract_type_type.sail[0m:3.0-13:
+3[96m |[0mtype a : Type
+ [91m |[0m[91m^-----------^[0m
+ [91m |[0m Abstract type must be either a boolean or integer type
