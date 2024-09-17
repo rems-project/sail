@@ -1030,7 +1030,7 @@ let rec subtyp l env typ1 typ2 =
       let prop = nc_eq nexp1 nexp2 in
       if prove __POS__ env prop then ()
       else typ_raise l (Err_subtype (typ1, typ2, Some prop, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
-  | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
+  | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) -> begin
       let env = add_existential l (List.map (mk_kopt K_int) kids1) nc1 env in
       let env =
         add_typ_vars l
@@ -1039,21 +1039,16 @@ let rec subtyp l env typ1 typ2 =
       in
       let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (tyvars_of_nexp nexp2)) in
       if not (kids2 = []) then
-        typ_error l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2)
-      else ();
-      (* TODO: Check this *)
-      let _vars =
-        KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env)
-      in
-      begin
-        match Constraint.call_smt l Bindings.empty (nc_eq nexp1 nexp2) with
-        | Constraint.Sat ->
-            let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
-            if prove __POS__ env nc2 then ()
-            else
-              typ_raise l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
-        | _ -> typ_error l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
-      end
+        typ_error l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2);
+      let constr = List.fold_left nc_and (nc_eq nexp1 nexp2) (Env.get_global_constraints env) in
+      match Constraint.call_smt l (Env.get_abstract_typs env) constr with
+      | Constraint.Sat ->
+          let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
+          if prove __POS__ env nc2 then ()
+          else
+            typ_raise l (Err_subtype (typ1, typ2, Some nc2, Env.get_constraint_reasons env, Env.get_typ_vars_info env))
+      | _ -> typ_error l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
+    end
   | _, _ -> (
       match (typ_aux1, typ_aux2) with
       | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
@@ -1199,6 +1194,9 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
       let exp1 = rewrite_sizeof' l env nexp1 in
       let exp2 = rewrite_sizeof' l env nexp2 in
       mk_exp (E_app (mk_id "emod_int", [exp1; exp2]))
+  | Nexp_app (id, [nexp]) when string_of_id id = "abs" ->
+      let exp = rewrite_sizeof' l env nexp in
+      mk_exp (E_app (mk_id "abs_int_atom", [exp]))
   | Nexp_if (i, t, e) ->
       let i = rewrite_nc env i in
       let t = rewrite_sizeof' l env t in
@@ -4826,47 +4824,45 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       begin
         match typ with
         (* The type of a bitfield must be a constant-width bitvector *)
-        | Typ_aux (Typ_app (v, [A_aux (A_nexp nexp, _)]), _) when string_of_id v = "bitvector" -> begin
-            match get_nexp_constant nexp with
-            | Some size ->
-                let rec expand_range_synonyms = function
-                  | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
-                  | BF_aux (BF_range (nexp1, nexp2), l) ->
-                      let nexp1 = Env.expand_nexp_synonyms env nexp1 in
-                      let nexp2 = Env.expand_nexp_synonyms env nexp2 in
-                      BF_aux (BF_range (nexp1, nexp2), l)
-                  | BF_aux (BF_concat (r1, r2), l) ->
-                      BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
-                in
-                let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
-                let ranges =
-                  List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
-                in
-                (* This would cause us to fail later, but with a potentially confusing error message *)
-                Bindings.iter
-                  (fun f _ ->
-                    if Id.compare f (mk_id "bits") = 0 then
-                      typ_error (id_loc f)
-                        "Field with name 'bits' found in bitfield definition.\n\n\
-                         This is used as the default name for all the bits in the bitfield, so should not be \
-                         overridden."
-                  )
-                  ranges;
+        | Typ_aux (Typ_app (v, [A_aux (A_nexp size, _)]), _) when string_of_id v = "bitvector" -> begin
+            let rec expand_range_synonyms = function
+              | BF_aux (BF_single nexp, l) -> BF_aux (BF_single (Env.expand_nexp_synonyms env nexp), l)
+              | BF_aux (BF_range (nexp1, nexp2), l) ->
+                  let nexp1 = Env.expand_nexp_synonyms env nexp1 in
+                  let nexp2 = Env.expand_nexp_synonyms env nexp2 in
+                  BF_aux (BF_range (nexp1, nexp2), l)
+              | BF_aux (BF_concat (r1, r2), l) ->
+                  BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
+            in
+            let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
+            let ranges =
+              List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
+            in
+            (* This would cause us to fail later, but with a potentially confusing error message *)
+            Bindings.iter
+              (fun f _ ->
+                if Id.compare f (mk_id "bits") = 0 then
+                  typ_error (id_loc f)
+                    "Field with name 'bits' found in bitfield definition.\n\n\
+                     This is used as the default name for all the bits in the bitfield, so should not be overridden."
+              )
+              ranges;
+            (*
                 let def_annot = add_def_attribute l "bitfield" (Some (AD_aux (AD_num size, l))) def_annot in
-                let defs =
-                  DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
-                  :: Bitfield.macro id size (Env.get_default_order env) ranges
-                in
-                let defs, env =
-                  try check_defs env defs
-                  with Type_error (inner_l, err) ->
-                    typ_raise l (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", err))
-                in
-                let env = Env.add_bitfield id typ ranges env in
-                if !opt_no_bitfield_expansion then
-                  ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
-                else (defs, env)
-            | None -> typ_error l ("Bitvector width " ^ string_of_nexp nexp ^ " for bitfield must be constant")
+                   *)
+            let defs =
+              DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
+              :: Bitfield.macro id size (Env.get_default_order env) ranges
+            in
+            let defs, env =
+              try check_defs env defs
+              with Type_error (inner_l, err) ->
+                typ_raise l (Err_inner (Err_other "Error while checking bitfield", inner_l, "Bitfield error", err))
+            in
+            let env = Env.add_bitfield id typ ranges env in
+            if !opt_no_bitfield_expansion then
+              ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
+            else (defs, env)
           end
         | typ -> typ_error l ("Underlying bitfield type " ^ string_of_typ typ ^ " must be a constant-width bitvector")
       end

@@ -184,6 +184,7 @@ val get_registers : t -> typ Bindings.t
 val add_register : id -> typ -> t -> t
 
 val get_constraints : t -> n_constraint list
+val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 

@@ -1,5 +1,6 @@
 default Order dec
 
+$include <smt.sail>
 $include <prelude.sail>
 
 type xlen : Int = abs(-2)
