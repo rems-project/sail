@@ -1,7 +1,6 @@
 default Order dec
 
-$include <flow.sail>
-$include <vector_dec.sail>
+$include <prelude.sail>
 
 type xlen : Int = 64
 type ylen : Int = 1

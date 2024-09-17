@@ -470,6 +470,11 @@ module KOptMap = Map.Make (KOpt)
 module NexpSet = Set.Make (Nexp)
 module NexpMap = Map.Make (Nexp)
 
+let unaux_nexp (Nexp_aux (nexp, _)) = nexp
+let unaux_typ (Typ_aux (typ, _)) = typ
+let unaux_kind (K_aux (k, _)) = k
+let unaux_constraint (NC_aux (nc, _)) = nc
+
 let nexp_identical nexp1 nexp2 = Nexp.compare nexp1 nexp2 = 0
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) =
@@ -483,6 +488,24 @@ let rec is_nexp_constant (Nexp_aux (nexp, _)) =
 
 let int_of_nexp_opt nexp = match nexp with Nexp_aux (Nexp_constant i, _) -> Some i | _ -> None
 
+let rec is_constant_arith_chain = function
+  | Nexp_aux (Nexp_sum (n, Nexp_aux (Nexp_constant _, _)), _) -> 1 + is_constant_arith_chain n
+  | Nexp_aux (Nexp_sum (Nexp_aux (Nexp_constant _, _), n), _) -> 1 + is_constant_arith_chain n
+  | Nexp_aux (Nexp_minus (n, Nexp_aux (Nexp_constant _, _)), _) -> 1 + is_constant_arith_chain n
+  | _ -> 0
+
+let rec constant_arith_chain = function
+  | Nexp_aux (Nexp_sum (n, Nexp_aux (Nexp_constant c, _)), _) ->
+      let root, constants = constant_arith_chain n in
+      (root, c :: constants)
+  | Nexp_aux (Nexp_sum (Nexp_aux (Nexp_constant c, _), n), _) ->
+      let root, constants = constant_arith_chain n in
+      (root, c :: constants)
+  | Nexp_aux (Nexp_minus (n, Nexp_aux (Nexp_constant c, _)), _) ->
+      let root, constants = constant_arith_chain n in
+      (root, Big_int.negate c :: constants)
+  | nexp -> (nexp, [])
+
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 
 and nexp_simp_aux = function
@@ -495,9 +518,17 @@ and nexp_simp_aux = function
       nexp_simp_aux n1
   | Nexp_sum (n1, n2) -> begin
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-      let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+      let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
+      | Nexp_constant c1, _ when Big_int.equal c1 Big_int.zero -> n2_simp
+      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.add c1 c2)
+      | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
+          let root, constants = constant_arith_chain n1 in
+          let sum = List.fold_left Big_int.add c constants in
+          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
+          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          else unaux_nexp root
       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
       | _, _ -> Nexp_sum (n1, n2)
     end
@@ -512,13 +543,16 @@ and nexp_simp_aux = function
     end
   | Nexp_minus (n1, n2) -> begin
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-      let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+      let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
+      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.sub c1 c2)
-      (* A vector range x['n-1 .. 0] can result in the size "('n-1) - -1" *)
-      | Nexp_minus (Nexp_aux (n, _), Nexp_aux (Nexp_constant c1, _)), Nexp_constant c2
-        when Big_int.equal c1 (Big_int.negate c2) ->
-          n
+      | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
+          let root, constants = constant_arith_chain n1 in
+          let sum = List.fold_left Big_int.add (Big_int.negate c) constants in
+          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
+          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          else unaux_nexp root
       | _, _ -> Nexp_minus (n1, n2)
     end
   | Nexp_neg n -> begin
@@ -778,11 +812,6 @@ let quant_map_items f = function
 let is_quant_kopt = function QI_aux (QI_id _, _) -> true | _ -> false
 
 let is_quant_constraint = function QI_aux (QI_constraint _, _) -> true | _ -> false
-
-let unaux_nexp (Nexp_aux (nexp, _)) = nexp
-let unaux_typ (Typ_aux (typ, _)) = typ
-let unaux_kind (K_aux (k, _)) = k
-let unaux_constraint (NC_aux (nc, _)) = nc
 
 let rec insert_subrange ms (n1, n2) =
   match ms with

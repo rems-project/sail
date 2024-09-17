@@ -1,6 +1,6 @@
 default Order dec
 
-$include <vector_dec.sail>
+$include <prelude.sail>
 
 bitfield PC_t : bitvector(16, dec) = {
   H : 15 .. 8,

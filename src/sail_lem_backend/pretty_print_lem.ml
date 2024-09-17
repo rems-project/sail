@@ -1736,7 +1736,7 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types then empty
       else group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
-  | DEF_constraint _ -> unreachable (def_loc def) __POS__ "Toplevel constraint not supported by lem backend"
+  | DEF_constraint _ -> empty
   | DEF_register dec -> group (doc_dec_lem dec)
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline

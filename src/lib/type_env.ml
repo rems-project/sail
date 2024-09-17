@@ -556,8 +556,8 @@ let check_args_typquant id env args typq =
     typ_error (id_loc id)
       ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
-let get_constraints env = List.map snd env.global.constraints @ List.map snd env.constraints
-
+let get_constraints env = List.map snd env.constraints @ List.map snd env.global.constraints
+let get_global_constraints env = List.map snd env.global.constraints
 let get_constraint_reasons env = env.global.constraints @ env.constraints
 
 let mk_synonym typq typ_arg =
@@ -866,8 +866,8 @@ and expand_synonyms env (Typ_aux (typ, l)) =
 and expand_arg_synonyms env (A_aux (typ_arg, l)) =
   match typ_arg with
   | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
-  | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
-  | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
+  | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc |> constraint_simp), l)
+  | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp |> nexp_simp), l)
 
 and add_constraint ?(global = false) ?reason constr env =
   let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in

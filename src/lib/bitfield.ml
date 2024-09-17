@@ -80,13 +80,13 @@ let index_of_nexp nexp =
   | Some i -> i
   | None -> raise (Reporting.err_typ (nexp_loc nexp) "non-constant bitfield index")
 
-let mk_num_exp i = mk_lit_exp (L_num i)
+let mk_sizeof_exp i = mk_exp (E_sizeof i)
 let mk_id_exp id = mk_exp (E_id id)
 let mk_id_pat id = mk_pat (P_id id)
 
 let rec indices_of_range = function
-  | BF_aux (BF_single i, _) -> [(index_of_nexp i, index_of_nexp i)]
-  | BF_aux (BF_range (i, j), _) -> [(index_of_nexp i, index_of_nexp j)]
+  | BF_aux (BF_single i, _) -> [(i, i)]
+  | BF_aux (BF_range (i, j), _) -> [(i, j)]
   | BF_aux (BF_concat (l, r), _) -> indices_of_range l @ indices_of_range r
 
 let range_loc (BF_aux (_, l)) = l
@@ -99,19 +99,19 @@ let fix_locations l defs =
   in
   List.rev (go [] defs)
 
-let slice_width (i, j) = Big_int.succ (Big_int.abs (Big_int.sub i j))
-let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left Big_int.add Big_int.zero
+let slice_width (i, j) = nsum (nminus i j) (nint 1)
+let range_width r = List.map slice_width (indices_of_range r) |> List.fold_left nsum (nint 0) |> nexp_simp
 
 (* Generate a constructor function for a bitfield type *)
 let constructor name size =
-  let typschm = fun_typschm [constant_bitvector_typ size] (mk_id_typ name) in
+  let typschm = fun_typschm [bitvector_typ size] (mk_id_typ name) in
   let constructor_val = mk_val_spec (VS_val_spec (typschm, prepend_id "Mk_" name, None)) in
   let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" (string_of_id name) in
   constructor_val :: fst (defs_of_string __POS__ initial_ctx constructor_fun)
 
 (* Helper functions to generate different kinds of field accessor exps and lexps *)
 let get_field_exp range inner_exp =
-  let mk_slice (i, j) = mk_exp (E_vector_subrange (inner_exp, mk_num_exp i, mk_num_exp j)) in
+  let mk_slice (i, j) = mk_exp (E_vector_subrange (inner_exp, mk_sizeof_exp i, mk_sizeof_exp j)) in
   let rec aux = function
     | [e] -> e
     | e :: es -> mk_exp (E_vector_append (e, aux es))
@@ -124,7 +124,7 @@ let construct_bitfield_struct _ exp = mk_exp (E_struct [mk_fexp (mk_id "bits") e
 let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
 
 let set_field_lexp range inner_lexp =
-  let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_num_exp i, mk_num_exp j)) in
+  let mk_slice (i, j) = mk_lexp (LE_vector_range (inner_lexp, mk_sizeof_exp i, mk_sizeof_exp j)) in
   match List.map mk_slice (indices_of_range range) with [e] -> e | es -> mk_lexp (LE_vector_concat es)
 
 let set_bits_field_lexp inner_lexp = mk_lexp (LE_field (inner_lexp, mk_id "bits"))
@@ -138,19 +138,19 @@ let update_field_exp range order inner_exp new_value =
   let rec aux e vi = function
     | (i, j) :: is ->
         let w = slice_width (i, j) in
-        let vi' = if is_order_inc order then Big_int.add vi w else Big_int.sub vi w in
+        let vi' = if is_order_inc order then nsum vi w else nminus vi w in
         let rhs =
           if single then new_value
           else begin
-            let vj = if is_order_inc order then Big_int.pred vi' else Big_int.succ vi' in
-            mk_exp (E_vector_subrange (new_value, mk_num_exp vi, mk_num_exp vj))
+            let vj = if is_order_inc order then nminus vi' (nint 1) else nsum vi' (nint 1) in
+            mk_exp (E_vector_subrange (new_value, mk_sizeof_exp vi, mk_sizeof_exp vj))
           end
         in
-        let update = mk_exp (E_vector_update_subrange (e, mk_num_exp i, mk_num_exp j, rhs)) in
+        let update = mk_exp (E_vector_update_subrange (e, mk_sizeof_exp i, mk_sizeof_exp j, rhs)) in
         aux update vi' is
     | [] -> e
   in
-  let vi = if is_order_inc order then Big_int.zero else Big_int.pred (range_width range) in
+  let vi = if is_order_inc order then nint 0 else nminus (range_width range) (nint 1) in
   aux inner_exp vi (indices_of_range range)
 
 (* For every field, create getter and setter functions *)
@@ -168,7 +168,7 @@ let field_accessor_ids type_name field =
 
 let field_getter typ_name field order range =
   let size = range_width range in
-  let typschm = fun_typschm [mk_id_typ typ_name] (constant_bitvector_typ size) in
+  let typschm = fun_typschm [mk_id_typ typ_name] (bitvector_typ size) in
   let fun_id = (field_accessor_ids typ_name field).get in
   let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let body = get_field_exp range (get_bits_field (mk_exp (E_id (mk_id "v")))) in
@@ -178,7 +178,7 @@ let field_getter typ_name field order range =
 let field_updater typ_name field order range =
   let size = range_width range in
   let typ = mk_id_typ typ_name in
-  let typschm = fun_typschm [typ; constant_bitvector_typ size] typ in
+  let typschm = fun_typschm [typ; bitvector_typ size] typ in
   let fun_id = (field_accessor_ids typ_name field).update in
   let spec = mk_val_spec (VS_val_spec (typschm, fun_id, None)) in
   let orig_var = mk_id "v" in
@@ -200,7 +200,7 @@ let register_field_setter typ_name field order range =
   let fun_id = string_of_id (field_accessor_ids typ_name field).set in
   let update_fun_id = string_of_id (field_accessor_ids typ_name field).update in
   let typ_name = string_of_id typ_name in
-  let field_typ = string_of_typ (constant_bitvector_typ size) in
+  let field_typ = string_of_typ (bitvector_typ size) in
   let rfs_val = Printf.sprintf "val %s : (register(%s), %s) -> unit" fun_id typ_name field_typ in
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let rfs_function =
@@ -232,7 +232,7 @@ let field_accessors typ_name field order range =
 
 (* Generate all accessor functions for a given bitfield type *)
 let macro id size order ranges =
-  let full_range = BF_aux (BF_range (nconstant (Big_int.pred size), nconstant Big_int.zero), Parse_ast.Unknown) in
+  let full_range = BF_aux (BF_range (nminus size (nint 1), nconstant Big_int.zero), Parse_ast.Unknown) in
   let ranges = (mk_id "bits", full_range) :: Bindings.bindings ranges in
   let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
   List.concat ([constructor id size] @ accessors)

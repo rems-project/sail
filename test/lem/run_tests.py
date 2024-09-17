@@ -24,10 +24,6 @@ skip_tests = {
     # The Lem backend needs sail_mem_read to be instantiated at a minimum
     'concurrency_interface_dec',
     'concurrency_interface_inc',
-    # Abstract types not implemented for Lem yet
-    'abstract_bool',
-    'abstract_bool2',
-    'constraint_syn',
     # Requires types that aren't currently in the library
     'float_prelude',
 }
@@ -46,6 +42,7 @@ skip_tests_mwords = {
     'zero_length_bv',
     'negative_bits_list',
     'patternrefinement',
+    'abstract_extend',
     # Due to an incompatibility between -auto_mono and -smt_linearize
     'pow_32_64',
     # The Lem backend needs sail_mem_read to be instantiated at a minimum
