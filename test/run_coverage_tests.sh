@@ -61,4 +61,10 @@ printf "==========================================\n"
 
 ./format/run_tests.py || returncode=1
 
+printf "\n==========================================\n"
+printf "One-off tests\n"
+printf "==========================================\n"
+
+./oneoff/run_tests.py || returncode=1
+
 exit $returncode

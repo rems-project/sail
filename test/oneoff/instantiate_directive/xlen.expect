@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[96mxlen.sail[0m:4.40-40:
+4[96m |[0m$option    --no-warn --instantiate xlen=#
+ [91m |[0m                                        [91m^[0m
+ [91m |[0m Unexpected character: #

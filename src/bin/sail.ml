@@ -68,6 +68,7 @@
 open Libsail
 
 open Interactive.State
+open Sail_options
 
 type version = { major : int; minor : int; patch : int }
 
@@ -80,7 +81,6 @@ let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
 let opt_just_parse_project : bool ref = ref false
 let opt_auto_interpreter_rewrites : bool ref = ref false
-let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_util.Bindings.t ref = ref Ast_util.Bindings.empty
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
@@ -176,13 +176,19 @@ let load_plugin opts plugin =
 let parse_instantiation inst =
   let open Ast in
   let open Ast_util in
+  let open Lexing in
   match String.split_on_char '=' inst with
   | abstract_type :: value ->
+      let inline =
+        match Preprocess.get_argv_position ~plus:1 with
+        | Some p -> Some { p with pos_cnum = p.pos_cnum + String.length abstract_type + 1 }
+        | None -> None
+      in
       let value = String.concat "=" value in
       let abstract_type = mk_id (String.trim abstract_type) in
       let parse_value kind =
         let open Initial_check in
-        parse_from_string
+        parse_from_string ?inline
           (fun lexbuf ->
             let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
             to_ast_typ_arg kind initial_ctx atyp
@@ -497,7 +503,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
               arguments with the appropriate extension, but not both!"
           )
   in
-  let ast = Frontend.instantiate_abstract_types tgt !opt_instantiations ast in
+  let ast = Frontend.instantiate_abstract_types (Some tgt) !opt_instantiations ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in

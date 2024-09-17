@@ -67,9 +67,11 @@
 
 type handle = int
 
-let handles = ref 1
+let handles = ref 2
 
 let interactive_repl = 0
+
+let argv = 1
 
 let new_handle () =
   let handle = !handles in
@@ -123,14 +125,29 @@ let new_info ~owner ~given_path ~canonical_path ~contents =
 
 let files : (int, info) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
-  let contents = Array.make 1 "0000001,0000016" in
-  Hashtbl.add tbl interactive_repl (new_info ~owner:Compiler ~given_path:"REPL" ~canonical_path:"REPL" ~contents);
+  let repl_contents = Array.make 1 "0000001,0000016" in
+  let argv_contents = Sys.argv in
+  Hashtbl.add tbl interactive_repl
+    (new_info ~owner:Compiler ~given_path:"REPL" ~canonical_path:"REPL" ~contents:repl_contents);
+  Hashtbl.add tbl argv (new_info ~owner:Compiler ~given_path:"ARGV" ~canonical_path:"ARGV" ~contents:argv_contents);
   tbl
 
 let opened : (string, int) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
   Hashtbl.add tbl "REPL" interactive_repl;
+  Hashtbl.add tbl "ARGV" argv;
   tbl
+
+let bol_of_lnum line file =
+  let info = Hashtbl.find files file in
+  let bol = ref 0 in
+  if line - 2 >= Array.length info.contents then None
+  else (
+    for i = 0 to line - 2 do
+      bol := !bol + String.length info.contents.(i) + 1
+    done;
+    Some !bol
+  )
 
 let add_line_to_repl_contents n line info =
   let len = Array.length info.contents in

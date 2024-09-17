@@ -89,6 +89,18 @@ def chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
+def directory_chunks(filenames, cores):
+    ys = []
+    chunk = []
+    for filename in filenames:
+        if os.path.isdir(filename):
+            chunk.append(filename)
+        if len(chunk) >= cores:
+            ys.append(list(chunk))
+            chunk = []
+    ys.append(list(chunk))
+    return ys
+
 def project_chunks(filenames, cores):
     ys = []
     chunk = []

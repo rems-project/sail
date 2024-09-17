@@ -101,15 +101,16 @@ let instantiate_abstract_types tgt insts ast =
     | def -> def
   in
   let defs = List.map instantiate ast.defs in
-  if Target.supports_abstract_types tgt then { ast with defs }
+  if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then { ast with defs }
   else (
     match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
     | Some (DEF_aux (_, def_annot)) ->
+        let target_name = Option.get tgt |> Target.name in
         raise
           (Reporting.err_general def_annot.loc
              (Printf.sprintf
                 "Abstract types must be removed using the --instantiate option when generating code for target '%s'"
-                (Target.name tgt)
+                target_name
              )
           )
     | None -> { ast with defs }
