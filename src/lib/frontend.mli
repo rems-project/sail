@@ -76,7 +76,7 @@ val opt_list_files : bool ref
 val opt_reformat : string option ref
 
 val instantiate_abstract_types :
-  Target.target -> (kind_aux -> typ_arg) Bindings.t -> Type_check.typed_ast -> Type_check.typed_ast
+  Target.target option -> (kind_aux -> typ_arg) Bindings.t -> Type_check.typed_ast -> Type_check.typed_ast
 
 (** The [FILE_HANDLER] module type allows plugins to define handlers
     for custom file types. It defines how those files are processed

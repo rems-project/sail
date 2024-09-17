@@ -530,21 +530,21 @@ let handle_input' istate input =
             List.iter print_endline commands;
             istate
         | ":option" ->
+            let current = ref 0 in
+            let args, reset = Preprocess.create_argv_array ~offset:0 ~current (Range (pos, pos)) arg in
             begin
               try
-                let args = Str.split (Str.regexp " +") arg in
-                begin
-                  match args with
-                  | opt :: args ->
-                      Arg.parse_argv ~current:(ref 0)
-                        (Array.of_list ["sail"; opt; String.concat " " args])
-                        istate.options
-                        (fun _ -> ())
-                        ""
-                  | [] -> print_endline "Must provide a valid option"
-                end
+                match args with
+                | opt :: args ->
+                    Arg.parse_argv ~current
+                      (Array.of_list ["sail"; opt; String.concat " " args])
+                      istate.options
+                      (fun _ -> ())
+                      ""
+                | [] -> print_endline "Must provide a valid option"
               with Arg.Bad message | Arg.Help message -> print_endline message
             end;
+            reset ();
             istate
             (*
        | ":pretty" ->
@@ -643,6 +643,10 @@ let handle_input' istate input =
               in
               let ast, env = Type_check.check istate.env ast in
               { istate with ast = append_ast istate.ast ast; env; ctx }
+          | ":instantiate" ->
+              let ast = Frontend.instantiate_abstract_types None !Sail_options.opt_instantiations istate.ast in
+              let ast, env = Type_check.check istate.env (Type_check.strip_ast ast) in
+              { istate with ast = append_ast istate.ast ast; env }
           | ":rewrite" ->
               let open Rewrites in
               let args = Str.split (Str.regexp " +") arg in

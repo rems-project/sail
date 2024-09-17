@@ -65,13 +65,12 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-val clear_symbols : unit -> unit
-val have_symbol : string -> bool
-val add_symbol : string -> unit
+(* This file exists for options that are shared by the REPL and the
+   sail executable. *)
 
-val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
+open Libsail
 
-val get_argv_position : plus:int -> Lexing.position option
+open Ast
+open Ast_util
 
-val preprocess :
-  string -> string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
+let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_util.Bindings.t ref = ref Ast_util.Bindings.empty

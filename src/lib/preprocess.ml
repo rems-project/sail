@@ -178,6 +178,42 @@ let wrap_include l file = function
   | defs ->
       [DEF_aux (DEF_pragma ("include_start", file, 1), l)] @ defs @ [DEF_aux (DEF_pragma ("include_end", file, 1), l)]
 
+type argv_offsets = Argv_actual | Argv_unknown | Argv_inline of int ref * Lexing.position * int list
+
+let inline_argv = ref Argv_actual
+
+let create_argv_array ~offset ~current l str =
+  let reset_value = !inline_argv in
+  let reset () = inline_argv := reset_value in
+  match Reporting.simp_loc l with
+  | None ->
+      inline_argv := Argv_unknown;
+      (Str.split (Str.regexp " +") str, reset)
+  | Some (p, _) ->
+      let args = Util.split_on_char ' ' str in
+      let _, args =
+        Util.fold_left_map
+          (fun n arg -> if arg = "" then (n + 1, None) else (n + String.length arg + 1, Some (n, arg)))
+          0 args
+      in
+      let args = Util.option_these args in
+      inline_argv := Argv_inline (current, { p with pos_cnum = p.pos_cnum + offset }, List.map fst args);
+      (List.map snd args, reset)
+
+let get_argv_position ~plus =
+  let open Util.Option_monad in
+  let open Lexing in
+  match !inline_argv with
+  | Argv_unknown -> None
+  | Argv_actual ->
+      let argv_lnum = !Arg.current + plus + 1 in
+      let* bol = Sail_file.bol_of_lnum argv_lnum Sail_file.argv in
+      Some { pos_fname = "ARGV"; pos_lnum = argv_lnum; pos_bol = bol; pos_cnum = bol }
+  | Argv_inline (current, p, offsets) ->
+      let n = !current in
+      let* char_offset = List.nth_opt offsets n in
+      Some { p with pos_cnum = p.pos_cnum + char_offset }
+
 let preprocess dir target opts =
   let module P = Parse_ast in
   let rec aux includes acc = function
@@ -199,24 +235,26 @@ let preprocess dir target opts =
             format_message message (buffer_formatter b);
             raise (Reporting.err_general l (Buffer.contents b))
       end
-    | (DEF_aux (DEF_pragma ("option", command, _), l) as opt_pragma) :: defs ->
+    | (DEF_aux (DEF_pragma ("option", command, ltrim), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
+        let first_line err_msg =
+          match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
+          (* Don't expect this should ever happen, but we are fine if it does *)
+        in
+        let current = ref 0 in
+        let args, reset = create_argv_array ~offset:(ltrim + 7) ~current l command in
         begin
-          let first_line err_msg =
-            match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
-            (* Don't expect this should ever happen, but we are fine if it does *)
-          in
           try
-            let args = Str.split (Str.regexp " +") command in
             let file_arg file =
               raise
                 (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive"))
             in
-            Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) opts file_arg ""
+            Arg.parse_argv ~current (Array.of_list ("sail" :: args)) opts file_arg ""
           with
           | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
           | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
         end;
+        reset ();
         aux includes (opt_pragma :: acc) defs
     | DEF_aux (DEF_pragma ("ifndef", symbol, _), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in

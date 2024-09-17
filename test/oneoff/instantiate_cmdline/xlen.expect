@@ -1,0 +1,5 @@
+[93mSyntax error[0m:
+[96mARGV[0m:5.9-9:
+5[96m |[0mxlen = 3 2
+ [91m |[0m         [91m^[0m
+ [91m |[0m Failed to parse ' 3 2' at token '2'
