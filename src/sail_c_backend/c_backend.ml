@@ -2223,15 +2223,7 @@ let compile_ast env effect_info output_chan c_includes ast =
 
     let model_main =
       let extra =
-        List.filter_map
-          (function
-            | CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg)
-            | CDEF_aux (CDEF_pragma (p, _), _) ->
-                prerr_endline p;
-                None
-            | _ -> None
-            )
-          cdefs
+        List.filter_map (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None) cdefs
       in
       separate hardline
         ( if !opt_no_main then []
