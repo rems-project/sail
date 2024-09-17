@@ -855,6 +855,130 @@ let register_refs_coq doc_id coq_record_update env registers =
   in
   separate hardline [generic_convs; refs; getters_setters]
 
+  let register_refs_lean doc_id coq_record_update env registers =
+    let generic_convs =
+      separate_map hardline string
+        [
+          "def bool_of_regval (merge_var : register_value) : Option Bool :=";
+          "  match merge_var with | Regval_bool v => some v | _ => none";
+          "";
+          "def regval_of_bool (v : Bool) : register_value := Regval_bool v.";
+          "";
+          "def int_of_regval (merge_var : register_value) : Option Int :=";
+          "  match merge_var with | Regval_int v => some v | _ => none";
+          "";
+          "def regval_of_int (v : Int) : register_value := Regval_int v.";
+          "";
+          "def real_of_regval (merge_var : register_value) : Option Real :=";
+          "  match merge_var with | Regval_real v => some v | _ => none";
+          "";
+          "def regval_of_real (v : Real) : register_value := Regval_real v.";
+          "";
+          "def string_of_regval (merge_var : register_value) : Option String :=";
+          "  match merge_var with | Regval_string v => some v | _ => none";
+          "";
+          "def regval_of_string (v : string) : register_value := Regval_string v";
+          "";
+          "def vector_of_regval {a} n (of_regval : register_value -> option a) (rv : register_value) : Option \
+           (Vec a n) := match rv with";
+          "  | Regval_vector v => if n =? length_list v then map_bind (vec_of_list n) (just_list (List.map of_regval v)) \
+           else none";
+          "  | _ => none";
+          (* "end."; *)
+          "";
+          "def regval_of_vector {a size} (regval_of : a -> register_value) (xs : Vec a size) : register_value := \
+           Regval_vector (List.map regval_of (list_of_vec xs))";
+          "";
+          "def list_of_regval {a} (of_regval : register_value -> Option a) (rv : register_value) : Option (List \
+           a) := match rv with";
+          "  | Regval_list v => just_list (List.map of_regval v)";
+          "  | _ => none";
+          (* "end."; *)
+          "";
+          "def regval_of_list {a} (regval_of : a -> register_value) (xs : List a) : register_value := Regval_list \
+           (List.map regval_of xs).";
+          "";
+          "def option_of_regval {a} (of_regval : register_value -> Option a) (rv : register_value) : Option \
+           (Option a) := match rv with";
+          "  | Regval_option v => match v with None => Some None | Some v' => option_map some (of_regval v') end";
+          "  | _ => none";
+          (* "end."; *)
+          "";
+          "def regval_of_option {a} (regval_of : a -> register_value) (v : Option a) := Regval_option (option_map \
+           regval_of v)";
+          "";
+          "";
+        ]
+    in
+    let register_ref (typ, id, _) =
+      let idd = doc_id id in
+      (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
+      let of_regval, regval_of = regval_convs_coq env typ in
+      concat
+        [
+          string "def ";
+          idd;
+          string "_ref := {|";
+          hardline;
+          string "  name := \"";
+          idd;
+          string "\";";
+          hardline;
+          string "  read_from := (fun s => s.(";
+          idd;
+          string "));";
+          hardline;
+          ( if coq_record_update then string "  write_to := (fun v s => (s <| " ^^ idd ^^ string " := v |>));"
+            else string "  write_to := (fun v s => ({[ s with " ^^ idd ^^ string " := v ]}));"
+          );
+          hardline;
+          string "  of_regval := ";
+          string of_regval;
+          string ";";
+          hardline;
+          string "  regval_of := ";
+          string regval_of;
+          string " |}.";
+          hardline;
+        ]
+    in
+    let refs = separate_map hardline register_ref registers in
+    let get_set_reg (_, id, _) =
+      let idd = doc_id id in
+      ( concat
+          [
+            string "  if string_dec reg_name \"";
+            idd;
+            string "\" then Some (";
+            idd;
+            string "_ref.(regval_of) (";
+            idd;
+            string "_ref.(read_from) s)) else";
+          ],
+        concat
+          [
+            string "  if string_dec reg_name \"";
+            idd;
+            string "\" then option_map (fun v => ";
+            idd;
+            string "_ref.(write_to) v s) (";
+            idd;
+            string "_ref.(of_regval) v) else";
+          ]
+      )
+    in
+    let getters_setters =
+      let getters, setters = List.split (List.map get_set_reg registers) in
+      string "Local Open Scope string." ^^ hardline
+      ^^ string "def get_regval (reg_name : String) (s : regstate) : Option register_value :="
+      ^^ hardline ^^ separate hardline getters ^^ hardline ^^ string "  none" ^^ hardline ^^ hardline
+      ^^ string "def set_regval (reg_name : String) (v : register_value) (s : regstate) : Option regstate :="
+      ^^ hardline ^^ separate hardline setters ^^ hardline ^^ string "  none" ^^ hardline ^^ hardline
+      ^^ string "def register_accessors := (get_regval, set_regval)."
+      ^^ hardline ^^ hardline
+    in
+    separate hardline [generic_convs; refs; getters_setters]
+
 let generate_regstate_defs ctx env ast =
   let defs = ast.defs in
   let registers = find_registers defs in

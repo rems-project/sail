@@ -200,7 +200,7 @@ let enclose_record_update = enclose (string "{[ ") (string " ]}")
 (* Record updates using coq-record-updates package *)
 let enclose_coq_record_update = enclose (string "<|") (string "|>")
 let bigarrow = string "=>"
-let comment = enclose (string "(*") (string "*)")
+let comment = enclose (string "/-") (string "-/")
 
 let separate_opt s f l = separate s (List.filter_map f l)
 
@@ -557,10 +557,11 @@ let rec doc_typ_fns ctx env =
     | _ -> tup_typ atyp_needed ty
   and tup_typ atyp_needed (Typ_aux (t, _) as ty) =
     match t with
-    | Typ_tuple typs -> parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
+    | Typ_tuple typs -> parens (separate_map (string " × ") (app_typ false) typs)
     | _ -> app_typ atyp_needed ty
   and app_typ atyp_needed (Typ_aux (t, l) as ty) =
     match t with
+    | Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)])
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         (* TODO: remove duplication with exists, below *)
         let tpp = string "Bitvec " ^^ doc_nexp ctx env m in
@@ -571,6 +572,9 @@ let rec doc_typ_fns ctx env =
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
         let tpp = string "register_ref regstate register_value " ^^ typ etyp in
+        if atyp_needed then parens tpp else tpp
+    | Typ_app (Id_aux (Id "option", _), [A_aux (A_typ etyp, _)]) ->
+        let tpp = string "Option " ^^ typ etyp in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "range", _), _)
     | Typ_id (Id_aux (Id "nat", _))
@@ -584,7 +588,9 @@ let rec doc_typ_fns ctx env =
     | _ -> atomic_typ atyp_needed ty
   and atomic_typ atyp_needed (Typ_aux (t, l) as ty) =
     match t with
+    | Typ_id (Id_aux (Id "unit", _)) -> string "Unit"
     | Typ_id (Id_aux (Id "string_literal", _)) -> string "String"
+    | Typ_id (Id_aux (Id "string", _)) -> string "String"
     | Typ_id (Id_aux (Id "bool", _)) -> string "Bool"
     | Typ_id (Id_aux (Id "bit", _)) -> string "bitU"
     | Typ_id id ->
@@ -906,8 +912,8 @@ let doc_lit (L_aux (lit, l)) =
       if Big_int.less i Big_int.zero then parens ipp else ipp
   (* Not a typo, the bbv hex notation uses the letter O *)
   (* These need parens because of the 'sz 'b "..."' variants :( *)
-  | L_hex n -> utf8string ("(Ox\"" ^ n ^ "\")")
-  | L_bin n -> utf8string ("('b\"" ^ n ^ "\")")
+  | L_hex n -> utf8string ("Ox" ^ n)
+  | L_bin n -> utf8string ("0b" ^ n)
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ coq_escape_string s ^ "\"")
   | L_real s ->
@@ -1186,7 +1192,7 @@ let similar_nexps ctxt env ?(existentials = []) n1 n2 =
   in
   if same_nexp_shape (nexp_const_eval n1) (nexp_const_eval n2) then true else false
 
-let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"; "neq_int"]
+let constraint_fns = ["Int.le"; "Int.ge"; "Int.lt"; "Int.gt"; "Int.beq"; "Int.ne"]
 
 let condition_produces_constraint ctxt exp =
   let env = env_of exp in
@@ -1198,22 +1204,22 @@ let condition_produces_constraint ctxt exp =
    in the constraint solver. *)
 let no_proof_fns =
   [
-    "Z.add";
-    "Z.sub";
-    "Z.opp";
-    "Z.mul";
-    "Z.rem";
+    "Int.add";
+    "Int.sub";
+    "Int.neg";
+    "Int.mul";
+    "Int.mod";
     "length_mword";
     "length";
     "vec_length";
     "negb";
     "andb";
     "orb";
-    "Z.leb";
-    "Z.geb";
-    "Z.ltb";
-    "Z.gtb";
-    "Z.eqb";
+    "Int.le";
+    "Int.ge";
+    "Int.lt";
+    "Int.gt";
+    "Int.beq";
   ]
 
 let is_no_proof_fn env id =
@@ -1339,7 +1345,7 @@ let complex_autocast ctxt env ?existentials top1 top2 =
         if List.exists (fun x -> x) rs then (true, "(" ^ f ^ " " ^ String.concat " " args ^ ")") else (false, "_")
     | Typ_tuple typs1, Typ_tuple typs2 ->
         let rs, typs = List.split (List.map2 aux_typ typs1 typs2) in
-        if List.exists (fun x -> x) rs then (true, "(" ^ String.concat " * " typs ^ ")") else (false, "_")
+        if List.exists (fun x -> x) rs then (true, "(" ^ String.concat " × " typs ^ ")") else (false, "_")
     | Typ_exist (_, _, typ), _ -> aux_typ typ typ2
     | _, Typ_exist (_, _, typ) -> aux_typ typ1 typ
     | _ -> (false, "_")
@@ -1494,7 +1500,7 @@ let doc_exp, doc_let =
         let () = debug ctxt (lazy ("Let with pattern " ^ string_of_pat pat)) in
         let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l, annot)) pat (env_of e) in
         let e' = rebind_cast_pattern_vars pat (typ_of lb_exp) e in
-        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e' in
+        let epp = let_exp ctxt leb ^^ space ^^ (* string "in" ^^ *) hardline ^^ top_exp new_ctxt false e' in
         if aexp_needed then parens epp else epp
     | E_app (f, args) ->
         let env = env_of full_exp in
@@ -1515,7 +1521,7 @@ let doc_exp, doc_let =
               let mkpp f vs = separate (string ", ") (List.map f vs) in
               let tup_pp = mkpp (fun (pp, _) -> pp) vs in
               let match_pp = mkpp (fun (_, pp) -> pp) vs in
-              (parens tup_pp, separate space ((string "fun" :: extra_binders) @ [squote ^^ parens match_pp; bigarrow]))
+              (parens tup_pp, separate space ((string "fun" :: extra_binders) @ [(* squote ^^ *) parens match_pp; bigarrow]))
           | _ ->
               let exp_pp, match_pp = doc_loop_var varstuple in
               (exp_pp, separate space ((string "fun" :: extra_binders) @ [match_pp; bigarrow]))
@@ -2152,22 +2158,22 @@ let doc_exp, doc_let =
                   | P_aux (P_id id, _) ->
                       (* Ideally we'd drop the parens and the squote when possible, but it's
                          easier to keep both, and avoids clashes with 'b"..." bitvector literals. *)
-                      let binder = squote ^^ parens (doc_pat ctxt false pat) in
+                      let binder = (* squote ^^ *) parens (doc_pat ctxt false pat) in
                       separate space [string ">>= fun"; binder; bigarrow]
                   | P_aux (P_typ (typ, pat'), _) ->
                       separate space
                         [
                           string ">>= fun";
-                          squote ^^ parens (doc_pat ctxt true pat ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ);
+                          (* squote ^^ *) parens (doc_pat ctxt true pat ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ);
                           bigarrow;
                         ]
-                  | _ -> separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt false pat); bigarrow]
+                  | _ -> separate space [string ">>= fun"; (* squote ^^ *) parens (doc_pat ctxt false pat); bigarrow]
                 )
                 else (
                   match pat with
                   | (P_aux (P_wild, _) | P_aux (P_typ (_, P_aux (P_wild, _)), _)) when is_unit_typ (typ_of_pat pat) ->
                       string ">>$"
-                  | _ -> separate space [string ">>$= fun"; squote ^^ parens (doc_pat ctxt false pat); bigarrow]
+                  | _ -> separate space [string ">>$= fun"; (* squote ^^ *) parens (doc_pat ctxt false pat); bigarrow]
                 )
               in
               let e1_pp = expY e1 in
@@ -2219,7 +2225,7 @@ let doc_exp, doc_let =
         align (parens (string "early_return" ^//^ exp_pp ^//^ ta))
     | E_constraint nc -> wrap_parens (doc_nc_exp ctxt (env_of full_exp) nc)
     | E_internal_assume (nc, e1) ->
-        string "(* " ^^ doc_nc_exp ctxt (env_of full_exp) nc ^^ string " *)" ^/^ wrap_parens (expN e1)
+        comment (doc_nc_exp ctxt (env_of full_exp) nc) ^/^ wrap_parens (expN e1)
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   (* TODO: no dep pairs now, what should this be? *)
@@ -2272,19 +2278,19 @@ let doc_exp, doc_let =
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
     | LB_val (P_aux (P_id id, _), e) when not (is_enum (env_of e) id) ->
-        prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false e)
+        prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (parens (top_exp ctxt false e))
     | LB_val (P_aux (P_typ (typ, P_aux (P_id id, _)), _), e) when not (is_enum (env_of e) id) ->
         prefix 2 1
           (separate space [string "let"; doc_id ctxt id; colon; doc_typ ctxt (env_of e) typ; coloneq])
-          (top_exp ctxt false e)
+          (parens (top_exp ctxt false e))
     | LB_val (P_aux (P_typ (typ, pat), _), (E_aux (_, e_ann) as e)) ->
         prefix 2 1
-          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true pat); coloneq])
-          (top_exp ctxt false (E_aux (E_typ (typ, e), e_ann)))
+          (separate space [string "let"; (* squote ^^ *) parens (doc_pat ctxt true pat); coloneq])
+          (parens (top_exp ctxt false (E_aux (E_typ (typ, e), e_ann))))
     | LB_val (pat, e) ->
         prefix 2 1
-          (separate space [string "let"; squote ^^ parens (doc_pat ctxt true pat); coloneq])
-          (top_exp ctxt false e)
+          (separate space [string "let"; (* squote ^^ *) parens (doc_pat ctxt true pat); coloneq])
+          (parens (top_exp ctxt false e))
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
     let fname = doc_field_name ctxt recordtyp id in
     let e_pp = construct_dep_pairs ctxt (env_of e) false e (general_typ_of e) in
@@ -2388,7 +2394,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
            )
         )
         (doc_typschm bare_ctxt Env.empty false typschm)
-      ^^ dot ^^ twice hardline
+      ^^ hardline (* ^^ dot ^^ twice hardline *)
   | TD_abbrev (id, typq, A_aux (A_nexp nexp, _)) ->
       let idpp = doc_id_type global None id in
       doc_op coloneq
@@ -2396,9 +2402,9 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
            ([string "def"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "Int"])
         )
         (doc_nexp bare_ctxt Env.empty nexp)
-      ^^ dot ^^ hardline
-      ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
-      ^^ twice hardline
+      (* ^^ dot *) ^^ hardline
+      (* ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."] *)
+      (* ^^ twice hardline *)
   | TD_abbrev (id, typq, A_aux (A_bool nc, _)) ->
       let idpp = doc_id_type global None id in
       doc_op coloneq
@@ -2406,9 +2412,9 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
            ([string "def"; idpp] @ doc_typquant_items bare_ctxt Env.empty parens typq @ [colon; string "Bool"])
         )
         (doc_nc_exp bare_ctxt Env.empty nc)
-      ^^ dot ^^ hardline
-      ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]
-      ^^ twice hardline
+      (* ^^ dot *) ^^ hardline
+      (* ^^ separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."] *)
+      (* ^^ twice hardline*)
   | TD_abstract _ -> unreachable l __POS__ "Abstract type not supported by Lean backend"
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record (id, typq, fs, _) ->
@@ -2460,7 +2466,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
             ^^ separate space (List.mapi (pp_field "_") fs)
             ^^ string " =>" ^//^ string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space
             ^^ separate space (List.mapi (pp_field "e") fs)
-            ^//^ string "end (at level 1)" ^^ dot
+            (* ^//^ string "end (at level 1)" ^^ dot *)
       in
       let updates_pp =
         if !opt_lean_record_update then (
@@ -2536,7 +2542,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
            (flow (break 1) ((string "Record" ^^ space ^^ type_id_pp) :: typq_pps) ^^ space ^^ coloneq ^^ space ^^ lbrace)
         )
         fs_doc
-      ^^ hardline ^^ rbrace ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline
+      ^^ hardline ^^ rbrace (* ^^ dot  ^^ hardline ^^ reset_implicits_pp *) ^^ hardline ^^ eq_pp ^^ updates_pp ^^ hardline
       ^^ inhabited_pp ^^ twice hardline
   | TD_variant (id, typq, ar, _) -> (
       match id with
@@ -2720,7 +2726,7 @@ let doc_typdef global generic_eq_types enum_number_defs (TD_aux (td, (l, annot))
             Reporting.print_err l "Warning" ("Empty type: " ^ string_of_id id);
             empty
       in
-      typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
+      typ_pp (* ^^ dot *) ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline ^^ inhabited_pp ^^ twice hardline
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -3035,7 +3041,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
     | None ->
         let typ = match classify_ex_type ctxt env ~binding:id exp_typ with _, _, typ' -> typ' in
         used_a_pattern := true;
-        squote ^^ parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt env typ])
+        (* squote ^^ *) parens (separate space [doc_pat ctxt true pat; colon; doc_typ ctxt env typ])
   in
   let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = List.filter_map (atom_constraint ctxt) pats in
@@ -3121,10 +3127,10 @@ let doc_mutrec global rec_set = function
       let bodies = List.map2 doc_funcl_body ctxts (details1 :: detailsn) in
       let idpps = List.map (fun fd -> string (string_of_id (id_of_fundef fd))) (fundef :: fundefs) in
       let bodies =
-        List.map2 (fun idpp b -> surround 3 0 (string "(*" ^^ idpp ^^ string "*) exact (") b (string ").")) idpps bodies
+        List.map2 (fun idpp b -> surround 3 0 (comment idpp ^^ string " exact (") b (string ").")) idpps bodies
       in
       let pres = pre1 :: pren in
-      separate hardline pres ^^ dot ^^ hardline ^^ separate hardline bodies ^^ break 1 ^^ string "Defined." ^^ hardline
+      separate hardline pres (* ^^ dot *) ^^ hardline ^^ separate hardline bodies ^^ break 1 ^^ string "Defined." ^^ hardline
 
 let doc_funcl global proof_mode mutrec r funcl =
   let pre, ctxt, details = doc_funcl_init global proof_mode mutrec r funcl in
@@ -3146,7 +3152,7 @@ let doc_fundef global (FD_aux (FD_function (r, typa, fcls), fannot)) =
             ^^ hardline ^^ string "Defined."
             )
           ^^ hardline
-      | _ -> group (prefix 3 1 (pre ^^ space ^^ coloneq) (body ^^ dot))
+      | _ -> group (prefix 3 1 (pre ^^ space ^^ coloneq) (body (* ^^ dot *)))
     end
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
@@ -3324,7 +3330,7 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       let ret_typ_pp = doc_typ empty_ctxt Env.empty ret_ty in
       let ret_typ_pp = if is_monadic then string "M" ^^ space ^^ parens ret_typ_pp else ret_typ_pp in
       let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt typ_env braces tqs in
-      string "forall" ^/^ separate space tyvars_pp ^/^ arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
+      string "∀" ^/^ separate space tyvars_pp ^/^ arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
   | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs, typ), l))
 
 let doc_val_spec global def_annot unimplemented (VS_aux (VS_val_spec (_, id, _), (l, ann)) as vs) =
@@ -3337,7 +3343,7 @@ let doc_val_spec global def_annot unimplemented (VS_aux (VS_val_spec (_, id, _),
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id global.effect_info) in
     group
-      (separate space [string "Axiom"; doc_id bare_ctxt id; colon; doc_axiom_typschm typ_env is_monadic l tys] ^^ dot)
+      (separate space [string "Axiom"; doc_id bare_ctxt id; colon; doc_axiom_typschm typ_env is_monadic l tys] (* ^^ dot *))
     ^/^ hardline
   )
   else empty (* Type signatures appear in definitions *)
@@ -3390,11 +3396,12 @@ let doc_val global pat exp =
       )
   in
   let idpp = doc_id bare_ctxt id in
-  let base_pp = doc_exp ctxt false exp ^^ dot in
+  let base_pp = doc_exp ctxt false exp (* ^^ dot *) in
   let () = debug_depth := 0 in
-  group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)
+  group (separate space [string "@[simp_sail]" (* Hint Unfold\"; idpp; colon; string \"sail." *) ])
   ^^ hardline
-  ^^ group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."])
+  ^^ group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)
+  ^^ hardline
   ^^ hardline
 
 let doc_def global unimplemented generic_eq_types enum_number_defs (DEF_aux (aux, def_annot) as def) =
@@ -3469,9 +3476,9 @@ let doc_isla_typ global (TD_aux (td, _)) =
                parens (dquotes idpp ^^ string ", " ^^ idpp)
              )
              enums
-        ^^ dot
+        (* ^^ dot*)
         )
-      ^^ hardline ^^ hardline
+      ^^ hardline (* ^^ hardline *)
   | TD_variant (id, typq, ar, _) -> (
       match id with
       | Id_aux (Id "option", _) -> empty
@@ -3553,7 +3560,7 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
     let global = { types_mod = type_defs_module; avoid_target_names; effect_info; library_style } in
     let bare_doc_id = doc_id { empty_ctxt with global } in
     let register_refs =
-      State.register_refs_coq bare_doc_id !opt_lean_record_update type_env (State.find_registers defs)
+      State.register_refs_lean bare_doc_id !opt_lean_record_update type_env (State.find_registers defs)
     in
     let generic_eq_types = types_used_with_generic_eq defs in
     let interface_defs =
@@ -3565,8 +3572,8 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
               [
                 string ("def MR a r := MonadR register_value a r " ^ exc_typ);
                 string ("def M a := Monad register_value a " ^ exc_typ);
-                string ("def returnM {A:Type} := @returnm register_value A " ^ exc_typ);
-                string ("def returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ")");
+                string ("def returnM {A : Type} := @returnm register_value A " ^ exc_typ);
+                string ("def returnR {A : Type} (R : Type) := @returnm register_value A (R + " ^ exc_typ ^ ")");
               ]
       | Some params ->
           let pp_typ = doc_typ { empty_ctxt with global } type_env in
@@ -3578,9 +3585,9 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
                 empty;
                 string ("def M a := Defs.monad a " ^ exc_typ);
                 string ("def MR a r := Defs.monad a (r + " ^ exc_typ ^ ")%type.");
-                string ("def returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ")");
+                string ("def returnM {A : Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ")");
                 string
-                  ("def returnR {A:Type} (R:Type) : A -> MR A R := Defs.returnm (E := R + " ^ exc_typ ^ ")%type");
+                  ("def returnR {A : Type} (R : Type) : A -> MR A R := Defs.returnm (E := R + " ^ exc_typ ^ ")%type");
               ]
           in
           separate hardline
@@ -3602,7 +3609,7 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
                string "  def cache_op := " ^^ pp_typ params.cache_op_type;
                string "  def tlb_op := " ^^ pp_typ params.tlbi_type;
                string "  def fault (deps : Type) := " ^^ pp_typ params.fault_type;
-               string "  def footprint_system_registers : list reg := [].";
+               string "  def footprint_system_registers : List Reg := [].";
                string "End Arch.";
                empty;
                string "Module Interface := Interface Arch.";
@@ -3654,15 +3661,15 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
     (print types_file)
       (concat
          ([
-            string "(*" ^^ string top_line ^^ string "*)";
+            comment (string top_line);
             hardline;
             (match library_style with BBV -> empty | Stdpp -> string "import base" ^^ hardline);
             (separate_map hardline)
-              (fun lib -> separate space [string "import Import"; string lib] ^^ dot)
+              (fun lib -> separate space [string "import"; string lib](* ^^ dot*))
               types_modules;
             hardline;
             ( if !opt_lean_record_update then
-                string "import RecordSet."
+                string "import RecordSet"
                 ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
               else empty
             );
@@ -3675,6 +3682,8 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
             hardline;
             string "open Int";
             hardline;
+            string "open Option";
+            hardline;
             hardline;
             separate empty (List.map doc_def typdefs);
             hardline;
@@ -3685,12 +3694,13 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
          else
            [separate empty (List.map doc_def statedefs); hardline; hardline; register_refs; hardline] @ [interface_defs]
          )
+         ^^ hardline
       );
     if not !opt_generate_extern_types then
       (print defs_file)
         (concat
            [
-             string "(*" ^^ string top_line ^^ string "*)";
+             comment (string top_line);
              hardline;
              (separate_map hardline)
                (fun lib -> separate space [string "import"; string lib])
@@ -3702,13 +3712,15 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
                  ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
                else empty
              );
-             string "import ListNotations.";
-             hardline;
+             (* string "import ListNotations.";
+             hardline; *)
              string "open String";
              hardline;
              string "open Bool";
              hardline;
              string "open Int";
+             hardline;
+             string "open Option";
              hardline;
              hardline;
              hardline;
@@ -3723,7 +3735,7 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
         (print file)
           (concat
              [
-               string "(*" ^^ string top_line ^^ string "*)";
+               comment (string top_line);
                hardline;
                (separate_map hardline)
                  (fun lib -> separate space [string "import"; string lib])
@@ -3737,6 +3749,8 @@ let pp_ast_lean library_style (types_file, types_modules) (defs_file, defs_modul
                string "open Bool";
                hardline;
                string "open Int";
+               hardline;
+               string "open Option";
                hardline;
                hardline;
                hardline;
