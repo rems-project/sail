@@ -148,7 +148,7 @@ let doc_target out_file { ast; _ } =
   else Printf.eprintf "Unknown documentation format: %s\n" !opt_doc_format
 
 let _ =
-  Target.register ~name:"doc" ~options:doc_options
+  Target.register ~name:"doc" ~options:doc_options ~supports_abstract_types:true
     ~pre_parse_hook:(fun () ->
       Type_check.opt_expand_valspec := false;
       Type_check.opt_no_bitfield_expansion := true
@@ -212,7 +212,7 @@ let html_target files out_dir_opt { ast; _ } =
 
 let _ =
   let files : Html_source.file_info list ref = ref [] in
-  Target.register ~name:"html" ~options:html_options
+  Target.register ~name:"html" ~options:html_options ~supports_abstract_types:true
     ~pre_initial_check_hook:(fun filenames ->
       List.iter
         (fun filename ->
