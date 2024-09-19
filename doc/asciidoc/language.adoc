@@ -585,6 +585,62 @@ struct foo('n : Int, 'a : Type) = {
 but in practice we don't need to do this, as Sail has kind-inference
 to avoid us having to think about this particular detail.
 
+=== Abstract types
+:abstract-ty: sail_doc/abstract_xlen.json
+
+NOTE: This feature is currently experimental and is enabled with the
+`--abstract-types` flag.
+
+Consider the following problem: We want to specify an architecture
+like RISC-V, which permits both 32-bit and a 64-bit implementations,
+with the two implementations being mostly the same other than the base
+ISA width (called XLEN in RISC-V).
+
+In Sail, we could write something like:
+[source,sail]
+----
+$ifdef RV32
+type xlen = 32
+$else
+type xlen = 64
+$endif
+
+register X1 : bits(xlen)
+----
+However, this has the problem that if we write a function like:
+[source,sail]
+----
+function rv32_only() = {
+    X1 = 0xFFFF_FFFF
+}
+----
+it will typecheck and build fine only when `RV32` is defined, but will
+fail otherwise when `xlen = 64`.
+
+What we really want is to write a specification that is truely
+_parametric_ over the choice of `xlen`. In Sail we can do this by
+leaving the `xlen` type _abstract_, which means we do not provide a
+concrete value for it during type-checking. This would look like:
+
+sail::XLEN[from=abstract-ty,type=span]
+
+If we then try to write the above `rv32_only` function, we will get an error
+[source]
+----
+include::sail_doc/abstract_error.error[]
+----
+as `xlen` is not guaranteed to be 32.
+
+Not all Sail targets support abstract types, so for some targets the
+abstract types must be instantiated to concrete values before
+generating definitions. We do this using the `--instantiate` option,
+so if the above file is called `xlen.sail`, we could do:
+[source,sh]
+----
+sail xlen.sail --lem --abstract-types --instantiate xlen=32
+----
+To create lem definitions for the `xlen = 32` case.
+
 === Pattern matching
 :pattern-match: sail_doc/pattern_matching.json
 :cannot-wildcard: sail_doc/cannot_wildcard.json

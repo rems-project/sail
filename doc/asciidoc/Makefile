@@ -20,6 +20,8 @@ SAIL_DOCS += sail_doc/enum.json
 SAIL_DOCS += sail_doc/union.json
 SAIL_DOCS += sail_doc/type_syn.json
 SAIL_DOCS += sail_doc/type_syn_xlen.json
+SAIL_DOCS += sail_doc/abstract_xlen.json
+SAIL_DOCS += sail_doc/abstract_error.error
 SAIL_DOCS += module_sail_doc/simple_mod.json
 SAIL_DOCS += module_sail_doc/simple_mod_err.error
 SAIL_DOCS += module_sail_doc/cond.sail_project
@@ -36,6 +38,10 @@ sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
 	sail --no-color -doc --doc-file $< --doc-embed plain --doc-bundle $(notdir $@) $< 2> $(basename $@).warning
 
+sail_doc/%.error: ../examples/%.sail
+	mkdir -p sail_doc
+	-sail --no-color $< 2> $@
+
 lib_sail_doc/%.json: ../examples/order_dec.sail ../../lib/%.sail
 	mkdir -p lib_sail_doc
 	mkdir -p lib_sail_doc/concurrency_interface
@@ -47,7 +53,7 @@ module_sail_doc/%.json: ../examples/%.sail_project $$(shell sail ../examples/%.s
 	mkdir -p module_sail_doc
 	sail --doc $(addprefix --doc-file ,$(shell sail $< -list_files)) --doc-embed plain --doc-bundle $(notdir $@) -o module_sail_doc $< --all-modules
 
-module_sail_doc/%.error: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project -list_files)
+module_sail_doc/%.error: ../examples/%.sail_project $$(shell sail ../examples/%.sail_project --list-files)
 	mkdir -p module_sail_doc
 	-sail --no-color $< 2> $@
 

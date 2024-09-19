@@ -141,7 +141,7 @@ val string_of_instr : instr -> string
 
 val full_string_of_ctyp : ctyp -> string
 
-(** {1. Functions and modules for working with ctyps} *)
+(** {1 Functions and modules for working with ctyps} *)
 
 val map_ctyp : (ctyp -> ctyp) -> ctyp -> ctyp
 val ctyp_has : (ctyp -> bool) -> ctyp -> bool

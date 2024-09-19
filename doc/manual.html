@@ -2623,6 +2623,7 @@ pre.rouge .gs {
 </li>
 <li><a href="#_type_synonyms">Type synonyms</a></li>
 <li><a href="#_type_kinds">Type kinds</a></li>
+<li><a href="#_abstract_types">Abstract types</a></li>
 <li><a href="#_pattern_matching">Pattern matching</a>
 <ul class="sectlevel3">
 <li><a href="#_guards">Guards</a></li>
@@ -4471,6 +4472,98 @@ could write:</p>
 <div class="paragraph">
 <p>but in practice we don&#8217;t need to do this, as Sail has kind-inference
 to avoid us having to think about this particular detail.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_abstract_types">Abstract types</h3>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+This feature is currently experimental and is enabled with the
+<code>--abstract-types</code> flag.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Consider the following problem: We want to specify an architecture
+like RISC-V, which permits both 32-bit and a 64-bit implementations,
+with the two implementations being mostly the same other than the base
+ISA width (called XLEN in RISC-V).</p>
+</div>
+<div class="paragraph">
+<p>In Sail, we could write something like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="cp">$ifdef RV32</span><span class="w">
+</span><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">32</span><span class="w">
+</span><span class="cp">$else</span><span class="w">
+</span><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">64</span><span class="w">
+</span><span class="cp">$endif</span><span class="w">
+
+</span><span class="k">register</span><span class="w"> </span><span class="n">X1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="n">xlen</span><span class="p">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, this has the problem that if we write a function like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">function</span><span class="w"> </span><span class="nf">rv32_only</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">X1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0xFFFF_FFFF</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>it will typecheck and build fine only when <code>RV32</code> is defined, but will
+fail otherwise when <code>xlen = 64</code>.</p>
+</div>
+<div class="paragraph">
+<p>What we really want is to write a specification that is truely
+<em>parametric</em> over the choice of <code>xlen</code>. In Sail we can do this by
+leaving the <code>xlen</code> type <em>abstract</em>, which means we do not provide a
+concrete value for it during type-checking. This would look like:</p>
+</div>
+<div id="abstract-ty-span-XLEN" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="w">
+
+</span><span class="nb">constraint</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="p">{</span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="mi">64</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If we then try to write the above <code>rv32_only</code> function, we will get an error</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code>Type error:
+../examples/abstract_error.sail:4.9-20:
+4 |    X1 = 0xFFFF_FFFF
+  |         ^---------^
+  | Failed to prove constraint: 32 == xlen</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>as <code>xlen</code> is not guaranteed to be 32.</p>
+</div>
+<div class="paragraph">
+<p>Not all Sail targets support abstract types, so for some targets the
+abstract types must be instantiated to concrete values before
+generating definitions. We do this using the <code>--instantiate</code> option,
+so if the above file is called <code>xlen.sail</code>, we could do:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sh">sail xlen.sail <span class="nt">--lem</span> <span class="nt">--abstract-types</span> <span class="nt">--instantiate</span> <span class="nv">xlen</span><span class="o">=</span>32</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To create lem definitions for the <code>xlen = 32</code> case.</p>
 </div>
 </div>
 <div class="sect2">
