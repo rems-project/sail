@@ -1335,7 +1335,7 @@ let complex_autocast ctxt env ?existentials top1 top2 =
   let ignore_apps_of = IdSet.of_list (List.map mk_id ["register"; "range"; "implicit"; "atom"; "atom_bool"]) in
   let rec aux_typ (Typ_aux (t1, _) as typ1) (Typ_aux (t2, _) as typ2) =
     match (t1, t2) with
-    | Typ_app (f, args1), Typ_app (_, args2) when not (IdSet.mem f ignore_apps_of) ->
+    | Typ_app (f, args1), Typ_app (f', args2) when Id.compare f f' == 0 && not (IdSet.mem f ignore_apps_of) ->
         let rs, args = List.split (List.map2 aux_arg args1 args2) in
         let f, args =
           if string_of_id f = "vector" then ("vec", List.rev args)
@@ -1348,7 +1348,10 @@ let complex_autocast ctxt env ?existentials top1 top2 =
         if List.exists (fun x -> x) rs then (true, "(" ^ String.concat " * " typs ^ ")") else (false, "_")
     | Typ_exist (_, _, typ), _ -> aux_typ typ typ2
     | _, Typ_exist (_, _, typ) -> aux_typ typ1 typ
-    | _ -> (false, "_")
+    | _ ->
+        let typ1' = Env.expand_synonyms env typ1 in
+        let typ2' = Env.expand_synonyms env typ2 in
+        if Typ.compare typ1 typ1' == 0 && Typ.compare typ2 typ2' == 0 then (false, "_") else aux_typ typ1' typ2'
   and aux_arg (A_aux (a1, _)) (A_aux (a2, _)) =
     match (a1, a2) with
     | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ?existentials n1 n2 then (false, "_") else (true, "_sz")
@@ -3917,7 +3920,32 @@ end = struct
        ]
       @ ( match ctxt.global.library_style with
         | BBV -> [string "End GRegister."; empty] (* No Countable, but we could sort this out if there's demand *)
-        | Stdpp when type_map = [] -> [string "End GRegister."; empty]
+        | Stdpp when type_map = [] ->
+            [
+              string "#[export] Instance Decidable_eq_greg : EqDecision greg :=";
+              string "  fun r _ => match r with GReg r' => match r' with end end.";
+              string "#[export] Instance Countable_greg : Countable greg := {|";
+              string "  encode r := match r with GReg r' => match r' with end end;";
+              string "  decode _ := None;";
+              string "  decode_encode r := match r with GReg r' => match r' with end end";
+              string "|}.";
+              string "End GRegister.";
+              empty;
+              string "Instance Decidable_eq_register {T} : EqDecision (register T) := fun r _ => match r with end.";
+              empty;
+              string "Definition register_transport {T T'} {P : Type -> Type} {r : register T} {r' : register T'} :";
+              string "  GRegister.GReg r = GRegister.GReg r' -> P T -> P T' :=";
+              string "  match r, r' with";
+              string "  end.";
+              empty;
+              string
+                "Lemma register_transport_sound {T P} {r r' : register T} (e : GRegister.GReg r = GRegister.GReg r') \
+                 (p : P T) : register_transport e p = p.";
+              string "Proof.";
+              string "  destruct r.";
+              string "Qed.";
+              empty;
+            ]
         | Stdpp ->
             [
               string "  Definition greg_encode (r : greg) : positive :=";
