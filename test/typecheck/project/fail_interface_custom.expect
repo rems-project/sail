@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mproject/interface/custom_inst.sail[0m:4.14-18:
+4[96m |[0minstantiation test with
+ [91m |[0m              [91m^--^[0m
+ [91m |[0m Not in scope
+ [91m |[0m 
+ [91m |[0m Try requiring module A to bring the following into scope for module B:
+ [91m |[0m [96mproject/interface/custom.sail[0m:5.8-12:
+ [91m |[0m 5[96m |[0moutcome test : 'a -> unit
+ [91m |[0m  [91m |[0m        [91m^--^[0m [91mdefinition here in A[0m
+ [91m |[0m [96mproject/fail_interface_custom.sail_project[0m:6.0-1:
+ [91m |[0m 6[96m |[0mB {
+ [91m |[0m  [91m |[0m[91m^[0m [91madd 'requires A' within B here[0m

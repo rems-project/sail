@@ -1122,7 +1122,7 @@ and add_outcome id (typq, typ, params, vals, outcome_env) env =
 and get_outcome l id env =
   match Option.map (get_item l env) (Bindings.find_opt id env.global.outcomes) with
   | Some (typq, typ, params, vals, val_specs) ->
-      (typq, typ, params, vals, { empty with global = { empty_global_env with val_specs } })
+      (typq, typ, params, vals, { empty with global = { empty_global_env with val_specs }; open_all = true })
   | None -> typ_error l ("Outcome " ^ string_of_id id ^ " does not exist")
 
 and add_mapping id (typq, typ1, typ2) env =
