@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/negindex_vector_concat.sail[0m:9.19-20:
+9[96m |[0m    _ : bits(33) @ _ => ()
+ [91m |[0m                   [91m^[0m
+ [91m |[0m Vector concatenation subpattern cannot have a negative width (-1)

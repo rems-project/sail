@@ -3051,7 +3051,10 @@ and bind_vector_concat_generic :
 
     let check_constant_len l n =
       match solve_unique env n with
-      | Some c -> nconstant c
+      | Some c ->
+          if Big_int.less c Big_int.zero then
+            typ_error l ("Vector concatenation subpattern cannot have a negative width (" ^ Big_int.to_string c ^ ")")
+          else nconstant c
       | None -> typ_error l "Could not infer constant length for vector concatenation subpattern"
     in
 
@@ -3095,6 +3098,7 @@ and bind_vector_concat_generic :
           | Some (total_len, uninferred_pat) ->
               let total_len = nconstant total_len in
               let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+              let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
               let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
               ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
                 env,
