@@ -3,7 +3,7 @@
 10[96m |[0m  let _ = 0b1001[if R then 0 else f()];
   [91m |[0m          [91m^--------------------------^[0m
   [91m |[0m Could not resolve quantifiers for bitvector_access
-  [91m |[0m [94m*[0m (0 <= 'ex240# & 'ex240# < 4)
+  [91m |[0m [94m*[0m (0 <= 'ex172# & 'ex172# < 4)
   [91m |[0m 
   [91m |[0m [93mCaused by [0m[96mpass/if_infer/v2.sail[0m:10.10-38:
   [91m |[0m 10[96m |[0m  let _ = 0b1001[if R then 0 else f()];

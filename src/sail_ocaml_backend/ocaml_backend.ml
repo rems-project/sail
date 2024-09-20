@@ -896,7 +896,7 @@ let ocaml_pp_generators ctx defs orig_types required =
           | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false
         )
-      | exception Not_found -> Bindings.find id Type_check.Env.builtin_typs
+      | exception Not_found -> fst (Bindings.find id Type_check.Env.builtin_typs)
     in
     let tquants = quant_kopts allquants in
     let gen_tyvars = List.map (fun k -> kopt_kid k |> zencode_kid) (List.filter is_typ_kopt tquants) in

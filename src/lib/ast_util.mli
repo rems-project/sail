@@ -414,6 +414,7 @@ val quant_items : typquant -> quant_item list
 val quant_kopts : typquant -> kinded_id list
 val quant_split : typquant -> kinded_id list * n_constraint list
 val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
+val quant_fold_map_items : ('acc -> quant_item -> 'acc * quant_item) -> 'acc -> typquant -> 'acc * typquant
 
 val is_quant_kopt : quant_item -> bool
 val is_quant_constraint : quant_item -> bool

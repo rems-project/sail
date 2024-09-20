@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-union two_bitvectors('n : Int) = {
+union two_bitvectors('n) = {
     BV1 : bits('n),
     BV2 : bits('n),
 }

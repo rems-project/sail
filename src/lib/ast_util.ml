@@ -788,6 +788,12 @@ let quant_map_items f = function
   | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
   | TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (List.map f qis), l)
 
+let quant_fold_map_items f acc = function
+  | TypQ_aux (TypQ_no_forall, l) -> (acc, TypQ_aux (TypQ_no_forall, l))
+  | TypQ_aux (TypQ_tq qis, l) ->
+      let acc, qis = Util.fold_left_map f acc qis in
+      (acc, TypQ_aux (TypQ_tq qis, l))
+
 let is_quant_kopt = function QI_aux (QI_id _, _) -> true | _ -> false
 
 let is_quant_constraint = function QI_aux (QI_constraint _, _) -> true | _ -> false

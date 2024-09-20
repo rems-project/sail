@@ -2,7 +2,7 @@ default Order dec
 
 $sail_internal
 
-type bits ('n : Int) = bitvector('n, dec)
+type bits('n) = bitvector('n, dec)
 
 union option ('a : Type) = {
   Some : 'a,

@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-struct phantom('n: Int) = {
+struct phantom('n) = {
   bits: bits('n),
 }
 

@@ -1,5 +1,17 @@
 [93mType error[0m:
-[96mfail/procstate1.sail[0m:14.0-30:
-14[96m |[0mregister PSTATE : ProcState(1)
-  [91m |[0m[91m^----------------------------^[0m
-  [91m |[0m Must provide a default register value for a register of type ProcState(1)
+[96mfail/procstate1.sail[0m:7.0-12.1:
+7 [96m |[0mstruct ProcState('n : Int) = {
+  [91m |[0m[91m^-----------------------------[0m
+12[96m |[0m}
+  [91m |[0m[91m^[0m
+  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/procstate1.sail[0m:8.6-24:
+  [91m |[0m 8[96m |[0m  N : bitvector('n, dec),
+  [91m |[0m  [91m |[0m      [91m^----------------^[0m
+  [91m |[0m  [91m |[0m Well-formedness check failed for type
+  [91m |[0m  [91m |[0m 
+  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/procstate1.sail[0m:8.6-24:
+  [91m |[0m  [91m |[0m 8[96m |[0m  N : bitvector('n, dec),
+  [91m |[0m  [91m |[0m  [91m |[0m      [91m^----------------^[0m
+  [91m |[0m  [91m |[0m  [91m |[0m Bitvector index must be greater than or equal to zero

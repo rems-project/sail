@@ -75,13 +75,11 @@ module Printer (Config : PRINT_CONFIG) = struct
     ^^ match def_annot.visibility with Private _ -> string "private" ^^ space | Public -> empty
 
   let doc_kopt_no_parens = function
-    | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
+    | kopt when is_int_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Int"]
     | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
     | kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Bool"]
 
-  let doc_kopt = function
-    | kopt when is_int_kopt kopt -> doc_kopt_no_parens kopt
-    | kopt -> parens (doc_kopt_no_parens kopt)
+  let doc_kopt kopt = parens (doc_kopt_no_parens kopt)
 
   let doc_int n = string (Big_int.to_string n)
 

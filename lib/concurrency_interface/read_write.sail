@@ -86,7 +86,7 @@ union Access_kind('arch_ak : Type) = {
 $option -lem_extern_type Mem_read_request
 $option -coq_extern_type Mem_read_request
 struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                        'arch_ak: Type), 'n > 0 = {
+                        'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),
   // There may not always be a virtual address, e.g. when translation is off.
   // Additionally, translate reads don't have a (VA, PA) pair in the
@@ -182,7 +182,7 @@ with
 $option -lem_extern_type Mem_write_request
 $option -coq_extern_type Mem_write_request
 struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                         'arch_ak : Type), 'n > 0 = {
+                         'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),
   va : option(bits('vasize)),
   pa : 'pa,

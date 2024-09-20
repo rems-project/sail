@@ -1,6 +1,27 @@
 Changelog
 =========
 
+Sail 0.19
+---------
+
+##### Stricter bitvector type indexing
+
+Stricter indexing for bitvector types. Previous versions of Sail
+treated `bitvector('n)` as uninhabited if `'n < 0`, but otherwise
+permitted such bitvector types in signatures. Now the type
+`bitvector('n)` is only well-formed if `'n >= 0`. This is a breaking
+change, as some previously permitted definitions are now rejected
+without additional constraints. However Sail has a new kind `Nat`
+which allows it to infer these `>= 0` constraints when explicit type
+variables are ommited, so in a function signature
+```
+val foo : forall 'n. bits('n) -> bool
+```
+the `'n` type variable will be inferred as:
+```
+val foo : forall ('n : Nat). bits('n) -> bool
+```
+
 Sail 0.18
 ---------
 

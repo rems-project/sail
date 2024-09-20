@@ -3,7 +3,7 @@ $include <prelude.sail>
 
 /* Use functions to hide the fact that these are really small constants, so they are forced to be represented as big ints */
 
-val big_five : unit -> int
+val big_five : unit -> nat
 
 function big_five() = 5
 

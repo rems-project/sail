@@ -8,4 +8,6 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [96mpass/Replicate/v1.sail[0m:14.4-30:
 14[96m |[0m    replicate_bits(x, 'N / 'M)
   [91m |[0m    [91m^------------------------^[0m
-  [91m |[0m Failed to prove constraint: ('M * div('N, 'M)) == 'N
+  [91m |[0m Could not resolve quantifiers for replicate_bits
+  [91m |[0m [94m*[0m 'M >= 0
+  [91m |[0m [94m*[0m div('N, 'M) >= 0

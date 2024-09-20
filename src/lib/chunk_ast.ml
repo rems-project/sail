@@ -460,7 +460,7 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
     end
 
 let string_of_kind (K_aux (k, _)) =
-  match k with K_type -> "Type" | K_int -> "Int" | K_order -> "Order" | K_bool -> "Bool"
+  match k with K_type -> "Type" | K_int -> "Int" | K_nat -> "Nat" | K_order -> "Order" | K_bool -> "Bool"
 
 (* Right now, let's just assume we never break up kinded-identifiers *)
 let chunk_of_kopt (KOpt_aux (KOpt_kind (special, vars, kind, _), l)) =

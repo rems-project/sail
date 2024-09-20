@@ -1,12 +1,12 @@
 default Order dec
 
-val vector_access = pure {ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"}: forall ('n : Int).
+val vector_access = pure {ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"}: forall 'n.
   (bitvector('n, dec), int) -> bit
 
-val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_dec", coq: "subrange_vec_dec"}: forall ('n : Int) ('m : Int) ('o : Int), 'm >= 'o & 'o >= 0 & 'n >= 'm + 1.
+val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_dec", coq: "subrange_vec_dec"}: forall 'n 'm 'o, 'm >= 'o & 'o >= 0 & 'n >= 'm + 1.
   (bitvector('n, dec), atom('m), atom('o)) -> bitvector('m - ('o - 1), dec)
 
-val vector_update_subrange = pure {ocaml: "update_subrange", lem: "update_subrange_vec_dec", coq: "update_subrange_vec_dec"} : forall 'n 'm 'o.
+val vector_update_subrange = pure {ocaml: "update_subrange", lem: "update_subrange_vec_dec", coq: "update_subrange_vec_dec"} : forall 'n 'm 'o, 'm - ('o - 1) >= 0.
   (bitvector('n, dec), atom('m), atom('o), bitvector('m - ('o - 1), dec)) -> bitvector('n, dec)
 
 register _FPEXC32_EL2 : bitvector(32, dec)

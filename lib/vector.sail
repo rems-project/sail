@@ -53,7 +53,7 @@ $endif
 
 $include <flow.sail>
 
-type bits('n : Int) = bitvector('n)
+type bits('n) = bitvector('n)
 
 val eq_bits = pure {
   ocaml: "eq_list",
@@ -129,7 +129,7 @@ function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail
 
 overload operator ^ = {sail_mask}
 
-val bitvector_concat = pure {ocaml: "append", interpreter: "append", lem: "concat_vec", coq: "concat_vec", _: "append"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = pure {ocaml: "append", interpreter: "append", lem: "concat_vec", coq: "concat_vec", _: "append"} : forall 'n 'm.
   (bits('n), bits('m)) -> bits('n + 'm)
 
 overload append = {bitvector_concat}
@@ -316,7 +316,7 @@ val slice = pure "slice_inc" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.
   (bits('m), int('o), int('n)) -> bits('n)
 $endif
 
-val replicate_bits = pure "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
+val replicate_bits = pure "replicate_bits" : forall 'n 'm, 'm >= 0. (bits('n), int('m)) -> bits('n * 'm)
 
 val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n)
 function slice_mask(n,i,l) =

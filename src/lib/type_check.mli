@@ -218,7 +218,7 @@ module Env : sig
      environment is lacking even basic builtins. *)
   val empty : t
 
-  val builtin_typs : typquant Bindings.t
+  val builtin_typs : (typquant * kind_aux) Bindings.t
 
   val get_union_id : id -> t -> typquant * typ
 
