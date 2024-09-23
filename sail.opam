@@ -39,6 +39,7 @@ depends: [
   "sail_sv_backend" {= version & post}
   "sail_lem_backend" {= version & post}
   "sail_coq_backend" {= version & post}
+  "sail_lean_backend" {= version & post}
   "sail_latex_backend" {= version & post}
   "sail_doc_backend" {= version & post}
   "sail_output" {= version & post}
