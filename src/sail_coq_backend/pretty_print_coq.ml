@@ -1333,10 +1333,10 @@ let maybe_parens_comma_list f ls =
 
 let complex_autocast ctxt env ?existentials top1 top2 =
   let ignore_apps_of = IdSet.of_list (List.map mk_id ["register"; "range"; "implicit"; "atom"; "atom_bool"]) in
-  let rec aux_typ (Typ_aux (t1, _) as typ1) (Typ_aux (t2, _) as typ2) =
+  let rec aux_typ env1 env2 (Typ_aux (t1, l1) as typ1) (Typ_aux (t2, l2) as typ2) =
     match (t1, t2) with
     | Typ_app (f, args1), Typ_app (f', args2) when Id.compare f f' == 0 && not (IdSet.mem f ignore_apps_of) ->
-        let rs, args = List.split (List.map2 aux_arg args1 args2) in
+        let rs, args = List.split (List.map2 (aux_arg env1 env2) args1 args2) in
         let f, args =
           if string_of_id f = "vector" then ("vec", List.rev args)
           else if string_of_id f = "bitvector" then ("mword", args)
@@ -1344,21 +1344,28 @@ let complex_autocast ctxt env ?existentials top1 top2 =
         in
         if List.exists (fun x -> x) rs then (true, "(" ^ f ^ " " ^ String.concat " " args ^ ")") else (false, "_")
     | Typ_tuple typs1, Typ_tuple typs2 ->
-        let rs, typs = List.split (List.map2 aux_typ typs1 typs2) in
+        let rs, typs = List.split (List.map2 (aux_typ env1 env2) typs1 typs2) in
         if List.exists (fun x -> x) rs then (true, "(" ^ String.concat " * " typs ^ ")") else (false, "_")
-    | Typ_exist (_, _, typ), _ -> aux_typ typ typ2
-    | _, Typ_exist (_, _, typ) -> aux_typ typ1 typ
+    | Typ_exist (kopts, nc, typ), _ ->
+        let env1 = List.fold_left (fun env kopt -> Env.add_typ_var l1 kopt env) env1 kopts in
+        let env1 = Env.add_constraint nc env1 in
+        aux_typ env1 env2 typ typ2
+    | _, Typ_exist (kopts, nc, typ) ->
+        let env2 = List.fold_left (fun env kopt -> Env.add_typ_var l2 kopt env) env2 kopts in
+        let env2 = Env.add_constraint nc env2 in
+        aux_typ env1 env2 typ1 typ
     | _ ->
-        let typ1' = Env.expand_synonyms env typ1 in
-        let typ2' = Env.expand_synonyms env typ2 in
-        if Typ.compare typ1 typ1' == 0 && Typ.compare typ2 typ2' == 0 then (false, "_") else aux_typ typ1' typ2'
-  and aux_arg (A_aux (a1, _)) (A_aux (a2, _)) =
+        let typ1' = Env.expand_synonyms env1 typ1 in
+        let typ2' = Env.expand_synonyms env2 typ2 in
+        if Typ.compare typ1 typ1' == 0 && Typ.compare typ2 typ2' == 0 then (false, "_")
+        else aux_typ env1 env2 typ1' typ2'
+  and aux_arg env1 env2 (A_aux (a1, _)) (A_aux (a2, _)) =
     match (a1, a2) with
     | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ?existentials n1 n2 then (false, "_") else (true, "_sz")
-    | A_typ typ1, A_typ typ2 -> aux_typ typ1 typ2
+    | A_typ typ1, A_typ typ2 -> aux_typ env1 env2 typ1 typ2
     | _ -> (false, "_")
   in
-  aux_typ top1 top2
+  aux_typ env env top1 top2
 
 type auto_t = Simple | Complex of string | No
 
