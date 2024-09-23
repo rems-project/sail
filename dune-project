@@ -99,6 +99,12 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (libsail (= :version))))
 
 (package
+  (name sail_lean_backend)
+  (synopsis "Sail to Lean translation")
+  (depends
+    (libsail (= :version))))
+
+(package
   (name sail_output)
   (synopsis "Example Sail output plugin")
   (depends
@@ -141,6 +147,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (sail_sv_backend (and (= :version) :post))
     (sail_lem_backend (and (= :version) :post))
     (sail_coq_backend (and (= :version) :post))
+    (sail_lean_backend (and (= :version) :post))
     (sail_latex_backend (and (= :version) :post))
     (sail_doc_backend (and (= :version) :post))
     (sail_output (and (= :version) :post))
