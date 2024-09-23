@@ -2752,10 +2752,11 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                       string "              mret (Build_" ^^ full_type_pp ^^ space ^^ separate space tmp_vars
                       ^^ string ")";
                       string "|}.";
-                      string "intros [" ^^ separate space tmp_vars ^^ string "].";
-                      string "rewrite decode_encode.";
-                      string "reflexivity.";
-                      string "Qed.";
+                      string "abstract (";
+                      string "  intros [" ^^ separate space tmp_vars ^^ string "];";
+                      string "  rewrite decode_encode;";
+                      string "  reflexivity).";
+                      string "Defined.";
                     ]
                 )
           in
@@ -2890,10 +2891,10 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                                )
                             );
                           string "|}.";
-                          string "intros ["
+                          string "abstract (intros ["
                           ^^ separate_map (string "|") (fun _ -> string "x") ar
-                          ^^ string "]; rewrite !decode_encode; reflexivity.";
-                          string "Qed.";
+                          ^^ string "]; rewrite !decode_encode; reflexivity).";
+                          string "Defined.";
                         ]
                     )
               in
@@ -2994,11 +2995,12 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                 string "  encode x := encode (" ^^ num_of_id_pp ^^ string " x);";
                 string "  decode x := z ← decode x; mret (" ^^ of_num_id_pp ^^ string " z);";
                 string "|}.";
-                string "intro s; rewrite decode_encode.";
-                string "simpl.";
-                string "rewrite " ^^ id_pp ^^ string "_num_of_roundtrip.";
-                string "reflexivity.";
-                string "Qed.";
+                string "abstract (";
+                string "  intro s; rewrite decode_encode;";
+                string "  simpl;";
+                string "  rewrite " ^^ id_pp ^^ string "_num_of_roundtrip;";
+                string "  reflexivity).";
+                string "Defined.";
               ]
       in
       let inhabited_pp =
@@ -4184,8 +4186,8 @@ end = struct
                     type_map;
                   string "  end;";
                   string "|}.";
-                  string "destruct r; apply decode_encode.";
-                  string "Qed.";
+                  string "abstract (destruct r; apply decode_encode).";
+                  string "Defined.";
                   empty;
                 ]
             )
