@@ -64,7 +64,7 @@ let cvc4_solver =
   {
     command = "cvc4";
     args = (fun input -> [| "-L"; "smtlib2"; "--tlimit=2000"; input |]);
-    header = "(set-logic QF_UFNIA)\n";
+    header = "(set-logic UFNIA)\n";
     footer = "";
     negative_literals = false;
     uninterpret_power = true;
