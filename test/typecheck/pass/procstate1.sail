@@ -1,8 +1,6 @@
 default Order dec
 
-infix 4 ==
-
-val operator == = pure {lem: "eq_vec"} : forall 'n. (bitvector('n, dec), bitvector('n, dec)) -> bool
+$include <prelude.sail>
 
 struct ProcState('n) = {
   N : bitvector('n, dec),

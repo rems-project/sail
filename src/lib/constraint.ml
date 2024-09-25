@@ -243,9 +243,14 @@ let to_smt l abstract vars constr =
   (abstract_decs @ var_decs vars, smt_constr, smt_var, !exponentials)
 
 let sailexp_concrete n =
-  List.init (n + 1) (fun i ->
-      sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
-  )
+  sfun "forall"
+    [
+      List [List [Atom "n"; Atom "Int"]];
+      sfun "=>" [sfun ">=" [Atom "n"; Atom "0"]; sfun ">=" [sfun "sailexp" [Atom "n"]; Atom "1"]];
+    ]
+  :: List.init (n + 1) (fun i ->
+         sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
+     )
 
 let smtlib_of_constraints ?(get_model = false) l abstract vars extra constr :
     string * (kid -> sexpr * bool) * sexpr list =
