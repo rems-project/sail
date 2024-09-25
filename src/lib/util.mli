@@ -356,3 +356,5 @@ val open_output_with_check :
 val open_output_with_check_unformatted : string option -> string -> out_channel * string * string option * string
 
 val close_output_with_check : out_channel * string * string option * string -> unit
+
+val to_upper_camel_case : string -> string
