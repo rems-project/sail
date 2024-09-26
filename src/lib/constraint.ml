@@ -286,7 +286,12 @@ let load_digests_err () =
       | 4 ->
           let solution = input_binary_int in_chan in
           known_uniques := DigestMap.add digest (Some solution) !known_uniques
-      | _ -> assert false
+      | _ ->
+          Reporting.warn "" Parse_ast.Unknown "SMT cache file 'z3_problems' is invalid";
+          known_problems := DigestMap.empty;
+          known_uniques := DigestMap.empty;
+          (* Exit the loop as if we reached the end of the file *)
+          raise End_of_file
     end;
     load ()
   in
