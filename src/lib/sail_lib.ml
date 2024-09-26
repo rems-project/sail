@@ -1075,6 +1075,7 @@ let to_lower_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 87) else Char
 let to_upper_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 55) else Char.chr (n + 48)
 
 let hex_str_helper to_char x =
+  let x, negative = if Big_int.less x Big_int.zero then (Big_int.abs x, "-") else (x, "") in
   if Big_int.equal x Big_int.zero then "0x0"
   else (
     let x = ref x in
@@ -1084,7 +1085,7 @@ let hex_str_helper to_char x =
       s := String.make 1 (to_char lower_4) ^ !s;
       x := Big_int.shift_right !x 4
     done;
-    "0x" ^ !s
+    negative ^ "0x" ^ !s
   )
 
 let hex_str = hex_str_helper to_lower_hex_char
