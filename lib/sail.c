@@ -164,13 +164,29 @@ void dec_str(sail_string *str, const mpz_t n)
 void hex_str(sail_string *str, const mpz_t n)
 {
   sail_free(*str);
-  gmp_asprintf(str, "0x%Zx", n);
+
+  if (mpz_cmp_si(n, 0) < 0) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, n);
+    gmp_asprintf(str, "-0x%Zx", abs);
+  } else {
+    gmp_asprintf(str, "0x%Zx", n);
+  }
 }
 
 void hex_str_upper(sail_string *str, const mpz_t n)
 {
   sail_free(*str);
-  gmp_asprintf(str, "0x%ZX", n);
+
+  if (mpz_cmp_si(n, 0) < 0) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, n);
+    gmp_asprintf(str, "-0x%ZX", abs);
+  } else {
+    gmp_asprintf(str, "0x%ZX", n);
+  }
 }
 
 bool eq_string(const_sail_string str1, const_sail_string str2)
