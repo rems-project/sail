@@ -268,7 +268,7 @@ let const_props target ast =
   let interpreter_istate =
     (* Do not interpret undefined_X functions *)
     let open Interpreter in
-    let undefined_builtin_ids = ids_of_defs Initial_check.undefined_builtin_val_specs in
+    let undefined_builtin_ids = ids_of_defs (Initial_check.undefined_builtin_val_specs ()) in
     let remove_primop id = StringMap.remove (string_of_id id) in
     let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
     let lstate, gstate = Constant_fold.initial_state ast Type_check.initial_env in

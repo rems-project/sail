@@ -619,7 +619,8 @@ module Well_formedness = struct
         wf_typ exs env typ1;
         wf_typ exs env typ2
     | Typ_tuple typs -> List.iter (wf_typ exs env) typs
-    | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "bitvector" ->
+    | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "bitvector" && !Initial_check.opt_strict_bitvector
+      ->
         wf_nexp exs env nexp;
         begin
           match env.prove with

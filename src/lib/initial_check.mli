@@ -56,6 +56,10 @@ open Ast_util
     if they are encountered. *)
 val opt_abstract_types : bool ref
 
+(** If enabled, bitvector types are only well-formed if their
+    arguments are natural numbers. *)
+val opt_strict_bitvector : bool ref
+
 (** Generate faster undefined_T functions. Rather than generating
    functions that allow for the undefined values of enums and variants
    to be picked at runtime using a RNG or similar, this creates
@@ -93,7 +97,7 @@ val generate_undefined_enum : id -> id list -> untyped_def list
 (** Val specs of undefined functions for builtin types that get added
     to the AST by generate_undefinds (minus those functions that
     already exist in the AST). *)
-val undefined_builtin_val_specs : untyped_def list
+val undefined_builtin_val_specs : unit -> untyped_def list
 
 val generate_undefineds : IdSet.t -> untyped_def list
 

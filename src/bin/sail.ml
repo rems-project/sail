@@ -274,6 +274,7 @@ let rec options =
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
       ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
       ("-strict_var", Arg.Set Type_check.opt_strict_var, " require var expressions for variable declarations");
+      ("-strict_bitvector", Arg.Set Initial_check.opt_strict_bitvector, " require bitvectors to be indexed by naturals");
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
       ("-memo_z3", Arg.Set opt_memo_z3, " memoize calls to z3, improving performance when typechecking repeatedly");

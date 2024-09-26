@@ -57,6 +57,7 @@ module P = Parse_ast
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
 let opt_abstract_types = ref false
+let opt_strict_bitvector = ref false
 
 let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
@@ -163,7 +164,7 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_bool -> Some (K_aux (K_bool, l))
 
 let parse_kind_constraint l v = function
-  | P.K_nat ->
+  | P.K_nat when !opt_strict_bitvector ->
       let v = Nexp_aux (Nexp_var v, kid_loc v) in
       Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
   | _ -> None
@@ -175,7 +176,7 @@ let filter_order_kinds kinds = List.filter not_order_kind kinds
 let string_of_parse_kind_aux = function
   | P.K_order -> "Order"
   | P.K_int -> "Int"
-  | P.K_nat -> "Nat"
+  | P.K_nat -> if !opt_strict_bitvector then "Nat" else "Int"
   | P.K_bool -> "Bool"
   | P.K_type -> "Type"
 
@@ -2219,7 +2220,7 @@ let generate_undefined_enum id ids =
       ];
   ]
 
-let undefined_builtin_val_specs =
+let undefined_builtin_val_specs () =
   [
     extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
     extern_of_string (mk_id "undefined_bool") "unit -> bool";
@@ -2240,7 +2241,7 @@ let make_global (DEF_aux (def, def_annot)) =
   DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
 
 let generate_undefineds vs_ids =
-  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) undefined_builtin_val_specs
+  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) (undefined_builtin_val_specs ())
 
 let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> begin

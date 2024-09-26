@@ -81,7 +81,7 @@ def test_lem(name, opts, skip_list):
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem {} -o {} {}/{}'.format(sail, opts, basename, test_dir, filename))
+                step('{} --lem {} --strict-bitvector -o {} {}/{}'.format(sail, opts, basename, test_dir, filename))
                 step('lem -lib {}/src/gen_lib {}_types.lem {}.lem'.format(sail_dir, basename, basename))
                 step('rm {}_types.lem {}.lem'.format(basename, basename))
                 print_ok(filename)
