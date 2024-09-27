@@ -1,0 +1,107 @@
+/****************************************************************************/
+/*     Sail                                                                 */
+/*                                                                          */
+/*  Sail and the Sail architecture models here, comprising all files and    */
+/*  directories except the ASL-derived Sail code in the aarch64 directory,  */
+/*  are subject to the BSD two-clause licence below.                        */
+/*                                                                          */
+/*  The ASL derived parts of the ARMv8.3 specification in                   */
+/*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               */
+/*                                                                          */
+/*  Copyright (c) 2024                                                      */
+/*    Alasdair Armstrong                                                    */
+/*                                                                          */
+/*  All rights reserved.                                                    */
+/*                                                                          */
+/*  This work was partially supported by EPSRC grant EP/K008528/1 <a        */
+/*  href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous          */
+/*  Engineering for Mainstream Systems</a>, an ARM iCASE award, EPSRC IAA   */
+/*  KTF funding, and donations from Arm.  This project has received         */
+/*  funding from the European Research Council (ERC) under the European     */
+/*  Union’s Horizon 2020 research and innovation programme (grant           */
+/*  agreement No 789108, ELVER).                                            */
+/*                                                                          */
+/*  This software was developed by SRI International and the University of  */
+/*  Cambridge Computer Laboratory (Department of Computer Science and       */
+/*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        */
+/*  and FA8750-10-C-0237 ("CTSRD").                                         */
+/*                                                                          */
+/*  SPDX-License-Identifier: BSD-2-Clause                                   */
+/****************************************************************************/
+
+#ifndef SAIL_CONFIG_H
+#define SAIL_CONFIG_H
+
+/*
+ * This file implements the runtime configuration of a Sail model
+ * using a JSON configuration file.
+ *
+ * It abstracts away the particular details of the exact JSON library
+ * that is being used.
+ */
+
+#include "sail.h"
+#include "sail_failure.h"
+#include "cJSON.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct sail_json;
+
+typedef const_sail_string sail_config_key[];
+
+typedef struct sail_json* sail_config_json;
+
+/*
+ * This file sets the runtime JSON config file
+ */
+void sail_config_set_file(const char *path);
+
+/*
+ * Deallocate any memory used by the configuration.
+ *
+ * After using this, other functions in this module are no long safe to call.
+ */
+void sail_config_cleanup();
+
+/*
+ * Extract a string value from the JSON configuration.
+ */
+void sail_config_get_string(sail_string *str, const size_t n, const_sail_string key[]);
+
+/*
+ * For more complex Sail types than just strings, Sail will generate code that will
+ * destructure the JSON values using the following function calls.
+ *
+ * In general, it will test if the JSON is the type it expects, and
+ * only then access the fields. The behaviour of these functions is
+ * not guaranteed if the JSON does not have the correct type.
+ */
+
+sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
+
+bool sail_config_is_object(const sail_config_json config);
+
+bool sail_config_object_has_key(const sail_config_json config, const sail_string key);
+
+sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key);
+
+bool sail_config_is_string(const sail_config_json config);
+
+bool sail_config_is_array(const sail_config_json config);
+bool sail_config_is_bool_array(const sail_config_json config);
+bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int expected);
+
+void sail_config_unwrap_string(sail_string *str, const sail_config_json config);
+
+void sail_config_unwrap_int(sail_int *n, const sail_config_json config);
+
+void sail_config_unwrap_bits(lbits *bv, const sail_config_json config);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

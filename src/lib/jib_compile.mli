@@ -181,8 +181,3 @@ module Make (C : CONFIG) : sig
 
   val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end
-
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info

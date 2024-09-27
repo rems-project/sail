@@ -13,7 +13,7 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
-targets = get_targets(['c', 'interpreter', 'ocaml'])
+targets = get_targets(['c', 'cpp', 'interpreter', 'ocaml'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
@@ -38,7 +38,10 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
+                if basename.startswith('config'):
+                    sail_opts += ' --c-include sail_config.h'
+                    c_opts += ' \'{}\'/lib/json/*.c -I \'{}\'/lib/json'.format(sail_dir, sail_dir)
+                step('\'{}\' --no-warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
@@ -194,12 +197,14 @@ if 'c' in targets:
     xml += test_c('unoptimized C', '', '--c-no-mangle', False)
     xml += test_c('unoptimized C', '', '', False)
     xml += test_c('unoptimized C', '', '--c-generate-header', False)
-    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
     xml += test_c('optimized C', '-O2', '-O', True)
-    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
     xml += test_c('constant folding', '', '-Oconstant_fold', False)
     #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
     xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+
+if 'cpp' in targets:
+    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
+    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
 
 if 'interpreter' in targets:
     xml += test_interpreter('interpreter')

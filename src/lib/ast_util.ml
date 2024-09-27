@@ -844,6 +844,7 @@ and map_exp_annot_aux f = function
   | E_id id -> E_id id
   | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
+  | E_config key -> E_config key
   | E_typ (typ, exp) -> E_typ (typ, map_exp_annot f exp)
   | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
   | E_app_infix (x, op, y) -> E_app_infix (map_exp_annot f x, op, map_exp_annot f y)
@@ -1285,6 +1286,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
+  | E_config key -> "config " ^ string_of_list "." (fun s -> s) key
   | E_struct_update (exp, fexps) ->
       "struct { " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_struct fexps -> "struct { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
@@ -1755,6 +1757,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_block exps -> E_block (List.map (subst id value) exps)
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp value else E_id id'
     | E_lit lit -> E_lit lit
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
     | E_app_infix (exp1, op, exp2) -> E_app_infix (subst id value exp1, op, subst id value exp2)
@@ -1993,6 +1996,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_block exps -> E_block (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)
     | E_lit lit -> E_lit (locate_lit f lit)
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (locate_typ f typ, locate f exp)
     | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)
     | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)

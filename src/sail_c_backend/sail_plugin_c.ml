@@ -232,6 +232,8 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
 
 let _ =
   Pragma.register "c_in_main";
+  Pragma.register "c_in_main_post";
   Pragma.register "c_reserved";
   Pragma.register "c_override";
-  Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
+  Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true
+    ~supports_runtime_config:true c_target

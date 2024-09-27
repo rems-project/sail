@@ -59,7 +59,7 @@ val start_repl :
   ?banner:bool ->
   ?commands:string list ->
   ?auto_rewrites:bool ->
-  config:Yojson.Basic.t option ->
+  config:Yojson.Safe.t option ->
   options:(Arg.key * Arg.spec * Arg.doc) list ->
   Initial_check.ctx ->
   Type_check.Env.t ->

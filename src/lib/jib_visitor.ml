@@ -24,7 +24,7 @@ let rec visit_ctyp vis outer_ctyp =
   let aux vis no_change =
     match no_change with
     | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_unit | CT_bool | CT_bit | CT_string
-    | CT_real | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ ->
+    | CT_real | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ | CT_json | CT_json_key ->
         no_change
     | CT_tup ctyps ->
         let ctyps' = visit_ctyps vis ctyps in
@@ -164,6 +164,7 @@ let rec visit_cval vis outer_cval =
         let cval' = visit_cval vis cval in
         let id' = visit_id vis id in
         if cval == cval' && id == id' then no_change else V_field (cval', id')
+    | V_config_key _ -> no_change
   in
   do_visit vis (vis#vcval outer_cval) aux outer_cval
 

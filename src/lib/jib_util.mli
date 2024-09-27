@@ -77,6 +77,7 @@ val ilabel : ?loc:l -> string -> instr
 val igoto : ?loc:l -> string -> instr
 val iundefined : ?loc:l -> ctyp -> instr
 val imatch_failure : l -> instr
+val ibad_config : l -> instr
 val iexit : l -> instr
 val iraw : ?loc:l -> string -> instr
 val ijump : l -> cval -> string -> instr

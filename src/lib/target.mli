@@ -98,6 +98,7 @@ val supports_abstract_types : target -> bool
    @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
    @param ?asserts_termination Whether termination measures are enforced by assertions in the target
    @param ?supports_abstract_types Whether the target supports abstract types to be passed to the target
+   @param ?supports_runtime_config Whether the target supports runtime configuration
 
    The final unnamed parameter is the main backend function that is called after the frontend
    has finished processing the input.
@@ -113,6 +114,7 @@ val register :
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
   ?supports_abstract_types:bool ->
+  ?supports_runtime_config:bool ->
   (string option -> Interactive.State.istate -> unit) ->
   target
 

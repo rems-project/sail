@@ -2324,9 +2324,10 @@ let rewrite_ast_letbind_effects effect_info env =
     let pure_rewrap e = purify (rewrap e) in
     match exp_aux with
     | E_block es -> failwith "E_block should have been removed till now"
-    | E_id id -> k exp
-    | E_ref id -> k exp
+    | E_id _ -> k exp
+    | E_ref _ -> k exp
     | E_lit _ -> k exp
+    | E_config _ -> k exp
     | E_typ (typ, exp') -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_typ (typ, exp'))))
     | E_app (op_bool, [l; r]) when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
         (* Leave effectful operands of Boolean "and"/"or" in place to allow

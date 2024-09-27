@@ -204,6 +204,8 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_string -> "s"
   | CT_float n -> "f" ^ string_of_int n
   | CT_rounding_mode -> "m"
+  | CT_json -> "j"
+  | CT_json_key -> "k"
   | CT_enum (id, _) -> "E" ^ string_of_id id ^ "%"
   | CT_ref ctyp -> "&" ^ mangle_string_of_ctyp ctx ctyp
   | CT_memory_writes -> "w"
@@ -342,6 +344,8 @@ module Make (C : CONFIG) = struct
         [iraw (Printf.sprintf "sail_function_entry(%d, \"%s\", %s);" function_id (string_of_id id) args)]
       end
     | _ -> []
+
+  let unit_cval = V_lit (VL_unit, CT_unit)
 
   let rec compile_aval l ctx = function
     | AV_cval (cval, typ) ->
@@ -616,6 +620,71 @@ module Make (C : CONFIG) = struct
       !cleanup
     )
 
+  let compile_extern l ctx id args =
+    let setup = ref [] in
+    let cleanup = ref [] in
+
+    let setup_arg aval =
+      let arg_setup, cval, arg_cleanup = compile_aval l ctx aval in
+      setup := List.rev arg_setup @ !setup;
+      cleanup := arg_cleanup @ !cleanup;
+      cval
+    in
+
+    let setup_args = List.map setup_arg args in
+
+    (List.rev !setup, (fun clexp -> iextern l clexp (id, []) setup_args), !cleanup)
+
+  let compile_config l ctx args typ =
+    let ctyp = ctyp_of_typ ctx typ in
+
+    let key =
+      List.map
+        (function
+          | AV_lit (L_aux (L_string part, _), _) -> part
+          | _ -> Reporting.unreachable l __POS__ "Invalid argument when compiling config key"
+          )
+        args
+    in
+    let key_name = ngensym () in
+    let args = [V_lit (VL_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
+    let key_init = [iinit l CT_json_key key_name (V_config_key key)] in
+
+    let config_extract ctyp ~validate ~extract =
+      let json = ngensym () in
+      let valid = ngensym () in
+      let value = ngensym () in
+      ( key_init
+        @ [
+            idecl l CT_json json;
+            iextern l (CL_id (json, CT_json)) (mk_id "sail_config_get", []) args;
+            idecl l CT_bool valid;
+            iextern l (CL_id (valid, CT_bool)) (mk_id (fst validate), []) ([V_id (json, CT_json)] @ snd validate);
+            iif l (V_call (Bnot, [V_id (valid, CT_bool)])) [ibad_config l] [] CT_unit;
+            idecl l ctyp value;
+            iextern l (CL_id (value, ctyp)) (mk_id extract, []) [V_id (json, CT_json)];
+          ],
+        (fun clexp -> icopy l clexp (V_id (value, ctyp))),
+        [iclear ctyp value; iclear CT_json json]
+      )
+    in
+
+    match ctyp with
+    | CT_string -> (key_init, (fun clexp -> iextern l clexp (mk_id "sail_config_get_string", []) args), [])
+    | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
+    | CT_lint ->
+        let gs = ngensym () in
+        ( key_init @ [idecl l CT_json gs; iextern l (CL_id (gs, CT_json)) (mk_id "sail_config_get", []) args],
+          (fun clexp -> iextern l clexp (mk_id "sail_config_unwrap_int", []) [V_id (gs, CT_json)]),
+          [iclear CT_json gs]
+        )
+    | CT_lbits -> config_extract CT_lbits ~validate:("sail_config_is_bool_array", []) ~extract:"sail_config_unwrap_bits"
+    | CT_fbits n ->
+        config_extract CT_lbits
+          ~validate:("sail_config_is_bool_array_with_size", [V_lit (VL_int (Big_int.of_int n), CT_fint 64)])
+          ~extract:"sail_config_unwrap_bits"
+    | _ -> Reporting.unreachable l __POS__ "Invalid configuration type"
+
   let rec apat_ctyp ctx (AP_aux (apat, { env; _ })) =
     let ctx = { ctx with local_env = env } in
     match apat with
@@ -729,8 +798,6 @@ module Make (C : CONFIG) = struct
       end
     | AP_nil _ -> ([on_failure l (V_call (Bnot, [V_call (List_is_empty, [cval])]))], [], [], ctx)
 
-  let unit_cval = V_lit (VL_unit, CT_unit)
-
   let rec compile_alexp ctx alexp =
     match alexp with
     | AL_id (id, typ) ->
@@ -777,13 +844,16 @@ module Make (C : CONFIG) = struct
         let ctx = { ctx with locals = Bindings.add id (mut, binding_ctyp) ctx.locals } in
         let setup, call, cleanup = compile_aexp ctx body in
         (letb_setup @ setup, call, cleanup @ letb_cleanup)
-    | AE_app (id, vs, _) ->
+    | AE_app (Sail_function id, vs, _) ->
         if Option.is_some (get_attribute "mapping_guarded" uannot) then (
           let override_id = append_id id "_infallible" in
           if Bindings.mem override_id ctx.valspecs then compile_funcall ~override_id l ctx id vs
           else compile_funcall l ctx id vs
         )
         else compile_funcall l ctx id vs
+    | AE_app (Pure_extern id, args, _) -> compile_extern l ctx id args
+    | AE_app (Extern id, args, typ) ->
+        if string_of_id id = "sail_config_get" then compile_config l ctx args typ else compile_extern l ctx id args
     | AE_val aval ->
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
@@ -1823,6 +1893,8 @@ module Make (C : CONFIG) = struct
     | DEF_pragma ("abstract", Pragma_line (id_str, _)) -> ([CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
     | DEF_pragma ("c_in_main", Pragma_line (source, _)) ->
         ([CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
+    | DEF_pragma ("c_in_main_post", Pragma_line (source, _)) ->
+        ([CDEF_aux (CDEF_pragma ("c_in_main_post", source), def_annot)], ctx)
     (* We just ignore any pragmas we don't want to deal with. *)
     | DEF_pragma _ -> ([], ctx)
     (* Termination measures only needed for Coq, and other theorem prover output *)
@@ -2276,31 +2348,31 @@ module Make (C : CONFIG) = struct
 
     let precise_call call tail =
       match call with
-      | I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr -> begin
+      | I_aux (I_funcall (CR_one clexp, true, (id, _), args), ((_, l) as aux)) as instr ->
+          if string_of_id id = "sail_cons" then (
+            match args with
+            | [hd_arg; tl_arg] ->
+                let ctyp_arg = ctyp_suprema (cval_ctyp hd_arg) in
+                if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then (
+                  let gs = ngensym () in
+                  let cast = [idecl l ctyp_arg gs; icopy l (CL_id (gs, ctyp_arg)) hd_arg] in
+                  let cleanup = [iclear ~loc:l ctyp_arg gs] in
+                  [
+                    iblock
+                      (cast
+                      @ [I_aux (I_funcall (CR_one clexp, true, (id, []), [V_id (gs, ctyp_arg); tl_arg]), aux)]
+                      @ tail @ cleanup
+                      );
+                  ]
+                )
+                else instr :: tail
+            | _ ->
+                (* cons must have two arguments *)
+                Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
+          )
+          else instr :: tail
+      | I_aux (I_funcall (CR_one clexp, false, (id, ctyp_args), args), ((_, l) as aux)) as instr -> begin
           match get_function_typ id with
-          | None when string_of_id id = "sail_cons" -> begin
-              match (ctyp_args, args) with
-              | [ctyp_arg], [hd_arg; tl_arg] ->
-                  if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then (
-                    let gs = ngensym () in
-                    let cast = [idecl l ctyp_arg gs; icopy l (CL_id (gs, ctyp_arg)) hd_arg] in
-                    let cleanup = [iclear ~loc:l ctyp_arg gs] in
-                    [
-                      iblock
-                        (cast
-                        @ [
-                            I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux);
-                          ]
-                        @ tail @ cleanup
-                        );
-                    ]
-                  )
-                  else instr :: tail
-              | _ ->
-                  (* cons must have a single type parameter and two arguments *)
-                  Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
-            end
-          | None -> instr :: tail
           | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id param_ctyps ret_ctyp ->
               if List.compare_lengths args param_ctyps <> 0 then
                 Reporting.unreachable (id_loc id) __POS__
@@ -2334,11 +2406,12 @@ module Make (C : CONFIG) = struct
               [
                 iblock1
                   (casts @ ret_setup
-                  @ [I_aux (I_funcall (CR_one clexp, extern, (id, ctyp_args), args), aux)]
+                  @ [I_aux (I_funcall (CR_one clexp, false, (id, ctyp_args), args), aux)]
                   @ tail @ ret_cleanup @ cleanup
                   );
               ]
           | Some _ -> instr :: tail
+          | None -> instr :: tail
         end
       | instr -> instr :: tail
     in
@@ -2466,13 +2539,3 @@ module Make (C : CONFIG) = struct
     let cdefs = sort_ctype_defs false cdefs in
     (cdefs, ctx)
 end
-
-let add_special_functions env effect_info =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
-  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
-
-  let effect_info = Effects.add_monadic_built_in (mk_id "sail_assert") effect_info in
-  let effect_info = Effects.add_monadic_built_in (mk_id "sail_exit") effect_info in
-
-  (snd (Type_error.check_defs env [assert_vs; exit_vs; cons_vs]), effect_info)

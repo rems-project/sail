@@ -541,6 +541,7 @@ let rename_variables globals graph root children =
         )
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_config_key parts -> V_config_key parts
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)

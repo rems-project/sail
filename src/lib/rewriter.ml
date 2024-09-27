@@ -177,7 +177,7 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
-  | E_id _ | E_lit _ -> rewrap exp
+  | E_id _ | E_lit _ | E_config _ -> rewrap exp
   | E_typ (typ, exp) -> rewrap (E_typ (typ, rewrite exp))
   | E_app (id, exps) -> rewrap (E_app (id, List.map rewrite exps))
   | E_app_infix (el, id, er) -> rewrap (E_app_infix (rewrite el, id, rewrite er))
@@ -504,6 +504,7 @@ type ( 'a,
   e_constraint : n_constraint -> 'exp_aux;
   e_exit : 'exp -> 'exp_aux;
   e_throw : 'exp -> 'exp_aux;
+  e_config : string list -> 'exp_aux;
   e_return : 'exp -> 'exp_aux;
   e_assert : 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
@@ -574,6 +575,7 @@ let rec fold_exp_aux alg = function
   | E_constraint nc -> alg.e_constraint nc
   | E_exit e -> alg.e_exit (fold_exp alg e)
   | E_throw e -> alg.e_throw (fold_exp alg e)
+  | E_config key -> alg.e_config key
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert (e1, e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_var (lexp, e1, e2) -> alg.e_var (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
@@ -652,6 +654,7 @@ let id_exp_alg =
     e_constraint = (fun nc -> E_constraint nc);
     e_exit = (fun e1 -> E_exit e1);
     e_throw = (fun e1 -> E_throw e1);
+    e_config = (fun key -> E_config key);
     e_return = (fun e1 -> E_return e1);
     e_assert = (fun (e1, e2) -> E_assert (e1, e2));
     e_var = (fun (lexp, e2, e3) -> E_var (lexp, e2, e3));
@@ -783,6 +786,7 @@ let compute_exp_alg bot join =
     e_constraint = (fun nc -> (bot, E_constraint nc));
     e_exit = (fun (v1, e1) -> (v1, E_exit e1));
     e_throw = (fun (v1, e1) -> (v1, E_throw e1));
+    e_config = (fun key -> (bot, E_config key));
     e_return = (fun (v1, e1) -> (v1, E_return e1));
     e_assert = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_assert (e1, e2)));
     e_var = (fun ((vl, lexp), (v2, e2), (v3, e3)) -> (join_list [vl; v2; v3], E_var (lexp, e2, e3)));
@@ -882,6 +886,7 @@ let pure_exp_alg bot join =
     e_constraint = (fun nc -> bot);
     e_exit = (fun v1 -> v1);
     e_throw = (fun v1 -> v1);
+    e_config = (fun _ -> bot);
     e_return = (fun v1 -> v1);
     e_assert = (fun (v1, v2) -> join v1 v2);
     e_var = (fun (vl, v2, v3) -> join_list [vl; v2; v3]);
@@ -997,7 +1002,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_block (List.rev es)))
-  | E_id _ | E_ref _ | E_lit _ -> (x, exp)
+  | E_id _ | E_ref _ | E_lit _ | E_config _ -> (x, exp)
   | E_typ (typ, e) ->
       let x, e = f x e in
       (x, re (E_typ (typ, e)))

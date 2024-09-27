@@ -2246,6 +2246,9 @@ let doc_exp, doc_let =
     | E_constraint nc -> wrap_parens (doc_nc_exp ctxt (env_of full_exp) nc)
     | E_internal_assume (nc, e1) ->
         string "(* " ^^ doc_nc_exp ctxt (env_of full_exp) nc ^^ string " *)" ^/^ wrap_parens (expN e1)
+    | E_config _ ->
+        raise
+          (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Coq generation")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   (* TODO: no dep pairs now, what should this be? *)

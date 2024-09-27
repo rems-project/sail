@@ -213,7 +213,7 @@ let set_syntax_deprecated l =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
+%token And As Assert Bitzero Bitone By Match Config Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
@@ -759,6 +759,8 @@ block:
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_typ ($3, $1)) $startpos $endpos }
+  | Config Id
+    { mk_exp (E_config $2) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit

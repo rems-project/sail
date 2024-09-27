@@ -1149,6 +1149,9 @@ let doc_exp_lem, doc_let_lem =
     | E_constraint _ -> string "true"
     | E_internal_assume (nc, e1) ->
         string "(* " ^^ string (string_of_n_constraint nc) ^^ string " *)" ^/^ wrap_parens (expN e1)
+    | E_config _ ->
+        raise
+          (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Lem generation")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =

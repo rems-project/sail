@@ -114,6 +114,8 @@ let imatch_failure l = I_aux (I_exit "match", (instr_number (), l))
 
 let iexit l = I_aux (I_exit "explicit", (instr_number (), l))
 
+let ibad_config l = I_aux (I_exit "bad config", (instr_number (), l))
+
 let iraw ?loc:(l = Parse_ast.Unknown) str = I_aux (I_raw str, (instr_number (), l))
 
 let ijump l cval label = I_aux (I_jump (cval, label), (instr_number (), l))
@@ -258,6 +260,8 @@ let rec string_of_ctyp = function
   | CT_real -> "%real"
   | CT_string -> "%string"
   | CT_memory_writes -> "%memory_writes"
+  | CT_json -> "%json"
+  | CT_json_key -> "%json_key"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
   | CT_struct (id, _fields) -> "%struct " ^ Util.zencode_string (string_of_id id)
   | CT_enum (id, _) -> "%enum " ^ Util.zencode_string (string_of_id id)
@@ -329,6 +333,7 @@ let rec string_of_cval = function
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
     end
   | V_tuple (members, _) -> "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
+  | V_config_key parts -> "config " ^ String.concat "." parts
 
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
@@ -389,7 +394,8 @@ let string_of_instr i = Document.to_string (doc_instr i)
 
 let rec map_ctyp f = function
   | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
-    | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_memory_writes ) as ctyp ->
+    | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_memory_writes | CT_json | CT_json_key ) as
+    ctyp ->
       f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
@@ -404,7 +410,7 @@ let rec ctyp_has pred ctyp =
   ||
   match ctyp with
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
-  | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_memory_writes ->
+  | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_memory_writes | CT_json | CT_json_key ->
       false
   | CT_tup ctyps -> List.exists (ctyp_has pred) ctyps
   | CT_ref ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp -> ctyp_has pred ctyp
@@ -434,6 +440,9 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> n1 = n2 && ctyp_equal ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
+  | CT_memory_writes, CT_memory_writes -> true
+  | CT_json, CT_json -> true
+  | CT_json_key, CT_json_key -> true
   | CT_poly kid1, CT_poly kid2 -> Kid.compare kid1 kid2 = 0
   | _, _ -> false
 
@@ -481,6 +490,12 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_string, CT_string -> 0
   | CT_string, _ -> 1
   | _, CT_string -> -1
+  | CT_json, CT_json -> 0
+  | CT_json, _ -> 1
+  | _, CT_json -> -1
+  | CT_json_key, CT_json_key -> 0
+  | CT_json_key, _ -> 1
+  | _, CT_json_key -> -1
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_compare ctyp1 ctyp2
   | CT_ref _, _ -> 1
   | _, CT_ref _ -> -1
@@ -552,6 +567,8 @@ let rec ctyp_suprema = function
   | CT_bool -> CT_bool
   | CT_real -> CT_real
   | CT_bit -> CT_bit
+  | CT_json -> CT_json
+  | CT_json_key -> CT_json_key
   | CT_tup ctyps -> CT_tup (List.map ctyp_suprema ctyps)
   | CT_string -> CT_string
   | CT_float n -> CT_float n
@@ -618,7 +635,7 @@ let rec ctyp_ids = function
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
   | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit
-  | CT_string | CT_poly _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+  | CT_string | CT_poly _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ->
       IdSet.empty
 
 let rec subst_poly substs = function
@@ -631,12 +648,12 @@ let rec subst_poly substs = function
   | CT_variant (id, ctors) -> CT_variant (id, List.map (fun (ctor_id, ctyp) -> (ctor_id, subst_poly substs ctyp)) ctors)
   | CT_struct (id, fields) -> CT_struct (id, List.map (fun (ctor_id, ctyp) -> (ctor_id, subst_poly substs ctyp)) fields)
   | ( CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real | CT_lbits | CT_fbits _
-    | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes ) as ctyp ->
+    | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ) as ctyp ->
       ctyp
 
 let rec is_polymorphic = function
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real
-  | CT_string | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+  | CT_string | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ->
       false
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
@@ -646,7 +663,7 @@ let rec is_polymorphic = function
 
 let rec cval_deps = function
   | V_id (id, _) -> NameSet.singleton id
-  | V_lit _ | V_member _ -> NameSet.empty
+  | V_lit _ | V_member _ | V_config_key _ -> NameSet.empty
   | V_field (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) | V_tuple (cvals, _) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
   | V_ctor_kind (cval, _, _) -> cval_deps cval
@@ -737,6 +754,7 @@ let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
   | V_member (id, ctyp) -> V_member (id, f ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, f ctyp)
+  | V_config_key parts -> V_config_key parts
   | V_ctor_kind (cval, (id, unifiers), ctyp) -> V_ctor_kind (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
   | V_ctor_unwrap (cval, (id, unifiers), ctyp) -> V_ctor_unwrap (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
   | V_tuple_member (cval, i, j) -> V_tuple_member (map_cval_ctyp f cval, i, j)
@@ -1020,6 +1038,7 @@ and cval_ctyp = function
   | V_struct (_, ctyp) -> ctyp
   | V_tuple (_, ctyp) -> ctyp
   | V_call (op, vs) -> infer_call op vs
+  | V_config_key _ -> CT_json_key
 
 let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp

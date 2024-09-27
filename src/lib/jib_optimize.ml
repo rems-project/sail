@@ -151,6 +151,7 @@ let rec cval_subst id subst = function
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_subst id subst cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_subst id subst cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_subst id subst) members, ctyp)
+  | V_config_key parts -> V_config_key parts
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
@@ -163,6 +164,7 @@ let rec cval_map_id f = function
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_map_id f cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_map_id f cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_map_id f) members, ctyp)
+  | V_config_key parts -> V_config_key parts
 
 module Remove_undefined = struct
   open Jib
@@ -470,7 +472,8 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key
+      ->
         CTSet.empty
   in
   let rec tuple_depth = function
@@ -479,7 +482,7 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool | CT_real | CT_bit
-    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ->
         0
   in
   let rec fix_tuples = function
@@ -494,12 +497,14 @@ let remove_tuples cdefs ctx =
     | CT_fvector (n, ctyp) -> CT_fvector (n, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | ( CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ) as ctyp ->
+      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes | CT_json
+      | CT_json_key ) as ctyp ->
         ctyp
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_config_key parts -> V_config_key parts
     | V_ctor_kind (cval, ctor, ctyp) -> V_ctor_kind (fix_cval cval, ctor, ctyp)
     | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (fix_cval cval, ctor, ctyp)
     | V_tuple_member (cval, _, n) ->

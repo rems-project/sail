@@ -2284,6 +2284,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | None -> typ_error l "Cannot use return outside a function"
       in
       annot_exp (E_return checked_exp) typ
+  | E_config key, _ -> annot_exp (E_config key) typ
   | E_tuple exps, Typ_tuple typs when List.length exps = List.length typs ->
       let checked_exps = List.map2 (fun exp typ -> crule check_exp env exp typ) exps typs in
       annot_exp (E_tuple checked_exps) typ

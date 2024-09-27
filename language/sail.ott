@@ -460,8 +460,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
-  | while ::   :: while
-  | until ::  :: until
+  | while :: :: while
+  | until :: :: until
 
 internal_loop_measure :: 'Measure_' ::=
   {{ com internal syntax for an optional termination measure for a loop }}
@@ -521,8 +521,10 @@ exp :: 'E_' ::=
     {{ com the value of $[[nexp]]$ at run time }}
 
   | return exp                                        :: :: return {{ com  return $[[exp]]$ from current function }}
-  | exit exp                                          :: :: exit
-    {{ com halt all current execution }}
+  | exit exp                                          :: :: exit {{ com halt all current execution }}
+
+  | config string1 . ... . stringn                    :: :: config {{ com model configuration value }}
+
   | ref id                                            :: :: ref
   | throw exp                                         :: :: throw
   | try exp catch { pexp1 , ... , pexpn }             :: :: try

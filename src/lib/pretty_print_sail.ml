@@ -535,6 +535,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_id id -> doc_id id
     | E_ref id -> string "ref" ^^ space ^^ doc_id id
     | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
+    | E_config key -> string "config" ^^ space ^^ separate_map dot string key
     | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
     | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
     (* Format a function with a unit argument as f() rather than f(()) *)

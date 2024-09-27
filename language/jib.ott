@@ -138,6 +138,7 @@ cval :: 'V_' ::=
   | cval nat0 nat1                                  :: :: tuple_member
   | op ( cval0 , ... , cvaln )                      :: :: call
   | cval . id                                       :: :: field
+  | string0 . ... . stringn                         :: :: config_key
 
 % Note that init / clear are sometimes referred to as create / kill
 
@@ -196,6 +197,9 @@ ctyp :: 'CT_' ::=
   | poly kid                :: :: poly
 
   | memory_writes           :: :: memory_writes
+% Used for configuration, an immutable reference to some json data
+  | json                    :: :: json
+  | json_key                :: :: json_key
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id

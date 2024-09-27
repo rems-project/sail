@@ -435,7 +435,24 @@ let file_to_string filename =
     close_in chan;
     Buffer.contents buf
 
-let run_sail (config : Yojson.Basic.t option) tgt =
+let apply_model_config env ast =
+  match !opt_config_file with
+  | Some file ->
+      if Sys.file_exists file then (
+        let json =
+          try Yojson.Safe.from_file ~fname:file ~lnum:0 file
+          with Yojson.Json_error message ->
+            raise
+              (Reporting.err_general Parse_ast.Unknown
+                 (Printf.sprintf "Failed to parse configuration file:\n%s" message)
+              )
+        in
+        Config.rewrite_ast env json ast
+      )
+      else raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file))
+  | None -> Config.rewrite_ast env (`Assoc []) ast
+
+let run_sail (config : Yojson.Safe.t option) tgt =
   Target.run_pre_parse_hook tgt ();
 
   let project_files, frees =
@@ -494,6 +511,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
           )
   in
   let ast = Frontend.instantiate_abstract_types (Some tgt) !opt_instantiations ast in
+  let ast = apply_model_config env ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
@@ -509,7 +527,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
 
   (ctx, ast, env, effect_info)
 
-let run_sail_format (config : Yojson.Basic.t option) =
+let run_sail_format (config : Yojson.Safe.t option) =
   let is_format_file f = match !opt_format_only with [] -> true | files -> List.exists (fun f' -> f = f') files in
   let is_skipped_file f = match !opt_format_skip with [] -> false | files -> List.exists (fun f' -> f = f') files in
   let module Config = struct
@@ -562,7 +580,7 @@ let rec find_file_above ?prev_inode_opt dir file =
     else None
   with Unix.Unix_error _ -> None
 
-let get_config_file () =
+let get_implicit_config_file override_file =
   let check_exists file =
     if Sys.file_exists file then Some file
     else (
@@ -570,7 +588,7 @@ let get_config_file () =
       None
     )
   in
-  match !opt_config_file with
+  match override_file with
   | Some file -> check_exists file
   | None -> (
       match Sys.getenv_opt "SAIL_CONFIG" with
@@ -579,7 +597,7 @@ let get_config_file () =
     )
 
 let parse_config_file file =
-  try Some (Yojson.Basic.from_file ~fname:file ~lnum:0 file)
+  try Some (Yojson.Safe.from_file ~fname:file ~lnum:0 file)
   with Yojson.Json_error message ->
     Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
     None
@@ -608,7 +626,7 @@ let main () =
 
   Arg.parse_dynamic options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg;
 
-  let config = Option.bind (get_config_file ()) parse_config_file in
+  let config = Option.bind (get_implicit_config_file None) parse_config_file in
 
   feature_check ();
 
@@ -631,6 +649,7 @@ let main () =
     print_endline version_full;
     exit 0
   );
+
   if !opt_show_sail_dir then (
     print_endline (Reporting.get_sail_dir Locations.sail_dir);
     exit 0

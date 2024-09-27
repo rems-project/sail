@@ -57,13 +57,15 @@ module Big_int = Nat_big_num
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
 
+type function_id = Sail_function of id | Pure_extern of id | Extern of id
+
 type anf_annot = { loc : l; env : Env.t; uannot : uannot }
 
 type 'a aexp = AE_aux of 'a aexp_aux * anf_annot
 
 and 'a aexp_aux =
   | AE_val of 'a aval
-  | AE_app of id * 'a aval list * 'a
+  | AE_app of function_id * 'a aval list * 'a
   | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
@@ -289,7 +291,9 @@ let rec is_pure_aexp effect_info (AE_aux (aexp, { uannot; _ })) =
   | Some _ -> true
   | None -> (
       match aexp with
-      | AE_app (f, _, _) -> Effects.function_is_pure f effect_info
+      | AE_app (Sail_function f, _, _) -> Effects.function_is_pure f effect_info
+      | AE_app (Pure_extern f, _, _) -> true
+      | AE_app (Extern f, _, _) -> false
       | AE_typ (aexp, _) -> is_pure_aexp effect_info aexp
       | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp effect_info aexp1 && is_pure_aexp effect_info aexp2
       | AE_match (_, arms, _) ->
@@ -456,6 +460,11 @@ let pp_order = function Ord_aux (Ord_inc, _) -> string "inc" | Ord_aux (Ord_dec,
 
 let pp_id id = string (string_of_id id)
 
+let pp_function_id = function
+  | Sail_function id -> pp_id id
+  | Pure_extern id -> string "pure_extern" ^^ space ^^ pp_id id
+  | Extern id -> string "extern" ^^ space ^^ pp_id id
+
 let rec pp_alexp = function
   | AL_id (id, typ) -> pp_annot typ (pp_id id)
   | AL_addr (id, typ) -> string "*" ^^ parens (pp_annot typ (pp_id id))
@@ -474,7 +483,7 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
   | AE_val v -> pp_aval v
   | AE_typ (aexp, typ) -> pp_annot typ (string "$" ^^ pp_aexp aexp)
   | AE_assign (alexp, aexp) -> pp_alexp alexp ^^ string " := " ^^ pp_aexp aexp
-  | AE_app (id, args, typ) -> pp_annot typ (pp_id id ^^ parens (separate_map (comma ^^ space) pp_aval args))
+  | AE_app (id, args, typ) -> pp_annot typ (pp_function_id id ^^ parens (separate_map (comma ^^ space) pp_aval args))
   | AE_short_circuit (SC_or, aval, aexp) -> pp_aval aval ^^ string " || " ^^ pp_aexp aexp
   | AE_short_circuit (SC_and, aval, aexp) -> pp_aval aval ^^ string " && " ^^ pp_aexp aexp
   | AE_let (mut, id, id_typ, binding, body, typ) ->
@@ -740,7 +749,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aexps = List.map anf exps in
       let avals = List.map to_aval aexps in
       let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
-      wrap (mk_aexp (AE_app (id, List.map fst avals, typ_of exp)))
+      wrap (mk_aexp (AE_app (Sail_function id, List.map fst avals, typ_of exp)))
   | E_throw exn_exp ->
       let aexp = anf exn_exp in
       let aval, wrap = to_aval aexp in
@@ -758,13 +767,13 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aexp2 = anf exp2 in
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
-      wrap1 (wrap2 (mk_aexp (AE_app (mk_id "sail_assert", [aval1; aval2], unit_typ))))
+      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_assert"), [aval1; aval2], unit_typ))))
   | E_cons (exp1, exp2) ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
-      wrap1 (wrap2 (mk_aexp (AE_app (mk_id "sail_cons", [aval1; aval2], typ_of exp))))
+      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_cons"), [aval1; aval2], typ_of exp))))
   | E_id id ->
       let lvar = Env.lookup_id id (env_of exp) in
       begin
@@ -773,6 +782,9 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   | E_ref id ->
       let lvar = Env.lookup_id id (env_of exp) in
       mk_aexp (AE_val (AV_ref (id, lvar)))
+  | E_config key ->
+      let anf_key_part part = AV_lit (mk_lit (L_string part), string_typ) in
+      mk_aexp (AE_app (Extern (mk_id "sail_config_get"), List.map anf_key_part key, typ_of exp))
   | E_match (match_exp, pexps) ->
       let match_aval, match_wrap = to_aval (anf match_exp) in
       let anf_pexp (Pat_aux (pat_aux, (l, tannot))) =

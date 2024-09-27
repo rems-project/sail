@@ -71,7 +71,7 @@ type istate = {
   display_options : display_options;
   state : Interpreter.lstate * Interpreter.gstate;
   default_sail_dir : string;
-  config : Yojson.Basic.t option;
+  config : Yojson.Safe.t option;
 }
 
 let shrink_istate istate : Interactive.State.istate =

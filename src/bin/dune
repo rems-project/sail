@@ -192,6 +192,8 @@
   (%{workspace_root}/lib/sail.c as lib/sail.c)
   (%{workspace_root}/lib/sail.h as lib/sail.h)
   (%{workspace_root}/lib/sail.tex as lib/sail.tex)
+  (%{workspace_root}/lib/json/cJSON.c as lib/json/cJSON.c)
+  (%{workspace_root}/lib/json/cJSON.h as lib/json/cJSON.h)
   (%{workspace_root}/lib/sail_coverage.h as lib/sail_coverage.h)
   (%{workspace_root}/lib/sail_failure.c as lib/sail_failure.c)
   (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)

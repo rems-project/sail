@@ -273,7 +273,11 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
       | I_aux (I_exit _, _) ->
           footprint.exits <- true;
           SkipChildren
-      | I_aux (I_funcall (_, _, (id, _), args), (l, _)) ->
+      | I_aux (I_funcall (_, true, (id, _), args), (l, _)) ->
+          let name = string_of_id id in
+          if name = "sail_assert" then footprint.contains_assert <- true;
+          DoChildren
+      | I_aux (I_funcall (_, false, (id, _), args), (l, _)) ->
           let open Util.Option_monad in
           if ctx_is_extern id ctx then (
             let name = ctx_get_extern id ctx in
@@ -297,7 +301,6 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
                 end
               | _ -> ()
             )
-            else if name = "sail_assert" then footprint.contains_assert <- true
           );
           DoChildren
       | _ -> DoChildren
@@ -686,6 +689,7 @@ module Make (Config : CONFIG) = struct
     | CT_memory_writes -> simple_type "sail_memory_writes"
     | CT_tup _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple type should not reach SV backend"
     | CT_poly _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Polymorphic type should not reach SV backend"
+    | CT_json | CT_json_key -> Reporting.unreachable Parse_ast.Unknown __POS__ "JSON type should not reach SV backend"
 
   module Smt =
     Smt_gen.Make
@@ -1239,6 +1243,61 @@ module Make (Config : CONFIG) = struct
           )
           (List.combine args (List.combine arg_ctyps conversions))
 
+  let extern_generate l ctx creturn id name args =
+    let wrap aux = return (Some (SVS_aux (aux, l))) in
+    match Smt.builtin ~allow_io:false name with
+    | Some generator ->
+        let clexp =
+          match creturn with
+          | CR_one clexp -> clexp
+          | CR_multi clexps ->
+              Reporting.unreachable l __POS__
+                (sprintf "Multiple return generator primitive found: %s (%s)" name
+                   (Util.string_of_list ", " string_of_clexp clexps)
+                )
+        in
+        let* value = Smt_gen.fmap (Smt_exp.simp SimpSet.empty) (generator args (clexp_ctyp clexp)) in
+        begin
+          (* We can optimize R = store(R, i x) into R[i] = x *)
+          match (clexp, value) with
+          | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
+              wrap (SVS_assign (SVP_index (SVP_id v, i), x))
+          | _, _ ->
+              let updates, lexp = svir_clexp clexp in
+              wrap (with_updates l updates (SVS_assign (lexp, value)))
+        end
+    | None -> (
+        match Primops.generate_module ~at:l name with
+        | Some generator ->
+            let generated_name = generator args (creturn_ctyp creturn) in
+            let* args = mapM Smt.smt_cval args in
+            let updates, ret = svir_creturn creturn in
+            wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
+        | None ->
+            let _, _, _, uannot = Bindings.find id ctx.valspecs in
+            let arity = List.length args in
+            let* arg_convs, ret_conv, is_function =
+              match get_sv_attribute "sv_module" uannot with
+              | Some obj, (module ModuleAttr) ->
+                  let module Attr = AttributeParser (ModuleAttr) in
+                  let types = Attr.get_types ~arity (Some obj) in
+                  let return_type = Attr.get_return_type (Some obj) in
+                  return (types, return_type, false)
+              | None, _ ->
+                  let attr, (module FunctionAttr) = get_sv_attribute "sv_function" uannot in
+                  let module Attr = AttributeParser (FunctionAttr) in
+                  let types = Attr.get_types ~arity attr in
+                  let return_type = Attr.get_return_type attr in
+                  return (types, return_type, true)
+            in
+            let* args = fmap (List.map fst) (convert_arguments args arg_convs) in
+            let* aux =
+              if is_function then convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) ret_conv
+              else convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) ret_conv
+            in
+            wrap aux
+      )
+
   let rec svir_instr ?pathcond spec_info ctx (I_aux (aux, (_, l))) =
     let wrap aux = return (Some (SVS_aux (aux, l))) in
     match aux with
@@ -1262,84 +1321,28 @@ module Make (Config : CONFIG) = struct
     | I_funcall (creturn, preserve_name, (id, _), args) ->
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
-          if name = "sail_assert" then
-            if Config.no_assertions then wrap SVS_skip
-            else (
-              let _, ret = svir_creturn creturn in
-              match args with
-              | [cond; msg] ->
-                  let* cond = Smt.smt_cval cond in
-                  let* msg = Smt.smt_cval msg in
-                  (* If the assert is only reachable under some path-condition, then the assert should pass
-                     whenever the path-condition is not true. *)
-                  let cond =
-                    match pathcond with
-                    | Some pathcond ->
-                        Fn
-                          ( "or",
-                            [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond]
-                          )
-                    | None -> cond
-                  in
-                  wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
-              | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
-            )
-          else (
-            match Smt.builtin ~allow_io:false name with
-            | Some generator ->
-                let clexp =
-                  match creturn with
-                  | CR_one clexp -> clexp
-                  | CR_multi clexps ->
-                      Reporting.unreachable l __POS__
-                        (sprintf "Multiple return generator primitive found: %s (%s)" name
-                           (Util.string_of_list ", " string_of_clexp clexps)
-                        )
-                in
-                let* value = Smt_gen.fmap (Smt_exp.simp SimpSet.empty) (generator args (clexp_ctyp clexp)) in
-                begin
-                  (* We can optimize R = store(R, i x) into R[i] = x *)
-                  match (clexp, value) with
-                  | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
-                      wrap (SVS_assign (SVP_index (SVP_id v, i), x))
-                  | _, _ ->
-                      let updates, lexp = svir_clexp clexp in
-                      wrap (with_updates l updates (SVS_assign (lexp, value)))
-                end
-            | None -> (
-                match Primops.generate_module ~at:l name with
-                | Some generator ->
-                    let generated_name = generator args (creturn_ctyp creturn) in
-                    let* args = mapM Smt.smt_cval args in
-                    let updates, ret = svir_creturn creturn in
-                    wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
-                | None ->
-                    let _, _, _, uannot = Bindings.find id ctx.valspecs in
-                    let arity = List.length args in
-                    let* arg_convs, ret_conv, is_function =
-                      match get_sv_attribute "sv_module" uannot with
-                      | Some obj, (module ModuleAttr) ->
-                          let module Attr = AttributeParser (ModuleAttr) in
-                          let types = Attr.get_types ~arity (Some obj) in
-                          let return_type = Attr.get_return_type (Some obj) in
-                          return (types, return_type, false)
-                      | None, _ ->
-                          let attr, (module FunctionAttr) = get_sv_attribute "sv_function" uannot in
-                          let module Attr = AttributeParser (FunctionAttr) in
-                          let types = Attr.get_types ~arity attr in
-                          let return_type = Attr.get_return_type attr in
-                          return (types, return_type, true)
-                    in
-                    let* args = fmap (List.map fst) (convert_arguments args arg_convs) in
-                    let* aux =
-                      if is_function then
-                        convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) ret_conv
-                      else convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) ret_conv
-                    in
-                    wrap aux
-              )
-          )
+          extern_generate l ctx creturn id name args
         )
+        else if Id.compare id (mk_id "sail_assert") = 0 then
+          if Config.no_assertions then wrap SVS_skip
+          else (
+            let _, ret = svir_creturn creturn in
+            match args with
+            | [cond; msg] ->
+                let* cond = Smt.smt_cval cond in
+                let* msg = Smt.smt_cval msg in
+                (* If the assert is only reachable under some path-condition, then the assert should pass
+                   whenever the path-condition is not true. *)
+                let cond =
+                  match pathcond with
+                  | Some pathcond ->
+                      Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
+                  | None -> cond
+                in
+                wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
+          )
+        else if Id.compare id (mk_id "sail_cons") = 0 then extern_generate l ctx creturn id "sail_cons" args
         else if Id.compare id (mk_id "update_fbits") = 0 then
           let* rhs = svir_update_fbits args in
           let updates, ret = svir_creturn creturn in

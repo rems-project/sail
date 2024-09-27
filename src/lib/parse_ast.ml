@@ -236,6 +236,7 @@ and exp_aux =
   | E_sizeof of atyp
   | E_constraint of atyp
   | E_exit of exp
+  | E_config of string
   | E_throw of exp
   | E_try of exp * pexp list
   | E_return of exp

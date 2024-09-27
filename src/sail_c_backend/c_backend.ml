@@ -112,6 +112,9 @@ let rec is_stack_ctyp ctyp =
   | CT_poly _ -> true
   | CT_float _ -> true
   | CT_rounding_mode -> true
+  (* Is a reference to some immutable JSON data *)
+  | CT_json -> true
+  | CT_json_key -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
   | CT_memory_writes -> false
 
@@ -423,7 +426,7 @@ end) : CONFIG = struct
     AE_aux (aexp, annot)
 
   let analyze_primop' ctx id args typ =
-    let no_change = AE_app (id, args, typ) in
+    let no_change = AE_app (Sail_function id, args, typ) in
     let args = List.map (c_aval ctx) args in
     let extern = if ctx_is_extern id ctx then ctx_get_extern id ctx else failwith "Not extern" in
 
@@ -525,7 +528,10 @@ end) : CONFIG = struct
 
   let analyze_primop ctx id args typ =
     let no_change = AE_app (id, args, typ) in
-    if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+    match id with
+    | Sail_function id ->
+        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+    | _ -> no_change
 
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
@@ -958,6 +964,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_fvector (_, typ) -> sgen_ctyp (CT_vector typ)
     | CT_string -> "sail_string"
     | CT_real -> "real"
+    | CT_json -> "sail_config_json"
+    | CT_json_key -> "sail_config_key"
     | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
     | CT_float n -> "float" ^ string_of_int n ^ "_t"
     | CT_rounding_mode -> "uint_fast8_t"
@@ -983,6 +991,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_fvector (_, typ) -> sgen_ctyp_name (CT_vector typ)
     | CT_string -> "sail_string"
     | CT_real -> "real"
+    | CT_json -> "sail_config_json"
+    | CT_json_key -> "sail_config_key"
     | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
     | CT_float n -> "float" ^ string_of_int n
     | CT_rounding_mode -> "rounding_mode"
@@ -1028,6 +1038,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | V_ctor_kind (f, ctor, _) -> sgen_cval f ^ ".kind" ^ " != Kind_" ^ sgen_uid ctor
     | V_struct (fields, _) ->
         sprintf "{%s}" (Util.string_of_list ", " (fun (field, cval) -> sgen_id field ^ " = " ^ sgen_cval cval) fields)
+    | V_config_key parts ->
+        Printf.sprintf "(const_sail_string[]){%s}" (Util.string_of_list ", " (fun part -> "\"" ^ part ^ "\"") parts)
     | V_ctor_unwrap (f, ctor, _) -> sprintf "%s.variants.%s" (sgen_cval f) (sgen_uid ctor)
     | V_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for a tuple literal"
 
@@ -1315,9 +1327,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           match (fname, ctyp) with
           | "internal_pick", _ -> sprintf "pick_%s" (sgen_ctyp_name ctyp)
           | "sail_cons", _ -> begin
-              match snd f with
-              | [ctyp] -> Util.zencode_string ("cons#" ^ string_of_ctyp ctyp)
-              | _ -> c_error "cons without specified type"
+              match Option.map cval_ctyp (List.nth_opt args 0) with
+              | Some ctyp -> Util.zencode_string ("cons#" ^ string_of_ctyp (ctyp_suprema ctyp))
+              | None -> c_error "cons without specified type"
             end
           | "eq_anything", _ -> begin
               match args with
@@ -2134,7 +2146,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
     | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
     | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
-    | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key
+      ->
         []
 
   let codegen_ctg = function
@@ -2202,7 +2215,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     let module Jibc = Make (C_config (struct
       let branch_coverage = Config.branch_coverage
     end)) in
-    let env, effect_info = add_special_functions env effect_info in
     let ctx = initial_ctx env effect_info in
     Jibc.compile_ast ctx ast
 
