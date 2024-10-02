@@ -14,7 +14,14 @@ let is_enum env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 let pat_is_plain_binder env (P_aux (p, _)) =
   match p with
   | (P_id id | P_typ (_, P_aux (P_id id, _))) when not (is_enum env id) -> Some (Some id)
-  | P_wild -> Some None
+  | (P_wild | P_typ (_, P_aux (P_wild, _))) -> Some None
+  | P_var (_, _) -> Some (Some (Id_aux (Id "var", Unknown)))
+  | P_app (_, _) -> Some (Some (Id_aux (Id "app", Unknown)))
+  | P_vector _ -> Some (Some (Id_aux (Id "vect", Unknown)))
+  | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)))
+  | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)))
+  | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)))
+  | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)))
   | _ -> None
 
 (* Copied from the Coq PP *)
@@ -46,6 +53,8 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
       let argexp = E_aux (E_tuple argexps, annot) in
       let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
       (argpats, bindargs)
+  (* TODO Occurrences of the unit literal are removed right now, in order to be able to compile `initialize_registers`. *)
+  | P_lit (L_aux (L_unit, _)), _ -> ([], identity)
   | _, [typ] -> ([(pat, typ)], identity)
   | _, _ -> unreachable l __POS__ "Unexpected pattern/type combination"
 
@@ -71,8 +80,8 @@ let doc_funcl_init (FCL_aux (FCL_funcl (id, pexp), annot)) =
         |> List.map (fun (pat, typ) ->
                match pat_is_plain_binder env pat with
                | Some (Some id) -> (id, typ)
-               | Some None -> (Id_aux (Id "x", l), typ)
-               | _ -> (Id_aux (Id "x", l), typ) (*failwith "Argument pattern not translatable yet."*)
+               | Some None -> (Id_aux (Id "x", l), typ) (* TODO fresh name or wildcard instead of x *)
+               | _ -> failwith "Argument pattern not translatable yet."
            )
       in
       let binders : document list =
