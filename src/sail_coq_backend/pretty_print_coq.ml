@@ -4443,8 +4443,11 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                string "Definition read_reg {A E} := @read_reg register A E.";
                string "Definition write_reg {A E} := @write_reg register A E.";
                empty;
+               (* Explicitly say which definitions are type so that Coq uses the
+                  type scope, otherwise a type like (mword 2 * mword 3) will fail
+                  typechecking because it attempts to use multiplication. *)
                string "Module Arch <: Arch.";
-               string "  Definition reg := register.";
+               string "  Definition reg : Type -> Type := register.";
                string "  Definition reg_eq := @Decidable_eq_register.";
                string "  Include GRegister.";
                string "  Definition greg_eq := @Decidable_eq_greg.";
@@ -4456,23 +4459,26 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
                (*   string "  Definition reg_countable : Countable reg := _.";*)
                string "  Definition va_size := 64%N.";
-               string "  Definition pa := " ^^ pp_typ params.pa_type ^^ string ".";
+               string "  Definition pa : Type := " ^^ pp_typ params.pa_type ^^ string ".";
                string "  Definition pa_eq : EqDecision pa := _.";
                string "  Definition pa_countable : Countable pa := _.";
-               string "  Definition arch_ak := " ^^ pp_typ params.arch_ak_type ^^ string ".";
+               string "  Definition arch_ak : Type := " ^^ pp_typ params.arch_ak_type ^^ string ".";
                string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
-               string "  Definition translation := " ^^ pp_typ params.translation_summary_type ^^ string ".";
+               string "  Definition translation : Type := " ^^ pp_typ params.translation_summary_type ^^ string ".";
                string "  Definition translation_eq : EqDecision translation := _.";
-               string "  Definition abort := " ^^ pp_typ params.abort_type ^^ string ".";
+               string "  Definition abort : Type := " ^^ pp_typ params.abort_type ^^ string ".";
                string "  Definition abort_eq : EqDecision abort := _.";
-               string "  Definition barrier := " ^^ pp_typ params.barrier_type ^^ string ".";
+               string "  Definition barrier : Type := " ^^ pp_typ params.barrier_type ^^ string ".";
                string "  Definition barrier_eq : EqDecision barrier := _.";
-               string "  Definition cache_op := " ^^ pp_typ params.cache_op_type ^^ string ".";
+               string "  Definition cache_op : Type := " ^^ pp_typ params.cache_op_type ^^ string ".";
                string "  Definition cache_op_eq : EqDecision cache_op := _.";
-               string "  Definition tlb_op := " ^^ pp_typ params.tlbi_type ^^ string ".";
+               string "  Definition tlb_op : Type := " ^^ pp_typ params.tlbi_type ^^ string ".";
                string "  Definition tlb_op_eq : EqDecision tlb_op := _.";
-               string "  Definition fault := " ^^ pp_typ params.fault_type ^^ string ".";
+               string "  Definition fault : Type := " ^^ pp_typ params.fault_type ^^ string ".";
                string "  Definition fault_eq : EqDecision fault := _.";
+               string "  Definition sys_reg_id : Type := " ^^ pp_typ params.sys_reg_id_type ^^ string ".";
+               string "  Definition sys_reg_id_eq : EqDecision sys_reg_id := _.";
+               string "  Definition sys_reg_id_countable : Countable sys_reg_id := _.";
                string "End Arch.";
                empty;
                string "Module Interface := Interface Arch.";

@@ -184,7 +184,7 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('{} -coq -coq-lib-style stdpp -coq-record-update -coq-all-eq-dec -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('{} -coq -coq-lib-style stdpp -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))

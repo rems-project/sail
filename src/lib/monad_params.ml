@@ -79,6 +79,7 @@ type parameters = {
   tlbi_type : typ;
   translation_summary_type : typ;
   arch_ak_type : typ;
+  sys_reg_id_type : typ;
 }
 
 let find_monad_parameters type_env =
@@ -113,7 +114,7 @@ let find_monad_parameters type_env =
       (* and then treat the remaining types as optional *)
       let extract_arg_typ fn_name =
         match Env.get_val_spec (mk_id fn_name) type_env with
-        | _, Typ_aux (Typ_fn ([typ], _), _) -> typ
+        | _, Typ_aux (Typ_fn (typ :: _, _), _) -> typ
         | _ -> unit_typ
         | exception _ -> unit_typ
       in
@@ -121,6 +122,7 @@ let find_monad_parameters type_env =
       let cache_op_type = extract_arg_typ "sail_cache_op" in
       let fault_type = extract_arg_typ "sail_take_exception" in
       let tlbi_type = extract_arg_typ "sail_tlbi" in
+      let sys_reg_id_type = extract_arg_typ "sail_sys_reg_read" in
       Some
         {
           abort_type;
@@ -131,4 +133,5 @@ let find_monad_parameters type_env =
           tlbi_type;
           translation_summary_type;
           arch_ak_type;
+          sys_reg_id_type;
         }

@@ -54,6 +54,9 @@
   (%{workspace_root}/lib/concurrency_interface/read_write.sail
    as
    lib/concurrency_interface/read_write.sail)
+  (%{workspace_root}/lib/concurrency_interface/sysreg.sail
+   as
+   lib/concurrency_interface/sysreg.sail)
   (%{workspace_root}/lib/coverage/Cargo.toml as lib/coverage/Cargo.toml)
   (%{workspace_root}/lib/coverage/Makefile as lib/coverage/Makefile)
   (%{workspace_root}/lib/coverage/src/lib.rs as lib/coverage/src/lib.rs)
