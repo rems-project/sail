@@ -168,14 +168,15 @@ let filter_items_with f env bindings =
 let filter_items env bindings = filter_items_with (fun x -> x) env bindings
 
 let err_not_in_scope env msg l item =
+  let is_opened = Project.ModSet.mem item.mod_id env.opened in
   match env.global.modules with
-  | None -> Err_not_in_scope (msg, l, None, None, is_private item.visibility)
+  | None -> Err_not_in_scope (msg, l, None, None, is_opened, is_private item.visibility)
   | Some proj ->
       let module_name_opt mod_id =
         if Project.valid_module_id proj mod_id then Some (Project.module_name proj mod_id) else None
       in
       Err_not_in_scope
-        (msg, l, module_name_opt item.mod_id, module_name_opt env.current_module, is_private item.visibility)
+        (msg, l, module_name_opt item.mod_id, module_name_opt env.current_module, is_opened, is_private item.visibility)
 
 let get_item_with_loc get_loc l env item =
   if item_in_scope env item then item.item

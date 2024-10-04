@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mproject/private/bmod.sail[0m:4.4-7:
+4[96m |[0m    foo("Cannot be called")
+ [91m |[0m    [91m^-^[0m
+ [91m |[0m Cannot use private definition
+ [91m |[0m The module containing this definition is also not required in this context
+ [91m |[0m 
+ [91m |[0m [96mproject/private/amod.sail[0m:3.17-20:
+ [91m |[0m 3[96m |[0mprivate function foo(message : string) -> unit = {
+ [91m |[0m  [91m |[0m                 [91m^-^[0m [91mprivate definition here in A[0m
