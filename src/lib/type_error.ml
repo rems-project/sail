@@ -460,7 +460,7 @@ let message_of_type_error type_error =
           None
         )
     | Err_no_num_ident id -> (Line ("No num identifier " ^ string_of_id id), None)
-    | Err_not_in_scope (explanation, Some l, item_scope, into_scope, priv) ->
+    | Err_not_in_scope (explanation, Some l, item_scope, into_scope, is_opened, priv) ->
         let suggest, in_mod, add_requires_here =
           match (item_scope, into_scope) with
           | None, None -> ("Try bringing the following into scope:", "", [])
@@ -496,16 +496,20 @@ let message_of_type_error type_error =
               ),
             None
           )
-        else
+        else (
+          let private_not_opened =
+            if not is_opened then [Line "The module containing this definition is also not required in this context"]
+            else []
+          in
           ( Seq
-              [
-                Line (Option.value ~default:"Cannot use private definition" explanation);
-                Line "";
-                Location ("", Some ("private definition here" ^ in_mod), l, Seq []);
-              ],
+              ([Line (Option.value ~default:"Cannot use private definition" explanation)]
+              @ private_not_opened
+              @ [Line ""; Location ("", Some ("private definition here" ^ in_mod), l, Seq [])]
+              ),
             None
           )
-    | Err_not_in_scope (explanation, None, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
+        )
+    | Err_not_in_scope (explanation, None, _, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
   in
   to_message type_error
 

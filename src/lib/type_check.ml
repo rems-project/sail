@@ -4482,7 +4482,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
         (* No val, so get the function type from annotations attached to clauses *)
         let bind = infer_funtyp l env tannot_opt funcls in
         (None, bind, env)
-    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, priv)) ->
+    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, is_opened, priv)) ->
         (* If we defined the function type with val in another module, but didn't require it. *)
         let reason = if priv then "private." else "not in scope." in
         typ_raise l
@@ -4491,6 +4491,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
                scope_l,
                item_scope,
                into_scope,
+               is_opened,
                priv
              )
           )

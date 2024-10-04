@@ -78,7 +78,7 @@ type type_error =
   | Err_other of string
   | Err_inner of type_error * Parse_ast.l * string * type_error
   | Err_not_in_scope of
-      string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool
+      string option * Parse_ast.l option * string Project.spanned option * string Project.spanned option * bool * bool
   | Err_instantiation_info of int * type_error
   | Err_function_arg of Parse_ast.l * typ * type_error
   | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
