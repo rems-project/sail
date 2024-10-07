@@ -63,3 +63,13 @@ jobs:
       run: |
         eval $(opam env)
         etc/ci_core_tests.sh
+
+  build-docker:
+    runs-on: "ubuntu-latest"
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build Dockerfile.nightly
+      run: |
+        docker build . -t sail -f ./Dockerfile.nightly --no-cache --progress plain

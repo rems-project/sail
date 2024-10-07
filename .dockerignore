@@ -2,4 +2,5 @@
 *.md
 .gitignore
 .dockerignore
-Dockerfile
+Dockerfile*
+/.github
