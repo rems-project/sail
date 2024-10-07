@@ -11,6 +11,5 @@ WORKDIR /sail-src
 COPY . /sail-src
 
 # build
-RUN opam pin -y add sail $PWD
-
+RUN opam install --yes .
 ENTRYPOINT [ "/sail-src/docker_entry_point.sh" ]
