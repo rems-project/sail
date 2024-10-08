@@ -1279,6 +1279,8 @@ type tannot = tannot' option * uannot
 
 type typed_def = (tannot, env) def
 type typed_ast = (tannot, env) ast
+type typed_lazy_def = (tannot, env) lazy_def
+type typed_lazy_ast = (tannot, env) lazy_ast
 
 let untyped_annot tannot = snd tannot
 
@@ -4454,7 +4456,7 @@ let check_funcls_complete l env funcls typ =
 
 let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
 
-let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
+let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
   let id =
     match
       List.fold_right
@@ -4542,20 +4544,27 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
       ([synthesize_val_spec env id quant typ def_annot], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
-  let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
-  let funcls, update_attr =
-    if
-      Option.is_some (get_def_attribute "complete" def_annot)
-      || Option.is_some (get_def_attribute "incomplete" def_annot)
-    then (funcls, fun attrs -> attrs)
-    else check_funcls_complete l funcl_env funcls typ
+  (* For performance, we can lazily check the body if we need it later *)
+  let check_body =
+    lazy
+      (let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
+       let funcls, update_attr =
+         if
+           Option.is_some (get_def_attribute "complete" def_annot)
+           || Option.is_some (get_def_attribute "incomplete" def_annot)
+         then (funcls, fun attrs -> attrs)
+         else check_funcls_complete l funcl_env funcls typ
+       in
+       let def_annot = fix_body_visibility (update_attr def_annot) in
+       DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
+      )
   in
-  let def_annot = fix_body_visibility (update_attr def_annot) in
   let env = Env.define_val_spec id env in
-  ( vs_def
-    @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)],
-    env
-  )
+  (vs_def, id, check_body, env)
+
+let check_fundef env def_annot fdef =
+  let vs_def, _, check_body, env = check_fundef_lazy env def_annot fdef in
+  (vs_def @ [Lazy.force check_body], env)
 
 let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
@@ -5121,8 +5130,19 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
       (* These will be checked during the move_loop_measures rewrite *)
       ([DEF_aux (DEF_loop_measures (id, measures), def_annot)], env)
 
-and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def list * Env.t =
- fun n total env defs ->
+and check_def_lazy env def =
+  match def with
+  | DEF_aux (DEF_fundef fdef, def_annot) ->
+      let def_annot = def_annot_map_env (fun _ -> env) def_annot in
+      let vs_def, id, check_body, env = check_fundef_lazy env def_annot fdef in
+      (List.map (fun def -> Strict_def def) vs_def @ [Lazy_fundef (id, check_body)], env)
+  | _ ->
+      let defs, env = check_def env def in
+      (List.map (fun def -> Strict_def def) defs, env)
+
+and check_defs_progress :
+      'a. (Env.t -> untyped_def -> 'a list * Env.t) -> int -> int -> Env.t -> untyped_def list -> 'a list * Env.t =
+ fun checker n total env defs ->
   let rec aux n total acc env defs =
     match defs with
     | [] -> (List.rev acc, env)
@@ -5142,9 +5162,9 @@ and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def l
         let def, env =
           match get_def_attribute "fix_location" def_annot with
           | Some (fix_l, _) -> (
-              try check_def env def with Type_error (_, err) -> typ_raise fix_l err
+              try checker env def with Type_error (_, err) -> typ_raise fix_l err
             )
-          | None -> check_def env def
+          | None -> checker env def
         in
         aux (n + 1) total (List.rev def @ acc) (restore env) defs
   in
@@ -5153,13 +5173,19 @@ and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def l
 and check_defs : Env.t -> untyped_def list -> typed_def list * Env.t =
  fun env defs ->
   let total = List.length defs in
-  check_defs_progress 1 total env defs
+  check_defs_progress check_def 1 total env defs
 
 let check : Env.t -> untyped_ast -> typed_ast * Env.t =
  fun env ast ->
   let total = List.length ast.defs in
-  let defs, env = check_defs_progress 1 total env ast.defs in
+  let defs, env = check_defs_progress check_def 1 total env ast.defs in
   ({ ast with defs }, env)
+
+let check_lazy : Env.t -> untyped_ast -> typed_lazy_ast * Env.t =
+ fun env ast ->
+  let total = List.length ast.defs in
+  let defs, env = check_defs_progress check_def_lazy 1 total env ast.defs in
+  ({ lazy_defs = defs; comments = ast.comments }, Env.open_all_modules env)
 
 let rec check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list =
  fun env defs ->
