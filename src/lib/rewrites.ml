@@ -4186,6 +4186,147 @@ let rewrite_truncate_hex_literals _type_env defs =
     { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
     defs
 
+let opt_unroll_loops = ref false
+let opt_unroll_loops_max_iter = ref 0
+
+(** The loop unrolling pass replaces :
+    {[
+       foreach k in 0 to 3 by 1 increasing:
+         f(k, foo, bar) + k
+    ]}
+   with
+    {[
+       f(0, foo, bar) + 0;
+       f(1, foo, bar) + 1;
+       f(2, foo, bar) + 2;
+       f(3, foo, bar) + 3;
+    }]
+*)
+let rewrite_unroll_constant_loops _type_env defs =
+
+  (** This pass replaces expressions like
+         f(k, foo, bar) + k
+     with
+         f(42, foo, bar) + 42
+  *)
+  let rewrite_exp_replace_id_with_num (id : string) (num : Z.t) =
+    let rewrite_aux (id : string) (num : Z.t) (e, annot) =
+      match e with
+      | E_id (Id_aux (Id v, _)) when String.equal v id  ->  E_aux( E_lit (L_aux(L_num num, Parse_ast.Unknown)) , annot)
+      | _ -> E_aux (e, annot)
+    in
+    fun e -> rewrite_exp { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux id num }) } e
+  in
+
+  (** Builds a list of integers from a start, end, step and direction
+
+     [list_of_ord_range 0 10 2 inc = 0, 2, 4, 6, 8, 10]
+
+     [list_of_ord_range 7 0 1 dec = 7, 6, 5, 4, 3, 2, 1, 0]
+  *)
+  let list_of_ord_range (Ord_aux (ord, _)) (n_start : Z.t) (n_end : Z.t) (n_step : Z.t) : Z.t list =
+    let list_of_range ns ne =
+      let rec aux n acc =
+        if (Z.gt n ne) then acc
+        else aux (Z.add n n_step) (n :: acc)
+      in
+      aux ns []
+    in
+    match ord with
+    | Ord_inc -> List.rev @@ list_of_range n_start n_end
+    | Ord_dec -> list_of_range n_end n_start
+  in
+
+  (** This is the main rewrite function of the pass.
+     Replacing :
+     {[
+       foreach k in 0 to 3 by 1 increasing:
+         f(k, foo, bar) + k
+     ]}
+     with
+     {[
+         f(0, foo, bar) + 0;
+         f(1, foo, bar) + 1;
+         f(2, foo, bar) + 2;
+         f(3, foo, bar) + 3;
+     ]}
+  *)
+  let rewrite_aux (e, annot) =
+    match e with
+    | E_for ( id                      (* 'k' in our example *)
+            , E_aux (_, (_, tannot1)) (* '0' in our example *)
+            , E_aux (_, (_, tannot2)) (* '3' in our example *)
+            , E_aux (_, (_, tannot3)) (* '1' in our example *)
+            , atyp                    (* 'increasing' in our example *)
+            , e_loop_body             (* 'f(k, foo, bar) + k'  in our example *)
+            ) ->
+      (
+
+        (* We get the int values of the bounds from their types inferred by the typer *)
+        let int_of_tannot_opt tannot =
+          let int_of_typ_aux_opt : typ_aux -> Z.t option = function
+            | Typ_app (id, [A_aux (A_nexp nexp, _)]) when Id.compare id (mk_id "atom") = 0 ->
+              int_of_nexp_opt @@ nexp_simp nexp
+            | _ -> None
+          in
+          match destruct_tannot tannot with
+          | Some (_, Typ_aux (typ, l)) -> int_of_typ_aux_opt typ
+          | None -> None
+        in
+        let n_start_opt = int_of_tannot_opt tannot1 in
+        let n_end_opt   = int_of_tannot_opt tannot2 in
+        let n_step_opt  = int_of_tannot_opt tannot3 in
+
+        (* Abort unrolling with a warning when types infered are too complex (i.e. not immediate literals) *)
+        match n_start_opt, n_end_opt, n_step_opt with
+        | Some n_start, Some n_end, Some n_step -> (
+
+            (* Build a range out of the bounds
+               in our example, from (start=0, end=3, step=1)
+               the range will be the list [0; 1; 2; 3]
+            *)
+            let range = list_of_ord_range atyp n_start n_end n_step in
+
+            (* Only unroll "small" loops, i.e. those with less than 'max_iter' iterations *)
+            if !opt_unroll_loops_max_iter <> 0
+               && List.length range > !opt_unroll_loops_max_iter
+            then E_aux(e, annot)
+            else (
+
+                (* Build the final expression, a block of n times the body *)
+                let bodies = List.map
+                    (fun z -> rewrite_exp_replace_id_with_num "i" z e_loop_body)
+                    range
+                in
+                E_aux (E_block bodies, annot)
+            ) (* else *)
+          ) (* Some n_start... *)
+
+        | _ -> (
+            let e' = E_aux (e, annot) in
+            let (l : Parse_ast.l), _tannot = annot in
+            let string_of_position (p : Lexing.position) : string =
+              p.pos_fname ^ ":" ^ (string_of_int p.pos_lnum)
+            in
+            let rec string_of_l : Parse_ast.l -> string = function
+            | Unknown                -> "Unknown"
+            | Unique (i, l)          -> Printf.sprintf "Unique( %s, %s)" (string_of_int i) (string_of_l l)
+            | Generated l            -> Printf.sprintf "Generated( %s ) " (string_of_l l)
+            | Hint (str, l1, l2)     -> Printf.sprintf "Hint( %s, %s, %s )" str (string_of_l l1) (string_of_l l2)
+            | Range (p1, p2)         -> Printf.sprintf "Range( %s, %s )" (string_of_position p1) (string_of_position p2)
+            in
+            print_endline  "[WARNING] Cannot unroll the loop because the bounds numerical values couldn't be fully determined.";
+            print_endline ("          Expression : " ^ string_of_exp e') ;
+            print_endline ("          Position   : " ^ string_of_l l);
+            e'
+           ) (* None *)
+      ) (* E_for ... *)
+    | _ -> E_aux (e, annot)
+  in
+  rewrite_ast_base
+    { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
+    defs
+
 (** Remove bitfield records and turn them into plain bitvectors
     This can improve performance for Isabelle, because processing record types is slow there
     (and we don't gain much by having record types with just a `bits` field).
@@ -4418,6 +4559,7 @@ let all_rewriters =
     ("pat_string_append", basic_rewriter rewrite_ast_pat_string_append);
     ("mapping_patterns", basic_rewriter (fun _ -> Mappings.rewrite_ast));
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
+    ("unroll_constant_loops", basic_rewriter rewrite_unroll_constant_loops);
     ("mono_rewrites", basic_rewriter mono_rewrites);
     ("complete_record_params", basic_rewriter rewrite_complete_record_params);
     ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);

@@ -57,6 +57,10 @@ val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
 
+(** Unroll loops with constant bounds if less than 'max_iter' iterations *)
+val opt_unroll_loops : bool ref
+val opt_unroll_loops_max_iter : int ref
+
 (** Warn about matches where we add a default case for Coq because
    they're not exhaustive *)
 val opt_coq_warn_nonexhaustive : bool ref
