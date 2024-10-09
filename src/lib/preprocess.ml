@@ -72,6 +72,7 @@ let default_symbols =
       "FEATURE_BITVECTOR_TYPE";
       "FEATURE_UNION_BARRIER";
       "FEATURE_STRICT_VAR";
+      "FEATURE_STRICT_BITVECTOR";
     ]
 
 let symbols = ref default_symbols

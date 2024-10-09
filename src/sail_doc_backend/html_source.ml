@@ -77,7 +77,7 @@ let highlights ~filename ~contents =
     | Id _ ->
         mark Highlight.Id;
         go ()
-    | Int | Bool | TYPE | Order ->
+    | INT | NAT | BOOL | TYPE | ORDER ->
         mark Highlight.Kind;
         go ()
     | String _ ->

@@ -1,12 +1,12 @@
 default Order inc
 
-val bv_add = pure {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
+val bv_add = pure {ocaml: "add_vec", lem: "add_vec"}: forall 'n.
   (bitvector('n, inc), bitvector('n, inc)) -> bitvector('n, inc)
 
-val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_inc"}: forall ('l : Int) ('m : Int) ('o : Int), 'l >= 0 & 'm <= 'o & 'o <= 'l.
+val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_inc"}: forall 'l 'm 'o, 'l >= 0 & 'm <= 'o & 'o <= 'l.
   (bitvector('l, inc), atom('m), atom('o)) -> bitvector('o + 1 - 'm, inc)
 
-val bitvector_concat = pure {ocaml: "append", lem: "concat_vec"} : forall ('m : Int) ('p : Int).
+val bitvector_concat = pure {ocaml: "append", lem: "concat_vec"} : forall 'm 'p.
   (bitvector('m, inc), bitvector('p, inc)) -> bitvector('m + 'p, inc)
 
 val eq_vec = pure {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bitvector('n, inc), bitvector('n, inc)) -> bool

@@ -37,15 +37,15 @@ def test_pass():
                 continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_memo_z3 -just_check -ddump_tc_ast pass/{} 1> rtpass/{}'.format(sail, filename, filename))
-                step('{} -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast rtpass/{} 1> rtpass2/{}'.format(sail, filename, filename))
+                step('{} --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast pass/{} 1> rtpass/{}'.format(sail, filename, filename))
+                step('{} --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast --dmagic-hash rtpass/{} 1> rtpass2/{}'.format(sail, filename, filename))
                 step('diff rtpass/{} rtpass2/{}'.format(filename, filename))
                 i = 0
                 variantdir = os.path.join('pass', basename);
                 for variantname in os.listdir(variantdir) if os.path.isdir(variantdir) else []:
                     if re.match('.+\.sail$', variantname):
                         variantbasename = os.path.splitext(os.path.basename(variantname))[0]
-                        step('{} -no_memo_z3 pass/{}/{} 2> pass/{}/{}.error'.format(sail, basename, variantname, basename, variantbasename), expected_status = 1)
+                        step('{} --no-memo-z3 --strict-bitvector pass/{}/{} 2> pass/{}/{}.error'.format(sail, basename, variantname, basename, variantbasename), expected_status = 1)
                         step('diff pass/{}/{}.error pass/{}/{}.expect'.format(basename, variantbasename, basename, variantbasename))
                         step('rm pass/{}/{}.error'.format(basename, variantbasename))
                         i = i + 1
@@ -83,7 +83,7 @@ def test_fail():
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_memo_z3 fail/{} 2> fail/{}.error'.format(sail, filename, basename), expected_status = 1)
+                step('{} --no-memo-z3 --strict-bitvector fail/{} 2> fail/{}.error'.format(sail, filename, basename), expected_status = 1)
                 step('diff fail/{}.error fail/{}.expect'.format(basename, basename))
                 step('rm fail/{}.error'.format(basename))
                 print_ok(filename)

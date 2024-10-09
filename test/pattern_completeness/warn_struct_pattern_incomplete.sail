@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-struct foo('m: Int, 'n: Int) = {
+struct foo('m, 'n) = {
     f1 : option(bits('n)),
     f2 : int('m),
 }

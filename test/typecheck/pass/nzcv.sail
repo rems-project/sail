@@ -1,6 +1,6 @@
 default Order dec
 
-val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_dec"} : forall 'n 'm 'o, 'o <= 'm <= 'n.
   (bitvector('n, dec), atom('m), atom('o)) -> bitvector('m - ('o - 1), dec)
 
 val test : bitvector(4, dec) -> unit

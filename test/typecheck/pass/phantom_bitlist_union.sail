@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-union phantom('n: Int) = {
+union phantom('n) = {
   Bits: bits('n),
 }
 

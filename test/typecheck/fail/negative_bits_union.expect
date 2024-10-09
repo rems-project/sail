@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/negative_bits_union.sail[0m:12.20-29:
-12[96m |[0m    let x: Foo(1) = undefined;
-  [91m |[0m                    [91m^-------^[0m
-  [91m |[0m Type Foo(1) cannot be undefined
+[96mfail/negative_bits_union.sail[0m:6.10-22:
+6[96m |[0m    Bar : bits('n - 2),
+ [91m |[0m          [91m^----------^[0m
+ [91m |[0m Could not prove constraints ('n - 2) >= 0 in type synonym bitvector(('n - 2)) with 

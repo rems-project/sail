@@ -4328,7 +4328,11 @@ module BitvectorSizeCasts = struct
     let cast_specs, _ =
       let kid = mk_kid "n" in
       let bitsn = bitvector_typ (nvar kid) in
-      let ts = mk_typschm (mk_typquant [mk_qi_id K_int kid]) (function_typ [bitsn] bitsn) in
+      let ts =
+        mk_typschm
+          (mk_typquant [mk_qi_id K_int kid; mk_qi_nc (nc_gteq (nvar kid) (nint 0))])
+          (function_typ [bitsn] bitsn)
+      in
       let mkfn name = mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] })) in
       let defs = List.map mkfn (IdSet.elements !specs_required) in
       check_defs initial_env defs

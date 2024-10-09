@@ -1,16 +1,16 @@
 $include <flow.sail>
 
-val extz : forall ('n : Int) ('m : Int) ('ord : Order).
+val extz : forall 'n 'm ('ord : Order).
   bitvector('n, 'ord) -> bitvector('m, 'ord)
 
-val exts : forall ('n : Int) ('m : Int) ('ord : Order).
+val exts : forall 'n 'm ('ord : Order).
   bitvector('n, 'ord) -> bitvector('m, 'ord)
 
 overload EXTZ = {extz}
 
 overload EXTS = {exts}
 
-val add_vec : forall ('n : Int) ('ord : Order).
+val add_vec : forall 'n ('ord : Order).
   (bitvector('n, 'ord), bitvector('n, 'ord)) -> bitvector('n, 'ord)
 
 overload operator + = {add_vec}
@@ -71,10 +71,10 @@ function wordWidthBytes w = match w {
   D => 8
 }
 
-val MEMr_reserve_wrapper : forall ('n : Int).
+val MEMr_reserve_wrapper : forall 'n.
   (bitvector(64, dec), atom('n)) -> bitvector(8 * 'n, dec) effect {rmem}
 
-val MEMr_wrapper : forall ('n : Int).
+val MEMr_wrapper : forall 'n.
   (bitvector(64, dec), atom('n)) -> bitvector(8 * 'n, dec) effect {rmem}
 
 val wGPR : (bitvector(5, dec), bitvector(64, dec)) -> unit effect {wreg}

@@ -85,7 +85,8 @@ type ix = text (* infix identifier *)
 type kind_aux =
   | (* base kind *)
     K_type (* kind of types *)
-  | K_int (* kind of natural number size expressions *)
+  | K_int (* kind of integer type expressions *)
+  | K_nat (* kind of natural type expressions *)
   | K_order (* kind of vector order specifications *)
   | K_bool (* kind of constraints *)
 

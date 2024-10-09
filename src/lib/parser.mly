@@ -215,7 +215,7 @@ let set_syntax_deprecated l =
 /*Terminals with no content*/
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
-%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
+%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
@@ -423,13 +423,15 @@ typ_list:
     { $1 :: $3 }
 
 kind:
-  | Int
+  | INT
     { K_aux (K_int, loc $startpos $endpos) }
+  | NAT
+    { K_aux (K_nat, loc $startpos $endpos) }
   | TYPE
     { K_aux (K_type, loc $startpos $endpos) }
-  | Order
+  | ORDER
     { K_aux (K_order, loc $startpos $endpos) }
-  | Bool
+  | BOOL
     { K_aux (K_bool, loc $startpos $endpos) }
 
 kid_list:

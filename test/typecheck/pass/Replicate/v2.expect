@@ -8,4 +8,6 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [96mpass/Replicate/v2.sail[0m:13.4-30:
 13[96m |[0m    replicate_bits(x, 'N / 'M)
   [91m |[0m    [91m^------------------------^[0m
-  [91m |[0m Failed to prove constraint: ('M * 'ex248#) == 'N
+  [91m |[0m Could not resolve quantifiers for replicate_bits
+  [91m |[0m [94m*[0m 'M >= 0
+  [91m |[0m [94m*[0m 'ex176# >= 0

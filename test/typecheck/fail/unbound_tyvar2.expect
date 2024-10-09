@@ -7,4 +7,4 @@
  [91m |[0m [93mCaused by [0m[96mfail/unbound_tyvar2.sail[0m:5.23-44:
  [91m |[0m 5[96m |[0mval foo : unit -> bits(definitelydoesntexist)
  [91m |[0m  [91m |[0m                       [91m^-------------------^[0m
- [91m |[0m  [91m |[0m Undefined type synonym definitelydoesntexist
+ [91m |[0m  [91m |[0m Undefined numeric type definitelydoesntexist

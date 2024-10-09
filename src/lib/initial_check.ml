@@ -57,6 +57,7 @@ module P = Parse_ast
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
 let opt_abstract_types = ref false
+let opt_strict_bitvector = ref false
 
 let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
@@ -68,7 +69,7 @@ module StringMap = Map.Make (String)
    $sail_internal marked files in the prelude. *)
 let reserved_type_ids = IdSet.of_list [mk_id "result"; mk_id "option"]
 
-type type_constructor = kind_aux option list * kind_aux
+type type_constructor = P.kind_aux list * P.kind_aux
 
 type ctx = {
   kinds : (kind_aux * P.l) KBindings.t;
@@ -147,18 +148,46 @@ let string_contains str char =
     true
   with Not_found -> false
 
+let to_ast_kind_aux = function
+  | P.K_type -> Some K_type
+  | P.K_int -> Some K_int
+  | P.K_nat -> Some K_int
+  | P.K_order -> None
+  | P.K_bool -> Some K_bool
+
 let to_ast_kind (P.K_aux (k, l)) =
   match k with
   | P.K_type -> Some (K_aux (K_type, l))
   | P.K_int -> Some (K_aux (K_int, l))
+  | P.K_nat -> Some (K_aux (K_int, l))
   | P.K_order -> None
   | P.K_bool -> Some (K_aux (K_bool, l))
+
+let parse_kind_constraint l v = function
+  | P.K_nat when !opt_strict_bitvector ->
+      let v = Nexp_aux (Nexp_var v, kid_loc v) in
+      Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
+  | _ -> None
+
+let not_order_kind = function P.K_order -> false | _ -> true
+
+let filter_order_kinds kinds = List.filter not_order_kind kinds
 
 let string_of_parse_kind_aux = function
   | P.K_order -> "Order"
   | P.K_int -> "Int"
+  | P.K_nat -> if !opt_strict_bitvector then "Nat" else "Int"
   | P.K_bool -> "Bool"
   | P.K_type -> "Type"
+
+(* Used for error messages involving lists of kinds *)
+let format_parse_kind_aux_list = function
+  | [kind] -> string_of_parse_kind_aux kind
+  | kinds -> "(" ^ Util.string_of_list ", " string_of_parse_kind_aux kinds ^ ")"
+
+let format_kind_aux_list = function
+  | [kind] -> string_of_kind_aux kind
+  | kinds -> "(" ^ Util.string_of_list ", " string_of_kind_aux kinds ^ ")"
 
 let to_parse_kind = function
   | Some K_int -> P.K_int
@@ -295,11 +324,6 @@ let parse_infix_atyp ctx = function
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
-(* Used for error messages involving lists of kinds *)
-let format_kind_aux_list = function
-  | [kind] -> string_of_kind_aux kind
-  | kinds -> "(" ^ Util.string_of_list ", " string_of_kind_aux kinds ^ ")"
-
 (** The [KindInference] module implements a type-inference module for
     kind (types of types).
 
@@ -352,9 +376,10 @@ module KindInference = struct
     in
     ((), { env with sets = go env.sets })
 
-  let check_same_kind kind l kind' l' =
+  let unify_kind kind l kind' l' =
     match (kind, kind') with
-    | P.K_int, P.K_int | P.K_bool, P.K_bool | P.K_type, P.K_type | P.K_order, P.K_order -> ()
+    | P.K_nat, P.K_int | P.K_int, P.K_nat -> P.K_nat
+    | P.K_int, P.K_int | P.K_nat, P.K_nat | P.K_bool, P.K_bool | P.K_type, P.K_type | P.K_order, P.K_order -> kind
     | _ ->
         raise
           (Reporting.err_typ
@@ -369,8 +394,8 @@ module KindInference = struct
     | Unknown, Unknown -> Unknown
     | Unknown, known | known, Unknown -> known
     | Known (kind, l), Known (kind', l') ->
-        check_same_kind kind l kind' l';
-        Known (kind, l)
+        let kind'' = unify_kind kind l kind' l' in
+        Known (kind'', l)
 
   let unify n m env =
     let n_sets, other_sets = List.partition (fun (set, _) -> IntSet.mem n set) env.sets in
@@ -421,7 +446,7 @@ module KindInference = struct
         let n_set, nk = List.hd n_sets in
         ((), { env with sets = (n_set, merge_unification_kind nk (Known (kind, l))) :: env.sets })
     | Kind (kind', l') ->
-        check_same_kind kind l kind' l';
+        let _ = unify_kind kind l kind' l' in
         ((), env)
 
   let atyp_loc (P.ATyp_aux (_, l)) = l
@@ -434,7 +459,7 @@ module KindInference = struct
         let* () =
           match Bindings.find_opt id' ctx.type_constructors with
           | None -> return ()
-          | Some ([], ret_kind) -> resolve ~at:l (to_parse_kind (Some ret_kind)) ik
+          | Some ([], ret_kind) -> resolve ~at:l ret_kind ik
           | Some (kind_opts, _) -> raise (ksprintf (Reporting.err_typ l) "%s is not a constant" (string_of_id id'))
         in
         return atyp
@@ -488,19 +513,35 @@ module KindInference = struct
         let* arg = check ctx arg (Kind (P.K_bool, atyp_loc arg)) in
         wrap (P.ATyp_app (id, [arg]))
     | P.ATyp_sum (t1, t2) ->
-        let* t1 = check ctx t1 ik in
-        let* t2 = check ctx t2 ik in
+        let* () = resolve ~at:l K_int ik in
+        let* t1 = check ctx t1 (Kind (P.K_int, atyp_loc t1)) in
+        let* t2 = check ctx t2 (Kind (P.K_int, atyp_loc t2)) in
         wrap (P.ATyp_sum (t1, t2))
-    | P.ATyp_times (t1, t2) ->
-        let* t1 = check ctx t1 ik in
-        let* t2 = check ctx t2 ik in
-        wrap (P.ATyp_times (t1, t2))
+    | P.ATyp_times (t1, t2) -> begin
+        (* Special case N * M when either N or M is a constant > 0, in
+           which case we can infer that if N * M is a Nat then the
+           non-constant case is also a Nat *)
+        match (t1, t2) with
+        | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _), _ when Big_int.greater n Big_int.zero ->
+            let* t2 = check ctx t2 ik in
+            wrap (P.ATyp_times (t1, t2))
+        | _, P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _) when Big_int.greater n Big_int.zero ->
+            let* t1 = check ctx t1 ik in
+            wrap (P.ATyp_times (t1, t2))
+        | _ ->
+            let* () = resolve ~at:l K_int ik in
+            let* t1 = check ctx t1 (Kind (P.K_int, atyp_loc t1)) in
+            let* t2 = check ctx t2 (Kind (P.K_int, atyp_loc t2)) in
+            wrap (P.ATyp_times (t1, t2))
+      end
     | P.ATyp_minus (t1, t2) ->
-        let* t1 = check ctx t1 ik in
-        let* t2 = check ctx t2 ik in
+        let* () = resolve ~at:l K_int ik in
+        let* t1 = check ctx t1 (Kind (P.K_int, atyp_loc t1)) in
+        let* t2 = check ctx t2 (Kind (P.K_int, atyp_loc t2)) in
         wrap (P.ATyp_minus (t1, t2))
     | P.ATyp_exp t ->
-        let* t = check ctx t ik in
+        let* () = resolve ~at:l K_int ik in
+        let* t = check ctx t (Kind (P.K_int, atyp_loc t)) in
         wrap (P.ATyp_exp t)
     | P.ATyp_neg t ->
         let* t = check ctx t ik in
@@ -511,23 +552,19 @@ module KindInference = struct
           match Bindings.find_opt id' ctx.type_constructors with
           | None ->
               raise (ksprintf (Reporting.err_typ l) "Unknown type level operator or function %s" (string_of_id id'))
-          | Some (kind_opts, ret_kind) ->
-              let* () = resolve ~at:l (to_parse_kind (Some ret_kind)) ik in
+          | Some (kinds, ret_kind) ->
+              let* () = resolve ~at:l ret_kind ik in
               let args_len = List.length args in
-              let kind_opts =
-                if args_len = List.length kind_opts then kind_opts else List.filter Option.is_some kind_opts
-              in
-              if List.compare_lengths args kind_opts <> 0 then
+              let kinds = if args_len = List.length kinds then kinds else filter_order_kinds kinds in
+              if List.compare_lengths args kinds <> 0 then
                 raise
                   (Reporting.err_typ l
                      (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id')
-                        (format_kind_aux_list (Util.option_these kind_opts))
-                        (List.length kind_opts) (List.length args)
+                        (format_parse_kind_aux_list (filter_order_kinds kinds))
+                        (List.length kinds) (List.length args)
                      )
                   );
-              mapM
-                (function arg, kind -> check ctx arg (Kind (to_parse_kind kind, id_loc id')))
-                (List.combine args kind_opts)
+              mapM (function arg, kind -> check ctx arg (Kind (kind, id_loc id'))) (List.combine args kinds)
         in
         wrap (P.ATyp_app (id, args))
     | P.ATyp_lit (P.L_aux (aux, _)) ->
@@ -761,11 +798,25 @@ end
 
 module ConvertType = struct
   let to_ast_kopts kenv ctx (P.KOpt_aux (aux, l)) =
-    let mk_kopt v k =
+    let open Util.Option_monad in
+    let mk_kopt v (P.K_aux (aux, _) as k) =
       let v = to_ast_var v in
-      Option.map
-        (fun k -> (KOpt_aux (KOpt_kind (k, v), l), { ctx with kinds = KBindings.add v (unaux_kind k, l) ctx.kinds }))
-        (to_ast_kind k)
+      let* k = to_ast_kind k in
+      Some
+        ( KOpt_aux (KOpt_kind (k, v), l),
+          parse_kind_constraint l v aux,
+          { ctx with kinds = KBindings.add v (unaux_kind k, l) ctx.kinds }
+        )
+    in
+    let fold_vars vs k =
+      List.fold_left
+        (fun (kopts, constrs, ctx) v ->
+          match mk_kopt v k with
+          | Some (kopt, None, ctx) -> (kopt :: kopts, constrs, ctx)
+          | Some (kopt, Some constr, ctx) -> (kopt :: kopts, constr :: constrs, ctx)
+          | None -> (kopts, constrs, ctx)
+        )
+        ([], [], ctx) vs
     in
     match aux with
     | P.KOpt_kind (attr, vs, None, Some u) ->
@@ -774,30 +825,26 @@ module ConvertType = struct
           | Some k -> P.K_aux (k, gen_loc l)
           | None -> raise (Reporting.err_typ l "Could not infer Kind for this type variable")
         in
-        ( List.fold_left
-            (fun (kopts, ctx) v ->
-              match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
-            )
-            ([], ctx) vs,
-          attr
-        )
+        (fold_vars vs k, attr)
     | P.KOpt_kind (attr, vs, None, None) ->
         let k = P.K_aux (P.K_int, gen_loc l) in
-        ( List.fold_left
-            (fun (kopts, ctx) v ->
-              match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
-            )
-            ([], ctx) vs,
-          attr
-        )
-    | P.KOpt_kind (attr, vs, Some k, _) ->
-        ( List.fold_left
-            (fun (kopts, ctx) v ->
-              match mk_kopt v k with Some (kopt, ctx) -> (kopt :: kopts, ctx) | None -> (kopts, ctx)
-            )
-            ([], ctx) vs,
-          attr
-        )
+        (fold_vars vs k, attr)
+    | P.KOpt_kind (attr, vs, Some k, _) -> (fold_vars vs k, attr)
+
+  let get_inference_kinds kenv = function
+    | P.TypQ_aux (P.TypQ_no_forall, _) -> []
+    | P.TypQ_aux (P.TypQ_tq qis, _) ->
+        let qi_kinds = function
+          | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, None, Some u), l)), _) -> begin
+              match KindInference.get_kind ~at:l u kenv with
+              | Some k -> List.init (List.length vs) (fun _ -> k)
+              | None -> raise (Reporting.err_typ l "Could not infer Kind for this type variable")
+            end
+          | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, Some (P.K_aux (k, _)), _), _)), _) ->
+              List.init (List.length vs) (fun _ -> k)
+          | _ -> []
+        in
+        List.concat (List.map qi_kinds qis)
 
   let rec to_ast_typ kenv ctx atyp =
     let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
@@ -826,7 +873,8 @@ module ConvertType = struct
           match Bindings.find_opt id ctx.type_constructors with
           | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
           | Some (kinds, _) ->
-              let non_order_kinds = Util.option_these kinds in
+              let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
+              let kinds = List.map to_ast_kind_aux kinds in
               let args_len = List.length args in
               if args_len = List.length non_order_kinds then
                 Typ_aux (Typ_app (id, List.map2 (to_ast_typ_arg kenv ctx) args non_order_kinds), l)
@@ -851,7 +899,7 @@ module ConvertType = struct
         let kopts, ctx =
           List.fold_right
             (fun kopt (kopts, ctx) ->
-              let (kopts', ctx), attr = to_ast_kopts kenv ctx kopt in
+              let (kopts', _, ctx), attr = to_ast_kopts kenv ctx kopt in
               match attr with
               | None -> (kopts' @ kopts, ctx)
               | Some attr ->
@@ -931,7 +979,7 @@ module ConvertType = struct
                   match Bindings.find_opt id ctx.type_constructors with
                   | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                   | Some (kinds, _) ->
-                      let non_order_kinds = Util.option_these kinds in
+                      let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
                       if List.length non_order_kinds = 2 then
                         NC_app (id, List.map2 (to_ast_typ_arg kenv ctx) [t1; t2] non_order_kinds)
                       else
@@ -949,7 +997,7 @@ module ConvertType = struct
                 match Bindings.find_opt id ctx.type_constructors with
                 | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                 | Some (kinds, _) ->
-                    let non_order_kinds = Util.option_these kinds in
+                    let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
                     if List.length args = List.length non_order_kinds then
                       NC_app (id, List.map2 (to_ast_typ_arg kenv ctx) args non_order_kinds)
                     else
@@ -972,15 +1020,17 @@ module ConvertType = struct
   let to_ast_quant_items kenv ctx (P.QI_aux (aux, l)) =
     match aux with
     | P.QI_constraint nc -> ([QI_aux (QI_constraint (to_ast_constraint kenv ctx nc), l)], ctx)
-    | P.QI_id kopt -> (
-        let (kopts, ctx), attr = to_ast_kopts kenv ctx kopt in
-        match attr with
-        | Some "constant" ->
-            Reporting.warn "Deprecated" l "constant type variable attribute no longer used";
-            (List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx)
-        | Some attr -> raise (Reporting.err_typ l (sprintf "Unknown attribute %s" attr))
-        | None -> (List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx)
-      )
+    | P.QI_id kopt ->
+        let (kopts, constrs, ctx), attr = to_ast_kopts kenv ctx kopt in
+        begin
+          match attr with
+          | Some "constant" -> Reporting.warn "Deprecated" l "constant type variable attribute no longer used"
+          | Some attr -> raise (Reporting.err_typ l (sprintf "Unknown attribute %s" attr))
+          | None -> ()
+        end;
+        ( List.map (fun c -> QI_aux (QI_constraint c, l)) constrs @ List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts,
+          ctx
+        )
 
   let to_ast_typquant kenv ctx (P.TypQ_aux (aux, l)) =
     match aux with
@@ -1049,12 +1099,13 @@ let to_ast_type_union = ConvertType.to_ast_type_union KindInference.initial_env
 let to_ast_bind ctx typq atyp kind_opt =
   let open KindInference in
   let (typq, atyp, kind), kenv = check_bind ctx typq atyp kind_opt initial_env in
+  let inference_kinds = ConvertType.get_inference_kinds kenv typq in
   let typq, ctx = ConvertType.to_ast_typquant kenv ctx typq in
   match to_ast_kind kind with
   | None -> None
   | Some kind ->
       let typ_arg = ConvertType.to_ast_typ_arg kenv ctx atyp (unaux_kind kind) in
-      Some (typq, typ_arg, kind)
+      Some (typq, typ_arg, kind, inference_kinds)
 
 let to_ast_typschm ctx (P.TypSchm_aux (P.TypSchm_ts (typq, typ), l)) =
   let open KindInference in
@@ -1393,7 +1444,7 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
       let outcome_args, inner_ctx =
         List.fold_left
           (fun (args, ctx) arg ->
-            let (arg, ctx), _ = to_ast_kopts ctx arg in
+            let (arg, _, ctx), _ = to_ast_kopts ctx arg in
             (arg @ args, ctx)
           )
           ([], ctx) outcome_args
@@ -1413,8 +1464,8 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
     )
 
 let add_constructor id typq kind ctx =
-  let kinds = List.map (fun kopt -> Some (unaux_kind (kopt_kind kopt))) (quant_kopts typq) in
-  { ctx with type_constructors = Bindings.add id (kinds, kind) ctx.type_constructors }
+  let kinds = List.map (fun kopt -> to_parse_kind (Some (unaux_kind (kopt_kind kopt)))) (quant_kopts typq) in
+  { ctx with type_constructors = Bindings.add id (kinds, to_parse_kind (Some kind)) ctx.type_constructors }
 
 let anon_rec_constructor_typ record_id = function
   | P.TypQ_aux (P.TypQ_no_forall, l) -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
@@ -1564,9 +1615,13 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let id = to_ast_reserved_type_id ctx id in
       begin
         match to_ast_bind ctx typq atyp kind_opt with
-        | Some (typq, typ_arg, kind) ->
+        | Some (typq, typ_arg, kind, inference_kinds) ->
             ( [DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
-              add_constructor id typq (unaux_kind kind) ctx
+              {
+                ctx with
+                type_constructors =
+                  Bindings.add id (inference_kinds, to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+              }
             )
         | None ->
             raise
@@ -1608,11 +1663,11 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       )
   | P.TD_enum (id, fns, enums) ->
       let id = to_ast_reserved_type_id ctx id in
-      let ctx = { ctx with type_constructors = Bindings.add id ([], K_type) ctx.type_constructors } in
+      let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
       let fns = generate_enum_functions l ctx id fns enums in
       let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
       ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
-        { ctx with type_constructors = Bindings.add id ([], K_type) ctx.type_constructors }
+        { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
   | P.TD_abstract (id, kind) ->
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
@@ -1621,7 +1676,10 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
         match to_ast_kind kind with
         | Some kind ->
             ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
-              { ctx with type_constructors = Bindings.add id ([], unaux_kind kind) ctx.type_constructors }
+              {
+                ctx with
+                type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+              }
             )
         | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
       end
@@ -1630,7 +1688,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let typ = to_ast_typ ctx typ in
       let ranges = List.map (fun (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) ranges in
       ( [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
-        { ctx with type_constructors = Bindings.add id ([], K_type) ctx.type_constructors }
+        { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
 
 let to_ast_rec ctx (P.Rec_aux (r, l) : P.rec_opt) : uannot rec_opt =
@@ -2009,33 +2067,33 @@ let initial_ctx =
         (fun m (k, v) -> Bindings.add (mk_id k) v m)
         Bindings.empty
         [
-          ("bool", ([], K_type));
-          ("nat", ([], K_type));
-          ("int", ([], K_type));
-          ("unit", ([], K_type));
-          ("bit", ([], K_type));
-          ("string", ([], K_type));
-          ("string_literal", ([], K_type));
-          ("real", ([], K_type));
-          ("list", ([Some K_type], K_type));
-          ("register", ([Some K_type], K_type));
-          ("range", ([Some K_int; Some K_int], K_type));
-          ("bitvector", ([Some K_int; None], K_type));
-          ("vector", ([Some K_int; None; Some K_type], K_type));
-          ("atom", ([Some K_int], K_type));
-          ("atom_bool", ([Some K_bool], K_type));
-          ("implicit", ([Some K_int], K_type));
-          ("itself", ([Some K_int], K_type));
-          ("not", ([Some K_bool], K_bool));
-          ("ite", ([Some K_bool; Some K_int; Some K_int], K_int));
-          ("abs", ([Some K_int], K_int));
-          ("mod", ([Some K_int; Some K_int], K_int));
-          ("div", ([Some K_int; Some K_int], K_int));
-          ("float16", ([], K_type));
-          ("float32", ([], K_type));
-          ("float64", ([], K_type));
-          ("float128", ([], K_type));
-          ("float_rounding_mode", ([], K_type));
+          ("bool", ([], P.K_type));
+          ("nat", ([], P.K_type));
+          ("int", ([], P.K_type));
+          ("unit", ([], P.K_type));
+          ("bit", ([], P.K_type));
+          ("string", ([], P.K_type));
+          ("string_literal", ([], P.K_type));
+          ("real", ([], P.K_type));
+          ("list", ([P.K_type], P.K_type));
+          ("register", ([P.K_type], P.K_type));
+          ("range", ([P.K_int; P.K_int], P.K_type));
+          ("bitvector", ([P.K_nat; P.K_order], P.K_type));
+          ("vector", ([P.K_nat; P.K_order; P.K_type], P.K_type));
+          ("atom", ([P.K_int], P.K_type));
+          ("atom_bool", ([P.K_bool], P.K_type));
+          ("implicit", ([P.K_int], P.K_type));
+          ("itself", ([P.K_int], P.K_type));
+          ("not", ([P.K_bool], P.K_bool));
+          ("ite", ([P.K_bool; P.K_int; P.K_int], P.K_int));
+          ("abs", ([P.K_int], P.K_int));
+          ("mod", ([P.K_int; P.K_int], P.K_int));
+          ("div", ([P.K_int; P.K_int], P.K_int));
+          ("float16", ([], P.K_type));
+          ("float32", ([], P.K_type));
+          ("float64", ([], P.K_type));
+          ("float128", ([], P.K_type));
+          ("float_rounding_mode", ([], P.K_type));
         ];
     function_type_variables = Bindings.empty;
     kinds = KBindings.empty;
@@ -2162,7 +2220,7 @@ let generate_undefined_enum id ids =
       ];
   ]
 
-let undefined_builtin_val_specs =
+let undefined_builtin_val_specs () =
   [
     extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
     extern_of_string (mk_id "undefined_bool") "unit -> bool";
@@ -2183,7 +2241,7 @@ let make_global (DEF_aux (def, def_annot)) =
   DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
 
 let generate_undefineds vs_ids =
-  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) undefined_builtin_val_specs
+  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) (undefined_builtin_val_specs ())
 
 let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> begin

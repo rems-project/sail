@@ -1,5 +1,5 @@
 [93mWarning[0m: Deprecated [96mfail/add_vec_lit_old.sail[0m:9.4-8:
-9[96m |[0mval cast unsigned : forall ('n : Int).
+9[96m |[0mval cast unsigned : forall 'n.
  [91m |[0m    [91m^--^[0m
  [91m |[0m 
 Cast annotations are deprecated. They will be removed in a future version of the language.

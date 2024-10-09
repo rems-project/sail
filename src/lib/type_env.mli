@@ -249,4 +249,4 @@ val set_prover : (t -> n_constraint -> bool) option -> t -> t
    sets up a correct initial environment. *)
 val empty : t
 
-val builtin_typs : typquant Bindings.t
+val builtin_typs : (typquant * kind_aux) Bindings.t

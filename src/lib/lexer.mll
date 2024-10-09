@@ -87,9 +87,10 @@ let kw_table =
      ("let",                     (fun _ -> Let_));
      ("var",                     (fun _ -> Var));
      ("ref",                     (fun _ -> Ref));
-     ("Int",                     (fun _ -> Int));
-     ("Order",                   (fun _ -> Order));
-     ("Bool",                    (fun _ -> Bool));
+     ("Int",                     (fun _ -> INT));
+     ("Nat",                     (fun _ -> NAT));
+     ("Order",                   (fun _ -> ORDER));
+     ("Bool",                    (fun _ -> BOOL));
      ("pure",                    (fun _ -> Pure));
      ("impure",                  (fun _ -> Impure));
      ("monadic",                 (fun _ -> Monadic));

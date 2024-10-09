@@ -350,6 +350,16 @@ let message_of_type_error type_error =
         end
     | Err_instantiation_info (_, err) -> to_message err
     | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->
+        let quants =
+          List.filter_map
+            (function
+              | QI_aux (QI_id _, _) as quant -> Some quant
+              | QI_aux (QI_constraint nc, _) as quant -> (
+                  match constraint_simp nc with NC_aux (NC_true, _) -> None | _ -> Some quant
+                )
+              )
+            quants
+        in
         ( Seq
             [
               Line ("Could not resolve quantifiers for " ^ string_of_id id);
