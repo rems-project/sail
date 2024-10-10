@@ -346,6 +346,8 @@ module Make
     register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
+        let n = primop_name "is_negative" in
+        let p = primop_name "prefix" in
         SVD_fundef
           {
             function_name = SVN_string name;
@@ -357,8 +359,12 @@ module Make
                    (List.map mk_statement
                       [
                         SVS_var (s, CT_string, None);
-                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
-                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
+                        SVS_var (n, CT_bool, None);
+                        SVS_var (p, CT_string, None);
+                        svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
+                        svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
+                        svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
+                        SVS_return (Fn ("str.++", [Var p; Var s]));
                       ]
                    )
                 );
@@ -370,6 +376,8 @@ module Make
     register_library_def name (fun () ->
         let i = primop_name "i" in
         let s = primop_name "s" in
+        let n = primop_name "is_negative" in
+        let p = primop_name "prefix" in
         SVD_fundef
           {
             function_name = SVN_string name;
@@ -381,9 +389,13 @@ module Make
                    (List.map mk_statement
                       [
                         SVS_var (s, CT_string, None);
-                        svs_raw "s.hextoa(i)" ~inputs:[i] ~outputs:[s];
+                        SVS_var (n, CT_bool, None);
+                        SVS_var (p, CT_string, None);
+                        svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
+                        svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
                         svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
-                        SVS_return (Fn ("str.++", [String_lit "0x"; Var s]));
+                        svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
+                        SVS_return (Fn ("str.++", [Var p; Var s]));
                       ]
                    )
                 );
