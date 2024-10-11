@@ -3358,7 +3358,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
         | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
             typ_equality l env elem_typ first_elem_typ;
             nsum acc len
-        | _ -> typ_error l "Vector concatentation l-expression must only contain vector types of the same order"
+        | _ -> typ_error l "Vector concatenation l-expression must only contain vector types of the same order"
       in
       let sum_bitvector_lengths acc (Typ_aux (v_typ_aux, _)) =
         match v_typ_aux with
@@ -3378,7 +3378,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len))
       | _ ->
           typ_error l
-            ("Vector concatentation l-expression must only contain bitvector or vector types, found "
+            ("Vector concatenation l-expression must only contain bitvector or vector types, found "
            ^ string_of_typ v_typ
             )
     end

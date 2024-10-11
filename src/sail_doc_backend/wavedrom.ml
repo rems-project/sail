@@ -53,7 +53,7 @@ module Big_int = Nat_big_num
 
 exception Invalid_wavedrom
 
-(* Process the $[wavedrom] attribute for a vector concatentation pattern of length n *)
+(* Process the $[wavedrom] attribute for a vector concatenation pattern of length n *)
 let process_attr_arg = function
   | None -> []
   | Some arg ->

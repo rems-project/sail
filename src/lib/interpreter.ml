@@ -684,7 +684,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           end
         | _ ->
             failwith
-              ("Bad vector annotation for vector concatentation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
+              ("Bad vector annotation for vector concatenation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
       end
   | P_tuple [pat] -> pattern_match env pat value
   | P_tuple pats | P_list pats ->
