@@ -256,7 +256,7 @@ let rec options =
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
         Arg.String (fun suffix -> opt_format_backup := Some suffix),
-        "<suffix> create backups of formated files as 'file.suffix'"
+        "<suffix> create backups of formatted files as 'file.suffix'"
       );
       ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
       ( "-fmt_skip",

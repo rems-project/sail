@@ -125,7 +125,7 @@ let safe_primops =
    when f is in the list of identifiers to be mapped to unit. The
    advantage of doing it like this is if x, y, and z are
    computationally expensive then we remove them also. String
-   concatentation is very expensive at runtime so this is something we
+   concatenation is very expensive at runtime so this is something we
    really want when cutting out tracing features. Obviously it's
    important that they don't have any meaningful side effects, and
    that f does actually have type unit.
