@@ -158,6 +158,14 @@ let empty_direct_footprint () : direct_footprint =
     references = CTSet.empty;
   }
 
+let get_bool_attribute name attr_object =
+  let open Parse_ast.Attribute_data in
+  match List.assoc_opt name attr_object with
+  | Some (AD_aux (AD_bool true, _)) -> true
+  | Some (AD_aux (AD_bool false, _)) | None -> true
+  | Some (AD_aux (_, l)) ->
+      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
+
 let check_attribute name attr_object f =
   let open Parse_ast.Attribute_data in
   match List.assoc_opt name attr_object with
@@ -551,6 +559,7 @@ module Make (Config : CONFIG) = struct
     | CT_real -> simple_type "sail_real"
     | CT_rounding_mode -> simple_type "sail_rounding_mode"
     | CT_float width -> ksprintf simple_type "sail_float%d" width
+    | CT_memory_writes -> simple_type "sail_memory_writes"
     | CT_tup _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple type should not reach SV backend"
     | CT_poly _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Polymorphic type should not reach SV backend"
 
@@ -606,6 +615,7 @@ module Make (Config : CONFIG) = struct
     | Throw_location n -> string "sail_throw_location" ^^ ssa_num n
     | Channel (Chan_stdout, n) -> string "sail_stdout" ^^ ssa_num n
     | Channel (Chan_stderr, n) -> string "sail_stderr" ^^ ssa_num n
+    | Memory_writes n -> string "sail_writes" ^^ ssa_num n
     | Return n -> string "sail_return" ^^ ssa_num n
 
   let wrap_type ctyp doc =
@@ -1427,19 +1437,30 @@ module Make (Config : CONFIG) = struct
                 in
                 let input_channels = List.map (fun c -> V_id (c, CT_string)) channels in
                 let output_channels = List.map (fun c -> CL_id (c, CT_string)) channels in
+                let input_memory_writes, output_memory_writes =
+                  if footprint.writes_mem then
+                    ([V_id (Memory_writes (-1), CT_memory_writes)], [CL_id (Memory_writes (-1), CT_memory_writes)])
+                  else ([], [])
+                in
                 let cr_multi x = function [] -> CR_one x | xs -> CR_multi (x :: xs) in
                 ChangeTo
                   (I_aux
                      ( I_funcall
-                         ( cr_multi clexp (writes @ throws @ output_channels),
+                         ( cr_multi clexp (writes @ throws @ output_channels @ output_memory_writes),
                            ext,
                            (f, []),
-                           args @ reads @ input_channels
+                           args @ reads @ input_channels @ input_memory_writes
                          ),
                        iannot
                      )
                   )
             | None ->
+                let attr =
+                  match Bindings.find_opt f ctx.valspecs with
+                  | Some (_, _, _, uannot) ->
+                      Option.bind (Option.bind (get_attribute "sv_module" uannot) snd) attribute_data_object
+                  | None -> None
+                in
                 if ctx_is_extern f ctx then (
                   let name = ctx_get_extern f ctx in
                   if name = "print" || name = "print_endline" || name = "print_bits" || name = "print_int" then
@@ -1450,6 +1471,18 @@ module Make (Config : CONFIG) = struct
                                ext,
                                (f, []),
                                args @ [V_id (Channel (Chan_stdout, -1), CT_string)]
+                             ),
+                           iannot
+                         )
+                      )
+                  else if Option.fold ~none:false ~some:(get_bool_attribute "writes_memory") attr then
+                    ChangeTo
+                      (I_aux
+                         ( I_funcall
+                             ( CR_multi (clexp :: [CL_id (Memory_writes (-1), CT_memory_writes)]),
+                               ext,
+                               (f, []),
+                               args @ [V_id (Memory_writes (-1), CT_memory_writes)]
                              ),
                            iannot
                          )
@@ -1837,6 +1870,9 @@ module Make (Config : CONFIG) = struct
             [{ name = Channel (Chan_stderr, 0); external_name = "in_stderr"; typ = CT_string }]
           else []
         )
+      @ ( if footprint.writes_mem then [{ name = Memory_writes 0; external_name = "in_writes"; typ = CT_memory_writes }]
+          else []
+        )
       @
       if footprint.contains_assert then
         [{ name = Name (mk_id "assert_reachable#", -1); external_name = "assert_reachable"; typ = CT_bool }]
@@ -1890,6 +1926,10 @@ module Make (Config : CONFIG) = struct
             ]
           else []
         )
+      @ ( if footprint.writes_mem then
+            [{ name = get_final_name (Memory_writes (-1)); external_name = "out_writes"; typ = CT_memory_writes }]
+          else []
+        )
       @
       if footprint.need_stderr then
         [{ name = NameMap.find (Channel (Chan_stderr, -1)) final_names; external_name = "out_stderr"; typ = CT_string }]
@@ -1918,6 +1958,7 @@ module Make (Config : CONFIG) = struct
                 )
             end
           | Channel _ -> Some CT_string
+          | Memory_writes _ -> Some CT_memory_writes
           | Have_exception _ -> Some CT_bool
           | Throw_location _ -> Some CT_string
           | Current_exception _ -> Some spec_info.exception_ctyp
@@ -1962,6 +2003,12 @@ module Make (Config : CONFIG) = struct
             )
             spec_info.registers ([], [])
         in
+        let memory_writes =
+          [
+            SVD_var (Name (mk_id "empty_memory_writes", -1), CT_memory_writes);
+            SVD_var (Name (mk_id "out_memory_writes", -1), CT_memory_writes);
+          ]
+        in
         let throws_outputs =
           if footprint.throws then
             [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
@@ -1983,6 +2030,7 @@ module Make (Config : CONFIG) = struct
                     (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
                 @ (if footprint.need_stdout then [String_lit ""] else [])
                 @ (if footprint.need_stderr then [String_lit ""] else [])
+                @ (if footprint.writes_mem then [Var (Name (mk_id "empty_memory_writes", -1))] else [])
                 @ if footprint.contains_assert then [Bool_lit true] else []
                 );
               output_connections =
@@ -1992,7 +2040,8 @@ module Make (Config : CONFIG) = struct
                     (natural_sort_ids (IdSet.elements footprint.all_writes))
                 @ (if footprint.throws then [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))] else [])
                 @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
-                @ if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else []
+                @ (if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else [])
+                @ if footprint.writes_mem then [SVP_id (Name (mk_id "out_memory_writes", -1))] else []
                 );
             }
         in
@@ -2055,7 +2104,7 @@ module Make (Config : CONFIG) = struct
             spec_info.initialized_registers
         in
         let defs =
-          register_inputs @ register_outputs @ throws_outputs @ channel_outputs
+          register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes
           @ [SVD_var (Jib_util.return, CT_unit)]
           @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb]
         in

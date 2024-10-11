@@ -302,6 +302,7 @@ let ssa_name i = function
   | Throw_location _ -> Throw_location i
   | Return _ -> Return i
   | Channel (chan, _) -> Channel (chan, i)
+  | Memory_writes _ -> Memory_writes i
 
 let inline cdefs should_inline instrs =
   let inlines = ref (-1) in
@@ -469,7 +470,7 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode ->
+    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ->
         CTSet.empty
   in
   let rec tuple_depth = function
@@ -478,7 +479,7 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool | CT_real | CT_bit
-    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode ->
+    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
         0
   in
   let rec fix_tuples = function
@@ -493,7 +494,7 @@ let remove_tuples cdefs ctx =
     | CT_fvector (n, ctyp) -> CT_fvector (n, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | ( CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode ) as ctyp ->
+      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ) as ctyp ->
         ctyp
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)

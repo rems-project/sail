@@ -99,6 +99,7 @@ $endif
 val sail_end_cycle = impure "cycle_count" : unit -> unit
 
 /*! Returns the current cycle count */
+$[sv_function { return_type = int }]
 val sail_get_cycle_count = impure "get_cycle_count" : unit -> int
 
 $ifdef SYMBOLIC

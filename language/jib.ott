@@ -82,6 +82,7 @@ name :: '' ::=
   | current_exception nat :: :: current_exception
   | throw_location nat    :: :: throw_location
   | channel chan nat      :: :: channel
+  | memory_writes nat     :: :: memory_writes
   | return nat            :: :: return
 
 op :: '' ::=
@@ -188,11 +189,13 @@ ctyp :: 'CT_' ::=
 % A vector type for non-bit vectors, and a (linked) list type.
   | fvector ( nat , ctyp )  :: :: fvector
   | vector ( ctyp )         :: :: vector
-  | list ( ctyp )                  :: :: list
+  | list ( ctyp )           :: :: list
 
-  | ref ( ctyp )                   :: :: ref
+  | ref ( ctyp )            :: :: ref
 
-  | poly kid                       :: :: poly
+  | poly kid                :: :: poly
+
+  | memory_writes           :: :: memory_writes
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id

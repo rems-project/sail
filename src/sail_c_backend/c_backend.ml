@@ -125,6 +125,7 @@ let rec is_stack_ctyp ctyp =
   | CT_float _ -> true
   | CT_rounding_mode -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
+  | CT_memory_writes -> false
 
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1)), CT_fbits i)
 
@@ -187,6 +188,7 @@ let rec sgen_ctyp_name = function
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_float n -> "float" ^ string_of_int n
   | CT_rounding_mode -> "rounding_mode"
+  | CT_memory_writes -> "sail_memory_writes"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let sail_create ?(prefix = "") ?(suffix = "") ctyp fmt =
@@ -917,6 +919,7 @@ let rec sgen_ctyp = function
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
   | CT_float n -> "float" ^ string_of_int n ^ "_t"
   | CT_rounding_mode -> "uint_fast8_t"
+  | CT_memory_writes -> "sail_memory_writes"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let sgen_const_ctyp = function CT_string -> "const_sail_string" | ty -> sgen_ctyp ty
@@ -1093,6 +1096,7 @@ let rec sgen_clexp l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
+  | CL_id (Memory_writes _, _) -> "memory_writes"
   | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
@@ -1106,6 +1110,7 @@ let rec sgen_clexp_pure l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
+  | CL_id (Memory_writes _, _) -> "memory_writes"
   | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
   | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
   | CL_id (Name (id, _), _) -> sgen_id id
@@ -2018,7 +2023,7 @@ let rec ctyp_dependencies = function
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
-  | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode ->
+  | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
       []
 
 let codegen_ctg = function

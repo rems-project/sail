@@ -90,6 +90,7 @@ module Make_optimizer (S : Sequence) = struct
       | Throw_location n -> Hashtbl.hash (3, n)
       | Return n -> Hashtbl.hash (4, n)
       | Channel (chan, n) -> Hashtbl.hash (5, (chan, n))
+      | Memory_writes n -> Hashtbl.hash (6, n)
   end
 
   module NameHashtbl = Hashtbl.Make (NameHash)
@@ -336,6 +337,9 @@ module Make (Config : CONFIG) = struct
     | CT_poly _ ->
         let* l = Smt_gen.current_location in
         Reporting.unreachable l __POS__ "Found polymorphic type in SMT property"
+    | CT_memory_writes ->
+        let* l = Smt_gen.current_location in
+        Reporting.unreachable l __POS__ "Found memory writes type in SMT property"
 
   (* When generating SMT when we encounter joins between two or more
      blocks such as in the example below, we have to generate a muxer

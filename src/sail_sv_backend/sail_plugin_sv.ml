@@ -448,7 +448,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    string "`include \"sail_modules.sv\"" ^^ twice hardline ^^ string base
+    string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
     ^^ separate_map (twice hardline) (pp_def None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
     ^^ separate_map (twice hardline) (pp_def None) svir

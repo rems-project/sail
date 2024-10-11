@@ -220,6 +220,7 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_rounding_mode -> "m"
   | CT_enum (id, _) -> "E" ^ string_of_id id ^ "%"
   | CT_ref ctyp -> "&" ^ mangle_string_of_ctyp ctx ctyp
+  | CT_memory_writes -> "w"
   | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")"
   | CT_struct (id, fields) ->
       let generic_fields = Bindings.find id ctx.records |> snd |> Bindings.bindings in

@@ -60,6 +60,7 @@ let ssa_name i = function
   | Current_exception _ -> Current_exception i
   | Throw_location _ -> Throw_location i
   | Channel (c, _) -> Channel (c, i)
+  | Memory_writes _ -> Memory_writes i
   | Return _ -> Return i
 
 let unssa_name = function
@@ -68,6 +69,7 @@ let unssa_name = function
   | Current_exception n -> (Current_exception (-1), n)
   | Throw_location n -> (Throw_location (-1), n)
   | Channel (c, n) -> (Channel (c, -1), n)
+  | Memory_writes n -> (Memory_writes (-1), n)
   | Return n -> (Return (-1), n)
 
 (**************************************************************************)

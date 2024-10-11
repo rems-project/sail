@@ -766,7 +766,7 @@ module Simplifier = struct
     | _ -> NoChange
 
   let is_bvfunction = function
-    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" -> true
+    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" -> true
     | _ -> false
 
   let rule_bvfunction_literal =
@@ -778,6 +778,8 @@ module Simplifier = struct
         | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (and_vec lhs rhs))
         | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (or_vec lhs rhs))
         | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (xor_vec lhs rhs))
+        | "bvadd", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (add_vec lhs rhs))
+        | "bvsub", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (sub_vec lhs rhs))
         | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
         | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (shiftl lhs shift)) | None -> NoChange
