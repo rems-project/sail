@@ -142,6 +142,9 @@ val option_all : 'a option list -> 'a list option
 
 val list_empty : 'a list -> bool
 
+(** [list_contains e l] returns if [l] contains the element [e] *)
+val list_contains : 'a -> 'a list -> bool
+
 (** [list_index p l] returns the first index [i] such that
     the predicate [p (l!i)] holds. If no such [i] exists,
     [None] is returned. *)

@@ -333,7 +333,14 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) arg
         )
         [("vars", ex.vars); ("constr", ex.constr); ("typ", ex.typ)]
-  | Binder _ -> ()
+  | Binder (binder, x, y, z) ->
+      Printf.eprintf "%sBinder:%s\n" indent (binder_keyword binder);
+      List.iteri
+        (fun i arg ->
+          Printf.eprintf "%s  %d:\n" indent i;
+          Queue.iter (prerr_chunk (indent ^ "    ")) arg
+        )
+        [x; y; z]
   | Block_binder (binder, binding, exp) ->
       Printf.eprintf "%sBlock_binder:%s\n" indent (binder_keyword binder);
       List.iter
@@ -366,7 +373,11 @@ let rec prerr_chunk indent = function
       Queue.iter (prerr_chunk (indent ^ "    ")) exp;
       Printf.eprintf "%s  with:" indent;
       List.iter (fun exp -> Queue.iter (prerr_chunk (indent ^ "    ")) exp) exps
-  | Vector_updates (_exp, _updates) -> Printf.eprintf "%sVector_updates:\n" indent
+  | Vector_updates (exp, updates) ->
+      Printf.eprintf "%sVector_updates:\n" indent;
+      Queue.iter (prerr_chunk (indent ^ "  ")) exp;
+      Printf.eprintf "%s  with:\n" indent;
+      List.iter (prerr_chunk (indent ^ "    ")) updates
   | Index (exp, ix) ->
       Printf.eprintf "%sIndex:\n" indent;
       List.iter
@@ -391,7 +402,14 @@ let rec pop_header_comments comments chunks l lnum =
       | Some (s, _) when e.pos_cnum < s.pos_cnum && comment_s.pos_lnum = lnum ->
           let _ = Stack.pop comments in
           Queue.add
-            (Comment (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, e.pos_lnum == lnum))
+            (Comment
+               ( comment_type,
+                 0,
+                 comment_s.pos_cnum - comment_s.pos_bol,
+                 contents,
+                 comment_type = Lexer.Comment_line && e.pos_lnum == lnum
+               )
+            )
             chunks;
           Queue.add (Spacer (true, 1)) chunks;
           pop_header_comments comments chunks l (lnum + 1)
@@ -412,7 +430,12 @@ let rec pop_comments ?(spacer = true) comments chunks l =
           let _ = Stack.pop comments in
           Queue.add
             (Comment
-               (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, comment_s.pos_lnum == e.pos_lnum)
+               ( comment_type,
+                 0,
+                 comment_s.pos_cnum - comment_s.pos_bol,
+                 contents,
+                 comment_type = Lexer.Comment_line && comment_s.pos_lnum == e.pos_lnum
+               )
             )
             chunks;
           if spacer && comment_e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
@@ -429,7 +452,12 @@ let rec pop_comments_until_loc_end comments chunks l =
           let _ = Stack.pop comments in
           Queue.add
             (Comment
-               (comment_type, 0, comment_s.pos_cnum - comment_s.pos_bol, contents, comment_s.pos_lnum == e.pos_lnum)
+               ( comment_type,
+                 0,
+                 comment_s.pos_cnum - comment_s.pos_bol,
+                 contents,
+                 comment_type = Lexer.Comment_line && comment_s.pos_lnum == e.pos_lnum
+               )
             )
             chunks;
           pop_comments_until_loc_end comments chunks l
@@ -888,6 +916,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       in
       Queue.add (Block (true, block_chunks)) chunks
   | (E_let (LB_aux (LB_val (pat, exp), _), body) | E_internal_plet (pat, exp, body)) as binder ->
+      (* there need a way to find position of '=' *)
       let binder =
         match binder with
         | E_let _ -> Let_binder
@@ -923,6 +952,14 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let i_chunks = rec_chunk_exp i in
       pop_comments ~spacer:false comments i_chunks keywords.then_loc;
       let t_chunks = rec_chunk_exp t in
+      if if_format.then_brace then ignore (pop_comments_until_loc_end comments t_chunks keywords.then_loc);
+      (*
+        no place to put comment between then_end and else_start
+          
+          if foo 
+          then {} /* comment */ 
+          else {} 
+      *)
       ignore (pop_trailing_comment comments t_chunks (ending_line_num keywords.then_loc));
       (match keywords.else_loc with Some l -> pop_comments comments t_chunks l | None -> ());
       let e_chunks = rec_chunk_exp e in

@@ -92,13 +92,11 @@ function b () -> int = {
 let c = 1
 
 // comment
-let c2 =
-    1 // comment
-let d =
-    {
-        1
-        // comment
-    } // comment
+let c2 = 1 // comment
+let d = {
+    1
+    // comment
+} // comment
 // comment
 // comment
 // comment
