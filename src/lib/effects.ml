@@ -197,7 +197,9 @@ let infer_def_direct_effects asserts_termination def =
               effects := EffectSet.add IncompleteMatch !effects
         | None -> Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
       end
-    | DEF_aux (DEF_mapdef _, _) -> effects := EffectSet.add IncompleteMatch !effects
+    | DEF_aux (DEF_mapdef _, def_annot) ->
+        if Option.is_some (get_def_attribute "incomplete" def_annot) then
+          effects := EffectSet.add IncompleteMatch !effects
     | DEF_aux (DEF_scattered _, _) -> effects := EffectSet.add Scattered !effects
     | _ -> ()
   end;

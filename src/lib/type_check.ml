@@ -4566,6 +4566,12 @@ let check_fundef env def_annot fdef =
   let vs_def, _, check_body, env = check_fundef_lazy env def_annot fdef in
   (vs_def @ [Lazy.force check_body], env)
 
+let check_mapdef_completeness l env mapcls typl typr =
+  let ctx = pattern_completeness_ctx env in
+  match PC.is_complete_mapcls_wildcarded l ctx mapcls typl typr with
+  | true -> add_def_attribute (gen_loc l) "complete" None
+  | false -> add_def_attribute (gen_loc l) "incomplete" None
+
 let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
   let inline_tannot =
@@ -4582,11 +4588,11 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
         (Some vs_l, quant, typ)
     | None, None -> typ_error l "Mapping does not have any declared type"
   in
-  begin
+  let typl, typr =
     match typ with
-    | Typ_aux (Typ_bidir (_, _), _) -> ()
+    | Typ_aux (Typ_bidir (l, r), _) -> (l, r)
     | _ -> typ_error l "Mapping type must be a bi-directional mapping"
-  end;
+  in
   (* If we have a val spec, then the mapping itself shouldn't be marked as private *)
   let fix_body_visibility =
     match (have_val_spec, def_annot.visibility) with
@@ -4607,7 +4613,16 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
   in
   let mapcl_env = Env.add_typquant l quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
-  let def_annot = fix_body_visibility def_annot in
+
+  let update_attr =
+    if
+      Option.is_some (get_def_attribute "complete" def_annot)
+      || Option.is_some (get_def_attribute "incomplete" def_annot)
+    then fun attrs -> attrs
+    else check_mapdef_completeness l env mapcls typl typr
+  in
+
+  let def_annot = fix_body_visibility (update_attr def_annot) in
   let env = Env.define_val_spec id env in
   ( vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, empty_tannot_opt, mapcls), (l, empty_tannot))), def_annot)],
     env
