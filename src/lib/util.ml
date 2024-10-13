@@ -592,3 +592,8 @@ let close_output_with_check (o, temp_file_name, opt_dir, file_name) =
   let do_replace = !always_replace_files || not (same_content_files temp_file_name file_name) in
   let _ = if not do_replace then Sys.remove temp_file_name else move_file temp_file_name file_name in
   ()
+
+let to_upper_camel_case s =
+  let ss = String.split_on_char '_' s |> List.map (String.split_on_char '-') |> List.concat in
+  let ss = List.map String.capitalize_ascii ss in
+  String.concat "" ss
