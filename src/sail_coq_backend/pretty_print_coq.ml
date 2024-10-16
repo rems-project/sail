@@ -865,7 +865,7 @@ let doc_tannot_core ctxt env eff typ =
     if eff then (
       match ctxt.early_ret with
       | Some ret_typ ->
-          if ctxt.is_monadic then string "MR " ^^ parens ta ^^ string " " ^^ parens (doc_typ ctxt env ret_typ)
+          if ctxt.is_monadic then string "MR " ^^ parens (doc_typ ctxt env ret_typ) ^^ string " " ^^ parens ta
           else string "sum " ^^ parens (doc_typ ctxt env ret_typ) ^^ string " " ^^ parens ta
       | None -> string "M " ^^ parens ta
     )
@@ -1674,7 +1674,7 @@ let doc_exp, doc_let =
                   let ret_typ_pp = doc_atomic_typ ctxt (env_of exp) false (typ_of exp) in
                   let local_typ_pp = doc_atomic_typ ctxt (env_of full_exp) false (typ_of full_exp) in
                   let inj, monad, args =
-                    if ctxt.is_monadic then ("early_return", "MR", [local_typ_pp; ret_typ_pp])
+                    if ctxt.is_monadic then ("early_return", "MR", [ret_typ_pp; local_typ_pp])
                     else ("inl", "sum", [ret_typ_pp; local_typ_pp])
                   in
                   let epp = separate space [string inj; exp_pp] in
@@ -2208,8 +2208,8 @@ let doc_exp, doc_let =
             separate space
               [
                 string ret_monad;
-                parens (doc_typ ctxt (env_of full_exp) (typ_of full_exp));
                 parens (doc_typ ctxt (env_of full_exp) (typ_of r));
+                parens (doc_typ ctxt (env_of full_exp) (typ_of full_exp));
               ]
         in
         align (parens (string "early_return" ^//^ exp_pp ^//^ ta))
@@ -4397,7 +4397,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
           else
             separate hardline
               [
-                string ("Definition MR a r := monadR register a r " ^ exc_typ ^ ".");
+                string ("Definition MR r a := monadR register a r " ^ exc_typ ^ ".");
                 string ("Definition M a := monad register a " ^ exc_typ ^ ".");
                 string ("Definition returnM {A:Type} := @returnm register A " ^ exc_typ ^ ".");
                 string ("Definition returnR {A:Type} (R:Type) := @returnm register A (R + " ^ exc_typ ^ ").");
@@ -4410,11 +4410,11 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             else
               [
                 empty;
-                string ("Definition M a := Defs.monad a " ^ exc_typ ^ ".");
-                string ("Definition MR a r := Defs.monad a (r + " ^ exc_typ ^ ")%type.");
+                string ("Definition M := Defs.monad " ^ exc_typ ^ ".");
+                string ("Definition MR r := Defs.monad (r + " ^ exc_typ ^ ")%type.");
                 string ("Definition returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ").");
                 string
-                  ("Definition returnR {A:Type} (R:Type) : A -> MR A R := Defs.returnm (E := R + " ^ exc_typ ^ ")%type.");
+                  ("Definition returnR {A:Type} (R:Type) : A -> MR R A := Defs.returnm (E := R + " ^ exc_typ ^ ")%type.");
               ]
           in
           separate hardline
