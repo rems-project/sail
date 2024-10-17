@@ -3573,6 +3573,8 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                   string "  Definition pa_countable : Countable pa := _.";*)
                string "  Definition arch_ak := " ^^ pp_typ params.arch_ak_type ^^ string ".";
                string "  Definition translation := " ^^ pp_typ params.translation_summary_type ^^ string ".";
+               string "  Definition trans_start := " ^^ pp_typ params.trans_start_type ^^ string ".";
+               string "  Definition trans_end := " ^^ pp_typ params.trans_end_type ^^ string ".";
                string "  Definition abort := " ^^ pp_typ params.abort_type ^^ string ".";
                string "  Definition barrier := " ^^ pp_typ params.barrier_type ^^ string ".";
                string "  Definition cache_op := " ^^ pp_typ params.cache_op_type ^^ string ".";

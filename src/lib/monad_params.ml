@@ -57,6 +57,8 @@ type parameters = {
   pa_type : typ;
   tlbi_type : typ;
   translation_summary_type : typ;
+  trans_start_type : typ;
+  trans_end_type : typ;
   arch_ak_type : typ;
 }
 
@@ -100,6 +102,8 @@ let find_monad_parameters type_env =
       let cache_op_type = extract_arg_typ "sail_cache_op" in
       let fault_type = extract_arg_typ "sail_take_exception" in
       let tlbi_type = extract_arg_typ "sail_tlbi" in
+      let trans_start_type = extract_arg_typ "sail_translation_start" in
+      let trans_end_type = extract_arg_typ "sail_translation_end" in
       Some
         {
           abort_type;
@@ -109,5 +113,7 @@ let find_monad_parameters type_env =
           pa_type;
           tlbi_type;
           translation_summary_type;
+          trans_start_type;
+          trans_end_type;
           arch_ak_type;
         }
