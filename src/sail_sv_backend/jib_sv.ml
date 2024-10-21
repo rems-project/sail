@@ -1123,6 +1123,7 @@ module Make (Config : CONFIG) = struct
                 let clexp =
                   match creturn with
                   | CR_one clexp -> clexp
+                  | CR_multi [ clexp ] -> clexp
                   | CR_multi clexps ->
                       Reporting.unreachable l __POS__
                         (sprintf "Multiple return generator primitive found: %s (%s)" name
