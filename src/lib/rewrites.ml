@@ -4291,7 +4291,7 @@ let rewrite_unroll_constant_loops _type_env defs =
         | _ ->
             let e' = E_aux (e, annot) in
             let (l : Parse_ast.l), _tannot = annot in
-            Reporting.warn "" l
+            Reporting.warn ~force_show:true "" l
             @@ Printf.sprintf
                  "Cannot unroll the loop because the bounds numerical values couldn't be fully determined on \
                   expression :\n\

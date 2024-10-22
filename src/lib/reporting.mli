@@ -139,7 +139,7 @@ val forbid_errors : string * int * int * int -> ('a -> 'b) -> 'a -> 'b
 
 (** Print a warning message. The first string is printed before the
    location, the second after. *)
-val warn : ?once_from:string * int * int * int -> string -> Parse_ast.l -> string -> unit
+val warn : ?once_from:string * int * int * int -> ?force_show:bool -> string -> Parse_ast.l -> string -> unit
 
 val format_warn : ?once_from:string * int * int * int -> string -> Parse_ast.l -> Error_format.message -> unit
 
