@@ -4291,18 +4291,12 @@ let rewrite_unroll_constant_loops _type_env defs =
         | _ ->
             let e' = E_aux (e, annot) in
             let (l : Parse_ast.l), _tannot = annot in
-            let string_of_position (p : Lexing.position) : string = p.pos_fname ^ ":" ^ string_of_int p.pos_lnum in
-            let rec string_of_l : Parse_ast.l -> string = function
-              | Unknown -> "Unknown"
-              | Unique (i, l) -> Printf.sprintf "Unique( %s, %s)" (string_of_int i) (string_of_l l)
-              | Generated l -> Printf.sprintf "Generated( %s ) " (string_of_l l)
-              | Hint (str, l1, l2) -> Printf.sprintf "Hint( %s, %s, %s )" str (string_of_l l1) (string_of_l l2)
-              | Range (p1, p2) -> Printf.sprintf "Range( %s, %s )" (string_of_position p1) (string_of_position p2)
-            in
-            print_endline
-              "[WARNING] Cannot unroll the loop because the bounds numerical values couldn't be fully determined.";
-            print_endline ("          Expression : " ^ string_of_exp e');
-            print_endline ("          Position   : " ^ string_of_l l);
+            Reporting.warn "" l
+            @@ Printf.sprintf
+                 "Cannot unroll the loop because the bounds numerical values couldn't be fully determined on \
+                  expression :\n\
+                  %s"
+                 (string_of_exp e');
             e'
       )
     | _ -> E_aux (e, annot)
