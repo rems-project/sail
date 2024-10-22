@@ -59,6 +59,7 @@ val opt_dmono_continue : bool ref
 
 (** Unroll loops with constant bounds if less than 'max_iter' iterations *)
 val opt_unroll_loops : bool ref
+
 val opt_unroll_loops_max_iter : int ref
 
 (** Warn about matches where we add a default case for Coq because
