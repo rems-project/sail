@@ -253,7 +253,7 @@ let suppressed_warning_info () =
     suppressed_warnings := 0
   )
 
-let warn ?once_from short_str l explanation =
+let warn ?once_from ?(force_show = false) short_str l explanation =
   let already_shown =
     match once_from with
     | Some (file, lnum, cnum, enum) when not !opt_all_warnings ->
@@ -268,7 +268,7 @@ let warn ?once_from short_str l explanation =
         )
     | _ -> false
   in
-  if !opt_warnings && not already_shown then (
+  if !opt_warnings && not already_shown || force_show then (
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in

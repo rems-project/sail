@@ -351,6 +351,11 @@ let rec options =
       ("-dno_cast", Arg.Unit (fun () -> ()), "");
       (* No longer does anything, preserved for backwards compatibility only *)
       ("-dallow_cast", Arg.Unit (fun () -> ()), "");
+      ("-unroll_loops", Arg.Set Rewrites.opt_unroll_loops, " turn on rewrites for unrolling loops with constant bounds.");
+      ( "-unroll_loops_max_iter",
+        Arg.Int (fun n -> Rewrites.opt_unroll_loops_max_iter := n),
+        "<nb_iter> Don't unroll loops if they have more than <nb_iter> iterations."
+      );
       ( "-ddump_rewrite_ast",
         Arg.String
           (fun l ->

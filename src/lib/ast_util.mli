@@ -459,6 +459,8 @@ val def_loc : ('a, 'b) def -> Parse_ast.l
    Note: For debugging and error messages only - not guaranteed to
    produce parseable Sail, or even print all language constructs! *)
 
+val string_of_order : order -> string
+
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_kind_aux : kind_aux -> string
