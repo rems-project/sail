@@ -14,7 +14,7 @@ let is_enum env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 let pat_is_plain_binder env (P_aux (p, _)) =
   match p with
   | (P_id id | P_typ (_, P_aux (P_id id, _))) when not (is_enum env id) -> Some (Some id)
-  | (P_wild | P_typ (_, P_aux (P_wild, _))) -> Some None
+  | P_wild | P_typ (_, P_aux (P_wild, _)) -> Some None
   | P_var (_, _) -> Some (Some (Id_aux (Id "var", Unknown)))
   | P_app (_, _) -> Some (Some (Id_aux (Id "app", Unknown)))
   | P_vector _ -> Some (Some (Id_aux (Id "vect", Unknown)))
