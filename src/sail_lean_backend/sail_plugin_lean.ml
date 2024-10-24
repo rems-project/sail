@@ -173,7 +173,8 @@ let create_lake_project (out_name : string) =
 
 let output (out_name : string) ast =
   let project_main = create_lake_project out_name in
-  Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
+  (* Uncomment for debug output of the Sail code after the rewrite passes *)
+  (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
   Pretty_print_lean.pp_ast_lean ast project_main;
   close_out project_main;
   failwith "Empty Lean project created, the actual export is not yet implemented."

@@ -1,5 +1,10 @@
 [93mType error[0m:
-[96mfail/negative_bits_struct.sail[0m:14.24-33:
+[96mfail/negative_bits_struct.sail[0m:14.11-21:
 14[96m |[0m    let x: synonym(1) = undefined;
-  [91m |[0m                        [91m^-------^[0m
-  [91m |[0m Type synonym(1) cannot be undefined
+  [91m |[0m           [91m^--------^[0m
+  [91m |[0m Well-formedness check failed for type
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/negative_bits_struct.sail[0m:14.11-18:
+  [91m |[0m 14[96m |[0m    let x: synonym(1) = undefined;
+  [91m |[0m   [91m |[0m           [91m^-----^[0m
+  [91m |[0m   [91m |[0m Could not prove 1 >= 2 for type constructor synonym

@@ -10,5 +10,6 @@
  [91m |[0m [93mBitfield error [0m[96mfail/bitfield_error.sail[0m:6.6-13:
  [91m |[0m 6[96m |[0m  b : 0 .. 15,
  [91m |[0m  [91m |[0m      [91m^-----^[0m
- [91m |[0m  [91m |[0m Could not resolve quantifiers for subrange_bits
- [91m |[0m  [91m |[0m [94m*[0m (0 <= 15 & (15 <= 0 & 0 < 15))
+ [91m |[0m  [91m |[0m Well-formedness check failed for type here
+ [91m |[0m  [91m |[0m 
+ [91m |[0m  [91m |[0m Bitvector index must be greater than or equal to zero

@@ -5,7 +5,7 @@ $include <prelude.sail>
 $[sv_module { stdout = true }]
 val print = "print_endline" : string -> unit
 
-struct Foo('n: Int) = {
+struct Foo('n) = {
   field: bits('n)
 }
 

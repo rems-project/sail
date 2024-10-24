@@ -33,7 +33,7 @@ overload _mod_GPR = { rGPR, wGPR }
 /* Create a new type which is a pair of a bitvector and a start index
 
    slice('n, 'm) is equivalent to old-sail vector('n, 'm, dec, bit) */
-newtype slice ('n : Int, 'm : Int) = MkSlice : (atom('n), bits('m))
+newtype slice ('n : Int, 'm : Nat) = MkSlice : (atom('n), bits('m))
 
 /* Extract the bitvector from a slice */
 val slice_bits : forall 'n 'm. slice('n, 'm) -> bits('m)

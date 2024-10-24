@@ -26,7 +26,7 @@ def test_patterns(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -just_check {} 2> {}.error'.format(sail, filename, basename))
+                step('{} --just-check {} 2> {}.error'.format(sail, filename, basename))
                 if filename.startswith('warn'):
                     step('diff {}.error {}.expect'.format(basename, basename))
                 else:

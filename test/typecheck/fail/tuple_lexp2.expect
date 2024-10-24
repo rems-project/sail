@@ -2,7 +2,7 @@
 [96mfail/tuple_lexp2.sail[0m:10.11-12:
 10[96m |[0m  (x, y) = 2
   [91m |[0m           [91m^[0m
-  [91m |[0m Type mismatch between (int('ex248#), int('ex249#)) and int(2)
+  [91m |[0m Type mismatch between (int('ex180#), int('ex181#)) and int(2)
   [91m |[0m 
   [91m |[0m [93mCaused by [0m[96mfail/tuple_lexp2.sail[0m:10.2-8:
   [91m |[0m 10[96m |[0m  (x, y) = 2

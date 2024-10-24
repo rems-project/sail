@@ -1,5 +1,10 @@
 [93mType error[0m:
-[96mpass/exist_synonym/v1.sail[0m:6.28-37:
+[96mpass/exist_synonym/v1.sail[0m:6.8-38:
 6[96m |[0mlet x : {'n, 0 <= 'n <= 33. regno('n)} = 4
- [91m |[0m                            [91m^-------^[0m
- [91m |[0m Could not prove constraints (0 <= 'n & 'n < 32) in type synonym int('n) with (0 <= 'n & 'n <= 33)
+ [91m |[0m        [91m^----------------------------^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mpass/exist_synonym/v1.sail[0m:6.28-33:
+ [91m |[0m 6[96m |[0mlet x : {'n, 0 <= 'n <= 33. regno('n)} = 4
+ [91m |[0m  [91m |[0m                            [91m^---^[0m
+ [91m |[0m  [91m |[0m Could not prove (0 <= 'n & 'n < 32) for type constructor regno

@@ -41,28 +41,7 @@
 (*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
 (*  and FA8750-10-C-0237 ("CTSRD").                                         *)
 (*                                                                          *)
-(*  Redistribution and use in source and binary forms, with or without      *)
-(*  modification, are permitted provided that the following conditions      *)
-(*  are met:                                                                *)
-(*  1. Redistributions of source code must retain the above copyright       *)
-(*     notice, this list of conditions and the following disclaimer.        *)
-(*  2. Redistributions in binary form must reproduce the above copyright    *)
-(*     notice, this list of conditions and the following disclaimer in      *)
-(*     the documentation and/or other materials provided with the           *)
-(*     distribution.                                                        *)
-(*                                                                          *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       *)
-(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         *)
-(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     *)
-(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            *)
-(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        *)
-(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        *)
-(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     *)
-(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      *)
-(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
-(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
-(*  SUCH DAMAGE.                                                            *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
 module Big_int = Nat_big_num
@@ -85,7 +64,7 @@ let cvc4_solver =
   {
     command = "cvc4";
     args = (fun input -> [| "-L"; "smtlib2"; "--tlimit=2000"; input |]);
-    header = "(set-logic QF_UFNIA)\n";
+    header = "(set-logic UFNIA)\n";
     footer = "";
     negative_literals = false;
     uninterpret_power = true;
@@ -264,9 +243,14 @@ let to_smt l abstract vars constr =
   (abstract_decs @ var_decs vars, smt_constr, smt_var, !exponentials)
 
 let sailexp_concrete n =
-  List.init (n + 1) (fun i ->
-      sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
-  )
+  sfun "forall"
+    [
+      List [List [Atom "n"; Atom "Int"]];
+      sfun "=>" [sfun ">=" [Atom "n"; Atom "0"]; sfun ">=" [sfun "sailexp" [Atom "n"]; Atom "1"]];
+    ]
+  :: List.init (n + 1) (fun i ->
+         sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
+     )
 
 let smtlib_of_constraints ?(get_model = false) l abstract vars extra constr :
     string * (kid -> sexpr * bool) * sexpr list =
@@ -307,7 +291,12 @@ let load_digests_err () =
       | 4 ->
           let solution = input_binary_int in_chan in
           known_uniques := DigestMap.add digest (Some solution) !known_uniques
-      | _ -> assert false
+      | _ ->
+          Reporting.warn "" Parse_ast.Unknown "SMT cache file 'z3_problems' is invalid";
+          known_problems := DigestMap.empty;
+          known_uniques := DigestMap.empty;
+          (* Exit the loop as if we reached the end of the file *)
+          raise End_of_file
     end;
     load ()
   in

@@ -12,4 +12,4 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/missing_tick.sail[0m:5.16-17:
  [91m |[0m  [91m |[0m 5[96m |[0mtype foo = bits(x)
  [91m |[0m  [91m |[0m  [91m |[0m                [91m^[0m
- [91m |[0m  [91m |[0m  [91m |[0m Undefined type synonym x
+ [91m |[0m  [91m |[0m  [91m |[0m Undefined numeric type x

@@ -41,28 +41,7 @@
 (*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
 (*  and FA8750-10-C-0237 ("CTSRD").                                         *)
 (*                                                                          *)
-(*  Redistribution and use in source and binary forms, with or without      *)
-(*  modification, are permitted provided that the following conditions      *)
-(*  are met:                                                                *)
-(*  1. Redistributions of source code must retain the above copyright       *)
-(*     notice, this list of conditions and the following disclaimer.        *)
-(*  2. Redistributions in binary form must reproduce the above copyright    *)
-(*     notice, this list of conditions and the following disclaimer in      *)
-(*     the documentation and/or other materials provided with the           *)
-(*     distribution.                                                        *)
-(*                                                                          *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       *)
-(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         *)
-(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     *)
-(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            *)
-(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        *)
-(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        *)
-(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     *)
-(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      *)
-(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
-(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
-(*  SUCH DAMAGE.                                                            *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
 (** The type checker API *)
@@ -239,7 +218,7 @@ module Env : sig
      environment is lacking even basic builtins. *)
   val empty : t
 
-  val builtin_typs : typquant Bindings.t
+  val builtin_typs : (typquant * kind_aux) Bindings.t
 
   val get_union_id : id -> t -> typquant * typ
 
@@ -279,7 +258,11 @@ type tannot
 (** Aliases for typed definitions and ASTs for readability *)
 type typed_def = (tannot, env) def
 
+type typed_lazy_def = (tannot, env) lazy_def
+
 type typed_ast = (tannot, env) ast
+
+type typed_lazy_ast = (tannot, env) lazy_ast
 
 (** The canonical view of a type annotation is that it is a tuple
    containing an environment (env), a type (typ), such that check_X
@@ -509,6 +492,8 @@ Some invariants that will hold of a fully checked AST are:
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
 val check : Env.t -> untyped_ast -> typed_ast * Env.t
+
+val check_lazy : Env.t -> untyped_ast -> typed_lazy_ast * Env.t
 
 val check_defs : Env.t -> untyped_def list -> typed_def list * Env.t
 

@@ -1,5 +1,10 @@
 [93mType error[0m:
-[96mfail/negative_bits_tuple.sail[0m:8.29-38:
+[96mfail/negative_bits_tuple.sail[0m:8.11-26:
 8[96m |[0m    let x: (bits(-1), int) = undefined;
- [91m |[0m                             [91m^-------^[0m
- [91m |[0m Type (bits(-1), int) could be empty
+ [91m |[0m           [91m^-------------^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/negative_bits_tuple.sail[0m:8.12-16:
+ [91m |[0m 8[96m |[0m    let x: (bits(-1), int) = undefined;
+ [91m |[0m  [91m |[0m            [91m^--^[0m
+ [91m |[0m  [91m |[0m Could not prove -1 >= 0 for type constructor bits

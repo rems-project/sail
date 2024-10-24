@@ -7,4 +7,4 @@
  [91m |[0m [93mCaused by [0m[96mfail/non_synonym.sail[0m:6.23-26:
  [91m |[0m 6[96m |[0mlet my_vector : vector(max, dec, int) = [1, 2, 3, 4, 5, 6]
  [91m |[0m  [91m |[0m                       [91m^-^[0m
- [91m |[0m  [91m |[0m Undefined type synonym max
+ [91m |[0m  [91m |[0m Undefined numeric type max

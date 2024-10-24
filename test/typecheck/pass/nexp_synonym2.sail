@@ -6,7 +6,7 @@ type LEN : Int = 30 + 2
 
 type V : Type = bits(LEN)
 
-type V2('n: Int) -> Type = bits('n)
+type V2('n : Int), 'n >= 0 -> Type = bits('n)
 
 let v : V = 0xFFFF_FFFF
 

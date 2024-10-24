@@ -41,28 +41,7 @@
 (*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
 (*  and FA8750-10-C-0237 ("CTSRD").                                         *)
 (*                                                                          *)
-(*  Redistribution and use in source and binary forms, with or without      *)
-(*  modification, are permitted provided that the following conditions      *)
-(*  are met:                                                                *)
-(*  1. Redistributions of source code must retain the above copyright       *)
-(*     notice, this list of conditions and the following disclaimer.        *)
-(*  2. Redistributions in binary form must reproduce the above copyright    *)
-(*     notice, this list of conditions and the following disclaimer in      *)
-(*     the documentation and/or other materials provided with the           *)
-(*     distribution.                                                        *)
-(*                                                                          *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       *)
-(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         *)
-(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     *)
-(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            *)
-(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        *)
-(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        *)
-(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     *)
-(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      *)
-(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
-(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
-(*  SUCH DAMAGE.                                                            *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
 open Util
@@ -371,6 +350,16 @@ let message_of_type_error type_error =
         end
     | Err_instantiation_info (_, err) -> to_message err
     | Err_unresolved_quants (id, quants, locals, tyvars, ncs) ->
+        let quants =
+          List.filter_map
+            (function
+              | QI_aux (QI_id _, _) as quant -> Some quant
+              | QI_aux (QI_constraint nc, _) as quant -> (
+                  match constraint_simp nc with NC_aux (NC_true, _) -> None | _ -> Some quant
+                )
+              )
+            quants
+        in
         ( Seq
             [
               Line ("Could not resolve quantifiers for " ^ string_of_id id);
@@ -481,7 +470,7 @@ let message_of_type_error type_error =
           None
         )
     | Err_no_num_ident id -> (Line ("No num identifier " ^ string_of_id id), None)
-    | Err_not_in_scope (explanation, Some l, item_scope, into_scope, priv) ->
+    | Err_not_in_scope (explanation, Some l, item_scope, into_scope, is_opened, priv) ->
         let suggest, in_mod, add_requires_here =
           match (item_scope, into_scope) with
           | None, None -> ("Try bringing the following into scope:", "", [])
@@ -517,16 +506,20 @@ let message_of_type_error type_error =
               ),
             None
           )
-        else
+        else (
+          let private_not_opened =
+            if not is_opened then [Line "The module containing this definition is also not required in this context"]
+            else []
+          in
           ( Seq
-              [
-                Line (Option.value ~default:"Cannot use private definition" explanation);
-                Line "";
-                Location ("", Some ("private definition here" ^ in_mod), l, Seq []);
-              ],
+              ([Line (Option.value ~default:"Cannot use private definition" explanation)]
+              @ private_not_opened
+              @ [Line ""; Location ("", Some ("private definition here" ^ in_mod), l, Seq [])]
+              ),
             None
           )
-    | Err_not_in_scope (explanation, None, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
+        )
+    | Err_not_in_scope (explanation, None, _, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
   in
   to_message type_error
 

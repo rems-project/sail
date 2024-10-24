@@ -41,28 +41,7 @@
 (*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
 (*  and FA8750-10-C-0237 ("CTSRD").                                         *)
 (*                                                                          *)
-(*  Redistribution and use in source and binary forms, with or without      *)
-(*  modification, are permitted provided that the following conditions      *)
-(*  are met:                                                                *)
-(*  1. Redistributions of source code must retain the above copyright       *)
-(*     notice, this list of conditions and the following disclaimer.        *)
-(*  2. Redistributions in binary form must reproduce the above copyright    *)
-(*     notice, this list of conditions and the following disclaimer in      *)
-(*     the documentation and/or other materials provided with the           *)
-(*     distribution.                                                        *)
-(*                                                                          *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       *)
-(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         *)
-(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     *)
-(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            *)
-(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        *)
-(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        *)
-(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     *)
-(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      *)
-(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      *)
-(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      *)
-(*  SUCH DAMAGE.                                                            *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
 open Ast
@@ -1300,6 +1279,8 @@ type tannot = tannot' option * uannot
 
 type typed_def = (tannot, env) def
 type typed_ast = (tannot, env) ast
+type typed_lazy_def = (tannot, env) lazy_def
+type typed_lazy_ast = (tannot, env) lazy_ast
 
 let untyped_annot tannot = snd tannot
 
@@ -3377,7 +3358,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
         | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ elem_typ, _)]) when Id.compare id (mk_id "vector") = 0 ->
             typ_equality l env elem_typ first_elem_typ;
             nsum acc len
-        | _ -> typ_error l "Vector concatentation l-expression must only contain vector types of the same order"
+        | _ -> typ_error l "Vector concatenation l-expression must only contain vector types of the same order"
       in
       let sum_bitvector_lengths acc (Typ_aux (v_typ_aux, _)) =
         match v_typ_aux with
@@ -3397,7 +3378,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           annot_lexp (LE_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len))
       | _ ->
           typ_error l
-            ("Vector concatentation l-expression must only contain bitvector or vector types, found "
+            ("Vector concatenation l-expression must only contain bitvector or vector types, found "
            ^ string_of_typ v_typ
             )
     end
@@ -4475,7 +4456,7 @@ let check_funcls_complete l env funcls typ =
 
 let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
 
-let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
+let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
   let id =
     match
       List.fold_right
@@ -4503,7 +4484,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
         (* No val, so get the function type from annotations attached to clauses *)
         let bind = infer_funtyp l env tannot_opt funcls in
         (None, bind, env)
-    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, priv)) ->
+    | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, is_opened, priv)) ->
         (* If we defined the function type with val in another module, but didn't require it. *)
         let reason = if priv then "private." else "not in scope." in
         typ_raise l
@@ -4512,6 +4493,7 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
                scope_l,
                item_scope,
                into_scope,
+               is_opened,
                priv
              )
           )
@@ -4562,20 +4544,27 @@ let check_fundef env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls)
       ([synthesize_val_spec env id quant typ def_annot], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
-  let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
-  let funcls, update_attr =
-    if
-      Option.is_some (get_def_attribute "complete" def_annot)
-      || Option.is_some (get_def_attribute "incomplete" def_annot)
-    then (funcls, fun attrs -> attrs)
-    else check_funcls_complete l funcl_env funcls typ
+  (* For performance, we can lazily check the body if we need it later *)
+  let check_body =
+    lazy
+      (let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
+       let funcls, update_attr =
+         if
+           Option.is_some (get_def_attribute "complete" def_annot)
+           || Option.is_some (get_def_attribute "incomplete" def_annot)
+         then (funcls, fun attrs -> attrs)
+         else check_funcls_complete l funcl_env funcls typ
+       in
+       let def_annot = fix_body_visibility (update_attr def_annot) in
+       DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
+      )
   in
-  let def_annot = fix_body_visibility (update_attr def_annot) in
   let env = Env.define_val_spec id env in
-  ( vs_def
-    @ [DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)],
-    env
-  )
+  (vs_def, id, check_body, env)
+
+let check_fundef env def_annot fdef =
+  let vs_def, _, check_body, env = check_fundef_lazy env def_annot fdef in
+  (vs_def @ [Lazy.force check_body], env)
 
 let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
@@ -5141,8 +5130,19 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
       (* These will be checked during the move_loop_measures rewrite *)
       ([DEF_aux (DEF_loop_measures (id, measures), def_annot)], env)
 
-and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def list * Env.t =
- fun n total env defs ->
+and check_def_lazy env def =
+  match def with
+  | DEF_aux (DEF_fundef fdef, def_annot) ->
+      let def_annot = def_annot_map_env (fun _ -> env) def_annot in
+      let vs_def, id, check_body, env = check_fundef_lazy env def_annot fdef in
+      (List.map (fun def -> Strict_def def) vs_def @ [Lazy_fundef (id, check_body)], env)
+  | _ ->
+      let defs, env = check_def env def in
+      (List.map (fun def -> Strict_def def) defs, env)
+
+and check_defs_progress :
+      'a. (Env.t -> untyped_def -> 'a list * Env.t) -> int -> int -> Env.t -> untyped_def list -> 'a list * Env.t =
+ fun checker n total env defs ->
   let rec aux n total acc env defs =
     match defs with
     | [] -> (List.rev acc, env)
@@ -5162,9 +5162,9 @@ and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def l
         let def, env =
           match get_def_attribute "fix_location" def_annot with
           | Some (fix_l, _) -> (
-              try check_def env def with Type_error (_, err) -> typ_raise fix_l err
+              try checker env def with Type_error (_, err) -> typ_raise fix_l err
             )
-          | None -> check_def env def
+          | None -> checker env def
         in
         aux (n + 1) total (List.rev def @ acc) (restore env) defs
   in
@@ -5173,13 +5173,19 @@ and check_defs_progress : int -> int -> Env.t -> untyped_def list -> typed_def l
 and check_defs : Env.t -> untyped_def list -> typed_def list * Env.t =
  fun env defs ->
   let total = List.length defs in
-  check_defs_progress 1 total env defs
+  check_defs_progress check_def 1 total env defs
 
 let check : Env.t -> untyped_ast -> typed_ast * Env.t =
  fun env ast ->
   let total = List.length ast.defs in
-  let defs, env = check_defs_progress 1 total env ast.defs in
+  let defs, env = check_defs_progress check_def 1 total env ast.defs in
   ({ ast with defs }, env)
+
+let check_lazy : Env.t -> untyped_ast -> typed_lazy_ast * Env.t =
+ fun env ast ->
+  let total = List.length ast.defs in
+  let defs, env = check_defs_progress check_def_lazy 1 total env ast.defs in
+  ({ lazy_defs = defs; comments = ast.comments }, Env.open_all_modules env)
 
 let rec check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list =
  fun env defs ->

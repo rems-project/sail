@@ -1,12 +1,12 @@
 default Order inc
 
-val add_vec = impure {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
+val add_vec = impure {ocaml: "add_vec", lem: "add_vec"}: forall 'n.
   (bitvector('n, inc), bitvector('n, inc)) -> bitvector('n, inc)
 
-val add_range = impure {ocaml: "add_range", lem: "add_range"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+val add_range = impure {ocaml: "add_range", lem: "add_range"}: forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
-val cast unsigned : forall ('n : Int).
+val cast unsigned : forall 'n.
   bitvector('n, inc) -> range(0, 2 ^ 'n - 1)
 
 overload operator + = {add_vec, add_range}

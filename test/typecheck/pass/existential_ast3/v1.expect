@@ -2,10 +2,10 @@
 [96mpass/existential_ast3/v1.sail[0m:17.48-65:
 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m                                                [91m^---------------^[0m
-  [91m |[0m (int(33), int('ex288)) is not a subtype of (int('ex283), int('ex284))
+  [91m |[0m (int(33), int('ex212)) is not a subtype of (int('ex207), int('ex208))
   [91m |[0m as false could not be proven
   [91m |[0m 
-  [91m |[0m type variable 'ex283:
+  [91m |[0m type variable 'ex207:
   [91m |[0m [96mpass/existential_ast3/v1.sail[0m:16.23-25:
   [91m |[0m 16[96m |[0m  let (datasize, n) : {'d 'n, datasize('d) & 0 <= 'n < 'd. (int('d), int('n))} =
   [91m |[0m   [92m |[0m                       [92m^^[0m [92mderived from here[0m
@@ -13,7 +13,7 @@
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m
   [91m |[0m 
-  [91m |[0m type variable 'ex284:
+  [91m |[0m type variable 'ex208:
   [91m |[0m [96mpass/existential_ast3/v1.sail[0m:16.26-28:
   [91m |[0m 16[96m |[0m  let (datasize, n) : {'d 'n, datasize('d) & 0 <= 'n < 'd. (int('d), int('n))} =
   [91m |[0m   [92m |[0m                          [92m^^[0m [92mderived from here[0m
@@ -21,7 +21,7 @@
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m
   [91m |[0m 
-  [91m |[0m type variable 'ex288:
+  [91m |[0m type variable 'ex212:
   [91m |[0m [96mpass/existential_ast3/v1.sail[0m:17.48-65:
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m [93mbound here[0m
