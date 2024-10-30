@@ -2039,6 +2039,10 @@ type ('a, 'b) pattern_functions = {
   get_loc_typed : 'b -> l;
 }
 
+type ('a, 'b, 'c) function_arg_result = Arg_ok of 'a | Arg_error of 'b | Arg_defer of 'c
+
+let is_arg_defer = function Arg_defer _ -> true | _ -> false
+
 type ('a, 'b) vector_concat_elem = VC_elem_ok of 'a | VC_elem_error of 'b * exn | VC_elem_unknown of 'a
 
 let unwrap_vector_concat_elem ~at:l = function
@@ -2157,6 +2161,8 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
             (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
     end
+  | E_vector_append (v1, E_aux (E_vector [], _)), _ -> check_exp env v1 typ
+  | E_vector_append (v1, v2), _ -> check_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot))) typ
   | E_app_infix (x, op, y), _ -> check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, uannot))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_prove" ->
       Env.wf_constraint ~at:l env nc;
@@ -2213,7 +2219,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       let rec try_overload = function
         | errs, [] -> typ_raise l (Err_no_overloading (orig_f, errs))
         | errs, f :: fs -> begin
-            typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
+            typ_print (lazy ("Check overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
             try crule check_exp env (E_aux (E_app (f, xs), (l, add_overload_attribute l orig_f uannot))) typ
             with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
@@ -3532,7 +3538,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let rec try_overload = function
         | errs, [] -> typ_raise l (Err_no_overloading (orig_f, errs))
         | errs, f :: fs -> begin
-            typ_print (lazy ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
+            typ_print (lazy ("Infer overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
             try irule infer_exp env (E_aux (E_app (f, xs), (l, add_overload_attribute l orig_f uannot)))
             with Type_error (err_l, err) ->
               typ_debug (lazy "Error");
@@ -3839,7 +3845,15 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
         else ([], List.map implicit_to_int typ_args, xs)
   in
 
-  let typ_args =
+  typ_debug
+    ( lazy
+      (Option.fold ~none:"No expected return"
+         ~some:(fun typ -> Printf.sprintf "Expected return %s" (string_of_typ typ))
+         expected_ret_typ
+      )
+      );
+
+  let instantiate_return_type typ_args =
     match expected_ret_typ with
     | None -> typ_args
     | Some expect when is_exist (Env.expand_synonyms env expect) -> typ_args
@@ -3863,14 +3877,16 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
       )
   in
 
+  let typ_args = instantiate_return_type typ_args in
+
   (* We now iterate throught the function arguments, checking them and
      instantiating quantifiers. *)
   let instantiate env arg typ remaining_typs =
     if KidSet.for_all (is_bound env) (tyvars_of_typ typ) then (
       try
         let checked_exp = crule check_exp env arg typ in
-        Ok (checked_exp, remaining_typs, env)
-      with Type_error (l, err) -> Error (l, 0, Err_function_arg (exp_loc arg, typ, err))
+        Arg_ok (checked_exp, remaining_typs, env)
+      with Type_error (l, err) -> Arg_error (l, 0, Err_function_arg (exp_loc arg, typ, err))
     )
     else (
       let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
@@ -3879,8 +3895,8 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
          as it provides a heuristic for how likely any error is in a
          function overloading *)
       match can_unify_with env goals (irule infer_exp env arg) typ with
-      | exception Unification_error (l, m) -> Error (l, 1, Err_function_arg (exp_loc arg, typ, Err_other m))
-      | exception Type_error (l, err) -> Error (l, 0, Err_function_arg (exp_loc arg, typ, err))
+      | exception Unification_error (l, m) -> Arg_defer (l, 1, Err_function_arg (exp_loc arg, typ, Err_other m))
+      | exception Type_error (l, err) -> Arg_defer (l, 0, Err_function_arg (exp_loc arg, typ, err))
       | inferred_arg, unifiers, env ->
           record_unifiers unifiers;
           let unifiers = KBindings.bindings unifiers in
@@ -3892,27 +3908,50 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
               );
           List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
           List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
+          let remaining_typs = instantiate_return_type remaining_typs in
           let remaining_typs =
             List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) remaining_typs
           in
-          Ok (inferred_arg, remaining_typs, env)
+          Arg_ok (inferred_arg, remaining_typs, env)
     )
   in
-  let fold_instantiate (xs, args, env) x =
-    match args with
-    | arg :: remaining_args -> (
-        match instantiate env x arg remaining_args with
-        | Ok (x, remaining_args, env) -> (Ok x :: xs, remaining_args, env)
-        | Error (l, h, m) -> (Error (l, h, m) :: xs, remaining_args, env)
-      )
-    | [] -> raise (Reporting.err_unreachable l __POS__ "Empty arguments during instantiation")
+
+  (* We don't know the best order to check function arguments in order to instantiate the quantifiers, so we
+     iterate until we reach a fixpoint *)
+  let rec do_instantiation ~previously_deferred env xs typ_args =
+    let fold_instantiate (xs, typs, env, deferred) (n, x) =
+      match typs with
+      | typ :: remaining_typs -> (
+          match instantiate env x typ remaining_typs with
+          | Arg_ok (x, remaining_typs, env) -> ((n, Arg_ok x) :: xs, remaining_typs, env, deferred)
+          | Arg_defer (l, h, m) ->
+              typ_debug (lazy (Printf.sprintf "Deferring %s : %s" (string_of_exp x) (string_of_typ typ)));
+              ((n, Arg_defer (l, h, m)) :: xs, remaining_typs @ [typ], env, deferred @ [(n, x)])
+          | Arg_error (l, h, m) -> ((n, Arg_error (l, h, m)) :: xs, remaining_typs, env, deferred)
+        )
+      | [] -> raise (Reporting.err_unreachable l __POS__ "Empty arguments during instantiation")
+    in
+    let xs, typ_args, env, deferred = List.fold_left fold_instantiate ([], typ_args, env, []) xs in
+    let num_deferred = List.length deferred in
+    typ_debug (lazy (Printf.sprintf "Have %d deferred arguments" num_deferred));
+    if num_deferred = previously_deferred then (xs, env)
+    else (
+      let ys, env = do_instantiation ~previously_deferred:num_deferred env deferred typ_args in
+      (List.filter (fun (_, result) -> not (is_arg_defer result)) xs @ ys, env)
+    )
   in
-  let xs, _, env = List.fold_left fold_instantiate ([], typ_args, env) xs in
+  let xs, env = do_instantiation ~previously_deferred:0 env (List.mapi (fun n x -> (n, x)) xs) typ_args in
+  let xs = List.fast_sort (fun (n, _) (m, _) -> Int.compare m n) xs |> List.map snd in
   let xs, instantiate_errors =
     List.fold_left
-      (fun (acc, errs) x -> match x with Ok x -> (x :: acc, errs) | Error (l, h, m) -> (acc, (l, h, m) :: errs))
+      (fun (acc, errs) x ->
+        match x with
+        | Arg_ok x -> (x :: acc, errs)
+        | Arg_defer (l, h, m) | Arg_error (l, h, m) -> (acc, (l, h, m) :: errs)
+      )
       ([], []) xs
   in
+  typ_debug (lazy (Printf.sprintf "Have %d instantiation errors" (List.length instantiate_errors)));
   begin
     match instantiate_errors with
     | [] -> ()
