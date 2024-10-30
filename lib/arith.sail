@@ -54,7 +54,7 @@ $include <flow.sail>
 val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", _: "add_int"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add",lean: "Int.add",  _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
@@ -63,7 +63,7 @@ overload operator + = {add_atom, add_int}
 val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "Int.sub", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -144,7 +144,8 @@ val tdiv_int = pure {
   interpreter: "tdiv_int",
   lem: "tdiv_int",
   c: "tdiv_int",
-  coq: "Z.quot"
+  coq: "Z.quot",
+  lean: "Int.tdiv"
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
@@ -153,6 +154,7 @@ val _tmod_int = pure {
   interpreter: "tmod_int",
   lem: "tmod_int",
   coq: "Z.rem",
+  lean: "Int.tmod",
   c: "tmod_int"
 } : (int, int) -> int
 
@@ -162,6 +164,7 @@ val _tmod_int_positive = pure {
   interpreter: "tmod_int",
   lem: "tmod_int",
   coq: "Z.rem",
+  lean: "Int.tmod",
   _: "tmod_int"
 } : forall 'n, 'n >= 1. (int, int('n)) -> nat
 
