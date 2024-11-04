@@ -280,11 +280,11 @@ module SimpSet = struct
 end
 
 let and_prefer = function
-  | Var _ -> Some 0
+  | v when SimpSet.is_simp_var v -> Some 0
   | Tester (_, Var _) -> Some 1
-  | Fn ("=", [lit; Var _]) when is_literal lit -> Some 1
-  | Fn ("=", [Var _; lit]) when is_literal lit -> Some 1
-  | Fn ("not", [Fn ("=", [Var _; lit])]) when is_literal lit -> Some 2
+  | Fn ("=", [lit; v]) when is_literal lit && SimpSet.is_simp_var v -> Some 1
+  | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some 1
+  | Fn ("not", [Fn ("=", [v; lit])]) when is_literal lit && SimpSet.is_simp_var v -> Some 2
   | _ -> None
 
 let and_order x y =
@@ -294,7 +294,7 @@ let and_order x y =
   | None, Some _ -> 1
   | None, None -> 0
 
-let or_prefer = function Var _ -> Some 0 | _ -> None
+let or_prefer x = if SimpSet.is_simp_var x then Some 0 else None
 
 let or_order x y =
   match (or_prefer x, or_prefer y) with
@@ -306,19 +306,24 @@ let or_order x y =
 let rec identical x y =
   match (x, y) with
   | Var x, Var y -> Name.compare x y = 0
+  | Field (struct_id1, field_id1, x), Field (struct_id2, field_id2, y) ->
+      Id.compare struct_id1 struct_id2 = 0 && Id.compare field_id1 field_id2 = 0 && identical x y
   | Fn (f1, args1), Fn (f2, args2) ->
       String.compare f1 f2 = 0 && List.compare_lengths args1 args2 = 0 && List.for_all2 identical args1 args2
   | Tester (ctorx, x), Tester (ctory, y) -> Id.compare ctorx ctory = 0 && identical x y
   | Ite (ix, tx, ex), Ite (iy, ty, ey) -> identical ix iy && identical tx ty && identical ex ey
   | _ -> false
 
-let simp_eq x y =
+let rec simp_eq x y =
   match (x, y) with
   | Bool_lit x, Bool_lit y -> Some (x = y)
   | Bitvec_lit x, Bitvec_lit y -> Some (x = y)
   | Var x, Var y when Jib_util.Name.compare x y = 0 -> Some true
   | Member x, Member y -> Some (Id.compare x y = 0)
   | Unit, Unit -> Some true
+  | Field (struct_id1, field_id1, x), Field (struct_id2, field_id2, y)
+    when Id.compare struct_id1 struct_id2 = 0 && Id.compare field_id1 field_id2 = 0 ->
+      simp_eq x y
   | _ -> None
 
 module Simplifier = struct
@@ -437,6 +442,14 @@ module Simplifier = struct
 
   let rule_or_duplicates =
     mk_simple_rule __LOC__ @@ function Fn ("or", xs) -> Change (0, Fn ("or", remove_duplicates xs)) | _ -> NoChange
+
+  let rule_bit_bool_inequality =
+    let open Sail2_values in
+    mk_simple_rule __LOC__ @@ function
+    | Fn ("not", [Fn ("=", [exp; Bitvec_lit [B0]])]) -> change (Fn ("=", [exp; Bitvec_lit [B1]]))
+    | Fn ("not", [Fn ("=", [exp; Bitvec_lit [B1]])]) -> change (Fn ("=", [exp; Bitvec_lit [B0]]))
+    | Fn ("not", [Fn ("=", [exp; Bool_lit b])]) -> change (Fn ("=", [exp; Bool_lit (not b)]))
+    | _ -> NoChange
 
   let rule_and_inequalities =
     mk_simple_rule __LOC__ @@ function
@@ -915,13 +928,15 @@ let simp simpset exp =
           )
     | Var _ -> run_strategy simpset exp rule_var
     | Fn ("=", _) -> run_strategy simpset exp (Then [rule_inequality; rule_simp_eq; rule_concat_literal_eq])
-    | Fn ("not", _) -> run_strategy simpset exp (Then [Repeat rule_not_not; Repeat rule_not_push; rule_inequality])
+    | Fn ("not", _) ->
+        run_strategy simpset exp
+          (Then [rule_bit_bool_inequality; Repeat rule_not_not; Repeat rule_not_push; rule_inequality])
     | Fn ("select", _) -> run_strategy simpset exp rule_access_ite
     | Fn (bvf, _) when is_bvfunction bvf -> run_strategy simpset exp rule_bvfunction_literal
     | ZeroExtend _ -> run_strategy simpset exp rule_extend_literal
     | SignExtend _ -> run_strategy simpset exp rule_extend_literal
     | Extract _ -> run_strategy simpset exp rule_extract
-    | Field _ -> run_strategy simpset exp rule_access_ite
+    | Field _ -> run_strategy simpset exp (Then [rule_var; rule_access_ite])
     | Unwrap _ -> run_strategy simpset exp rule_access_ite
     | Tester _ -> run_strategy simpset exp (Then [rule_tester; rule_access_ite])
     | exp -> NoChange
