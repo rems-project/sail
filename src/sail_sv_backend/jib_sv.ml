@@ -927,8 +927,12 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvshl", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "<<"; sv_signed (pp_smt y)])
     | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>"; sv_signed (pp_smt y)])
     | Fn ("bvashr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>>"; sv_signed (pp_smt y)])
-    | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "/"; pp_smt_parens y])
-    | Fn ("bvsmod", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "%"; pp_smt_parens y])
+    (* SV LRM: The integer division shall truncate any fractional part toward zero
+       SMTLIB bvsdiv: Truncation is towards zero (could not find official reference, but z3 and cvc5 are consistent). *)
+    | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "/"; sv_signed (pp_smt y)])
+    (* SV LRM: The result of a modulus operation shall take the sign of the first operand (dividend).
+       SMTLIB bvsrem: Sign follows dividend *)
+    | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
     | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
     | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "bits"
     | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)

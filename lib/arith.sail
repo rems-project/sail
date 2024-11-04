@@ -140,22 +140,16 @@ overload shr_int = {_shr32, _shr_int, _shr_int_general}
 
 /*! Truncating division (rounds towards zero) */
 val tdiv_int = pure {
-  ocaml: "tdiv_int",
-  interpreter: "tdiv_int",
-  lem: "tdiv_int",
-  c: "tdiv_int",
   coq: "Z.quot",
-  lean: "Int.tdiv"
+  lean: "Int.tdiv",
+  _: "tdiv_int"
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
 val _tmod_int = pure {
-  ocaml: "tmod_int",
-  interpreter: "tmod_int",
-  lem: "tmod_int",
   coq: "Z.rem",
   lean: "Int.tmod",
-  c: "tmod_int"
+  _: "tmod_int"
 } : (int, int) -> int
 
 /*! If we know the second argument is positive, we know the result is positive */

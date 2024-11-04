@@ -54,24 +54,24 @@ val ediv_int = pure {
   ocaml: "quotient",
   interpreter: "quotient",
   lem: "integerDiv",
-  c: "ediv_int",
-  coq: "ZEuclid.div"
+  coq: "ZEuclid.div",
+  _: "ediv_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
 val emod_int = pure {
   ocaml: "modulus",
   interpreter: "modulus",
   lem: "integerMod",
-  c: "emod_int",
-  coq: "ZEuclid.modulo"
+  coq: "ZEuclid.modulo",
+  _: "emod_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
 val abs_int_atom = pure {
   ocaml: "abs_int",
   interpreter: "abs_int",
   lem: "integerAbs",
-  c: "abs_int",
-  coq: "Z.abs"
+  coq: "Z.abs",
+  _: "abs_int"
 } : forall 'n. int('n) -> int(abs('n))
 
 overload abs_int = {abs_int_atom}

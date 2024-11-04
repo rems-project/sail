@@ -187,9 +187,12 @@ let bvsub x y = Fn ("bvsub", [x; y])
 let bvmul x y = Fn ("bvmul", [x; y])
 let bvudiv x y = Fn ("bvudiv", [x; y])
 let bvurem x y = Fn ("bvurem", [x; y])
+let bvsdiv x y = Fn ("bvsdiv", [x; y])
+let bvsrem x y = Fn ("bvsrem", [x; y])
 let bvshl x y = Fn ("bvshl", [x; y])
 let bvlshr x y = Fn ("bvlshr", [x; y])
 let bvult x y = Fn ("bvult", [x; y])
+let bvslt x y = Fn ("bvslt", [x; y])
 
 let bvzero n = Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int n))
 

@@ -99,6 +99,7 @@ typedef sail_write sail_memory_writes [$];
 
 function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits addr, sail_int n);
    logic [63:0] paddr;
+   /* verilator lint_off UNOPTFLAT */
    logic [SAIL_BITS_WIDTH-1:0] buffer;
    sail_int i;
 
@@ -159,7 +160,10 @@ module emulator_write_tag
    output sail_unit          ret,
    output sail_memory_writes out_writes
    );
-endmodule
+endmodule // emulator_write_tag
 
+function automatic string sail_string_of_bits(sail_bits bv);
+   return "";
+endfunction // sail_string_of_bits
 
 `endif

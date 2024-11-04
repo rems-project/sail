@@ -30,6 +30,7 @@ skip_tests = {
     'lib_hex_bits_signed', # bitvector parsing
     'nexp_simp_euclidian', # division
     'concurrency_interface', # memory
+    'ediv_from_tdiv', # loops
 }
 
 print("Sail is {}".format(sail))

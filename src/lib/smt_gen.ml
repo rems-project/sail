@@ -447,10 +447,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             else Extract (esz - 1, 0, smt)
           )
 
-  let builtin_arith fn big_int_fn padding v1 v2 ret_ctyp =
+  let builtin_arith ?(fold = true) fn big_int_fn padding v1 v2 ret_ctyp =
     match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
     | _, _, CT_constant c -> return (bvint (required_width c) c)
-    | CT_constant c1, CT_constant c2, _ -> return (bvint (int_size ret_ctyp) (big_int_fn c1 c2))
+    | CT_constant c1, CT_constant c2, _ when fold -> return (bvint (int_size ret_ctyp) (big_int_fn c1 c2))
     | ctyp1, ctyp2, _ ->
         (* To detect arithmetic overflow we can expand the input
            bitvectors to some size determined by a padding function,
@@ -462,6 +462,40 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* padded_smt1 = signed_size ~into:(padding ret_sz) ~from:(int_size ctyp1) smt1 in
         let* padded_smt2 = signed_size ~into:(padding ret_sz) ~from:(int_size ctyp2) smt2 in
         signed_size ~into:ret_sz ~from:(padding ret_sz) (Fn (fn, [padded_smt1; padded_smt2]))
+
+  let builtin_ediv_int v1 v2 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
+    | _, _, CT_constant c -> return (bvint (required_width c) c)
+    | ctyp1, ctyp2, _ ->
+        let ret_sz = int_size ret_ctyp in
+        let* smt1 = bind (smt_cval v1) (signed_size ~into:ret_sz ~from:(int_size ctyp1)) in
+        let* smt2 = bind (smt_cval v2) (signed_size ~into:ret_sz ~from:(int_size ctyp2)) in
+        let negative_dividend = bvslt smt1 (bvzero ret_sz) in
+        let negative_divisor = bvslt smt2 (bvzero ret_sz) in
+        return
+          (Ite
+             ( smt_conj [negative_dividend; negative_divisor],
+               bvadd (bvsdiv (bvsub (bvneg smt1) (bvone ret_sz)) (bvneg smt2)) (bvone ret_sz),
+               Ite (negative_dividend, bvsub (bvsdiv (bvadd smt1 (bvone ret_sz)) smt2) (bvone ret_sz), bvsdiv smt1 smt2)
+             )
+          )
+
+  let builtin_emod_int v1 v2 ret_ctyp =
+    match (cval_ctyp v1, cval_ctyp v2, ret_ctyp) with
+    | _, _, CT_constant c -> return (bvint (required_width c) c)
+    | ctyp1, ctyp2, _ ->
+        let ret_sz = int_size ret_ctyp in
+        let* smt1 = bind (smt_cval v1) (signed_size ~into:ret_sz ~from:(int_size ctyp1)) in
+        let* smt2 = bind (smt_cval v2) (signed_size ~into:ret_sz ~from:(int_size ctyp2)) in
+        let negative_dividend = bvslt smt1 (bvzero ret_sz) in
+        let negative_divisor = bvslt smt2 (bvzero ret_sz) in
+        return
+          (Ite
+             ( smt_conj [negative_dividend; negative_divisor],
+               bvadd (bvsrem (bvsub (bvneg smt1) (bvone ret_sz)) (bvneg smt2)) (bvone ret_sz),
+               Ite (negative_dividend, bvsub (bvsrem (bvadd smt1 (bvone ret_sz)) smt2) (bvone ret_sz), bvsrem smt1 smt2)
+             )
+          )
 
   let builtin_add_int = builtin_arith "bvadd" Big_int.add (fun x -> x + 1)
   let builtin_sub_int = builtin_arith "bvsub" Big_int.sub (fun x -> x + 1)
@@ -500,8 +534,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_max_int = builtin_choose_int "bvsgt" max
   let builtin_min_int = builtin_choose_int "bvslt" min
 
-  let builtin_tdiv_int = builtin_arith "bvsdiv" Big_int.div (fun x -> x)
-  let builtin_tmod_int = builtin_arith "bvsrem" Big_int.div (fun x -> x)
+  let builtin_tdiv_int = builtin_arith ~fold:false "bvsdiv" Sail2_values.tdiv_int (fun x -> x)
+  let builtin_tmod_int = builtin_arith ~fold:false "bvsrem" Sail2_values.tmod_int (fun x -> x)
 
   let int_comparison fn big_int_fn v1 v2 =
     let* sv1 = smt_cval v1 in
@@ -600,6 +634,19 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           )
           else Fn (shiftop, [Fn ("contents", [bv]); shift])
         in
+        return (Fn ("Bits", [Fn ("len", [bv]); shifted]))
+    | _ -> builtin_type_error shiftop [vbits; vshift] (Some ret_ctyp)
+
+  let builtin_shift_by_bits shiftop vbits vshift ret_ctyp =
+    match cval_ctyp vbits with
+    | CT_fbits n ->
+        let* bv = smt_cval vbits in
+        let* shift = bind (smt_cval vshift) (smt_conversion ~into:(CT_fbits n) ~from:(cval_ctyp vshift)) in
+        return (Fn (shiftop, [bv; shift]))
+    | CT_lbits ->
+        let* bv = smt_cval vbits in
+        let* shift = bind (smt_cval vshift) (smt_conversion ~into:(CT_fbits lbits_size) ~from:(cval_ctyp vshift)) in
+        let shifted = Fn (shiftop, [Fn ("contents", [bv]); shift]) in
         return (Fn ("Bits", [Fn ("len", [bv]); shifted]))
     | _ -> builtin_type_error shiftop [vbits; vshift] (Some ret_ctyp)
 
@@ -1399,6 +1446,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "min_int" -> binary_primop builtin_min_int
     | "tdiv_int" -> binary_primop builtin_tdiv_int
     | "tmod_int" -> binary_primop builtin_tmod_int
+    | "ediv_int" -> binary_primop builtin_ediv_int
+    | "emod_int" -> binary_primop builtin_emod_int
     | "pow2" -> unary_primop builtin_pow2
     | "zeros" -> unary_primop builtin_zeros
     | "ones" -> unary_primop builtin_ones
@@ -1422,6 +1471,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "shiftl" -> binary_primop (builtin_shift "bvshl")
     | "shiftr" -> binary_primop (builtin_shift "bvlshr")
     | "arith_shiftr" -> binary_primop (builtin_shift "bvashr")
+    | "shift_bits_left" -> binary_primop (builtin_shift_by_bits "bvshl")
+    | "shift_bits_right" -> binary_primop (builtin_shift_by_bits "bvlshr")
     | "and_bits" -> binary_primop (builtin_bitwise "bvand")
     | "or_bits" -> binary_primop (builtin_bitwise "bvor")
     | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
