@@ -3484,9 +3484,12 @@ module MakeExhaustive = struct
   }
 
   let make_enum_mappings ids m =
-    IdSet.fold
-      (fun id m -> Bindings.add id (List.map (fun e -> RP_enum e) (IdSet.elements (IdSet.remove id ids))) m)
-      ids m
+    let all_ids = List.map (fun e -> RP_enum e) (IdSet.elements ids) in
+    IdSet.fold (fun id m -> Bindings.add id all_ids m) ids m
+
+  let get_residual_enum ctx id =
+    let all_ids = Bindings.find id ctx.enum_to_rest in
+    List.filter (function RP_enum id' -> Id.compare id id' <> 0 | _ -> false) all_ids
 
   let make_cstr_mappings env ids m =
     let ids = IdSet.elements ids in
@@ -3566,7 +3569,7 @@ module MakeExhaustive = struct
           match Env.lookup_id id ctx.env with
           | Enum enum -> (
               match res_pat with
-              | RP_any -> (Bindings.find id ctx.enum_to_rest, true)
+              | RP_any -> (get_residual_enum ctx id, true)
               | RP_enum id' -> if Id.compare id id' == 0 then ([], true) else ([res_pat], false)
               | _ -> inconsistent ()
             )
