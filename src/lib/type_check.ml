@@ -3599,6 +3599,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Try to infer the type of the condition - in some cases it may be a constant `true`
          or `false`, e.g. `xlen == 32`. If that fails check it is a bool without inference. *)
       let cond' = try irule infer_exp env cond with Type_error _ -> crule check_exp env cond bool_typ in
+      subtyp (exp_loc cond) env (typ_of cond') bool_typ;
 
       (* Constraints to apply when reasoning about the branch types. The condition must be
          true when evaluating the type of the `then` branch, and false for `else`. *)

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/non_bool_if.sail[0m:2.11-17:
+2[96m |[0mlet _ = if "test" then 1 else 2
+ [91m |[0m           [91m^----^[0m
+ [91m |[0m Type mismatch between bool('ex1#) and string
