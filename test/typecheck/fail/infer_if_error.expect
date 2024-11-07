@@ -1,0 +1,15 @@
+[93mType error[0m:
+[96mfail/infer_if_error.sail[0m:4.8-30:
+4[96m |[0mlet _ = if b then f() else g()
+ [91m |[0m        [91m^--------------------^[0m
+ [91m |[0m Could not infer type for if-statement
+ [91m |[0m [94m*[0m then branch:
+ [91m |[0m   [96mfail/infer_if_error.sail[0m:4.18-19:
+ [91m |[0m   4[96m |[0mlet _ = if b then f() else g()
+ [91m |[0m    [91m |[0m                  [91m^[0m
+ [91m |[0m    [91m |[0m Function f not found
+ [91m |[0m [94m*[0m else branch:
+ [91m |[0m   [96mfail/infer_if_error.sail[0m:4.27-28:
+ [91m |[0m   4[96m |[0mlet _ = if b then f() else g()
+ [91m |[0m    [91m |[0m                           [91m^[0m
+ [91m |[0m    [91m |[0m Function g not found

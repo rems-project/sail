@@ -520,6 +520,22 @@ let message_of_type_error type_error =
           )
         )
     | Err_not_in_scope (explanation, None, _, _, _, _) -> (Line (Option.value ~default:"Not in scope" explanation), None)
+    | Err_alternate (err, reasons) ->
+        let msg, hint = to_message err in
+        ( Seq
+            [
+              msg;
+              List
+                (List.map
+                   (fun (item, l, err) ->
+                     let msg, hint = to_message err in
+                     (item, Location ("", hint, l, msg))
+                   )
+                   reasons
+                );
+            ],
+          hint
+        )
   in
   to_message type_error
 

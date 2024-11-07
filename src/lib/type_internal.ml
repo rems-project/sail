@@ -92,6 +92,7 @@ type type_error =
   | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
   | Err_hint of string
   | Err_with_hint of string * type_error
+  | Err_alternate of type_error * (string * Parse_ast.l * type_error) list
 
 let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", error2)
 

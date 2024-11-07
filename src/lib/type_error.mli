@@ -88,6 +88,7 @@ type type_error =
           whether we have a function of the same name in scope. *)
   | Err_hint of string  (** A short error that only appears attached to a location *)
   | Err_with_hint of string * type_error
+  | Err_alternate of type_error * (string * Parse_ast.l * type_error) list
 
 exception Type_error of Parse_ast.l * type_error
 

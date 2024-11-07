@@ -3618,7 +3618,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
               (destruct_numeric (Env.expand_synonyms env (typ_of inferred_exp)))
           in
           Left (inferred_exp, maybe_simple_numeric)
-        with Type_error (l, err) -> Right (Type_error (l, err))
+        with Type_error (l, err) -> Right (l, err)
       in
 
       (* When one branch's type is inferred, check the other branch's type against it. *)
@@ -3650,8 +3650,14 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | _, Left (else_branch', None) ->
           let other_branch, inferred_typ = one_branch_inferred else_branch' then_branch then_env in
           annot_exp (E_if (cond', other_branch, else_branch')) inferred_typ
-      (* We couldn't infer the type of either branch; raise the error for the `then` branch. *)
-      | Right err, _ -> raise err
+      (* We couldn't infer the type of either branch. *)
+      | Right (l1, err1), Right (l2, err2) ->
+          typ_raise l
+            (Err_alternate
+               ( Err_other "Could not infer type for if-statement",
+                 [("then branch:", l1, err1); ("else branch:", l2, err2)]
+               )
+            )
     end
   | E_vector_access (v, n) -> begin
       try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot))) with
