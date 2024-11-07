@@ -69,6 +69,7 @@ let opt_includes = ref []
 type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
+let opt_verilate_args = ref None
 
 let opt_line_directives = ref false
 
@@ -115,6 +116,10 @@ let verilog_options =
               )
         ),
       "<compile|run> Invoke verilator on generated output"
+    );
+    ( "-sv_verilate_args",
+      Arg.String (fun s -> opt_verilate_args := Some s),
+      "<string> Extra arguments to pass to verilator"
     );
     ("-sv_lines", Arg.Set opt_line_directives, " output `line directives");
     ("-sv_comb", Arg.Set opt_comb, " output an always_comb block instead of initial block");
@@ -608,12 +613,15 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
           (verilator_cpp_wrapper "sail_toplevel");
         Util.close_output_with_check file_info;
 
+        let extra = match !opt_verilate_args with None -> "" | Some args -> " " ^ args in
+
         (* Verilator sometimes just spuriously returns non-zero exit
            codes even when it suceeds, so we don't use system_checked
            here, and just hope for the best. *)
         let verilator_command =
-          sprintf "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv"
-            sail_sv_libdir out out out
+          sprintf
+            "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv%s"
+            sail_sv_libdir out out out extra
         in
         print_endline ("Verilator command: " ^ verilator_command);
         let _ = Unix.system verilator_command in

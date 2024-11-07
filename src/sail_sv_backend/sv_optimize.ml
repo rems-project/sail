@@ -615,7 +615,7 @@ module RemoveUnusedVariables = struct
 
   let rec def_uses stack uses (SVD_aux (aux, l)) =
     match aux with
-    | SVD_type _ | SVD_null -> ()
+    | SVD_type _ | SVD_null | SVD_dpi_function _ -> ()
     | SVD_fundef { params; body; _ } ->
         let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty params in
         push (Function paramset) stack;

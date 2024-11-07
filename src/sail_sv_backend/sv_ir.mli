@@ -105,6 +105,7 @@ and sv_def_aux =
       output_connections : sv_place list;
     }
   | SVD_always_comb of sv_statement
+  | SVD_dpi_function of { function_name : sv_name; return_type : Jib.ctyp option; param_types : Jib.ctyp list }
 
 and sv_place =
   | SVP_id of Jib.name

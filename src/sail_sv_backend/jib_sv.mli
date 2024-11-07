@@ -106,7 +106,7 @@ module Make (Config : CONFIG) : sig
   val sv_fundef_with :
     Jib_compile.ctx -> string -> Ast.id list -> Jib.ctyp list -> Jib.ctyp -> PPrint.document -> PPrint.document
 
-  val sv_ctyp : Jib.ctyp -> string * string option
+  val sv_ctyp : ?two_state:bool -> Jib.ctyp -> string * string option
 
   val wrap_type : Jib.ctyp -> PPrint.document -> PPrint.document
 

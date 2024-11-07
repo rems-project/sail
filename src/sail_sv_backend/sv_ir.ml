@@ -107,6 +107,7 @@ and sv_def_aux =
       output_connections : sv_place list;
     }
   | SVD_always_comb of sv_statement
+  | SVD_dpi_function of { function_name : sv_name; return_type : Jib.ctyp option; param_types : Jib.ctyp list }
 
 and sv_place =
   | SVP_id of Jib.name
@@ -357,6 +358,11 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
     | SVD_always_comb statement ->
         let statement' = visit_sv_statement vis statement in
         if statement == statement' then no_change else SVD_aux (SVD_always_comb statement', l)
+    | SVD_dpi_function { function_name; return_type; param_types } ->
+        let return_type' = map_no_copy_opt (visit_ctyp (vis :> common_visitor)) return_type in
+        let param_types' = map_no_copy (visit_ctyp (vis :> common_visitor)) param_types in
+        if return_type == return_type' && param_types = param_types' then no_change
+        else SVD_aux (SVD_dpi_function { function_name; return_type = return_type'; param_types = param_types' }, l)
   in
   do_visit vis (vis#vdef outer_def) aux outer_def
 

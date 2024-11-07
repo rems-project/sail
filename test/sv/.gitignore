@@ -1,2 +1,2 @@
 # Ignore generated directories from SV tests
-**/*
+*_obj_dir/*

@@ -129,6 +129,14 @@ let sv_return_type_from_attribute attr_data_opt =
   | None -> Some ctyp
   | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
 
+let sv_dpi_from_attr attr_data_opt =
+  let open Util.Option_monad in
+  let* fields = Option.bind attr_data_opt attribute_data_object in
+  let* dpi = List.assoc_opt "dpi" fields in
+  match dpi with
+  | AD_aux (AD_bool b, _) -> Some b
+  | AD_aux (_, l) -> raise (Reporting.err_general l "dpi field must be a boolean")
+
 (* The direct footprint contains information about the effects
    directly performed by the function itself, i.e. not those from any
    transitive function calls. It is constructed by the footprint
@@ -525,15 +533,18 @@ module Make (Config : CONFIG) = struct
 
   let simple_type str = (str, None)
 
-  let rec sv_ctyp = function
+  let rec sv_ctyp ?(two_state = false) = function
     | CT_bool -> simple_type "bit"
+    | CT_bit when two_state -> simple_type "bit"
     | CT_bit -> simple_type "logic"
     | CT_fbits 0 -> simple_type "sail_zwbv"
+    | CT_fbits width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
     | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_sbits max_width ->
         let logic = sprintf "logic [%d:0]" (max_width - 1) in
         ksprintf simple_type "struct packed { logic [7:0] size; %s bits; }" logic
     | CT_lbits -> simple_type "sail_bits"
+    | CT_fint width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
     | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_lint -> ksprintf simple_type "logic [%d:0]" (Config.max_unknown_integer_width - 1)
     | CT_string -> simple_type (if Config.nostrings then "sail_unit" else "string")
@@ -541,20 +552,25 @@ module Make (Config : CONFIG) = struct
     | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> simple_type (sv_type_id_string id)
     | CT_constant c ->
         let width = required_width c in
-        ksprintf simple_type "logic [%d:0]" (width - 1)
+        if two_state then ksprintf simple_type "bit [%d:0]" (width - 1)
+        else ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_ref ctyp -> ksprintf simple_type "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
     | CT_fvector (len, ctyp) ->
         let outer_index = sprintf "[%d:0]" (len - 1) in
         begin
-          match sv_ctyp ctyp with
+          match sv_ctyp ~two_state ctyp with
           | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
           | ty, None -> (ty, Some outer_index)
         end
     | CT_list ctyp -> begin
-        match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[$]")) | ty, None -> (ty, Some "[$]")
+        match sv_ctyp ~two_state ctyp with
+        | ty, Some inner_index -> (ty, Some (inner_index ^ "[$]"))
+        | ty, None -> (ty, Some "[$]")
       end
     | CT_vector ctyp -> begin
-        match sv_ctyp ctyp with ty, Some inner_index -> (ty, Some (inner_index ^ "[]")) | ty, None -> (ty, Some "[]")
+        match sv_ctyp ~two_state ctyp with
+        | ty, Some inner_index -> (ty, Some (inner_index ^ "[]"))
+        | ty, None -> (ty, Some "[]")
       end
     | CT_real -> simple_type "sail_real"
     | CT_rounding_mode -> simple_type "sail_rounding_mode"
@@ -2199,6 +2215,30 @@ module Make (Config : CONFIG) = struct
     | SVD_fundef f -> pp_fundef f
     | SVD_module m -> pp_module m
     | SVD_type type_def -> pp_type_def type_def
+    | SVD_dpi_function { function_name; return_type; param_types } ->
+        let ret_ty, typedef =
+          match return_type with
+          | Some ret_ctyp ->
+              (* Per the SystemVerilog LRM, a DPI function can only return
+                 two-state types other than a single logic *)
+              let ret_ty, index_ty = sv_ctyp ~two_state:true ret_ctyp in
+              begin
+                match index_ty with
+                | Some index ->
+                    let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
+                    let new_ty = string ("t_" ^ pp_sv_name_string function_name ^ "_" ^ encoded) in
+                    ( new_ty,
+                      separate space [string "typedef"; string ret_ty; new_ty; string index] ^^ semi ^^ twice hardline
+                    )
+                | None -> (string ret_ty, empty)
+              end
+          | None -> (string "void", empty)
+        in
+        let params = List.mapi (fun n ctyp -> wrap_type ctyp (string ("param" ^ string_of_int n))) param_types in
+        typedef
+        ^^ separate space [string "import"; string "\"DPI-C\""; string "function"; ret_ty; pp_sv_name function_name]
+        ^^ parens (separate (comma ^^ space) params)
+        ^^ semi
 
   let sv_fundef_with ctx f params param_ctyps ret_ctyp fun_body =
     let sv_ret_ty, index_ty = sv_ctyp ret_ctyp in
@@ -2390,7 +2430,40 @@ module Make (Config : CONFIG) = struct
 
   let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (f, _, param_ctyps, ret_ctyp) -> ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+    | CDEF_val (f, ext_name, param_ctyps, ret_ctyp) ->
+        let sv_function_attr_opt = get_def_attribute "sv_function" def_annot in
+        if Option.is_some sv_function_attr_opt then (
+          let _, sv_function_attr = Option.get sv_function_attr_opt in
+          match sv_dpi_from_attr sv_function_attr with
+          (* If the dpi attribute isn't present, or is false don't do anything *)
+          | None | Some false -> ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+          | Some true ->
+              let ret_ctyp =
+                match sv_return_type_from_attribute sv_function_attr with None -> ret_ctyp | Some ctyp' -> ctyp'
+              in
+              let param_ctyps =
+                match sv_types_from_attribute ~arity:(List.length param_ctyps) sv_function_attr with
+                | None -> param_ctyps
+                | Some conversions ->
+                    List.map
+                      (fun (ctyp, convert) -> match convert with None -> ctyp | Some ctyp' -> ctyp')
+                      (List.combine param_ctyps conversions)
+              in
+
+              let dpi_import =
+                SVD_aux
+                  ( SVD_dpi_function
+                      {
+                        function_name = Option.fold ~none:(SVN_id f) ~some:(fun s -> SVN_string s) ext_name;
+                        return_type = Some ret_ctyp;
+                        param_types = param_ctyps;
+                      },
+                    def_annot.loc
+                  )
+              in
+              ([dpi_import], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+        )
+        else ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
     | CDEF_fundef (f, _, params, body) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
