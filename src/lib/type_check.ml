@@ -1772,6 +1772,15 @@ and build_overload_tree_arg env (E_aux (aux, annot) as exp) =
       | L_aux (L_undef, _) -> OT_leaf (exp, OL_unknown)
       | _ -> OT_leaf (exp, overload_leaf_type (infer_lit lit))
     end
+  | E_if (_, then_branch, else_branch) ->
+      let then_tree = build_overload_tree_arg env then_branch in
+      let else_tree = build_overload_tree_arg env else_branch in
+      begin
+        match (then_tree, else_tree) with
+        | OT_leaf (_, OL_unknown), OT_leaf (_, ot) -> OT_leaf (exp, ot)
+        | OT_leaf (_, ot), OT_leaf _ -> OT_leaf (exp, ot)
+        | _ -> OT_leaf (exp, OL_unknown)
+      end
   | _ -> OT_leaf (exp, OL_unknown)
 
 let string_of_overload_leaf = function
