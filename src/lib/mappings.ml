@@ -75,9 +75,40 @@
     }
     ]}
 
-   which is quite complicated. The [$[mapping_match]] attribute
-   ensures the type checker can re-check the mapping despite
-   the added option type. *)
+    which is quite complicated. The [$[mapping_match]] attribute
+    ensures the type checker can re-check the mapping despite
+    the added option type.
+
+    There are a few constraints that make this rewrite as tricky looking as it is:
+
+    - We don't want to duplicate any expression (`<expr1>` and `<expr2>`).
+    - We can't change the evaluation order, as this might change the
+      observable side effects of the expression. This includes the order
+      in which we evaluate `mapping_forwards` relative to all the other
+      expressions.
+    - The scope of all pattern bindings should be preserved.
+    - The match can be embedded in any context (so we can't use `return`).
+    - Mappings can be nested e.g. `m1(m2(m3(<pattern>)))`.
+
+    If the mapping match is in a return position we can instead rewrite to
+
+    {@sail[
+    let y = x in {
+      $[complete] match y {
+        <pat> => return <expr1>,
+        z if mapping_forwards_matches(z) => $[complete] match mapping_forwards(z) {
+          A => return <expr2>,
+          _ => (),
+        },
+        _ => (),
+      };
+      $[<completeness>] match y {
+        <rest>
+      }
+    }
+    ]}
+
+    which avoids the nested match statements and option type. *)
 
 open Ast
 open Ast_util
@@ -175,23 +206,29 @@ let name_gen prefix =
   in
   fresh
 
-(* Take a arm like "<pat> => <exp>" and turn it into "<pat> => Some(<exp>)" *)
-let some_arm = function
-  | Pat_aux (Pat_exp (pat, exp), annot) -> Pat_aux (Pat_exp (pat, mk_exp (E_app (mk_id "Some", [exp]))), annot)
-  | Pat_aux (Pat_when (pat, guard, exp), annot) ->
-      Pat_aux (Pat_when (pat, guard, mk_exp (E_app (mk_id "Some", [exp]))), annot)
+let wrap_some ~return_position exp =
+  if return_position then mk_exp (E_return exp) else mk_exp (E_app (mk_id "Some", [exp]))
 
-let wildcard_none = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))))
+(* Take a arm like "<pat> => <exp>" and turn it into "<pat> => Some(<exp>)", or
+   "<pat> => return <exp>" when in return position. *)
+let some_arm ~return_position = function
+  | Pat_aux (Pat_exp (pat, exp), annot) -> Pat_aux (Pat_exp (pat, wrap_some ~return_position exp), annot)
+  | Pat_aux (Pat_when (pat, guard, exp), annot) -> Pat_aux (Pat_when (pat, guard, wrap_some ~return_position exp), annot)
+
+(* Create an arm like "_ => None()" or "_ => ()" (when in return position) *)
+let wildcard_arm ~return_position () =
+  if return_position then mk_pexp (Pat_exp (mk_pat P_wild, mk_lit_exp L_unit))
+  else mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))))
 
 let unwrap_some =
   mk_pexp (Pat_exp (mk_pat (P_app (mk_id "Some", [mk_pat (P_id (mk_id "result"))])), mk_exp (E_id (mk_id "result"))))
 
 let none_pexp exp = mk_pexp (Pat_exp (mk_pat (P_app (mk_id "None", [mk_pat (P_lit (mk_lit L_unit))])), exp))
 
+let remove_completeness_attribute uannot = uannot |> remove_attribute "incomplete" |> remove_attribute "complete"
+
 let match_completeness c (E_aux (aux, (l, uannot))) =
-  let uannot =
-    uannot |> remove_attribute "incomplete" |> remove_attribute "complete" |> add_attribute (gen_loc l) c None
-  in
+  let uannot = uannot |> remove_completeness_attribute |> add_attribute (gen_loc l) c None in
   match aux with
   | E_match _ -> E_aux (aux, (l, uannot))
   | _ -> Reporting.unreachable l __POS__ "Non-match in match_completeness"
@@ -237,7 +274,7 @@ let tuple_exp = function [exp] -> exp | exps -> mk_exp (E_tuple exps)
 
 let tuple_pat = function [pat] -> pat | pats -> mk_pat (P_tuple pats)
 
-let rec mappings_match is_mapping subst mappings pexp =
+let rec mappings_match ~terminal ~return_position is_mapping subst mappings pexp =
   let handle_mapping (subst_id, P_aux (aux, (l, uannot))) =
     match aux with
     | P_app (mapping, [subpat]) ->
@@ -257,50 +294,78 @@ let rec mappings_match is_mapping subst mappings pexp =
   let subpat = tuple_pat (List.map (fun (_, _, subpat) -> subpat) mappings) in
   let match_exp =
     let arms =
-      [
-        construct_pexp (subpat, guard_opt, mk_exp (E_app (mk_id "Some", [exp])), (gen_loc l, empty_uannot));
-        wildcard_none;
-      ]
+      if terminal then [construct_pexp (subpat, guard_opt, exp, (gen_loc l, empty_uannot))]
+      else
+        [
+          construct_pexp (subpat, guard_opt, wrap_some ~return_position exp, (gen_loc l, empty_uannot));
+          wildcard_arm ~return_position ();
+        ]
     in
-    rewrite_match_untyped is_mapping subst head_exp arms (gen_loc l, empty_uannot)
+    rewrite_match_untyped ~return_position is_mapping subst head_exp arms (gen_loc l, empty_uannot)
   in
   construct_pexp (pat, Some guard_exp, match_exp, (gen_loc l, empty_uannot))
 
-and rewrite_arms is_mapping subst msa (l, uannot) =
+and rewrite_arms ~return_position is_mapping subst msa (l, uannot) =
   let head_exp_tmp = mk_id "head_exp#" in
-  let mmatch = mappings_match is_mapping subst msa.mappings msa.subst_arm in
+  let mmatch terminal = mappings_match ~terminal ~return_position is_mapping subst msa.mappings msa.subst_arm in
   let new_head_exp =
-    mk_exp (E_match (mk_exp (E_id head_exp_tmp), List.map some_arm msa.before_arms @ [mmatch; wildcard_none]))
+    mk_exp
+      (E_match
+         ( mk_exp (E_id head_exp_tmp),
+           List.map (some_arm ~return_position) msa.before_arms @ [mmatch false; wildcard_arm ~return_position ()]
+         )
+      )
     |> match_complete
   in
   let outer_match =
-    match msa.after_arms with
-    | [] ->
-        E_aux (E_match (new_head_exp, [unwrap_some]), (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot))
-        |> match_incomplete
-    | _ ->
-        let after_match =
-          rewrite_match_untyped is_mapping subst (mk_exp (E_id head_exp_tmp)) msa.after_arms (l, uannot)
-        in
-        E_aux
-          ( E_match (new_head_exp, [unwrap_some; none_pexp after_match]),
-            (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot)
-          )
-        |> match_complete
+    if return_position then (
+      match msa.after_arms with
+      | [] ->
+          mk_exp
+            (E_match (mk_exp (E_id head_exp_tmp), List.map (some_arm ~return_position) msa.before_arms @ [mmatch true]))
+          |> match_incomplete
+      | _ ->
+          let after_match =
+            rewrite_match_untyped ~return_position is_mapping subst (mk_exp (E_id head_exp_tmp)) msa.after_arms
+              (l, uannot)
+          in
+          E_aux (E_block [new_head_exp; after_match], (l, remove_completeness_attribute uannot))
+    )
+    else (
+      match msa.after_arms with
+      | [] ->
+          E_aux (E_match (new_head_exp, [unwrap_some]), (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot))
+          |> match_incomplete
+      | _ ->
+          let after_match =
+            rewrite_match_untyped ~return_position is_mapping subst (mk_exp (E_id head_exp_tmp)) msa.after_arms
+              (l, uannot)
+          in
+          E_aux
+            ( E_match (new_head_exp, [unwrap_some; none_pexp after_match]),
+              (l, add_attribute Parse_ast.Unknown "mapping_match" None uannot)
+            )
+          |> match_complete
+    )
   in
-  mk_exp (E_let (mk_letbind (mk_pat (P_id head_exp_tmp)) msa.head_exp, outer_match))
+  (* Make sure we don't generate a pointless `let head_exp# = head_exp# in ...` *)
+  match msa.head_exp with
+  | E_aux (E_id id, _) when string_of_id id = "head_exp#" -> outer_match
+  | _ -> mk_exp (E_let (mk_letbind (mk_pat (P_id head_exp_tmp)) msa.head_exp, outer_match))
 
-and rewrite_match_untyped is_mapping subst head_exp arms (l, (uannot : uannot)) =
+and rewrite_match_untyped ~return_position is_mapping subst head_exp arms (l, (uannot : uannot)) =
   match split_arms (fun x -> x) is_mapping subst [] arms with
   | before_arms, Some (subst_arm, mappings, after_arms) ->
-      rewrite_arms is_mapping subst { head_exp; before_arms; subst_arm; mappings; after_arms } (l, uannot)
+      rewrite_arms ~return_position is_mapping subst
+        { head_exp; before_arms; subst_arm; mappings; after_arms }
+        (l, uannot)
   | _, None -> E_aux (E_match (head_exp, arms), (l, uannot))
 
-and rewrite_match_typed is_mapping subst head_exp arms (l, (tannot : tannot)) =
+and rewrite_match_typed ~return_position is_mapping subst head_exp arms (l, (tannot : tannot)) =
   match split_arms map_uannot is_mapping subst [] arms with
   | before_arms, Some (subst_arm, mappings, after_arms) ->
       let rewritten_match =
-        rewrite_arms is_mapping subst
+        rewrite_arms ~return_position is_mapping subst
           (strip_mapping_split_arms { head_exp; before_arms; subst_arm; mappings; after_arms })
           (l, untyped_annot tannot)
       in
@@ -311,7 +376,9 @@ let rewrite_exp (aux, annot) =
   match aux with
   | E_match (head_exp, arms) ->
       let fresh = name_gen "mapping" in
-      rewrite_match_typed (fun m -> Env.is_mapping m (env_of_annot annot)) fresh head_exp arms annot
+      rewrite_match_typed ~return_position:false
+        (fun m -> Env.is_mapping m (env_of_annot annot))
+        fresh head_exp arms annot
   | _ -> E_aux (aux, annot)
 
 let rewrite_ast ast =

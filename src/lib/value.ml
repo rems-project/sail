@@ -457,6 +457,8 @@ let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
 
+let value_undefined_range = function [v1; v2] -> v1 | _ -> failwith "value undefined_range"
+
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
 
 let value_undefined_bitvector = function
@@ -795,6 +797,7 @@ let primops =
          ("undefined_unit", fun _ -> V_unit);
          ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
          ("undefined_int", fun _ -> V_int Big_int.zero);
+         ("undefined_range", value_undefined_range);
          ("undefined_nat", fun _ -> V_int Big_int.zero);
          ("undefined_bool", fun _ -> V_bool false);
          ("undefined_bitvector", value_undefined_bitvector);

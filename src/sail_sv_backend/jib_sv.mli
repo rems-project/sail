@@ -71,6 +71,7 @@ module type CONFIG = sig
   val unreachable : string list
   val comb : bool
   val ignore : string list
+  val dpi_sets : Util.StringSet.t
 end
 
 module Make (Config : CONFIG) : sig

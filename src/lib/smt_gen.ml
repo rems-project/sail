@@ -353,6 +353,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fint n, CT_lbits ->
         let* x = signed_size ~into:lbits_size ~from:n x in
         return (Fn ("Bits", [bvint lbits_index (Big_int.of_int n); x]))
+    | CT_fint n, CT_fint m -> signed_size ~into:m ~from:n x
     | CT_lbits, CT_fbits n -> unsigned_size ~into:n ~from:lbits_size (Fn ("contents", [x]))
     | CT_fbits n, CT_fbits m -> unsigned_size ~into:m ~from:n x
     | CT_fbits n, CT_lbits ->
@@ -1242,11 +1243,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     match (cval_ctyp v, ret_ctyp) with
     | CT_constant n, _ when Big_int.greater_equal n Big_int.zero ->
         return (bvint (int_size ret_ctyp) (Big_int.pow_int_positive 2 (Big_int.to_int n)))
-    | CT_lint, CT_lint ->
-        let* v = smt_cval v in
+    | ctyp, _ ->
         (* TODO: Check we haven't shifted too far *)
-        return (bvshl (bvone lint_size) v)
-    | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
+        let sz = int_size ctyp in
+        let ret_sz = int_size ret_ctyp in
+        let* shift = bind (smt_cval v) (signed_size ~into:ret_sz ~from:sz) in
+        return (bvshl (bvone ret_sz) shift)
 
   let builtin_count_leading_zeros v ret_ctyp =
     let rec lzcnt ret_sz sz smt =
@@ -1367,6 +1369,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         in
         return (Fn ("or", constructors))
     | (CT_fbits _ | CT_lbits), (CT_fbits _ | CT_lbits) -> builtin_eq_bits x y
+    | CT_bit, CT_bit ->
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        return (Fn ("=", [x; y]))
     | (CT_constant _ | CT_fint _ | CT_lint), (CT_constant _ | CT_fint _ | CT_lint) -> builtin_eq_int x y
     | CT_unit, CT_unit -> return (Bool_lit true)
     | CT_enum _, CT_enum _ ->

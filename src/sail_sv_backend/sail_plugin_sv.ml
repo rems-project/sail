@@ -60,6 +60,7 @@ open Interactive.State
 
 open Sv_optimize
 
+module StringSet = Util.StringSet
 module R = Jib_sv
 
 let opt_output_dir = ref None
@@ -70,6 +71,11 @@ type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
 let opt_verilate_args = ref None
+let opt_verilate_cflags = ref None
+let opt_verilate_ldflags = ref None
+let opt_verilate_link_sail_runtime = ref false
+
+let append_flag opt flag = match !opt with None -> opt := Some flag | Some flags -> opt := Some (flags ^ " " ^ flag)
 
 let opt_line_directives = ref false
 
@@ -89,6 +95,8 @@ let opt_nomem = ref false
 
 let opt_unreachable = ref []
 let opt_fun2wires = ref []
+
+let opt_dpi_sets = ref StringSet.empty
 
 let opt_int_specialize = ref None
 
@@ -118,8 +126,20 @@ let verilog_options =
       "<compile|run> Invoke verilator on generated output"
     );
     ( "-sv_verilate_args",
-      Arg.String (fun s -> opt_verilate_args := Some s),
+      Arg.String (fun s -> append_flag opt_verilate_args s),
       "<string> Extra arguments to pass to verilator"
+    );
+    ( "-sv_verilate_cflags",
+      Arg.String (fun s -> append_flag opt_verilate_cflags s),
+      "<string> Verilator CFLAGS argument"
+    );
+    ( "-sv_verilate_ldflags",
+      Arg.String (fun s -> append_flag opt_verilate_ldflags s),
+      "<string> Verilator LDFLAGS argument"
+    );
+    ( "-sv_verilate_link_sail_runtime",
+      Arg.Set opt_verilate_link_sail_runtime,
+      " Link the Sail C runtime with the generated verilator C++"
     );
     ("-sv_lines", Arg.Set opt_line_directives, " output `line directives");
     ("-sv_comb", Arg.Set opt_comb, " output an always_comb block instead of initial block");
@@ -151,6 +171,10 @@ let verilog_options =
       "<n> Run n specialization passes on Sail Int-kinded type variables"
     );
     ("-sv_disable_optimizations", Arg.Set opt_disable_optimizations, " disable SystemVerilog specific optimizations");
+    ( "-sv_dpi",
+      Arg.String (fun s -> opt_dpi_sets := StringSet.add s !opt_dpi_sets),
+      "<set> Use SystemVerilog DPI-C for a set of primitives (e.g. memory)"
+    );
   ]
 
 let verilog_rewrites =
@@ -336,19 +360,38 @@ let wrap_module pre mod_name ins_outs doc =
   ^^ hardline ^^ string "endmodule" ^^ hardline
 
 let verilator_cpp_wrapper name =
-  [
-    sprintf "#include \"V%s.h\"" name;
-    "#include \"verilated.h\"";
-    "int main(int argc, char** argv) {";
-    "    VerilatedContext* contextp = new VerilatedContext;";
-    "    contextp->commandArgs(argc, argv);";
-    sprintf "    V%s* top = new V%s{contextp};" name name;
-    "    while (!contextp->gotFinish()) { top -> eval(); }";
-    "    delete top;";
-    "    delete contextp;";
-    "    return 0;";
-    "}";
-  ]
+  if not !opt_verilate_link_sail_runtime then
+    [
+      sprintf "#include \"V%s.h\"" name;
+      "#include \"verilated.h\"";
+      "int main(int argc, char** argv) {";
+      "    VerilatedContext* contextp = new VerilatedContext;";
+      "    contextp->commandArgs(argc, argv);";
+      sprintf "    V%s* top = new V%s{contextp};" name name;
+      "    while (!contextp->gotFinish()) { top -> eval(); }";
+      "    delete top;";
+      "    delete contextp;";
+      "    return 0;";
+      "}";
+    ]
+  else
+    [
+      sprintf "#include \"V%s.h\"" name;
+      "#include \"verilated.h\"";
+      "#include \"rts.h\"";
+      "int main(int argc, char** argv) {";
+      "    VerilatedContext* contextp = new VerilatedContext;";
+      (* "    contextp->commandArgs(argc, argv);"; *)
+      "    setup_rts();";
+      "    process_arguments(argc, argv);";
+      sprintf "    V%s* top = new V%s{contextp};" name name;
+      "    while (!contextp->gotFinish()) { top -> eval(); }";
+      "    cleanup_rts();";
+      "    delete top;";
+      "    delete contextp;";
+      "    return 0;";
+      "}";
+    ]
 
 (*
 let make_genlib_file filename =
@@ -389,6 +432,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let unreachable = !opt_unreachable
     let comb = !opt_comb
     let ignore = !opt_fun2wires
+    let dpi_sets = !opt_dpi_sets
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
@@ -410,6 +454,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   let include_doc =
     (if !opt_nostrings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
+    ^^ List.fold_left
+         (fun doc set -> ksprintf string "SAIL_DPI_%s" (String.uppercase_ascii set) ^^ hardline)
+         empty (StringSet.elements !opt_dpi_sets)
     ^^ string "`include \"sail.sv\"" ^^ hardline
     ^^ ksprintf string "`include \"sail_genlib_%s.sv\"" out
     ^^ (if !opt_nomem then empty else hardline ^^ string "`include \"sail_memory.sv\"")
@@ -453,7 +500,12 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
+    Util.fold_left_last
+      (fun last doc set ->
+        ksprintf string "`define SAIL_DPI_%s" (String.uppercase_ascii set) ^^ if last then twice hardline else hardline
+      )
+      empty (StringSet.elements !opt_dpi_sets)
+    ^^ string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
     ^^ separate_map (twice hardline) (pp_def None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
     ^^ separate_map (twice hardline) (pp_def None) svir
@@ -614,14 +666,16 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
         Util.close_output_with_check file_info;
 
         let extra = match !opt_verilate_args with None -> "" | Some args -> " " ^ args in
+        let cflags = match !opt_verilate_cflags with None -> "" | Some args -> sprintf " -CFLAGS \"%s\"" args in
+        let ldflags = match !opt_verilate_ldflags with None -> "" | Some args -> sprintf " -LDFLAGS \"%s\"" args in
 
         (* Verilator sometimes just spuriously returns non-zero exit
            codes even when it suceeds, so we don't use system_checked
            here, and just hope for the best. *)
         let verilator_command =
           sprintf
-            "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv%s"
-            sail_sv_libdir out out out extra
+            "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv%s%s%s"
+            sail_sv_libdir out out out extra cflags ldflags
         in
         print_endline ("Verilator command: " ^ verilator_command);
         let _ = Unix.system verilator_command in

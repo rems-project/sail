@@ -268,10 +268,12 @@ val string_to_list : string -> char list
 
 (** {2 Useful sets} *)
 
-(** Sets of Integers *)
+(** Sets of integers and strings *)
 module IntSet : Set.S with type elt = int and type t = Set.Make(Int).t
 
 module IntMap : Map.S with type key = int and type 'a t = 'a Map.Make(Int).t
+
+module StringSet : Set.S with type elt = string and type t = Set.Make(String).t
 
 module StringMap : Map.S with type key = string and type 'a t = 'a Map.Make(String).t
 

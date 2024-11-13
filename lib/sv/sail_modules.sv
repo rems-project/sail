@@ -37,7 +37,7 @@ module print_endline
       out_sail_stdout = {in_sail_stdout, in_str, "\n"};
       out_return = SAIL_UNIT;
    end
-endmodule // print_endline
+endmodule
 
 function automatic bit valid_hex_bits(int n, string hex);
    int  len = hex.len();
@@ -72,23 +72,29 @@ function automatic bit valid_hex_bits(int n, string hex);
    end;
 
    return 1'h1;
-endfunction // valid_hex_bits
+endfunction
 
 function automatic string string_take(string str, int n);
    return str.substr(0, n - 1);
-endfunction // string_take
+endfunction
 
 function automatic string string_drop(string str, int n);
    return str.substr(n, str.len() - 1);
-endfunction // string_drop
+endfunction
 
 function automatic int string_length(string str);
    return str.len();
-endfunction // string_length
+endfunction
 
+`ifdef SAIL_DPI_MEMORY
+import "DPI-C" function bit[7:0] sail_read_byte(logic [63:0] addr);
+
+import "DPI-C" function bit sail_read_tag(logic [63:0] addr);
+`else
 logic [7:0] sail_memory [logic [63:0]];
 
 bit sail_tag_memory [logic [63:0]];
+`endif
 
 typedef struct {
    logic [63:0] paddr;
@@ -99,15 +105,17 @@ typedef sail_write sail_memory_writes [$];
 
 function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits addr, sail_int n);
    logic [63:0] paddr;
-   /* verilator lint_off UNOPTFLAT */
    logic [SAIL_BITS_WIDTH-1:0] buffer;
-   sail_int i;
+   logic [SAIL_INDEX_WIDTH-2:0] i;
 
    paddr = addr.bits[63:0];
 
-   for (i = n; i > 0; i = i - 1) begin
-      buffer = buffer << 8;
-      buffer[7:0] = sail_memory[paddr + (i[63:0] - 1)];
+   for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
+`ifdef SAIL_DPI_MEMORY
+      buffer[7 + (i * 8) -: 8] = sail_read_byte(paddr + (64'(i) - 1));
+`else
+      buffer[7 + (i * 8) -: 8] = sail_memory[paddr + (64'(i) - 1)];
+`endif
    end
 
    return '{n[SAIL_INDEX_WIDTH-1:0] * 8, buffer};
@@ -124,10 +132,14 @@ endfunction
 function automatic bit emulator_read_tag(logic [63:0] addrsize, sail_bits addr);
    logic [63:0] paddr;
    paddr = addr.bits[63:0];
+`ifdef SAIL_DPI_MEMORY
+   return sail_read_tag(paddr);
+`else
    if (sail_tag_memory.exists(paddr) == 1)
      return sail_tag_memory[paddr];
    else
      return 1'b0;
+`endif
 endfunction
 
 module emulator_write_mem
@@ -160,10 +172,10 @@ module emulator_write_tag
    output sail_unit          ret,
    output sail_memory_writes out_writes
    );
-endmodule // emulator_write_tag
+endmodule
 
 function automatic string sail_string_of_bits(sail_bits bv);
    return "";
-endfunction // sail_string_of_bits
+endfunction
 
 `endif

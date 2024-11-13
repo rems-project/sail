@@ -129,13 +129,14 @@ let sv_return_type_from_attribute attr_data_opt =
   | None -> Some ctyp
   | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
 
-let sv_dpi_from_attr attr_data_opt =
+let sv_dpi_from_attr sets attr_data_opt =
   let open Util.Option_monad in
   let* fields = Option.bind attr_data_opt attribute_data_object in
   let* dpi = List.assoc_opt "dpi" fields in
   match dpi with
   | AD_aux (AD_bool b, _) -> Some b
-  | AD_aux (_, l) -> raise (Reporting.err_general l "dpi field must be a boolean")
+  | AD_aux (AD_string s, _) -> Some (StringSet.mem s sets)
+  | AD_aux (_, l) -> raise (Reporting.err_general l "dpi field must be a boolean or string")
 
 (* The direct footprint contains information about the effects
    directly performed by the function itself, i.e. not those from any
@@ -465,6 +466,7 @@ module type CONFIG = sig
   val unreachable : string list
   val comb : bool
   val ignore : string list
+  val dpi_sets : StringSet.t
 end
 
 module Make (Config : CONFIG) = struct
@@ -2434,7 +2436,7 @@ module Make (Config : CONFIG) = struct
         let sv_function_attr_opt = get_def_attribute "sv_function" def_annot in
         if Option.is_some sv_function_attr_opt then (
           let _, sv_function_attr = Option.get sv_function_attr_opt in
-          match sv_dpi_from_attr sv_function_attr with
+          match sv_dpi_from_attr Config.dpi_sets sv_function_attr with
           (* If the dpi attribute isn't present, or is false don't do anything *)
           | None | Some false -> ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
           | Some true ->

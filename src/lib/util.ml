@@ -347,6 +347,7 @@ let string_to_list s =
 module IntSet = Set.Make (Int)
 module IntMap = Map.Make (Int)
 
+module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
 module IntIntSet = Set.Make (struct
