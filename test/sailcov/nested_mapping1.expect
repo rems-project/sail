@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>nested_mapping1</title></head>
+<body>
+<h1>nested_mapping1.sail (2/5) 40%</h1>
+<code style="display: block">
+default&nbsp;Order&nbsp;dec<br>
+$include&nbsp;&lt;prelude.sail&gt;<br>
+<br>
+union&nbsp;ast&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;B&nbsp;:&nbsp;(bool),<br>
+&nbsp;&nbsp;Z&nbsp;:&nbsp;unit<br>
+}<br>
+<br>
+mapping&nbsp;bool_not_bits&nbsp;:&nbsp;bool&nbsp;&lt;-&gt;&nbsp;bits(1)&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;<span style="background-color: hsl(0, 85%, 80%)">true</span>&nbsp;&nbsp;&nbsp;&lt;-&gt;&nbsp;0b0,<br>
+&nbsp;&nbsp;<span style="background-color: hsl(0, 85%, 80%)">false</span>&nbsp;&nbsp;&lt;-&gt;&nbsp;0b1<br>
+}<br>
+<br>
+mapping&nbsp;encdec&nbsp;&nbsp;:&nbsp;bits(2)&nbsp;&lt;-&gt;&nbsp;&nbsp;ast&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;<span style="background-color: hsl(120, 85%, 80%)">0b00</span>&nbsp;&lt;-&gt;&nbsp;Z(),<br>
+&nbsp;&nbsp;<span style="background-color: hsl(0, 85%, 80%)">0b1&nbsp;@&nbsp;bool_not_bits(s)</span>&nbsp;&lt;-&gt;&nbsp;B(s)<br>
+}<br>
+<br>
+val&nbsp;main&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit<br>
+function&nbsp;main()&nbsp;=&nbsp;<span style="background-color: hsl(120, 85%, 80%)">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_&nbsp;=&nbsp;encdec(0b00)<br>
+}</span><br>
+</code>
+</body>
+</html>
