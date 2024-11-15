@@ -772,37 +772,42 @@ module Make (C : CONFIG) = struct
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
         let compile_case case_match_id case_return_id (apat, guard, body) =
-          let trivial_guard =
-            match guard with
-            | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
-            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
-                true
-            | _ -> false
-          in
-          let pre_destructure, destructure, destructure_cleanup, ctx =
-            compile_match ctx apat cval (fun l b -> icopy l (CL_id (case_match_id, CT_bool)) (V_call (Bnot, [b])))
-          in
-          let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
-          let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-          [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool)); idecl l ctyp case_return_id]
-          @ pre_destructure @ destructure
-          @ ( if not trivial_guard then (
-                let gs = ngensym () in
-                guard_setup
-                @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))]
-                @ guard_cleanup
-                @ [
-                    iif l
-                      (V_call (Bnot, [V_id (gs, CT_bool)]))
-                      (destructure_cleanup @ [icopy l (CL_id (case_match_id, CT_bool)) (V_lit (VL_bool false, CT_bool))])
-                      [] CT_unit;
-                  ]
+          if is_dead_aexp body then []
+          else (
+            let trivial_guard =
+              match guard with
+              | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
+              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
+                  true
+              | _ -> false
+            in
+            let pre_destructure, destructure, destructure_cleanup, ctx =
+              compile_match ctx apat cval (fun l b -> icopy l (CL_id (case_match_id, CT_bool)) (V_call (Bnot, [b])))
+            in
+            let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
+            let body_setup, body_call, body_cleanup = compile_aexp ctx body in
+            [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool)); idecl l ctyp case_return_id]
+            @ pre_destructure @ destructure
+            @ ( if not trivial_guard then (
+                  let gs = ngensym () in
+                  guard_setup
+                  @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))]
+                  @ guard_cleanup
+                  @ [
+                      iif l
+                        (V_call (Bnot, [V_id (gs, CT_bool)]))
+                        (destructure_cleanup
+                        @ [icopy l (CL_id (case_match_id, CT_bool)) (V_lit (VL_bool false, CT_bool))]
+                        )
+                        [] CT_unit;
+                    ]
+                )
+                else []
               )
-              else []
-            )
-          @ body_setup
-          @ [body_call (CL_id (case_return_id, ctyp))]
-          @ body_cleanup @ destructure_cleanup
+            @ body_setup
+            @ [body_call (CL_id (case_return_id, ctyp))]
+            @ body_cleanup @ destructure_cleanup
+          )
         in
         let case_ids, cases =
           List.map

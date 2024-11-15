@@ -991,7 +991,7 @@ and map_valspec_annot f = function VS_aux (vs_aux, annot) -> VS_aux (vs_aux, f a
 and map_scattered_annot f = function SD_aux (sd_aux, annot) -> SD_aux (map_scattered_annot_aux f sd_aux, f annot)
 
 and map_scattered_annot_aux f = function
-  | SD_function (rec_opt, tannot_opt, name) -> SD_function (map_recopt_annot f rec_opt, tannot_opt, name)
+  | SD_function (name, tannot_opt) -> SD_function (name, tannot_opt)
   | SD_funcl fcl -> SD_funcl (map_funcl_annot f fcl)
   | SD_variant (id, typq) -> SD_variant (id, typq)
   | SD_unioncl (id, tu) -> SD_unioncl (id, tu)
@@ -1425,7 +1425,7 @@ let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
 let id_of_scattered (SD_aux (sdef, _)) =
   match sdef with
-  | SD_function (_, _, id)
+  | SD_function (id, _)
   | SD_funcl (FCL_aux (FCL_funcl (id, _), _))
   | SD_end id
   | SD_variant (id, _)

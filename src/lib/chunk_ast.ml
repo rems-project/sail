@@ -1137,7 +1137,7 @@ let chunk_default_typing_spec comments chunks (DT_aux (DT_order (kind, typ), l))
   chunk_atyp comments chunks typ;
   Queue.push (Spacer (true, 1)) chunks
 
-let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, _, funcls), l)) =
+let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, funcls), l)) =
   pop_comments comments chunks l;
   let fn_id =
     match funcls with
@@ -1276,7 +1276,7 @@ let chunk_scattered comments chunks (SD_aux (aux, l)) =
         (Function { id; clause = true; rec_opt = None; typq_opt = None; return_typ_opt = None; funcls = [funcl_chunks] })
         chunks
   | SD_end id -> build_def chunks [chunk_keyword "end"; chunk_id id comments]
-  | SD_function (_, _, _, id) -> build_def chunks [chunk_keyword "scattered function"; chunk_id id comments]
+  | SD_function (id, _) -> build_def chunks [chunk_keyword "scattered function"; chunk_id id comments]
   | _ -> Reporting.unreachable l __POS__ "unhandled scattered def"
 
 let def_spacer (_, e) (s, _) = match (e, s) with Some l_e, Some l_s -> if l_s > l_e + 1 then 1 else 0 | _, _ -> 1

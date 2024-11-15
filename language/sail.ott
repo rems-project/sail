@@ -726,7 +726,7 @@ default_spec :: 'DT_' ::=
 scattered_def :: 'SD_' ::=
   {{ com scattered function and union type definitions }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | scattered function rec_opt tannot_opt effect_opt id   :: :: function
+  | scattered function id : tannot_opt effect_opt :: :: function
 {{ texlong }} {{ com scattered function definition header }}
 
   | function clause funcl  :: :: funcl

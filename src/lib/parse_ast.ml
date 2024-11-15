@@ -375,7 +375,7 @@ type outcome_spec_aux = (* outcome declaration *)
 type outcome_spec = OV_aux of outcome_spec_aux * l
 
 type fundef_aux = (* Function definition *)
-  | FD_function of rec_opt * tannot_opt * effect_opt * funcl list
+  | FD_function of rec_opt * tannot_opt * funcl list
 
 type type_def_aux =
   (* Type definition body *)
@@ -395,7 +395,7 @@ type dec_spec_aux = (* Register declarations *)
 type scattered_def_aux =
   (* Function and type union definitions that can be spread across
      a file. Each one must end in $_$ *)
-  | SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
+  | SD_function of id * tannot_opt (* scattered function definition header *)
   | SD_funcl of funcl (* scattered function definition clause *)
   | SD_enum of id (* scattered enumeration definition header *)
   | SD_enumcl of id * id (* scattered enumeration member clause *)

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/issue775.sail[0m:12.49-51:
+12[96m |[0mmapping clause encdec = UTYPE(imm, rd) <-> imm @ rd @ 0b0010111
+  [91m |[0m                                                 [91m^^[0m
+  [91m |[0m Expected bitvector type, got regidx

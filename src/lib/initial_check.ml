@@ -733,10 +733,10 @@ module KindInference = struct
         let* case = infer_case ctx case in
         wrap (P.FCL_funcl (id, case))
 
-  let infer_fundef ctx (P.FD_aux (P.FD_function (rec_opt, tannot_opt, effects, funcls), l)) =
+  let infer_fundef ctx (P.FD_aux (P.FD_function (rec_opt, tannot_opt, funcls), l)) =
     let* tannot_opt = infer_tannot_opt ctx tannot_opt in
     let* funcls = mapM (infer_funcl ctx) funcls in
-    return (P.FD_aux (P.FD_function (rec_opt, tannot_opt, effects, funcls), l))
+    return (P.FD_aux (P.FD_function (rec_opt, tannot_opt, funcls), l))
 
   let rec infer_constructor ctx (P.Tu_aux (aux, l)) =
     let wrap aux = return (P.Tu_aux (aux, l)) in
@@ -1761,7 +1761,7 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl list =
   | _ -> raise (Reporting.err_general l "Attributes or documentation comment not permitted here")
 
 let to_ast_fundef ctx fdef =
-  let P.FD_aux (P.FD_function (rec_opt, tannot_opt, _, funcls), l), kenv =
+  let P.FD_aux (P.FD_function (rec_opt, tannot_opt, funcls), l), kenv =
     KindInference.infer_fundef ctx fdef KindInference.initial_env
   in
   let tannot_opt, ctx = ConvertType.to_ast_tannot_opt kenv ctx tannot_opt in
@@ -1837,9 +1837,10 @@ let to_ast_dec ctx (P.DEC_aux (regdec, l)) =
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
   let extra_def, aux, ctx =
     match aux with
-    | P.SD_function (rec_opt, tannot_opt, _, id) ->
+    | P.SD_function (id, tannot_opt) ->
+        let id = to_ast_id ctx id in
         let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
-        (None, SD_function (to_ast_rec ctx rec_opt, tannot_opt, to_ast_id ctx id), ctx)
+        (None, SD_function (id, tannot_opt), ctx)
     | P.SD_funcl funcl -> (None, SD_funcl (to_ast_funcl None [] ctx funcl), ctx)
     | P.SD_variant (id, parse_typq) ->
         let id = to_ast_id ctx id in
@@ -1903,15 +1904,6 @@ let to_ast_subst ctx = function
 let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> (While, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> (Until, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
-
-(* Annotations on some scattered constructs will not be preserved after de-scattering, so warn about this *)
-let check_annotation (DEF_aux (aux, def_annot)) =
-  if Option.is_some def_annot.doc_comment || not (Util.list_empty def_annot.attrs) then (
-    match aux with
-    | DEF_scattered (SD_aux ((SD_function _ | SD_mapping _ | SD_end _), _)) ->
-        Reporting.warn "" def_annot.loc "Documentation comments and attributes will not be preserved on this definition"
-    | _ -> ()
-  )
 
 let pragma_arg_loc pragma arg_left_trim l =
   let open Lexing in
@@ -2038,7 +2030,6 @@ let to_ast ctx (P.Defs files) =
       List.fold_left
         (fun (defs, ctx) def ->
           let new_defs, ctx = to_ast_def None [] None ctx def in
-          List.iter check_annotation new_defs;
           (new_defs @ defs, ctx)
         )
         ([], ctx) defs

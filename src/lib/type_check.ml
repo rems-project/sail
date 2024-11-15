@@ -2570,12 +2570,12 @@ and check_case env pat_typ pexp typ =
   (* AA: Not sure if we still need this *)
   | exception (Type_error _ as typ_exn) -> (
       match pat with
-      | P_aux (P_lit lit, _) ->
+      | P_aux (P_lit lit, (l, _)) ->
           let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
           let guard =
             match guard with None -> guard' | Some guard -> mk_exp (E_app_infix (guard, mk_id "&", guard'))
           in
-          check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
+          check_case env pat_typ (Pat_aux (Pat_when (mk_pat ~loc:l (P_id (mk_id "p#")), guard, case), annot)) typ
       | _ -> raise typ_exn
     )
 
@@ -2868,7 +2868,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               let guard =
                 locate (fun _ -> l) (mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))))
               in
-              let typed_pat, env, guards = bind_pat env (mk_pat (P_id var)) typ in
+              let typed_pat, env, guards = bind_pat env (mk_pat ~loc:l (P_id var)) typ in
               (typed_pat, env, guard :: guards)
           | _ -> raise typ_exn
         )
@@ -4248,7 +4248,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
       | Local (Immutable, _) | Unbound _ -> begin
           match Env.lookup_id v other_env with
           | Local (Immutable, typ) ->
-              bind_mpat allow_unknown other_env env (mk_mpat (MP_typ (mk_mpat (MP_id v), typ))) typ
+              bind_mpat allow_unknown other_env env (mk_mpat ~loc:l (MP_typ (mk_mpat ~loc:l (MP_id v), typ))) typ
           | Unbound _ ->
               if allow_unknown then (annot_mpat (MP_id v) unknown_typ, env, [])
               else
@@ -4934,7 +4934,14 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
 and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_def list * Env.t =
  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
-  | SD_function (_, _, id) | SD_mapping (id, _) -> ([], Env.add_scattered_id id env)
+  | SD_function (id, tannot_opt) ->
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
+        Env.add_scattered_id id env
+      )
+  | SD_mapping (id, tannot_opt) ->
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
+        Env.add_scattered_id id env
+      )
   | SD_end id ->
       if not (Env.is_scattered_id id env) then
         typ_error l (string_of_id id ^ " is not a scattered definition, so it cannot be ended")

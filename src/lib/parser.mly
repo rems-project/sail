@@ -148,7 +148,6 @@ let mk_typqn = TypQ_aux (TypQ_no_forall, Unknown)
 
 let mk_tannotn = Typ_annot_opt_aux (Typ_annot_opt_none, Unknown)
 let mk_tannot typq typ n m = Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), loc n m)
-let mk_eannotn = Effect_opt_aux (Effect_opt_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 
@@ -1077,7 +1076,7 @@ rec_measure:
 
 fun_def:
   | Function_ rec_measure? funcls
-    { let funcls, tannot = $3 in mk_fun (FD_function (default_opt mk_recn $2, tannot, mk_eannotn, funcls)) $startpos $endpos }
+    { let funcls, tannot = $3 in mk_fun (FD_function (default_opt mk_recn $2, tannot, funcls)) $startpos $endpos }
 
 fun_def_list:
   | fun_def
@@ -1259,9 +1258,9 @@ scattered_def:
   | Scattered Union id typaram
     { mk_sd (SD_variant($3, $4)) $startpos $endpos }
   | Scattered Union id
-    { mk_sd (SD_variant($3, mk_typqn)) $startpos $endpos }
+    { mk_sd (SD_variant ($3, mk_typqn)) $startpos $endpos }
   | Scattered Function_ id
-    { mk_sd (SD_function(mk_recn, mk_tannotn, mk_eannotn, $3)) $startpos $endpos }
+    { mk_sd (SD_function ($3, mk_tannotn)) $startpos $endpos }
   | Scattered Mapping id
     { mk_sd (SD_mapping ($3, mk_tannotn)) $startpos $endpos }
   | Scattered Mapping id Colon funcl_typ

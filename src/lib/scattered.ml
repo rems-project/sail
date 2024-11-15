@@ -95,10 +95,12 @@ let patch_funcl_loc def_annot (FCL_aux (aux, (_, tannot))) =
 let patch_mapcl_annot def_annot (MCL_aux (aux, (_, tannot))) =
   MCL_aux (aux, (Type_check.strip_def_annot def_annot, tannot))
 
-let rec descatter' accumulator funcls mapcls = function
+let rec descatter' annots accumulator funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function
      clause into a DEF_fundef containing all the clauses. *)
+  | DEF_aux (DEF_scattered (SD_aux (SD_function (id, _), _)), def_annot) :: defs ->
+      descatter' (Bindings.add id def_annot annots) accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, tannot))), def_annot) :: defs
     when last_scattered_funcl (funcl_id funcl) defs ->
       let funcl = patch_funcl_loc def_annot funcl in
@@ -110,43 +112,46 @@ let rec descatter' accumulator funcls mapcls = function
       let clauses, update_attr =
         Type_check.(check_funcls_complete l (env_of_tannot tannot) clauses (typ_of_tannot tannot))
       in
+      let def_annot =
+        Option.value ~default:(mk_def_annot (gen_loc l) def_annot.env) (Bindings.find_opt (funcl_id funcl) annots)
+      in
       let accumulator =
         DEF_aux
           ( DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
-            update_attr (mk_def_annot (gen_loc l) def_annot.env)
+            update_attr def_annot
           )
         :: accumulator
       in
-      descatter' accumulator funcls mapcls defs
+      descatter' annots accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), def_annot) :: defs ->
       let id = funcl_id funcl in
       let funcl = patch_funcl_loc def_annot funcl in
       begin
         match Bindings.find_opt id funcls with
-        | Some clauses -> descatter' accumulator (Bindings.add id (funcl :: clauses) funcls) mapcls defs
-        | None -> descatter' accumulator (Bindings.add id [funcl] funcls) mapcls defs
+        | Some clauses -> descatter' annots accumulator (Bindings.add id (funcl :: clauses) funcls) mapcls defs
+        | None -> descatter' annots accumulator (Bindings.add id [funcl] funcls) mapcls defs
       end
   (* Scattered mappings are handled the same way as scattered functions *)
+  | DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, _), _)), def_annot) :: defs ->
+      descatter' (Bindings.add id def_annot annots) accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, tannot))), def_annot) :: defs
     when last_scattered_mapcl id defs ->
       let mapcl = patch_mapcl_annot def_annot mapcl in
       let clauses =
         match Bindings.find_opt id mapcls with Some clauses -> List.rev (mapcl :: clauses) | None -> [mapcl]
       in
+      let def_annot = Option.value ~default:(mk_def_annot (gen_loc l) def_annot.env) (Bindings.find_opt id annots) in
       let accumulator =
-        DEF_aux
-          ( DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))),
-            mk_def_annot (gen_loc l) def_annot.env
-          )
+        DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))), def_annot)
         :: accumulator
       in
-      descatter' accumulator funcls mapcls defs
+      descatter' annots accumulator funcls mapcls defs
   | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), _)), def_annot) :: defs ->
       let mapcl = patch_mapcl_annot def_annot mapcl in
       begin
         match Bindings.find_opt id mapcls with
-        | Some clauses -> descatter' accumulator funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
-        | None -> descatter' accumulator funcls (Bindings.add id [mapcl] mapcls) defs
+        | Some clauses -> descatter' annots accumulator funcls (Bindings.add id (mapcl :: clauses) mapcls) defs
+        | None -> descatter' annots accumulator funcls (Bindings.add id [mapcl] mapcls) defs
       end
   (* For scattered unions, when we find a union declaration we
      immediately grab all the future clauses and turn it into a
@@ -164,7 +169,7 @@ let rec descatter' accumulator funcls mapcls = function
               :: records
               @ accumulator
             in
-            descatter' accumulator funcls mapcls (filter_union_clauses id defs)
+            descatter' annots accumulator funcls mapcls (filter_union_clauses id defs)
       end
   (* Therefore we should never see SD_unioncl... *)
   | DEF_aux (DEF_scattered (SD_aux (SD_unioncl _, (l, _))), _) :: _ ->
@@ -184,9 +189,9 @@ let rec descatter' accumulator funcls mapcls = function
               DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
               :: accumulator
             in
-            descatter' accumulator funcls mapcls (filter_enum_clauses id defs)
+            descatter' annots accumulator funcls mapcls (filter_enum_clauses id defs)
       end
-  | def :: defs -> descatter' (def :: accumulator) funcls mapcls defs
+  | def :: defs -> descatter' annots (def :: accumulator) funcls mapcls defs
   | [] -> List.rev accumulator
 
-let descatter ast = { ast with defs = descatter' [] Bindings.empty Bindings.empty ast.defs }
+let descatter ast = { ast with defs = descatter' Bindings.empty [] Bindings.empty Bindings.empty ast.defs }

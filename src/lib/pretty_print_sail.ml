@@ -795,7 +795,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_scattered (SD_aux (sd_aux, _)) =
     match sd_aux with
-    | SD_function (_, _, id) -> string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
+    | SD_function (id, _) -> string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
     | SD_funcl funcl -> string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
     | SD_end id -> string "end" ^^ space ^^ doc_id id
     | SD_variant (id, TypQ_aux (TypQ_no_forall, _)) ->
