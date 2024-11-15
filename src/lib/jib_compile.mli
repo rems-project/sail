@@ -87,6 +87,7 @@ type ctx = {
   letbind_ids : IdSet.t;
   no_raw : bool;
   coverage_override : bool;
+  def_annot : unit def_annot option;
 }
 
 val ctx_is_extern : id -> ctx -> bool

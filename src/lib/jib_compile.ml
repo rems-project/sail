@@ -131,6 +131,7 @@ type ctx = {
   letbind_ids : IdSet.t;
   no_raw : bool;
   coverage_override : bool;
+  def_annot : unit def_annot option;
 }
 
 let ctx_is_extern id ctx =
@@ -193,6 +194,7 @@ let initial_ctx ?for_target env effect_info =
     letbind_ids = IdSet.empty;
     no_raw = false;
     coverage_override = true;
+    def_annot = None;
   }
 
 let update_coverage_override' ctx = function
@@ -746,6 +748,11 @@ module Make (C : CONFIG) = struct
         CL_addr (CL_id (name id, ctyp))
     | AL_field (alexp, field_id) -> CL_field (compile_alexp ctx alexp, field_id)
 
+  let can_optimize_control_flow_order ctx =
+    match ctx.def_annot with
+    | Some def_annot -> Option.is_some (get_def_attribute "optimize_control_flow_order" def_annot)
+    | None -> false
+
   let rec compile_aexp ctx (AE_aux (aexp_aux, { env; loc = l; uannot })) =
     let ctx = { ctx with local_env = env } in
     match aexp_aux with
@@ -765,10 +772,7 @@ module Make (C : CONFIG) = struct
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
     (* Compile case statements *)
-    | AE_match (aval, cases, typ)
-      when C.eager_control_flow
-           && Option.is_some (get_attribute "complete" uannot)
-           && List.for_all (is_pure_case ctx) cases ->
+    | AE_match (aval, cases, typ) when C.eager_control_flow && can_optimize_control_flow_order ctx ->
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
         let compile_case case_match_id case_return_id (apat, guard, body) =
@@ -786,23 +790,14 @@ module Make (C : CONFIG) = struct
             in
             let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
             let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-            [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool)); idecl l ctyp case_return_id]
+            [idecl l ctyp case_return_id]
             @ pre_destructure @ destructure
-            @ ( if not trivial_guard then (
-                  let gs = ngensym () in
-                  guard_setup
-                  @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))]
+            @ ( if not trivial_guard then
+                  [idecl l CT_bool case_match_id]
+                  @ guard_setup
+                  @ [guard_call (CL_id (case_match_id, CT_bool))]
                   @ guard_cleanup
-                  @ [
-                      iif l
-                        (V_call (Bnot, [V_id (gs, CT_bool)]))
-                        (destructure_cleanup
-                        @ [icopy l (CL_id (case_match_id, CT_bool)) (V_lit (VL_bool false, CT_bool))]
-                        )
-                        [] CT_unit;
-                    ]
-                )
-                else []
+                else [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool))]
               )
             @ body_setup
             @ [body_call (CL_id (case_return_id, ctyp))]
@@ -950,8 +945,10 @@ module Make (C : CONFIG) = struct
         else (
           let if_ctyp = ctyp_of_typ ctx if_typ in
           let setup, cval, cleanup = compile_aval l ctx aval in
-          match get_attribute "anf_pure" uannot with
-          | Some _ ->
+          let pure_attr = get_attribute "anf_pure" uannot in
+          let eager = C.eager_control_flow && can_optimize_control_flow_order ctx in
+          match (pure_attr, eager) with
+          | Some _, _ | _, true ->
               let then_gs = ngensym () in
               let then_setup, then_call, then_cleanup = compile_aexp ctx then_aexp in
               let else_gs = ngensym () in
@@ -966,7 +963,7 @@ module Make (C : CONFIG) = struct
                 (fun clexp -> icopy l clexp (V_call (Ite, [cval; V_id (then_gs, if_ctyp); V_id (else_gs, if_ctyp)]))),
                 [iclear if_ctyp else_gs; iclear if_ctyp then_gs] @ else_cleanup @ then_cleanup @ cleanup
               )
-          | None ->
+          | _ ->
               let branch_id, on_reached = coverage_branch_reached ctx l in
               let compile_branch aexp =
                 let setup, call, cleanup = compile_aexp ctx aexp in
@@ -1003,42 +1000,60 @@ module Make (C : CONFIG) = struct
           [iclear ctyp gs]
         )
     | AE_short_circuit (SC_and, aval, aexp) ->
-        let ctx = update_coverage_override uannot ctx in
-        let branch_id, on_reached = coverage_branch_reached ctx l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
-        let gs = ngensym () in
-        ( left_setup @ on_reached
-          @ [
-              idecl l CT_bool gs;
-              iif l cval
-                (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
-                [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
-                CT_bool;
-            ]
-          @ left_cleanup,
-          (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
-          []
+        if C.eager_control_flow && can_optimize_control_flow_order ctx then (
+          let gs = ngensym () in
+          ( left_setup @ right_setup @ [idecl l CT_bool gs; call (CL_id (gs, CT_bool))],
+            (fun clexp -> icopy l clexp (V_call (Band, [cval; V_id (gs, CT_bool)]))),
+            right_cleanup @ left_cleanup
+          )
+        )
+        else (
+          let ctx = update_coverage_override uannot ctx in
+          let branch_id, on_reached = coverage_branch_reached ctx l in
+          let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
+          let gs = ngensym () in
+          ( left_setup @ on_reached
+            @ [
+                idecl l CT_bool gs;
+                iif l cval
+                  (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
+                  CT_bool;
+              ]
+            @ left_cleanup,
+            (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
+            []
+          )
         )
     | AE_short_circuit (SC_or, aval, aexp) ->
-        let ctx = update_coverage_override uannot ctx in
-        let branch_id, on_reached = coverage_branch_reached ctx l in
         let left_setup, cval, left_cleanup = compile_aval l ctx aval in
         let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-        let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
-        let gs = ngensym () in
-        ( left_setup @ on_reached
-          @ [
-              idecl l CT_bool gs;
-              iif l cval
-                [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-                (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
-                CT_bool;
-            ]
-          @ left_cleanup,
-          (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
-          []
+        if C.eager_control_flow && can_optimize_control_flow_order ctx then (
+          let gs = ngensym () in
+          ( left_setup @ right_setup @ [idecl l CT_bool gs; call (CL_id (gs, CT_bool))],
+            (fun clexp -> icopy l clexp (V_call (Band, [cval; V_id (gs, CT_bool)]))),
+            right_cleanup @ left_cleanup
+          )
+        )
+        else (
+          let ctx = update_coverage_override uannot ctx in
+          let branch_id, on_reached = coverage_branch_reached ctx l in
+          let right_coverage = coverage_branch_target_taken ctx branch_id aexp in
+          let gs = ngensym () in
+          ( left_setup @ on_reached
+            @ [
+                idecl l CT_bool gs;
+                iif l cval
+                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
+                  (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+                  CT_bool;
+              ]
+            @ left_cleanup,
+            (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
+            []
+          )
         )
     (* This is a faster assignment rule for updating fields of a
        struct. *)
@@ -1662,13 +1677,16 @@ module Make (C : CONFIG) = struct
               let out_chan = open_out cachefile in
               Marshal.to_channel out_chan compiled [Marshal.Closures];
               close_out out_chan;
-              (compiled, ctx)
+              (compiled, { ctx with def_annot = None })
         end
-    | _ -> compile_def' n total ctx def
+    | _ ->
+        let compiled, ctx = compile_def' n total ctx def in
+        (compiled, { ctx with def_annot = None })
 
   and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
     let def_env = def_annot.env in
     let def_annot = strip_def_annot def_annot in
+    let ctx = { ctx with def_annot = Some def_annot } in
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, []), def_annot)], ctx)

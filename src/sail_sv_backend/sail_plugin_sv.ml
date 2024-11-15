@@ -335,7 +335,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let branch_coverage = None
   let use_real = false
   let use_void = false
-  let eager_control_flow = false
+  let eager_control_flow = true
 end
 
 let register_types cdefs =
