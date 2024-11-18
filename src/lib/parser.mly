@@ -716,10 +716,12 @@ exp0:
                          $endpos) }
 
 case:
-  | pat EqGt exp
-    { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
-  | pat If_ exp EqGt exp
-    { mk_pexp (Pat_when ($1, $3, $5)) $startpos $endpos }
+  | p = pat; EqGt; body = exp
+    { mk_pexp (Pat_exp (p, body)) $startpos $endpos }
+  | p = pat; If_; guard = exp; EqGt; body = exp
+    { mk_pexp (Pat_when (p, guard, body)) $startpos $endpos }
+  | a = attribute; Lparen; c = case; Rparen
+    { mk_pexp (Pat_attribute (fst a, snd a, c)) $startpos $endpos(a) }
 
 case_list:
   | case

@@ -3223,11 +3223,15 @@ let rewrite_ast_realize_mappings effect_info env ast =
     | Pat_aux (Pat_exp (pat, _), annot) -> Pat_aux (Pat_exp (pat, mk_lit_exp L_true), annot)
     | Pat_aux (Pat_when (pat, guard, _), annot) -> Pat_aux (Pat_when (pat, guard, mk_lit_exp L_true), annot)
   in
-  let realize_mapcl forwards id mapcl =
+  let annotate_pat ~last = function
+    | Pat_aux (pexp_aux, (l, uannot)) when last -> Pat_aux (pexp_aux, (l, add_attribute l "mapping_last" None uannot))
+    | pexp -> pexp
+  in
+  let realize_mapcl ~last ~forwards id mapcl =
     match mapcl with
-    | MCL_aux (MCL_bidir (mpexp1, mpexp2), _) -> [realize_mpexps forwards mpexp1 mpexp2]
-    | MCL_aux (MCL_forwards pexp, _) -> if forwards then [pexp] else []
-    | MCL_aux (MCL_backwards pexp, _) -> if forwards then [] else [pexp]
+    | MCL_aux (MCL_bidir (mpexp1, mpexp2), _) -> [annotate_pat ~last (realize_mpexps forwards mpexp1 mpexp2)]
+    | MCL_aux (MCL_forwards pexp, _) -> if forwards then [annotate_pat ~last pexp] else []
+    | MCL_aux (MCL_backwards pexp, _) -> if forwards then [] else [annotate_pat ~last pexp]
   in
   let realize_bool_mapcl forwards id mapcl =
     match mapcl with
@@ -3305,14 +3309,22 @@ let rewrite_ast_realize_mappings effect_info env ast =
     let forwards_match =
       mk_exp
         (E_match
-           (arg_exp, List.map (fun mapcl -> strip_mapcl mapcl |> realize_mapcl true forwards_id) mapcls |> List.flatten)
+           ( arg_exp,
+             Util.map_last
+               (fun last mapcl -> strip_mapcl mapcl |> realize_mapcl ~last ~forwards:true forwards_id)
+               mapcls
+             |> List.flatten
+           )
         )
     in
     let backwards_match =
       mk_exp
         (E_match
            ( arg_exp,
-             List.map (fun mapcl -> strip_mapcl mapcl |> realize_mapcl false backwards_id) mapcls |> List.flatten
+             Util.map_last
+               (fun last mapcl -> strip_mapcl mapcl |> realize_mapcl ~last ~forwards:false backwards_id)
+               mapcls
+             |> List.flatten
            )
         )
     in
@@ -3360,8 +3372,10 @@ let rewrite_ast_realize_mappings effect_info env ast =
         )
     in
 
-    let forwards_fun, _ = Type_check.check_fundef env def_annot forwards_fun in
-    let backwards_fun, _ = Type_check.check_fundef env def_annot backwards_fun in
+    let fun_def_annot = add_def_attribute (gen_loc l) "mapping_function" None def_annot in
+
+    let forwards_fun, _ = Type_check.check_fundef env fun_def_annot forwards_fun in
+    let backwards_fun, _ = Type_check.check_fundef env fun_def_annot backwards_fun in
     let forwards_matches_fun, _ = Type_check.check_fundef env def_annot forwards_matches_fun in
     let backwards_matches_fun, _ = Type_check.check_fundef env def_annot backwards_matches_fun in
 

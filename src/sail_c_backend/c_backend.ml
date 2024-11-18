@@ -436,7 +436,7 @@ end) : CONFIG = struct
           let aexp4 = analyze_functions ctx f aexp4 in
           AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
       | AE_match (aval, cases, typ) ->
-          let analyze_case ((AP_aux (_, env, _) as pat), aexp1, aexp2) =
+          let analyze_case ((AP_aux (_, { env; _ }) as pat), aexp1, aexp2, uannot) =
             let pat_bindings = Bindings.bindings (apat_types pat) in
             let ctx = { ctx with local_env = env } in
             let ctx =
@@ -444,14 +444,16 @@ end) : CONFIG = struct
                 (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals })
                 ctx pat_bindings
             in
-            (pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2)
+            (pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2, uannot)
           in
           AE_match (aval, List.map analyze_case cases, typ)
       | AE_try (aexp, cases, typ) ->
           AE_try
             ( analyze_functions ctx f aexp,
               List.map
-                (fun (pat, aexp1, aexp2) -> (pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2))
+                (fun (pat, aexp1, aexp2, uannot) ->
+                  (pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2, uannot)
+                )
                 cases,
               typ
             )
@@ -1083,6 +1085,7 @@ and sgen_call op cvals =
       | _ -> assert false
     end
   | Get_abstract, [v] -> sgen_cval v
+  | Ite, [i; t; e] -> sprintf "(%s ? %s : %s)" (sgen_cval i) (sgen_cval t) (sgen_cval e)
   | _, _ -> failwith "Could not generate cval primop"
 
 let sgen_cval_param cval =

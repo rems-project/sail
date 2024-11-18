@@ -2545,7 +2545,7 @@ and check_block l env exps ret_typ =
       texp :: check_block l env exps ret_typ
 
 and check_case env pat_typ pexp typ =
-  let pat, guard, case, ((l, _) as annot) = destruct_pexp pexp in
+  let pat, guard, case, (l, uannot) = destruct_pexp pexp in
   ignore (check_pattern_duplicates env pat);
   let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
@@ -2566,7 +2566,7 @@ and check_case env pat_typ pexp typ =
             (Some checked_guard, add_opt_constraint l "guard pattern" (assert_constraint env true checked_guard) env)
       in
       let checked_case = crule check_exp env' case typ in
-      construct_pexp (tpat, checked_guard, checked_case, (l, empty_tannot))
+      construct_pexp (tpat, checked_guard, checked_case, (l, (None, uannot)))
   (* AA: Not sure if we still need this *)
   | exception (Type_error _ as typ_exn) -> (
       match pat with
@@ -2575,7 +2575,7 @@ and check_case env pat_typ pexp typ =
           let guard =
             match guard with None -> guard' | Some guard -> mk_exp (E_app_infix (guard, mk_id "&", guard'))
           in
-          check_case env pat_typ (Pat_aux (Pat_when (mk_pat ~loc:l (P_id (mk_id "p#")), guard, case), annot)) typ
+          check_case env pat_typ (Pat_aux (Pat_when (mk_pat ~loc:l (P_id (mk_id "p#")), guard, case), (l, uannot))) typ
       | _ -> raise typ_exn
     )
 

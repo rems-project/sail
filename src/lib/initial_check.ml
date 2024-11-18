@@ -707,9 +707,12 @@ module KindInference = struct
         let* pat = infer_pat ctx pat in
         wrap (P.P_attribute (attr, arg, pat))
 
-  let infer_case ctx (P.Pat_aux (pexp, l)) =
+  let rec infer_case ctx (P.Pat_aux (pexp, l)) =
     let wrap aux = return (P.Pat_aux (aux, l)) in
     match pexp with
+    | P.Pat_attribute (attr, arg, pexp) ->
+        let* pexp = infer_case ctx pexp in
+        wrap (P.Pat_attribute (attr, arg, pexp))
     | P.Pat_exp (pat, exp) ->
         let* pat = infer_pat ctx pat in
         wrap (P.Pat_exp (pat, exp))
@@ -1381,8 +1384,12 @@ and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
   | P.E_vector_append (exp1, exp2) -> to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2
   | _ -> [to_ast_lexp ctx exp]
 
-and to_ast_case ctx (P.Pat_aux (pex, l) : P.pexp) : uannot pexp =
-  match pex with
+and to_ast_case ctx (P.Pat_aux (pexp_aux, l) : P.pexp) : uannot pexp =
+  match pexp_aux with
+  | P.Pat_attribute (attr, arg, pexp) ->
+      let (Pat_aux (pexp, (pexp_l, annot))) = to_ast_case ctx pexp in
+      let annot = add_attribute l attr arg annot in
+      Pat_aux (pexp, (pexp_l, annot))
   | P.Pat_exp (pat, exp) -> Pat_aux (Pat_exp (to_ast_pat ctx pat, to_ast_exp ctx exp), (l, empty_uannot))
   | P.Pat_when (pat, guard, exp) ->
       Pat_aux (Pat_when (to_ast_pat ctx pat, to_ast_exp ctx guard, to_ast_exp ctx exp), (l, empty_uannot))

@@ -595,10 +595,18 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace
 
-  and doc_pexp (Pat_aux (pat_aux, _)) =
-    match pat_aux with
-    | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
-    | Pat_when (pat, wh, exp) -> separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
+  and doc_pexp (Pat_aux (pat_aux, (_, uannot))) =
+    let wrap, attrs_doc =
+      match get_attributes uannot with
+      | [] -> ((fun x -> x), empty)
+      | _ -> (parens, concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot))
+    in
+    let pexp_doc =
+      match pat_aux with
+      | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
+      | Pat_when (pat, wh, exp) -> separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
+    in
+    attrs_doc ^^ wrap pexp_doc
 
   and doc_letbind (LB_aux (lb_aux, _)) =
     match lb_aux with LB_val (pat, exp) -> separate space [doc_pat pat; equals; doc_exp exp]

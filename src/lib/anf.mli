@@ -82,9 +82,9 @@ open Type_check
     the original Sail expression, it's typing environment, and the
     uannot type containing any attributes attached to the original
     expression. *)
-type aexp_annot = { loc : l; env : Env.t; uannot : uannot }
+type anf_annot = { loc : l; env : Env.t; uannot : uannot }
 
-type 'a aexp = AE_aux of 'a aexp_aux * aexp_annot
+type 'a aexp = AE_aux of 'a aexp_aux * anf_annot
 
 and 'a aexp_aux =
   | AE_val of 'a aval
@@ -98,8 +98,8 @@ and 'a aexp_aux =
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
-  | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
+  | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
+  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
   | AE_struct_update of 'a aval * 'a aval Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
@@ -110,7 +110,7 @@ and 'a aexp_aux =
 
 and sc_op = SC_and | SC_or
 
-and 'a apat = AP_aux of 'a apat_aux * Env.t * l
+and 'a apat = AP_aux of 'a apat_aux * anf_annot
 
 and 'a apat_aux =
   | AP_tuple of 'a apat list
@@ -152,10 +152,10 @@ val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
 
 (** Map over all values in an ANF expression *)
-val map_aval : (aexp_annot -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
+val map_aval : (anf_annot -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
 (** Map over all function calls in an ANF expression *)
-val map_functions : (aexp_annot -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+val map_functions : (anf_annot -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
 (** This function 'folds' an [aexp] applying the provided function to
     all leaf subexpressions, then applying the function to their
@@ -163,6 +163,10 @@ val map_functions : (aexp_annot -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> '
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
 val aexp_bindings : 'a aexp -> IdSet.t
+
+val is_pure_aexp : Effects.side_effect_info -> 'a aexp -> bool
+
+val is_pure_case : Effects.side_effect_info -> 'a apat * 'a aexp * 'a aexp * uannot -> bool
 
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp

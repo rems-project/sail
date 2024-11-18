@@ -152,6 +152,7 @@ type direct_footprint = {
   mutable writes_mem : bool;
   mutable contains_assert : bool;
   mutable references : CTSet.t;
+  mutable exits : bool;
 }
 
 let empty_direct_footprint () : direct_footprint =
@@ -165,6 +166,7 @@ let empty_direct_footprint () : direct_footprint =
     writes_mem = false;
     contains_assert = false;
     references = CTSet.empty;
+    exits = false;
   }
 
 let get_bool_attribute name attr_object =
@@ -204,6 +206,9 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
 
     method! vinstr =
       function
+      | I_aux (I_exit _, _) ->
+          footprint.exits <- true;
+          SkipChildren
       | I_aux (I_funcall (_, _, (id, _), args), (l, _)) ->
           let open Util.Option_monad in
           if ctx_is_extern id ctx then (
@@ -265,6 +270,7 @@ type footprint = {
   reads_mem : bool;
   writes_mem : bool;
   contains_assert : bool;
+  exits : bool;
 }
 
 let pure_footprint =
@@ -280,6 +286,7 @@ let pure_footprint =
     reads_mem = false;
     writes_mem = false;
     contains_assert = false;
+    exits = false;
   }
 
 type spec_info = {
@@ -370,6 +377,7 @@ let collect_spec_info ctx cdefs =
                 reads_mem = direct_footprint.reads_mem;
                 writes_mem = direct_footprint.writes_mem;
                 contains_assert = direct_footprint.contains_assert;
+                exits = direct_footprint.exits;
               }
               footprints
         | _ -> footprints
@@ -384,10 +392,18 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
             let footprint = Bindings.find f footprints in
             let callees = cfg |> IdGraph.reachable (IdSet.singleton f) IdSet.empty |> IdSet.remove f in
-            let all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert =
+            let all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert, exits =
               List.fold_left
-                (fun (all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert)
-                     callee ->
+                (fun ( all_reads,
+                       all_writes,
+                       throws,
+                       need_stdout,
+                       need_stderr,
+                       reads_mem,
+                       writes_mem,
+                       contains_assert,
+                       exits
+                     ) callee ->
                   match Bindings.find_opt callee footprints with
                   | Some footprint ->
                       ( IdSet.union all_reads footprint.direct_reads,
@@ -397,10 +413,20 @@ let collect_spec_info ctx cdefs =
                         need_stderr || footprint.need_stderr,
                         reads_mem || footprint.reads_mem,
                         writes_mem || footprint.writes_mem,
-                        contains_assert || footprint.contains_assert
+                        contains_assert || footprint.contains_assert,
+                        exits || footprint.exits
                       )
                   | _ ->
-                      (all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert)
+                      ( all_reads,
+                        all_writes,
+                        throws,
+                        need_stdout,
+                        need_stderr,
+                        reads_mem,
+                        writes_mem,
+                        contains_assert,
+                        exits
+                      )
                 )
                 ( footprint.direct_reads,
                   footprint.direct_writes,
@@ -409,7 +435,8 @@ let collect_spec_info ctx cdefs =
                   footprint.need_stderr,
                   footprint.reads_mem,
                   footprint.writes_mem,
-                  footprint.contains_assert
+                  footprint.contains_assert,
+                  footprint.exits
                 )
                 (IdSet.elements callees)
             in
@@ -426,6 +453,7 @@ let collect_spec_info ctx cdefs =
                     reads_mem;
                     writes_mem;
                     contains_assert;
+                    exits;
                   }
               )
               footprints
@@ -1449,7 +1477,7 @@ module Make (Config : CONFIG) = struct
                     (natural_sort_ids (IdSet.elements footprint.all_writes))
                 in
                 let throws =
-                  if footprint.throws then
+                  if footprint.throws || footprint.exits then
                     [CL_id (Have_exception (-1), CT_bool); CL_id (Current_exception (-1), spec_info.exception_ctyp)]
                   else []
                 in
@@ -1927,7 +1955,7 @@ module Make (Config : CONFIG) = struct
             }
           )
           (natural_sort_ids (IdSet.elements footprint.all_writes))
-      @ ( if footprint.throws then
+      @ ( if footprint.throws || footprint.exits then
             [
               { name = get_final_name (Have_exception (-1)); external_name = "have_exception"; typ = CT_bool };
               {
@@ -2032,7 +2060,7 @@ module Make (Config : CONFIG) = struct
           ]
         in
         let throws_outputs =
-          if footprint.throws then
+          if footprint.throws || footprint.exits then
             [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
           else []
         in
@@ -2060,7 +2088,10 @@ module Make (Config : CONFIG) = struct
                 @ List.map
                     (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1)))
                     (natural_sort_ids (IdSet.elements footprint.all_writes))
-                @ (if footprint.throws then [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))] else [])
+                @ ( if footprint.throws || footprint.exits then
+                      [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))]
+                    else []
+                  )
                 @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
                 @ (if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else [])
                 @ if footprint.writes_mem then [SVP_id (Name (mk_id "out_memory_writes", -1))] else []

@@ -96,8 +96,6 @@ val ctx_get_extern : id -> ctx -> string
 
 val ctx_has_val_spec : id -> ctx -> bool
 
-val is_pure_aexp : ctx -> 'a aexp -> bool
-
 (** Create an inital Jib compilation context.
 
     The target is the name that would appear in a valspec extern section, i.e.

@@ -743,7 +743,8 @@ let flatten_block exps =
 
 (* Check if a sequence of cases in a match or try statement is aligned *)
 let is_aligned pexps =
-  let pexp_exp_column = function
+  let rec pexp_exp_column = function
+    | Pat_aux (Pat_attribute (_, _, pexp), _) -> pexp_exp_column pexp
     | Pat_aux (Pat_exp (_, E_aux (_, l)), _) -> starting_column_num l
     | Pat_aux (Pat_when (_, _, E_aux (_, l)), _) -> starting_column_num l
   in
@@ -945,7 +946,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let kind = match match_exp with E_match _ -> Match_match | _ -> Try_match in
       let exp_chunks = rec_chunk_exp exp in
       let aligned = is_aligned cases in
-      let cases = List.map (chunk_pexp ~delim:"," comments) cases in
+      let cases = List.map (chunk_pexp ~delim:"," comments chunks) cases in
       Match { kind; exp = exp_chunks; aligned; cases } |> add_chunk chunks
   | E_vector_update _ | E_vector_update_subrange _ ->
       let vec_chunks, updates = chunk_vector_update comments (E_aux (aux, l)) in
@@ -1052,8 +1053,12 @@ and chunk_vector_update comments (E_aux (aux, l) as exp) =
       chunk_exp comments exp_chunks exp;
       (exp_chunks, [])
 
-and chunk_pexp ?delim comments (Pat_aux (aux, l)) =
+and chunk_pexp ?delim comments chunks (Pat_aux (aux, l)) =
   match aux with
+  | Pat_attribute (attr, arg, pexp) ->
+      Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
+      Queue.add (Spacer (false, 1)) chunks;
+      chunk_pexp ?delim comments chunks pexp
   | Pat_exp (pat, exp) ->
       let funcl_space = match pat with P_aux (P_tuple _, _) -> false | _ -> true in
       let pat_chunks = Queue.create () in
@@ -1087,7 +1092,7 @@ let chunk_funcl comments funcl =
         Queue.add (Spacer (false, 1)) chunks;
         chunk_funcl' comments funcl
     | FCL_doc (_, funcl) -> chunk_funcl' comments funcl
-    | FCL_funcl (_, pexp) -> chunk_pexp comments pexp
+    | FCL_funcl (_, pexp) -> chunk_pexp comments chunks pexp
   in
   (chunks, chunk_funcl' comments funcl)
 

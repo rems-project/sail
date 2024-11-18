@@ -62,7 +62,7 @@
     let y = x in
     $[mapping_match] $[complete] match ($[complete] match y {
       <pat> => Some(<expr1>),
-      z if mapping_forwards_matches(z) => $[complete] match mapping_forwards(z) {
+      z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
         A => Some(<expr2>),
         _ => None(),
       },
@@ -96,7 +96,7 @@
     let y = x in {
       $[complete] match y {
         <pat> => return <expr1>,
-        z if mapping_forwards_matches(z) => $[complete] match mapping_forwards(z) {
+        z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
           A => return <expr2>,
           _ => (),
         },
@@ -281,8 +281,9 @@ let rec mappings_match ~terminal ~return_position is_mapping subst mappings pexp
         let direction = mapping_direction l uannot in
         let mapping_fun_id = mapping_function mapping direction in
         let mapping_guard_id = mapping_guard mapping direction in
-        ( mk_exp (E_app (mapping_fun_id, [mk_exp (E_id subst_id)])),
-          mk_exp (E_app (mapping_guard_id, [mk_exp (E_id subst_id)])),
+        let guarded_attr = add_attribute (gen_loc l) "mapping_guarded" None empty_uannot in
+        ( E_aux (E_app (mapping_fun_id, [mk_exp (E_id subst_id)]), (gen_loc l, guarded_attr)),
+          mk_exp ~loc:(gen_loc l) (E_app (mapping_guard_id, [mk_exp (E_id subst_id)])),
           subpat
         )
     | _ -> Reporting.unreachable l __POS__ "Non-mapping in mappings_match"

@@ -150,22 +150,6 @@ let ctx_get_extern id ctx =
 
 let ctx_has_val_spec id ctx = Bindings.mem id ctx.valspecs || Bindings.mem id (Env.get_val_specs ctx.tc_env)
 
-let rec is_pure_aexp ctx (AE_aux (aexp, { uannot; _ })) =
-  match get_attribute "anf_pure" uannot with
-  | Some _ -> true
-  | None -> (
-      match aexp with
-      | AE_app (f, _, _) -> Effects.function_is_pure f ctx.effect_info
-      | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2
-      | AE_match (_, arms, _) ->
-          List.for_all (fun (_, guard, aexp) -> is_pure_aexp ctx guard && is_pure_aexp ctx aexp) arms
-      | AE_short_circuit (_, _, aexp) -> is_pure_aexp ctx aexp
-      | AE_val _ -> true
-      | _ -> false
-    )
-
-let is_pure_case ctx (_, guard, body) = is_pure_aexp ctx guard && is_pure_aexp ctx body
-
 let initial_ctx ?for_target env effect_info =
   let initial_valspecs =
     [
@@ -583,7 +567,14 @@ module Make (C : CONFIG) = struct
           [iclear (CT_list ctyp) gs]
         )
 
-  let compile_funcall l ctx id args =
+  (** Compile a function call.
+
+      If called as [compile_funcall ~override_id:foo l ctx bar args], then we will compile
+      as if we are calling [bar], but insert a call to [foo] in the IR. This is used for
+      optimizations where we can generate a more efficient version of [foo] that doesn't exist
+      in the original Sail.
+  *)
+  let compile_funcall ?override_id l ctx id args =
     let setup = ref [] in
     let cleanup = ref [] in
 
@@ -594,7 +585,7 @@ module Make (C : CONFIG) = struct
       try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
     in
     let arg_typs, ret_typ = match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false in
-    let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
+    let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
     let arg_ctyps, ret_ctyp = (List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ) in
 
     assert (List.length arg_ctyps = List.length args);
@@ -611,19 +602,21 @@ module Make (C : CONFIG) = struct
 
     let setup_args = List.map2 setup_arg arg_ctyps args in
 
+    let call_id = Option.value ~default:id override_id in
+
     ( List.rev !setup,
       begin
         fun clexp ->
           let instantiation =
             KBindings.union merge_unifiers (ctyp_unify l ret_ctyp (clexp_ctyp clexp)) !instantiation
           in
-          ifuncall l clexp (id, KBindings.bindings instantiation |> List.map snd) setup_args
+          ifuncall l clexp (call_id, KBindings.bindings instantiation |> List.map snd) setup_args
         (* iblock1 (optimize_call l ctx clexp (id, KBindings.bindings unifiers |> List.map snd) setup_args arg_ctyps ret_ctyp) *)
       end,
       !cleanup
     )
 
-  let rec apat_ctyp ctx (AP_aux (apat, env, _)) =
+  let rec apat_ctyp ctx (AP_aux (apat, { env; _ })) =
     let ctx = { ctx with local_env = env } in
     match apat with
     | AP_tuple apats -> CT_tup (List.map (apat_ctyp ctx) apats)
@@ -634,7 +627,7 @@ module Make (C : CONFIG) = struct
     | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
     | AP_struct (_, typ) -> ctyp_of_typ ctx typ
 
-  let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval on_failure =
+  let rec compile_match ctx (AP_aux (apat_aux, { env; loc = l; _ })) cval on_failure =
     let ctx = { ctx with local_env = env } in
     let ctyp = cval_ctyp cval in
     match apat_aux with
@@ -753,6 +746,23 @@ module Make (C : CONFIG) = struct
     | Some def_annot -> Option.is_some (get_def_attribute "optimize_control_flow_order" def_annot)
     | None -> false
 
+  (** Returns true if we have an infalliable mapping case. This occurs
+      only if the final case is marked with $[mapping_last] by the
+      mappings.ml rewrite, and we have a $[mapping_infallible]
+      attribute attached to the containing function in the context. *)
+  let has_infallible_mapping_case ctx = function
+    | [] -> true
+    | cases ->
+        let in_infallible_mapping =
+          match ctx.def_annot with
+          | None -> false
+          | Some def_annot -> Option.is_some (get_def_attribute "mapping_infallible" def_annot)
+        in
+        in_infallible_mapping
+        &&
+        let _, _, _, uannot = Util.last cases in
+        Option.is_some (get_attribute "mapping_last" uannot)
+
   let rec compile_aexp ctx (AE_aux (aexp_aux, { env; loc = l; uannot })) =
     let ctx = { ctx with local_env = env } in
     match aexp_aux with
@@ -767,16 +777,24 @@ module Make (C : CONFIG) = struct
         let ctx = { ctx with locals = Bindings.add id (mut, binding_ctyp) ctx.locals } in
         let setup, call, cleanup = compile_aexp ctx body in
         (letb_setup @ setup, call, cleanup @ letb_cleanup)
-    | AE_app (id, vs, _) -> compile_funcall l ctx id vs
+    | AE_app (id, vs, _) ->
+        if Option.is_some (get_attribute "mapping_guarded" uannot) then (
+          let override_id = append_id id "_infallible" in
+          if Bindings.mem override_id ctx.valspecs then compile_funcall ~override_id l ctx id vs
+          else compile_funcall l ctx id vs
+        )
+        else compile_funcall l ctx id vs
     | AE_val aval ->
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
     (* Compile case statements *)
-    | AE_match (aval, cases, typ) when C.eager_control_flow && can_optimize_control_flow_order ctx ->
+    | AE_match (aval, cases, typ)
+      when C.eager_control_flow
+           && (can_optimize_control_flow_order ctx || Option.is_some (get_attribute "anf_pure" uannot)) ->
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
-        let compile_case case_match_id case_return_id (apat, guard, body) =
-          if is_dead_aexp body then []
+        let compile_case case_match_id case_return_id (apat, guard, body, case_uannot) =
+          if is_dead_aexp body then None
           else (
             let trivial_guard =
               match guard with
@@ -790,28 +808,37 @@ module Make (C : CONFIG) = struct
             in
             let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
             let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-            [idecl l ctyp case_return_id]
-            @ pre_destructure @ destructure
-            @ ( if not trivial_guard then
-                  [idecl l CT_bool case_match_id]
-                  @ guard_setup
-                  @ [guard_call (CL_id (case_match_id, CT_bool))]
-                  @ guard_cleanup
-                else [iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool))]
+            Some
+              ([idecl l ctyp case_return_id; iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool))]
+              @ pre_destructure @ destructure
+              @ ( if not trivial_guard then (
+                    let gs = ngensym () in
+                    guard_setup
+                    @ [
+                        idecl l CT_bool gs;
+                        guard_call (CL_id (gs, CT_bool));
+                        icopy l
+                          (CL_id (case_match_id, CT_bool))
+                          (V_call (Band, [V_id (case_match_id, CT_bool); V_id (gs, CT_bool)]));
+                      ]
+                    @ guard_cleanup
+                  )
+                  else []
+                )
+              @ body_setup
+              @ [body_call (CL_id (case_return_id, ctyp))]
+              @ body_cleanup @ destructure_cleanup
               )
-            @ body_setup
-            @ [body_call (CL_id (case_return_id, ctyp))]
-            @ body_cleanup @ destructure_cleanup
           )
         in
         let case_ids, cases =
-          List.map
+          List.filter_map
             (fun case ->
+              let open Util.Option_monad in
               let case_match_id = ngensym () in
               let case_return_id = ngensym () in
-              ( (V_id (case_match_id, CT_bool), V_id (case_return_id, ctyp)),
-                compile_case case_match_id case_return_id case
-              )
+              let* case = compile_case case_match_id case_return_id case in
+              Some ((V_id (case_match_id, CT_bool), V_id (case_return_id, ctyp)), case)
             )
             cases
           |> List.split
@@ -823,7 +850,7 @@ module Make (C : CONFIG) = struct
         in
         (aval_setup @ List.concat cases, (fun clexp -> icopy l clexp (build_ite case_ids)), aval_cleanup)
     | AE_match (aval, cases, typ) ->
-        let is_complete = Option.is_some (get_attribute "complete" uannot) in
+        let is_complete = Option.is_some (get_attribute "complete" uannot) || has_infallible_mapping_case ctx cases in
         let ctx = update_coverage_override uannot ctx in
         let ctyp = ctyp_of_typ ctx typ in
         let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
@@ -833,7 +860,7 @@ module Make (C : CONFIG) = struct
         let branch_id, on_reached = if num_cases > 1 then coverage_branch_reached ctx l else (0, []) in
         let case_return_id = ngensym () in
         let finish_match_label = label "finish_match_" in
-        let compile_case is_last (apat, guard, body) =
+        let compile_case is_last (apat, guard, body, case_uannot) =
           let case_label = label "case_" in
           if is_dead_aexp body then [ilabel case_label]
           else (
@@ -890,7 +917,7 @@ module Make (C : CONFIG) = struct
         let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
         let try_return_id = ngensym () in
         let post_exception_handlers_label = label "post_exception_handlers_" in
-        let compile_case (apat, guard, body) =
+        let compile_case (apat, guard, body, case_uannot) =
           let trivial_guard =
             match guard with
             | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
@@ -946,36 +973,37 @@ module Make (C : CONFIG) = struct
           let if_ctyp = ctyp_of_typ ctx if_typ in
           let setup, cval, cleanup = compile_aval l ctx aval in
           let pure_attr = get_attribute "anf_pure" uannot in
-          let eager = C.eager_control_flow && can_optimize_control_flow_order ctx in
-          match (pure_attr, eager) with
-          | Some _, _ | _, true ->
-              let then_gs = ngensym () in
-              let then_setup, then_call, then_cleanup = compile_aexp ctx then_aexp in
-              let else_gs = ngensym () in
-              let else_setup, else_call, else_cleanup = compile_aexp ctx else_aexp in
-              ( setup @ then_setup @ else_setup
-                @ [
-                    idecl l if_ctyp then_gs;
-                    idecl l if_ctyp else_gs;
-                    then_call (CL_id (then_gs, if_ctyp));
-                    else_call (CL_id (else_gs, if_ctyp));
-                  ],
-                (fun clexp -> icopy l clexp (V_call (Ite, [cval; V_id (then_gs, if_ctyp); V_id (else_gs, if_ctyp)]))),
-                [iclear if_ctyp else_gs; iclear if_ctyp then_gs] @ else_cleanup @ then_cleanup @ cleanup
-              )
-          | _ ->
-              let branch_id, on_reached = coverage_branch_reached ctx l in
-              let compile_branch aexp =
-                let setup, call, cleanup = compile_aexp ctx aexp in
-                fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
-              in
-              ( setup,
-                (fun clexp ->
-                  append_into_block on_reached
-                    (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
-                ),
-                cleanup
-              )
+          let eager = C.eager_control_flow && (can_optimize_control_flow_order ctx || Option.is_some pure_attr) in
+          if eager then (
+            let then_gs = ngensym () in
+            let then_setup, then_call, then_cleanup = compile_aexp ctx then_aexp in
+            let else_gs = ngensym () in
+            let else_setup, else_call, else_cleanup = compile_aexp ctx else_aexp in
+            ( setup @ then_setup @ else_setup
+              @ [
+                  idecl l if_ctyp then_gs;
+                  idecl l if_ctyp else_gs;
+                  then_call (CL_id (then_gs, if_ctyp));
+                  else_call (CL_id (else_gs, if_ctyp));
+                ],
+              (fun clexp -> icopy l clexp (V_call (Ite, [cval; V_id (then_gs, if_ctyp); V_id (else_gs, if_ctyp)]))),
+              [iclear if_ctyp else_gs; iclear if_ctyp then_gs] @ else_cleanup @ then_cleanup @ cleanup
+            )
+          )
+          else (
+            let branch_id, on_reached = coverage_branch_reached ctx l in
+            let compile_branch aexp =
+              let setup, call, cleanup = compile_aexp ctx aexp in
+              fun clexp -> coverage_branch_target_taken ctx branch_id aexp @ setup @ [call clexp] @ cleanup
+            in
+            ( setup,
+              (fun clexp ->
+                append_into_block on_reached
+                  (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
+              ),
+              cleanup
+            )
+          )
         )
     (* FIXME: AE_struct_update could be AV_record_update - would reduce some copying. *)
     | AE_struct_update (aval, fields, typ) ->
@@ -1562,9 +1590,11 @@ module Make (C : CONFIG) = struct
 
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
+    let mapping_function_attr = get_def_attribute "mapping_function" def_annot in
 
     if Option.is_some debug_attr then (
-      prerr_endline Util.("Rewritten source for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      let extra = if Option.is_some mapping_function_attr then " (mapping)" else "" in
+      prerr_endline Util.("Rewritten source for " ^ string_of_id id ^ extra ^ ":" |> yellow |> bold |> clear);
       prerr_endline (Document.to_string (Pretty_print_sail.doc_exp (Type_check.strip_exp exp)))
     );
 
@@ -1626,27 +1656,50 @@ module Make (C : CONFIG) = struct
       prerr_endline (Document.to_string (pp_aexp aexp))
     );
 
-    let setup, call, cleanup = compile_aexp ctx aexp in
-    let destructure, destructure_cleanup =
-      compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
+    let compile_body ctx =
+      let setup, call, cleanup = compile_aexp ctx aexp in
+      let destructure, destructure_cleanup =
+        compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
+      in
+
+      let instrs =
+        arg_setup @ destructure @ guard_instrs @ setup
+        @ [call (CL_id (return, ret_ctyp))]
+        @ cleanup @ destructure_cleanup @ arg_cleanup
+      in
+      let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
+      let instrs = unique_names instrs in
+      let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+      coverage_function_entry ctx id (exp_loc exp) @ instrs
     in
 
-    let instrs =
-      arg_setup @ destructure @ guard_instrs @ setup
-      @ [call (CL_id (return, ret_ctyp))]
-      @ cleanup @ destructure_cleanup @ arg_cleanup
-    in
-    let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
-    let instrs = unique_names instrs in
-    let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
-    let instrs = coverage_function_entry ctx id (exp_loc exp) @ instrs in
+    let compiled_args = List.map fst compiled_args in
+    let instrs = compile_body ctx in
 
     if Option.is_some debug_attr then (
       prerr_endline Util.("IR for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
       List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
     );
 
-    ([CDEF_aux (CDEF_fundef (id, None, List.map fst compiled_args, instrs), def_annot)], orig_ctx)
+    (* If the function is a mapping, we generate an infallible version (that never causes a match_failure) *)
+    let mapping_infallible, return_ctx =
+      match mapping_function_attr with
+      | Some (attr_l, _) ->
+          let instrs =
+            compile_body
+              { ctx with def_annot = Some (add_def_attribute (gen_loc attr_l) "mapping_infallible" None def_annot) }
+          in
+          let id = append_id id "_infallible" in
+          ( [
+              CDEF_aux (CDEF_val (id, None, arg_ctyps, ret_ctyp), def_annot);
+              CDEF_aux (CDEF_fundef (id, None, compiled_args, instrs), def_annot);
+            ],
+            { orig_ctx with valspecs = Bindings.add id (None, arg_ctyps, ret_ctyp, empty_uannot) orig_ctx.valspecs }
+          )
+      | None -> ([], orig_ctx)
+    in
+
+    ([CDEF_aux (CDEF_fundef (id, None, compiled_args, instrs), def_annot)] @ mapping_infallible, return_ctx)
 
   (** Compile a Sail toplevel definition into an IR definition **)
   let rec compile_def n total ctx (DEF_aux (aux, _) as def) =

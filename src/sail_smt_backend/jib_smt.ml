@@ -1250,7 +1250,7 @@ end) : Jib_compile.CONFIG = struct
           let aexp1 = analyze ctx aexp1 in
           let aexp2 = analyze ctx aexp2 in
           let annot =
-            if is_pure_aexp ctx aexp1 && is_pure_aexp ctx aexp2 then
+            if is_pure_aexp ctx.effect_info aexp1 && is_pure_aexp ctx.effect_info aexp2 then
               { annot with uannot = add_attribute (gen_loc loc) "anf_pure" None uannot }
             else annot
           in
@@ -1265,7 +1265,7 @@ end) : Jib_compile.CONFIG = struct
           let aexp4 = analyze ctx aexp4 in
           (AE_for (id, aexp1, aexp2, aexp3, order, aexp4), annot)
       | AE_match (aval, cases, typ) ->
-          let analyze_case ((AP_aux (_, env, _) as pat), aexp1, aexp2) =
+          let analyze_case ((AP_aux (_, { env; _ }) as pat), aexp1, aexp2, uannot) =
             let pat_bindings = Bindings.bindings (apat_types pat) in
             let ctx = { ctx with local_env = env } in
             let ctx =
@@ -1273,13 +1273,19 @@ end) : Jib_compile.CONFIG = struct
                 (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals })
                 ctx pat_bindings
             in
-            (pat, analyze ctx aexp1, analyze ctx aexp2)
+            let uannot =
+              match get_attribute "complete" uannot with
+              | Some (l, _) when List.for_all (is_pure_case ctx.effect_info) cases ->
+                  add_attribute (gen_loc l) "anf_pure" None uannot
+              | _ -> uannot
+            in
+            (pat, analyze ctx aexp1, analyze ctx aexp2, uannot)
           in
           (AE_match (aval, List.map analyze_case cases, typ), annot)
       | AE_try (aexp, cases, typ) ->
           ( AE_try
               ( analyze ctx aexp,
-                List.map (fun (pat, aexp1, aexp2) -> (pat, analyze ctx aexp1, analyze ctx aexp2)) cases,
+                List.map (fun (pat, aexp1, aexp2, uannot) -> (pat, analyze ctx aexp1, analyze ctx aexp2, uannot)) cases,
                 typ
               ),
             annot
