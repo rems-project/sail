@@ -16,10 +16,12 @@ let fp16_pos_snan_1      = 0x7d10
 let fp16_neg_snan_0      = 0xfc01
 let fp16_neg_snan_1      = 0xfd10
 
-let fp16_pos_qnan_0      = 0x7e00
-let fp16_pos_qnan_1      = 0x7e01
-let fp16_neg_qnan_0      = 0xfe00
-let fp16_neg_qnan_1      = 0xfe01
+let fp16_pos_qnan_0       = 0x7e00
+let fp16_pos_qnan_1       = 0x7e01
+let fp16_pos_qnan_default = 0x7e00
+let fp16_neg_qnan_0       = 0xfe00
+let fp16_neg_qnan_1       = 0xfe01
+let fp16_neg_qnan_default = 0xfe00
 
 let fp16_pos_inf         = 0x7c00
 let fp16_neg_inf         = 0xfc00
@@ -59,10 +61,12 @@ let fp32_pos_snan_1      = 0x7f8f0000
 let fp32_neg_snan_0      = 0xff800001
 let fp32_neg_snan_1      = 0xff8f0000
 
-let fp32_pos_qnan_0      = 0x7fc00000
-let fp32_pos_qnan_1      = 0x7fc00001
-let fp32_neg_qnan_0      = 0xffc00000
-let fp32_neg_qnan_1      = 0xffc00001
+let fp32_pos_qnan_0       = 0x7fc00000
+let fp32_pos_qnan_1       = 0x7fc00001
+let fp32_pos_qnan_default = 0x7fc00000
+let fp32_neg_qnan_0       = 0xffc00000
+let fp32_neg_qnan_1       = 0xffc00001
+let fp32_neg_qnan_default = 0xffc00000
 
 let fp32_pos_inf         = 0x7f800000
 let fp32_neg_inf         = 0xff800000
@@ -102,10 +106,12 @@ let fp64_pos_snan_1      = 0x7ff7000000000000
 let fp64_neg_snan_0      = 0xfff0000000000001
 let fp64_neg_snan_1      = 0xfff7000000000000
 
-let fp64_pos_qnan_0      = 0x7ff8000000000000
-let fp64_pos_qnan_1      = 0x7fff000000000000
-let fp64_neg_qnan_0      = 0xfff8000000000000
-let fp64_neg_qnan_1      = 0xffff000000000000
+let fp64_pos_qnan_0       = 0x7ff8000000000000
+let fp64_pos_qnan_1       = 0x7fff000000000000
+let fp64_pos_qnan_default = 0x7ff8000000000000
+let fp64_neg_qnan_0       = 0xfff8000000000000
+let fp64_neg_qnan_1       = 0xffff000000000000
+let fp64_neg_qnan_default = 0xfff8000000000000
 
 let fp64_pos_inf         = 0x7ff0000000000000
 let fp64_neg_inf         = 0xfff0000000000000
@@ -145,10 +151,12 @@ let fp128_pos_snan_1     = 0x7fff000000000000ff00000000000000
 let fp128_neg_snan_0     = 0xffff0000000000000000000000000001
 let fp128_neg_snan_1     = 0xffff000000000000ff00000000000000
 
-let fp128_pos_qnan_0     = 0x7fff8000000000000000000000000001
-let fp128_pos_qnan_1     = 0x7fff8d00000000000000000000000000
-let fp128_neg_qnan_0     = 0xffff8000000000000000000000000001
-let fp128_neg_qnan_1     = 0xffff8d00000000000000000000000000
+let fp128_pos_qnan_0       = 0x7fff8000000000000000000000000001
+let fp128_pos_qnan_1       = 0x7fff8d00000000000000000000000000
+let fp128_pos_qnan_default = 0x7fff8000000000000000000000000000
+let fp128_neg_qnan_0       = 0xffff8000000000000000000000000001
+let fp128_neg_qnan_1       = 0xffff8d00000000000000000000000000
+let fp128_neg_qnan_default = 0xffff8000000000000000000000000000
 
 let fp128_pos_inf        = 0x7fff0000000000000000000000000000
 let fp128_neg_inf        = 0xffff0000000000000000000000000000
