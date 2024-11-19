@@ -1373,6 +1373,10 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         let* x = smt_cval x in
         let* y = smt_cval y in
         return (Fn ("=", [x; y]))
+    | CT_bool, CT_bool ->
+        let* x = smt_cval x in
+        let* y = smt_cval y in
+        return (Fn ("=", [x; y]))
     | (CT_constant _ | CT_fint _ | CT_lint), (CT_constant _ | CT_fint _ | CT_lint) -> builtin_eq_int x y
     | CT_unit, CT_unit -> return (Bool_lit true)
     | CT_enum _, CT_enum _ ->

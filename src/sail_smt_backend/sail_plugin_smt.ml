@@ -53,6 +53,7 @@ let opt_smt_auto = ref false
 let opt_smt_auto_solver = ref Smt_exp.Cvc5
 let opt_smt_includes : string list ref = ref []
 let opt_smt_ignore_overflow = ref false
+let opt_smt_specialize = ref true
 let opt_smt_unknown_integer_width = ref 128
 let opt_smt_unknown_bitvector_width = ref 64
 let opt_smt_unknown_generic_vector_width = ref 32
@@ -86,6 +87,7 @@ let smt_options =
       Arg.String (fun i -> opt_smt_includes := i :: !opt_smt_includes),
       "<filename> insert additional file in SMT output"
     );
+    ("-smt_disable_specialization", Arg.Clear opt_smt_specialize, " Disable generic specialization when generating SMT");
   ]
 
 let smt_rewrites =
@@ -126,9 +128,12 @@ let smt_target out_file { ast; effect_info; env; _ } =
   let prop_ids = Bindings.bindings properties |> List.map fst |> IdSet.of_list in
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
   Specialize.add_initial_calls prop_ids;
-  let ast_smt, env, effect_info = Specialize.(specialize typ_specialization env ast effect_info) in
   let ast_smt, env, effect_info =
-    Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info)
+    if !opt_smt_specialize then (
+      let ast_smt, env, effect_info = Specialize.(specialize typ_specialization env ast effect_info) in
+      Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info)
+    )
+    else (ast, env, effect_info)
   in
   let name_file =
     match out_file with Some f -> fun str -> f ^ "_" ^ str ^ ".smt2" | None -> fun str -> str ^ ".smt2"
