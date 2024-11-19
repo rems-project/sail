@@ -36,12 +36,6 @@ printf "==========================================\n"
 ./ocaml/run_tests.sh || returncode=1
 
 printf "\n==========================================\n"
-printf "Lean tests\n"
-printf "==========================================\n"
-
-./lean/run_tests.py || returncode=1
-
-printf "\n==========================================\n"
 printf "Floating point tests\n"
 printf "==========================================\n"
 
