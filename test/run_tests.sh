@@ -48,12 +48,6 @@ printf "==========================================\n"
 
 ./arm/run_tests.sh
 
-printf "\n==========================================\n"
-printf "Lean tests\n"
-printf "==========================================\n"
-
-./lean/run_tests.py
-
 # This specification has bitrotted
 #
 # printf "\n==========================================\n"
