@@ -50,6 +50,14 @@ printf "==========================================\n"
 ./smt/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
+printf "SystemVerilog tests\n"
+printf "==========================================\n"
+
+verilator --version || returncode=1
+
+./sv/run_tests.py || returncode=1
+
+printf "\n==========================================\n"
 printf "Lean tests\n"
 printf "==========================================\n"
 

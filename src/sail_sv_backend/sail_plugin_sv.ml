@@ -74,6 +74,7 @@ let opt_verilate_args = ref None
 let opt_verilate_cflags = ref None
 let opt_verilate_ldflags = ref None
 let opt_verilate_link_sail_runtime = ref false
+let opt_verilate_jobs = ref 0
 
 let append_flag opt flag = match !opt with None -> opt := Some flag | Some flags -> opt := Some (flags ^ " " ^ flag)
 
@@ -141,6 +142,7 @@ let verilog_options =
       Arg.Set opt_verilate_link_sail_runtime,
       " Link the Sail C runtime with the generated verilator C++"
     );
+    ("-sv_verilate_jobs", Arg.Int (fun i -> opt_verilate_jobs := i), "<n> Provide the -j option to verilator");
     ("-sv_lines", Arg.Set opt_line_directives, " output `line directives");
     ("-sv_comb", Arg.Set opt_comb, " output an always_comb block instead of initial block");
     ("-sv_inregs", Arg.Set opt_inregs, " take register values from inputs");
@@ -674,8 +676,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
            here, and just hope for the best. *)
         let verilator_command =
           sprintf
-            "verilator --cc --exe --build -j 0 --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv%s%s%s"
-            sail_sv_libdir out out out extra cflags ldflags
+            "verilator --cc --exe --build -j %d --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp \
+             %s.sv%s%s%s"
+            !opt_verilate_jobs sail_sv_libdir out out out extra cflags ldflags
         in
         print_endline ("Verilator command: " ^ verilator_command);
         let _ = Unix.system verilator_command in
