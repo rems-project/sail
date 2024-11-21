@@ -60,6 +60,7 @@ val eq_bits = pure {
   interpreter: "eq_list",
   lem: "eq_vec",
   coq: "eq_vec",
+  lean: "Eq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -68,7 +69,8 @@ overload operator == = {eq_bit, eq_bits}
 val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
-  c: "neq_bits"
+  c: "neq_bits",
+  lean: "Ne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
@@ -109,6 +111,7 @@ val truncate = pure {
   interpreter: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
+  lean: "BitVec.truncate",
   _: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
@@ -129,7 +132,14 @@ function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail
 
 overload operator ^ = {sail_mask}
 
-val bitvector_concat = pure {ocaml: "append", interpreter: "append", lem: "concat_vec", coq: "concat_vec", _: "append"} : forall 'n 'm.
+val bitvector_concat = pure {
+  ocaml: "append",
+  interpreter: "append",
+  lem: "concat_vec",
+  coq: "concat_vec",
+  lean: "BitVec.append",
+   _: "append"
+} : forall 'n 'm.
   (bits('n), bits('m)) -> bits('n + 'm)
 
 overload append = {bitvector_concat}
@@ -198,7 +208,7 @@ val add_bits = pure {
   interpreter: "add_vec",
   lem: "add_vec",
   coq: "add_vec",
-  lean: "Add.add",
+  lean: "HAdd.hAdd",
   _: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -217,16 +227,25 @@ val sub_bits = pure {
   interpreter: "sub_vec",
   lem: "sub_vec",
   coq: "sub_vec",
+  lean: "HSub.hSub",
   _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val not_vec = pure {ocaml: "not_vec", lem: "not_vec", coq: "not_vec", interpreter: "not_vec", _: "not_bits"} : forall 'n. bits('n) -> bits('n)
+val not_vec = pure {
+  ocaml: "not_vec", 
+  lem: "not_vec",
+  coq: "not_vec",
+  interpreter: "not_vec",
+  lean: "Complement.complement",
+  _: "not_bits"
+} : forall 'n. bits('n) -> bits('n)
 
 val and_vec = pure {
   lem: "and_vec",
   coq: "and_vec",
   ocaml: "and_vec",
   interpreter: "and_vec",
+  lean: "HAnd.hAnd",
   _: "and_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -237,6 +256,7 @@ val or_vec = pure {
   coq: "or_vec",
   ocaml: "or_vec",
   interpreter: "or_vec",
+  lean: "HOr.hOr",
   _: "or_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -247,6 +267,7 @@ val xor_vec = pure {
   coq: "xor_vec",
   ocaml: "xor_vec",
   interpreter: "xor_vec",
+  lean: "HXor.hXor",
   _: "xor_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -345,6 +366,7 @@ val unsigned = pure {
   lem: "uint",
   interpreter: "uint",
   coq: "uint",
+  lean: "BitVec.toNat",
   _: "sail_unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
@@ -357,6 +379,7 @@ val signed = pure {
   lem: "sint",
   interpreter: "sint",
   coq: "sint",
+  lean: "BitVec.toInt",
   _: "sail_signed"
 } : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
