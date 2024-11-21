@@ -2,7 +2,10 @@ default Order dec
 
 $include <prelude.sail>
 
+$[sv_function { types = "int #0" }]
 val "parse_hex_bits" : forall 'n, 'n > 0. (int('n), string) -> bits('n)
+
+$[sv_function { types = "int #0" }]
 val "valid_hex_bits" : forall 'n, 'n > 0. (int('n), string) -> bool
 
 val hex_bits : forall 'n, 'n > 0. bits('n) <-> (int('n), string)

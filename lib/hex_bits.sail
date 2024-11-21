@@ -51,6 +51,7 @@ $include <option.sail>
 $include <vector.sail>
 $include <string.sail>
 
+$[sv_function { types = "int #0" }]
 val "parse_hex_bits" : forall 'n, 'n > 0. (int('n), string) -> bits('n)
 
 $[sv_function { types = "int #0" }]
