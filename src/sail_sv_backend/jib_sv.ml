@@ -2189,7 +2189,9 @@ module Make (Config : CONFIG) = struct
         let inputs = List.map (fun exp -> pp_smt exp) input_connections in
         let outputs = List.map pp_place output_connections in
         let connections =
-          match inputs @ outputs with [] -> empty | connections -> parens (separate (comma ^^ space) connections)
+          match inputs @ outputs with
+          | [] -> parens empty
+          | connections -> parens (separate (comma ^^ space) connections)
         in
         pp_sv_name module_name ^^ params ^^ space ^^ string instance_name ^^ connections ^^ semi
     | SVD_fundef f -> pp_fundef f
