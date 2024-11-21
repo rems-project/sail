@@ -247,6 +247,8 @@ module Make (Config : CONFIG) = struct
 
         let count_leading_zeros l = function _ -> Reporting.unreachable l __POS__ "count_leading_zeros"
 
+        let count_trailing_zeros l = function _ -> Reporting.unreachable l __POS__ "count_trailing_zeros"
+
         let fvector_store l _ _ = "store"
 
         let is_empty l = function _ -> Reporting.unreachable l __POS__ "is_empty"

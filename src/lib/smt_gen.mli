@@ -148,6 +148,7 @@ module type PRIMOP_GEN = sig
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string
   val count_leading_zeros : Parse_ast.l -> int -> string
+  val count_trailing_zeros : Parse_ast.l -> int -> string
   val fvector_store : Parse_ast.l -> int -> ctyp -> string
   val is_empty : Parse_ast.l -> ctyp -> string
   val hd : Parse_ast.l -> ctyp -> string

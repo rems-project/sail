@@ -174,6 +174,8 @@ let count_leading_zeros xs =
   let rec aux bs acc = match bs with B0 :: bs' -> aux bs' (acc + 1) | _ -> acc in
   Big_int.of_int (aux xs 0)
 
+let count_trailing_zeros xs = count_leading_zeros (List.rev xs)
+
 let subrange (list, n, m) =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in

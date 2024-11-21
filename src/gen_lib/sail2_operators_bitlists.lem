@@ -312,3 +312,4 @@ let eq_vec    = eq_bv
 let neq_vec   = neq_bv
 
 let inline count_leading_zeros v = count_leading_zero_bits v
+let inline count_trailing_zeros v = count_trailing_zero_bits v

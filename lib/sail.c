@@ -812,6 +812,16 @@ void count_leading_zeros(sail_int *rop, const lbits op)
   }
 }
 
+void count_trailing_zeros(sail_int *rop, const lbits op)
+{
+  if (mpz_cmp_ui(*op.bits, 0) == 0) {
+    mpz_set_ui(*rop, op.len);
+  } else {
+    mp_bitcnt_t ix = mpz_scan1(*op.bits, 0);
+    mpz_set_ui(*rop, ix);
+  }
+}
+
 bool eq_bits(const lbits op1, const lbits op2)
 {
   assert(op1.len == op2.len);

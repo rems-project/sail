@@ -634,6 +634,8 @@ module Make (Config : CONFIG) = struct
 
         let count_leading_zeros l _ = Reporting.unreachable l __POS__ "count_leading_zeros"
 
+        let count_trailing_zeros l _ = Reporting.unreachable l __POS__ "count_trailing_zeros"
+
         let fvector_store _l len ctyp = Primops.fvector_store len ctyp
 
         let is_empty l = function

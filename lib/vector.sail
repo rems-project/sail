@@ -90,6 +90,7 @@ val vector_init = pure "vector_init" : forall 'n ('a : Type), 'n >= 0. (implicit
 overload length = {bitvector_length, vector_length}
 
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+val count_trailing_zeros = pure "count_trailing_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
 $[sv_module { stdout = true }]
 val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit

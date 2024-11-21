@@ -383,6 +383,10 @@ let value_count_leading_zeros = function
   | [v1] -> V_int (Sail_lib.count_leading_zeros (coerce_bv v1))
   | _ -> failwith "value count_leading_zeros"
 
+let value_count_trailing_zeros = function
+  | [v1] -> V_int (Sail_lib.count_trailing_zeros (coerce_bv v1))
+  | _ -> failwith "value count_trailing_zeros"
+
 let is_member = function V_member _ -> true | _ -> false
 
 let is_ctor = function V_ctor _ -> true | _ -> false
@@ -807,6 +811,7 @@ let primops =
          ("internal_pick", value_internal_pick);
          ("replicate_bits", value_replicate_bits);
          ("count_leading_zeros", value_count_leading_zeros);
+         ("count_trailing_zeros", value_count_trailing_zeros);
          ("Elf_loader.elf_entry", fun _ -> V_int !Elf_loader.opt_elf_entry);
          ("Elf_loader.elf_tohost", fun _ -> V_int !Elf_loader.opt_elf_tohost);
          ("string_append", value_string_append);

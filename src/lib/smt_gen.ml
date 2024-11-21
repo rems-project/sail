@@ -235,6 +235,7 @@ module type PRIMOP_GEN = sig
   val hex_str : Parse_ast.l -> ctyp -> string
   val hex_str_upper : Parse_ast.l -> ctyp -> string
   val count_leading_zeros : Parse_ast.l -> int -> string
+  val count_trailing_zeros : Parse_ast.l -> int -> string
   val fvector_store : Parse_ast.l -> int -> ctyp -> string
   val is_empty : Parse_ast.l -> ctyp -> string
   val hd : Parse_ast.l -> ctyp -> string
@@ -1321,6 +1322,77 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         )
     | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
+  let builtin_count_trailing_zeros v ret_ctyp =
+    let rec tzcnt ret_sz sz smt =
+      if sz == 1 then
+        Ite
+          ( Fn ("=", [Extract (0, 0, smt); Bitvec_lit [Sail2_values.B0]]),
+            bvint ret_sz (Big_int.of_int 1),
+            bvint ret_sz Big_int.zero
+          )
+      else (
+        assert (sz land (sz - 1) = 0);
+        let hsz = sz / 2 in
+        Ite
+          ( Fn ("=", [Extract (hsz - 1, 0, smt); bvzero hsz]),
+            Fn ("bvadd", [bvint ret_sz (Big_int.of_int hsz); tzcnt ret_sz hsz (Extract (sz - 1, hsz, smt))]),
+            tzcnt ret_sz hsz (Extract (hsz - 1, 0, smt))
+          )
+      )
+    in
+    let smallest_greater_power_of_two n =
+      let m = ref 1 in
+      while !m < n do
+        m := !m lsl 1
+      done;
+      assert (!m land (!m - 1) = 0);
+      !m
+    in
+    let ret_sz = int_size ret_ctyp in
+    let* smt = smt_cval v in
+    match cval_ctyp v with
+    | CT_fbits sz when sz land (sz - 1) = 0 -> return (tzcnt ret_sz sz smt)
+    | CT_fbits sz ->
+        let padded_sz = smallest_greater_power_of_two sz in
+        let padding = bvzero (padded_sz - sz) in
+        assert (padded_sz > sz);
+        return
+          (Fn
+             ( "bvsub",
+               [tzcnt ret_sz padded_sz (Fn ("concat", [padding; smt])); bvint ret_sz (Big_int.of_int (padded_sz - sz))]
+             )
+          )
+    | CT_lbits ->
+        if ret_sz > lbits_index then
+          return
+            (Fn
+               ( "bvsub",
+                 [
+                   tzcnt ret_sz lbits_size (Fn ("contents", [smt]));
+                   Fn
+                     ( "bvsub",
+                       [
+                         bvint ret_sz (Big_int.of_int lbits_size);
+                         Fn ("concat", [bvzero (ret_sz - lbits_index); Fn ("len", [smt])]);
+                       ]
+                     );
+                 ]
+               )
+            )
+        else (
+          let trailing_zeros =
+            Fn
+              ( "bvsub",
+                [
+                  tzcnt lbits_index lbits_size (Fn ("contents", [smt]));
+                  Fn ("bvsub", [bvint lbits_index (Big_int.of_int lbits_size); Fn ("len", [smt])]);
+                ]
+              )
+          in
+          return (Extract (ret_sz - 1, 0, trailing_zeros))
+        )
+    | _ -> builtin_type_error "count_trailing_zeros" [v] (Some ret_ctyp)
+
   let rec builtin_eq_anything x y =
     match (cval_ctyp x, cval_ctyp y) with
     | CT_struct (xid, xfields), CT_struct (yid, yfields) ->
@@ -1508,6 +1580,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "length" -> unary_primop builtin_length
     | "replicate_bits" -> binary_primop builtin_replicate_bits
     | "count_leading_zeros" -> unary_primop builtin_count_leading_zeros
+    | "count_trailing_zeros" -> unary_primop builtin_count_trailing_zeros
     | "eq_real" -> binary_primop (binary_smt "=")
     | "neg_real" -> unary_primop (unary_smt "-")
     | "add_real" -> binary_primop (binary_smt "+")
