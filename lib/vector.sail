@@ -60,8 +60,6 @@ val eq_bits = pure {
   interpreter: "eq_list",
   lem: "eq_vec",
   coq: "eq_vec",
-  // The lean case works, but can't be tested properly, because `Bool` is printed as `bool`
-  // lean: "Eq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -71,8 +69,6 @@ val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
   c: "neq_bits",
-  // The lean case works, but can't be tested properly, because `Bool` is printed as `bool`
-  // lean: "Ne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
@@ -113,8 +109,6 @@ val truncate = pure {
   interpreter: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
-  // The lean case doesn't work, because BitVec.truncate's arguments are in the opposite order
-  // lean: "BitVec.truncate",
   _: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
