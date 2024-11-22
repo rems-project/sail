@@ -993,13 +993,15 @@ module Make (Config : CONFIG) = struct
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pp_smt [arr; i; x])
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pp_smt x ^^ string "})))"
     | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ pp_smt x ^^ string "})"
-    | Extract (n, m, Bitvec_lit bits) ->
+    | Extract (n, m, _, Bitvec_lit bits) ->
         pp_smt (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
-    | Extract (n, m, Var v) ->
-        if n = m then pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+    | Extract (n, m, len, Var v) ->
+        if len = 1 then pp_name v
+        else if n = m then pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
         else pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
-    | Extract (n, m, x) ->
-        if n = m then braces (pp_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+    | Extract (n, m, len, x) ->
+        if len = 1 then pp_smt x
+        else if n = m then braces (pp_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
         else braces (pp_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
     | Var v -> pp_name v
     | Tester (ctor, v) ->
@@ -1038,8 +1040,8 @@ module Make (Config : CONFIG) = struct
         | CT_fbits sz, CT_constant c ->
             let c = Big_int.to_int c in
             let* bv_smt = Smt.smt_cval bv in
-            let bv_smt_1 = Extract (sz - 1, c + 1, bv_smt) in
-            let bv_smt_2 = Extract (c - 1, 0, bv_smt) in
+            let bv_smt_1 = Extract (sz - 1, c + 1, sz, bv_smt) in
+            let bv_smt_2 = Extract (c - 1, 0, sz, bv_smt) in
             let* bit_smt = Smt.smt_cval bit in
             let smt =
               if c = 0 then Fn ("concat", [bv_smt_1; bit_smt])
@@ -1261,7 +1263,7 @@ module Make (Config : CONFIG) = struct
                                     ( SVS_assign
                                         ( SVP_index (ret, var_id j),
                                           Ite
-                                            ( Fn ("=", [Extract (sz - 1, 0, var_id j); i]),
+                                            ( Fn ("=", [Extract (sz - 1, 0, sz, var_id j); i]),
                                               x,
                                               Fn ("select", [arr; var_id j])
                                             )

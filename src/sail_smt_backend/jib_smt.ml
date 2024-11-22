@@ -112,7 +112,7 @@ module Make_optimizer (S : Sequence) = struct
           uses_in_exp cond;
           uses_in_exp t;
           uses_in_exp e
-      | Extract (_, _, exp)
+      | Extract (_, _, _, exp)
       | Unwrap (_, _, exp)
       | Tester (_, exp)
       | SignExtend (_, _, exp)

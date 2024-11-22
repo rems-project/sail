@@ -176,9 +176,9 @@ let rec visit_smt_exp (vis : svir_visitor) outer_smt_exp =
     | SignExtend (n, m, exp) ->
         let exp' = visit_smt_exp vis exp in
         if exp == exp' then no_change else SignExtend (n, m, exp')
-    | Extract (n, m, exp) ->
+    | Extract (n, m, len, exp) ->
         let exp' = visit_smt_exp vis exp in
-        if exp == exp' then no_change else Extract (n, m, exp')
+        if exp == exp' then no_change else Extract (n, m, len, exp')
     | Hd (hd_op, exp) ->
         let exp' = visit_smt_exp vis exp in
         if exp == exp' then no_change else Hd (hd_op, exp')

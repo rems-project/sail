@@ -527,7 +527,7 @@ module RemoveUnusedVariables = struct
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
     | SignExtend (_, _, exp)
     | ZeroExtend (_, _, exp)
-    | Extract (_, _, exp)
+    | Extract (_, _, _, exp)
     | Tester (_, exp)
     | Unwrap (_, _, exp)
     | Field (_, _, exp)

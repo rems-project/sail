@@ -81,7 +81,7 @@ type smt_exp =
   | Ite of smt_exp * smt_exp * smt_exp
   | SignExtend of int * int * smt_exp
   | ZeroExtend of int * int * smt_exp
-  | Extract of int * int * smt_exp
+  | Extract of int * int * int * smt_exp
   | Tester of Ast.id * smt_exp
   | Unwrap of Ast.id * bool * smt_exp
   | Field of Ast.id * Ast.id * smt_exp
@@ -109,7 +109,7 @@ let rec pp_smt_exp =
   | Unwrap (ctor, _, exp) -> parens (string ("un" ^ zencode_id ctor) ^^ space ^^ pp_smt_exp exp)
   | Ite (cond, then_exp, else_exp) ->
       parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
-  | Extract (i, j, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
+  | Extract (i, j, _, exp) -> parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
   | Tester (ctor, exp) -> parens (string (Printf.sprintf "(_ is %s)" (zencode_id ctor)) ^^ space ^^ pp_smt_exp exp)
   | SignExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
   | ZeroExtend (_, i, exp) -> parens (string (Printf.sprintf "(_ zero_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
@@ -124,7 +124,7 @@ let rec fold_smt_exp f = function
   | Ite (cond, t, e) -> f (Ite (fold_smt_exp f cond, fold_smt_exp f t, fold_smt_exp f e))
   | SignExtend (len, n, exp) -> f (SignExtend (len, n, fold_smt_exp f exp))
   | ZeroExtend (len, n, exp) -> f (ZeroExtend (len, n, fold_smt_exp f exp))
-  | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
+  | Extract (n, m, len, exp) -> f (Extract (n, m, len, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
   | Unwrap (ctor, b, exp) -> f (Unwrap (ctor, b, fold_smt_exp f exp))
   | Field (struct_id, field_id, exp) -> f (Field (struct_id, field_id, fold_smt_exp f exp))
@@ -146,7 +146,7 @@ let rec iter_smt_exp f exp =
       iter_smt_exp f e
   | SignExtend (_, _, exp)
   | ZeroExtend (_, _, exp)
-  | Extract (_, _, exp)
+  | Extract (_, _, _, exp)
   | Tester (_, exp)
   | Unwrap (_, _, exp)
   | Hd (_, exp)
@@ -165,7 +165,7 @@ let rec smt_exp_size = function
   | Ite (i, t, e) -> 1 + smt_exp_size i + smt_exp_size t + smt_exp_size e
   | SignExtend (_, _, exp)
   | ZeroExtend (_, _, exp)
-  | Extract (_, _, exp)
+  | Extract (_, _, _, exp)
   | Tester (_, exp)
   | Unwrap (_, _, exp)
   | Hd (_, exp)
@@ -176,7 +176,7 @@ let rec smt_exp_size = function
   | Struct (_, fields) -> 1 + List.fold_left (fun n (_, field) -> n + smt_exp_size field) 0 fields
   | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> 1
 
-let extract i j x = Extract (i, j, x)
+let extract ~from i j x = Extract (i, j, from, x)
 
 let bvnot x = Fn ("bvnot", [x])
 let bvand x y = Fn ("bvand", [x; y])
@@ -822,7 +822,7 @@ module Simplifier = struct
 
   let rule_extract =
     mk_simple_rule __LOC__ @@ function
-    | Extract (n, m, Bitvec_lit bv) ->
+    | Extract (n, m, _, Bitvec_lit bv) ->
         change (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bv (Big_int.of_int n) (Big_int.of_int m)))
     | _ -> NoChange
 
@@ -867,9 +867,9 @@ module Simplifier = struct
       | SignExtend (n, m, exp) ->
           let exp' = go simpset exp in
           if exp == exp' then no_change else SignExtend (n, m, exp')
-      | Extract (n, m, exp) ->
+      | Extract (n, m, len, exp) ->
           let exp' = go simpset exp in
-          if exp == exp' then no_change else Extract (n, m, exp')
+          if exp == exp' then no_change else Extract (n, m, len, exp')
       | Store (info, store_fn, arr, i, x) ->
           let arr' = go simpset arr in
           let i' = go simpset i in
