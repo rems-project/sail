@@ -61,7 +61,7 @@ val eq_bits = pure {
   lem: "eq_vec",
   coq: "eq_vec",
   // The lean case works, but can't be tested properly, because `Bool` is printed as `bool`
-  lean: "Eq",
+  // lean: "Eq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -72,7 +72,7 @@ val neq_bits = pure {
   coq: "neq_vec",
   c: "neq_bits",
   // The lean case works, but can't be tested properly, because `Bool` is printed as `bool`
-  lean: "Ne"
+  // lean: "Ne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
