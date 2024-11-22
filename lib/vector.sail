@@ -68,7 +68,7 @@ overload operator == = {eq_bit, eq_bits}
 val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
-  c: "neq_bits",
+  c: "neq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
