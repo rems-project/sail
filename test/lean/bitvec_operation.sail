@@ -36,3 +36,4 @@ val bitvector_xor : (bits(16), bits(16)) -> bits(16)
 function bitvector_xor(x, y) = {
   xor_vec (x, y)
 }
+
