@@ -95,6 +95,7 @@ let opt_no_packed = ref false
 let opt_no_assertions = ref false
 let opt_never_pack_unions = ref false
 let opt_padding = ref false
+let opt_no_unions = ref false
 let opt_nomem = ref false
 
 let opt_assert_to_exception = ref false
@@ -171,6 +172,7 @@ let verilog_options =
       Arg.Int (fun i -> opt_max_unknown_bitvector_width := i),
       "set the maximum width for bitvectors with unknown width"
     );
+    (Flag.create ~prefix:["sv"] "no_unions", Arg.Set opt_no_unions, " don't emit any union, instead emit struct");
     (Flag.create ~prefix:["sv"] "no_strings", Arg.Set opt_no_strings, "don't emit any strings, instead emit units");
     (Flag.create ~prefix:["sv"] "no_packed", Arg.Set opt_no_packed, "don't emit packed datastructures");
     (Flag.create ~prefix:["sv"] "no_assertions", Arg.Set opt_no_assertions, "ignore all Sail asserts");
@@ -458,6 +460,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let no_assertions = !opt_no_assertions
     let never_pack_unions = !opt_never_pack_unions
     let union_padding = !opt_padding
+    let no_unions = !opt_no_unions
     let unreachable = !opt_unreachable
     let comb = !opt_comb
     let ignore = [] (* List.map fst !opt_fun2wires *)

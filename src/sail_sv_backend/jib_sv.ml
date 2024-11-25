@@ -96,6 +96,7 @@ module type CONFIG = sig
   val no_assertions : bool
   val never_pack_unions : bool
   val union_padding : bool
+  val no_unions : bool
   val unreachable : string list
   val comb : bool
   val ignore : string list
@@ -447,7 +448,7 @@ module Make (Config : CONFIG) = struct
           ^^ separate space
                [
                  string "typedef";
-                 string "union";
+                 (if Config.no_unions then string "struct" else string "union");
                  string "packed";
                  group
                    (lbrace
