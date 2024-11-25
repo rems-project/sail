@@ -21,3 +21,4 @@ def bitvector_xor (x : BitVec 16) (y : BitVec 16) : BitVec 16 :=
 
 def initialize_registers : Unit :=
   ()
+
