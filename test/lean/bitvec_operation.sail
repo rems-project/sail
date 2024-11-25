@@ -2,6 +2,16 @@ default Order dec
 
 $include <prelude.sail>
 
+val bitvector_eq : (bits(16), bits(16)) -> bool
+function bitvector_eq(x, y) = {
+  x == y
+}
+
+val bitvector_neq : (bits(16), bits(16)) -> bool
+function bitvector_neq(x, y) = {
+  x != y
+}
+
 val bitvector_append : (bits(16), bits(16)) -> bits(32)
 function bitvector_append(x, y) = {
   append (x, y)

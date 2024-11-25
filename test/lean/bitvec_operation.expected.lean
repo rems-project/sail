@@ -1,3 +1,9 @@
+def bitvector_eq (x : BitVec 16) (y : BitVec 16) : Bool :=
+  (Eq x y)
+
+def bitvector_neq (x : BitVec 16) (y : BitVec 16) : Bool :=
+  (Ne x y)
+
 def bitvector_append (x : BitVec 16) (y : BitVec 16) : BitVec 32 :=
   (BitVec.append x y)
 
