@@ -711,6 +711,7 @@ let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
     if not (IntSet.mem n !visited) then (
       match graph.nodes.(n) with
       | Some ((ssa, cfnode), preds, succs) ->
+          visited := IntSet.add n !visited;
           let disj =
             List.map
               (fun post_frontier ->
@@ -740,7 +741,6 @@ let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
             | [conj] -> Pi conj
             | conjs -> Pi [mk_disj (List.map (fun conj -> mk_conj conj) conjs)]
           in
-          visited := IntSet.add n !visited;
           graph.nodes.(n) <- Some ((mk_pi disj :: ssa, cfnode), preds, succs)
       | None -> ()
     )
