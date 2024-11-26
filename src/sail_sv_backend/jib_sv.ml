@@ -78,65 +78,121 @@ let parse_sv_type = function
       (l, num_opt, ctyp)
   | AD_aux (_, l) -> raise (Reporting.err_general l "Cannot parse systemverilog type from attribute")
 
-let sv_types_from_attribute ~arity attr_data_opt =
-  let open Util.Option_monad in
-  let* attr_data = attr_data_opt in
-  let* fields = attribute_data_object attr_data in
-  let* types = List.assoc_opt "types" fields in
-  let l = match types with AD_aux (_, l) -> l in
-  let ctyps =
-    match types with
-    | AD_aux (AD_string _, _) as s -> [parse_sv_type s]
-    | AD_aux (AD_list types, _) -> List.map parse_sv_type types
-    | _ -> raise (Reporting.err_general l "types field must be either a string, or an array of strings")
-  in
-  if List.for_all (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps then
-    Some
-      (List.init arity (fun n ->
-           let* _, _, ctyp = List.find_opt (fun (_, num_opt, _) -> Option.get num_opt = n) ctyps in
-           Some ctyp
-       )
-      )
-  else if List.for_all (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps then
-    if List.length ctyps <> arity then
-      raise
-        (Reporting.err_general l
-           "Number of items of types key must match number of function arguments, unless argument positions are \
-            explicit"
+module type ATTRIBUTE_INFO = sig
+  val loc : Ast.l
+  val attribute_name : string
+end
+
+module NullAttributeInfo : ATTRIBUTE_INFO = struct
+  let loc = Parse_ast.Unknown
+  let attribute_name = "unknown"
+end
+
+let get_sv_attribute_from ~getter name annot =
+  match getter name annot with
+  | Some (l, attr_data_opt) -> (
+      let module Info = struct
+        let loc = l
+        let attribute_name = name
+      end in
+      match attr_data_opt with
+      | None -> (Some [], (module Info : ATTRIBUTE_INFO))
+      | Some attr_data -> (
+          match attribute_data_object attr_data with
+          | Some obj -> (Some obj, (module Info : ATTRIBUTE_INFO))
+          | None -> raise (Reporting.err_general l ("Expected key-value pairs on " ^ name ^ " attribute"))
         )
-    else Some (List.map (fun (_, _, ctyp) -> Some ctyp) ctyps)
-  else (
-    let l1, _, _ = List.find (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps in
-    let l2, _, _ = List.find (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps in
-    raise
-      (Reporting.err_general
-         (Hint ("Non-positional type specified here", l2, l1))
-         "Mixed use of types with specified positions and non-specified positions"
+    )
+  | None -> (None, (module NullAttributeInfo))
+
+let get_sv_attribute name uannot = get_sv_attribute_from ~getter:get_attribute name uannot
+let get_sv_def_attribute name def_annot = get_sv_attribute_from ~getter:get_def_attribute name def_annot
+
+module AttributeParser (Info : ATTRIBUTE_INFO) = struct
+  open Util.Option_monad
+
+  let key_type_error ~expected key l =
+    Reporting.err_general
+      (Hint ("key here", l, Info.loc))
+      (Printf.sprintf "Expected %s type for %s in %s attribute" expected key Info.attribute_name)
+
+  let get_bool ~default key obj_opt =
+    match obj_opt with
+    | None -> default
+    | Some obj -> (
+        match List.assoc_opt key obj with
+        | None -> default
+        | Some (AD_aux (AD_bool b, _)) -> b
+        | Some (AD_aux (_, l)) -> raise (key_type_error ~expected:"boolean" key l)
       )
-  )
 
-let sv_return_type_from_attribute attr_data_opt =
-  let open Util.Option_monad in
-  let* attr_data = attr_data_opt in
-  let* fields = attribute_data_object attr_data in
-  let* return_type = List.assoc_opt "return_type" fields in
-  let l, num_opt, ctyp =
-    match return_type with
-    | AD_aux (AD_string _, _) as s -> parse_sv_type s
-    | AD_aux (_, l) -> raise (Reporting.err_general l "return_type field must be a string")
-  in
-  match num_opt with
-  | None -> Some ctyp
-  | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
+  let get_types ~arity obj_opt =
+    let* types = Option.bind obj_opt (List.assoc_opt "types") in
+    let ctyps =
+      match types with
+      | AD_aux (AD_string _, _) as s -> [parse_sv_type s]
+      | AD_aux (AD_list types, _) -> List.map parse_sv_type types
+      | _ -> raise (Reporting.err_general Info.loc "types field must be either a string, or an array of strings")
+    in
+    if List.for_all (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps then
+      Some
+        (List.init arity (fun n ->
+             let* _, _, ctyp = List.find_opt (fun (_, num_opt, _) -> Option.get num_opt = n) ctyps in
+             Some ctyp
+         )
+        )
+    else if List.for_all (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps then
+      if List.length ctyps <> arity then
+        raise
+          (Reporting.err_general Info.loc
+             "Number of items of types key must match number of function arguments, unless argument positions are \
+              explicit"
+          )
+      else Some (List.map (fun (_, _, ctyp) -> Some ctyp) ctyps)
+    else (
+      let l1, _, _ = List.find (fun (_, num_opt, _) -> Option.is_some num_opt) ctyps in
+      let l2, _, _ = List.find (fun (_, num_opt, _) -> Option.is_none num_opt) ctyps in
+      raise
+        (Reporting.err_general
+           (Hint ("Non-positional type specified here", l2, l1))
+           "Mixed use of types with specified positions and non-specified positions"
+        )
+    )
 
-let sv_dpi_from_attr sets attr_data_opt =
-  let open Util.Option_monad in
-  let* fields = Option.bind attr_data_opt attribute_data_object in
-  let* dpi = List.assoc_opt "dpi" fields in
-  match dpi with
-  | AD_aux (AD_bool b, _) -> Some b
-  | AD_aux (AD_string s, _) -> Some (StringSet.mem s sets)
-  | AD_aux (_, l) -> raise (Reporting.err_general l "dpi field must be a boolean or string")
+  let get_return_type obj_opt =
+    let* return_type = Option.bind obj_opt (List.assoc_opt "return_type") in
+    let l, num_opt, ctyp =
+      match return_type with
+      | AD_aux (AD_string _, _) as s -> parse_sv_type s
+      | AD_aux (_, l) -> raise (Reporting.err_general l "return_type field must be a string")
+    in
+    match num_opt with
+    | None -> Some ctyp
+    | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
+
+  let get_dpi sets obj_opt =
+    let* dpi = Option.bind obj_opt (List.assoc_opt "dpi") in
+    match dpi with
+    | AD_aux (AD_bool b, _) -> Some b
+    | AD_aux (AD_string s, _) -> Some (StringSet.mem s sets)
+    | AD_aux (_, l) -> raise (Reporting.err_general l "dpi field must be a boolean or string")
+end
+
+let get_bool_attribute name attr_object =
+  let open Parse_ast.Attribute_data in
+  match List.assoc_opt name attr_object with
+  | Some (AD_aux (AD_bool true, _)) -> true
+  | Some (AD_aux (AD_bool false, _)) | None -> false
+  | Some (AD_aux (_, l)) ->
+      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
+
+let check_attribute name attr_object f =
+  let open Parse_ast.Attribute_data in
+  match List.assoc_opt name attr_object with
+  | Some (AD_aux (AD_bool true, _)) -> f ()
+  | Some (AD_aux (AD_bool false, _)) | None -> ()
+  | Some (AD_aux (_, l)) ->
+      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
 
 (* The direct footprint contains information about the effects
    directly performed by the function itself, i.e. not those from any
@@ -168,22 +224,6 @@ let empty_direct_footprint () : direct_footprint =
     references = CTSet.empty;
     exits = false;
   }
-
-let get_bool_attribute name attr_object =
-  let open Parse_ast.Attribute_data in
-  match List.assoc_opt name attr_object with
-  | Some (AD_aux (AD_bool true, _)) -> true
-  | Some (AD_aux (AD_bool false, _)) | None -> true
-  | Some (AD_aux (_, l)) ->
-      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
-
-let check_attribute name attr_object f =
-  let open Parse_ast.Attribute_data in
-  match List.assoc_opt name attr_object with
-  | Some (AD_aux (AD_bool true, _)) -> f ()
-  | Some (AD_aux (AD_bool false, _)) | None -> ()
-  | Some (AD_aux (_, l)) ->
-      raise (Reporting.err_general l (Printf.sprintf "Expected boolean for %s key on sv_module attribute" name))
 
 class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visitor =
   object
@@ -487,8 +527,8 @@ module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val line_directives : bool
-  val nostrings : bool
-  val nopacked : bool
+  val no_strings : bool
+  val no_packed : bool
   val no_assertions : bool
   val never_pack_unions : bool
   val union_padding : bool
@@ -560,7 +600,7 @@ module Make (Config : CONFIG) = struct
         List.map (fun (_, ctyp) -> bit_width ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
     | _ -> None
 
-  let is_packed ctyp = if Config.nopacked then false else Option.is_some (bit_width ctyp)
+  let is_packed ctyp = if Config.no_packed then false else Option.is_some (bit_width ctyp)
 
   let simple_type str = (str, None)
 
@@ -578,7 +618,7 @@ module Make (Config : CONFIG) = struct
     | CT_fint width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
     | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_lint -> ksprintf simple_type "logic [%d:0]" (Config.max_unknown_integer_width - 1)
-    | CT_string -> simple_type (if Config.nostrings then "sail_unit" else "string")
+    | CT_string -> simple_type (if Config.no_strings then "sail_unit" else "string")
     | CT_unit -> simple_type "sail_unit"
     | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> simple_type (sv_type_id_string id)
     | CT_constant c ->
@@ -939,7 +979,7 @@ module Make (Config : CONFIG) = struct
         else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
     | Bool_lit true -> string "1'h1"
     | Bool_lit false -> string "1'h0"
-    | String_lit s -> if Config.nostrings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
+    | String_lit s -> if Config.no_strings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
     | Unit -> string "SAIL_UNIT"
     | Member id -> string (string_of_id id)
     | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
@@ -1106,11 +1146,11 @@ module Make (Config : CONFIG) = struct
     let wrap aux = SVS_aux (aux, l) in
     match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
-  let convert_return l creturn to_aux attr_data_opt =
+  let convert_return l creturn to_aux return_type_opt =
     let wrap aux = SVS_aux (aux, l) in
     let ctyp = creturn_ctyp creturn in
     let updates, ret = svir_creturn creturn in
-    match sv_return_type_from_attribute attr_data_opt with
+    match return_type_opt with
     | Some ctyp' ->
         let temp = ngensym () in
         let* converted = Smt.smt_conversion ~into:ctyp ~from:ctyp' (Var temp) in
@@ -1126,9 +1166,7 @@ module Make (Config : CONFIG) = struct
         | _ -> return (SVS_block (List.map wrap updates @ [wrap (to_aux ret)]))
       )
 
-  let convert_arguments ?(reverse = false) args attr_data_opt =
-    let args_len = List.length args in
-    match sv_types_from_attribute ~arity:args_len attr_data_opt with
+  let convert_arguments ?(reverse = false) args = function
     | None ->
         mapM
           (fun arg ->
@@ -1227,23 +1265,30 @@ module Make (Config : CONFIG) = struct
                     let* args = mapM Smt.smt_cval args in
                     let updates, ret = svir_creturn creturn in
                     wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
-                | None -> (
+                | None ->
                     let _, _, _, uannot = Bindings.find id ctx.valspecs in
-                    match get_attribute "sv_module" uannot with
-                    | Some (_, attr_data_opt) ->
-                        let* args = fmap (List.map fst) (convert_arguments args attr_data_opt) in
-                        let* aux =
-                          convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) attr_data_opt
-                        in
-                        wrap aux
-                    | None ->
-                        let attr_data_opt = Option.bind (get_attribute "sv_function" uannot) snd in
-                        let* args = fmap (List.map fst) (convert_arguments args attr_data_opt) in
-                        let* aux =
-                          convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) attr_data_opt
-                        in
-                        wrap aux
-                  )
+                    let arity = List.length args in
+                    let* arg_convs, ret_conv, is_function =
+                      match get_sv_attribute "sv_module" uannot with
+                      | Some obj, (module ModuleAttr) ->
+                          let module Attr = AttributeParser (ModuleAttr) in
+                          let types = Attr.get_types ~arity (Some obj) in
+                          let return_type = Attr.get_return_type (Some obj) in
+                          return (types, return_type, false)
+                      | None, _ ->
+                          let attr, (module FunctionAttr) = get_sv_attribute "sv_function" uannot in
+                          let module Attr = AttributeParser (FunctionAttr) in
+                          let types = Attr.get_types ~arity attr in
+                          let return_type = Attr.get_return_type attr in
+                          return (types, return_type, true)
+                    in
+                    let* args = fmap (List.map fst) (convert_arguments args arg_convs) in
+                    let* aux =
+                      if is_function then
+                        convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) ret_conv
+                      else convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) ret_conv
+                    in
+                    wrap aux
               )
           )
         )
@@ -2068,38 +2113,24 @@ module Make (Config : CONFIG) = struct
     in
     { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
-  let sv_clk_from_attribute attr_data_opt =
-    let open Util.Option_monad in
-    let* attr_data = attr_data_opt in
-    let* fields = attribute_data_object attr_data in
-    let* clk = List.assoc_opt "clk" fields in
-    match clk with
-    | AD_aux (AD_bool b, _) -> Some b
-    | AD_aux (_, l) -> raise (Reporting.err_general l "clk attribute must be a boolean")
-
   let toplevel_module id spec_info fn_ctyps =
-    let attr_data_opt, arg_ctyps, ret_ctyp =
-      match Bindings.find_opt id fn_ctyps with
-      | Some (def_annot, arg_ctyps, ret_ctyp) ->
-          let attr_data_opt = Option.fold ~none:None ~some:snd (get_def_attribute "sv_toplevel" def_annot) in
-          (attr_data_opt, arg_ctyps, ret_ctyp)
-      | None ->
-          raise
-            (Reporting.err_general Parse_ast.Unknown
-               ("Cannot generate toplevel module for " ^ string_of_id id ^ " as it has no type")
-            )
-    in
+    if not (Bindings.mem id fn_ctyps && Bindings.mem id spec_info.footprints) then
+      raise
+        (Reporting.err_general Parse_ast.Unknown
+           ("Cannot generate toplevel module for " ^ string_of_id id ^ " as it has no type or footprint")
+        );
+
+    let def_annot, arg_ctyps, ret_ctyp = Bindings.find id fn_ctyps in
+    let footprint = Bindings.find id spec_info.footprints in
+
+    (* Handle any options on the sv_toplevel attribute, if present *)
+    let attr, (module ToplevelAttr) = get_sv_def_attribute "sv_toplevel" def_annot in
+    let module Attr = AttributeParser (ToplevelAttr) in
     (* If true, we will generate a module with an input clk and reset signal. *)
-    let clk = Option.value ~default:false (sv_clk_from_attribute attr_data_opt) in
-    let footprint =
-      match Bindings.find_opt id spec_info.footprints with
-      | Some footprint -> footprint
-      | None ->
-          raise
-            (Reporting.err_general Parse_ast.Unknown
-               ("Cannot generate toplevel module for " ^ string_of_id id ^ " as it has no footprint information")
-            )
-    in
+    let clk = Attr.get_bool ~default:false "clk" attr in
+    (* Type conversions for the module input signals derived from function arguments. *)
+    let arg_conversions = Attr.get_types ~arity:(List.length arg_ctyps) attr in
+
     let register_resets, register_inputs, register_outputs =
       Bindings.fold
         (fun reg ctyp (resets, ins, outs) ->
@@ -2128,7 +2159,7 @@ module Make (Config : CONFIG) = struct
     let arg_name n = name (mk_id ("arg" ^ string_of_int n)) in
     let arg_cvals = List.mapi (fun n ctyp -> V_id (arg_name n, ctyp)) arg_ctyps in
     let args, arg_ctyps =
-      List.split (fst (Smt_gen.run (convert_arguments ~reverse:true arg_cvals attr_data_opt) Parse_ast.Unknown))
+      List.split (fst (Smt_gen.run (convert_arguments ~reverse:true arg_cvals arg_conversions) Parse_ast.Unknown))
     in
     let arg_ports = List.mapi (fun n ctyp -> mk_port (arg_name n) ctyp) arg_ctyps in
     let instantiate_main =
@@ -2251,7 +2282,6 @@ module Make (Config : CONFIG) = struct
       | _ -> ([], [mk_port Jib_util.return ret_ctyp])
     in
     let defs =
-      (* register_resets @ *)
       register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes @ return_def
       @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_block]
     in
@@ -2261,7 +2291,7 @@ module Make (Config : CONFIG) = struct
       input_ports =
         ( if clk then
             [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
-          else arg_ports @ register_resets
+          else arg_ports
         );
       output_ports;
       defs = List.map mk_def defs;
@@ -2567,18 +2597,16 @@ module Make (Config : CONFIG) = struct
   let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, def_annot)) =
     match aux with
     | CDEF_val (f, ext_name, param_ctyps, ret_ctyp) ->
-        let sv_function_attr_opt = get_def_attribute "sv_function" def_annot in
-        if Option.is_some sv_function_attr_opt then (
-          let _, sv_function_attr = Option.get sv_function_attr_opt in
-          match sv_dpi_from_attr Config.dpi_sets sv_function_attr with
+        let attr, (module FunctionAttr) = get_sv_def_attribute "sv_function" def_annot in
+        if Option.is_some attr then
+          let module Attr = AttributeParser (FunctionAttr) in
+          match Attr.get_dpi Config.dpi_sets attr with
           (* If the dpi attribute isn't present, or is false don't do anything *)
           | None | Some false -> ([], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
           | Some true ->
-              let ret_ctyp =
-                match sv_return_type_from_attribute sv_function_attr with None -> ret_ctyp | Some ctyp' -> ctyp'
-              in
+              let ret_ctyp = match Attr.get_return_type attr with None -> ret_ctyp | Some ctyp' -> ctyp' in
               let param_ctyps =
-                match sv_types_from_attribute ~arity:(List.length param_ctyps) sv_function_attr with
+                match Attr.get_types ~arity:(List.length param_ctyps) attr with
                 | None -> param_ctyps
                 | Some conversions ->
                     List.map
@@ -2598,7 +2626,6 @@ module Make (Config : CONFIG) = struct
                   )
               in
               ([dpi_import], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
-        )
         else ([], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
     | CDEF_fundef (f, _, params, body) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in

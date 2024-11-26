@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Sail to verilog                                                       *)
+(*  Sail to SystemVerilog                                                 *)
 (*                                                                        *)
 (*  Copyright (c) 2023                                                    *)
 (*    Alasdair Armstrong                                                  *)

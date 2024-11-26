@@ -28,6 +28,7 @@ skip_tests = {
     'nexp_simp_euclidian', # division
     'concurrency_interface', # memory
     'ediv_from_tdiv', # loops
+    'lib_hex_bits_signed', # verilator bug (in CI, works with latest)
 }
 
 print("Sail is {}".format(sail))

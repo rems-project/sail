@@ -68,10 +68,13 @@ module type CONFIG = sig
 
   (** If true, treat all strings as if they were the unit type.
       Obviously this is only sound when the semantics does not depend
-      on strings, and they are only used for output. *)
-  val nostrings : bool
+      on strings, and they are only used for output.
 
-  val nopacked : bool
+      This is intended for EDA tools that do not support strings in
+      SystemVerilog. *)
+  val no_strings : bool
+
+  val no_packed : bool
 
   (** If true, then all assertions are treated as no-ops *)
   val no_assertions : bool
@@ -81,6 +84,23 @@ module type CONFIG = sig
   val unreachable : string list
   val comb : bool
   val ignore : string list
+
+  (** The SystemVerilog DPI (direct programming interface) lets the
+      generated SystemVerilog directly call C functions. A Sail
+      external function for the [systemverilog] target can be translated
+      into a DPI binding using the [sv_function] attribute, for example:
+
+      {@sail
+      $[sv_function { dpi = true }]
+      val foo = pure "foo" : ...
+
+      $[sv_function { dpi = "memory" }]
+      val bar = pure "bar" : ...
+      }
+
+      In the above example [foo] will always generated a DPI binding,
+      but [bar] will only generate a DPI binding when ["memory"] is
+      included in [dpi_sets]. *)
   val dpi_sets : Util.StringSet.t
 end
 
