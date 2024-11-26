@@ -67,6 +67,8 @@ let opt_output_dir = ref None
 
 let opt_includes = ref []
 
+let opt_toplevel = ref "main"
+
 type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
@@ -90,6 +92,7 @@ let opt_max_unknown_bitvector_width = ref 128
 
 let opt_nostrings = ref false
 let opt_nopacked = ref false
+let opt_no_assertions = ref false
 let opt_never_pack_unions = ref false
 let opt_padding = ref false
 let opt_nomem = ref false
@@ -112,6 +115,14 @@ let verilog_options =
     ( "-sv_include",
       Arg.String (fun s -> opt_includes := s :: !opt_includes),
       "<file> add include directive to generated SystemVerilog file"
+    );
+    ( "-sv_toplevel",
+      Arg.String
+        (fun s ->
+          Specialize.add_initial_calls (IdSet.singleton (mk_id s));
+          opt_toplevel := s
+        ),
+      "<id> Sail function to use as toplevel module"
     );
     ( "-sv_verilate",
       Arg.String
@@ -157,6 +168,7 @@ let verilog_options =
     );
     ("-sv_nostrings", Arg.Set opt_nostrings, " don't emit any strings, instead emit units");
     ("-sv_nopacked", Arg.Set opt_nopacked, " don't emit packed datastructures");
+    ("-sv_no_assertions", Arg.Set opt_no_assertions, " ignore all Sail asserts");
     ("-sv_never_pack_unions", Arg.Set opt_never_pack_unions, " never emit a packed union");
     ("-sv_padding", Arg.Set opt_padding, " add padding on packed unions");
     ( "-sv_unreachable",
@@ -429,6 +441,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let line_directives = !opt_line_directives
     let nostrings = !opt_nostrings
     let nopacked = !opt_nopacked
+    let no_assertions = !opt_no_assertions
     let never_pack_unions = !opt_never_pack_unions
     let union_padding = !opt_padding
     let unreachable = !opt_unreachable
@@ -486,9 +499,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let svir = List.rev svir in
   let svir_types, svir = List.partition Sv_ir.is_typedef svir in
   let library_svir = SV.Primops.get_generated_library_defs () in
-  let toplevel_svir =
-    Option.fold ~none:[] ~some:(fun m -> [Sv_ir.mk_def (Sv_ir.SVD_module m)]) (SV.toplevel_module spec_info)
-  in
+  let toplevel_svir = [Sv_ir.mk_def (Sv_ir.SVD_module (SV.toplevel_module (mk_id !opt_toplevel) spec_info fn_ctyps))] in
 
   let svir = library_svir @ svir @ toplevel_svir in
 

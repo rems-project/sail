@@ -47,6 +47,7 @@
 
 open Libsail
 
+open Ast_util
 open Jib
 open Jib_util
 open Jib_visitor
@@ -581,7 +582,7 @@ module RemoveUnusedVariables = struct
             add_use ~write:true name stack uses;
             smt_uses stack uses exp
       end
-    | SVS_assign (place, exp) ->
+    | SVS_assign (place, exp) | SVS_continuous_assign (place, exp) ->
         place_uses stack uses place;
         smt_uses stack uses exp
     | SVS_call (place, _, args) ->
@@ -636,6 +637,9 @@ module RemoveUnusedVariables = struct
         List.iter (smt_uses stack uses) input_connections;
         List.iter (place_uses ~output:true stack uses) output_connections
     | SVD_always_comb stmt -> statement_uses stack uses stmt
+    | SVD_always_ff stmt ->
+        add_use ~raw:true ~read:true (name (mk_id "clk")) stack uses;
+        statement_uses stack uses stmt
 
   and defs_uses stack uses defs =
     push (Block (-1, NameMap.empty)) stack;

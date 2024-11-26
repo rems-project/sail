@@ -105,6 +105,8 @@ and sv_def_aux =
       output_connections : sv_place list;
     }
   | SVD_always_comb of sv_statement
+  | SVD_initial of sv_statement
+  | SVD_always_ff of sv_statement
   | SVD_dpi_function of { function_name : sv_name; return_type : Jib.ctyp option; param_types : Jib.ctyp list }
 
 and sv_place =
@@ -127,6 +129,7 @@ and sv_statement_aux =
   | SVS_var of Jib.name * Jib.ctyp * smt_exp option
   | SVS_return of smt_exp
   | SVS_assign of sv_place * smt_exp
+  | SVS_continuous_assign of sv_place * smt_exp
   | SVS_call of sv_place * sv_name * smt_exp list
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option

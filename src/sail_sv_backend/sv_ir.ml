@@ -107,6 +107,8 @@ and sv_def_aux =
       output_connections : sv_place list;
     }
   | SVD_always_comb of sv_statement
+  | SVD_initial of sv_statement
+  | SVD_always_ff of sv_statement
   | SVD_dpi_function of { function_name : sv_name; return_type : Jib.ctyp option; param_types : Jib.ctyp list }
 
 and sv_place =
@@ -129,6 +131,7 @@ and sv_statement_aux =
   | SVS_var of Jib.name * Jib.ctyp * smt_exp option
   | SVS_return of smt_exp
   | SVS_assign of sv_place * smt_exp
+  | SVS_continuous_assign of sv_place * smt_exp
   | SVS_call of sv_place * sv_name * smt_exp list
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
@@ -253,6 +256,10 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
         let place' = visit_sv_place vis place in
         let exp' = visit_smt_exp vis exp in
         if place == place' && exp == exp' then no_change else SVS_aux (SVS_assign (place', exp'), l)
+    | SVS_continuous_assign (place, exp) ->
+        let place' = visit_sv_place vis place in
+        let exp' = visit_smt_exp vis exp in
+        if place == place' && exp == exp' then no_change else SVS_aux (SVS_continuous_assign (place', exp'), l)
     | SVS_block statements ->
         let statements' = map_no_copy (visit_sv_statement vis) statements in
         if statements == statements' then no_change else SVS_aux (SVS_block statements', l)
@@ -358,6 +365,12 @@ let rec visit_sv_def (vis : svir_visitor) outer_def =
     | SVD_always_comb statement ->
         let statement' = visit_sv_statement vis statement in
         if statement == statement' then no_change else SVD_aux (SVD_always_comb statement', l)
+    | SVD_initial statement ->
+        let statement' = visit_sv_statement vis statement in
+        if statement == statement' then no_change else SVD_aux (SVD_initial statement', l)
+    | SVD_always_ff statement ->
+        let statement' = visit_sv_statement vis statement in
+        if statement == statement' then no_change else SVD_aux (SVD_always_ff statement', l)
     | SVD_dpi_function { function_name; return_type; param_types } ->
         let return_type' = map_no_copy_opt (visit_ctyp (vis :> common_visitor)) return_type in
         let param_types' = map_no_copy (visit_ctyp (vis :> common_visitor)) param_types in

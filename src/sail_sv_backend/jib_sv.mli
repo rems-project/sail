@@ -54,7 +54,13 @@ type spec_info
 val collect_spec_info : Jib_compile.ctx -> Jib.cdef list -> spec_info
 
 module type CONFIG = sig
+  (** If Sail does not know a precise bitwidth for an integer
+      variable, it will use this width. *)
   val max_unknown_integer_width : int
+
+  (** If Sail does not know the precise width for a bitvector
+      variable, it will use a variable-length bitvector representation
+      which can hold bitvectors of at most this length. *)
   val max_unknown_bitvector_width : int
 
   (** Output SystemVerilog line directives where possible *)
@@ -66,6 +72,10 @@ module type CONFIG = sig
   val nostrings : bool
 
   val nopacked : bool
+
+  (** If true, then all assertions are treated as no-ops *)
+  val no_assertions : bool
+
   val never_pack_unions : bool
   val union_padding : bool
   val unreachable : string list
@@ -86,13 +96,22 @@ module Make (Config : CONFIG) : sig
   val svir_cdef :
     spec_info ->
     Jib_compile.ctx ->
-    (Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
+    (unit Ast.def_annot * Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
     Jib.cdef ->
-    Sv_ir.sv_def list * (Jib.ctyp list * Jib.ctyp) Bindings.t
+    Sv_ir.sv_def list * (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t
 
   val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
-  val toplevel_module : spec_info -> Sv_ir.sv_module option
+  (** Create a SystemVerilog module that wraps the provided Sail
+      function in a more convenient interface.
+
+      Raises a general Sail exception if the function cannot be found,
+      or has no footprint information contained within spec_info.
+
+      The way this is generated is controlled by the sv_toplevel
+      attribute, which is attached to the signature of the function. *)
+  val toplevel_module :
+    Ast.id -> spec_info -> (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t -> Sv_ir.sv_module
 
   val sv_cdef :
     spec_info ->

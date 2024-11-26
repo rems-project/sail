@@ -489,6 +489,7 @@ module type CONFIG = sig
   val line_directives : bool
   val nostrings : bool
   val nopacked : bool
+  val no_assertions : bool
   val never_pack_unions : bool
   val union_padding : bool
   val unreachable : string list
@@ -1125,19 +1126,30 @@ module Make (Config : CONFIG) = struct
         | _ -> return (SVS_block (List.map wrap updates @ [wrap (to_aux ret)]))
       )
 
-  let convert_arguments args attr_data_opt =
+  let convert_arguments ?(reverse = false) args attr_data_opt =
     let args_len = List.length args in
     match sv_types_from_attribute ~arity:args_len attr_data_opt with
-    | None -> mapM Smt.smt_cval args
+    | None ->
+        mapM
+          (fun arg ->
+            let* smt = Smt.smt_cval arg in
+            return (smt, cval_ctyp arg)
+          )
+          args
     | Some conversions ->
         let arg_ctyps = List.map cval_ctyp args in
         mapM
           (fun (arg, (ctyp, convert)) ->
+            let* smt = Smt.smt_cval arg in
             match convert with
-            | None -> Smt.smt_cval arg
+            | None -> return (smt, ctyp)
             | Some ctyp' ->
                 let* smt = Smt.smt_cval arg in
-                Smt.smt_conversion ~into:ctyp' ~from:ctyp smt
+                let* converted =
+                  if reverse then Smt.smt_conversion ~into:ctyp ~from:ctyp' smt
+                  else Smt.smt_conversion ~into:ctyp' ~from:ctyp smt
+                in
+                return (converted, ctyp')
           )
           (List.combine args (List.combine arg_ctyps conversions))
 
@@ -1164,23 +1176,28 @@ module Make (Config : CONFIG) = struct
     | I_funcall (creturn, preserve_name, (id, _), args) ->
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
-          if name = "sail_assert" then (
-            let _, ret = svir_creturn creturn in
-            match args with
-            | [cond; msg] ->
-                let* cond = Smt.smt_cval cond in
-                let* msg = Smt.smt_cval msg in
-                (* If the assert is only reachable under some path-condition, then the assert should pass
-                   whenever the path-condition is not true. *)
-                let cond =
-                  match pathcond with
-                  | Some pathcond ->
-                      Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
-                  | None -> cond
-                in
-                wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
-            | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
-          )
+          if name = "sail_assert" then
+            if Config.no_assertions then wrap SVS_skip
+            else (
+              let _, ret = svir_creturn creturn in
+              match args with
+              | [cond; msg] ->
+                  let* cond = Smt.smt_cval cond in
+                  let* msg = Smt.smt_cval msg in
+                  (* If the assert is only reachable under some path-condition, then the assert should pass
+                     whenever the path-condition is not true. *)
+                  let cond =
+                    match pathcond with
+                    | Some pathcond ->
+                        Fn
+                          ( "or",
+                            [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond]
+                          )
+                    | None -> cond
+                  in
+                  wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+              | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
+            )
           else (
             match Smt.builtin ~allow_io:false name with
             | Some generator ->
@@ -1214,14 +1231,14 @@ module Make (Config : CONFIG) = struct
                     let _, _, _, uannot = Bindings.find id ctx.valspecs in
                     match get_attribute "sv_module" uannot with
                     | Some (_, attr_data_opt) ->
-                        let* args = convert_arguments args attr_data_opt in
+                        let* args = fmap (List.map fst) (convert_arguments args attr_data_opt) in
                         let* aux =
                           convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) attr_data_opt
                         in
                         wrap aux
                     | None ->
                         let attr_data_opt = Option.bind (get_attribute "sv_function" uannot) snd in
-                        let* args = convert_arguments args attr_data_opt in
+                        let* args = fmap (List.map fst) (convert_arguments args attr_data_opt) in
                         let* aux =
                           convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) attr_data_opt
                         in
@@ -1263,7 +1280,7 @@ module Make (Config : CONFIG) = struct
                                     ( SVS_assign
                                         ( SVP_index (ret, var_id j),
                                           Ite
-                                            ( Fn ("=", [Extract (sz - 1, 0, sz, var_id j); i]),
+                                            ( Fn ("=", [Extract (sz - 1, 0, 32, var_id j); i]),
                                               x,
                                               Fn ("select", [arr; var_id j])
                                             )
@@ -1354,6 +1371,8 @@ module Make (Config : CONFIG) = struct
       end
     | SVS_return smt -> string "return" ^^ space ^^ pp_smt smt ^^ terminator
     | SVS_assign (place, value) -> ld ^^ separate space [pp_place place; equals; pp_smt value] ^^ terminator
+    | SVS_continuous_assign (place, value) ->
+        ld ^^ separate space [pp_place place; string "<="; pp_smt value] ^^ terminator
     | SVS_call (place, ctor, args) ->
         ld
         ^^ separate space [pp_place place; equals; pp_sv_name ctor]
@@ -1365,7 +1384,12 @@ module Make (Config : CONFIG) = struct
         string "if" ^^ space ^^ parens cond ^^ space ^^ pp_statement else_block
     | SVS_if (cond, Some then_block, None) ->
         string "if" ^^ space ^^ parens (pp_smt cond) ^^ space ^^ pp_statement then_block
-    | SVS_if (cond, Some then_block, Some else_block) -> empty
+    | SVS_if (cond, Some then_block, Some else_block) ->
+        string "if" ^^ space
+        ^^ parens (pp_smt cond)
+        ^^ space
+        ^^ pp_statement ~terminator:hardline then_block
+        ^^ string "else" ^^ space ^^ pp_statement else_block
     | SVS_case { head_exp; cases; fallthrough } ->
         let pp_case (exp, statement) = separate space [pp_smt exp; colon; pp_statement ~terminator:semi statement] in
         let pp_fallthrough = function
@@ -2044,135 +2068,204 @@ module Make (Config : CONFIG) = struct
     in
     { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
-  let toplevel_module spec_info =
-    match Bindings.find_opt (mk_id "main") spec_info.footprints with
-    | None -> None
-    | Some footprint ->
-        let register_inputs, register_outputs =
+  let sv_clk_from_attribute attr_data_opt =
+    let open Util.Option_monad in
+    let* attr_data = attr_data_opt in
+    let* fields = attribute_data_object attr_data in
+    let* clk = List.assoc_opt "clk" fields in
+    match clk with
+    | AD_aux (AD_bool b, _) -> Some b
+    | AD_aux (_, l) -> raise (Reporting.err_general l "clk attribute must be a boolean")
+
+  let toplevel_module id spec_info fn_ctyps =
+    let attr_data_opt, arg_ctyps, ret_ctyp =
+      match Bindings.find_opt id fn_ctyps with
+      | Some (def_annot, arg_ctyps, ret_ctyp) ->
+          let attr_data_opt = Option.fold ~none:None ~some:snd (get_def_attribute "sv_toplevel" def_annot) in
+          (attr_data_opt, arg_ctyps, ret_ctyp)
+      | None ->
+          raise
+            (Reporting.err_general Parse_ast.Unknown
+               ("Cannot generate toplevel module for " ^ string_of_id id ^ " as it has no type")
+            )
+    in
+    (* If true, we will generate a module with an input clk and reset signal. *)
+    let clk = Option.value ~default:false (sv_clk_from_attribute attr_data_opt) in
+    let footprint =
+      match Bindings.find_opt id spec_info.footprints with
+      | Some footprint -> footprint
+      | None ->
+          raise
+            (Reporting.err_general Parse_ast.Unknown
+               ("Cannot generate toplevel module for " ^ string_of_id id ^ " as it has no footprint information")
+            )
+    in
+    let register_resets, register_inputs, register_outputs =
+      Bindings.fold
+        (fun reg ctyp (resets, ins, outs) ->
+          ( mk_port (Name (prepend_id "reset_" reg, -1)) ctyp :: resets,
+            SVD_var (Name (prepend_id "in_" reg, -1), ctyp) :: ins,
+            SVD_var (Name (prepend_id "out_" reg, -1), ctyp) :: outs
+          )
+        )
+        spec_info.registers ([], [], [])
+    in
+    let memory_writes =
+      [
+        SVD_var (Name (mk_id "empty_memory_writes", -1), CT_memory_writes);
+        SVD_var (Name (mk_id "out_memory_writes", -1), CT_memory_writes);
+      ]
+    in
+    let throws_outputs =
+      if footprint.throws || footprint.exits then
+        [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
+      else []
+    in
+    let channel_outputs =
+      (if footprint.need_stdout then [SVD_var (Name (mk_id "out_stdout", -1), CT_string)] else [])
+      @ if footprint.need_stderr then [SVD_var (Name (mk_id "out_stderr", -1), CT_string)] else []
+    in
+    let arg_name n = name (mk_id ("arg" ^ string_of_int n)) in
+    let arg_cvals = List.mapi (fun n ctyp -> V_id (arg_name n, ctyp)) arg_ctyps in
+    let args, arg_ctyps =
+      List.split (fst (Smt_gen.run (convert_arguments ~reverse:true arg_cvals attr_data_opt) Parse_ast.Unknown))
+    in
+    let arg_ports = List.mapi (fun n ctyp -> mk_port (arg_name n) ctyp) arg_ctyps in
+    let instantiate_main =
+      SVD_instantiate
+        {
+          module_name = SVN_id id;
+          instance_name = string_of_id (prepend_id "inst_" id);
+          input_connections =
+            (args
+            @ List.map
+                (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
+                (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
+            @ (if footprint.need_stdout then [String_lit ""] else [])
+            @ (if footprint.need_stderr then [String_lit ""] else [])
+            @ (if footprint.writes_mem then [Var (Name (mk_id "empty_memory_writes", -1))] else [])
+            @ if footprint.contains_assert then [Bool_lit true] else []
+            );
+          output_connections =
+            ([SVP_id Jib_util.return]
+            @ List.map
+                (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1)))
+                (natural_sort_ids (IdSet.elements footprint.all_writes))
+            @ ( if footprint.throws || footprint.exits then
+                  [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))]
+                else []
+              )
+            @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
+            @ (if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else [])
+            @ if footprint.writes_mem then [SVP_id (Name (mk_id "out_memory_writes", -1))] else []
+            );
+        }
+    in
+    let initialize_letbindings =
+      List.map
+        (fun (n, ids) ->
+          let module_name = SVN_string (sprintf "sail_setup_let_%d" n) in
+          SVD_instantiate
+            {
+              module_name;
+              instance_name = sprintf "sail_inst_let_%d" n;
+              input_connections = [];
+              output_connections = List.map (fun id -> SVP_id (name id)) ids;
+            }
+        )
+        (IntMap.bindings spec_info.global_let_numbers)
+    in
+    let always_block =
+      let channel_writes =
+        ( if footprint.need_stdout then
+            [
+              mk_statement
+                (svs_raw "$write({\"SAIL START\\n\", out_stdout, \"SAIL END\\n\"})"
+                   ~inputs:[Name (mk_id "out_stdout", -1)]
+                );
+            ]
+          else []
+        )
+        @
+        if footprint.need_stderr then
+          [mk_statement (svs_raw "$write(out_stderr)" ~inputs:[Name (mk_id "out_stderr", -1)])]
+        else []
+      in
+      if clk then (
+        let reset_regs, inout_regs =
           Bindings.fold
-            (fun reg ctyp (ins, outs) ->
-              ( SVD_var (Name (prepend_id "in_" reg, -1), ctyp) :: ins,
-                SVD_var (Name (prepend_id "out_" reg, -1), ctyp) :: outs
+            (fun reg ctyp (resets, inouts) ->
+              ( mk_statement
+                  (SVS_continuous_assign
+                     (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "reset_" reg, -1)))
+                  )
+                :: resets,
+                mk_statement
+                  (SVS_continuous_assign
+                     (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "out_" reg, -1)))
+                  )
+                :: inouts
               )
             )
             spec_info.registers ([], [])
         in
-        let memory_writes =
-          [
-            SVD_var (Name (mk_id "empty_memory_writes", -1), CT_memory_writes);
-            SVD_var (Name (mk_id "out_memory_writes", -1), CT_memory_writes);
-          ]
+        let on_reset = mk_statement (SVS_block reset_regs) in
+        let on_clock = mk_statement (SVS_block (inout_regs @ channel_writes)) in
+        SVD_always_ff
+          (mk_statement (SVS_block [mk_statement (SVS_if (Var (name (mk_id "reset")), Some on_reset, Some on_clock))]))
+      )
+      else (
+        let unchanged_registers =
+          Bindings.fold
+            (fun reg _ unchanged ->
+              if not (IdSet.mem reg footprint.all_writes) then
+                mk_statement
+                  (SVS_assign (SVP_id (Name (prepend_id "out_" reg, -1)), Var (Name (prepend_id "in_" reg, -1))))
+                :: unchanged
+              else unchanged
+            )
+            spec_info.registers []
         in
-        let throws_outputs =
-          if footprint.throws || footprint.exits then
-            [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
-          else []
-        in
-        let channel_outputs =
-          (if footprint.need_stdout then [SVD_var (Name (mk_id "out_stdout", -1), CT_string)] else [])
-          @ if footprint.need_stderr then [SVD_var (Name (mk_id "out_stderr", -1), CT_string)] else []
-        in
-        let instantiate_main =
+        SVD_always_comb
+          (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
+      )
+    in
+    let initialize_registers =
+      let reset_target reg = prepend_id (if clk then "reset_" else "in_") reg in
+      List.mapi
+        (fun i reg ->
+          let name = sprintf "sail_setup_reg_%s" (pp_id_string reg) in
           SVD_instantiate
             {
-              module_name = SVN_id (mk_id "main");
-              instance_name = "inst_main";
-              input_connections =
-                ([Unit]
-                @ List.map
-                    (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
-                    (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
-                @ (if footprint.need_stdout then [String_lit ""] else [])
-                @ (if footprint.need_stderr then [String_lit ""] else [])
-                @ (if footprint.writes_mem then [Var (Name (mk_id "empty_memory_writes", -1))] else [])
-                @ if footprint.contains_assert then [Bool_lit true] else []
-                );
-              output_connections =
-                ([SVP_id Jib_util.return]
-                @ List.map
-                    (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1)))
-                    (natural_sort_ids (IdSet.elements footprint.all_writes))
-                @ ( if footprint.throws || footprint.exits then
-                      [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))]
-                    else []
-                  )
-                @ (if footprint.need_stdout then [SVP_id (Name (mk_id "out_stdout", -1))] else [])
-                @ (if footprint.need_stderr then [SVP_id (Name (mk_id "out_stderr", -1))] else [])
-                @ if footprint.writes_mem then [SVP_id (Name (mk_id "out_memory_writes", -1))] else []
-                );
+              module_name = SVN_string name;
+              instance_name = sprintf "reg_init_%d" i;
+              input_connections = [];
+              output_connections = [SVP_id (Name (reset_target reg, -1))];
             }
-        in
-        let initialize_letbindings =
-          List.map
-            (fun (n, ids) ->
-              let module_name = SVN_string (sprintf "sail_setup_let_%d" n) in
-              SVD_instantiate
-                {
-                  module_name;
-                  instance_name = sprintf "sail_inst_let_%d" n;
-                  input_connections = [];
-                  output_connections = List.map (fun id -> SVP_id (name id)) ids;
-                }
-            )
-            (IntMap.bindings spec_info.global_let_numbers)
-        in
-        let always_comb =
-          let unchanged_registers =
-            Bindings.fold
-              (fun reg _ unchanged ->
-                if not (IdSet.mem reg footprint.all_writes) then
-                  mk_statement
-                    (SVS_assign (SVP_id (Name (prepend_id "out_" reg, -1)), Var (Name (prepend_id "in_" reg, -1))))
-                  :: unchanged
-                else unchanged
-              )
-              spec_info.registers []
-          in
-          let channel_writes =
-            ( if footprint.need_stdout then
-                [
-                  mk_statement
-                    (svs_raw "$write({\"SAIL START\\n\", out_stdout, \"SAIL END\\n\"})"
-                       ~inputs:[Name (mk_id "out_stdout", -1)]
-                    );
-                ]
-              else []
-            )
-            @
-            if footprint.need_stderr then
-              [mk_statement (svs_raw "$write(out_stderr)" ~inputs:[Name (mk_id "out_stderr", -1)])]
-            else []
-          in
-          SVD_always_comb
-            (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
-        in
-        let initialize_registers =
-          List.mapi
-            (fun i reg ->
-              let name = sprintf "sail_setup_reg_%s" (pp_id_string reg) in
-              SVD_instantiate
-                {
-                  module_name = SVN_string name;
-                  instance_name = sprintf "reg_init_%d" i;
-                  input_connections = [];
-                  output_connections = [SVP_id (Name (prepend_id "in_" reg, -1))];
-                }
-            )
-            spec_info.initialized_registers
-        in
-        let defs =
-          register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes
-          @ [SVD_var (Jib_util.return, CT_unit)]
-          @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_comb]
-        in
-        Some
-          {
-            name = SVN_string "sail_toplevel";
-            recursive = false;
-            input_ports = [];
-            output_ports = [];
-            defs = List.map mk_def defs;
-          }
+        )
+        spec_info.initialized_registers
+    in
+    let return_def, output_ports =
+      match ret_ctyp with
+      | CT_unit -> ([SVD_var (Jib_util.return, CT_unit)], [])
+      | _ -> ([], [mk_port Jib_util.return ret_ctyp])
+    in
+    let defs =
+      (* register_resets @ *)
+      register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes @ return_def
+      @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_block]
+    in
+    {
+      name = SVN_string "sail_toplevel";
+      recursive = false;
+      input_ports =
+        ( if clk then
+            [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
+          else arg_ports @ register_resets
+        );
+      output_ports;
+      defs = List.map mk_def defs;
+    }
 
   let rec pp_module m =
     let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
@@ -2236,6 +2329,10 @@ module Make (Config : CONFIG) = struct
     match aux with
     | SVD_null -> empty
     | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
+    | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi statement
+    | SVD_always_ff statement ->
+        let posedge_clk = char '@' ^^ parens (string "posedge" ^^ space ^^ string "clk") in
+        separate space [string "always_ff"; posedge_clk; pp_statement ~terminator:semi statement]
     | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
         let params =
@@ -2475,7 +2572,7 @@ module Make (Config : CONFIG) = struct
           let _, sv_function_attr = Option.get sv_function_attr_opt in
           match sv_dpi_from_attr Config.dpi_sets sv_function_attr with
           (* If the dpi attribute isn't present, or is false don't do anything *)
-          | None | Some false -> ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+          | None | Some false -> ([], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
           | Some true ->
               let ret_ctyp =
                 match sv_return_type_from_attribute sv_function_attr with None -> ret_ctyp | Some ctyp' -> ctyp'
@@ -2500,9 +2597,9 @@ module Make (Config : CONFIG) = struct
                     def_annot.loc
                   )
               in
-              ([dpi_import], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+              ([dpi_import], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
         )
-        else ([], Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps)
+        else ([], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
     | CDEF_fundef (f, _, params, body) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
@@ -2518,7 +2615,7 @@ module Make (Config : CONFIG) = struct
             List.iter (fun instr -> prerr_endline (string_of_instr instr)) body
           );
           match Bindings.find_opt f fn_ctyps with
-          | Some (param_ctyps, ret_ctyp) ->
+          | Some (_, param_ctyps, ret_ctyp) ->
               ( [
                   SVD_aux
                     ( SVD_module (svir_module ?debug_attr spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body),

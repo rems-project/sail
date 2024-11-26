@@ -124,9 +124,9 @@ function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits 
 
    for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
 `ifdef SAIL_DPI_MEMORY
-      buffer[7 + (i * 8) -: 8] = sail_read_byte(paddr + (64'(i) - 1));
+      buffer[7 + ((i - 1) * 8) -: 8] = sail_read_byte(paddr + (64'(i) - 1));
 `else
-      buffer[7 + (i * 8) -: 8] = sail_memory[paddr + (64'(i) - 1)];
+      buffer[7 + ((i - 1) * 8) -: 8] = sail_memory[paddr + (64'(i) - 1)];
 `endif
    end
 
