@@ -28,7 +28,7 @@ jobs:
     - name: System dependencies (macOS)
       if: startsWith(matrix.os, 'macOS')
       run: |
-        brew install --force --overwrite gpatch gmp z3 pkg-config lzlib zlib opam
+        brew install --force --overwrite gpatch gmp z3 pkg-config opam
 
     - name: Restore cached opam
       id: cache-opam-restore

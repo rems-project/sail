@@ -34,7 +34,6 @@ jobs:
         dnf install --assumeyes \
           gmp-devel \
           pkg-config \
-          zlib-devel \
           openssl \
           curl \
           git \

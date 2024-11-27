@@ -42,7 +42,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('{} {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
+                step('{} {} {}.c {}/lib/*.c -lgmp -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
@@ -65,7 +65,7 @@ def test_c2(name, c_opts, sail_opts, valgrind):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_warn -c2 {} {} -o {}'.format(sail, sail_opts, filename, basename))
-                step('gcc {} {}.c {}_emu.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
+                step('gcc {} {}.c {}_emu.c {}/lib/*.c -lgmp -I {}/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
                 step('./{} > {}.result 2>&1'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if valgrind:

@@ -1,7 +1,7 @@
 FROM ubuntu
 
 # Install apt deps
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates build-essential libgmp-dev z3 libz3-dev opam rsync pkg-config m4 zlib1g-dev
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates build-essential libgmp-dev z3 libz3-dev opam rsync pkg-config m4
 
 # Configure opam
 RUN opam init -y --no-setup --compiler=5.2.0 --shell=sh --disable-sandboxing

@@ -1,6 +1,6 @@
 FROM debian
 
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential git ruby ruby-rubygems opam z3 rsync libgmp-dev pkg-config zlib1g-dev texlive-latex-base texlive-pictures poppler-utils
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git ruby ruby-rubygems opam z3 rsync libgmp-dev pkg-config texlive-latex-base texlive-pictures poppler-utils
 
 RUN gem install asciidoctor asciidoctor-pdf asciidoctor-bibtex asciidoctor-sail rouge
 

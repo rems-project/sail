@@ -29,7 +29,7 @@ def test_c_builtins(name, sail_opts):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('gcc {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
+                step('gcc {}.c {}/lib/*.c -lgmp -I {}/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
                 step('./{}'.format(basename))
                 step('rm {}.c'.format(basename))
                 step('rm {}'.format(basename))
@@ -171,4 +171,3 @@ xml += '</testsuites>\n'
 output = open('tests.xml', 'w')
 output.write(xml)
 output.close()
-

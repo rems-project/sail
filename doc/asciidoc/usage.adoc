@@ -68,10 +68,10 @@ this needs to be compiled and linked with the C files in the
 `$SAIL_DIR/lib` directory:
 [source,sh]
 ----
-gcc out.c $SAIL_DIR/lib/*.c -lgmp -lz -I $SAIL_DIR/lib/ -o out
+gcc out.c $SAIL_DIR/lib/*.c -lgmp -I $SAIL_DIR/lib/ -o out
 ----
 The C output requires the https://gmplib.org/[GMP library] for arbitrary precision
-arithmetic, as well as https://zlib.net/[zlib] for working with compressed ELF binaries.
+arithmetic.
 
 There are several Sail options that affect the C output:
 

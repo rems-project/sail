@@ -3112,12 +3112,12 @@ this needs to be compiled and linked with the C files in the
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">gcc out.c <span class="nv">$SAIL_DIR</span>/lib/<span class="k">*</span>.c <span class="nt">-lgmp</span> <span class="nt">-lz</span> <span class="nt">-I</span> <span class="nv">$SAIL_DIR</span>/lib/ <span class="nt">-o</span> out</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">gcc out.c <span class="nv">$SAIL_DIR</span>/lib/<span class="k">*</span>.c <span class="nt">-lgmp</span> <span class="nt">-I</span> <span class="nv">$SAIL_DIR</span>/lib/ <span class="nt">-o</span> out</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p>The C output requires the <a href="https://gmplib.org/">GMP library</a> for arbitrary precision
-arithmetic, as well as <a href="https://zlib.net/">zlib</a> for working with compressed ELF binaries.</p>
+arithmetic.</p>
 </div>
 <div class="paragraph">
 <p>There are several Sail options that affect the C output:</p>
@@ -4958,7 +4958,7 @@ wildcard cannot be inserted.</p>
 <pre class="rouge highlight"><code>Warning: Required literal ../examples/cannot_wildcard.sail:17.14-17:
 17 |        (Some(0b1), _)         =&gt; print_endline("3"),
    |              ^-^
-   | 
+   |
 Sail cannot simplify the above pattern match:
 This bitvector pattern literal must be kept, as it is required for Sail to show that the surrounding pattern match is complete.
 When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify that the match covers all possible cases.</code></pre>
@@ -5957,7 +5957,7 @@ would get the following error:</p>
 6 |    let x = alfa();
   |            ^--^
   | Not in scope
-  | 
+  |
   | Try requiring module A to bring the following into scope for module B:
   | ../examples/amod.sail:6.4-8:
   | 6 |val alfa : unit -&gt; int

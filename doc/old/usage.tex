@@ -123,10 +123,10 @@ will generate a file called \verb+out.c+. To produce an executable
 this needs to be compiled and linked with the C files in the
 \verb+sail/lib+ directory:
 \begin{verbatim}
-gcc out.c $SAIL_DIR/lib/*.c -lgmp -lz -I $SAIL_DIR/lib/ -o out
+gcc out.c $SAIL_DIR/lib/*.c -lgmp -I $SAIL_DIR/lib/ -o out
 \end{verbatim}
 The C output requires the GMP library for arbitrary precision
-arithmetic, as well as zlib for working with compressed ELF binaries.
+arithmetic.
 
 There are several Sail options that affect the C output:
 \begin{itemize}

@@ -19,7 +19,7 @@ eval $(opam config env)
 ```
 Install system dependencies, on Ubuntu (if using WSL see the note below):
 ```
-sudo apt-get install build-essential libgmp-dev z3 pkg-config zlib1g-dev
+sudo apt-get install build-essential libgmp-dev z3 pkg-config
 ```
 or [MacOS homebrew](https://brew.sh/):
 ```

@@ -57,7 +57,6 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (lem (>= "2018-12-14"))
     (linksem (>= "0.3"))
     conf-gmp
-    conf-zlib
     (yojson (>= 1.6.0))
     (pprint (>= 20220103))))
 

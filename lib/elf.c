@@ -53,9 +53,6 @@
 #include "rts.h"
 #include "sail.h"
 
-// Use the zlib library to uncompress ELF.gz files
-#include <zlib.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -434,17 +431,18 @@ void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
     int   size   = 0;
     int   chunk  = (1<<24); // increments output buffer this much
     int   read   = 0;
-    gzFile in = gzopen(filename, "rb");
+    FILE* in = fopen(filename, "rb");
     if (in == NULL) { goto fail; }
-    while (!gzeof(in)) {
+    while (!feof(in)) {
         size = read + chunk;
         buffer = (char*)realloc(buffer, size);
         if (buffer == NULL) { goto fail; }
 
-        int s = gzread(in, buffer+read, size - read);
+        int s = fread(buffer+read, 1, size - read, in);
         if (s < 0) { goto fail; }
         read += s;
     }
+    fclose(in);
     loadELFHdr(buffer, read, is32bit_p, entry);
     free(buffer);
     return;
@@ -587,17 +585,18 @@ int lookup_sym(const char *filename, const char *symname, uint64_t *value) {
     int   chunk  = (1<<24); // increments output buffer this much
     int   read   = 0;
     int   ret    = 0;
-    gzFile in = gzopen(filename, "rb");
+    FILE* in = fopen(filename, "rb");
     if (in == NULL) { goto fail; }
-    while (!gzeof(in)) {
+    while (!feof(in)) {
         size = read + chunk;
         buffer = (char*)realloc(buffer, size);
         if (buffer == NULL) { goto fail; }
 
-        int s = gzread(in, buffer+read, size - read);
+        int s = fread(buffer+read, 1, size - read, in);
         if (s < 0) { goto fail; }
         read += s;
     }
+    fclose(in);
     ret = lookupSymbol(buffer, read, symname, value);
     free(buffer);
     return ret;
