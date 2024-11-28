@@ -147,7 +147,7 @@ let lean_rewrites =
     ("attach_effects", []);
   ]
 
-let create_lake_project (out_name : string) =
+let create_lake_project (out_name : string) default_sail_dir =
   (* Change the base directory if the option '--lean-output-dir' is set *)
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
@@ -168,18 +168,20 @@ let create_lake_project (out_name : string) =
    ^ "\"]\n\n[[lean_lib]]\nname = \"Sail\"\n\n[[lean_lib]]\nname = \"" ^ out_name_camel ^ "\""
     );
   close_out lakefile;
+  let sail_dir = Reporting.get_sail_dir default_sail_dir in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "src/sail_lean_backend/Sail .") in
   let project_main = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   project_main
 
-let output (out_name : string) ast =
-  let project_main = create_lake_project out_name in
+let output (out_name : string) ast default_sail_dir =
+  let project_main = create_lake_project out_name default_sail_dir in
   (* Uncomment for debug output of the Sail code after the rewrite passes *)
   (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
   Pretty_print_lean.pp_ast_lean ast project_main;
   close_out project_main
 
-let lean_target out_name { ctx; ast; effect_info; env; _ } =
+let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name ast
+  output out_name ast default_sail_dir
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target
