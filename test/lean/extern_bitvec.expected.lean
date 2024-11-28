@@ -1,3 +1,5 @@
+import Sail.sail
+
 def extern_const : BitVec 64 :=
   (0xFFFF000012340000 : BitVec 64)
 

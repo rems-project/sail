@@ -1,3 +1,5 @@
+import Sail.sail
+
 def foo (y : Unit) : Unit :=
   y
 

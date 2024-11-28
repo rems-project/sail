@@ -1,3 +1,5 @@
+import Sail.sail
+
 def bitvector_eq (x : BitVec 16) (y : BitVec 16) : Bool :=
   (Eq x y)
 
