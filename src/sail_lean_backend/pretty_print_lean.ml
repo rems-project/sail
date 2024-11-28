@@ -199,5 +199,6 @@ let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.en
 let pp_ast_lean ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
   let defs = remove_imports defs 0 in
   let output : document = separate_map empty doc_def defs in
+  output_string o "import Sail.sail\n\n";
   print o output;
   ()
