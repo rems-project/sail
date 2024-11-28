@@ -164,8 +164,8 @@ let create_lake_project (out_name : string) =
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   output_string lakefile
-    ("name = \"" ^ out_name ^ "\"\ndefaultTargets = [\"" ^ out_name_camel ^ "\"]\n\n[[lean_lib]]\nname = \"Sail\"\n\n[[lean_lib]]\nname = \""
-   ^ out_name_camel ^ "\""
+    ("name = \"" ^ out_name ^ "\"\ndefaultTargets = [\"" ^ out_name_camel
+   ^ "\"]\n\n[[lean_lib]]\nname = \"Sail\"\n\n[[lean_lib]]\nname = \"" ^ out_name_camel ^ "\""
     );
   close_out lakefile;
   let project_main = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
