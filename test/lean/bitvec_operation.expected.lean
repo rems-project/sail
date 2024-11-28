@@ -6,6 +6,21 @@ def bitvector_eq (x : BitVec 16) (y : BitVec 16) : Bool :=
 def bitvector_neq (x : BitVec 16) (y : BitVec 16) : Bool :=
   (Ne x y)
 
+def bitvector_len (x : BitVec 16) : Nat :=
+  (Sail.BitVec.length x)
+
+def bitvector_sign_extend (x : BitVec 16) : BitVec 32 :=
+  (Sail.BitVec.signExtend x 32)
+
+def bitvector_zero_extend (x : BitVec 16) : BitVec 32 :=
+  (Sail.BitVec.zeroExtend x 32)
+
+def bitvector_truncate (x : BitVec 32) : BitVec 16 :=
+  (Sail.BitVec.truncate x 16)
+
+def bitvector_truncateLSB (x : BitVec 32) : BitVec 16 :=
+  (Sail.BitVec.truncateLSB x 16)
+
 def bitvector_append (x : BitVec 16) (y : BitVec 16) : BitVec 32 :=
   (BitVec.append x y)
 
@@ -26,6 +41,12 @@ def bitvector_or (x : BitVec 16) (y : BitVec 16) : BitVec 16 :=
 
 def bitvector_xor (x : BitVec 16) (y : BitVec 16) : BitVec 16 :=
   (HXor.hXor x y)
+
+def bitvector_unsigned (x : BitVec 16) : Nat :=
+  (BitVec.toNat x)
+
+def bitvector_signed (x : BitVec 16) : Int :=
+  (BitVec.toInt x)
 
 def initialize_registers : Unit :=
   ()

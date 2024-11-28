@@ -77,7 +77,11 @@ function neq_bits(x, y) = not_bool(eq_bits(x, y))
 
 overload operator != = {neq_bits}
 
-val bitvector_length = pure {coq: "length_mword", _: "length"} : forall 'n. bits('n) -> int('n)
+val bitvector_length = pure {
+  coq: "length_mword",
+  lean: "Sail.BitVec.length",
+  _: "length"
+} : forall 'n. bits('n) -> int('n)
 
 val vector_length = pure {
   ocaml: "length",
@@ -100,9 +104,15 @@ val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit
 $[sv_module { stderr = true }]
 val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
-val sail_sign_extend = pure "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
+val sail_sign_extend = pure {
+  lean: "Sail.BitVec.signExtend",
+  _: "sign_extend"
+} : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
 
-val sail_zero_extend = pure "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
+val sail_zero_extend = pure {
+  lean: "Sail.BitVec.zeroExtend",
+  _: "zero_extend"
+} : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
 
 /*!
 THIS`(v, n)` truncates `v`, keeping only the _least_ significant `n` bits.
@@ -112,6 +122,7 @@ val truncate = pure {
   interpreter: "vector_truncate",
   lem: "vector_truncate",
   coq: "vector_truncate",
+  lean: "Sail.BitVec.truncate",
   _: "sail_truncate"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
@@ -123,6 +134,7 @@ val truncateLSB = pure {
   interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
+  lean: "Sail.BitVec.truncateLSB",
   _: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 

@@ -12,6 +12,31 @@ function bitvector_neq(x, y) = {
   x != y
 }
 
+val bitvector_len : bits(16) -> nat
+function bitvector_len(x) = {
+  length (x)
+}
+
+val bitvector_sign_extend : bits(16) -> bits(32)
+function bitvector_sign_extend(x) = {
+  sail_sign_extend (x, 32)
+}
+
+val bitvector_zero_extend : bits(16) -> bits(32)
+function bitvector_zero_extend(x) = {
+  sail_zero_extend (x, 32)
+}
+
+val bitvector_truncate : bits(32) -> bits(16)
+function bitvector_truncate(x) = {
+  truncate (x, 16)
+}
+
+val bitvector_truncateLSB : bits(32) -> bits(16)
+function bitvector_truncateLSB(x) = {
+  truncateLSB (x, 16)
+}
+
 val bitvector_append : (bits(16), bits(16)) -> bits(32)
 function bitvector_append(x, y) = {
   append (x, y)
@@ -47,3 +72,12 @@ function bitvector_xor(x, y) = {
   xor_vec (x, y)
 }
 
+val bitvector_unsigned : bits(16) -> nat
+function bitvector_unsigned(x) = {
+  unsigned (x)
+}
+
+val bitvector_signed : bits(16) -> int
+function bitvector_signed(x) = {
+  signed (x)
+}
