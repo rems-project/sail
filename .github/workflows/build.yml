@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         version: [4.08.1, 5.2.1]
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest, macos-latest]
         exclude:
         - os: macos-latest
           version: 4.08.1
@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: System dependencies (ubuntu)
       if: startsWith(matrix.os, 'ubuntu')
@@ -26,13 +26,13 @@ jobs:
         sudo apt install build-essential libgmp-dev z3 cvc4 opam
 
     - name: System dependencies (macOS)
-      if: startsWith(matrix.os, 'macOS')
+      if: startsWith(matrix.os, 'macos')
       run: |
         brew install --force --overwrite gpatch gmp z3 pkg-config opam
 
     - name: Restore cached opam
       id: cache-opam-restore
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: ~/.opam
         key: ${{ matrix.os }}-${{ matrix.version }}
@@ -45,7 +45,7 @@ jobs:
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       with:
         path: ~/.opam
         key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
