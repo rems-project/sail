@@ -103,17 +103,11 @@ let doc_lit (L_aux (lit, l)) =
 let fail_doc_exp (e : tannot exp_aux) =
   match e with
   | E_block _ -> failwith "Expression E_block not translatable yet"
-  | E_id _ -> failwith "Expression E_id not translatable yet"
   | E_ref _ -> failwith "Expression E_ref not translatable yet"
-  | E_lit _ -> failwith "Expression E_lit not translatable yet"
-  | E_typ _ -> failwith "Expression E_typ not translatable yet"
-  | E_app _ -> failwith "Expression E_app not translatable yet"
   | E_app_infix _ -> failwith "Expression E_app_infix not translatable yet"
-  | E_tuple _ -> failwith "Expression E_tuple not translatable yet"
   | E_if _ -> failwith "Expression E_if not translatable yet"
   | E_loop _ -> failwith "Expression E_loop not translatable yet"
   | E_for _ -> failwith "Expression E_for not translatable yet"
-  | E_vector _ -> failwith "Expression E_vector not translatable yet"
   | E_vector_access _ -> failwith "Expression E_vector_access not translatable yet"
   | E_vector_subrange _ -> failwith "Expression E_vector_subrange not translatable yet"
   | E_vector_update _ -> failwith "Expression E_vector_update not translatable yet"
@@ -125,7 +119,6 @@ let fail_doc_exp (e : tannot exp_aux) =
   | E_struct_update _ -> failwith "Expression E_struct_update not translatable yet"
   | E_field _ -> failwith "Expression E_field not translatable yet"
   | E_match _ -> failwith "Expression E_match not translatable yet"
-  | E_let _ -> failwith "Expression E_let not translatable yet"
   | E_assign _ -> failwith "Expression E_assign not translatable yet"
   | E_sizeof _ -> failwith "Expression E_sizeof not translatable yet"
   | E_constraint _ -> failwith "Expression E_constraint not translatable yet"
@@ -139,6 +132,7 @@ let fail_doc_exp (e : tannot exp_aux) =
   | E_internal_return _ -> failwith "Expression E_internal_return not translatable yet"
   | E_internal_assume _ -> failwith "Expression E_internal_assume not translatable yet"
   | E_internal_value _ -> failwith "Expression E_internal_value not translatable yet"
+  | _ -> failwith "Expression not translatable yet. This should not be reachable."
 
 let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
@@ -214,9 +208,9 @@ let fail_doc_typdef td =
   | TD_abbrev _ -> failwith "Type definition TD_abbrev not translatable yet"
   | TD_record _ -> failwith "Type definition TD_record not translatable yet"
   | TD_variant _ -> failwith "Type definition TD_variant not translatable yet"
-  | TD_enum _ -> failwith "Type definition TD_enum not translatable yet"
   | TD_abstract _ -> failwith "Type definition TD_abstract not translatable yet"
   | TD_bitfield _ -> failwith "Type definition TD_bitfield not translatable yet"
+  | _ -> failwith "Type definition not translatable yet. This should not be reachable."
 
 let doc_typdef (TD_aux (td, tannot) as full_typdef) =
   match td with
