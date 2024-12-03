@@ -530,8 +530,8 @@ let run_sail_format (config : Yojson.Basic.t option) =
               close_out out_chan
           | None -> ()
         end;
-        let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted None f in
-        output_string out_chan formatted;
+        let file_info = Util.open_output_with_check f in
+        output_string file_info.channel formatted;
         Util.close_output_with_check file_info
       )
     )

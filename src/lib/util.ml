@@ -540,21 +540,23 @@ let progress prefix msg n total =
   )
   else ()
 
-let open_output_with_check opt_dir file_name =
-  let temp_file_name, o = Filename.open_temp_file "ll_temp" "" in
-  let o' = Format.formatter_of_out_channel o in
-  (o', (o, temp_file_name, opt_dir, file_name))
+type checked_output = { channel : out_channel; temp_file_name : string; directory : string option; file_name : string }
 
-let open_output_with_check_unformatted opt_dir file_name =
-  let temp_file_name, o = Filename.open_temp_file "ll_temp" "" in
-  (o, temp_file_name, opt_dir, file_name)
+let open_output_with_check_formatted ?directory file_name =
+  let temp_file_name, channel = Filename.open_temp_file "ll_temp" "" in
+  let fmt = Format.formatter_of_out_channel channel in
+  (fmt, { channel; temp_file_name; directory; file_name })
+
+let open_output_with_check ?directory file_name =
+  let temp_file_name, channel = Filename.open_temp_file "ll_temp" "" in
+  { channel; temp_file_name; directory; file_name }
 
 let always_replace_files = ref true
 
-let close_output_with_check (o, temp_file_name, opt_dir, file_name) =
-  let _ = close_out o in
+let close_output_with_check { channel; temp_file_name; directory; file_name } =
+  let _ = close_out channel in
   let file_name =
-    match opt_dir with
+    match directory with
     | None -> file_name
     | Some dir ->
         if Sys.file_exists dir then () else Unix.mkdir dir 0o775;

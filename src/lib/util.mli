@@ -318,11 +318,25 @@ val progress : string -> string -> int -> int -> unit
     the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref
 
-val open_output_with_check :
-  string option -> string -> Format.formatter * (out_channel * string * string option * string)
+type checked_output = { channel : out_channel; temp_file_name : string; directory : string option; file_name : string }
 
-val open_output_with_check_unformatted : string option -> string -> out_channel * string * string option * string
+(** [open_output_with_check file_name] will open a file for output,
+    but will only actually create or update said file if the contents
+    are different to the existing contents of said file when the
+    output is closed. This means it works well for compiler artifacts
+    that are referenced by tools like Make. The 'check' that the file
+    actually needs updating happens in the [close_output_with_check]
+    function, so it is especially important that any call to this is
+    matched with that function otherwise no actual output will happen.
 
-val close_output_with_check : out_channel * string * string option * string -> unit
+    Takes an optional directory argument, which will cause the file to
+    be created in a subdirectory of the current directory. The
+    subdirectory will be created (by the [close_output_with_check]
+    function) if it doesn't exist. *)
+val open_output_with_check : ?directory:string -> string -> checked_output
+
+val open_output_with_check_formatted : ?directory:string -> string -> Format.formatter * checked_output
+
+val close_output_with_check : checked_output -> unit
 
 val to_upper_camel_case : string -> string

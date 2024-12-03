@@ -161,7 +161,7 @@ let html_target files out_dir_opt { ast; _ } =
     (fun file_info ->
       let output_file = Filename.concat out_dir (file_info.prefix ^ ".html") in
       create_directories (Filename.dirname output_file);
-      let ((out_chan, _, _, _) as handle) = Util.open_output_with_check_unformatted None output_file in
+      let handle = Util.open_output_with_check output_file in
       let file_links = Html_source.hyperlinks_for_file ~filename:file_info.filename ast in
       let file_links =
         Array.map
@@ -184,7 +184,7 @@ let html_target files out_dir_opt { ast; _ } =
         try Option.map Util.read_whole_file !opt_html_css
         with Sys_error msg -> raise (Reporting.err_general Parse_ast.Unknown msg)
       in
-      output_html ?css ~file_info ~hyperlinks:file_links out_chan;
+      output_html ?css ~file_info ~hyperlinks:file_links handle.channel;
       Util.close_output_with_check handle
     )
     !files

@@ -149,10 +149,10 @@ let lem_rewrites =
     ("attach_effects", []);
   ]
 
-let write_doc dir filename doc =
-  let ((chan, _, _, _) as o) = Util.open_output_with_check_unformatted dir filename in
-  Pretty_print_common.print chan doc;
-  Util.close_output_with_check o
+let write_doc directory filename doc =
+  let file_info = Util.open_output_with_check ?directory filename in
+  Pretty_print_common.print file_info.channel doc;
+  Util.close_output_with_check file_info
 
 let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
   let out_filename = match out_file with Some f -> f | None -> "out" in
