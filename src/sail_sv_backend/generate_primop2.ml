@@ -32,15 +32,15 @@ let sail_bits width =
   let index_top = required_width (Big_int.of_int (width - 1)) in
   [
     nf "typedef struct packed {";
-    pf "    logic [%d:0] size;" index_top;
-    pf "    logic [%d:0] bits;" (width - 1);
+    pf "    logic [%d:0] sb_size;" index_top;
+    pf "    logic [%d:0] sb_bits;" (width - 1);
     nf "} sail_bits;";
     "";
     pf "localparam SAIL_BITS_WIDTH = %d;" width;
     pf "localparam SAIL_INDEX_WIDTH = %d;" (index_top + 1);
     "";
-    pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.size; endfunction" index_top;
-    pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.bits; endfunction" (width - 1);
+    pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.sb_size; endfunction" index_top;
+    pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.sb_bits; endfunction" (width - 1);
   ]
 
 let sail_int width = [pf "typedef logic [%d:0] sail_int;" (width - 1)]

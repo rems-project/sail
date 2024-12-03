@@ -198,7 +198,7 @@ module Make (Config : CONFIG) = struct
     | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_sbits max_width ->
         let logic = sprintf "logic [%d:0]" (max_width - 1) in
-        ksprintf simple_type "struct packed { logic [7:0] size; %s bits; }" logic
+        ksprintf simple_type "struct packed { logic [7:0] sb_size; %s sb_bits; }" logic
     | CT_lbits -> simple_type "sail_bits"
     | CT_fint width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
     | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
@@ -624,9 +624,9 @@ module Make (Config : CONFIG) = struct
        SMTLIB bvsrem: Sign follows dividend *)
     | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
     | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
-    | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "bits"
+    | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "sb_bits"
     | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)
-    | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "size"
+    | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "sb_size"
     | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pp_smt x)
     | Fn ("cons", [x; xs]) -> lbrace ^^ pp_smt x ^^ comma ^^ space ^^ pp_smt xs ^^ rbrace
     | Fn ("str.++", xs) ->
