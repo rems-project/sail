@@ -68,7 +68,20 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | _, _ -> unreachable l __POS__ "Unexpected pattern/type combination"
 
 let doc_nexp (Nexp_aux (n, l) as nexp) =
-  match n with Nexp_constant i -> string (Big_int.to_string i) | _ -> failwith "NExp not translatable yet."
+  match n with Nexp_constant i -> string (Big_int.to_string i) | _ -> failwith ("NExp " ^ string_of_nexp nexp ^ " not translatable yet.")
+
+let fail_doc_typ t =
+  match t with
+  | Typ_app (id, args) -> let args = List.map string_of_typ_arg args in
+    let args = String.concat "," args in
+    failwith ("Type Typ_app(" ^ string_of_id id ^ args ^ ") not translatable yet.")
+  | Typ_var _ -> failwith "Type Typ_var not translatable yet"
+  | Typ_fn _ -> failwith "Type Typ_fn not translatable yet"
+  | Typ_tuple _ -> failwith "Type Typ_tuple not translatable yet"
+  | Typ_exist _ -> failwith "Type Typ_exist not translatable yet"
+  | Typ_bidir _ -> failwith "Type Typ_bidir not translatable yet"
+  | Typ_internal_unknown -> failwith "Type Typ_internal_unknown not translatable yet"
+  | _ -> failwith "Type not translatable yet. This should not be reachable."
 
 let rec doc_typ (Typ_aux (t, _) as typ) =
   match t with
@@ -80,7 +93,7 @@ let rec doc_typ (Typ_aux (t, _) as typ) =
   | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) -> string "BitVec " ^^ doc_nexp m
   | Typ_tuple ts -> parens (separate_map (space ^^ string "×" ^^ space) doc_typ ts)
   | Typ_id (Id_aux (Id id, _)) -> string id
-  | _ -> failwith "Type not translatable yet."
+  | _ -> fail_doc_typ t
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
