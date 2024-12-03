@@ -153,7 +153,6 @@ let load_plugin opts plugin =
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 
 let parse_instantiation inst =
-  let open Ast in
   let open Ast_util in
   let open Lexing in
   match String.split_on_char '=' inst with

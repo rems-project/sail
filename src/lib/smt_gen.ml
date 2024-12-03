@@ -49,11 +49,6 @@ open Jib
 open Jib_util
 open Smt_exp
 
-let zencode_uid (id, ctyps) =
-  match ctyps with
-  | [] -> Util.zencode_string (string_of_id id)
-  | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
-
 (* Generate SMT definitions in a writer monad that keeps tracks of any
    overflow checks needed. *)
 

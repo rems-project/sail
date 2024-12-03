@@ -1980,8 +1980,6 @@ module Make (C : CONFIG) = struct
     if IdSet.is_empty (IdSet.diff polymorphic_functions unreachable_polymorphic_functions) then (cdefs, ctx)
     else specialize_functions ~specialized_calls ctx cdefs
 
-  let is_struct id = function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false
-
   class contains_struct_visitor id found =
     object
       inherit empty_jib_visitor

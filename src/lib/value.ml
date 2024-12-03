@@ -461,7 +461,7 @@ let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
 
-let value_undefined_range = function [v1; v2] -> v1 | _ -> failwith "value undefined_range"
+let value_undefined_range = function [v; _] -> v | _ -> failwith "value undefined_range"
 
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
 

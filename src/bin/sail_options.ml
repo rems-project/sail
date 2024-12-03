@@ -49,7 +49,4 @@
 
 open Libsail
 
-open Ast
-open Ast_util
-
 let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_util.Bindings.t ref = ref Ast_util.Bindings.empty

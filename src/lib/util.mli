@@ -80,19 +80,6 @@ module State_monad : functor
   val mapM : ('a -> 'b monad) -> 'a list -> 'b list monad
 end
 
-(** Mixed useful things *)
-module Duplicate (S : Set.S) : sig
-  type dups = No_dups of S.t | Has_dups of S.elt
-  val duplicates : S.elt list -> dups
-end
-
-(** [remove_duplicates l] removes duplicate elements from
-    the list l. As a side-effect, the list might be reordered. *)
-val remove_duplicates : 'a list -> 'a list
-
-(** [remove_dups compare eq l] as remove_duplicates but with parameterised comparison and equality *)
-val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
-
 (** Lift a comparison order to the lexical order on lists *)
 val lex_ord_list : ('a -> 'a -> int) -> 'a list -> 'a list -> int
 

@@ -134,36 +134,6 @@ struct
   let put_state s _ = ((), s)
 end
 
-module Duplicate (S : Set.S) = struct
-  type dups = No_dups of S.t | Has_dups of S.elt
-
-  let duplicates (x : S.elt list) : dups =
-    let rec f x acc =
-      match x with [] -> No_dups acc | s :: rest -> if S.mem s acc then Has_dups s else f rest (S.add s acc)
-    in
-    f x S.empty
-end
-
-let remove_duplicates l =
-  let l' = List.sort Stdlib.compare l in
-  let rec aux acc l =
-    match (acc, l) with
-    | _, [] -> List.rev acc
-    | [], x :: xs -> aux [x] xs
-    | y :: ys, x :: xs -> if x = y then aux (y :: ys) xs else aux (x :: y :: ys) xs
-  in
-  aux [] l'
-
-let remove_dups compare eq l =
-  let l' = List.sort compare l in
-  let rec aux acc l =
-    match (acc, l) with
-    | _, [] -> List.rev acc
-    | [], x :: xs -> aux [x] xs
-    | y :: ys, x :: xs -> if eq x y then aux (y :: ys) xs else aux (x :: y :: ys) xs
-  in
-  aux [] l'
-
 let lex_ord_list comparison xs ys =
   let rec lex_lists xs ys =
     match (xs, ys) with
