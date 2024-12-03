@@ -83,7 +83,7 @@ let lean_options =
     );
     ( "-lean_force_output",
       Arg.Unit (fun () -> opt_lean_force_output := true),
-      "removes the content of the output directory if it is non-empty"
+      " removes the content of the output directory if it is non-empty"
     );
   ]
 
