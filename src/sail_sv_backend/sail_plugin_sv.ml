@@ -87,6 +87,8 @@ let opt_comb = ref false
 let opt_inregs = ref false
 let opt_outregs = ref false
 
+let opt_recursion_depth = ref 10
+
 let opt_max_unknown_integer_width = ref 128
 let opt_max_unknown_bitvector_width = ref 128
 
@@ -164,6 +166,10 @@ let verilog_options =
     (Flag.create ~prefix:["sv"] "comb", Arg.Set opt_comb, "output an always_comb block instead of initial block");
     (Flag.create ~prefix:["sv"] "inregs", Arg.Set opt_inregs, "take register values from inputs");
     (Flag.create ~prefix:["sv"] "outregs", Arg.Set opt_outregs, "output register values");
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "recursion_depth",
+      Arg.Int (fun i -> opt_recursion_depth := i),
+      "set the depth of recursive SV modules"
+    );
     ( Flag.create ~prefix:["sv"] ~arg:"n" "int_size",
       Arg.Int (fun i -> opt_max_unknown_integer_width := i),
       "set the maximum width for unknown integers"
@@ -452,6 +458,7 @@ let make_genlib_file filename =
 
 let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let module SV = Jib_sv.Make (struct
+    let recursion_depth = !opt_recursion_depth
     let max_unknown_integer_width = !opt_max_unknown_integer_width
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width
     let line_directives = !opt_line_directives

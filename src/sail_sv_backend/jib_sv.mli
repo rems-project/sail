@@ -50,6 +50,9 @@ open Libsail
 open Ast_util
 
 module type CONFIG = sig
+  (** Set recursion depth for recursive SystemVerilog modules *)
+  val recursion_depth : int
+
   (** If Sail does not know a precise bitwidth for an integer variable, it will use this width. *)
   val max_unknown_integer_width : int
 

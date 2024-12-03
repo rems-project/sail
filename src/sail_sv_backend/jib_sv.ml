@@ -88,6 +88,7 @@ let natural_name_compare variable_locations n1 n2 =
 let natural_sort_names names = List.stable_sort (natural_name_compare Bindings.empty) names
 
 module type CONFIG = sig
+  val recursion_depth : int
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val line_directives : bool
@@ -111,6 +112,7 @@ module Make (Config : CONFIG) = struct
   module Primops =
     Generate_primop2.Make
       (struct
+        let recursion_depth = Config.recursion_depth
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let no_strings = Config.no_strings
@@ -2020,7 +2022,11 @@ module Make (Config : CONFIG) = struct
     }
 
   let rec pp_module ctx m =
-    let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
+    let params =
+      if m.recursive then
+        space ^^ string (Printf.sprintf "#(parameter RECURSION_DEPTH = %d)" Config.recursion_depth) ^^ space
+      else empty
+    in
     let ports =
       match (m.input_ports, m.output_ports) with
       | [], [] -> semi
