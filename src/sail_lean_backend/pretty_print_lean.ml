@@ -82,6 +82,16 @@ let rec doc_typ (Typ_aux (t, _) as typ) =
   | Typ_id (Id_aux (Id id, _)) -> string id
   | _ -> failwith "Type not translatable yet."
 
+
+let doc_typ_id (typ, fid) = concat [doc_id_ctor fid; space; colon; space; doc_typ typ; hardline]
+
+let doc_typ_quant tq =
+  match tq with
+  | TypQ_tq qs -> (match qs with 
+    | [] -> string ""
+    | _ -> failwith "Type quantifier not translatable yet.")
+  | TypQ_no_forall -> string ""
+
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
 let doc_lit (L_aux (lit, l)) =
@@ -99,6 +109,46 @@ let doc_lit (L_aux (lit, l)) =
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real s -> utf8string s (* TODO test if this is really working *)
+
+let fail_doc_exp (e: tannot exp_aux) =
+  match e with
+  | E_block _ -> failwith "Expression E_block not translatable yet"
+  | E_id _ -> failwith "Expression E_id not translatable yet"
+  | E_ref _ -> failwith "Expression E_ref not translatable yet"
+  | E_lit _ -> failwith "Expression E_lit not translatable yet"
+  | E_typ _ -> failwith "Expression E_typ not translatable yet"
+  | E_app _ -> failwith "Expression E_app not translatable yet"
+  | E_app_infix _ -> failwith "Expression E_app_infix not translatable yet"
+  | E_tuple _ -> failwith "Expression E_tuple not translatable yet"
+  | E_if _ -> failwith "Expression E_if not translatable yet"
+  | E_loop _ -> failwith "Expression E_loop not translatable yet"
+  | E_for _ -> failwith "Expression E_for not translatable yet"
+  | E_vector _ -> failwith "Expression E_vector not translatable yet"
+  | E_vector_access _ -> failwith "Expression E_vector_access not translatable yet"
+  | E_vector_subrange _ -> failwith "Expression E_vector_subrange not translatable yet"
+  | E_vector_update _ -> failwith "Expression E_vector_update not translatable yet"
+  | E_vector_update_subrange _ -> failwith "Expression E_vector_update_subrange not translatable yet"
+  | E_vector_append _ -> failwith "Expression E_vector_append not translatable yet"
+  | E_list _ -> failwith "Expression E_list not translatable yet"
+  | E_cons _ -> failwith "Expression E_cons not translatable yet"
+  | E_struct _ -> failwith "Expression E_struct not translatable yet"
+  | E_struct_update _ -> failwith "Expression E_struct_update not translatable yet"
+  | E_field _ -> failwith "Expression E_field not translatable yet"
+  | E_match _ -> failwith "Expression E_match not translatable yet"
+  | E_let _ -> failwith "Expression E_let not translatable yet"
+  | E_assign _ -> failwith "Expression E_assign not translatable yet"
+  | E_sizeof _ -> failwith "Expression E_sizeof not translatable yet"
+  | E_constraint _ -> failwith "Expression E_constraint not translatable yet"
+  | E_exit _ -> failwith "Expression E_exit not translatable yet"
+  | E_throw _ -> failwith "Expression E_throw not translatable yet"
+  | E_try _ -> failwith "Expression E_try not translatable yet"
+  | E_return _ -> failwith "Expression E_return not translatable yet"
+  | E_assert _ -> failwith "Expression E_assert not translatable yet"
+  | E_var _ -> failwith "Expression E_var not translatable yet"
+  | E_internal_plet _ -> failwith "Expression E_internal_plet not translatable yet"
+  | E_internal_return _ -> failwith "Expression E_internal_return not translatable yet"
+  | E_internal_assume _ -> failwith "Expression E_internal_assume not translatable yet"
+  | E_internal_value _ -> failwith "Expression E_internal_value not translatable yet"
 
 let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
@@ -124,7 +174,7 @@ let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
         | _ -> failwith "Let pattern not translatable yet."
       in
       nest 2 (flow (break 1) [string "let"; string id; coloneq; doc_exp lexp]) ^^ hardline ^^ doc_exp e
-  | _ -> failwith "Expression not translatable yet"
+  | _ -> fail_doc_exp e
 
 let doc_funcl_init (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
@@ -169,6 +219,15 @@ let doc_fundef (FD_aux (FD_function (r, typa, fcls), fannot)) =
   | [funcl] -> doc_funcl funcl
   | _ -> failwith "FD_function with more than one clause"
 
+let fail_doc_typdef td =
+  match td with
+  | TD_abbrev _ -> failwith "Type definition TD_abbrev not translatable yet"
+  | TD_record _ -> failwith "Type definition TD_record not translatable yet"
+  | TD_variant _ -> failwith "Type definition TD_variant not translatable yet"
+  | TD_enum _ -> failwith "Type definition TD_enum not translatable yet"
+  | TD_abstract _ -> failwith "Type definition TD_abstract not translatable yet"
+  | TD_bitfield _ -> failwith "Type definition TD_bitfield not translatable yet"
+
 let doc_typdef (TD_aux (td, tannot) as full_typdef) =
   match td with
   | TD_enum (Id_aux (Id id, _), fields, _) ->
@@ -181,7 +240,14 @@ let doc_typdef (TD_aux (td, tannot) as full_typdef) =
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space
         ^^ separate (comma ^^ space) derivers
         )
-  | _ -> failwith "Type definition not translatable yet"
+  | TD_record (Id_aux (Id id, _), TypQ_aux (tq, _), fields, _) -> 
+    let fields = List.map doc_typ_id fields in
+    let enums_doc = concat fields in
+    let rectyp = doc_typ_quant tq in
+    nest 2
+     (flow (break 1) [string "structure"; string id; rectyp; string "where"]
+     ^^ enums_doc)
+  | _ -> fail_doc_typdef td
 
 let doc_def (DEF_aux (aux, def_annot) as def) =
   match aux with
