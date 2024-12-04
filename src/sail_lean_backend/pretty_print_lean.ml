@@ -116,8 +116,7 @@ let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
   | E_lit l -> doc_lit l
   | E_app (Id_aux (Id "internal_pick", _), _) ->
       string "sorry" (* TODO replace by actual implementation of internal_pick *)
-  | E_internal_plet _ ->
-      string "sorry" (* TODO replace by actual implementation of internal_plet *)
+  | E_internal_plet _ -> string "sorry" (* TODO replace by actual implementation of internal_plet *)
   | E_app (f, args) ->
       let d_id =
         if Env.is_extern f env "lean" then string (Env.get_extern f env "lean") else doc_exp (E_aux (E_id f, (l, annot)))
