@@ -6,7 +6,7 @@ structure My_struct  where
 
 
 def undefined_My_struct (lit : Unit) : My_struct :=
-  sorry /- internal plet -/
+  sorry
 
 def initialize_registers : Unit :=
   ()
