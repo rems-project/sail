@@ -116,6 +116,8 @@ let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
   | E_lit l -> doc_lit l
   | E_app (Id_aux (Id "internal_pick", _), _) ->
       string "sorry" (* TODO replace by actual implementation of internal_pick *)
+  | E_internal_plet _ ->
+      string "sorry /- internal plet -/" (* TODO replace by actual implementation of internal_plet *)
   | E_app (f, args) ->
       let d_id =
         if Env.is_extern f env "lean" then string (Env.get_extern f env "lean") else doc_exp (E_aux (E_id f, (l, annot)))
@@ -194,7 +196,7 @@ let doc_typdef (TD_aux (td, tannot) as full_typdef) =
       let fields = List.map doc_typ_id fields in
       let enums_doc = concat fields in
       let rectyp = doc_typ_quant tq in
-      nest 2 (flow (break 1) [string "structure"; string id; rectyp; string "where"] ^^ enums_doc)
+      nest 2 (flow (break 1) [string "structure"; string id; rectyp; string "where"] ^^ hardline ^^ enums_doc)
   | _ -> failwith "Type definition not translatable yet"
 
 let doc_def (DEF_aux (aux, def_annot) as def) =
