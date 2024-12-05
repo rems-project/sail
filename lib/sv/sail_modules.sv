@@ -102,6 +102,8 @@ endfunction
 import "DPI-C" function bit[7:0] sail_read_byte(logic [63:0] addr);
 
 import "DPI-C" function bit sail_read_tag(logic [63:0] addr);
+
+import "DPI-C" function void sail_write_byte(logic [63:0] addr, logic [7:0] b);
 `else
 logic [7:0] sail_memory [logic [63:0]];
 
@@ -114,6 +116,14 @@ typedef struct {
 } sail_write;
 
 typedef sail_write sail_memory_writes [$];
+
+function automatic void sail_flush_writes(sail_memory_writes writes);
+   foreach (writes[i]) begin
+`ifdef SAIL_DPI_MEMORY
+      sail_write_byte(writes[i].paddr, writes[i].data);
+`endif
+   end
+endfunction
 
 function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits addr, sail_int n);
    logic [63:0] paddr;
@@ -163,6 +173,25 @@ module emulator_write_mem
    output sail_unit          ret,
    output sail_memory_writes out_writes
    );
+   always_comb begin
+      logic [63:0] paddr;
+      logic [SAIL_BITS_WIDTH-1:0] buffer;
+      logic [SAIL_INDEX_WIDTH-2:0] i;
+      sail_memory_writes tmp;
+
+      buffer = value.bits;
+      paddr = addr.bits[63:0];
+      tmp = in_writes;
+
+      for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
+         sail_write b;
+         b.paddr = paddr + (64'(i) - 1);
+         b.data = buffer[7 + ((i - 1) * 8) -: 8];
+         tmp.push_back(b);
+      end
+
+      out_writes = tmp;
+   end
 endmodule
 
 module emulator_write_mem_exclusive
@@ -187,7 +216,11 @@ module emulator_write_tag
 endmodule
 
 function automatic string sail_string_of_bits(sail_bits bv);
-   return "";
+   string hexstr;
+   string trimmed;
+   hexstr = $sformatf("%x", bv.bits);
+   trimmed = hexstr.substr(SAIL_BITS_WIDTH / 4 - (bv.size / 4), SAIL_BITS_WIDTH / 4 - 1).toupper();
+   return {"0x", trimmed};
 endfunction
 
 `endif
