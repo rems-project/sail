@@ -2254,10 +2254,14 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           let inferred_exp = infer_funapp l env f [x; y] uannot (Some typ) in
           expect_subtype env inferred_exp typ
       | Some _ ->
-          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot (Some typ) in
+          let inferred_exp =
+            infer_funapp l env f [x; mk_exp ~loc:(exp_loc y) (E_typ (bool_typ, y))] uannot (Some typ)
+          in
           expect_subtype env inferred_exp typ
       | exception Type_error _ ->
-          let inferred_exp = infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot (Some typ) in
+          let inferred_exp =
+            infer_funapp l env f [x; mk_exp ~loc:(exp_loc y) (E_typ (bool_typ, y))] uannot (Some typ)
+          in
           expect_subtype env inferred_exp typ
     end
   | E_app (f, xs), _ ->
@@ -2550,12 +2554,22 @@ and check_case env pat_typ pexp typ =
   let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
+      let hint_loc l =
+        match guard with
+        | None -> Parse_ast.Hint ("guard created for this pattern", pat_loc pat, l)
+        | Some exp -> Parse_ast.Hint ("combining pattern with guard", exp_loc exp, l)
+      in
       let guard =
         match (guard, guards) with None, h :: t -> Some (h, t) | Some x, l -> Some (x, l) | None, [] -> None
       in
       let guard =
         match guard with
-        | Some (h, t) -> Some (List.fold_left (fun acc guard -> mk_exp (E_app_infix (acc, mk_id "&", guard))) h t)
+        | Some (h, t) ->
+            Some
+              (List.fold_left
+                 (fun acc guard -> mk_exp ~loc:(hint_loc (exp_loc guard)) (E_app_infix (acc, mk_id "&", guard)))
+                 h t
+              )
         | None -> None
       in
       let checked_guard, env' =

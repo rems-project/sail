@@ -277,9 +277,12 @@ let message_of_type_error type_error =
           (Seq [msg; Line ""; Location (prefix, hint', l', msg')], hint)
         )
     | Err_other str -> ((if str = "" then Seq [] else Line str), None)
-    | Err_function_arg (_, typ, err) ->
-        let msg, _ = to_message err in
-        (msg, Some ("checking function argument has type " ^ string_of_typ typ))
+    | Err_function_arg (_, typ, err) -> (
+        let msg, hint = to_message err in
+        match hint with
+        | None -> (msg, Some ("checking function argument has type " ^ string_of_typ typ))
+        | Some _ -> (msg, hint)
+      )
     | Err_unbound_id { id; locals; have_function } ->
         let name = string_of_id id in
         let closest = find_closest name (fun callback -> Bindings.iter (fun other_id _ -> callback other_id) locals) in

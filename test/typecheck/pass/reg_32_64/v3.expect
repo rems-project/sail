@@ -7,7 +7,7 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [93mType error[0m:
 [96mpass/reg_32_64/v3.sail[0m:29.2-27:
 29[96m |[0m  reg_deref(R)['d - 1 .. 0]
-  [91m |[0m  [91m^-----------------------^[0m [91mchecking function argument has type int('m)[0m
+  [91m |[0m  [91m^-----------------------^[0m [91m(operator -)[0m
   [91m |[0m No overloading for (operator -), tried:
   [91m |[0m [94m*[0m sub_atom
   [91m |[0m   [96mpass/reg_32_64/v3.sail[0m:29.15-17:
