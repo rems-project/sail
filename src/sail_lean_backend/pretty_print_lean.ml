@@ -273,7 +273,6 @@ let doc_typdef (TD_aux (td, tannot) as full_typdef) =
       nest 2 (flow (break 1) [string "structure"; string id; rectyp; string "where"] ^^ hardline ^^ enums_doc)
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
-
 let doc_def (DEF_aux (aux, def_annot) as def) =
   match aux with
   | DEF_fundef fdef -> group (doc_fundef fdef) ^/^ hardline
