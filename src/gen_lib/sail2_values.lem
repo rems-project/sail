@@ -755,7 +755,7 @@ val count_leading_zeros_bv : forall 'a. Bitvector 'a => 'a -> integer
 let count_leading_zeros_bv v = count_leading_zero_bits (bits_of v)
 
 val count_trailing_zero_bits : list bitU -> integer
-let rec count_trailing_zero_bits v = count_leading_zeros_bv (List.reverse v)
+let count_trailing_zero_bits v = count_leading_zeros_bv (List.reverse v)
 
 val count_trailing_zeros_bv : forall 'a. Bitvector 'a => 'a -> integer
 let count_trailing_zeros_bv v = count_trailing_zero_bits (bits_of v)

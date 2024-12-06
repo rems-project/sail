@@ -637,6 +637,7 @@ module RemoveUnusedVariables = struct
         List.iter (smt_uses stack uses) input_connections;
         List.iter (place_uses ~output:true stack uses) output_connections
     | SVD_always_comb stmt -> statement_uses stack uses stmt
+    | SVD_initial stmt -> statement_uses stack uses stmt
     | SVD_always_ff stmt ->
         add_use ~raw:true ~read:true (name (mk_id "clk")) stack uses;
         statement_uses stack uses stmt

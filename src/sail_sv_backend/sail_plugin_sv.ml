@@ -660,20 +660,18 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let sv_output = Pretty_print_sail.Document.to_string doc in
 
   (* make_genlib_file (Filename.concat (Filename.dirname out) (sprintf "sail_genlib_%s.sv" (Filename.basename out))); *)
-  let ((out_chan, _, _, _) as file_info) = Util.open_output_with_check_unformatted !opt_output_dir (out ^ ".sv") in
-  output_string out_chan sv_output;
+  let file_info = Util.open_output_with_check ?directory:!opt_output_dir (out ^ ".sv") in
+  output_string file_info.channel sv_output;
   Util.close_output_with_check file_info;
 
   begin
     match !opt_verilate with
     | Verilator_compile | Verilator_run ->
-        let ((out_chan, _, _, _) as file_info) =
-          Util.open_output_with_check_unformatted !opt_output_dir ("sim_" ^ out ^ ".cpp")
-        in
+        let file_info = Util.open_output_with_check ?directory:!opt_output_dir ("sim_" ^ out ^ ".cpp") in
         List.iter
           (fun line ->
-            output_string out_chan line;
-            output_char out_chan '\n'
+            output_string file_info.channel line;
+            output_char file_info.channel '\n'
           )
           (verilator_cpp_wrapper "sail_toplevel");
         Util.close_output_with_check file_info;

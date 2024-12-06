@@ -189,8 +189,8 @@ let rec visit_instr vis outer_instr =
     | I_aux (I_jump (cval, label), aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_jump (cval', label), aux)
-    | I_aux (I_goto _, aux) -> no_change
-    | I_aux (I_label _, aux) -> no_change
+    | I_aux (I_goto _, _) -> no_change
+    | I_aux (I_label _, _) -> no_change
     | I_aux (I_funcall (creturn, extern, (id, ctyps), cvals), aux) ->
         let creturn' = visit_creturn vis creturn in
         let id' = visit_id vis id in
@@ -209,12 +209,12 @@ let rec visit_instr vis outer_instr =
     | I_aux (I_undefined ctyp, aux) ->
         let ctyp' = visit_ctyp vis ctyp in
         if ctyp == ctyp' then no_change else I_aux (I_undefined ctyp', aux)
-    | I_aux (I_exit _, aux) -> no_change
+    | I_aux (I_exit _, _) -> no_change
     | I_aux (I_end name, aux) ->
         let name' = visit_name vis name in
         if name == name' then no_change else I_aux (I_end name', aux)
-    | I_aux (I_comment _, aux) -> no_change
-    | I_aux (I_raw _, aux) -> no_change
+    | I_aux (I_comment _, _) -> no_change
+    | I_aux (I_raw _, _) -> no_change
     | I_aux (I_return cval, aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_return cval', aux)

@@ -51,13 +51,7 @@ open Ast
 open Ast_defs
 open Ast_util
 
-let constant_bitvector_typ size = bitvector_typ (nconstant size)
 let fun_typschm arg_typs ret_typ = mk_typschm (mk_typquant []) (function_typ arg_typs ret_typ)
-
-let index_of_nexp nexp =
-  match int_of_nexp_opt (nexp_simp nexp) with
-  | Some i -> i
-  | None -> raise (Reporting.err_typ (nexp_loc nexp) "non-constant bitfield index")
 
 let mk_sizeof_exp i = mk_exp (E_sizeof i)
 let mk_id_exp id = mk_exp (E_id id)

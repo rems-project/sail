@@ -330,14 +330,6 @@ let lookup_typ_var v tv_info = match KBindings.find_opt v tv_info.vars with Some
 
 let is_shadowed v tv_info = match KBindings.find_opt v tv_info.shadows with Some _ -> true | None -> false
 
-let k_counter = ref 0
-let k_name () =
-  let kid = mk_kid ("k#" ^ string_of_int !k_counter) in
-  incr k_counter;
-  kid
-
-let kinds_typq kinds = mk_typquant (List.map (fun k -> mk_qi_id k (k_name ())) kinds)
-
 let builtin_typs =
   let k_counter = ref 0 in
   let k_name () =

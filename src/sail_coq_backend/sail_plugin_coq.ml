@@ -204,24 +204,24 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
     | [] -> base_imports_default
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules)
   in
-  let ((ot, _, _, _) as ext_ot) = Util.open_output_with_check_unformatted opt_dir (types_module ^ ".v") in
-  let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (filename ^ ".v") in
-  let oi, ext_oi =
+  let types_file_info = Util.open_output_with_check ?directory:opt_dir (types_module ^ ".v") in
+  let file_info = Util.open_output_with_check ?directory:opt_dir (filename ^ ".v") in
+  let isla_channel_opt, isla_file_info_opt =
     match !opt_coq_isla with
     | None -> (None, None)
     | Some fname ->
-        let ((o, _, _, _) as ext_o) = Util.open_output_with_check_unformatted opt_dir (fname ^ ".v") in
-        (Some o, Some ext_o)
+        let file_info = Util.open_output_with_check ?directory:opt_dir (fname ^ ".v") in
+        (Some file_info.channel, Some file_info)
   in
-  (Pretty_print_coq.pp_ast_coq library_style (ot, base_imports)
-     (o, base_imports @ (types_module :: libs) @ alt_modules2)
-     types_module oi ctx effect_info env ast concurrency_monad_params generated_line
+  (Pretty_print_coq.pp_ast_coq library_style (types_file_info.channel, base_imports)
+     (file_info.channel, base_imports @ (types_module :: libs) @ alt_modules2)
+     types_module isla_channel_opt ctx effect_info env ast concurrency_monad_params generated_line
   )
     (alt_modules2 <> []);
   (* suppress MR and M defns if alt_modules2 present*)
-  Util.close_output_with_check ext_ot;
-  Util.close_output_with_check ext_o;
-  Option.iter (fun ext -> Util.close_output_with_check ext) ext_oi
+  Util.close_output_with_check types_file_info;
+  Util.close_output_with_check file_info;
+  Option.iter (fun f -> Util.close_output_with_check f) isla_file_info_opt
 
 let output libs files =
   List.iter

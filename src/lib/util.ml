@@ -134,36 +134,6 @@ struct
   let put_state s _ = ((), s)
 end
 
-module Duplicate (S : Set.S) = struct
-  type dups = No_dups of S.t | Has_dups of S.elt
-
-  let duplicates (x : S.elt list) : dups =
-    let rec f x acc =
-      match x with [] -> No_dups acc | s :: rest -> if S.mem s acc then Has_dups s else f rest (S.add s acc)
-    in
-    f x S.empty
-end
-
-let remove_duplicates l =
-  let l' = List.sort Stdlib.compare l in
-  let rec aux acc l =
-    match (acc, l) with
-    | _, [] -> List.rev acc
-    | [], x :: xs -> aux [x] xs
-    | y :: ys, x :: xs -> if x = y then aux (y :: ys) xs else aux (x :: y :: ys) xs
-  in
-  aux [] l'
-
-let remove_dups compare eq l =
-  let l' = List.sort compare l in
-  let rec aux acc l =
-    match (acc, l) with
-    | _, [] -> List.rev acc
-    | [], x :: xs -> aux [x] xs
-    | y :: ys, x :: xs -> if eq x y then aux (y :: ys) xs else aux (x :: y :: ys) xs
-  in
-  aux [] l'
-
 let lex_ord_list comparison xs ys =
   let rec lex_lists xs ys =
     match (xs, ys) with
@@ -570,21 +540,23 @@ let progress prefix msg n total =
   )
   else ()
 
-let open_output_with_check opt_dir file_name =
-  let temp_file_name, o = Filename.open_temp_file "ll_temp" "" in
-  let o' = Format.formatter_of_out_channel o in
-  (o', (o, temp_file_name, opt_dir, file_name))
+type checked_output = { channel : out_channel; temp_file_name : string; directory : string option; file_name : string }
 
-let open_output_with_check_unformatted opt_dir file_name =
-  let temp_file_name, o = Filename.open_temp_file "ll_temp" "" in
-  (o, temp_file_name, opt_dir, file_name)
+let open_output_with_check_formatted ?directory file_name =
+  let temp_file_name, channel = Filename.open_temp_file "ll_temp" "" in
+  let fmt = Format.formatter_of_out_channel channel in
+  (fmt, { channel; temp_file_name; directory; file_name })
+
+let open_output_with_check ?directory file_name =
+  let temp_file_name, channel = Filename.open_temp_file "ll_temp" "" in
+  { channel; temp_file_name; directory; file_name }
 
 let always_replace_files = ref true
 
-let close_output_with_check (o, temp_file_name, opt_dir, file_name) =
-  let _ = close_out o in
+let close_output_with_check { channel; temp_file_name; directory; file_name } =
+  let _ = close_out channel in
   let file_name =
-    match opt_dir with
+    match directory with
     | None -> file_name
     | Some dir ->
         if Sys.file_exists dir then () else Unix.mkdir dir 0o775;

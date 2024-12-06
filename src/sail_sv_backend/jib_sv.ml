@@ -126,6 +126,16 @@ module AttributeParser (Info : ATTRIBUTE_INFO) = struct
         | Some (AD_aux (_, l)) -> raise (key_type_error ~expected:"boolean" key l)
       )
 
+  let get_string ~default key obj_opt =
+    match obj_opt with
+    | None -> default
+    | Some obj -> (
+        match List.assoc_opt key obj with
+        | None -> default
+        | Some (AD_aux (AD_string s, _)) -> s
+        | Some (AD_aux (_, l)) -> raise (key_type_error ~expected:"string" key l)
+      )
+
   let get_types ~arity obj_opt =
     let* types = Option.bind obj_opt (List.assoc_opt "types") in
     let ctyps =
@@ -169,6 +179,20 @@ module AttributeParser (Info : ATTRIBUTE_INFO) = struct
     match num_opt with
     | None -> Some ctyp
     | Some _ -> raise (Reporting.err_general l "return_type field should not have positional argument")
+
+  let get_string_set ~default key obj_opt =
+    let add_to_set set = function
+      | AD_aux (AD_string s, _) -> StringSet.add s set
+      | AD_aux (_, l) -> raise (key_type_error ~expected:"string" key l)
+    in
+    match obj_opt with
+    | None -> default
+    | Some obj -> (
+        match List.assoc_opt key obj with
+        | None -> default
+        | Some (AD_aux (AD_list xs, _)) -> List.fold_left add_to_set StringSet.empty xs
+        | Some (AD_aux (_, l)) -> raise (key_type_error ~expected:"boolean" key l)
+      )
 
   let get_dpi sets obj_opt =
     let* dpi = Option.bind obj_opt (List.assoc_opt "dpi") in
@@ -2130,6 +2154,11 @@ module Make (Config : CONFIG) = struct
     let clk = Attr.get_bool ~default:false "clk" attr in
     (* Type conversions for the module input signals derived from function arguments. *)
     let arg_conversions = Attr.get_types ~arity:(List.length arg_ctyps) attr in
+    (* Registers that are exposed as output ports *)
+    let exposed = Attr.get_string_set ~default:StringSet.empty "expose" attr in
+    (* Text used to bracket output *)
+    let prefix = Attr.get_string ~default:"SAIL START\\n" "prefix" attr in
+    let suffix = Attr.get_string ~default:"SAIL END\\n" "suffix" attr in
 
     let register_resets, register_inputs, register_outputs =
       Bindings.fold
@@ -2140,6 +2169,11 @@ module Make (Config : CONFIG) = struct
           )
         )
         spec_info.registers ([], [], [])
+    in
+    let exposed_registers =
+      Bindings.fold
+        (fun reg ctyp ports -> if StringSet.mem (string_of_id reg) exposed then (reg, ctyp) :: ports else ports)
+        spec_info.registers []
     in
     let memory_writes =
       [
@@ -2211,16 +2245,23 @@ module Make (Config : CONFIG) = struct
         ( if footprint.need_stdout then
             [
               mk_statement
-                (svs_raw "$write({\"SAIL START\\n\", out_stdout, \"SAIL END\\n\"})"
+                (svs_raw
+                   (Printf.sprintf "$write({\"%s\", out_stdout, \"%s\"})" prefix suffix)
                    ~inputs:[Name (mk_id "out_stdout", -1)]
                 );
             ]
           else []
         )
-        @
-        if footprint.need_stderr then
-          [mk_statement (svs_raw "$write(out_stderr)" ~inputs:[Name (mk_id "out_stderr", -1)])]
-        else []
+        @ ( if footprint.need_stderr then
+              [mk_statement (svs_raw "$write(out_stderr)" ~inputs:[Name (mk_id "out_stderr", -1)])]
+            else []
+          )
+        @ List.map
+            (fun (reg, _) ->
+              mk_statement (SVS_continuous_assign (SVP_id (Name (reg, -1)), Var (Name (prepend_id "out_" reg, -1))))
+            )
+            exposed_registers
+        @ [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
       in
       if clk then (
         let reset_regs, inout_regs =
@@ -2293,7 +2334,7 @@ module Make (Config : CONFIG) = struct
             [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
           else arg_ports
         );
-      output_ports;
+      output_ports = output_ports @ List.map (fun (reg, ctyp) -> mk_port (Name (reg, -1)) ctyp) exposed_registers;
       defs = List.map mk_def defs;
     }
 

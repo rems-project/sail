@@ -108,6 +108,15 @@ let rec doc_typ (Typ_aux (t, _) as typ) =
   | Typ_id (Id_aux (Id id, _)) -> string id
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
+let doc_typ_id (typ, fid) = concat [doc_id_ctor fid; space; colon; space; doc_typ typ; hardline]
+
+let doc_typ_quant tq =
+  match tq with
+  | TypQ_tq qs -> (
+      match qs with [] -> string "" | _ -> failwith "Type quantifier not translatable yet."
+    )
+  | TypQ_no_forall -> string ""
+
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
 let doc_lit (L_aux (lit, l)) =
@@ -173,6 +182,7 @@ let rec doc_exp (E_aux (e, (l, annot)) as full_exp) =
   | E_lit l -> doc_lit l
   | E_app (Id_aux (Id "internal_pick", _), _) ->
       string "sorry" (* TODO replace by actual implementation of internal_pick *)
+  | E_internal_plet _ -> string "sorry" (* TODO replace by actual implementation of internal_plet *)
   | E_app (f, args) ->
       let d_id =
         if Env.is_extern f env "lean" then string (Env.get_extern f env "lean") else doc_exp (E_aux (E_id f, (l, annot)))
@@ -256,7 +266,13 @@ let doc_typdef (TD_aux (td, tannot) as full_typdef) =
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space
         ^^ separate (comma ^^ space) derivers
         )
+  | TD_record (Id_aux (Id id, _), TypQ_aux (tq, _), fields, _) ->
+      let fields = List.map doc_typ_id fields in
+      let enums_doc = concat fields in
+      let rectyp = doc_typ_quant tq in
+      nest 2 (flow (break 1) [string "structure"; string id; rectyp; string "where"] ^^ hardline ^^ enums_doc)
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
+
 
 let doc_def (DEF_aux (aux, def_annot) as def) =
   match aux with

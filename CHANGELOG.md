@@ -13,7 +13,7 @@ permitted such bitvector types in signatures. Now the type
 change, as some previously permitted definitions are now rejected
 without additional constraints. However Sail has a new kind `Nat`
 which allows it to infer these `>= 0` constraints when explicit type
-variables are ommited, so in a function signature
+variables are omitted, so in a function signature
 ```
 val foo : forall 'n. bits('n) -> bool
 ```
@@ -21,6 +21,14 @@ the `'n` type variable will be inferred as:
 ```
 val foo : forall ('n : Nat). bits('n) -> bool
 ```
+
+##### Removed support for compressed ELF binaries
+
+As a convenience feature, the Sail C runtime allowed transparently
+loading compressed ELF files directly by using `gzopen`. However, it
+is easy to just manually decompress such files before passing them to
+the runtime, so we have decided to remove this feature in favour
+of fewer build-time dependencies for the Sail C runtime.
 
 Sail 0.18
 ---------
