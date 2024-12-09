@@ -178,6 +178,7 @@
    as
    lib/reverse_endianness.sail)
   (%{workspace_root}/lib/sv/sail_modules.sv as lib/sv/sail_modules.sv)
+  (%{workspace_root}/lib/rts.c as lib/rts.c)
   (%{workspace_root}/lib/rts.h as lib/rts.h)
   (%{workspace_root}/lib/sail.c as lib/sail.c)
   (%{workspace_root}/lib/sail.h as lib/sail.h)
