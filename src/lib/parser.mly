@@ -260,6 +260,12 @@ let set_syntax_deprecated l =
 
 %%
 
+separated_nonempty_list_trailing(SEP, ELEM):
+  | x=ELEM; SEP?
+    { [x] }
+  | x=ELEM; SEP; xs=separated_nonempty_list_trailing(SEP, ELEM)
+    { x :: xs }
+
 id:
   | Id { mk_id (Id $1) $startpos $endpos }
 
@@ -573,7 +579,7 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list(Comma, fpat) Rcurly
+  | Struct Lcurly separated_nonempty_list_trailing(Comma, fpat) Rcurly
     { mk_pat (P_struct $3) $startpos $endpos }
 
 fpat:
@@ -976,10 +982,10 @@ param_kopt:
     { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 typaram:
-  | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
+  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen Comma typ
     { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
       mk_typq $2 [qi_nc] $startpos $endpos }
-  | Lparen separated_nonempty_list(Comma, param_kopt) Rparen
+  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
     { mk_typq $2 [] $startpos $endpos }
 
 type_def:
@@ -1065,9 +1071,7 @@ type_union:
     { Tu_aux (Tu_ty_anon_rec ($4, $1), loc $startpos $endpos) }
 
 type_unions:
-  | type_union
-    { [$1] }
-  | type_union Comma
+  | type_union Comma?
     { [$1] }
   | type_union Comma type_unions
     { $1 :: $3 }
@@ -1112,7 +1116,7 @@ mpat:
     { mk_mpat (MP_as (p, id)) $startpos $endpos }
 
 mpat_list:
-  | mpat
+  | mpat Comma?
     { [$1] }
   | mpat Comma mpat_list
     { $1 :: $3 }
@@ -1142,7 +1146,7 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ_no_caret
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list(Comma, fmpat) Rcurly
+  | Struct Lcurly separated_nonempty_list_trailing(Comma, fmpat) Rcurly
     { mk_mpat (MP_struct $3) $startpos $endpos }
 
 fmpat:
@@ -1214,12 +1218,12 @@ externs:
   | Eq String
     { warn_extern_effect (loc $startpos $endpos);
       Some { pure = true; bindings = [("_", $2)] }, true }
-  | Eq Lcurly separated_nonempty_list(Comma, extern_binding) Rcurly
+  | Eq Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
     { warn_extern_effect (loc $startpos $endpos);
       Some { pure = true; bindings = $3 }, true }
   | Eq pure_opt String
     { Some { pure = $2; bindings = [("_", $3)] }, false }
-  | Eq pure_opt Lcurly separated_nonempty_list(Comma, extern_binding) Rcurly
+  | Eq pure_opt Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
     { Some { pure = $2; bindings = $4 }, false }
 
 val_spec_def:
