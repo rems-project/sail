@@ -2,13 +2,13 @@ default Order dec
 $include <prelude.sail>
 $include <smt.sail>
 
-val extzv : forall 'n 'm, 'm >= 0 & 'n >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extzv : forall 'n 'm, 'm >= 0 & 'n >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
 function extzv(m, v) = sail_mask(m, v)
 
 
 /* Test generation of casts across case splits (e.g., going from bits('m) to bits(32)) */
 
-val foo : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect pure
+val foo : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n)
 
 function foo(n, x) =
   let y : bits(16) = extzv(x) in
@@ -17,7 +17,7 @@ function foo(n, x) =
     64 => let z = y@y@y@y in let dfsf = 4 in z
   }
 
-val foo_if : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect pure
+val foo_if : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n)
 
 function foo_if(n, x) =
   let y : bits(16) = extzv(x) in
@@ -25,11 +25,11 @@ function foo_if(n, x) =
   then y@y
   else /* 64 */ let z = y@y@y@y in let dfsf = 4 in z
 
-val use : bits(16) -> unit effect pure
+val use : bits(16) -> unit
 
 function use(x) = ()
 
-val bar : forall 'n, 'n in {8,16}. bits('n) -> unit effect pure
+val bar : forall 'n, 'n in {8,16}. bits('n) -> unit
 
 function bar(x) =
   match 'n {
@@ -37,7 +37,7 @@ function bar(x) =
    16 => use(x)
   }
 
-val bar_if : forall 'n, 'n in {8,16}. bits('n) -> unit effect pure
+val bar_if : forall 'n, 'n in {8,16}. bits('n) -> unit
 
 function bar_if(x) =
   if 'n == 8
@@ -146,7 +146,7 @@ function refine_mutable_exp2(n, x) = {
 
 /* Adding casts for top-level pattern matches */
 
-val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (int('n), bits('m)) -> bits('n) effect pure
+val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (int('n), bits('m)) -> bits('n)
 
 function foo2(32,x) =
   let y : bits(16) = extzv(x) in
@@ -155,7 +155,7 @@ and foo2(64,x) =
   let y : bits(16) = extzv(x) in
   let z = y@y@y@y in let dfsf = 4 in z
 
-val foo3 : forall 'm 'n, 'm >= 0 & 'n in {4,8}. (int('n), bits('m)) -> bits(8 * 'n) effect pure
+val foo3 : forall 'm 'n, 'm >= 0 & 'n in {4,8}. (int('n), bits('m)) -> bits(8 * 'n)
 
 function foo3(4,x) =
   let y : bits(16) = extzv(x) in
@@ -165,7 +165,7 @@ and foo3(8,x) =
   let z = y@y@y@y in let dfsf = 4 in z
 
 /* Casting an argument isn't supported yet 
-val bar2 : forall 'n, 'n in {8,16}. (int('n),bits('n)) -> unit effect pure
+val bar2 : forall 'n, 'n in {8,16}. (int('n),bits('n)) -> unit
 
 function bar2(8,x) =
   use(x@x)

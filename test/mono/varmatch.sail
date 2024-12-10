@@ -1,6 +1,6 @@
 $include <flow.sail>
 
-val eq_all = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_all = pure {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
 overload operator == = {eq_all}
 
 

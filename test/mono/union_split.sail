@@ -15,7 +15,7 @@ function execute(SomeOp(n as int('n),v)) = {
   sail_zero_extend(b,32)
 }
 
-val run : unit -> unit effect {escape}
+val run : unit -> unit
 
 function run () = {
   assert(execute(SomeOp(8,0x11)) == 0x00000010);

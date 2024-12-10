@@ -5,9 +5,9 @@ $include <smt.sail>
 val extzv : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
 function extzv(m,v) = sail_zero_extend(v, m)
 
-val cast ex_int : int -> {'n, true. int('n)}
+val ex_int : int -> {'n, true. int('n)}
 function ex_int 'n = n
-val quotient = {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (int, int) -> int
+val quotient = pure {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (int, int) -> int
 overload operator / = {quotient}
 
 /* Byte/bits size conversions are a pain */
@@ -39,6 +39,7 @@ function g(m,n,v) = {
   assert(constraint('m >= 0 & 'n >= 0));
   let 'o : {'p, true. int('p)} = ex_int(m / n) in {
     assert(constraint('o * 'n == 'm));
+    assert(o >= 0);
     accept2(replicate_bits(v,o))
   }
 }

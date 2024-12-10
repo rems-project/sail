@@ -5,10 +5,10 @@ $include <arith.sail>
 $include <flow.sail>
 $include <vector_dec.sail>
 
-val neq_vec = {lem: "neq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val neq_vec = pure {lem: "neq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(x == y)
 overload operator != = {neq_vec}
-val UInt = {
+val UInt = pure {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",

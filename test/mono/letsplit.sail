@@ -7,7 +7,7 @@ $include <smt.sail>
 
 register size : bits(2)
 
-function get_size() -> {|8,16,32,64|} = {
+function get_size() -> {8,16,32,64} = {
   shl_int(8, unsigned(size))
 }
 

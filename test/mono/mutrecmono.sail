@@ -1,9 +1,9 @@
 default Order dec
 $include <prelude.sail>
 
-val extz : forall 'n 'm, 'n >= 0 & 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extz : forall 'n 'm, 'n >= 0 & 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
 function extz(m,v) = sail_mask(m,v)
-val UInt = {
+val UInt = pure {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",

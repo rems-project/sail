@@ -1,7 +1,7 @@
 default Order dec
 $include <prelude.sail>
 
-val cast ex_int : int -> {'n, true. int('n)}
+val ex_int : int -> {'n, true. int('n)}
 function ex_int 'n = n
 
 

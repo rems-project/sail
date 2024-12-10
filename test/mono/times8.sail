@@ -3,7 +3,7 @@ $include <prelude.sail>
 
 /* Another byte/bit size conversion */
 
-val bar : forall 'n. int('n) -> bits(8 * 'n)
+val bar : forall 'n, 'n >= 0. int('n) -> bits(8 * 'n)
 
 function bar (n) = replicate_bits(0x12,n)
 

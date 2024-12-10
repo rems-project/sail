@@ -1,10 +1,10 @@
 default Order dec
 $include <prelude.sail>
 
-val extz : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extz : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
 function extz(m,v) = sail_zero_extend(v, m)
 
-val exts : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val exts : forall 'n 'm, 'n >= 0 & 'm >= 'n. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)
 function exts(m,v) = sail_sign_extend(v, m)
 
 /* A function which is merely parametrised by a size does not need to be

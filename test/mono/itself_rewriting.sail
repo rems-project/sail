@@ -5,7 +5,7 @@ $include <prelude.sail>
    added in the right places, but it's also worth running in case that gets
    broken. */
 
-val needs_size_in_guard : forall 'n. int('n) -> unit
+val needs_size_in_guard : forall 'n, 'n >= 0. int('n) -> unit
 
 function needs_size_in_guard(n if n > 8) = {
   let x : bits('n) = replicate_bits(0b0,n);
@@ -16,7 +16,7 @@ and needs_size_in_guard(n) = {
   ()
 }
 
-val no_size_in_guard : forall 'n. (int('n), int) -> unit
+val no_size_in_guard : forall 'n, 'n >= 0. (int('n), int) -> unit
 
 function no_size_in_guard((n,m) if m > 8) = {
   let x : bits('n) = replicate_bits(0b0,n);
@@ -27,7 +27,7 @@ and no_size_in_guard(n,m) = {
   ()
 }
 
-val shadowed : forall 'n. int('n) -> unit
+val shadowed : forall 'n, 'n >= 0. int('n) -> unit
 
 function shadowed(n) = {
   let n = 8;
@@ -38,13 +38,13 @@ function shadowed(n) = {
 val willsplit : bool -> unit
 
 function willsplit(x) = {
-  let 'n : int = if x then 8 else 16;
+  let 'n : nat = if x then 8 else 16;
   needs_size_in_guard(n);
   no_size_in_guard(n,n);
   shadowed(n);
 }
 
-val execute : forall 'datasize. int('datasize) -> unit
+val execute : forall 'datasize, 'datasize >= 0. int('datasize) -> unit
 
 function execute(datasize) = {
   let x : bits('datasize) = replicate_bits(0b1, datasize);
@@ -56,10 +56,11 @@ val test_execute : unit -> unit
 function test_execute() = {
   let exp = 4;
   let 'datasize = shl_int(1, exp);
+  assert('datasize >= 0);
   execute(datasize)
 }
 
-val transitive_itself : forall 'n. int('n) -> unit
+val transitive_itself : forall 'n, 'n >= 0. int('n) -> unit
 
 function transitive_itself(n) = {
   needs_size_in_guard(n);

@@ -8,7 +8,7 @@ type vmax : Int = 64
 
 register vsize : bits(2)
 
-function get_vector_size() -> {|8,16,32,64|} = {
+function get_vector_size() -> {8,16,32,64} = {
   shl_int(8, unsigned(vsize))
 }
 
