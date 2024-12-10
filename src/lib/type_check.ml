@@ -4956,10 +4956,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
         Env.add_scattered_id id env
       )
-  | SD_end id ->
-      if not (Env.is_scattered_id id env) then
-        typ_error l (string_of_id id ^ " is not a scattered definition, so it cannot be ended")
-      else ([], env)
+  | SD_end id -> ([], Env.end_scattered_id ~at:l id env)
   | SD_enum id ->
       ([DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)], Env.add_scattered_enum id env)
   | SD_enumcl (id, member) ->
