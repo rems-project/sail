@@ -170,6 +170,7 @@ void hex_str(sail_string *str, const mpz_t n)
     mpz_init(abs);
     mpz_abs(abs, n);
     gmp_asprintf(str, "-0x%Zx", abs);
+    mpz_clear(abs);
   } else {
     gmp_asprintf(str, "0x%Zx", n);
   }
@@ -184,6 +185,7 @@ void hex_str_upper(sail_string *str, const mpz_t n)
     mpz_init(abs);
     mpz_abs(abs, n);
     gmp_asprintf(str, "-0x%ZX", abs);
+    mpz_clear(abs);
   } else {
     gmp_asprintf(str, "0x%ZX", n);
   }
