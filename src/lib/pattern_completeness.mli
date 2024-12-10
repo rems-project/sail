@@ -58,6 +58,7 @@ type ctx = {
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
+  is_open : id -> bool;
   constraints : n_constraint list;
   is_mapping : id -> bool;
 }

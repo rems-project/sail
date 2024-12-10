@@ -198,6 +198,11 @@ module Env : sig
 
   val is_mapping : id -> t -> bool
 
+  (** A scattered definition is open if it can have new clauses added to
+      it, i.e. it exists and has not been closed by the [end]
+      keyword. *)
+  val is_scattered_open : id -> t -> bool
+
   val is_register : id -> t -> bool
 
   (** Check if the type with the given id is a bitfield type *)

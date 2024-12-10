@@ -217,6 +217,7 @@ val lookup_id : id -> t -> typ lvar
 
 val add_scattered_id : id -> (l * string * Ast.attribute_data option) list -> t -> t
 val is_scattered_id : id -> t -> bool
+val is_scattered_open : id -> t -> bool
 val end_scattered_id : at:Ast.l -> id -> t -> t
 
 val expand_synonyms : t -> typ -> typ

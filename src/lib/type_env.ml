@@ -1346,6 +1346,9 @@ let add_scattered_enum id attrs env = env |> add_scattered_id id attrs |> add_en
 
 let is_scattered_id id env = Bindings.mem id env.global.scattered_ids
 
+let is_scattered_open id env =
+  match Bindings.find_opt id env.global.scattered_ids with Some (Ok _) -> true | _ -> false
+
 let end_scattered_id ~at:l id env =
   let attrs = ref [] in
   let updater = function

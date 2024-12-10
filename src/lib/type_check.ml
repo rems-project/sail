@@ -2077,6 +2077,7 @@ let pattern_completeness_ctx env =
     Pattern_completeness.variants = Env.get_variants env;
     Pattern_completeness.structs = Env.get_records env;
     Pattern_completeness.enums = Env.get_enums env;
+    Pattern_completeness.is_open = (fun id -> Env.is_scattered_open id env);
     Pattern_completeness.constraints = Env.get_constraints env;
     Pattern_completeness.is_mapping = (fun id -> Env.is_mapping id env);
   }

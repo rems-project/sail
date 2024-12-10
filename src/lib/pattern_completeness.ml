@@ -57,6 +57,7 @@ type ctx = {
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
+  is_open : id -> bool;
   constraints : n_constraint list;
   is_mapping : id -> bool;
 }
@@ -755,7 +756,8 @@ module Make (C : Config) = struct
     )
 
   let split_matrix_enum e c matrix =
-    let is_enum_row = function GP_enum (_, id) -> Id.compare e id = 0 | GP_wild -> true | _ -> false in
+    let is_member id = match e with Some member -> Id.compare id member = 0 | None -> false in
+    let is_enum_row = function GP_enum (_, id) -> is_member id | GP_wild -> true | _ -> false in
     Rows
       (rows_to_list matrix
       |> List.filter (fun (_, row) -> columns_to_list row |> (fun xs -> List.nth xs c) |> is_enum_row)
@@ -798,9 +800,9 @@ module Make (C : Config) = struct
     let xs, ys = Util.split_after i unmatcheds in
     xs @ (mk_exp (E_list []) :: ys)
 
-  let reenum e i unmatcheds =
+  let reenum exp i unmatcheds =
     let xs, ys = Util.split_after i unmatcheds in
-    xs @ (mk_exp (E_id e) :: ys)
+    xs @ (exp :: ys)
 
   let rec undefs_except n c v len =
     if n = len then []
@@ -881,9 +883,16 @@ module Make (C : Config) = struct
               | Completeness_unknown -> Completeness_unknown
             end
         | Enum_column typ_id ->
-            let members = Bindings.find typ_id ctx.enums in
-            IdSet.fold
-              (fun member unmatcheds ->
+            let members = Bindings.find typ_id ctx.enums |> IdSet.elements |> List.map (fun id -> Some id) in
+            let members = if ctx.is_open typ_id then members @ [None] else members in
+            let mk_counterexample = function
+              | Some id -> mk_exp (E_id id)
+              | None ->
+                  let id = mk_id (Printf.sprintf "<future %s clause>" (string_of_id typ_id)) in
+                  mk_exp (E_id id)
+            in
+            List.fold_left
+              (fun unmatcheds member ->
                 match unmatcheds with
                 | Incomplete unmatcheds -> Incomplete unmatcheds
                 | Completeness_unknown -> Completeness_unknown
@@ -891,12 +900,13 @@ module Make (C : Config) = struct
                     let enum_matrix = split_matrix_enum member i matrix in
                     if row_matrix_empty enum_matrix then (
                       let width = row_matrix_width l matrix in
-                      Incomplete (undefs_except 0 i (mk_exp (E_id member)) width)
+                      Incomplete (undefs_except 0 i (mk_counterexample member) width)
                     )
                     else
-                      matrix_is_complete l ctx enum_matrix |> completeness_map (reenum member i) (union_complete cinfo)
+                      matrix_is_complete l ctx enum_matrix
+                      |> completeness_map (reenum (mk_counterexample member) i) (union_complete cinfo)
               )
-              members (mk_complete [] [])
+              (mk_complete [] []) members
         | Unknown_column -> Completeness_unknown
       end
 
