@@ -39,3 +39,20 @@ function custom_conversions() -> unit = {
   assert(from_number(1) == Member2);
 }
 $span end
+
+val iterate : unit -> unit
+
+$span start ENUM_VECTOR
+$[enum_vector my_enum_members]
+enum My_other_enum = { M1, M2, M3 }
+
+function iterate() = {
+  foreach (i from 0 to (length(my_enum_members) - 1)) {
+    match my_enum_members[i] {
+      M1 => print_endline("1"),
+      M2 => print_endline("2"),
+      M3 => print_endline("3"),
+    }
+  }
+}
+$span end

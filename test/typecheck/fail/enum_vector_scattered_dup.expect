@@ -1,0 +1,9 @@
+[93mType error[0m:
+Code generated nearby:
+[96mfail/enum_vector_scattered_dup.sail[0m:5.0-24:
+5[96m |[0m$[enum_vector E_members]
+ [92m |[0m[92m^----------------------^[0m [92mPrevious definition[0m
+[96mfail/enum_vector_scattered_dup.sail[0m:12.4-34:
+12[96m |[0mlet E_members : vector(1, E) = [A]
+  [91m |[0m    [91m^----------------------------^[0m
+  [91m |[0m Duplicate toplevel let binding E_members

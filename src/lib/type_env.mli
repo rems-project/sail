@@ -207,7 +207,7 @@ val add_extern : id -> extern -> t -> t
 val get_extern : id -> t -> string -> string
 
 val add_enum : id -> id list -> t -> t
-val add_scattered_enum : id -> t -> t
+val add_scattered_enum : id -> (l * string * Ast.attribute_data option) list -> t -> t
 val add_enum_clause : id -> id -> t -> t
 val get_enum_opt : id -> t -> id list option
 val get_enum : id -> t -> id list
@@ -215,7 +215,7 @@ val get_enums : t -> IdSet.t Bindings.t
 
 val lookup_id : id -> t -> typ lvar
 
-val add_scattered_id : id -> t -> t
+val add_scattered_id : id -> (l * string * Ast.attribute_data option) list -> t -> t
 val is_scattered_id : id -> t -> bool
 val end_scattered_id : at:Ast.l -> id -> t -> t
 

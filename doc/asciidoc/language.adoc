@@ -439,6 +439,11 @@ sail::ENUM_CONV[from=enum,type=span]
 The `no_enum_number_conversions` attribute can be used to disable the
 generation of these functions entirely.
 
+We also support generating a vector containing all elements of the
+enumeration, using the `enum_vector` attribute.
+
+sail::ENUM_VECTOR[from=enum,type=span]
+
 ==== Unions
 :union: sail_doc/union.json
 

@@ -477,7 +477,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     in
     match find_attribute_opt "split" attrs with
     | None -> None
-    | Some (Some (AD_aux (AD_string split_id, _))) -> (
+    | Some (_, Some (AD_aux (AD_string split_id, _))) -> (
         let split_id = mk_id split_id in
         let env = Type_check.env_of exp in
         match Type_check.Env.lookup_id split_id env with
@@ -572,7 +572,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Type_check.strip_mapcl Reformatter.doc_mapcl clause in
-    let parse_wavedrom_attr = function Some (AD_aux (AD_string s, _)) -> Some s | Some _ | None -> None in
+    let parse_wavedrom_attr = function _, Some (AD_aux (AD_string s, _)) -> Some s | _, Some _ | _, None -> None in
     let wavedrom_attr = Option.bind (find_attribute_opt "wavedrom" def_annot.attrs) parse_wavedrom_attr in
 
     let left, left_wavedrom, right, right_wavedrom, body =

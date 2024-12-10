@@ -107,7 +107,7 @@ let get_attribute attr annot =
 let get_attributes annot = annot.attrs
 
 let find_attribute_opt attr1 attrs =
-  List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (_, _, arg) -> arg)
+  List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 let mk_def_annot ?doc ?(attrs = []) ?(visibility = Public) l env =
   { doc_comment = doc; attrs; visibility; loc = l; env }

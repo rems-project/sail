@@ -100,7 +100,7 @@ val get_attribute : string -> uannot -> (l * attribute_data option) option
 
 val get_attributes : uannot -> (l * string * attribute_data option) list
 
-val find_attribute_opt : string -> (l * string * attribute_data option) list -> attribute_data option option
+val find_attribute_opt : string -> (l * string * attribute_data option) list -> (l * attribute_data option) option
 
 val mk_def_annot :
   ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> 'a -> 'a def_annot
@@ -593,6 +593,8 @@ val locate_pat : (l -> l) -> 'a pat -> 'a pat
 val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
 
 val locate_typ : (l -> l) -> typ -> typ
+
+val locate_letbind : (l -> l) -> 'a letbind -> 'a letbind
 
 (** Make a unique location by giving it a Parse_ast.Unique wrapper with
    a generated number. *)

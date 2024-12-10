@@ -4874,12 +4874,32 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
   | TD_enum (id, ids, _) ->
       let env = Env.add_enum id ids env in
+      (* If the enumeration has the "enum_vector" attribute, we will generate a
+         top-level letbinding which is a vector of all the members. *)
+      let def_annot, enum_vector, env =
+        match get_def_attribute "enum_vector" def_annot with
+        | Some (l, Some (AD_aux (AD_string enum_vector_name, _))) ->
+            let enum_vector_id = mk_id enum_vector_name in
+            let typ = vector_typ (nint (List.length ids)) (mk_id_typ id) in
+            let letbind =
+              mk_letbind
+                (mk_pat (P_typ (typ, mk_pat (P_id enum_vector_id))))
+                (mk_exp (E_vector (List.rev_map (fun member -> mk_exp (E_id member)) ids)))
+              |> locate_letbind (fun _ -> gen_loc l)
+            in
+            let defs, env = check_letdef env (mk_def_annot (gen_loc l) env) letbind in
+            (remove_def_attribute "enum_vector" def_annot, defs, env)
+        | Some (l, _) -> raise (Reporting.err_general l "Invalid enum_vector attribute")
+        | None -> (def_annot, [], env)
+      in
       begin
         match get_def_attribute "undefined_gen" def_annot with
         | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
-            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector, env)
         | Some (_, Some (AD_aux (AD_string "skip", _))) ->
-            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
+            ( [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector,
+              Env.allow_user_undefined id env
+            )
         | Some (_, Some (AD_aux (AD_string "generate", _))) | None ->
             let undefined_defs = Initial_check.generate_undefined_enum id ids in
             let undefined_defs, env = check_defs env undefined_defs in
@@ -4887,7 +4907,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
               def_annot |> remove_def_attribute "undefined_gen"
               |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
             in
-            ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
+            ( (DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs) @ enum_vector,
               Env.allow_user_undefined id env
             )
         | Some (attr_l, Some arg) ->
@@ -4950,15 +4970,17 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
   match sdef with
   | SD_function (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id env
+        Env.add_scattered_id id def_annot.attrs env
       )
   | SD_mapping (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id env
+        Env.add_scattered_id id def_annot.attrs env
       )
   | SD_end id -> ([], Env.end_scattered_id ~at:l id env)
   | SD_enum id ->
-      ([DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)], Env.add_scattered_enum id env)
+      ( [DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)],
+        Env.add_scattered_enum id def_annot.attrs env
+      )
   | SD_enumcl (id, member) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
         Env.add_enum_clause id member env
@@ -4998,14 +5020,14 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
-        Env.add_scattered_id id env
+        Env.add_scattered_id id def_annot.attrs env
       )
   | SD_mapcl (id, mapcl) ->
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id env
+        Env.add_scattered_id id def_annot.attrs env
       )
 
 and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =
