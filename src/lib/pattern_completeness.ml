@@ -645,6 +645,14 @@ module Make (C : Config) = struct
     let all_ctors =
       Bindings.find typ_id ctx.variants |> snd |> List.map (function Tu_aux (Tu_ty_id (_, id), _) -> id)
     in
+    (* If the union is open, create a fake constructor to represent some future constructor *)
+    let all_ctors =
+      if ctx.is_open typ_id then (
+        let extra = mk_id (Printf.sprintf "<future %s clause>" (string_of_id typ_id)) in
+        extra :: all_ctors
+      )
+      else all_ctors
+    in
     let all_ctors = List.fold_left (fun m ctor -> Bindings.add ctor [] m) Bindings.empty all_ctors in
     List.fold_left
       (fun (i, acc) (_, gpat) ->
@@ -854,9 +862,18 @@ module Make (C : Config) = struct
               | Completeness_unknown -> Completeness_unknown
             end
         | App_column typ_id ->
-            let ctors = split_app_column l ctx col in
-            Bindings.fold
-              (fun ctor ctor_rows unmatcheds ->
+            (* If split_app_column inserts a fake constructor for the
+               case where the union is open (i.e. scattered) make sure
+               it comes last in any counterexample. *)
+            let extra_to_end = function
+              | ((ctor, _) as first) :: rest ->
+                  let s = string_of_id ctor in
+                  if String.length s > 0 && s.[0] = '<' then rest @ [first] else first :: rest
+              | [] -> []
+            in
+            let ctors = split_app_column l ctx col |> Bindings.bindings |> extra_to_end in
+            List.fold_left
+              (fun unmatcheds (ctor, ctor_rows) ->
                 match unmatcheds with
                 | Incomplete unmatcheds -> Incomplete unmatcheds
                 | Completeness_unknown -> Completeness_unknown
@@ -868,7 +885,7 @@ module Make (C : Config) = struct
                     )
                     else matrix_is_complete l ctx ctor_matrix |> completeness_map (rector ctor i) (union_complete cinfo)
               )
-              ctors (mk_complete [] [])
+              (mk_complete [] []) ctors
         | Bool_column ->
             let true_matrix = split_matrix_bool true i matrix in
             let false_matrix = split_matrix_bool false i matrix in
