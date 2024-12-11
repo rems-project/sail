@@ -193,7 +193,7 @@ def test_coq(name):
                 step('coqc {}_types.v'.format(basename))
                 step('coqc {}.v'.format(basename))
                 step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename), expected_status = 1 if basename.startswith('fail') else 0)
-                filter_command = '''ocaml ../filter.ml < '''
+                filter_command = '''ocaml ../coq_output_filter.ml < '''
                 step('''{} output.out | diff - ../{}.expect'''.format(filter_command, basename, basename))
                 if os.path.exists('../{}.err_expect'.format(basename)):
                     step('''{} error.out | diff - ../{}.err_expect'''.format(filter_command, basename, basename))
