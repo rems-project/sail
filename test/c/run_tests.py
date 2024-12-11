@@ -174,6 +174,10 @@ def test_coq(name):
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
     results.expect_failure("config.sail","bug: configuration register initialisation missing")
     results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
+    results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
+    results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
+    results.expect_failure("abstract_type.sail", "Abstract constraint not supported by Coq backend yet")
+    results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -200,7 +204,6 @@ def test_coq(name):
 
                 os.chdir('..')
                 step('rm -r _coqbuild_{}'.format(basename))
-
                 print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
