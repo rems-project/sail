@@ -1,6 +1,6 @@
 import Sail.sail
 
-structure My_struct  where
+structure My_struct where
   field1 : Int
   field2 : Int
 
