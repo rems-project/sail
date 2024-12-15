@@ -1115,15 +1115,14 @@ let ocaml_compile default_sail_dir spec ast generator_types =
   if Sys.file_exists !opt_ocaml_build_dir then () else Unix.mkdir !opt_ocaml_build_dir 0o775;
   let cwd = Unix.getcwd () in
   Unix.chdir !opt_ocaml_build_dir;
-  let _ = Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/src/lib/elf_loader.ml"; "."]) in
-  let _ = Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/src/lib/sail_lib.ml"; "."]) in
-  let _ = Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/src/lib/util.ml"; "."]) in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/elf_loader.ml") ^ " .") in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/sail_lib.ml") ^ " .") in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/util.ml") ^ " .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
-  let _ = Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/lib/" ^ tags_file; "_tags"]) in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/" ^ tags_file) ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then
-    ignore
-      (Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/lib/myocamlbuild_coverage.ml"; "myocamlbuild.ml"]));
+    ignore (Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/myocamlbuild_coverage.ml") ^ " myocamlbuild.ml"));
   List.iter (fun w -> output_string out_chan (Printf.sprintf "[@@@warning \"-%d\"]\n" w)) [8; 9; 11; 23; 26];
   ocaml_pp_ast out_chan ast generator_types;
   close_out out_chan;
@@ -1137,7 +1136,7 @@ let ocaml_compile default_sail_dir spec ast generator_types =
         system_checked
           "BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' main.native"
       else system_checked "ocamlbuild -use-ocamlfind main.native";
-      ignore (Unix.system (Filename.quote_command "cp" ["main.native"; cwd ^ "/" ^ spec]))
+      ignore (Unix.system ("cp main.native " ^ Filename.quote (cwd ^ "/" ^ spec)))
     )
   end
   else if not !opt_ocaml_nobuild then system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");

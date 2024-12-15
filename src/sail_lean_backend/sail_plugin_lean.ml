@@ -179,7 +179,9 @@ let create_lake_project (out_name : string) default_sail_dir =
     );
   close_out lakefile;
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
-  let _ = Unix.system (Filename.quote_command "cp" ["-r"; sail_dir ^ "/src/sail_lean_backend/Sail"; project_dir]) in
+  let _ =
+    Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail") ^ " " ^ Filename.quote project_dir)
+  in
   let project_main = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   project_main
 
