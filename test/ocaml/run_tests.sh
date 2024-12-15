@@ -2,22 +2,22 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd $DIR
+cd "$DIR"
 SAIL=${SAIL:=sail}
 SAILDIR="$DIR/../.."
 
-rm -f $DIR/tests.xml
+rm -f "$DIR/tests.xml"
 
 printf "\$SAIL is $SAIL\n"
 
 # shellcheck source=../test_helpers.sh
 source "$SAILDIR/test/test_helpers.sh"
 
-printf "<testsuites>\n" >> $DIR/tests.xml
+printf "<testsuites>\n" >> "$DIR/tests.xml"
 
 for i in `ls -d */`;
 do
-    cd $DIR/$i;
+    cd "$DIR/$i";
     if "$SAIL" -no_warn -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result;
@@ -37,11 +37,11 @@ done
 
 finish_suite "Ocaml testing"
 
-cd $DIR
+cd "$DIR"
 
 for i in `ls -d */`;
 do
-    cd $DIR/$i;
+    cd "$DIR/$i";
     if "$SAIL" -no_warn -o out -ocaml -ocaml_trace ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result 2> /dev/null;
@@ -62,11 +62,11 @@ done
 finish_suite "Ocaml trace testing"
 
 # FIXME: Re-enable these!
-#cd $DIR
+#cd "$DIR"
 #
 #for i in `ls -d */`;
 #do
-#    cd $DIR/$i;
+#    cd "$DIR/$i";
 #    if "$SAIL" -no_warn -undefined_gen -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
 #    then
 #	if diff expect result;
@@ -83,5 +83,5 @@ finish_suite "Ocaml trace testing"
 #
 #finish_suite "Interpreter testing"
 
-printf "</testsuites>\n" >> $DIR/tests.xml
+printf "</testsuites>\n" >> "$DIR/tests.xml"
 exit $returncode

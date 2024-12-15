@@ -23,7 +23,7 @@ echo > log
 
 if [ -z "$1" ]
 then
-    TESTS=`find $TESTSDIR/pass -type f | sort`
+    TESTS=`find ./pass -type f | sort`
 else
     TESTS="$@"
 fi
@@ -81,4 +81,4 @@ done
 
 finish_suite "monomorphisation tests"
 
-printf "</testsuites>\n" >> $DIR/tests.xml
+printf "</testsuites>\n" >> "$DIR/tests.xml"

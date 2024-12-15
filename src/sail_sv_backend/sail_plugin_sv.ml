@@ -687,7 +687,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
           sprintf
             "verilator --cc --exe --build -j %d --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp \
              %s.sv%s%s%s"
-            !opt_verilate_jobs sail_sv_libdir out out out extra cflags ldflags
+            !opt_verilate_jobs (Filename.quote sail_sv_libdir) out out out extra cflags ldflags
         in
         print_endline ("Verilator command: " ^ verilator_command);
         let _ = Unix.system verilator_command in

@@ -28,8 +28,8 @@ def test_c_builtins(name, sail_opts):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('gcc {}.c {}/lib/*.c -lgmp -I {}/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
+                step('\'{}\' -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
+                step('gcc {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
                 step('./{}'.format(basename))
                 step('rm {}.c'.format(basename))
                 step('rm {}'.format(basename))
@@ -48,7 +48,7 @@ def test_ocaml_builtins(name, sail_opts):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(sail, basename, basename, filename))
+                step('\'{}\' -no_warn -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(sail, basename, basename, filename))
                 step('./{}'.format(basename))
                 step('rm -r _sbuild_{}'.format(basename))
                 step('rm {}'.format(basename))
@@ -68,7 +68,7 @@ def test_lem_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Lem from Sail
-                step('{} -no_warn -lem -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -no_warn -lem -o {} {}'.format(sail, basename, filename))
 
                 # Create a directory to build the generated Lem and
                 # copy/move everything we need into it, as well as
@@ -77,7 +77,7 @@ def test_lem_builtins(name):
                 step('mv {}.lem _lbuild_{}'.format(basename, basename))
                 step('mv {}_types.lem _lbuild_{}'.format(basename, basename))
                 step('cp myocamlbuild.ml _lbuild_{}'.format(basename))
-                step('cp {}/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
+                step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
 
                 # Use ocamlbuild to build the lem to OCaml using the
@@ -104,7 +104,7 @@ def test_coq_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('{} -no_warn -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -no_warn -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))
@@ -135,8 +135,8 @@ def test_isla_builtins(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{}/isla-sail/isla-sail {} {}/lib/vector_dec.sail {}/test/property/include/config.sail -o {}'.format(isla_dir, filename, sail_dir, isla_dir, basename))
-                step('{}/target/release/isla-execute-function -A {}.ir -C {}/configs/plain.toml main'.format(isla_dir, basename, isla_dir))
+                step('\'{}\'/isla-sail/isla-sail {} \'{}\'/lib/vector_dec.sail \'{}\'/test/property/include/config.sail -o {}'.format(isla_dir, filename, sail_dir, isla_dir, basename))
+                step('\'{}\'/target/release/isla-execute-function -A {}.ir -C \'{}\'/configs/plain.toml main'.format(isla_dir, basename, isla_dir))
                 step('rm {}.ir'.format(basename))
                 print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()

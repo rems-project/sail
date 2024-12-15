@@ -47,7 +47,7 @@ def test_smt(name, solver, sail_opts):
                     continue
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} {} -smt {} -o {}'.format(sail, sail_opts, filename, basename))
+                step('\'{}\' {} -smt {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('timeout 30s {} {}_prop.smt2 1> {}.out'.format(solver, basename, basename))
                 if re.match('.+\.sat\.sail$', filename):
                     step('grep -q ^sat$ {}.out'.format(basename))

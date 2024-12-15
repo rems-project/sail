@@ -27,7 +27,7 @@ def test_lean():
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('mkdir {}'.format(basename))
-                step('{} {} --lean --lean-output-dir {}'.format(sail, filename, basename))
+                step('\'{}\' {} --lean --lean-output-dir {}'.format(sail, filename, basename))
                 step('diff {}/out/Out.lean {}.expected.lean'.format(basename, basename))
                 step('rm -r {}'.format(basename))
                 print_ok(filename)

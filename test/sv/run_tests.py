@@ -48,9 +48,9 @@ def test_sv(name, opts, skip_list):
             if tests[filename] == 0:
                 step('rm -rf {}_obj_dir'.format(basename));
                 if basename.startswith('fail'):
-                    step('{} --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
+                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
                 else:
-                    step('{} --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
+                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
                     step('awk \'/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
                     step('diff ../c/{}.expect {}.result'.format(basename, basename))
                 print_ok(filename)

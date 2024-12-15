@@ -41,8 +41,8 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('{} {} {}.c {}/lib/*.c -lgmp -I {}/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
+                step('\'{}\' -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
+                step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
@@ -64,8 +64,8 @@ def test_c2(name, c_opts, sail_opts, valgrind):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -no_warn -c2 {} {} -o {}'.format(sail, sail_opts, filename, basename))
-                step('gcc {} {}.c {}_emu.c {}/lib/*.c -lgmp -I {}/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
+                step('\'{}\' -no_warn -c2 {} {} -o {}'.format(sail, sail_opts, filename, basename))
+                step('gcc {} {}.c {}_emu.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
                 step('./{} > {}.result 2>&1'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if valgrind:
@@ -85,7 +85,7 @@ def test_interpreter(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                step('\'{}\' -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 step('rm {}.iresult'.format(basename))
                 print_ok(filename)
@@ -102,7 +102,7 @@ def test_ocaml(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -ocaml -ocaml_build_dir _sbuild_{} -o {}_ocaml {}'.format(sail, basename, basename, filename))
+                step('\'{}\' -ocaml -ocaml_build_dir _sbuild_{} -o {}_ocaml {}'.format(sail, basename, basename, filename))
                 step('./{}_ocaml 1> {}.oresult'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.oresult {}.expect'.format(basename, basename))
                 step('rm -r _sbuild_{}'.format(basename))
@@ -135,11 +135,11 @@ def test_lem(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
                 step('cp {}*.lem _lbuild_{}'.format(basename, basename))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
-                step('cp {}/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
+                step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
                 step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
@@ -180,7 +180,7 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('{} -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))

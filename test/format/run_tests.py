@@ -27,7 +27,7 @@ def test(test_dir):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('cp {} {}/{}'.format(filename, test_dir, filename))
-                step('{} -config {}/config.json -fmt {}/{}'.format(sail, test_dir, test_dir, filename))
+                step('\'{}\' -config {}/config.json -fmt {}/{}'.format(sail, test_dir, test_dir, filename))
                 step('diff {}/{} {}/{}.expect'.format(test_dir, filename, test_dir, basename))
                 step('rm {}/{}'.format(test_dir, filename))
                 print_ok(filename)

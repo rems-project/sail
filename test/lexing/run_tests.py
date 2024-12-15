@@ -26,7 +26,7 @@ def test_lexing():
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('{} {} 2> {}.error'.format(sail, filename, basename), expected_status = 1)
+                step('\'{}\' {} 2> {}.error'.format(sail, filename, basename), expected_status = 1)
                 step('diff {}.expect {}.error'.format(basename, basename))
                 step('rm {}.error'.format(basename))
                 print_ok(filename)

@@ -3,7 +3,7 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-cd $DIR
+cd "$DIR"
 
 # Some basic tests that don't have external tool requirements, don't
 # take too long, and don't have regressions that we haven't sorted out
