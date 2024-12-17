@@ -4194,7 +4194,9 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
       | _ -> Reporting.unreachable l __POS__ "unifying mapping type, expanded synonyms to non-mapping type!"
     end
   | MP_app (other, mpats) when Env.is_mapping other env ->
-      bind_mpat allow_unknown other_env env (MP_aux (MP_app (other, [mk_mpat (MP_tuple mpats)]), (l, uannot))) typ
+      bind_mpat allow_unknown other_env env
+        (MP_aux (MP_app (other, [mk_mpat ~loc:l (MP_tuple mpats)]), (l, uannot)))
+        typ
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
       typ_error l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)
   | MP_as (mpat, id) ->

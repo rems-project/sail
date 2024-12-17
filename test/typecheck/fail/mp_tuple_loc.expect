@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mp_tuple_loc.sail[0m:9.9-24:
+9[96m |[0m  () <-> foo((), (), ()),
+ [91m |[0m         [91m^-------------^[0m
+ [91m |[0m Tuple mapping-pattern and tuple type have different length
