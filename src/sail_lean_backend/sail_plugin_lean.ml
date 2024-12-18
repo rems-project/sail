@@ -77,13 +77,13 @@ let lean_version : string = "lean4:nightly-2024-09-25"
 
 let lean_options =
   [
-    ( "-lean_output_dir",
+    ( Flag.create ~prefix:["lean"] ~arg:"directory" "output_dir",
       Arg.String (fun dir -> opt_lean_output_dir := Some dir),
-      "<directory> set a custom directory to output generated Lean"
+      "set a custom directory to output generated Lean"
     );
-    ( "-lean_force_output",
+    ( Flag.create ~prefix:["lean"] "force_output",
       Arg.Unit (fun () -> opt_lean_force_output := true),
-      " removes the content of the output directory if it is non-empty"
+      "removes the content of the output directory if it is non-empty"
     );
   ]
 

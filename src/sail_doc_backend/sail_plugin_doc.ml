@@ -69,24 +69,30 @@ let embedding_option () =
 
 let doc_options =
   [
-    ( "-doc_format",
+    ( Flag.create ~prefix:["doc"] ~arg:"format" "format",
       Arg.String (fun format -> opt_doc_format := format),
-      "<format> Output documentation in the chosen format, either latex or asciidoc (default asciidoc)"
+      "Output documentation in the chosen format, either latex or asciidoc (default asciidoc)"
     );
-    ( "-doc_file",
+    ( Flag.create ~prefix:["doc"] ~arg:"file" "file",
       Arg.String (fun file -> opt_doc_files := file :: !opt_doc_files),
-      "<file> Document only the provided files"
+      "Document only the provided files"
     );
-    ( "-doc_embed",
+    ( Flag.create ~prefix:["doc"] ~arg:"plain|base64" "embed",
       Arg.String (fun format -> opt_doc_embed := Some format),
-      "<plain|base64> Embed all documentation contents into the documentation bundle rather than referencing it"
+      "Embed all documentation contents into the documentation bundle rather than referencing it"
     );
-    ( "-doc_embed_with_location",
+    ( Flag.create ~prefix:["doc"] "embed_with_location",
       Arg.Set opt_doc_embed_with_location,
-      " When used with --doc-embed, include both the contents and locations"
+      "When used with --doc-embed, include both the contents and locations"
     );
-    ("-doc_compact", Arg.Unit (fun _ -> opt_doc_compact := true), " Use compact documentation format");
-    ("-doc_bundle", Arg.String (fun file -> opt_doc_bundle := file), "<file> Name for documentation bundle file");
+    ( Flag.create ~prefix:["doc"] "compact",
+      Arg.Unit (fun _ -> opt_doc_compact := true),
+      "Use compact documentation format"
+    );
+    ( Flag.create ~prefix:["doc"] ~arg:"file" "bundle",
+      Arg.String (fun file -> opt_doc_bundle := file),
+      "Name for documentation bundle file"
+    );
   ]
 
 let output_docinfo doc_dir docinfo =
@@ -136,10 +142,13 @@ let _ =
 
 let html_options =
   [
-    ("-html_css", Arg.String (fun file -> opt_html_css := Some file), "<file> CSS file for html output");
-    ( "-html_link_prefix",
+    ( Flag.create ~prefix:["html"] ~arg:"file" "css",
+      Arg.String (fun file -> opt_html_css := Some file),
+      "CSS file for html output"
+    );
+    ( Flag.create ~prefix:["html"] ~arg:"string" "link_prefix",
       Arg.String (fun prefix -> opt_html_link_prefix := prefix),
-      "<string> Prefix links in HTML output with string"
+      "Prefix links in HTML output with string"
     );
   ]
 

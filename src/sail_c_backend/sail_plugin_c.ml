@@ -53,39 +53,42 @@ let opt_specialize_c = ref false
 
 let c_options =
   [
-    ( "-c_include",
+    ( Flag.create ~prefix:["c"] ~arg:"filename" "include",
       Arg.String (fun i -> opt_includes_c := i :: !opt_includes_c),
-      "<filename> provide additional include for C output"
+      "provide additional include for C output"
     );
-    ("-c_no_main", Arg.Set C_backend.opt_no_main, " do not generate the main() function");
-    ("-c_no_rts", Arg.Set C_backend.opt_no_rts, " do not include the Sail runtime");
-    ( "-c_no_lib",
+    (Flag.create ~prefix:["c"] "no_main", Arg.Set C_backend.opt_no_main, "do not generate the main() function");
+    (Flag.create ~prefix:["c"] "no_rts", Arg.Set C_backend.opt_no_rts, "do not include the Sail runtime");
+    ( Flag.create ~prefix:["c"] "no_lib",
       Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
-      " do not include the Sail runtime or library"
+      "do not include the Sail runtime or library"
     );
-    ("-c_prefix", Arg.String (fun prefix -> C_backend.opt_prefix := prefix), "<prefix> prefix generated C functions");
-    ( "-c_extra_params",
+    ( Flag.create ~prefix:["c"] ~arg:"prefix" "prefix",
+      Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
+      "prefix generated C functions"
+    );
+    ( Flag.create ~prefix:["c"] ~arg:"parameters" "extra_params",
       Arg.String (fun params -> C_backend.opt_extra_params := Some params),
-      "<parameters> generate C functions with additional parameters"
+      "generate C functions with additional parameters"
     );
-    ( "-c_extra_args",
+    ( Flag.create ~prefix:["c"] ~arg:"arguments" "extra_args",
       Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
-      "<arguments> supply extra argument to every generated C function call"
+      "supply extra argument to every generated C function call"
     );
-    ("-c_specialize", Arg.Set opt_specialize_c, " specialize integer arguments in C output");
-    ( "-c_preserve",
+    (Flag.create ~prefix:["c"] "specialize", Arg.Set opt_specialize_c, "specialize integer arguments in C output");
+    ( Flag.create ~prefix:["c"] "preserve",
       Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
-      " make sure the provided function identifier is preserved in C output"
+      "make sure the provided function identifier is preserved in C output"
     );
-    ( "-c_fold_unit",
+    ( Flag.create ~prefix:["c"] "fold_unit",
       Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
-      " remove comma separated list of functions from C output, replacing them with unit"
+      "remove comma separated list of functions from C output, replacing them with unit"
     );
-    ( "-c_coverage",
+    ( Flag.create ~prefix:["c"] ~arg:"file" "coverage",
       Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
-      "<file> Turn on coverage tracking and output information about all branches and functions to a file"
+      "Turn on coverage tracking and output information about all branches and functions to a file"
     );
-    ( "-O",
+    ( Flag.create ~prefix:["c"] ~hide_prefix:true "O",
       Arg.Tuple
         [
           Arg.Set C_backend.optimize_primops;
@@ -94,17 +97,20 @@ let c_options =
           Arg.Set C_backend.optimize_struct_updates;
           Arg.Set C_backend.optimize_alias;
         ],
-      " turn on optimizations for C compilation"
+      "turn on optimizations for C compilation"
     );
-    ( "-Ofixed_int",
+    ( Flag.create ~prefix:["c"] ~hide_prefix:true "Ofixed_int",
       Arg.Set C_backend.optimize_fixed_int,
-      " assume fixed size integers rather than GMP arbitrary precision integers"
+      "assume fixed size integers rather than GMP arbitrary precision integers"
     );
-    ( "-Ofixed_bits",
+    ( Flag.create ~prefix:["c"] ~hide_prefix:true "Ofixed_bits",
       Arg.Set C_backend.optimize_fixed_bits,
-      " assume fixed size bitvectors rather than arbitrary precision bitvectors"
+      "assume fixed size bitvectors rather than arbitrary precision bitvectors"
     );
-    ("-static", Arg.Set C_backend.opt_static, " make generated C functions static");
+    ( Flag.create ~prefix:["c"] ~hide_prefix:true "static",
+      Arg.Set C_backend.opt_static,
+      "make generated C functions static"
+    );
   ]
 
 let c_rewrites =

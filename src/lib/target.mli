@@ -106,7 +106,7 @@ val register :
   name:string ->
   ?flag:string ->
   ?description:string ->
-  ?options:(Arg.key * Arg.spec * Arg.doc) list ->
+  ?options:(Flag.t * Arg.spec * string) list ->
   ?pre_parse_hook:(unit -> unit) ->
   ?pre_initial_check_hook:(string list -> unit) ->
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
@@ -130,4 +130,4 @@ val get : name:string -> target option
 val extract_registered : unit -> string list
 
 (** Used internally to dynamically update the option list when loading plugins *)
-val extract_options : unit -> (Arg.key * Arg.spec * Arg.doc) list
+val extract_options : unit -> (Flag.t * Arg.spec * string) list

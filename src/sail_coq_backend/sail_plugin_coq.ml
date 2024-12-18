@@ -58,58 +58,57 @@ let opt_coq_lib_style : Pretty_print_coq.library_style option ref = ref None
 
 let coq_options =
   [
-    ( "-coq_output_dir",
+    ( Flag.create ~prefix:["coq"] ~arg:"directory" "output_dir",
       Arg.String (fun dir -> opt_coq_output_dir := Some dir),
-      "<directory> set a custom directory to output generated Coq"
+      "set a custom directory to output generated Coq"
     );
-    ( "-coq_lib",
+    ( Flag.create ~prefix:["coq"] ~arg:"filename" "lib",
       Arg.String (fun l -> opt_libs_coq := l :: !opt_libs_coq),
-      "<filename> provide additional library to open in Coq output"
+      "provide additional library to open in Coq output"
     );
-    ( "-coq_alt_modules",
+    ( Flag.create ~prefix:["coq"] ~arg:"filename" "alt_modules",
       Arg.String (fun l -> opt_alt_modules_coq := l :: !opt_alt_modules_coq),
-      "<filename> provide alternative modules to open in Coq output"
+      "provide alternative modules to open in Coq output"
     );
-    ( "-coq_alt_modules2",
+    ( Flag.create ~prefix:["coq"] ~arg:"filename" "alt_modules2",
       Arg.String (fun l -> opt_alt_modules2_coq := l :: !opt_alt_modules2_coq),
-      "<filename> provide additional alternative modules to open only in main (non-_types) Coq output, and suppress \
-       default definitions of MR and M monads"
+      "provide additional alternative modules to open only in main (non-_types) Coq output, and suppress default \
+       definitions of MR and M monads"
     );
-    ( "-coq_extern_type",
+    ( Flag.create ~prefix:["coq"] ~arg:"typename" "extern_type",
       Arg.String Pretty_print_coq.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
-      "<typename> do not generate a definition for the type"
+      "do not generate a definition for the type"
     );
-    ( "-coq_generate_extern_types",
+    ( Flag.create ~prefix:["coq"] "generate_extern_types",
       Arg.Set Pretty_print_coq.opt_generate_extern_types,
-      " generate only extern types rather than suppressing them"
+      "generate only extern types rather than suppressing them"
     );
-    ( "-coq_isla",
+    ( Flag.create ~prefix:["coq"] ~arg:"filename" "isla",
       Arg.String (fun fname -> opt_coq_isla := Some fname),
-      "<filename> generate Coq code for decoding Isla trace values"
+      "generate Coq code for decoding Isla trace values"
     );
-    ( "-coq_record_update",
+    ( Flag.create ~prefix:["coq"] "record_update",
       Arg.Set Pretty_print_coq.opt_coq_record_update,
-      " use coq-record-update package's syntax for record updates"
+      "use coq-record-update package's syntax for record updates"
     );
-    ( "-coq_lib_style",
+    ( Flag.create ~prefix:["coq"] "lib_style",
       Arg.Symbol
         ( ["bbv"; "stdpp"],
           fun s -> opt_coq_lib_style := match s with "bbv" -> Some BBV | "stdpp" -> Some Stdpp | _ -> assert false
         ),
-      " select which style of Coq library to use (default: stdpp when the concurrency interfaces is used, bbv \
-       otherwise)"
+      "select which style of Coq library to use (default: stdpp when the concurrency interfaces is used, bbv otherwise)"
     );
-    ( "-dcoq_undef_axioms",
+    ( Flag.create ~prefix:["coq"] ~debug:true "undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
-      " (debug) generate axioms for functions that are declared but not defined"
+      "generate axioms for functions that are declared but not defined"
     );
-    ( "-dcoq_warn_nonex",
+    ( Flag.create ~prefix:["coq"] ~debug:true "warn_nonex",
       Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
-      " (debug) generate warnings for non-exhaustive pattern matches in the Coq backend"
+      "generate warnings for non-exhaustive pattern matches in the Coq backend"
     );
-    ( "-dcoq_debug_on",
+    ( Flag.create ~prefix:["coq"] ~arg:"function" ~debug:true "debug_on",
       Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f :: !Pretty_print_coq.opt_debug_on),
-      "<function> (debug) produce debug messages for Coq output on given function"
+      "produce debug messages for Coq output on given function"
     );
   ]
 

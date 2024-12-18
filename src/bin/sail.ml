@@ -149,7 +149,7 @@ let add_target_header plugin opts =
 let load_plugin opts plugin =
   try
     if is_bytecode then Dynlink.loadfile plugin else Dynlink.loadfile_private plugin;
-    let plugin_opts = Target.extract_options () |> fix_options |> target_align in
+    let plugin_opts = Target.extract_options () |> List.map Flag.to_arg |> fix_options |> target_align in
     opts := add_target_header plugin !opts @ plugin_opts
   with Dynlink.Error msg -> prerr_endline ("Failed to load plugin " ^ plugin ^ ": " ^ Dynlink.error_message msg)
 

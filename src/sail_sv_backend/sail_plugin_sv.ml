@@ -108,23 +108,23 @@ let opt_disable_optimizations = ref false
 
 let verilog_options =
   [
-    ( "-sv_output_dir",
+    ( Flag.create ~prefix:["sv"] ~arg:"path" "output_dir",
       Arg.String (fun s -> opt_output_dir := Some s),
-      "<path> set the output directory for generated SystemVerilog files"
+      "set the output directory for generated SystemVerilog files"
     );
-    ( "-sv_include",
+    ( Flag.create ~prefix:["sv"] ~arg:"file" "include",
       Arg.String (fun s -> opt_includes := s :: !opt_includes),
-      "<file> add include directive to generated SystemVerilog file"
+      "add include directive to generated SystemVerilog file"
     );
-    ( "-sv_toplevel",
+    ( Flag.create ~prefix:["sv"] ~arg:"id" "toplevel",
       Arg.String
         (fun s ->
           Specialize.add_initial_calls (IdSet.singleton (mk_id s));
           opt_toplevel := s
         ),
-      "<id> Sail function to use as toplevel module"
+      "Sail function to use as toplevel module"
     );
-    ( "-sv_verilate",
+    ( Flag.create ~prefix:["sv"] ~arg:"compile|run" "verilate",
       Arg.String
         (fun opt ->
           if opt = "run" then opt_verilate := Verilator_run
@@ -135,59 +135,65 @@ let verilog_options =
                  "Invalid argument for -sv_verilate option. Valid options are either 'run' or 'compile'."
               )
         ),
-      "<compile|run> Invoke verilator on generated output"
+      "Invoke verilator on generated output"
     );
-    ( "-sv_verilate_args",
+    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_args",
       Arg.String (fun s -> append_flag opt_verilate_args s),
-      "<string> Extra arguments to pass to verilator"
+      "Extra arguments to pass to verilator"
     );
-    ( "-sv_verilate_cflags",
+    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_cflags",
       Arg.String (fun s -> append_flag opt_verilate_cflags s),
-      "<string> Verilator CFLAGS argument"
+      "Verilator CFLAGS argument"
     );
-    ( "-sv_verilate_ldflags",
+    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_ldflags",
       Arg.String (fun s -> append_flag opt_verilate_ldflags s),
-      "<string> Verilator LDFLAGS argument"
+      "Verilator LDFLAGS argument"
     );
-    ( "-sv_verilate_link_sail_runtime",
+    ( Flag.create ~prefix:["sv"] "verilate_link_sail_runtime",
       Arg.Set opt_verilate_link_sail_runtime,
-      " Link the Sail C runtime with the generated verilator C++"
+      "Link the Sail C runtime with the generated verilator C++"
     );
-    ("-sv_verilate_jobs", Arg.Int (fun i -> opt_verilate_jobs := i), "<n> Provide the -j option to verilator");
-    ("-sv_lines", Arg.Set opt_line_directives, " output `line directives");
-    ("-sv_comb", Arg.Set opt_comb, " output an always_comb block instead of initial block");
-    ("-sv_inregs", Arg.Set opt_inregs, " take register values from inputs");
-    ("-sv_outregs", Arg.Set opt_outregs, " output register values");
-    ( "-sv_int_size",
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "verilate_jobs",
+      Arg.Int (fun i -> opt_verilate_jobs := i),
+      "Provide the -j option to verilator"
+    );
+    (Flag.create ~prefix:["sv"] "lines", Arg.Set opt_line_directives, "output `line directives");
+    (Flag.create ~prefix:["sv"] "comb", Arg.Set opt_comb, "output an always_comb block instead of initial block");
+    (Flag.create ~prefix:["sv"] "inregs", Arg.Set opt_inregs, "take register values from inputs");
+    (Flag.create ~prefix:["sv"] "outregs", Arg.Set opt_outregs, "output register values");
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "int_size",
       Arg.Int (fun i -> opt_max_unknown_integer_width := i),
-      "<n> set the maximum width for unknown integers"
+      "set the maximum width for unknown integers"
     );
-    ( "-sv_bits_size",
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "bits_size",
       Arg.Int (fun i -> opt_max_unknown_bitvector_width := i),
-      "<n> set the maximum width for bitvectors with unknown width"
+      "set the maximum width for bitvectors with unknown width"
     );
-    ("-sv_no_strings", Arg.Set opt_no_strings, " don't emit any strings, instead emit units");
-    ("-sv_no_packed", Arg.Set opt_no_packed, " don't emit packed datastructures");
-    ("-sv_no_assertions", Arg.Set opt_no_assertions, " ignore all Sail asserts");
-    ("-sv_never_pack_unions", Arg.Set opt_never_pack_unions, " never emit a packed union");
-    ("-sv_padding", Arg.Set opt_padding, " add padding on packed unions");
-    ( "-sv_unreachable",
+    (Flag.create ~prefix:["sv"] "no_strings", Arg.Set opt_no_strings, "don't emit any strings, instead emit units");
+    (Flag.create ~prefix:["sv"] "no_packed", Arg.Set opt_no_packed, "don't emit packed datastructures");
+    (Flag.create ~prefix:["sv"] "no_assertions", Arg.Set opt_no_assertions, "ignore all Sail asserts");
+    (Flag.create ~prefix:["sv"] "never_pack_unions", Arg.Set opt_never_pack_unions, "never emit a packed union");
+    (Flag.create ~prefix:["sv"] "padding", Arg.Set opt_padding, "add padding on packed unions");
+    ( Flag.create ~prefix:["sv"] ~arg:"functionname" "unreachable",
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
-      "<functionname> Mark function as unreachable."
+      "Mark function as unreachable."
     );
-    ("-sv_nomem", Arg.Set opt_nomem, " don't emit a dynamic memory implementation");
-    ( "-sv_fun2wires",
+    (Flag.create ~prefix:["sv"] "nomem", Arg.Set opt_nomem, "don't emit a dynamic memory implementation");
+    ( Flag.create ~prefix:["sv"] ~arg:"functionname" "fun2wires",
       Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
-      "<functionname> Use input/output ports instead of emitting a function call"
+      "Use input/output ports instead of emitting a function call"
     );
-    ( "-sv_specialize",
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "specialize",
       Arg.Int (fun i -> opt_int_specialize := Some i),
-      "<n> Run n specialization passes on Sail Int-kinded type variables"
+      "Run n specialization passes on Sail Int-kinded type variables"
     );
-    ("-sv_disable_optimizations", Arg.Set opt_disable_optimizations, " disable SystemVerilog specific optimizations");
-    ( "-sv_dpi",
+    ( Flag.create ~prefix:["sv"] "disable_optimizations",
+      Arg.Set opt_disable_optimizations,
+      "disable SystemVerilog specific optimizations"
+    );
+    ( Flag.create ~prefix:["sv"] ~arg:"set" "dpi",
       Arg.String (fun s -> opt_dpi_sets := StringSet.add s !opt_dpi_sets),
-      "<set> Use SystemVerilog DPI-C for a set of primitives (e.g. memory)"
+      "Use SystemVerilog DPI-C for a set of primitives (e.g. memory)"
     );
   ]
 

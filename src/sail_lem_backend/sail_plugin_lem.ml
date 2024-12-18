@@ -57,24 +57,33 @@ let opt_lem_split_files : bool ref = ref false
 
 let lem_options =
   [
-    ( "-lem_output_dir",
+    ( Flag.create ~prefix:["lem"] ~arg:"directory" "output_dir",
       Arg.String (fun dir -> opt_lem_output_dir := Some dir),
-      "<directory> set a custom directory to output generated Lem"
+      "set a custom directory to output generated Lem"
     );
-    ( "-isa_output_dir",
+    ( Flag.create ~prefix:["lem"] ~arg:"directory" ~hide_prefix:true "isa_output_dir",
       Arg.String (fun dir -> opt_isa_output_dir := Some dir),
-      "<directory> set a custom directory to output generated Isabelle auxiliary theories"
+      "set a custom directory to output generated Isabelle auxiliary theories"
     );
-    ("-lem_split_files", Arg.Set opt_lem_split_files, " split output into multiple files, one per input file");
-    ( "-lem_lib",
+    ( Flag.create ~prefix:["lem"] "split_files",
+      Arg.Set opt_lem_split_files,
+      "split output into multiple files, one per input file"
+    );
+    ( Flag.create ~prefix:["lem"] ~arg:"filename" "lib",
       Arg.String (fun l -> opt_libs_lem := l :: !opt_libs_lem),
-      "<filename> provide additional library to open in Lem output"
+      "provide additional library to open in Lem output"
     );
-    ("-lem_sequential", Arg.Set Pretty_print_lem.opt_sequential, " use sequential state monad for Lem output");
-    ("-lem_mwords", Arg.Set Monomorphise.opt_mwords, " use native machine word library for Lem output");
-    ( "-lem_extern_type",
+    ( Flag.create ~prefix:["lem"] "sequential",
+      Arg.Set Pretty_print_lem.opt_sequential,
+      "use sequential state monad for Lem output"
+    );
+    ( Flag.create ~prefix:["lem"] "mwords",
+      Arg.Set Monomorphise.opt_mwords,
+      "use native machine word library for Lem output"
+    );
+    ( Flag.create ~prefix:["lem"] ~arg:"typename" "extern_type",
       Arg.String Pretty_print_lem.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
-      "<typename> do not generate a definition for the type"
+      "do not generate a definition for the type"
     );
   ]
 

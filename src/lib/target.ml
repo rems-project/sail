@@ -52,7 +52,7 @@ module StringMap = Map.Make (String)
 
 type target = {
   name : string;
-  options : (Arg.key * Arg.spec * Arg.doc) list;
+  options : (Flag.t * Arg.spec * string) list;
   pre_parse_hook : unit -> unit;
   pre_initial_check_hook : string list -> unit;
   pre_rewrites_hook : typed_ast -> Effects.side_effect_info -> Env.t -> unit;
@@ -93,12 +93,12 @@ let register ~name ?flag ?description:desc ?(options = []) ?(pre_parse_hook = fu
         prerr_endline ("Cannot use multiple Sail targets simultaneously: " ^ tgt ^ " and " ^ name);
         exit 1
   in
-  let desc = match desc with Some desc -> desc | None -> " invoke the Sail " ^ name ^ " target" in
+  let desc = match desc with Some desc -> desc | None -> "invoke the Sail " ^ name ^ " target" in
   let flag = match flag with Some flag -> flag | None -> name in
   let tgt =
     {
       name;
-      options = ("-" ^ flag, Arg.Unit set_target, desc) :: options;
+      options = (Flag.create ~prefix:[flag] "", Arg.Unit set_target, desc) :: options;
       pre_parse_hook;
       pre_initial_check_hook;
       pre_rewrites_hook;

@@ -52,22 +52,22 @@ let opt_ocaml_generators = ref ([] : string list)
 
 let ocaml_options =
   [
-    ("-ocaml_nobuild", Arg.Set Ocaml_backend.opt_ocaml_nobuild, " do not build generated OCaml");
-    ( "-ocaml_trace",
+    (Flag.create ~prefix:["ocaml"] "nobuild", Arg.Set Ocaml_backend.opt_ocaml_nobuild, "do not build generated OCaml");
+    ( Flag.create ~prefix:["ocaml"] "trace",
       Arg.Set Ocaml_backend.opt_trace_ocaml,
-      " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml"
+      "output an OCaml translated version of the input with tracing instrumentation, implies -ocaml"
     );
-    ( "-ocaml_build_dir",
+    ( Flag.create ~prefix:["ocaml"] ~arg:"directory" "build_dir",
       Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
-      "<directory> set a custom directory to build generated OCaml"
+      "set a custom directory to build generated OCaml"
     );
-    ( "-ocaml_coverage",
+    ( Flag.create ~prefix:["ocaml"] "coverage",
       Arg.Set Ocaml_backend.opt_ocaml_coverage,
-      " build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx)."
+      "build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx)."
     );
-    ( "-ocaml_generators",
+    ( Flag.create ~prefix:["ocaml"] ~arg:"types" "generators",
       Arg.String (fun s -> opt_ocaml_generators := s :: !opt_ocaml_generators),
-      "<types> produce random generators for the given types"
+      "produce random generators for the given types"
     );
   ]
 
@@ -115,17 +115,17 @@ let opt_tofrominterp_output_dir : string option ref = ref None
 
 let tofrominterp_options =
   [
-    ( "-tofrominterp_lem",
+    ( Flag.create ~prefix:["tofrominterp"] "lem",
       Arg.Set ToFromInterp_backend.lem_mode,
-      " output embedding translation for the Lem backend rather than the OCaml backend, implies -tofrominterp"
+      "output embedding translation for the Lem backend rather than the OCaml backend, implies -tofrominterp"
     );
-    ( "-tofrominterp_mwords",
+    ( Flag.create ~prefix:["tofrominterp"] "mwords",
       Arg.Set ToFromInterp_backend.mword_mode,
-      " output embedding translation in machine-word mode rather than bit-list mode, implies -tofrominterp"
+      "output embedding translation in machine-word mode rather than bit-list mode, implies -tofrominterp"
     );
-    ( "-tofrominterp_output_dir",
+    ( Flag.create ~prefix:["tofrominterp"] ~arg:"directory" "output_dir",
       Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
-      "<directory> set a custom directory to output embedding translation OCaml"
+      "set a custom directory to output embedding translation OCaml"
     );
   ]
 
@@ -149,7 +149,7 @@ let tofrominterp_target out_file { ast; _ } =
 
 let _ =
   Target.register ~name:"tofrominterp"
-    ~description:" output OCaml functions to translate between shallow embedding and interpreter"
+    ~description:"output OCaml functions to translate between shallow embedding and interpreter"
     ~options:tofrominterp_options ~rewrites:tofrominterp_rewrites tofrominterp_target
 
 let marshal_target out_file { ast; env; _ } =
@@ -164,5 +164,5 @@ let marshal_target out_file { ast; env; _ } =
   close_out f
 
 let _ =
-  Target.register ~name:"marshal" ~description:" OCaml-marshal out the rewritten AST to a file"
+  Target.register ~name:"marshal" ~description:"OCaml-marshal out the rewritten AST to a file"
     ~rewrites:tofrominterp_rewrites marshal_target

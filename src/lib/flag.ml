@@ -44,23 +44,21 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Libsail
+open Arg
 
-open Interactive.State
+type t = { prefix : string list; hide_prefix : bool; debug : bool; hide : bool; arg : string option; key : string }
 
-let output_sail_options =
-  [
-    ( Flag.create ~prefix:["output_sail"] ~arg:"directory" "dir",
-      Arg.String (fun dir -> Frontend.opt_reformat := Some dir),
-      "set a directory to output pretty-printed Sail"
-    );
-  ]
+let create ?(prefix = []) ?(hide_prefix = false) ?(debug = false) ?(hide = false) ?arg key =
+  { prefix; hide_prefix; debug; hide; arg; key }
 
-let sail_target out_file { ast; _ } =
-  let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".sail")) | None -> (false, stdout) in
-  Pretty_print_sail.output_ast output_chan (Type_check.strip_ast ast);
-  if close then close_out output_chan
+let underscore_sep = Util.string_of_list "_" (fun s -> s)
 
-let _ =
-  Target.register ~name:"sail" ~flag:"output_sail" ~options:output_sail_options
-    ~description:"print Sail code after type checking and initial rewriting" sail_target
+let to_arg (flag, spec, doc) =
+  let apply_prefix key =
+    match flag.prefix with [] -> key | _ when flag.hide_prefix -> key | _ -> underscore_sep flag.prefix ^ "_" ^ key
+  in
+  let key =
+    "-" ^ if flag.key = "" then underscore_sep flag.prefix else (if flag.debug then "d" else "") ^ apply_prefix flag.key
+  in
+  let arg_prefix = match flag.arg with Some desc -> "<" ^ desc ^ "> " | None -> " " in
+  (key, spec, if flag.hide then "" else arg_prefix ^ (if flag.debug then "(debug) " else "") ^ doc)

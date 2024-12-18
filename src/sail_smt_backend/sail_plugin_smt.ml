@@ -64,30 +64,42 @@ let set_smt_auto_solver arg =
 
 let smt_options =
   [
-    ("-smt_auto", Arg.Tuple [Arg.Set opt_smt_auto], " automatically call the smt solver on generated SMT");
-    ( "-smt_auto_solver",
+    ( Flag.create ~prefix:["smt"] "auto",
+      Arg.Tuple [Arg.Set opt_smt_auto],
+      "automatically call the smt solver on generated SMT"
+    );
+    ( Flag.create ~prefix:["smt"] ~arg:"cvc4/cvc5/z3" "auto_solver",
       Arg.Tuple [Arg.Set opt_smt_auto; Arg.String set_smt_auto_solver],
-      "<cvc4/cvc5/z3> set the solver to use for counterexample checks (default cvc5)"
+      "set the solver to use for counterexample checks (default cvc5)"
     );
-    ("-smt_ignore_overflow", Arg.Set opt_smt_ignore_overflow, " ignore integer overflow in generated SMT");
-    ( "-smt_int_size",
+    ( Flag.create ~prefix:["smt"] "ignore_overflow",
+      Arg.Set opt_smt_ignore_overflow,
+      "ignore integer overflow in generated SMT"
+    );
+    ( Flag.create ~prefix:["smt"] ~arg:"n" "int_size",
       Arg.String (fun n -> opt_smt_unknown_integer_width := int_of_string n),
-      "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)"
+      "set a bound of n on the maximum integer bitwidth for generated SMT (default 128)"
     );
-    ("-smt_propagate_vars", Arg.Unit (fun () -> ()), " (deprecated) propgate variables through generated SMT");
-    ( "-smt_bits_size",
+    ( Flag.create ~prefix:["smt"] "propagate_vars",
+      Arg.Unit (fun () -> ()),
+      "(deprecated) propgate variables through generated SMT"
+    );
+    ( Flag.create ~prefix:["smt"] ~arg:"n" "bits_size",
       Arg.String (fun n -> opt_smt_unknown_bitvector_width := int_of_string n),
-      "<n> set a size bound of n for unknown-length bitvectors in generated SMT (default 64)"
+      "set a size bound of n for unknown-length bitvectors in generated SMT (default 64)"
     );
-    ( "-smt_vector_size",
+    ( Flag.create ~prefix:["smt"] ~arg:"n" "vector_size",
       Arg.String (fun n -> opt_smt_unknown_generic_vector_width := int_of_string n),
-      "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)"
+      "set a bound of 2 ^ n for generic vectors in generated SMT (default 5)"
     );
-    ( "-smt_include",
+    ( Flag.create ~prefix:["smt"] ~arg:"filename" "include",
       Arg.String (fun i -> opt_smt_includes := i :: !opt_smt_includes),
-      "<filename> insert additional file in SMT output"
+      "insert additional file in SMT output"
     );
-    ("-smt_disable_specialization", Arg.Clear opt_smt_specialize, " Disable generic specialization when generating SMT");
+    ( Flag.create ~prefix:["smt"] "disable_specialization",
+      Arg.Clear opt_smt_specialize,
+      "Disable generic specialization when generating SMT"
+    );
   ]
 
 let smt_rewrites =

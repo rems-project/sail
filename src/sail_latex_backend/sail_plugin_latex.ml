@@ -50,12 +50,15 @@ open Interactive.State
 
 let latex_options =
   [
-    ( "-latex_prefix",
+    ( Flag.create ~prefix:["latex"] ~arg:"prefix" "prefix",
       Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-      "<prefix> set a custom prefix for generated LaTeX labels and macro commands (default sail)"
+      "set a custom prefix for generated LaTeX labels and macro commands (default sail)"
     );
-    ("-latex_full_valspecs", Arg.Clear Latex.opt_simple_val, " print full valspecs in LaTeX output");
-    ( "-latex_abbrevs",
+    ( Flag.create ~prefix:["latex"] "full_valspecs",
+      Arg.Clear Latex.opt_simple_val,
+      "print full valspecs in LaTeX output"
+    );
+    ( Flag.create ~prefix:["latex"] "abbrevs",
       Arg.String
         (fun s ->
           let abbrevs = String.split_on_char ';' s in
@@ -68,7 +71,7 @@ let latex_options =
           | None -> Latex.opt_abbrevs := filtered
           | Some abbrev -> raise (Arg.Bad (abbrev ^ " does not end in a '.'"))
         ),
-      " semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')"
+      "semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')"
     );
   ]
 
