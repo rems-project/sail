@@ -24,7 +24,7 @@ sudo apt-get install build-essential libgmp-dev z3 pkg-config
 or [MacOS homebrew](https://brew.sh/):
 ```
 xcode-select --install # if you haven't already
-brew install gmp z3 pkg-config
+brew install gmp z3 pkgconf
 ```
 Finally, install sail from the opam package [https://opam.ocaml.org/packages/sail/](https://opam.ocaml.org/packages/sail/) and its dependencies:
 ```
