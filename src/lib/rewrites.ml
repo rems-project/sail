@@ -3869,14 +3869,20 @@ let move_loop_measures ast =
         (Bindings.add id measures m, FCL_aux (FCL_funcl (id, pexp), ann) :: acc)
     | None -> (m, fcl :: acc)
   in
+  let do_fundef wrap (m, acc) (FD_aux (FD_function (r, t, fcls), ann)) =
+    let m, rfcls = List.fold_left do_funcl (m, []) fcls in
+    (m, wrap (FD_aux (FD_function (r, t, List.rev rfcls), ann)) :: acc)
+  in
   let unused, rev_defs =
     List.fold_left
       (fun (m, acc) d ->
         match d with
         | DEF_aux (DEF_loop_measures _, _) -> (m, acc)
-        | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), ann)), def_annot) ->
-            let m, rfcls = List.fold_left do_funcl (m, []) fcls in
-            (m, DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.rev rfcls), ann)), def_annot) :: acc)
+        | DEF_aux (DEF_fundef fundef, def_annot) ->
+            do_fundef (fun f -> DEF_aux (DEF_fundef f, def_annot)) (m, acc) fundef
+        | DEF_aux (DEF_internal_mutrec fundefs, def_annot) ->
+            let m, rfundefs = List.fold_left (do_fundef (fun f -> f)) (m, []) fundefs in
+            (m, DEF_aux (DEF_internal_mutrec (List.rev rfundefs), def_annot) :: acc)
         | _ -> (m, d :: acc)
       )
       (loop_measures, []) ast.defs
