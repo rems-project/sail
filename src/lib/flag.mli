@@ -46,6 +46,14 @@
 
 type t
 
-val create : ?prefix:string list -> ?hide_prefix:bool -> ?debug:bool -> ?hide:bool -> ?arg:string -> string -> t
+val create :
+  ?prefix:string list ->
+  ?hide_prefix:bool ->
+  ?debug:bool ->
+  ?hide:bool ->
+  ?arg:string ->
+  ?override:string ->
+  string ->
+  t
 
 val to_arg : t * Arg.spec * string -> Arg.key * Arg.spec * Arg.doc

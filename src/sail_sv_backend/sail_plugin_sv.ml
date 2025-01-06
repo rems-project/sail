@@ -124,7 +124,7 @@ let verilog_options =
         ),
       "Sail function to use as toplevel module"
     );
-    ( Flag.create ~prefix:["sv"] ~arg:"compile|run" "verilate",
+    ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"compile|run" ~override:"sv_verilate" "mode",
       Arg.String
         (fun opt ->
           if opt = "run" then opt_verilate := Verilator_run
@@ -137,23 +137,23 @@ let verilog_options =
         ),
       "Invoke verilator on generated output"
     );
-    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_args",
+    ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"string" "args",
       Arg.String (fun s -> append_flag opt_verilate_args s),
       "Extra arguments to pass to verilator"
     );
-    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_cflags",
+    ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"string" "cflags",
       Arg.String (fun s -> append_flag opt_verilate_cflags s),
       "Verilator CFLAGS argument"
     );
-    ( Flag.create ~prefix:["sv"] ~arg:"string" "verilate_ldflags",
+    ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"string" "ldflags",
       Arg.String (fun s -> append_flag opt_verilate_ldflags s),
       "Verilator LDFLAGS argument"
     );
-    ( Flag.create ~prefix:["sv"] "verilate_link_sail_runtime",
+    ( Flag.create ~prefix:["sv"; "verilate"] "link_sail_runtime",
       Arg.Set opt_verilate_link_sail_runtime,
       "Link the Sail C runtime with the generated verilator C++"
     );
-    ( Flag.create ~prefix:["sv"] ~arg:"n" "verilate_jobs",
+    ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"n" "jobs",
       Arg.Int (fun i -> opt_verilate_jobs := i),
       "Provide the -j option to verilator"
     );
