@@ -120,6 +120,11 @@ let rec simp_loc = function
   | Parse_ast.Hint (_, l1, l2) -> begin match simp_loc l1 with None -> simp_loc l2 | pos -> pos end
   | Parse_ast.Range (p1, p2) -> Some (p1, p2)
 
+let rec is_unknown_loc = function
+  | Parse_ast.Unknown -> true
+  | Parse_ast.Range _ -> false
+  | Parse_ast.Generated l | Parse_ast.Unique (_, l) | Parse_ast.Hint (_, _, l) -> is_unknown_loc l
+
 let loc_range_to_src (p1 : Lexing.position) (p2 : Lexing.position) =
   (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) (Util.read_whole_file p1.pos_fname)
 

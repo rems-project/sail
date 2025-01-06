@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/issue853_2.sail[0m:6.25-27:
+6[96m |[0mfunction foo(addr : bits(64)) -> unit = ()
+ [91m |[0m                         [91m^^[0m
+ [91m |[0m Failed to prove constraint: 32 == 64
+ [91m |[0m 
+ [91m |[0m constraint from [96mfail/issue853_2.sail[0m:4.20-22:
+ [91m |[0m 4[96m |[0mval foo : bitvector(32) -> unit
+ [91m |[0m  [91m |[0m                    [91m^^[0m [91mThis type argument[0m

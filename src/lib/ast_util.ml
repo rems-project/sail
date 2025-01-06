@@ -178,6 +178,8 @@ let exp_loc = function E_aux (_, (l, _)) -> l
 
 let nexp_loc = function Nexp_aux (_, l) -> l
 
+let constraint_loc = function NC_aux (_, l) -> l
+
 let gen_loc = function Parse_ast.Generated l -> Parse_ast.Generated l | l -> Parse_ast.Generated l
 
 let rec is_gen_loc = function
@@ -2089,63 +2091,64 @@ let extern_assoc backend ext =
 (* 1. Substitutions                                                       *)
 (**************************************************************************)
 
-let rec nexp_subst sv subst = function
-  | Nexp_aux (Nexp_var kid, _) as nexp -> begin
-      match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n | _ -> nexp
-    end
-  | Nexp_aux (nexp, l) -> Nexp_aux (nexp_subst_aux sv subst nexp, l)
+let mk_subst_arg = function
+  | A_typ typ -> A_aux (A_typ typ, typ_loc typ)
+  | A_nexp n -> A_aux (A_nexp n, nexp_loc n)
+  | A_bool b -> A_aux (A_bool b, constraint_loc b)
 
-and nexp_subst_aux sv subst = function
+let rec nexp_subst sv subst (Nexp_aux (n, l)) =
+  let wrap aux = Nexp_aux (aux, l) in
+  match n with
   | Nexp_var kid -> begin
-      match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> unaux_nexp n | _ -> Nexp_var kid
+      match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n | _ -> wrap (Nexp_var kid)
     end
-  | Nexp_id id -> Nexp_id id
-  | Nexp_constant c -> Nexp_constant c
-  | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_minus (nexp1, nexp2) -> Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_app (id, nexps) -> Nexp_app (id, List.map (nexp_subst sv subst) nexps)
-  | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
-  | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
-  | Nexp_if (i, t, e) -> Nexp_if (constraint_subst sv subst i, nexp_subst sv subst t, nexp_subst sv subst e)
+  | Nexp_id id -> wrap (Nexp_id id)
+  | Nexp_constant c -> wrap (Nexp_constant c)
+  | Nexp_times (nexp1, nexp2) -> wrap (Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2))
+  | Nexp_sum (nexp1, nexp2) -> wrap (Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2))
+  | Nexp_minus (nexp1, nexp2) -> wrap (Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2))
+  | Nexp_app (id, nexps) -> wrap (Nexp_app (id, List.map (nexp_subst sv subst) nexps))
+  | Nexp_exp nexp -> wrap (Nexp_exp (nexp_subst sv subst nexp))
+  | Nexp_neg nexp -> wrap (Nexp_neg (nexp_subst sv subst nexp))
+  | Nexp_if (i, t, e) -> wrap (Nexp_if (constraint_subst sv subst i, nexp_subst sv subst t, nexp_subst sv subst e))
 
-and constraint_subst sv subst (NC_aux (nc, l)) = NC_aux (constraint_subst_aux l sv subst nc, l)
-
-and constraint_subst_aux l sv subst = function
-  | NC_id id -> NC_id id
-  | NC_equal (arg1, arg2) -> NC_equal (typ_arg_subst sv subst arg1, typ_arg_subst sv subst arg2)
-  | NC_not_equal (arg1, arg2) -> NC_not_equal (typ_arg_subst sv subst arg1, typ_arg_subst sv subst arg2)
-  | NC_ge (n1, n2) -> NC_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_gt (n1, n2) -> NC_gt (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_le (n1, n2) -> NC_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_lt (n1, n2) -> NC_lt (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_set (n, ints) -> NC_set (nexp_subst sv subst n, ints)
-  | NC_or (nc1, nc2) -> NC_or (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
-  | NC_and (nc1, nc2) -> NC_and (constraint_subst sv subst nc1, constraint_subst sv subst nc2)
-  | NC_app (id, args) -> NC_app (id, List.map (typ_arg_subst sv subst) args)
+and constraint_subst sv subst (NC_aux (nc, l)) =
+  let wrap aux = NC_aux (aux, l) in
+  match nc with
+  | NC_id id -> wrap (NC_id id)
+  | NC_equal (arg1, arg2) -> wrap (NC_equal (typ_arg_subst sv subst arg1, typ_arg_subst sv subst arg2))
+  | NC_not_equal (arg1, arg2) -> wrap (NC_not_equal (typ_arg_subst sv subst arg1, typ_arg_subst sv subst arg2))
+  | NC_ge (n1, n2) -> wrap (NC_ge (nexp_subst sv subst n1, nexp_subst sv subst n2))
+  | NC_gt (n1, n2) -> wrap (NC_gt (nexp_subst sv subst n1, nexp_subst sv subst n2))
+  | NC_le (n1, n2) -> wrap (NC_le (nexp_subst sv subst n1, nexp_subst sv subst n2))
+  | NC_lt (n1, n2) -> wrap (NC_lt (nexp_subst sv subst n1, nexp_subst sv subst n2))
+  | NC_set (n, ints) -> wrap (NC_set (nexp_subst sv subst n, ints))
+  | NC_or (nc1, nc2) -> wrap (NC_or (constraint_subst sv subst nc1, constraint_subst sv subst nc2))
+  | NC_and (nc1, nc2) -> wrap (NC_and (constraint_subst sv subst nc1, constraint_subst sv subst nc2))
+  | NC_app (id, args) -> wrap (NC_app (id, List.map (typ_arg_subst sv subst) args))
   | NC_var kid -> begin
-      match subst with A_aux (A_bool nc, _) when Kid.compare kid sv = 0 -> unaux_constraint nc | _ -> NC_var kid
+      match subst with A_aux (A_bool nc, _) when Kid.compare kid sv = 0 -> nc | _ -> wrap (NC_var kid)
     end
-  | NC_false -> NC_false
-  | NC_true -> NC_true
+  | NC_false -> wrap NC_false
+  | NC_true -> wrap NC_true
 
-and typ_subst sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_aux sv subst typ, l)
-
-and typ_subst_aux sv subst = function
-  | Typ_internal_unknown -> Typ_internal_unknown
-  | Typ_id v -> Typ_id v
+and typ_subst sv subst (Typ_aux (typ, l)) =
+  let wrap aux = Typ_aux (aux, l) in
+  match typ with
+  | Typ_internal_unknown -> wrap Typ_internal_unknown
+  | Typ_id v -> wrap (Typ_id v)
   | Typ_var kid -> begin
-      match subst with A_aux (A_typ typ, _) when Kid.compare kid sv = 0 -> unaux_typ typ | _ -> Typ_var kid
+      match subst with A_aux (A_typ typ, _) when Kid.compare kid sv = 0 -> typ | _ -> wrap (Typ_var kid)
     end
-  | Typ_fn (arg_typs, ret_typ) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2)
-  | Typ_tuple typs -> Typ_tuple (List.map (typ_subst sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_arg_subst sv subst) args)
+  | Typ_fn (arg_typs, ret_typ) -> wrap (Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ))
+  | Typ_bidir (typ1, typ2) -> wrap (Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2))
+  | Typ_tuple typs -> wrap (Typ_tuple (List.map (typ_subst sv subst) typs))
+  | Typ_app (f, args) -> wrap (Typ_app (f, List.map (typ_arg_subst sv subst) args))
   | Typ_exist (kopts, nc, typ) when KidSet.mem sv (KidSet.of_list (List.map kopt_kid kopts)) ->
-      Typ_exist (kopts, nc, typ)
-  | Typ_exist (kopts, nc, typ) -> Typ_exist (kopts, constraint_subst sv subst nc, typ_subst sv subst typ)
+      wrap (Typ_exist (kopts, nc, typ))
+  | Typ_exist (kopts, nc, typ) -> wrap (Typ_exist (kopts, constraint_subst sv subst nc, typ_subst sv subst typ))
 
-and typ_arg_subst sv subst (A_aux (arg, l)) = A_aux (typ_arg_subst_aux sv subst arg, l)
+and typ_arg_subst sv subst (A_aux (arg, _)) = mk_subst_arg (typ_arg_subst_aux sv subst arg)
 
 and typ_arg_subst_aux sv subst = function
   | A_nexp nexp -> A_nexp (nexp_subst sv subst nexp)

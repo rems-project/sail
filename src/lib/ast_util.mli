@@ -452,6 +452,7 @@ val pat_loc : 'a pat -> Parse_ast.l
 val mpat_loc : 'a mpat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val nexp_loc : nexp -> Parse_ast.l
+val constraint_loc : n_constraint -> Parse_ast.l
 val def_loc : ('a, 'b) def -> Parse_ast.l
 
 (** {1 Printing utilities}

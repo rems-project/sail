@@ -370,8 +370,13 @@ let message_of_type_error type_error =
             ],
           None
         )
-    | Err_failed_constraint (check, locals, _, ncs) ->
+    | Err_failed_constraint (check, derived_from, locals, _, ncs) ->
         let simplified = constraint_simp check in
+        let add_derivation msg =
+          match derived_from with
+          | Some l -> Seq [msg; Line ""; Location ("constraint from ", Some "This type argument", l, Seq [])]
+          | None -> msg
+        in
         begin
           match simplified with
           | NC_aux (NC_false, _) ->
@@ -381,7 +386,10 @@ let message_of_type_error type_error =
                   ),
                 None
               )
-          | _ -> (Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check)), None)
+          | _ ->
+              ( Line ("Failed to prove constraint: " ^ string_of_n_constraint (constraint_simp check)) |> add_derivation,
+                None
+              )
         end
     | Err_subtype (typ1, typ2, nc, all_constraints, tyvars) ->
         let nc = Option.map constraint_simp nc in

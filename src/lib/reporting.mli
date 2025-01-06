@@ -76,6 +76,10 @@ val loc_file : Parse_ast.l -> string option
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
+(** Returns true if a loc is [Unknown]. In the case of [Hint] location
+    only checks the base location. *)
+val is_unknown_loc : Ast.l -> bool
+
 (** [loc_range_to_src] returns the source code text of a range **)
 val loc_range_to_src : Lexing.position -> Lexing.position -> string
 
