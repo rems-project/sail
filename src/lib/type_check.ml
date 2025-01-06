@@ -671,7 +671,8 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
           | Nexp_times (n2a, n2b) when prove __POS__ env (nc_eq n1a n2a) -> unify_nexp l env goals n1b n2b
           | Nexp_constant c2 -> begin
               match n1a with
-              | Nexp_aux (Nexp_constant c1, _) when Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
+              | Nexp_aux (Nexp_constant c1, _)
+                when (not (Big_int.equal c1 Big_int.zero)) && Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
                   unify_nexp l env goals n1b (nconstant (Big_int.div c2 c1))
               | _ ->
                   unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
