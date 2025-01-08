@@ -1,4 +1,5 @@
 (rule
+ (deps (universe))
  (target manifest.ml)
  (mode fallback)
  (action
