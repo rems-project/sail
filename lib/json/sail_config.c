@@ -29,6 +29,8 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                   */
 /****************************************************************************/
 
+#include <string.h>
+
 #include "sail_config.h"
 #include "cJSON.h"
 
@@ -76,27 +78,6 @@ void sail_config_cleanup(void)
   sail_free(sail_config);
 }
 
-void sail_config_get_string(sail_string *str, size_t n, const char *key[])
-{
-  cJSON *json = (cJSON *)sail_config;
-
-  sail_free(*str);
-
-  for (int i = 0; i < n; i++) {
-    if (cJSON_IsObject(json)) {
-      json = cJSON_GetObjectItemCaseSensitive(json, key[i]);
-    } else {
-      sail_assert(false, "Failed to access config item");
-    }
-  }
-
-  if (cJSON_IsString(json)) {
-    *str = cJSON_GetStringValue(json);
-  } else {
-    sail_assert(false, "Expected string value in config");
-  }
-}
-
 sail_config_json sail_config_get(size_t n, const char *key[])
 {
   sail_config_json result;
@@ -111,6 +92,25 @@ sail_config_json sail_config_get(size_t n, const char *key[])
   }
 
   return (sail_config_json)json;
+}
+
+int64_t sail_config_list_length(const sail_config_json config)
+{
+  cJSON *json = (cJSON *)config;
+
+  if (cJSON_IsArray(json)) {
+    return (int64_t)cJSON_GetArraySize(json);
+  } else {
+    return INT64_C(-1);
+  }
+}
+
+sail_config_json sail_config_list_nth(const sail_config_json config, int64_t index)
+{
+  // This is very inefficient, but works with how the Jib IR functions
+  cJSON *json = (cJSON *)config;
+  cJSON *item = cJSON_GetArrayItem(json, (int)index);
+  return (sail_config_json)item;
 }
 
 bool sail_config_is_object(const sail_config_json config)
@@ -169,7 +169,11 @@ bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int
 
 void sail_config_unwrap_string(sail_string *str, const sail_config_json config)
 {
-  *str = cJSON_GetStringValue((cJSON *)config);
+  sail_string conf_str = cJSON_GetStringValue((cJSON *)config);
+
+  size_t len = strlen(conf_str);
+  *str = (sail_string)realloc(*str, len + 1);
+  *str = strcpy(*str, conf_str);
 }
 
 void sail_config_unwrap_int(sail_int *n, const sail_config_json config)

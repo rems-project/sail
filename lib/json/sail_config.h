@@ -67,26 +67,25 @@ void sail_config_set_file(const char *path);
 void sail_config_cleanup();
 
 /*
- * Extract a string value from the JSON configuration.
+ * Get the JSON corresponding to some key
  */
-void sail_config_get_string(sail_string *str, const size_t n, const_sail_string key[]);
+sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
 
 /*
- * For more complex Sail types than just strings, Sail will generate code that will
- * destructure the JSON values using the following function calls.
+ * For each Sail type, Sail will generate code that will destructure
+ * the JSON values using the following function calls.
  *
  * In general, it will test if the JSON is the type it expects, and
  * only then access the fields. The behaviour of these functions is
  * not guaranteed if the JSON does not have the correct type.
  */
 
-sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
-
 bool sail_config_is_object(const sail_config_json config);
-
 bool sail_config_object_has_key(const sail_config_json config, const sail_string key);
-
 sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key);
+
+int64_t sail_config_list_length(const sail_config_json config);
+sail_config_json sail_config_list_nth(const sail_config_json config, int64_t index);
 
 bool sail_config_is_string(const sail_config_json config);
 
@@ -95,9 +94,7 @@ bool sail_config_is_bool_array(const sail_config_json config);
 bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int expected);
 
 void sail_config_unwrap_string(sail_string *str, const sail_config_json config);
-
 void sail_config_unwrap_int(sail_int *n, const sail_config_json config);
-
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config);
 
 #ifdef __cplusplus

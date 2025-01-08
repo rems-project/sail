@@ -26,6 +26,9 @@ skip_tests = {
     'concurrency_interface_inc',
     # Requires types that aren't currently in the library
     'float_prelude',
+    # No possible configuration
+    'config_mismatch',
+    'config_bits_types',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -64,6 +67,9 @@ skip_tests_mwords = {
     'float_prelude',
     # Needs smarter monomorphisation
     'bits_alias_cast',
+    # No possible configuration
+    'config_mismatch',
+    'config_bits_types',
 }
 
 print('Sail is {}'.format(sail))

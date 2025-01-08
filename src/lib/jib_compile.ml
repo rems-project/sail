@@ -647,43 +647,156 @@ module Make (C : CONFIG) = struct
         args
     in
     let key_name = ngensym () in
+    let json = ngensym () in
     let args = [V_lit (VL_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
-    let key_init = [ijson_key l key_name key] in
+    let init =
+      [
+        ijson_key l key_name key;
+        idecl l CT_json json;
+        iextern l (CL_id (json, CT_json)) (mk_id "sail_config_get", []) args;
+      ]
+    in
 
-    let config_extract ctyp ~validate ~extract =
-      let json = ngensym () in
+    let config_extract ctyp json ~validate ~extract =
       let valid = ngensym () in
       let value = ngensym () in
-      ( key_init
-        @ [
-            idecl l CT_json json;
-            iextern l (CL_id (json, CT_json)) (mk_id "sail_config_get", []) args;
-            idecl l CT_bool valid;
-            iextern l (CL_id (valid, CT_bool)) (mk_id (fst validate), []) ([V_id (json, CT_json)] @ snd validate);
-            iif l (V_call (Bnot, [V_id (valid, CT_bool)])) [ibad_config l] [] CT_unit;
-            idecl l ctyp value;
-            iextern l (CL_id (value, ctyp)) (mk_id extract, []) [V_id (json, CT_json)];
-          ],
+      ( [
+          idecl l CT_bool valid;
+          iextern l (CL_id (valid, CT_bool)) (mk_id (fst validate), []) ([V_id (json, CT_json)] @ snd validate);
+          iif l (V_call (Bnot, [V_id (valid, CT_bool)])) [ibad_config l] [] CT_unit;
+          idecl l ctyp value;
+          iextern l (CL_id (value, ctyp)) (mk_id extract, []) [V_id (json, CT_json)];
+        ],
         (fun clexp -> icopy l clexp (V_id (value, ctyp))),
-        [iclear ctyp value; iclear CT_json json]
+        [iclear ctyp value]
       )
     in
 
-    match ctyp with
-    | CT_string -> (key_init, (fun clexp -> iextern l clexp (mk_id "sail_config_get_string", []) args), [])
-    | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
-    | CT_lint ->
-        let gs = ngensym () in
-        ( key_init @ [idecl l CT_json gs; iextern l (CL_id (gs, CT_json)) (mk_id "sail_config_get", []) args],
-          (fun clexp -> iextern l clexp (mk_id "sail_config_unwrap_int", []) [V_id (gs, CT_json)]),
-          [iclear CT_json gs]
-        )
-    | CT_lbits -> config_extract CT_lbits ~validate:("sail_config_is_bool_array", []) ~extract:"sail_config_unwrap_bits"
-    | CT_fbits n ->
-        config_extract CT_lbits
-          ~validate:("sail_config_is_bool_array_with_size", [V_lit (VL_int (Big_int.of_int n), CT_fint 64)])
-          ~extract:"sail_config_unwrap_bits"
-    | _ -> Reporting.unreachable l __POS__ "Invalid configuration type"
+    let rec extract json = function
+      | CT_string ->
+          config_extract CT_string json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_string"
+      | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
+      | CT_lint -> config_extract CT_lint json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_int"
+      | CT_lbits ->
+          config_extract CT_lbits json ~validate:("sail_config_is_bool_array", []) ~extract:"sail_config_unwrap_bits"
+      | CT_fbits n ->
+          config_extract CT_lbits json
+            ~validate:("sail_config_is_bool_array_with_size", [V_lit (VL_int (Big_int.of_int n), CT_fint 64)])
+            ~extract:"sail_config_unwrap_bits"
+      | CT_vector item_ctyp ->
+          let vec = ngensym () in
+          let len = ngensym () in
+          let n = ngensym () in
+          let item_json = ngensym () in
+          let item = ngensym () in
+          let loop = label "config_vector_" in
+          let index =
+            V_call
+              ( Isub,
+                [
+                  V_id (len, CT_fint 64);
+                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]);
+                ]
+              )
+          in
+          let setup, call, cleanup = extract item_json item_ctyp in
+          ( [
+              idecl l (CT_fint 64) len;
+              iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
+              iif l
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
+                [ibad_config l]
+                [] CT_unit;
+              idecl l (CT_vector item_ctyp) vec;
+              iextern l (CL_id (vec, CT_vector item_ctyp)) (mk_id "internal_vector_init", []) [V_id (len, CT_fint 64)];
+              iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
+              ilabel loop;
+              idecl l CT_json item_json;
+              iextern l
+                (CL_id (item_json, CT_json))
+                (mk_id "sail_config_list_nth", [])
+                [V_id (json, CT_json); V_id (n, CT_fint 64)];
+              idecl l item_ctyp item;
+            ]
+            @ setup
+            @ [
+                call (CL_id (item, item_ctyp));
+                iextern l
+                  (CL_id (vec, CT_vector item_ctyp))
+                  (mk_id "internal_vector_update", [])
+                  [V_id (vec, CT_vector item_ctyp); index; V_id (item, item_ctyp)];
+              ]
+            @ cleanup
+            @ [
+                iclear item_ctyp item;
+                iclear CT_json item_json;
+                icopy l
+                  (CL_id (n, CT_fint 64))
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]));
+                ijump l (V_call (Ilt, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop;
+              ],
+            (fun clexp -> icopy l clexp (V_id (vec, CT_vector item_ctyp))),
+            [iclear (CT_vector item_ctyp) vec]
+          )
+      | CT_list item_ctyp ->
+          let list = ngensym () in
+          let len = ngensym () in
+          let n = ngensym () in
+          let item_json = ngensym () in
+          let item = ngensym () in
+          let loop_start = label "config_list_start_" in
+          let loop_end = label "config_list_end_" in
+          let index =
+            V_call
+              ( Isub,
+                [
+                  V_id (len, CT_fint 64);
+                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]);
+                ]
+              )
+          in
+          let setup, call, cleanup = extract item_json item_ctyp in
+          ( [
+              idecl l (CT_fint 64) len;
+              iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
+              iif l
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
+                [ibad_config l]
+                [] CT_unit;
+              idecl l (CT_list item_ctyp) list;
+              iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
+              ilabel loop_start;
+              ijump l (V_call (Igteq, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop_end;
+              idecl l CT_json item_json;
+              iextern l (CL_id (item_json, CT_json)) (mk_id "sail_config_list_nth", []) [V_id (json, CT_json); index];
+              idecl l item_ctyp item;
+            ]
+            @ setup
+            @ [
+                call (CL_id (item, item_ctyp));
+                iextern l
+                  (CL_id (list, CT_list item_ctyp))
+                  (mk_id "sail_cons", [])
+                  [V_id (item, item_ctyp); V_id (list, CT_list item_ctyp)];
+              ]
+            @ cleanup
+            @ [
+                iclear item_ctyp item;
+                iclear CT_json item_json;
+                icopy l
+                  (CL_id (n, CT_fint 64))
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]));
+                igoto loop_start;
+                ilabel loop_end;
+              ],
+            (fun clexp -> icopy l clexp (V_id (list, CT_list item_ctyp))),
+            [iclear (CT_list item_ctyp) list]
+          )
+      | _ -> Reporting.unreachable l __POS__ "Invalid configuration type"
+    in
+
+    let setup, call, cleanup = extract json ctyp in
+    (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
 
   let rec apat_ctyp ctx (AP_aux (apat, { env; _ })) =
     let ctx = { ctx with local_env = env } in

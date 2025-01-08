@@ -50,30 +50,288 @@ open Rewriter
 open Type_check
 
 module J = Yojson.Safe
-module StringMap = Util.StringMap
 
 module ConfigTypes : sig
+  type config_type = { loc : Ast.l; env : env; typ : typ }
+
   type t
+
+  val to_schema : t -> J.t
 
   val create : unit -> t
 
-  val find_opt : at:Ast.l -> string list -> t -> (Ast.l * typ) option
+  val find_opt : at:Ast.l -> string list -> t -> config_type list option
 
-  val update_type : string list -> Ast.l -> typ -> t -> bool
-
-  val insert : string list -> Ast.l -> typ -> t -> unit
+  val insert : string list -> config_type -> t -> unit
 end = struct
   open Util.Option_monad
   open Error_format
 
-  type t = Sail_value of { mutable loc : Ast.l; mutable typ : typ } | Object of (string, t) Hashtbl.t
+  type config_type = { loc : Ast.l; env : env; typ : typ }
+
+  type schema_logic =
+    | All_of of schema_logic list
+    | Any_of of schema_logic list
+    | Not of schema_logic
+    | Schema of (string * J.t) list
+
+  let rec logic_type schema_type = function
+    | All_of schemas -> All_of (List.map (logic_type schema_type) schemas)
+    | Any_of schemas -> Any_of (List.map (logic_type schema_type) schemas)
+    | Not schema -> All_of [Schema (schema_type []); Not (logic_type schema_type schema)]
+    | Schema clauses -> Schema (schema_type clauses)
+
+  let rec logic_to_schema = function
+    | All_of [schema] -> logic_to_schema schema
+    | All_of schemas -> `Assoc [("allOf", `List (List.map logic_to_schema schemas))]
+    | Any_of schemas -> `Assoc [("anyOf", `List (List.map logic_to_schema schemas))]
+    | Not schema -> `Assoc [("not", logic_to_schema schema)]
+    | Schema clauses -> `Assoc clauses
+
+  let any_of c1 c2 =
+    match (c1, c2) with
+    | Any_of schemas1, Any_of schemas2 -> Any_of (schemas1 @ schemas2)
+    | Any_of schemas1, _ -> Any_of (schemas1 @ [c2])
+    | _, Any_of schemas2 -> Any_of (c1 :: schemas2)
+    | _ -> Any_of [c1; c2]
+
+  let all_of c1 c2 =
+    match (c1, c2) with
+    | Schema clauses1, Schema clauses2 -> Schema (clauses1 @ clauses2)
+    | All_of schemas1, All_of schemas2 -> All_of (schemas1 @ schemas2)
+    | All_of schemas1, _ -> All_of (schemas1 @ [c2])
+    | _, All_of schemas2 -> All_of (c1 :: schemas2)
+    | _ -> All_of [c1; c2]
+
+  module type CONSTRAINT = sig
+    val const : Big_int.num -> (string * J.t) list
+    val maximum : Big_int.num -> (string * J.t) list
+    val minimum : Big_int.num -> (string * J.t) list
+    val exclusive_maximum : Big_int.num -> (string * J.t) list
+    val exclusive_minimum : Big_int.num -> (string * J.t) list
+  end
+
+  module SchemaTypeConstraint (Gen : CONSTRAINT) = struct
+    let rec constraint_schema v (NC_aux (aux, _)) =
+      match aux with
+      | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _))
+      | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _))
+        when Kid.compare v v' = 0 ->
+          Some (Schema (Gen.const c))
+      | NC_and (nc1, nc2) ->
+          let* c1 = constraint_schema v nc1 in
+          let* c2 = constraint_schema v nc2 in
+          Some (all_of c1 c2)
+      | NC_or (nc1, nc2) ->
+          let* c1 = constraint_schema v nc1 in
+          let* c2 = constraint_schema v nc2 in
+          Some (any_of c1 c2)
+      | NC_lt (Nexp_aux (Nexp_var v', _), Nexp_aux (Nexp_constant c, _))
+      | NC_gt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v', _))
+        when Kid.compare v v' = 0 ->
+          Some (Schema (Gen.exclusive_maximum c))
+      | NC_le (Nexp_aux (Nexp_var v', _), Nexp_aux (Nexp_constant c, _))
+      | NC_ge (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v', _))
+        when Kid.compare v v' = 0 ->
+          Some (Schema (Gen.maximum c))
+      | NC_gt (Nexp_aux (Nexp_var v', _), Nexp_aux (Nexp_constant c, _))
+      | NC_lt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v', _))
+        when Kid.compare v v' = 0 ->
+          Some (Schema (Gen.exclusive_minimum c))
+      | NC_ge (Nexp_aux (Nexp_var v', _), Nexp_aux (Nexp_constant c, _))
+      | NC_le (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v', _))
+        when Kid.compare v v' = 0 ->
+          Some (Schema (Gen.minimum c))
+      | NC_true -> Some (Schema [])
+      | NC_false -> Some (Not (Schema []))
+      | NC_app (id, [A_aux (A_bool nc, _)]) when string_of_id id = "not" ->
+          let* c = constraint_schema v nc in
+          Some (Not c)
+      | NC_set (Nexp_aux (Nexp_var v', _), set) when Kid.compare v v' = 0 ->
+          Some (Any_of (List.map (fun n -> Schema (Gen.const n)) set))
+      | _ -> None
+  end
+
+  module IntegerConstraint = SchemaTypeConstraint (struct
+    let const n = [("const", `Intlit (Big_int.to_string n))]
+    let maximum n = [("maximum", `Intlit (Big_int.to_string n))]
+    let minimum n = [("minimum", `Intlit (Big_int.to_string n))]
+    let exclusive_maximum n = [("exclusiveMaximum", `Intlit (Big_int.to_string n))]
+    let exclusive_minimum n = [("exclusiveMinimum", `Intlit (Big_int.to_string n))]
+  end)
+
+  let array_constraint ?min_length ?max_length () =
+    Util.option_these
+      [
+        Option.map (fun len -> ("minItems", `Intlit (Big_int.to_string len))) min_length;
+        Option.map (fun len -> ("maxItems", `Intlit (Big_int.to_string len))) max_length;
+      ]
+
+  module ArrayConstraint = SchemaTypeConstraint (struct
+    let const n = array_constraint ~min_length:n ~max_length:n ()
+    let maximum n = array_constraint ~max_length:n ()
+    let minimum n = array_constraint ~min_length:n ()
+    let exclusive_maximum n = array_constraint ~max_length:(Big_int.pred n) ()
+    let exclusive_minimum n = array_constraint ~min_length:(Big_int.succ n) ()
+  end)
+
+  let bitvector_string_literal =
+    `Assoc
+      [
+        ( "oneOf",
+          `List
+            [
+              `Assoc [("type", `String "string"); ("pattern", `String "^0x[0-9a-fA-F_]+$")];
+              `Assoc [("type", `String "string"); ("pattern", `String "^0b[0-1_]+$")];
+              `Assoc [("type", `String "string"); ("pattern", `String "^[0-9_]+$")];
+            ]
+        );
+      ]
+
+  let type_schema { loc; env; typ } =
+    let rec generate typ =
+      let kopts, nc, typ =
+        match destruct_exist typ with None -> ([], nc_true, typ) | Some destructure -> destructure
+      in
+      match (kopts, nc, typ) with
+      | _, _, Typ_aux (Typ_app (id, [A_aux (A_nexp arg, _)]), _) when string_of_id id = "atom" -> (
+          let schema_integer clauses = ("type", `String "integer") :: clauses in
+          match (kopts, nc, arg) with
+          | [], NC_aux (NC_true, _), nexp ->
+              let* c = solve_unique env nexp in
+              Some (`Assoc (schema_integer [("const", `Intlit (Big_int.to_string c))]))
+          | [KOpt_aux (KOpt_kind (_, v), _)], nc, Nexp_aux (Nexp_var v', _) when Kid.compare v v' = 0 ->
+              let* nc_logic =
+                nc |> constraint_simp |> IntegerConstraint.constraint_schema v |> Option.map (logic_type schema_integer)
+              in
+              Some (logic_to_schema nc_logic)
+          | _ -> None
+        )
+      | [], NC_aux (NC_true, _), Typ_aux (Typ_app (id, _), _) when string_of_id id = "atom_bool" ->
+          Some (`Assoc [("type", `String "boolean")])
+      | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) -> (
+          match string_of_id id with
+          | "string" -> Some (`Assoc [("type", `String "string")])
+          | "unit" -> Some (`Assoc [("type", `String "null")])
+          | _ -> None
+        )
+      | _, _, Typ_aux (Typ_app (id, [A_aux (A_nexp arg, _)]), _) when string_of_id id = "bitvector" -> (
+          let schema_bool_array clauses =
+            [("type", `String "array"); ("items", `Assoc [("type", `String "boolean")])] @ clauses
+          in
+          let schema_hex_object clauses =
+            [
+              ("type", `String "object");
+              ( "properties",
+                `Assoc [("len", `Assoc (("type", `String "integer") :: clauses)); ("value", bitvector_string_literal)]
+              );
+              ("required", `List [`String "len"; `String "value"]);
+              ("additionalProperties", `Bool false);
+            ]
+          in
+          match (kopts, nc, arg) with
+          | [], NC_aux (NC_true, _), nexp ->
+              let* c = solve_unique env nexp in
+              Some
+                (`Assoc
+                  [
+                    ( "oneOf",
+                      `List
+                        [
+                          `Assoc (schema_bool_array (array_constraint ~min_length:c ~max_length:c ()));
+                          `Assoc (schema_hex_object [("const", `Intlit (Big_int.to_string c))]);
+                        ]
+                    );
+                  ]
+                  )
+          | [KOpt_aux (KOpt_kind (_, v), _)], nc, Nexp_aux (Nexp_var v', _) when Kid.compare v v' = 0 ->
+              let* bool_array_nc_logic =
+                nc |> constraint_simp |> ArrayConstraint.constraint_schema v |> Option.map (logic_type schema_bool_array)
+              in
+              let* hex_object_nc_logic =
+                nc |> constraint_simp |> IntegerConstraint.constraint_schema v
+                |> Option.map (logic_type schema_hex_object)
+              in
+              Some (`Assoc [("oneOf", `List [logic_to_schema bool_array_nc_logic; logic_to_schema hex_object_nc_logic])])
+          | _ -> None
+        )
+      | _, _, Typ_aux (Typ_app (id, [A_aux (A_nexp arg, _); A_aux (A_typ item_typ, _)]), _)
+        when string_of_id id = "vector" -> (
+          let* schema_items = generate item_typ in
+          let schema_array clauses = [("type", `String "array"); ("items", schema_items)] @ clauses in
+          match (kopts, nc, arg) with
+          | [], NC_aux (NC_true, _), nexp ->
+              let* c = solve_unique env nexp in
+              Some (`Assoc (schema_array (array_constraint ~min_length:c ~max_length:c ())))
+          | [KOpt_aux (KOpt_kind (_, v), _)], nc, Nexp_aux (Nexp_var v', _) when Kid.compare v v' = 0 ->
+              let* nc_logic =
+                nc |> constraint_simp |> ArrayConstraint.constraint_schema v |> Option.map (logic_type schema_array)
+              in
+              Some (logic_to_schema nc_logic)
+          | _ -> None
+        )
+      | [], NC_aux (NC_true, _), Typ_aux (Typ_app (id, [A_aux (A_typ item_typ, _)]), _) when string_of_id id = "list" ->
+          let* schema_items = generate item_typ in
+          let schema_array clauses = [("type", `String "array"); ("items", schema_items)] @ clauses in
+          Some (`Assoc (schema_array (array_constraint ())))
+      | _ -> None
+    in
+    let* json = generate typ in
+    (* The non-Assoc case here should perhaps be an error (or None), as this
+       function should always generate a schema object. *)
+    match json with
+    | `Assoc obj -> Some (`Assoc (("description", `String (Reporting.short_loc_to_string loc)) :: obj))
+    | json -> Some json
+
+  let type_schema_or_error config_type =
+    match type_schema config_type with
+    | Some schema -> schema
+    | None ->
+        raise
+          (Reporting.err_typ config_type.loc
+             ("Failed to generate JSON Schema for configuration type " ^ string_of_typ config_type.typ)
+          )
+
+  type t = Sail_value of config_type * config_type list | Object of (string, t) Hashtbl.t
+
+  let rec to_schema = function
+    | Object tbl ->
+        let properties =
+          Hashtbl.fold
+            (fun key value props ->
+              let schema = to_schema value in
+              (key, schema) :: props
+            )
+            tbl []
+        in
+        let properties = List.sort (fun (p1, _) (p2, _) -> String.compare p1 p2) properties in
+        let required = ("required", `List (List.map (fun (p, _) -> `String p) properties)) in
+        `Assoc (("type", `String "object") :: required :: properties)
+    | Sail_value (config_type, []) -> type_schema_or_error config_type
+    | Sail_value (config_type, config_types) ->
+        let schemas = config_type :: config_types |> List.map type_schema_or_error in
+        `Assoc [("allOf", `List schemas)]
 
   (* Random is false here for deterministic error messages *)
   let create () = Object (Hashtbl.create ~random:false 16)
 
   let rec get_example = function
-    | Sail_value { loc; typ } -> Some (loc, typ)
+    | Sail_value ({ loc; typ; _ }, _) -> Some (loc, typ)
     | Object tbl -> Hashtbl.fold (fun _ value acc -> if Option.is_none acc then get_example value else acc) tbl None
+
+  let subkey_error l full_parts obj =
+    let full_parts = String.concat "." full_parts in
+    let extra_info msg =
+      match get_example obj with
+      | Some (l, typ) -> Seq [msg; Line ""; Line "For example:"; Location ("", Some "used here", l, Seq [])]
+      | None -> msg
+    in
+    let msg =
+      Line (Printf.sprintf "Attempting to access key %s, but various subkeys have already been used" full_parts)
+    in
+    let b = Buffer.create 1024 in
+    format_message (extra_info msg) (buffer_formatter b);
+    raise (Reporting.err_general l (Buffer.contents b))
 
   let find_opt ~at:l full_parts map =
     let rec go parts map =
@@ -81,7 +339,7 @@ end = struct
       | part :: parts, Object tbl ->
           let* map = Hashtbl.find_opt tbl part in
           go parts map
-      | part :: _, Sail_value { loc; typ } ->
+      | part :: _, Sail_value ({ loc; typ; _ }, _) ->
           let msg =
             Seq
               [
@@ -96,45 +354,31 @@ end = struct
           let b = Buffer.create 1024 in
           format_message msg (buffer_formatter b);
           raise (Reporting.err_typ l (Buffer.contents b))
-      | [], Sail_value { loc; typ } -> Some (loc, typ)
-      | [], obj ->
-          let full_parts = String.concat "." full_parts in
-          let extra_info msg =
-            match get_example obj with
-            | Some (l, typ) -> Seq [msg; Line ""; Line "For example:"; Location ("", Some "used here", l, Seq [])]
-            | None -> msg
-          in
-          let msg =
-            Line (Printf.sprintf "Attempting to access key %s, but various subkeys have already been used" full_parts)
-          in
-          let b = Buffer.create 1024 in
-          format_message (extra_info msg) (buffer_formatter b);
-          raise (Reporting.err_general l (Buffer.contents b))
+      | [], Sail_value (hd_types, tl_types) -> Some (hd_types :: tl_types)
+      | [], obj -> subkey_error l full_parts obj
     in
     go full_parts map
 
-  let rec insert parts l typ map =
-    match (parts, map) with
-    | [part], Object tbl -> Hashtbl.replace tbl part (Sail_value { loc = l; typ })
-    | part :: parts, Object tbl -> (
-        match Hashtbl.find_opt tbl part with
-        | Some map -> insert parts l typ map
-        | None ->
-            Hashtbl.add tbl part (create ());
-            insert (part :: parts) l typ map
-      )
-    | _ -> Reporting.unreachable l __POS__ "Failed to insert into config type map"
-
-  let rec update_type parts l typ map =
-    match (parts, map) with
-    | part :: parts, Object tbl -> (
-        match Hashtbl.find_opt tbl part with Some map -> update_type parts l typ map | None -> false
-      )
-    | [], Sail_value v ->
-        v.loc <- l;
-        v.typ <- typ;
-        true
-    | _ -> false
+  let insert full_parts config_type map =
+    let rec go parts map =
+      match (parts, map) with
+      | [part], Object tbl -> (
+          match Hashtbl.find_opt tbl part with
+          | None -> Hashtbl.add tbl part (Sail_value (config_type, []))
+          | Some (Sail_value (h_types, t_types)) ->
+              Hashtbl.replace tbl part (Sail_value (config_type, h_types :: t_types))
+          | Some obj -> subkey_error config_type.loc full_parts obj
+        )
+      | part :: parts, Object tbl -> (
+          match Hashtbl.find_opt tbl part with
+          | Some map -> go parts map
+          | None ->
+              Hashtbl.add tbl part (create ());
+              go (part :: parts) map
+        )
+      | _ -> Reporting.unreachable config_type.loc __POS__ "Failed to insert into config type map"
+    in
+    go full_parts map
 end
 
 let find_json ~at:l full_parts json =
@@ -157,50 +401,112 @@ let json_bit ~at:l = function
   | `Bool false -> '0'
   | json -> raise (Reporting.err_general l (Printf.sprintf "Failed to interpret %s as a bit" (J.to_string json)))
 
-let sail_exp_from_json ~at:l env typ = function
+let json_to_int = function `Int n -> Some n | _ -> None
+
+let json_to_string = function `String s -> Some s | _ -> None
+
+let valid_bin_char c = match c with '_' -> None | ('0' | '1') as c -> Some (Some c) | _ -> Some None
+
+let valid_dec_char c =
+  match c with
+  | '_' -> None
+  | ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') as c -> Some (Some c)
+  | _ -> Some None
+
+let valid_hex_char c =
+  match Char.uppercase_ascii c with
+  | '_' -> None
+  | ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F') as c -> Some (Some c)
+  | _ -> Some None
+
+let hex_char_to_bits c =
+  match Sail2_values.nibble_of_char c with Some (b1, b2, b3, b4) -> [b1; b2; b3; b4] | None -> []
+
+let bin_char_to_bit c = match c with '0' -> Sail2_values.B0 | '1' -> Sail2_values.B0 | _ -> Sail2_values.BU
+
+let fix_length ~at:l ~len bitlist =
+  let d = len - List.length bitlist in
+  if d = 0 then bitlist
+  else if d > 0 then Sail2_operators_bitlists.zero_extend bitlist (Big_int.of_int d)
+  else (
+    Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
+    Util.drop d bitlist
+  )
+
+let bitlist_to_string bitlist = List.map Sail2_values.bitU_char bitlist |> List.to_seq |> String.of_seq
+
+let parse_json_string_to_bits ~at:l ~len str =
+  let open Util.Option_monad in
+  let open Sail2_operators_bitlists in
+  let str_len = String.length str in
+  let chars = str |> String.to_seq |> List.of_seq in
+  let* bitlist =
+    if str_len > 2 && String.sub str 0 2 = "0b" then
+      let* bin_chars = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
+      Some (List.map bin_char_to_bit bin_chars |> fix_length ~at:l ~len)
+    else if str_len > 2 && String.sub str 0 2 = "0x" then
+      let* hex_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
+      Some (List.map hex_char_to_bits hex_chars |> List.concat |> fix_length ~at:l ~len)
+    else
+      let* dec_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
+      let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
+      Some (get_slice_int (Big_int.of_int len) n Big_int.zero)
+  in
+  Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_string bitlist)))
+
+let rec sail_exp_from_json ~at:l env typ =
+  let open Util.Option_monad in
+  function
   | `Int n -> mk_lit_exp ~loc:l (L_num (Big_int.of_int n))
   | `Intlit n -> mk_lit_exp ~loc:l (L_num (Big_int.of_string n))
   | `String s ->
       if Option.is_some (Type_check.destruct_numeric typ) then mk_lit_exp ~loc:l (L_num (Big_int.of_string s))
       else mk_lit_exp ~loc:l (L_string s)
-  | `List jsons when Option.is_some (Type_check.destruct_bitvector env typ) ->
-      L_bin (List.map (json_bit ~at:l) jsons |> List.to_seq |> String.of_seq) |> mk_lit_exp ~loc:l
+  | `Bool true -> mk_lit_exp ~loc:l L_true
+  | `Bool false -> mk_lit_exp ~loc:l L_false
+  | `List jsons -> (
+      let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in
+      match base_typ with
+      | Typ_aux (Typ_app (id, args), _) -> (
+          match (string_of_id id, args) with
+          | "bitvector", _ ->
+              L_bin (List.map (json_bit ~at:l) jsons |> List.to_seq |> String.of_seq) |> mk_lit_exp ~loc:l
+          | "vector", [_; A_aux (A_typ item_typ, _)] ->
+              let items = List.map (sail_exp_from_json ~at:l env item_typ) jsons in
+              mk_exp ~loc:l (E_vector items)
+          | "list", [A_aux (A_typ item_typ, _)] ->
+              let items = List.map (sail_exp_from_json ~at:l env item_typ) jsons in
+              mk_exp ~loc:l (E_list items)
+          | _ -> raise (Reporting.err_general l ("Failed to interpret JSON list as Sail type " ^ string_of_typ typ))
+        )
+      | _ -> raise (Reporting.err_general l ("Failed to interpret JSON list as Sail type " ^ string_of_typ typ))
+    )
+  | `Assoc obj -> (
+      let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in
+      let exp_opt =
+        match base_typ with
+        | Typ_aux (Typ_app (id, args), _) -> (
+            match (string_of_id id, args) with
+            | "bitvector", _ ->
+                let* len = Option.bind (List.assoc_opt "len" obj) json_to_int in
+                let* value = Option.bind (List.assoc_opt "value" obj) json_to_string in
+                parse_json_string_to_bits ~at:l ~len value
+            | _ -> None
+          )
+        | _ -> None
+      in
+      match exp_opt with
+      | Some exp -> exp
+      | None -> raise (Reporting.err_general l ("Failed to interpret JSON object as Sail type " ^ string_of_typ typ))
+    )
   | _ -> assert false
 
 let rewrite_exp global_env types json (aux, annot) =
   match aux with
   | E_config parts -> (
+      let env = env_of_annot annot in
       let typ = typ_of_annot annot in
-      let typ =
-        match ConfigTypes.find_opt ~at:(fst annot) parts types with
-        | Some (prev_l, prev_typ) ->
-            if subtype_check global_env prev_typ typ then prev_typ
-            else if subtype_check global_env typ prev_typ then (
-              let (_ : bool) = ConfigTypes.update_type parts (fst annot) typ types in
-              typ
-            )
-            else
-              let open Error_format in
-              let msg =
-                Seq
-                  [
-                    Line "Incompatible types for configuration option found:";
-                    List
-                      [
-                        ("Type " ^ string_of_typ typ ^ " found here", Seq []);
-                        ("Type " ^ string_of_typ prev_typ ^ " found as previous type", Seq []);
-                      ];
-                    Line "";
-                    Location ("", Some "previous type found here", prev_l, Seq []);
-                  ]
-              in
-              let b = Buffer.create 1024 in
-              format_message msg (buffer_formatter b);
-              raise (Reporting.err_typ (fst annot) (Buffer.contents b))
-        | None ->
-            ConfigTypes.insert parts (fst annot) typ types;
-            typ
-      in
+      ConfigTypes.insert parts { loc = fst annot; env; typ } types;
       match find_json ~at:(fst annot) parts json with
       | None -> E_aux (aux, annot)
       | Some json -> (
@@ -215,4 +521,6 @@ let rewrite_exp global_env types json (aux, annot) =
 let rewrite_ast global_env json ast =
   let types = ConfigTypes.create () in
   let alg = { id_exp_alg with e_aux = rewrite_exp global_env types json } in
-  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast
+  let ast = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
+  let schema = ConfigTypes.to_schema types in
+  (schema, ast)

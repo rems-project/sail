@@ -77,6 +77,8 @@ let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
 let opt_slice_instantiation_types : bool ref = ref false
+let opt_output_schema_file : string option ref = ref None
+
 let is_bytecode = Sys.backend_type = Bytecode
 
 (* Allow calling all options as either -foo_bar, -foo-bar, or
@@ -253,6 +255,10 @@ let rec options =
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
       ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
       ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
+      ( "-output-schema",
+        Arg.String (fun file -> opt_output_schema_file := Some file),
+        "<file> output configuration schema"
+      );
       ("-abstract_types", Arg.Set Initial_check.opt_abstract_types, " (experimental) allow abstract types");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
@@ -511,10 +517,18 @@ let run_sail (config : Yojson.Safe.t option) tgt =
           )
   in
   let ast = Frontend.instantiate_abstract_types (Some tgt) !opt_instantiations ast in
-  let ast = apply_model_config env ast in
+  let schema, ast = apply_model_config env ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
+
+  ( match !opt_output_schema_file with
+  | None -> ()
+  | Some file ->
+      let out = Util.open_output_with_check file in
+      Yojson.Safe.pretty_to_channel ~std:true out.channel schema;
+      Util.close_output_with_check out
+  );
 
   (* Don't show warnings during re-writing for now *)
   Reporting.suppressed_warning_info ();
