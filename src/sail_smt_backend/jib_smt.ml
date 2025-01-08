@@ -585,7 +585,7 @@ module Make (Config : CONFIG) = struct
               singleton (define_const id ret_ctyp (Fn (zencode_id function_id, smt_args)))
         )
         else failwith ("Unrecognised function " ^ string_of_id function_id)
-    | I_init (ctyp, id, cval) | I_copy (CL_id (id, ctyp), cval) ->
+    | I_init (ctyp, id, Init_cval cval) | I_copy (CL_id (id, ctyp), cval) ->
         let* smt = Smt.smt_cval cval in
         let* smt = Smt.smt_conversion ~into:ctyp ~from:(cval_ctyp cval) smt in
         singleton (define_const id ctyp smt)

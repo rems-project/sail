@@ -164,7 +164,6 @@ let rec visit_cval vis outer_cval =
         let cval' = visit_cval vis cval in
         let id' = visit_id vis id in
         if cval == cval' && id == id' then no_change else V_field (cval', id')
-    | V_config_key _ -> no_change
   in
   do_visit vis (vis#vcval outer_cval) aux outer_cval
 
@@ -175,6 +174,13 @@ and visit_field vis ((id, cval) as field) =
 
 and visit_cvals vis cvals = map_no_copy (visit_cval vis) cvals
 
+let visit_init vis no_change =
+  match no_change with
+  | Init_cval cval ->
+      let cval' = visit_cval vis cval in
+      if cval == cval' then no_change else Init_cval cval'
+  | Init_json_key _ -> no_change
+
 let rec visit_instr vis outer_instr =
   let aux vis no_change =
     match no_change with
@@ -182,11 +188,11 @@ let rec visit_instr vis outer_instr =
         let ctyp' = visit_ctyp vis ctyp in
         let name' = visit_name vis name in
         if ctyp == ctyp' && name == name' then no_change else I_aux (I_decl (ctyp', name'), aux)
-    | I_aux (I_init (ctyp, name, cval), aux) ->
+    | I_aux (I_init (ctyp, name, init), aux) ->
         let ctyp' = visit_ctyp vis ctyp in
         let name' = visit_name vis name in
-        let cval' = visit_cval vis cval in
-        if ctyp == ctyp' && name == name' && cval == cval' then no_change else I_aux (I_init (ctyp', name', cval'), aux)
+        let init' = visit_init vis init in
+        if ctyp == ctyp' && name == name' && init == init' then no_change else I_aux (I_init (ctyp', name', init'), aux)
     | I_aux (I_jump (cval, label), aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_jump (cval', label), aux)

@@ -60,6 +60,7 @@ val symbol_generator : string -> (unit -> id) * (unit -> unit)
 val idecl : l -> ctyp -> name -> instr
 val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
+val ijson_key : l -> name -> string list -> instr
 val iif : l -> cval -> instr list -> instr list -> ctyp -> instr
 val ifuncall : l -> clexp -> id * ctyp list -> cval list -> instr
 val ifuncall_multi : l -> clexp list -> id * ctyp list -> cval list -> instr

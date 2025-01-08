@@ -648,7 +648,7 @@ module Make (C : CONFIG) = struct
     in
     let key_name = ngensym () in
     let args = [V_lit (VL_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
-    let key_init = [iinit l CT_json_key key_name (V_config_key key)] in
+    let key_init = [ijson_key l key_name key] in
 
     let config_extract ctyp ~validate ~extract =
       let json = ngensym () in

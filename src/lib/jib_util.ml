@@ -76,7 +76,9 @@ let idecl l ctyp id = I_aux (I_decl (ctyp, id), (instr_number (), l))
 
 let ireset l ctyp id = I_aux (I_reset (ctyp, id), (instr_number (), l))
 
-let iinit l ctyp id cval = I_aux (I_init (ctyp, id, cval), (instr_number (), l))
+let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_number (), l))
+
+let ijson_key l id parts = I_aux (I_init (CT_json_key, id, Init_json_key parts), (instr_number (), l))
 
 let iif l cval then_instrs else_instrs ctyp = I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (instr_number (), l))
 
@@ -333,7 +335,6 @@ let rec string_of_cval = function
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
     end
   | V_tuple (members, _) -> "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
-  | V_config_key parts -> "config " ^ String.concat "." parts
 
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
@@ -347,14 +348,18 @@ let string_of_creturn = function
   | CR_one clexp -> string_of_clexp clexp
   | CR_multi clexps -> "(" ^ Util.string_of_list ", " string_of_clexp clexps ^ ")"
 
+let string_of_init = function
+  | Init_cval cval -> string_of_cval cval
+  | Init_json_key parts -> Util.string_of_list "." (fun part -> "\"" ^ part ^ "\"") parts
+
 let rec doc_instr (I_aux (aux, _)) =
   let open Printf in
   let instr s = twice space ^^ string s in
   match aux with
   | I_decl (ctyp, id) -> ksprintf instr "%s : %s" (string_of_name id) (string_of_ctyp ctyp)
   | I_reset (ctyp, id) -> ksprintf instr "reset %s : %s" (string_of_name id) (string_of_ctyp ctyp)
-  | I_init (ctyp, id, cval) ->
-      ksprintf instr "%s : %s = %s" (string_of_name id) (string_of_ctyp ctyp) (string_of_cval cval)
+  | I_init (ctyp, id, init) ->
+      ksprintf instr "%s : %s = %s" (string_of_name id) (string_of_ctyp ctyp) (string_of_init init)
   | I_reinit (ctyp, id, cval) ->
       ksprintf instr "reinit %s : %s = %s" (string_of_name id) (string_of_ctyp ctyp) (string_of_cval cval)
   | I_clear (ctyp, id) -> ksprintf instr "clear %s : %s" (string_of_name id) (string_of_ctyp ctyp)
@@ -663,7 +668,7 @@ let rec is_polymorphic = function
 
 let rec cval_deps = function
   | V_id (id, _) -> NameSet.singleton id
-  | V_lit _ | V_member _ | V_config_key _ -> NameSet.empty
+  | V_lit _ | V_member _ -> NameSet.empty
   | V_field (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) | V_tuple (cvals, _) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
   | V_ctor_kind (cval, _, _) -> cval_deps cval
@@ -688,11 +693,14 @@ let creturn_deps = function
         )
         (NameSet.empty, NameSet.empty) clexps
 
+let init_deps = function Init_cval cval -> cval_deps cval | Init_json_key _ -> NameSet.empty
+
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
   | I_decl (_, id) -> (NameSet.empty, NameSet.singleton id)
   | I_reset (_, id) -> (NameSet.empty, NameSet.singleton id)
-  | I_init (_, id, cval) | I_reinit (_, id, cval) -> (cval_deps cval, NameSet.singleton id)
+  | I_init (_, id, init) -> (init_deps init, NameSet.singleton id)
+  | I_reinit (_, id, cval) -> (cval_deps cval, NameSet.singleton id)
   | I_if (cval, _, _, _) -> (cval_deps cval, NameSet.empty)
   | I_jump (cval, _) -> (cval_deps cval, NameSet.empty)
   | I_funcall (creturn, _, _, cvals) ->
@@ -754,7 +762,6 @@ let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
   | V_member (id, ctyp) -> V_member (id, f ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, f ctyp)
-  | V_config_key parts -> V_config_key parts
   | V_ctor_kind (cval, (id, unifiers), ctyp) -> V_ctor_kind (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
   | V_ctor_unwrap (cval, (id, unifiers), ctyp) -> V_ctor_unwrap (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
   | V_tuple_member (cval, i, j) -> V_tuple_member (map_cval_ctyp f cval, i, j)
@@ -767,11 +774,14 @@ let map_creturn_ctyp f = function
   | CR_one clexp -> CR_one (map_clexp_ctyp f clexp)
   | CR_multi clexps -> CR_multi (List.map (map_clexp_ctyp f) clexps)
 
+let map_init_ctyp f init =
+  match init with Init_cval cval -> Init_cval (map_cval_ctyp f cval) | Init_json_key _ -> init
+
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr =
     match instr with
     | I_decl (ctyp, id) -> I_decl (f ctyp, id)
-    | I_init (ctyp, id, cval) -> I_init (f ctyp, id, map_cval_ctyp f cval)
+    | I_init (ctyp, id, init) -> I_init (f ctyp, id, map_init_ctyp f init)
     | I_if (cval, then_instrs, else_instrs, ctyp) ->
         I_if
           ( map_cval_ctyp f cval,
@@ -1038,7 +1048,6 @@ and cval_ctyp = function
   | V_struct (_, ctyp) -> ctyp
   | V_tuple (_, ctyp) -> ctyp
   | V_call (op, vs) -> infer_call op vs
-  | V_config_key _ -> CT_json_key
 
 let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp
@@ -1066,10 +1075,13 @@ let rec clexp_ctyp = function
 
 let creturn_ctyp = function CR_one clexp -> clexp_ctyp clexp | CR_multi clexps -> CT_tup (List.map clexp_ctyp clexps)
 
+let init_ctyps = function Init_cval cval -> CTSet.singleton (cval_ctyp cval) | Init_json_key _ -> CTSet.empty
+
 let rec instr_ctyps (I_aux (instr, aux)) =
   match instr with
   | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp -> CTSet.singleton ctyp
-  | I_init (ctyp, _, cval) | I_reinit (ctyp, _, cval) -> CTSet.add ctyp (CTSet.singleton (cval_ctyp cval))
+  | I_init (ctyp, _, init) -> CTSet.add ctyp (init_ctyps init)
+  | I_reinit (ctyp, _, cval) -> CTSet.add ctyp (CTSet.singleton (cval_ctyp cval))
   | I_if (cval, instrs1, instrs2, ctyp) ->
       CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2) |> CTSet.add (cval_ctyp cval) |> CTSet.add ctyp
   | I_funcall (creturn, _, (_, ctyps), cvals) ->

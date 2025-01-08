@@ -1303,9 +1303,13 @@ module Make (Config : CONFIG) = struct
     match aux with
     | I_comment str -> wrap (SVS_comment str)
     | I_decl (ctyp, id) -> wrap (SVS_var (id, ctyp, None))
-    | I_init (ctyp, id, cval) ->
-        let* value = Smt.smt_cval cval in
-        wrap (SVS_var (id, ctyp, Some value))
+    | I_init (ctyp, id, init) -> (
+        match init with
+        | Init_cval cval ->
+            let* value = Smt.smt_cval cval in
+            wrap (SVS_var (id, ctyp, Some value))
+        | Init_json_key _ -> Reporting.unreachable l __POS__ "Json key found in SV backend"
+      )
     | I_return cval ->
         let* value = Smt.smt_cval cval in
         wrap (SVS_return value)
@@ -2506,7 +2510,7 @@ module Make (Config : CONFIG) = struct
         (fun (decls, others) instr ->
           match instr with
           | I_aux (I_decl (ctyp, id), (_, l)) -> (idecl l ctyp id :: decls, others)
-          | I_aux (I_init (ctyp, id, cval), (_, l)) ->
+          | I_aux (I_init (ctyp, id, Init_cval cval), (_, l)) ->
               (idecl l ctyp id :: decls, icopy l (CL_id (id, ctyp)) cval :: others)
           | other -> (decls, other :: others)
         )

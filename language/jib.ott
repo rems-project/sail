@@ -138,7 +138,6 @@ cval :: 'V_' ::=
   | cval nat0 nat1                                  :: :: tuple_member
   | op ( cval0 , ... , cvaln )                      :: :: call
   | cval . id                                       :: :: field
-  | string0 . ... . stringn                         :: :: config_key
 
 % Note that init / clear are sometimes referred to as create / kill
 
@@ -225,12 +224,16 @@ creturn :: 'CR_' ::=
   | clexp                     :: :: one
   | ( clexp0 , ... , clexpn ) :: :: multi
 
+init :: 'Init_' ::=
+  | cval                             :: :: cval
+  | json_key string0 . ... . stringn :: :: json_key
+
 instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
 % Jib_compile.ml.
   | ctyp name                                      :: :: decl
-  | ctyp name = cval                               :: :: init
+  | ctyp name = init                               :: :: init
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label

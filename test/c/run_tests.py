@@ -41,7 +41,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
                 if basename.startswith('config'):
                     sail_opts += ' --c-include sail_config.h'
                     c_opts += ' \'{}\'/lib/json/*.c -I \'{}\'/lib/json'.format(sail_dir, sail_dir)
-                step('\'{}\' --no-warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
+                step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))

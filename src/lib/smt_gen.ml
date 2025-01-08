@@ -427,10 +427,6 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         | V_tuple _ | V_tuple_member _ ->
             let* l = current_location in
             Reporting.unreachable l __POS__ "Found tuple value, which should have been removed before SMT generation"
-        | V_config_key _ ->
-            let* l = current_location in
-            Reporting.unreachable l __POS__
-              "Found config key value, which should have been removed before SMT generation"
       )
 
   (* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval

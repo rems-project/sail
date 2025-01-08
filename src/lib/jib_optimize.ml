@@ -151,7 +151,6 @@ let rec cval_subst id subst = function
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_subst id subst cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_subst id subst cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_subst id subst) members, ctyp)
-  | V_config_key parts -> V_config_key parts
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
@@ -164,7 +163,6 @@ let rec cval_map_id f = function
   | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_map_id f cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, cval_map_id f cval)) fields, ctyp)
   | V_tuple (members, ctyp) -> V_tuple (List.map (cval_map_id f) members, ctyp)
-  | V_config_key parts -> V_config_key parts
 
 module Remove_undefined = struct
   open Jib
@@ -242,10 +240,13 @@ end
 
 let remove_functions_to_references = Jib_visitor.visit_instrs (new Remove_functions_to_references.visitor)
 
+let init_subst id subst init =
+  match init with Init_cval cval -> Init_cval (cval_subst id subst cval) | Init_json_key _ -> init
+
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
-  | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
-      I_aux (I_init (ctyp, id', cval_subst id subst cval), aux) :: rest
+  | I_aux (I_init (ctyp, id', init), aux) :: rest when Name.compare id id' = 0 ->
+      I_aux (I_init (ctyp, id', init_subst id subst init), aux) :: rest
   | I_aux (I_reset (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
   | I_aux (I_reinit (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
       I_aux (I_reinit (ctyp, id', cval_subst id subst cval), aux) :: rest
@@ -254,7 +255,7 @@ let rec instrs_subst id subst = function
       let instr =
         match instr with
         | I_decl (ctyp, id') -> I_decl (ctyp, id')
-        | I_init (ctyp, id', cval) -> I_init (ctyp, id', cval_subst id subst cval)
+        | I_init (ctyp, id', init) -> I_init (ctyp, id', init_subst id subst init)
         | I_jump (cval, label) -> I_jump (cval_subst id subst cval, label)
         | I_goto label -> I_goto label
         | I_label label -> I_label label
@@ -335,7 +336,7 @@ let inline cdefs should_inline instrs =
   let fix_substs =
     let f = cval_map_id (ssa_name (-1)) in
     function
-    | I_aux (I_init (ctyp, id, cval), aux) -> I_aux (I_init (ctyp, id, f cval), aux)
+    | I_aux (I_init (ctyp, id, Init_cval cval), aux) -> I_aux (I_init (ctyp, id, Init_cval (f cval)), aux)
     | I_aux (I_jump (cval, label), aux) -> I_aux (I_jump (f cval, label), aux)
     | I_aux (I_funcall (clexp, extern, function_id, args), aux) ->
         I_aux (I_funcall (clexp, extern, function_id, List.map f args), aux)
@@ -504,7 +505,6 @@ let remove_tuples cdefs ctx =
     | V_id (id, ctyp) -> V_id (id, ctyp)
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
-    | V_config_key parts -> V_config_key parts
     | V_ctor_kind (cval, ctor, ctyp) -> V_ctor_kind (fix_cval cval, ctor, ctyp)
     | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (fix_cval cval, ctor, ctyp)
     | V_tuple_member (cval, _, n) ->
@@ -547,10 +547,11 @@ let remove_tuples cdefs ctx =
     | CR_one clexp -> CR_one (fix_clexp clexp)
     | CR_multi clexps -> CR_multi (List.map fix_clexp clexps)
   in
+  let fix_init = function Init_cval cval -> Init_cval (fix_cval cval) | Init_json_key parts -> Init_json_key parts in
   let rec fix_instr_aux = function
     | I_funcall (creturn, extern, id, args) -> I_funcall (fix_creturn creturn, extern, id, List.map fix_cval args)
     | I_copy (clexp, cval) -> I_copy (fix_clexp clexp, fix_cval cval)
-    | I_init (ctyp, id, cval) -> I_init (ctyp, id, fix_cval cval)
+    | I_init (ctyp, id, init) -> I_init (ctyp, id, fix_init init)
     | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, fix_cval cval)
     | I_jump (cval, label) -> I_jump (fix_cval cval, label)
     | I_throw cval -> I_throw (fix_cval cval)
