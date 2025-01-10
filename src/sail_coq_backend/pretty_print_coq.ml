@@ -1052,6 +1052,12 @@ let filter_dep_pattern_tuple ctxt kopts (P_aux (p, ann) as pat) typ =
       (Some coq_typat, P_aux (coq_pat, ann), coq_typ)
   | _ -> (None, pat, typ)
 
+(* If kid is bound by a pattern when in env, compute the actual kid bound due to shadowing *)
+let compute_kid_shadow env kid loc =
+  if KBindings.mem kid (Env.get_typ_vars env) then
+    Kid_aux (Var (string_of_kid kid ^ "#" ^ string_of_int (Env.shadows kid env)), loc)
+  else kid
+
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
@@ -1071,6 +1077,8 @@ let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
   | P_lit lit -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id ctxt id
+  (* When p is an id the type variable in P_var will be handled by merge_pat; TODO:
+     handle more general cases where a type variable actually needs to be bound *)
   | P_var (p, _) -> doc_pat ctxt true p
   | P_as (p, id) -> parens (separate space [doc_pat ctxt true p; string "as"; doc_id ctxt id])
   | P_typ (ptyp, p) ->
@@ -1293,7 +1301,8 @@ let merge_new_tyvars ctxt old_env pat new_env =
     | P_var (p, ty_p) -> begin
         match (p, ty_p) with
         | _, TP_aux (TP_wild, _) -> merge_pat m p
-        | P_aux (P_id id, _), TP_aux (TP_var kid, _) -> check_kid id kid (merge_pat m p)
+        | P_aux (P_id id, _), TP_aux (TP_var kid, tp_l) ->
+            check_kid id (compute_kid_shadow old_env kid tp_l) (merge_pat m p)
         | _ -> merge_pat m p
       end
     (* Some of these don't make it through to the backend, but it's obvious what
@@ -2268,6 +2277,9 @@ let doc_exp, doc_let =
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
     | LB_val (P_aux (P_id id, _), e) when not (is_enum (env_of e) id) ->
+        prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false e)
+    (* The type variable will be handled by merge_pat *)
+    | LB_val (P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var _, _)), p_annot), e) when not (is_enum (env_of e) id) ->
         prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false e)
     | LB_val (P_aux (P_typ (typ, P_aux (P_id id, _)), _), e) when not (is_enum (env_of e) id) ->
         prefix 2 1
