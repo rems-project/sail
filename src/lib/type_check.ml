@@ -4790,8 +4790,11 @@ let check_record l env def_annot id typq fields =
   let env =
     try
       match get_def_attribute "bitfield" def_annot with
-      | Some (_, Some (AD_aux (AD_num size, _))) when not (Env.is_bitfield id env) ->
-          Env.add_bitfield id (bitvector_typ (nconstant size)) Bindings.empty env
+      | Some _ when not (Env.is_bitfield id env) -> begin
+          match fields with
+          | [(typ, Id_aux (Id "bits", _))] -> Env.add_bitfield id typ Bindings.empty env
+          | _ -> typ_raise l (Err_other "bitfield record has wrong fields")
+        end
       | _ -> env
     with _ -> env
   in
@@ -4957,9 +4960,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
                      This is used as the default name for all the bits in the bitfield, so should not be overridden."
               )
               ranges;
-            (*
-                let def_annot = add_def_attribute l "bitfield" (Some (AD_aux (AD_num size, l))) def_annot in
-                   *)
+            let def_annot = add_def_attribute l "bitfield" None def_annot in
             let defs =
               DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
               :: Bitfield.macro id size (Env.get_default_order env) ranges

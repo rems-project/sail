@@ -4328,8 +4328,9 @@ let rewrite_unroll_constant_loops _type_env defs =
     A type-checking pass is expected to be run after this rewrite. *)
 let remove_bitfield_records type_env =
   let rewrite_def rewriters = function
-    | DEF_aux (DEF_type (TD_aux (TD_record (id, tq, _, _), t_annot)), def_annot) when Env.is_bitfield id type_env ->
-        let typ, _ = Env.get_bitfield id type_env in
+    (* Avoid using Env.get_bitfield in case the typing environment is out of date (e.g., due to nexp_ids) *)
+    | DEF_aux (DEF_type (TD_aux (TD_record (id, tq, [(typ, _)], _), t_annot)), def_annot)
+      when Env.is_bitfield id type_env ->
         DEF_aux (DEF_type (TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)), def_annot)
     | d -> rewriters_base.rewrite_def rewriters d
   in
