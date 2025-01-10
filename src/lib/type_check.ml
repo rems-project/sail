@@ -3970,7 +3970,6 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
               );
           List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
           List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
-          let remaining_typs = instantiate_return_type remaining_typs in
           let remaining_typs =
             List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) remaining_typs
           in
@@ -3994,6 +3993,7 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
       | [] -> raise (Reporting.err_unreachable l __POS__ "Empty arguments during instantiation")
     in
     let xs, typ_args, env, deferred = List.fold_left fold_instantiate ([], typ_args, env, []) xs in
+    let typ_args = instantiate_return_type typ_args in
     let num_deferred = List.length deferred in
     typ_debug (lazy (Printf.sprintf "Have %d deferred arguments" num_deferred));
     if num_deferred = previously_deferred then (xs, env)
