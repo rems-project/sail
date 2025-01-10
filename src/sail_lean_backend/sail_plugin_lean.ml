@@ -190,15 +190,15 @@ let create_lake_project (out_name : string) default_sail_dir =
   output_string project_main "open Sail\n\n";
   project_main
 
-let output (out_name : string) ast default_sail_dir =
+let output (out_name : string) env ast default_sail_dir =
   let project_main = create_lake_project out_name default_sail_dir in
   (* Uncomment for debug output of the Sail code after the rewrite passes *)
   (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
-  Pretty_print_lean.pp_ast_lean ast project_main;
+  Pretty_print_lean.pp_ast_lean env ast project_main;
   close_out project_main
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name ast default_sail_dir
+  output out_name env ast default_sail_dir
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target
