@@ -25,18 +25,19 @@ endif
 syntax keyword  identifier  val function type struct union enum let var if then by
 syntax keyword  identifier  else match in return register ref forall operator effect
 syntax keyword  identifier  overload cast sizeof constant constraint default assert newtype from
-syntax keyword  identifier  pure infixl infixr infix scattered end try catch and to
+syntax keyword  identifier  pure impure infixl infixr infix scattered end try catch and to
 syntax keyword  identifier  throw clause as repeat until while do foreach bitfield
-syntax keyword  identifier  mapping where with implicit
+syntax keyword  identifier  mapping where with implicit outcome instantiation impl
+syntax keyword  identifier  private mutual termination_measure forwards backwards
 
-syntax keyword  sailKind    Int Type Order Bool inc dec
+syntax keyword  sailKind    Int Nat Type Order Bool inc dec
 syntax keyword  sailKind    barr depend rreg wreg rmem rmemt wmv wmvt eamem wmem
 syntax keyword  sailKind    exmem undef unspec nondet escape configuration
 
 syntax keyword  sailType    vector bitvector int nat atom range unit bit real list bool string bits option
 syntax keyword  sailType    uint64_t int64_t bv_t mpz_t
 
-syntax keyword  sailSpecial _prove _not_prove create kill convert undefined
+syntax keyword  sailSpecial _prove _not_prove create kill convert undefined exit
 
 syntax match    sailNumber      "\<0b[0-1_]\+\>"
 syntax match    sailNumber      "\<0x[0-9a-fA-F_]\+\>"
@@ -54,6 +55,8 @@ syntax match    sailEscape      +\\[nt"\\]+ contained
 syntax match    sailEscape      "\\\o\o\=\o\=" contained
 
 syntax match    sailConstant    "\<[A-Z][A-Z0-9_]\+\>"
+syntax keyword  sailConstant    true false
+syntax keyword  sailConstant    bitzero bitone
 
 syntax match    sailPragma      "$include .*" contains=sailFilename
 syntax region   sailFilename    start=+<+ end=+>+ contained
