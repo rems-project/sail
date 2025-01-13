@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/vector_lit_length.sail[0m:4.27-33:
+4[96m |[0m  let v : vector(1, int) = [1, 2];
+ [91m |[0m                           [91m^----^[0m
+ [91m |[0m Vector literal with incorrect length: found 2 elements, but expected 1

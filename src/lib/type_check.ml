@@ -2385,7 +2385,11 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           (tyvars, nc, elem_typ)
         )
         else if prove __POS__ env (nc_eq (nint literal_len) (nexp_simp len)) then (tyvars, nc, elem_typ)
-        else typ_error l "Vector literal with incorrect length"
+        else
+          typ_error l
+            ("Vector literal with incorrect length: found " ^ string_of_int literal_len ^ " elements, but expected "
+           ^ string_of_nexp len
+            )
       in
       match check_or_infer_sequence ~at:l env vec tyvars nc (Some elem_typ) with
       | Some (vec, elem_typ) ->
