@@ -4578,13 +4578,14 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
     | None -> typ_error l "funcl list is empty"
   in
   typ_print (lazy ("\n" ^ Util.("Check function " |> cyan |> clear) ^ string_of_id id));
-  let have_val_spec, (quant, typ), env =
+  let have_val_spec, (quant_ast, typ_ast), (quant, typ), env =
     match Env.get_val_spec_opt id env with
-    | Some (bind, l) -> (Some l, bind, env)
+    | Some (bind, l) -> (Some l, bind, bind, env)
     | None ->
         (* No val, so get the function type from annotations attached to clauses *)
         let bind = infer_funtyp l env tannot_opt funcls in
-        (None, bind, env)
+        let bind' = expand_bind_synonyms l env bind in
+        (None, (if !opt_expand_valspec then bind' else bind), bind', env)
     | exception Type_error (l, Err_not_in_scope (_, scope_l, item_scope, into_scope, is_opened, priv)) ->
         (* If we defined the function type with val in another module, but didn't require it. *)
         let reason = if priv then "private." else "not in scope." in
@@ -4642,7 +4643,7 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
   in
   let vs_def, env =
     if Option.is_none have_val_spec then
-      ([synthesize_val_spec env id quant typ def_annot], Env.add_val_spec id (quant, typ) env)
+      ([synthesize_val_spec env id quant_ast typ_ast def_annot], Env.add_val_spec id (quant, typ) env)
     else ([], env)
   in
   (* For performance, we can lazily check the body if we need it later *)
