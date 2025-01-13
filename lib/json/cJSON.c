@@ -311,6 +311,7 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
     unsigned char number_c_string[64];
     unsigned char decimal_point = get_decimal_point();
     size_t i = 0;
+    unsigned char *output = NULL;
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL))
     {
@@ -352,12 +353,16 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
 loop_end:
     number_c_string[i] = '\0';
 
+    output = (unsigned char*)input_buffer->hooks.allocate(i * sizeof(char));
+    memcpy(output, number_c_string, i);
+
     number = strtod((const char*)number_c_string, (char**)&after_end);
     if (number_c_string == after_end)
     {
         return false; /* parse_error */
     }
 
+    item->valuestring = (char*)output;
     item->valuedouble = number;
 
     /* use saturation in case of overflow */

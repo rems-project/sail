@@ -450,6 +450,8 @@ val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
+val instantiate_record : at:Ast.l -> env -> id -> typ_arg list -> (typ * id) list
+
 (** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
    that substituting those bindings using every type variable in goals
    will make typ1 and typ2 equal. Will throw a Unification_error if

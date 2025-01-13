@@ -156,6 +156,19 @@ bool sail_config_is_bool_array(const sail_config_json config)
   return true;
 }
 
+bool sail_config_is_bits(const sail_config_json config)
+{
+  bool is_bool_array = sail_config_is_bool_array(config);
+
+  bool is_bv_object = sail_config_is_object(config);
+  if (is_bv_object) {
+    is_bv_object &= sail_config_object_has_key(config, "len");
+    is_bv_object &= sail_config_object_has_key(config, "value");
+  }
+
+  return is_bool_array || is_bv_object;
+}
+
 bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int expected)
 {
   if (!sail_config_is_bool_array(config)) {
@@ -186,17 +199,25 @@ void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;
 
-  mp_bitcnt_t len = (mp_bitcnt_t)cJSON_GetArraySize(json);
-  bv->len = len;
-  mpz_set_ui(*bv->bits, 0);
+  if (cJSON_IsArray(json)) {
+    mp_bitcnt_t len = (mp_bitcnt_t)cJSON_GetArraySize(json);
+    bv->len = len;
+    mpz_set_ui(*bv->bits, 0);
 
-  mp_bitcnt_t i = 0;
-  cJSON *bit;
-  cJSON_ArrayForEach(bit, json) {
-    if (cJSON_IsTrue(bit)) {
-      mpz_setbit(*bv->bits, len - i - 1);
+    mp_bitcnt_t i = 0;
+    cJSON *bit;
+    cJSON_ArrayForEach(bit, json) {
+      if (cJSON_IsTrue(bit)) {
+        mpz_setbit(*bv->bits, len - i - 1);
+      }
+      i++;
     }
-    i++;
+  } else {
+    cJSON *len_json = cJSON_GetObjectItemCaseSensitive(json, "len");
+    cJSON *value_json = cJSON_GetObjectItemCaseSensitive(json, "value");
+
+    bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
+    gmp_sscanf(value_json->valuestring, "%Zd", bv->bits);
   }
 }
 

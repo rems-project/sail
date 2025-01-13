@@ -1,0 +1,6 @@
+{
+    "c1" : {
+        "foo" : { "len" : 32, "value" : "12" },
+        "bar" : "Hello, World!"
+    }
+}

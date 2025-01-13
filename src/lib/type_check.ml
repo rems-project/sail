@@ -2049,6 +2049,17 @@ let rec reroll_cons ~at:l elems annots last_tail =
   | [], [] -> last_tail
   | _, _ -> Reporting.unreachable l __POS__ "Could not recreate cons list due to element and annotation length mismatch"
 
+let instantiate_record ~at:l env id args =
+  let typq, fields = Env.get_record id env in
+  let kopts, _ = quant_split typq in
+  let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+  List.map
+    (fun (field_typ, id) ->
+      let field_typ = subst_unifiers unifiers field_typ in
+      (field_typ, id)
+    )
+    fields
+
 type ('a, 'b) pattern_functions = {
   infer : Env.t -> 'a -> 'b * Env.t * uannot exp list;
   bind : Env.t -> 'a -> typ -> 'b * Env.t * uannot exp list;

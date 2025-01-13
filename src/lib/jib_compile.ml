@@ -678,11 +678,35 @@ module Make (C : CONFIG) = struct
       | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
       | CT_lint -> config_extract CT_lint json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_int"
       | CT_lbits ->
-          config_extract CT_lbits json ~validate:("sail_config_is_bool_array", []) ~extract:"sail_config_unwrap_bits"
+          config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
       | CT_fbits n ->
-          config_extract CT_lbits json
-            ~validate:("sail_config_is_bool_array_with_size", [V_lit (VL_int (Big_int.of_int n), CT_fint 64)])
-            ~extract:"sail_config_unwrap_bits"
+          config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
+      | CT_struct (_, fields) as struct_ctyp ->
+          let struct_name = ngensym () in
+          let fields_from_json =
+            List.map
+              (fun (field_id, field_ctyp) ->
+                let field_json = ngensym () in
+                let setup, call, cleanup = extract field_json field_ctyp in
+                [
+                  idecl l CT_json field_json;
+                  iextern l
+                    (CL_id (field_json, CT_json))
+                    (mk_id "sail_config_object_key", [])
+                    [V_id (json, CT_json); V_lit (VL_string (string_of_id field_id), CT_string)];
+                ]
+                @ setup
+                @ [call (CL_field (CL_id (struct_name, struct_ctyp), field_id))]
+                @ cleanup
+                @ [iclear CT_json field_json]
+              )
+              fields
+            |> List.concat
+          in
+          ( [idecl l struct_ctyp struct_name] @ fields_from_json,
+            (fun clexp -> icopy l clexp (V_id (struct_name, struct_ctyp))),
+            [iclear struct_ctyp struct_name]
+          )
       | CT_vector item_ctyp ->
           let vec = ngensym () in
           let len = ngensym () in

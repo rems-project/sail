@@ -51,6 +51,16 @@ open Type_check
 
 module J = Yojson.Safe
 
+let typ_is_record env = function
+  | Typ_aux (Typ_id id, _) -> Env.is_record id env
+  | Typ_aux (Typ_app (id, _), _) -> Env.is_record id env
+  | _ -> false
+
+let destruct_record = function
+  | Typ_aux (Typ_id id, _) -> Some (id, [])
+  | Typ_aux (Typ_app (id, args), _) -> Some (id, args)
+  | _ -> None
+
 module ConfigTypes : sig
   type config_type = { loc : Ast.l; env : env; typ : typ }
 
@@ -209,12 +219,6 @@ end = struct
         )
       | [], NC_aux (NC_true, _), Typ_aux (Typ_app (id, _), _) when string_of_id id = "atom_bool" ->
           Some (`Assoc [("type", `String "boolean")])
-      | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) -> (
-          match string_of_id id with
-          | "string" -> Some (`Assoc [("type", `String "string")])
-          | "unit" -> Some (`Assoc [("type", `String "null")])
-          | _ -> None
-        )
       | _, _, Typ_aux (Typ_app (id, [A_aux (A_nexp arg, _)]), _) when string_of_id id = "bitvector" -> (
           let schema_bool_array clauses =
             [("type", `String "array"); ("items", `Assoc [("type", `String "boolean")])] @ clauses
@@ -274,6 +278,36 @@ end = struct
           let* schema_items = generate item_typ in
           let schema_array clauses = [("type", `String "array"); ("items", schema_items)] @ clauses in
           Some (`Assoc (schema_array (array_constraint ())))
+      (* Records here can't be existentially quantified because the
+         existential quantifier might link multiple fields, and we
+         can't capture that in the schema. *)
+      | [], NC_aux (NC_true, _), _ when typ_is_record env typ ->
+          let* id, args = destruct_record typ in
+          let fields = instantiate_record ~at:loc env id args in
+          let* properties =
+            List.map
+              (fun (field_typ, field_id) ->
+                let* schema = generate field_typ in
+                Some (string_of_id field_id, schema)
+              )
+              fields
+            |> Util.option_all
+          in
+          let record_schema : (string * J.t) list =
+            [
+              ("type", `String "object");
+              ("properties", `Assoc properties);
+              ("required", `List (List.map (fun (_, field_id) -> `String (string_of_id field_id)) fields));
+              ("additionalProperties", `Bool false);
+            ]
+          in
+          Some (`Assoc record_schema)
+      | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) -> (
+          match string_of_id id with
+          | "string" -> Some (`Assoc [("type", `String "string")])
+          | "unit" -> Some (`Assoc [("type", `String "null")])
+          | _ -> None
+        )
       | _ -> None
     in
     let* json = generate typ in
@@ -448,7 +482,7 @@ let parse_json_string_to_bits ~at:l ~len str =
       let* hex_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
       Some (List.map hex_char_to_bits hex_chars |> List.concat |> fix_length ~at:l ~len)
     else
-      let* dec_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
+      let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
       Some (get_slice_int (Big_int.of_int len) n Big_int.zero)
   in
@@ -484,16 +518,32 @@ let rec sail_exp_from_json ~at:l env typ =
   | `Assoc obj -> (
       let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in
       let exp_opt =
-        match base_typ with
-        | Typ_aux (Typ_app (id, args), _) -> (
-            match (string_of_id id, args) with
-            | "bitvector", _ ->
-                let* len = Option.bind (List.assoc_opt "len" obj) json_to_int in
-                let* value = Option.bind (List.assoc_opt "value" obj) json_to_string in
-                parse_json_string_to_bits ~at:l ~len value
-            | _ -> None
-          )
-        | _ -> None
+        if typ_is_record env base_typ then
+          let* id, _ = destruct_record base_typ in
+          let _, fields = Env.get_record id env in
+          let* fexps =
+            List.map
+              (fun (field_typ, field_id) ->
+                let* field_json = List.assoc_opt (string_of_id field_id) obj in
+                let exp = sail_exp_from_json ~at:l env field_typ field_json in
+                Some (mk_fexp ~loc:l field_id exp)
+              )
+              fields
+            |> Util.option_all
+          in
+          Some (mk_exp ~loc:l (E_struct fexps))
+        else (
+          match base_typ with
+          | Typ_aux (Typ_app (id, args), _) -> (
+              match (string_of_id id, args) with
+              | "bitvector", _ ->
+                  let* len = Option.bind (List.assoc_opt "len" obj) json_to_int in
+                  let* value = Option.bind (List.assoc_opt "value" obj) json_to_string in
+                  parse_json_string_to_bits ~at:l ~len value
+              | _ -> None
+            )
+          | _ -> None
+        )
       in
       match exp_opt with
       | Some exp -> exp
