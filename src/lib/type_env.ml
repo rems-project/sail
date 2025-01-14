@@ -954,7 +954,7 @@ and expand_arg_synonyms env (A_aux (typ_arg, l)) =
   match typ_arg with
   | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
   | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc |> constraint_simp), l)
-  | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp |> nexp_simp), l)
+  | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
 
 and add_constraint ?(global = false) ?reason constr env =
   Well_formedness.wf_constraint Well_formedness.no_existential env constr;
