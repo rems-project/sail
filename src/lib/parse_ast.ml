@@ -77,8 +77,6 @@ type 'a annot = l * 'a
 
 type extern = { pure : bool; bindings : (string * string) list }
 
-exception Parse_error_locn of l * string
-
 type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
