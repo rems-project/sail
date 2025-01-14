@@ -2330,7 +2330,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           in
           let checked_exp = crule check_exp env exp typ in
           annot_exp (E_var (lexp, bind, checked_exp)) typ
-      | Update -> typ_error l "var expression can only be used to declare new variables, not update them"
+      | Update -> typ_error (lexp_loc lexp) "var expression can only be used to declare new variables, not update them"
     end
   | E_internal_return exp, _ ->
       let checked_exp = crule check_exp env exp typ in

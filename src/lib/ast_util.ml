@@ -176,6 +176,8 @@ let mpat_loc = function MP_aux (_, (l, _)) -> l
 
 let exp_loc = function E_aux (_, (l, _)) -> l
 
+let lexp_loc = function LE_aux (_, (l, _)) -> l
+
 let nexp_loc = function Nexp_aux (_, l) -> l
 
 let constraint_loc = function NC_aux (_, l) -> l
