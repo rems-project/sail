@@ -195,6 +195,16 @@ void sail_config_unwrap_int(sail_int *n, const sail_config_json config)
   mpz_set_str(*n, str, 10);
 }
 
+void sail_config_truncate(lbits *rop) {
+  mpz_t tmp;
+  mpz_init(tmp);
+
+  mpz_set_ui(tmp, 1);
+  mpz_mul_2exp(tmp, tmp, rop->len);
+  mpz_sub_ui(tmp, tmp, 1);
+  mpz_and(*rop->bits, *rop->bits, tmp);
+}
+
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;
@@ -215,9 +225,39 @@ void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
   } else {
     cJSON *len_json = cJSON_GetObjectItemCaseSensitive(json, "len");
     cJSON *value_json = cJSON_GetObjectItemCaseSensitive(json, "value");
+    char *v = value_json->valuestring;
+    bool has_separator = false;
 
     bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
-    gmp_sscanf(value_json->valuestring, "%Zd", bv->bits);
+
+    size_t i = 0;
+    for (char *c = v; *c != '\0'; c++) {
+      if (*c != '_') {
+        v[i] = *c;
+        i++;
+      }
+    }
+    v[i] = '\0';
+
+    if (strncmp(v, "0x", 2) == 0) {
+      bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
+      gmp_sscanf(v, "0x%Zx", bv->bits);
+    } else if (strncmp(v, "0b", 2) == 0) {
+      mp_bitcnt_t b = 0;
+      i--;
+      do {
+        if (v[i] == '1') {
+          mpz_setbit(*bv->bits, b);
+        }
+        b++;
+        i--;
+      } while (i >= 2);
+    } else {
+      bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
+      gmp_sscanf(v, "%Zd", bv->bits);
+    }
+
+    sail_config_truncate(bv);
   }
 }
 
