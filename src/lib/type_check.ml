@@ -1145,6 +1145,8 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
         | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "atom" -> prove __POS__ env (nc_eq (nvar v) n)
         | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]) when string_of_id id = "bitvector" ->
             Kid.compare v v' = 0
+        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _); _]) when string_of_id id = "vector" ->
+            Kid.compare v v' = 0
         | _ -> false
       in
       begin

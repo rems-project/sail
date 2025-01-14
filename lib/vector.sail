@@ -397,6 +397,6 @@ val signed = pure {
 
 $endif
 
-overload __size = {__id, bitvector_length}
+overload __size = {__id, bitvector_length, vector_length}
 
 $endif
