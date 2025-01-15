@@ -54,3 +54,18 @@ function extern_eq_bit() -> bool = {
   return eq_bit(bitzero, bitone)
 }
 
+
+// TODO: Waiting for full AST to get translated.
+// function extern_fdiv_int() -> int = {
+//   return fdiv_int(5, 4)
+// }
+
+// TODO: Waiting for full AST to get translated.
+// function extern_fmod_int() -> int = {
+//   return fmod_int(5, 4)
+// }
+
+function extern_abs_int_plain() -> int = {
+  let x: int = -5;
+  return abs_int_plain(x)
+}

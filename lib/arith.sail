@@ -185,6 +185,7 @@ val abs_int_plain = pure {
   interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
+  lean: "(Int.ofNat ∘ Int.natAbs)",
   _: "abs_int"
 } : int -> int
 
