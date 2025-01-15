@@ -217,8 +217,13 @@ end = struct
               Some (logic_to_schema nc_logic)
           | _ -> None
         )
-      | [], NC_aux (NC_true, _), Typ_aux (Typ_app (id, _), _) when string_of_id id = "atom_bool" ->
-          Some (`Assoc [("type", `String "boolean")])
+      | _, NC_aux (NC_true, _), Typ_aux (Typ_app (id, [A_aux (A_bool arg, _)]), _) when string_of_id id = "atom_bool"
+        -> (
+          match (kopts, arg) with
+          | [KOpt_aux (KOpt_kind (_, v), _)], NC_aux (NC_var v', _) when Kid.compare v v' = 0 ->
+              Some (`Assoc [("type", `String "boolean")])
+          | _ -> None
+        )
       | _, _, Typ_aux (Typ_app (id, [A_aux (A_nexp arg, _)]), _) when string_of_id id = "bitvector" -> (
           let schema_bool_array clauses =
             [("type", `String "array"); ("items", `Assoc [("type", `String "boolean")])] @ clauses
@@ -498,6 +503,7 @@ let rec sail_exp_from_json ~at:l env typ =
       else mk_lit_exp ~loc:l (L_string s)
   | `Bool true -> mk_lit_exp ~loc:l L_true
   | `Bool false -> mk_lit_exp ~loc:l L_false
+  | `Null -> mk_lit_exp ~loc:l L_unit
   | `List jsons -> (
       let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in
       match base_typ with

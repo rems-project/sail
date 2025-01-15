@@ -87,16 +87,17 @@ sail_config_json sail_config_object_key(const sail_config_json config, const sai
 int64_t sail_config_list_length(const sail_config_json config);
 sail_config_json sail_config_list_nth(const sail_config_json config, int64_t index);
 
+bool sail_config_is_array(const sail_config_json config);
+bool sail_config_is_bits(const sail_config_json config);
+bool sail_config_is_bool(const sail_config_json config);
+bool sail_config_is_bool_array(const sail_config_json config);
+bool sail_config_is_int(const sail_config_json config);
 bool sail_config_is_string(const sail_config_json config);
 
-bool sail_config_is_array(const sail_config_json config);
-bool sail_config_is_bool_array(const sail_config_json config);
-bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int expected);
-bool sail_config_is_bits(const sail_config_json config);
-
-void sail_config_unwrap_string(sail_string *str, const sail_config_json config);
-void sail_config_unwrap_int(sail_int *n, const sail_config_json config);
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config);
+bool sail_config_unwrap_bool(const sail_config_json config);
+void sail_config_unwrap_int(sail_int *n, const sail_config_json config);
+void sail_config_unwrap_string(sail_string *str, const sail_config_json config);
 
 #ifdef __cplusplus
 }

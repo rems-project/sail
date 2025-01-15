@@ -113,6 +113,16 @@ sail_config_json sail_config_list_nth(const sail_config_json config, int64_t ind
   return (sail_config_json)item;
 }
 
+bool sail_config_is_bool(const sail_config_json config)
+{
+  return cJSON_IsBool((cJSON *)config);
+}
+
+bool sail_config_unwrap_bool(const sail_config_json config)
+{
+  return cJSON_IsTrue((cJSON *)config);
+}
+
 bool sail_config_is_object(const sail_config_json config)
 {
   return cJSON_IsObject((cJSON *)config);
@@ -131,6 +141,11 @@ sail_config_json sail_config_object_key(const sail_config_json config, const sai
 bool sail_config_is_string(const sail_config_json config)
 {
   return cJSON_IsString((cJSON *)config);
+}
+
+bool sail_config_is_int(const sail_config_json config)
+{
+  return cJSON_IsNumber((cJSON *)config);
 }
 
 bool sail_config_is_array(const sail_config_json config)
@@ -169,17 +184,6 @@ bool sail_config_is_bits(const sail_config_json config)
   return is_bool_array || is_bv_object;
 }
 
-bool sail_config_is_bool_array_with_size(const sail_config_json config, mach_int expected)
-{
-  if (!sail_config_is_bool_array(config)) {
-    return false;
-  }
-
-  int len = cJSON_GetArraySize((cJSON *)config);
-
-  return (mach_int)len == expected;
-}
-
 void sail_config_unwrap_string(sail_string *str, const sail_config_json config)
 {
   sail_string conf_str = cJSON_GetStringValue((cJSON *)config);
@@ -191,8 +195,8 @@ void sail_config_unwrap_string(sail_string *str, const sail_config_json config)
 
 void sail_config_unwrap_int(sail_int *n, const sail_config_json config)
 {
-  char *str = cJSON_GetStringValue((cJSON *)config);
-  mpz_set_str(*n, str, 10);
+  cJSON *json = (cJSON *)config;
+  mpz_set_str(*n, json->valuestring, 10);
 }
 
 void sail_config_truncate(lbits *rop) {

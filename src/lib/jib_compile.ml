@@ -676,11 +676,13 @@ module Make (C : CONFIG) = struct
       | CT_string ->
           config_extract CT_string json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_string"
       | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
-      | CT_lint -> config_extract CT_lint json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_int"
+      | CT_lint -> config_extract CT_lint json ~validate:("sail_config_is_int", []) ~extract:"sail_config_unwrap_int"
+      | CT_fint _ -> config_extract CT_lint json ~validate:("sail_config_is_int", []) ~extract:"sail_config_unwrap_int"
       | CT_lbits ->
           config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
-      | CT_fbits n ->
+      | CT_fbits _ ->
           config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
+      | CT_bool -> config_extract CT_bool json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bool"
       | CT_struct (_, fields) as struct_ctyp ->
           let struct_name = ngensym () in
           let fields_from_json =
