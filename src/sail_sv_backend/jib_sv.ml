@@ -99,6 +99,7 @@ module type CONFIG = sig
   val union_padding : bool
   val no_unions : bool
   val unreachable : string list
+  val no_write_flush : bool
   val comb : bool
   val ignore : string list
   val fun_to_wires : (string * int) list
@@ -1919,7 +1920,10 @@ module Make (Config : CONFIG) = struct
               | _ -> assert false
               )
             exposed_registers
-        @ [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
+        @
+        if Config.no_write_flush then []
+        else
+          [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
       in
       if clk then (
         let reset_regs, inout_regs =

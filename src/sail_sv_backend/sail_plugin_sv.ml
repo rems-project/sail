@@ -84,6 +84,8 @@ let opt_line_directives = ref false
 
 let opt_comb = ref false
 
+let opt_no_write_flush = ref false
+
 let opt_inregs = ref false
 let opt_outregs = ref false
 
@@ -164,6 +166,10 @@ let verilog_options =
     );
     (Flag.create ~prefix:["sv"] "lines", Arg.Set opt_line_directives, "output `line directives");
     (Flag.create ~prefix:["sv"] "comb", Arg.Set opt_comb, "output an always_comb block instead of initial block");
+    ( Flag.create ~prefix:["sv"] "no_write_flush",
+      Arg.Set opt_no_write_flush,
+      "don't emit potentially unsupported sail_write_flush() in main module."
+    );
     (Flag.create ~prefix:["sv"] "inregs", Arg.Set opt_inregs, "take register values from inputs");
     (Flag.create ~prefix:["sv"] "outregs", Arg.Set opt_outregs, "output register values");
     ( Flag.create ~prefix:["sv"] ~arg:"n" "recursion_depth",
@@ -470,6 +476,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let no_unions = !opt_no_unions
     let unreachable = !opt_unreachable
     let comb = !opt_comb
+    let no_write_flush = !opt_no_write_flush
     let ignore = [] (* List.map fst !opt_fun2wires *)
     let fun_to_wires = !opt_fun_to_wires
     let dpi_sets = !opt_dpi_sets
