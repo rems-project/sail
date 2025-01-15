@@ -4415,8 +4415,14 @@ let rewrite_toplevel_let_patterns env ast =
           let ids = pat_ids pat in
           let base_id = fresh_id "let" l in
           let base_annot = mk_tannot env (typ_of exp) in
+          (* We may need the type information for (e.g.) records *)
+          let add_pat_typ p =
+            match pat with P_aux (P_typ (typ, _), (l, _)) -> P_aux (P_typ (typ, p), (l, mk_tannot env typ)) | _ -> p
+          in
           let base_def =
-            mk_def (DEF_let (LB_aux (LB_val (P_aux (P_id base_id, (l, base_annot)), exp), (l, empty_tannot)))) env
+            mk_def
+              (DEF_let (LB_aux (LB_val (add_pat_typ (P_aux (P_id base_id, (l, base_annot))), exp), (l, empty_tannot))))
+              env
           in
           let id_defs =
             List.map
