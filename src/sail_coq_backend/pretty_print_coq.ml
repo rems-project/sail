@@ -1715,7 +1715,7 @@ let doc_exp, doc_let =
                 | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ)
                 | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
               in
-              let fn_typ_env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env (quant_kopts tqs) in
+              let fn_typ_env = Env.add_typquant l tqs env in
               let is_monadic = not (Effects.function_is_pure f ctxt.global.effect_info) in
               let inst, inst_env =
                 (* We attempt to get an instantiation of the function signature's
