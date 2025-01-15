@@ -10,6 +10,10 @@ function extern_sub() -> int = {
   return sub_int(5, 4)
 }
 
+function extern_sub_nat() -> nat = {
+  return sub_nat(5, 4)
+}
+
 function extern_tdiv() -> int = {
   return tdiv_int(5, 4)
 }

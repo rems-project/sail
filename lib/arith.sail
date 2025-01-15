@@ -71,6 +71,7 @@ val sub_nat = pure {
   ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
   lem: "integerMinus",
   coq: "Z.sub",
+  lean: "Nat.sub",
   _: "sub_nat"
 } : (nat, nat) -> nat
 
