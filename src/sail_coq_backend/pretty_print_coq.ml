@@ -3723,7 +3723,9 @@ let doc_def global unimplemented generic_eq_types countable_types enum_number_de
         ("Loop termination measures for " ^ string_of_id id ^ " should have been rewritten before backend")
   | DEF_impl _ | DEF_outcome _ | DEF_instantiation _ ->
       unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
-  | DEF_constraint _ -> unreachable (def_loc def) __POS__ "Abstract constraint not supported by Coq backend"
+  (* This backend doesn't currently support abstract types, so they must have been instantiated by now and
+     the constraints don't need to appear in the output. *)
+  | DEF_constraint _ -> empty
 
 (* Definitions to help translate Isla trace values embedded in Coq into directly
    translated Coq datatypes. *)
