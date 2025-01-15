@@ -1,0 +1,48 @@
+:conf: sail_doc/config.json
+
+Sail includes a configuration system that allows building
+specifications that can be configured at either runtime (if supported
+by the Sail backend in use) or statically at build-time using a set of
+options.
+
+From the perspective of the specification author, one uses the
+`config` construct to include a value in the specification, for
+example:
+
+sail::example1[from=conf,part=body,dedent]
+
+The configuration is some key-value store with dot-separated
+hierachical keys, so we access the value stored at `foo.bar` key as
+some string value. In practice, we use JSON to represent these
+configurations. In this example, the JSON might look something like:
+
+[source,json]
+----
+include::sail_config/config.json[]
+----
+
+Which when used will cause the specification to print `"Hello,
+World!"`. If we want to statically apply this configuration (and
+convert the Sail source to OCaml), we could run the following,
+assuming the configration file is called `file.json` and the Sail file
+containing the above code is `file.sail`.
+
+[source,sh]
+----
+sail --ocaml --config file.json file.sail
+----
+
+=== Runtime Configuration with Sail to C
+
+The runtime configuration functions are included in the
+`sail_config.h` header in the `lib/json` subdirectory of the Sail
+distribution.
+
+[source,c]
+----
+void sail_config_set_file(const char *path);
+
+void sail_config_cleanup(void);
+----
+
+=== Validating Configurations with JSON Schema

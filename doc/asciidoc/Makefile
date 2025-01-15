@@ -18,6 +18,8 @@ SAIL_DOCS += sail_doc/bitvector_and_generic.json
 SAIL_DOCS += sail_doc/struct.json
 SAIL_DOCS += sail_doc/enum.json
 SAIL_DOCS += sail_doc/union.json
+SAIL_DOCS += sail_doc/config.json
+SAIL_DOCS += sail_config/config.json
 SAIL_DOCS += sail_doc/type_syn.json
 SAIL_DOCS += sail_doc/type_syn_xlen.json
 SAIL_DOCS += sail_doc/abstract_xlen.json
@@ -37,6 +39,10 @@ all: manual.html manual.pdf
 sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
 	sail --no-color -doc --doc-file $< --doc-embed plain --doc-bundle $(notdir $@) $< 2> $(basename $@).warning
+
+sail_config/%.json: ../examples/%.json
+	mkdir -p sail_config
+	cp $< $@
 
 sail_doc/%.error: ../examples/%.sail
 	mkdir -p sail_doc

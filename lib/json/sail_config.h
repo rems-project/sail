@@ -64,7 +64,7 @@ void sail_config_set_file(const char *path);
  *
  * After using this, other functions in this module are no long safe to call.
  */
-void sail_config_cleanup();
+void sail_config_cleanup(void);
 
 /*
  * Get the JSON corresponding to some key

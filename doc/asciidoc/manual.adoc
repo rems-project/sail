@@ -27,6 +27,10 @@ include::usage.adoc[]
 
 include::language.adoc[]
 
+== Model Configuration
+
+include::configuration.adoc[]
+
 == Modular Sail Specifications
 
 include::modules.adoc[]
