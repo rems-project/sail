@@ -29,6 +29,7 @@ def test_lean():
                 step('rm -r {} || true'.format(basename))
                 step('mkdir -p {}'.format(basename))
                 step('\'{}\' {} --lean --lean-output-dir {}'.format(sail, filename, basename))
+                step(f'lake --dir {basename}/out build')
                 step('diff {}/out/Out.lean {}.expected.lean'.format(basename, basename))
                 step('rm -r {}'.format(basename))
                 print_ok(filename)
