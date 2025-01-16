@@ -144,7 +144,7 @@ val truncateLSB = pure {
   interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
-  lean: "Sail.BitVec.truncateLSB",
+  lean: "Sail.BitVec.truncateLsb",
   _: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 

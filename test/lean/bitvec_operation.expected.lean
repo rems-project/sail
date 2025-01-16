@@ -19,7 +19,7 @@ def bitvector_truncate (x : BitVec 32) : BitVec 16 :=
   (Sail.BitVec.truncate x 16)
 
 def bitvector_truncateLSB (x : BitVec 32) : BitVec 16 :=
-  (Sail.BitVec.truncateLSB x 16)
+  (Sail.BitVec.truncateLsb x 16)
 
 def bitvector_append (x : BitVec 16) (y : BitVec 16) : BitVec 32 :=
   (BitVec.append x y)
