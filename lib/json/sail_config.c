@@ -75,7 +75,7 @@ void sail_config_set_file(const char *path)
 
 void sail_config_cleanup(void)
 {
-  sail_free(sail_config);
+  cJSON_Delete((cJSON *)sail_config);
 }
 
 sail_config_json sail_config_get(size_t n, const char *key[])
@@ -196,7 +196,9 @@ void sail_config_unwrap_string(sail_string *str, const sail_config_json config)
 void sail_config_unwrap_int(sail_int *n, const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;
-  mpz_set_str(*n, json->valuestring, 10);
+  if (mpz_set_str(*n, json->valuestring, 10) == -1) {
+    sail_assert(false, "Failed to parse integer from configuration");
+  }
 }
 
 void sail_config_truncate(lbits *rop) {
@@ -207,6 +209,8 @@ void sail_config_truncate(lbits *rop) {
   mpz_mul_2exp(tmp, tmp, rop->len);
   mpz_sub_ui(tmp, tmp, 1);
   mpz_and(*rop->bits, *rop->bits, tmp);
+
+  mpz_clear(tmp);
 }
 
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)

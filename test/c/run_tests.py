@@ -43,12 +43,15 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
                     c_opts += ' \'{}\'/lib/json/*.c -I \'{}\'/lib/json'.format(sail_dir, sail_dir)
                 step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
-                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
+                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename),
+                     expected_status = 1 if basename.startswith('fail') else 0,
+                     stderr_file='{}.err_result'.format(basename))
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
                     step('diff {}.err_result {}.err_expect'.format(basename, basename))
                 if valgrind and not basename.startswith('fail'):
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename),
+                         expected_status = 1 if basename.startswith('fail') else 0)
                 step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
@@ -201,6 +204,7 @@ if 'c' in targets:
     xml += test_c('constant folding', '', '-Oconstant_fold', False)
     #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
     xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+    xml += test_c('address sanitised', '-O2 -fsanitize=address -g', '-O', False)
 
 if 'cpp' in targets:
     xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')

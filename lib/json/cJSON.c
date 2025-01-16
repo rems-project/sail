@@ -353,8 +353,8 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
 loop_end:
     number_c_string[i] = '\0';
 
-    output = (unsigned char*)input_buffer->hooks.allocate(i * sizeof(char));
-    memcpy(output, number_c_string, i);
+    output = (unsigned char*)input_buffer->hooks.allocate(i * sizeof(char) + 1);
+    memcpy(output, number_c_string, i + 1);
 
     number = strtod((const char*)number_c_string, (char**)&after_end);
     if (number_c_string == after_end)

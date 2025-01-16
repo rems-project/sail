@@ -9,6 +9,8 @@ $else
 $option --config ../c/config_int.json
 $endif
 
+$option --sv-int-size 256
+
 val main : unit -> unit
 
 function main() = {
