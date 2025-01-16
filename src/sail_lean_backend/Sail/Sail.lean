@@ -13,7 +13,7 @@ def truncate {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
   x.truncate w'
 
 def truncateLsb {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
-  x.extractLsb' (w-w') w'
+  x.extractLsb' (w - w') w'
 
 end BitVec
 end Sail
