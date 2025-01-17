@@ -176,8 +176,8 @@ def test_coq(name):
     results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
     results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
-    results.expect_failure("abstract_type.sail", "Abstract constraint not supported by Coq backend yet")
     results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
+    results.expect_failure("union_variant_names.sail", "Coq backend doesn't support constructors with the same name as a type")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
