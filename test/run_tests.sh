@@ -16,7 +16,7 @@ printf "\n==========================================\n"
 printf "Monomorphisation tests\n"
 printf "==========================================\n"
 
-./mono/run_tests.sh
+./mono/run_tests.py
 
 printf "\n==========================================\n"
 printf "LaTeX tests\n"
