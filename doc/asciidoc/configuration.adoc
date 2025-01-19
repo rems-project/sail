@@ -32,11 +32,56 @@ containing the above code is `file.sail`.
 sail --ocaml --config file.json file.sail
 ----
 
+=== JSON representation of Sail types
+
+The following example demonstrates how basic Sail types are
+represented in the JSON configuration file. We can load integers,
+booleans, and strings, all of which correspond directly to the
+equivalent JSON type. Integers are allowed to be arbitrary precision,
+as they are in Sail.
+
+:confbasic: sail_doc/config_basic_types.json
+
+sail::example[from=confbasic,part=body,dedent]
+
+The following JSON can be used to instantiate the above Sail source:
+
+[source,json]
+----
+include::sail_config/config_basic_types.json[]
+----
+
+Note the two permissible representations for bitvectors. First, we can
+represent them as a list of JSON booleans. This representation has the
+advantage of being simple and unambiguous regarding the length of the
+bitvector, but is verbose. Second, we can use a string containing the
+bitvector value formatted as a Sail bitvector literal (so `pass:[_]`
+can be used as a separator) with an explicit integer length. If the
+value is shorter than the desired width it will be zero-extended. If
+it is larger then any high bits above the stated width will be ignored
+(care should be taken to avoid this). In addition to `0b` and `0x`
+prefixed literals, a decimal value can also be used (also supporting
+`pass:[_]` separators), for example:
+
+[source,json]
+----
+{ "len" : 32, "value" : "1_000_000" }
+----
+
+There are some cases where a specification might need many
+configuration options. Consider the case of RISC-V PMP registers,
+where there are up to 64 such registers, and each one might be
+configured differently. To support this, we allow reading sequences of
+JSON values into Sail vectors and lists.
+
 === Runtime Configuration with Sail to C
 
 The runtime configuration functions are included in the
 `sail_config.h` header in the `lib/json` subdirectory of the Sail
-distribution.
+distribution. The `sail_config_set_file` function loads a
+configuration, and should be called before running any code in a
+configurable model. The loaded configuration data can be freed by
+using the `sail_config_cleanup` function.
 
 [source,c]
 ----

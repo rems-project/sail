@@ -19,7 +19,9 @@ SAIL_DOCS += sail_doc/struct.json
 SAIL_DOCS += sail_doc/enum.json
 SAIL_DOCS += sail_doc/union.json
 SAIL_DOCS += sail_doc/config.json
+SAIL_DOCS += sail_doc/config_basic_types.json
 SAIL_DOCS += sail_config/config.json
+SAIL_DOCS += sail_config/config_basic_types.json
 SAIL_DOCS += sail_doc/type_syn.json
 SAIL_DOCS += sail_doc/type_syn_xlen.json
 SAIL_DOCS += sail_doc/abstract_xlen.json
@@ -43,6 +45,7 @@ sail_doc/%.json: ../examples/%.sail
 sail_config/%.json: ../examples/%.json
 	mkdir -p sail_config
 	cp $< $@
+	-sail $(basename $<).sail --config $< 2> $(basename $@).error
 
 sail_doc/%.error: ../examples/%.sail
 	mkdir -p sail_doc

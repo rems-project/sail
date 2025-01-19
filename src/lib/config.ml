@@ -466,7 +466,7 @@ let bin_char_to_bit c = match c with '0' -> Sail2_values.B0 | '1' -> Sail2_value
 let fix_length ~at:l ~len bitlist =
   let d = len - List.length bitlist in
   if d = 0 then bitlist
-  else if d > 0 then Sail2_operators_bitlists.zero_extend bitlist (Big_int.of_int d)
+  else if d > 0 then Sail2_operators_bitlists.zero_extend bitlist (Big_int.of_int len)
   else (
     Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
     Util.drop (abs d) bitlist
