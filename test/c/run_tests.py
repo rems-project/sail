@@ -119,6 +119,7 @@ def test_lem(name):
     results.expect_failure("real.sail", "print_real not available for Lem at present")
     results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
     results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("concurrency_interface_write.sail", "test harness doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
     results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
@@ -132,7 +133,8 @@ def test_lem(name):
             if tests[filename] == 0:
                 step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
-                step('cp {}*.lem _lbuild_{}'.format(basename, basename))
+                step('mv {}*.lem _lbuild_{}'.format(basename, basename))
+                step('rm {}_lemmas.thy'.format(basename.capitalize()))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
                 step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
@@ -142,6 +144,8 @@ def test_lem(name):
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))
                 if os.path.exists('../{}.err_expect'.format(basename)):
                     step('diff {}.lerr ../{}.err_expect'.format(basename, basename))
+                os.chdir('..')
+                step('rm -r _lbuild_{}'.format(basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
