@@ -114,7 +114,6 @@ def test_lem(name):
     results = Results(name)
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Lem library")
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Lem")
-    results.expect_failure("for_shadow.sail", "Pure loops aren't current supported for Lem (and don't really make sense)")
     results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("real.sail", "print_real not available for Lem at present")
@@ -125,7 +124,6 @@ def test_lem(name):
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
-    results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
