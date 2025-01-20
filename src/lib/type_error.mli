@@ -73,7 +73,7 @@ type type_error =
   | Err_no_overloading of id * (id * Parse_ast.l * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_failed_constraint of
-      n_constraint * Parse_ast.l option * (mut * typ) Bindings.t * type_variables * n_constraint list
+      n_constraint * Parse_ast.l list * (mut * typ) Bindings.t * type_variables * n_constraint list
   | Err_subtype of typ * typ * n_constraint option * (constraint_reason * n_constraint) list * type_variables
   | Err_no_num_ident of id
   | Err_other of string

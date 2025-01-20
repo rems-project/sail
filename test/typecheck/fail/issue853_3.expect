@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/issue853_3.sail[0m:19.23-43:
+19[96m |[0m    physical_address = physaddr_bits(paddr),
+  [91m |[0m                       [91m^------------------^[0m
+  [91m |[0m Failed to prove constraint: 34 == 32
+  [91m |[0m 
+  [91m |[0m constraint from [96mfail/issue853_3.sail[0m:4.21-23:
+  [91m |[0m 4[96m |[0mtype xlenbits = bits(32)
+  [91m |[0m  [91m |[0m                     [91m^^[0m [91mThis type argument[0m
+  [91m |[0m 
+  [91m |[0m constraint from [96mfail/issue853_3.sail[0m:5.25-27:
+  [91m |[0m 5[96m |[0mtype physaddrbits = bits(34)
+  [91m |[0m  [91m |[0m                         [91m^^[0m [91mThis type argument[0m

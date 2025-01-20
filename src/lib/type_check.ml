@@ -1086,8 +1086,7 @@ and subtyp_arg l env (A_aux (aux1, arg_l1) as arg1) (A_aux (aux2, arg_l2) as arg
     (* If we don't have precise locations for both arguments, then
        don't try to use an argument location as the base location for
        the type error, as there are a few confusing corner cases. *)
-    let l = if Reporting.is_unknown_loc arg_l1 || Reporting.is_unknown_loc arg_l2 then l else arg_l2 in
-    let derived_from = if Reporting.is_unknown_loc arg_l1 then None else Some arg_l1 in
+    let derived_from = List.filter (fun l -> not (Reporting.is_unknown_loc l)) [arg_l2; arg_l1] in
     typ_raise l
       (Err_failed_constraint (nc, derived_from, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
   in
@@ -3351,9 +3350,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
             annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len)
           else
             typ_raise l
-              (Err_failed_constraint
-                 (check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
-              )
+              (Err_failed_constraint (check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
       | _ -> typ_error l "Cannot assign slice of non vector type"
     end
   | LE_vector (v_lexp, exp) -> begin
@@ -3369,7 +3366,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           else
             typ_raise l
               (Err_failed_constraint
-                 (bounds_check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                 (bounds_check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
               )
       | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
@@ -3380,7 +3377,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           else
             typ_raise l
               (Err_failed_constraint
-                 (bounds_check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                 (bounds_check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
               )
       | Typ_id id -> begin
           match exp with

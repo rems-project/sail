@@ -3,3 +3,7 @@
 9[96m |[0m    let y : bool('b) = false;
  [91m |[0m                       [91m^---^[0m
  [91m |[0m Failed to prove constraint: not('b)
+ [91m |[0m 
+ [91m |[0m constraint from [96mpass/bool_typ_pat/v1.sail[0m:9.17-19:
+ [91m |[0m 9[96m |[0m    let y : bool('b) = false;
+ [91m |[0m  [91m |[0m                 [91m^^[0m [91mThis type argument[0m
