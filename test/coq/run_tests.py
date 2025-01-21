@@ -25,8 +25,6 @@ def test(name, dir):
     banner('Testing Coq backend on {}'.format(name))
     results = Results(name)
     results.expect_failure('bind_typ_var.sail', 'unsupported existential quantification of a vector length')
-    results.expect_failure('constraint_ctor.sail', 'needs name collision avoidance due to type/constructor punning')
-    results.expect_failure('mapping_clause.sail', 'needs name collision avoidance due to type/constructor punning')
     results.expect_failure('execute_decode_hard.sail', 'Complex existential type - probably going to need this for ARM instruction ASTs')
     results.expect_failure('exist1.sail', 'Needs an existential witness')
     results.expect_failure('while_MM.sail', 'Non-terminating loops - I\'ve written terminating versions of these')

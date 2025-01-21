@@ -170,7 +170,6 @@ def test_coq(name):
     results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
     results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backend")
     results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
-    results.expect_failure("tl_pat.sail", "Coq backend doesn't support constructors with the same name as a type")
     results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
@@ -179,7 +178,6 @@ def test_coq(name):
     results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
     results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
-    results.expect_failure("union_variant_names.sail", "Coq backend doesn't support constructors with the same name as a type")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
