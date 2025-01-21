@@ -1587,6 +1587,7 @@ let doc_exp, doc_let =
                   in
                   let combinator = combinator ^ dir in
                   let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
+                  let body_ctxt = { body_ctxt with is_monadic = effectful (effect_of body) } in
                   let from_exp_pp, to_exp_pp, step_exp_pp = (expY from_exp, expY to_exp, expY step_exp) in
                   (* The body has the right type for deciding whether a proof is necessary *)
                   let vartuple_retyped = check_exp env (strip_exp vartuple) (general_typ_of body) in
@@ -1601,7 +1602,9 @@ let doc_exp, doc_let =
                          (parens (prefix 2 1 (group body_lambda) body_pp))
                       )
                   in
-                  loop_pp
+                  if ctxt.is_monadic && (not body_ctxt.is_monadic) && has_early_return body then
+                    parens (string "pure_early_return_embed" ^/^ loop_pp)
+                  else loop_pp
               | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
             end
           | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
