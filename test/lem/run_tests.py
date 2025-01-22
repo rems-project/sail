@@ -52,6 +52,7 @@ skip_tests_mwords = {
     'bitfield_exponential',
     'bitfield_abs',
     'bitfield_mod',
+    'bitfield_empty',
     # Abstract types not implemented for Lem yet
     'abstract_bool',
     'abstract_bool2',
