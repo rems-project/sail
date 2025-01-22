@@ -56,7 +56,12 @@ let typ_is_record env = function
   | Typ_aux (Typ_app (id, _), _) -> Env.is_record id env
   | _ -> false
 
-let destruct_record = function
+let typ_is_variant env = function
+  | Typ_aux (Typ_id id, _) -> Env.is_variant id env
+  | Typ_aux (Typ_app (id, _), _) -> Env.is_variant id env
+  | _ -> false
+
+let destruct_typ_args = function
   | Typ_aux (Typ_id id, _) -> Some (id, [])
   | Typ_aux (Typ_app (id, args), _) -> Some (id, args)
   | _ -> None
@@ -287,8 +292,8 @@ end = struct
          existential quantifier might link multiple fields, and we
          can't capture that in the schema. *)
       | [], NC_aux (NC_true, _), _ when typ_is_record env typ ->
-          let* id, args = destruct_record typ in
-          let fields = instantiate_record ~at:loc env id args in
+          let* id, args = destruct_typ_args typ in
+          let fields = instantiate_record env id args in
           let* properties =
             List.map
               (fun (field_typ, field_id) ->
@@ -298,7 +303,7 @@ end = struct
               fields
             |> Util.option_all
           in
-          let record_schema : (string * J.t) list =
+          let record_schema =
             [
               ("type", `String "object");
               ("properties", `Assoc properties);
@@ -307,6 +312,27 @@ end = struct
             ]
           in
           Some (`Assoc record_schema)
+      | [], NC_aux (NC_true, _), _ when typ_is_variant env typ ->
+          let* id, args = destruct_typ_args typ in
+          let constructors = instantiate_variant env id args in
+          let* properties =
+            List.map
+              (fun (constructor, typ) ->
+                let* schema = generate typ in
+                Some (string_of_id constructor, schema)
+              )
+              constructors
+            |> Util.option_all
+          in
+          let variant_schema =
+            [
+              ("type", `String "object");
+              ("properties", `Assoc properties);
+              ("minProperties", `Int 1);
+              ("maxProperties", `Int 1);
+            ]
+          in
+          Some (`Assoc variant_schema)
       | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) -> (
           match string_of_id id with
           | "string" -> Some (`Assoc [("type", `String "string")])
@@ -525,7 +551,7 @@ let rec sail_exp_from_json ~at:l env typ =
       let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in
       let exp_opt =
         if typ_is_record env base_typ then
-          let* id, _ = destruct_record base_typ in
+          let* id, _ = destruct_typ_args base_typ in
           let _, fields = Env.get_record id env in
           let* fexps =
             List.map
@@ -538,6 +564,28 @@ let rec sail_exp_from_json ~at:l env typ =
             |> Util.option_all
           in
           Some (mk_exp ~loc:l (E_struct fexps))
+        else if typ_is_variant env base_typ then
+          let* id, _ = destruct_typ_args base_typ in
+          match obj with
+          | [(constructor, value)] -> (
+              let constructor = mk_id ~loc:l constructor in
+              match Env.union_constructor_info constructor env with
+              | None ->
+                  raise
+                    (Reporting.err_general l
+                       (Printf.sprintf "Constructor %s in JSON configuration is not a valid constructor for union %s"
+                          (string_of_id constructor) (string_of_id id)
+                       )
+                    )
+              | Some (_, _, _, Tu_aux (Tu_ty_id (typ, _), _)) ->
+                  let exp = sail_exp_from_json ~at:l env typ value in
+                  Some (mk_exp ~loc:l (E_app (constructor, [exp])))
+            )
+          | _ ->
+              raise
+                (Reporting.err_general l
+                   (Printf.sprintf "JSON does not appear to contain a valid Sail union member for %s" (string_of_id id))
+                )
         else (
           match base_typ with
           | Typ_aux (Typ_app (id, args), _) -> (

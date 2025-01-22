@@ -578,7 +578,7 @@ module Make (C : CONFIG) = struct
       optimizations where we can generate a more efficient version of [foo] that doesn't exist
       in the original Sail.
   *)
-  let compile_funcall ?override_id l ctx id args =
+  let compile_funcall_with ?override_id l ctx id compile_arg args =
     let setup = ref [] in
     let cleanup = ref [] in
 
@@ -596,8 +596,8 @@ module Make (C : CONFIG) = struct
 
     let instantiation = ref KBindings.empty in
 
-    let setup_arg ctyp aval =
-      let arg_setup, cval, arg_cleanup = compile_aval l ctx aval in
+    let setup_arg ctyp arg =
+      let arg_setup, cval, arg_cleanup = compile_arg arg in
       instantiation := KBindings.union merge_unifiers (ctyp_unify l ctyp (cval_ctyp cval)) !instantiation;
       setup := List.rev arg_setup @ !setup;
       cleanup := arg_cleanup @ !cleanup;
@@ -619,6 +619,8 @@ module Make (C : CONFIG) = struct
       end,
       !cleanup
     )
+
+  let compile_funcall ?override_id l ctx id args = compile_funcall_with ?override_id l ctx id (compile_aval l ctx) args
 
   let compile_extern l ctx id args =
     let setup = ref [] in
@@ -683,6 +685,52 @@ module Make (C : CONFIG) = struct
       | CT_fbits _ ->
           config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
       | CT_bool -> config_extract CT_bool json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bool"
+      | CT_variant (_, constructors) as variant_ctyp ->
+          let variant_name = ngensym () in
+          let ctor_checks, ctor_extracts =
+            Util.fold_left_map
+              (fun checks (ctor_id, ctyp) ->
+                let is_ctor = ngensym () in
+                let ctor_json = ngensym () in
+                let value = ngensym () in
+                let check =
+                  [
+                    idecl l CT_bool is_ctor;
+                    iextern l
+                      (CL_id (is_ctor, CT_bool))
+                      (mk_id "sail_config_object_has_key", [])
+                      [V_id (json, CT_json); V_lit (VL_string (string_of_id ctor_id), CT_string)];
+                  ]
+                in
+                let setup, call, cleanup = extract ctor_json ctyp in
+                let ctor_setup, ctor_call, ctor_cleanup =
+                  compile_funcall_with l ctx ctor_id (fun cval -> ([], cval, [])) [V_id (value, ctyp)]
+                in
+                let extract =
+                  [
+                    idecl l CT_json ctor_json;
+                    idecl l ctyp value;
+                    iextern l
+                      (CL_id (ctor_json, CT_json))
+                      (mk_id "sail_config_object_key", [])
+                      [V_id (json, CT_json); V_lit (VL_string (string_of_id ctor_id), CT_string)];
+                  ]
+                  @ setup @ ctor_setup
+                  @ [call (CL_id (value, ctyp))]
+                  @ [ctor_call (CL_id (variant_name, variant_ctyp))]
+                  @ ctor_cleanup @ cleanup
+                in
+                (checks @ check, (is_ctor, extract))
+              )
+              [] constructors
+          in
+          let ctor_extracts =
+            List.fold_left (fun rest (b, instrs) -> [iif l (V_id (b, CT_bool)) instrs rest CT_unit]) [] ctor_extracts
+          in
+          ( [idecl l variant_ctyp variant_name] @ ctor_checks @ ctor_extracts,
+            (fun clexp -> icopy l clexp (V_id (variant_name, variant_ctyp))),
+            [iclear variant_ctyp variant_name]
+          )
       | CT_struct (_, fields) as struct_ctyp ->
           let struct_name = ngensym () in
           let fields_from_json =

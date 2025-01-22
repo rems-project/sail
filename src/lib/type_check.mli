@@ -151,6 +151,8 @@ module Env : sig
 
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
+  val is_variant : id -> t -> bool
+
   val is_record : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
@@ -450,7 +452,9 @@ val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
-val instantiate_record : at:Ast.l -> env -> id -> typ_arg list -> (typ * id) list
+val instantiate_record : env -> id -> typ_arg list -> (typ * id) list
+
+val instantiate_variant : env -> id -> typ_arg list -> (id * typ) list
 
 (** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
    that substituting those bindings using every type variable in goals
