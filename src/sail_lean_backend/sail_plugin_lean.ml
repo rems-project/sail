@@ -108,8 +108,8 @@ let lean_rewrites =
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
-    ("remove_numeral_pats", []);
-    ("pattern_literals", [Literal_arg "lem"]);
+    (* ("remove_numeral_pats", []); *)
+    (* ("pattern_literals", [Literal_arg "lem"]); *)
     ("guarded_pats", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
