@@ -1408,7 +1408,7 @@ module Make (Config : CONFIG) = struct
     | I_block instrs ->
         let* statements = fmap Util.option_these (mapM (svir_instr ?pathcond spec_info ctx) instrs) in
         wrap (svs_block statements)
-    | I_if (cond, then_instrs, else_instrs, _) ->
+    | I_if (cond, then_instrs, else_instrs) ->
         let* cond = Smt.smt_cval cond in
         let to_block statements =
           match filter_skips (Util.option_these statements) with

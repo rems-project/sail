@@ -225,13 +225,12 @@ let rec visit_instr vis outer_instr =
     | I_aux (I_return cval, aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_return cval', aux)
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) ->
         let cval' = visit_cval vis cval in
         let then_instrs' = visit_instrs vis then_instrs in
         let else_instrs' = visit_instrs vis else_instrs in
-        let ctyp' = visit_ctyp vis ctyp in
-        if cval == cval' && then_instrs == then_instrs' && else_instrs == else_instrs' && ctyp == ctyp' then no_change
-        else I_aux (I_if (cval', then_instrs', else_instrs', ctyp'), aux)
+        if cval == cval' && then_instrs == then_instrs' && else_instrs == else_instrs' then no_change
+        else I_aux (I_if (cval', then_instrs', else_instrs'), aux)
     | I_aux (I_block instrs, aux) ->
         let instrs' = visit_instrs vis instrs in
         if instrs == instrs' then no_change else I_aux (I_block instrs', aux)

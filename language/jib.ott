@@ -249,7 +249,7 @@ instr :: 'I_' ::=
 % Jib_compile.ml, as exceptional control flow is handled by a separate
 % Jib->Jib pass.
   | if ( cval ) { instr0 ; ... ; instrn }
-    else { instr0 ; ... ; instrm } : ctyp          :: :: if
+    else { instr0 ; ... ; instrm }                 :: :: if
   | { instr0 ; ... ; instrn }                      :: :: block
   | try { instr0 ; ... ; instrn }                  :: :: try_block
   | throw cval                                     :: :: throw

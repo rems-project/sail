@@ -665,7 +665,7 @@ module Make (C : CONFIG) = struct
       ( [
           idecl l CT_bool valid;
           iextern l (CL_id (valid, CT_bool)) (mk_id (fst validate), []) ([V_id (json, CT_json)] @ snd validate);
-          iif l (V_call (Bnot, [V_id (valid, CT_bool)])) [ibad_config l] [] CT_unit;
+          iif l (V_call (Bnot, [V_id (valid, CT_bool)])) [ibad_config l] [];
           idecl l ctyp value;
           iextern l (CL_id (value, ctyp)) (mk_id extract, []) [V_id (json, CT_json)];
         ],
@@ -725,7 +725,7 @@ module Make (C : CONFIG) = struct
               [] constructors
           in
           let ctor_extracts =
-            List.fold_left (fun rest (b, instrs) -> [iif l (V_id (b, CT_bool)) instrs rest CT_unit]) [] ctor_extracts
+            List.fold_left (fun rest (b, instrs) -> [iif l (V_id (b, CT_bool)) instrs rest]) [] ctor_extracts
           in
           ( [idecl l variant_ctyp variant_name] @ ctor_checks @ ctor_extracts,
             (fun clexp -> icopy l clexp (V_id (variant_name, variant_ctyp))),
@@ -780,7 +780,7 @@ module Make (C : CONFIG) = struct
               iif l
                 (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
-                [] CT_unit;
+                [];
               idecl l (CT_vector item_ctyp) vec;
               iextern l (CL_id (vec, CT_vector item_ctyp)) (mk_id "internal_vector_init", []) [V_id (len, CT_fint 64)];
               iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
@@ -836,7 +836,7 @@ module Make (C : CONFIG) = struct
               iif l
                 (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
-                [] CT_unit;
+                [];
               idecl l (CT_list item_ctyp) list;
               iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
               ilabel loop_start;
@@ -1146,9 +1146,7 @@ module Make (C : CONFIG) = struct
                     guard_setup
                     @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))]
                     @ guard_cleanup
-                    @ [
-                        iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit;
-                      ]
+                    @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) []]
                   else []
                 )
               @ (if num_cases > 1 then coverage_branch_target_taken ctx branch_id body else [])
@@ -1256,7 +1254,7 @@ module Make (C : CONFIG) = struct
             ( setup,
               (fun clexp ->
                 append_into_block on_reached
-                  (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp) if_ctyp)
+                  (iif l cval (compile_branch then_aexp clexp) (compile_branch else_aexp clexp))
               ),
               cleanup
             )
@@ -1307,8 +1305,7 @@ module Make (C : CONFIG) = struct
                 idecl l CT_bool gs;
                 iif l cval
                   (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
-                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
-                  CT_bool;
+                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))];
               ]
             @ left_cleanup,
             (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
@@ -1338,8 +1335,7 @@ module Make (C : CONFIG) = struct
                 idecl l CT_bool gs;
                 iif l cval
                   [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-                  (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
-                  CT_bool;
+                  (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup);
               ]
             @ left_cleanup,
             (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
@@ -1659,10 +1655,10 @@ module Make (C : CONFIG) = struct
       | instrs, [] -> instrs
       | before, I_aux (I_block instrs, _) :: after ->
           before @ [iblock (rewrite_exception (historic @ before) instrs)] @ rewrite_exception (historic @ before) after
-      | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
+      | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
           let historic = historic @ before in
           before
-          @ [iif l cval (rewrite_exception historic then_instrs) (rewrite_exception historic else_instrs) ctyp]
+          @ [iif l cval (rewrite_exception historic then_instrs) (rewrite_exception historic else_instrs)]
           @ rewrite_exception historic after
       | before, I_aux (I_throw cval, (_, l)) :: after ->
           before
@@ -1693,7 +1689,7 @@ module Make (C : CONFIG) = struct
                 iif l
                   (V_id (have_exception, CT_bool))
                   (generate_cleanup (historic @ before) @ [igoto end_block_label])
-                  [] CT_unit;
+                  [];
               ]
             @ rewrite_exception (historic @ before) after
           else before @ (funcall :: rewrite_exception (historic @ before) after)
@@ -1707,8 +1703,8 @@ module Make (C : CONFIG) = struct
     let instr =
       match instr with
       | I_decl _ | I_reset _ | I_init _ | I_reinit _ -> instr
-      | I_if (cval, instrs1, instrs2, ctyp) ->
-          I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2, ctyp)
+      | I_if (cval, instrs1, instrs2) ->
+          I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2)
       | I_funcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
       | I_block instrs -> I_block (List.map (map_try_block f) instrs)
       | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
@@ -1784,10 +1780,10 @@ module Make (C : CONFIG) = struct
           before @ [itry_block l (rewrite_return (historic @ before) instrs)] @ rewrite_return (historic @ before) after
       | before, I_aux (I_block instrs, _) :: after ->
           before @ [iblock (rewrite_return (historic @ before) instrs)] @ rewrite_return (historic @ before) after
-      | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
+      | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
           let historic = historic @ before in
           before
-          @ [iif l cval (rewrite_return historic then_instrs) (rewrite_return historic else_instrs) ctyp]
+          @ [iif l cval (rewrite_return historic then_instrs) (rewrite_return historic else_instrs)]
           @ rewrite_return historic after
       | before, I_aux (I_return cval, (_, l)) :: after ->
           let cleanup_label = label "cleanup_" in
@@ -1837,11 +1833,11 @@ module Make (C : CONFIG) = struct
           let block', seen = opt seen block in
           let instrs', seen = opt seen instrs in
           (I_aux (I_try_block block', aux) :: instrs', seen)
-      | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+      | I_aux (I_if (cval, then_instrs, else_instrs), aux) :: instrs ->
           let then_instrs', seen = opt seen then_instrs in
           let else_instrs', seen = opt seen else_instrs in
           let instrs', seen = opt seen instrs in
-          (I_aux (I_if (cval, then_instrs', else_instrs', ctyp), aux) :: instrs', seen)
+          (I_aux (I_if (cval, then_instrs', else_instrs'), aux) :: instrs', seen)
       | instr :: instrs ->
           let instrs', seen = opt seen instrs in
           (instr :: instrs', seen)

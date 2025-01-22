@@ -569,8 +569,8 @@ let fix_early_heap_return ret instrs =
     | before, I_aux (I_block instrs, _) :: after -> before @ [iblock (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_try_block instrs, (_, l)) :: after ->
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
-        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
+    | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
+        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs)] @ rewrite_return after
     | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
         before
         @ [I_aux (I_funcall (CR_one (CL_addr (CL_id (ret, CT_ref ctyp))), extern, fid, args), aux)]
@@ -595,8 +595,8 @@ let fix_early_stack_return ret ret_ctyp instrs =
     | before, I_aux (I_block instrs, _) :: after -> before @ [iblock (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_try_block instrs, (_, l)) :: after ->
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
-        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
+    | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
+        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs)] @ rewrite_return after
     | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
         before @ [I_aux (I_funcall (CR_one (CL_id (ret, ctyp)), extern, fid, args), aux)] @ rewrite_return after
     | before, I_aux (I_copy (CL_id (Return _, ctyp), cval), aux) :: after ->
@@ -684,8 +684,8 @@ let hoist_allocations recursive_functions = function
         | I_aux (I_clear (ctyp, _), _) :: instrs when hoist_ctyp ctyp -> hoist instrs
         | I_aux (I_block block, annot) :: instrs -> I_aux (I_block (hoist block), annot) :: hoist instrs
         | I_aux (I_try_block block, annot) :: instrs -> I_aux (I_try_block (hoist block), annot) :: hoist instrs
-        | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), annot) :: instrs ->
-            I_aux (I_if (cval, hoist then_instrs, hoist else_instrs, ctyp), annot) :: hoist instrs
+        | I_aux (I_if (cval, then_instrs, else_instrs), annot) :: instrs ->
+            I_aux (I_if (cval, hoist then_instrs, hoist else_instrs), annot) :: hoist instrs
         | instr :: instrs -> instr :: hoist instrs
         | [] -> []
       in
@@ -758,8 +758,8 @@ let remove_alias =
       end
     | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (opt block), aux) :: opt instrs
     | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (opt block), aux) :: opt instrs
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-        I_aux (I_if (cval, opt then_instrs, opt else_instrs, ctyp), aux) :: opt instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) :: instrs ->
+        I_aux (I_if (cval, opt then_instrs, opt else_instrs), aux) :: opt instrs
     | instr :: instrs -> instr :: opt instrs
     | [] -> []
   in
@@ -1284,17 +1284,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ^^ sail_create ~prefix:"  " ~suffix:";" (sgen_ctyp_name ctyp) "&%s" (sgen_name id)
     | I_copy (clexp, cval) -> codegen_conversion l clexp cval
     | I_jump (cval, label) -> ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label
-    | I_if (cval, [], else_instrs, ctyp) -> codegen_instr fid ctx (iif l (V_call (Bnot, [cval])) else_instrs [] ctyp)
-    | I_if (cval, [then_instr], [], _) ->
+    | I_if (cval, [], else_instrs) -> codegen_instr fid ctx (iif l (V_call (Bnot, [cval])) else_instrs [])
+    | I_if (cval, [then_instr], []) ->
         ksprintf string "  if (%s)" (sgen_cval cval)
         ^^ space
         ^^ surround 2 0 lbrace (codegen_instr fid ctx then_instr) (twice space ^^ rbrace)
-    | I_if (cval, then_instrs, [], _) ->
+    | I_if (cval, then_instrs, []) ->
         string "  if" ^^ space
         ^^ parens (string (sgen_cval cval))
         ^^ space
         ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
-    | I_if (cval, then_instrs, else_instrs, _) ->
+    | I_if (cval, then_instrs, else_instrs) ->
         string "  if" ^^ space
         ^^ parens (string (sgen_cval cval))
         ^^ space
@@ -1386,13 +1386,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | I_clear (ctyp, _) when is_stack_ctyp ctyp -> empty
     | I_clear (ctyp, id) -> sail_kill ~prefix:"  " ~suffix:";" (sgen_ctyp_name ctyp) "&%s" (sgen_name id)
     | I_init (ctyp, id, init) -> (
-      match init with
-      | Init_cval cval ->
-          codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
-      | Init_json_key parts ->
-          ksprintf string "  sail_config_key %s = {%s};" (sgen_name id)
-            (Util.string_of_list ", " (fun part -> "\"" ^ part ^ "\"") parts)
-    )
+        match init with
+        | Init_cval cval ->
+            codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
+        | Init_json_key parts ->
+            ksprintf string "  sail_config_key %s = {%s};" (sgen_name id)
+              (Util.string_of_list ", " (fun part -> "\"" ^ part ^ "\"") parts)
+      )
     | I_reinit (ctyp, id, cval) ->
         codegen_instr fid ctx (ireset l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
     | I_reset (ctyp, id) when is_stack_ctyp ctyp -> string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_name id))

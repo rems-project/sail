@@ -84,7 +84,7 @@ let rec flatten_instrs = function
       let fid = flat_id () in
       I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
   | I_aux ((I_block block | I_try_block block), _) :: instrs -> flatten_instrs block @ flatten_instrs instrs
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
+  | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
       let then_label = label "then_" in
       let endif_label = label "endif_" in
       [ijump l cval then_label]
@@ -122,8 +122,8 @@ let unique_per_function_ids cdefs =
     | I_aux (I_block instrs, aux) :: rest -> I_aux (I_block (unique_instrs i instrs), aux) :: unique_instrs i rest
     | I_aux (I_try_block instrs, aux) :: rest ->
         I_aux (I_try_block (unique_instrs i instrs), aux) :: unique_instrs i rest
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: rest ->
-        I_aux (I_if (cval, unique_instrs i then_instrs, unique_instrs i else_instrs, ctyp), aux) :: unique_instrs i rest
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) :: rest ->
+        I_aux (I_if (cval, unique_instrs i then_instrs, unique_instrs i else_instrs), aux) :: unique_instrs i rest
     | instr :: instrs -> instr :: unique_instrs i instrs
     | [] -> []
   in
@@ -265,8 +265,8 @@ let rec instrs_subst id subst = function
         | I_undefined ctyp -> I_undefined ctyp
         | I_exit cause -> I_exit cause
         | I_end id' -> I_end id'
-        | I_if (cval, then_instrs, else_instrs, ctyp) ->
-            I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs, ctyp)
+        | I_if (cval, then_instrs, else_instrs) ->
+            I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs)
         | I_block instrs -> I_block (instrs_subst id subst instrs)
         | I_try_block instrs -> I_try_block (instrs_subst id subst instrs)
         | I_throw cval -> I_throw (cval_subst id subst cval)
@@ -340,8 +340,7 @@ let inline cdefs should_inline instrs =
     | I_aux (I_jump (cval, label), aux) -> I_aux (I_jump (f cval, label), aux)
     | I_aux (I_funcall (clexp, extern, function_id, args), aux) ->
         I_aux (I_funcall (clexp, extern, function_id, List.map f args), aux)
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
-        I_aux (I_if (f cval, then_instrs, else_instrs, ctyp), aux)
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) -> I_aux (I_if (f cval, then_instrs, else_instrs), aux)
     | I_aux (I_copy (clexp, cval), aux) -> I_aux (I_copy (clexp, f cval), aux)
     | I_aux (I_return cval, aux) -> I_aux (I_return (f cval), aux)
     | I_aux (I_throw cval, aux) -> I_aux (I_throw (f cval), aux)
@@ -556,8 +555,8 @@ let remove_tuples cdefs ctx =
     | I_jump (cval, label) -> I_jump (fix_cval cval, label)
     | I_throw cval -> I_throw (fix_cval cval)
     | I_return cval -> I_return (fix_cval cval)
-    | I_if (cval, then_instrs, else_instrs, ctyp) ->
-        I_if (fix_cval cval, List.map fix_instr then_instrs, List.map fix_instr else_instrs, ctyp)
+    | I_if (cval, then_instrs, else_instrs) ->
+        I_if (fix_cval cval, List.map fix_instr then_instrs, List.map fix_instr else_instrs)
     | I_block instrs -> I_block (List.map fix_instr instrs)
     | I_try_block instrs -> I_try_block (List.map fix_instr instrs)
     | ( I_goto _ | I_label _ | I_decl _ | I_clear _ | I_end _ | I_comment _ | I_reset _ | I_undefined _ | I_exit _
@@ -668,7 +667,7 @@ let structure_control_flow_block instrs =
   let iguard l guarded = function
     | [] -> []
     | instrs -> (
-        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs [] CT_unit]
+        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs []]
       )
   in
 
@@ -695,8 +694,7 @@ let structure_control_flow_block instrs =
             [
               iif l cond
                 [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool false, CT_bool))]
-                CT_unit;
+                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool false, CT_bool))];
             ]
         in
         let guarded = NameSet.add v guarded in

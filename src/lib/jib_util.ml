@@ -80,7 +80,7 @@ let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_numb
 
 let ijson_key l id parts = I_aux (I_init (CT_json_key, id, Init_json_key parts), (instr_number (), l))
 
-let iif l cval then_instrs else_instrs ctyp = I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (instr_number (), l))
+let iif l cval then_instrs else_instrs = I_aux (I_if (cval, then_instrs, else_instrs), (instr_number (), l))
 
 let ifuncall l clexp id cvals = I_aux (I_funcall (CR_one clexp, false, id, cvals), (instr_number (), l))
 
@@ -388,7 +388,7 @@ let rec doc_instr (I_aux (aux, _)) =
       twice space ^^ string "try {"
       ^^ nest 2 (hardline ^^ separate_map hardline doc_instr instrs)
       ^^ hardline ^^ twice space ^^ char '}'
-  | I_if (cond, then_instrs, else_instrs, _) ->
+  | I_if (cond, then_instrs, else_instrs) ->
       ksprintf instr "if %s {" (string_of_cval cond)
       ^^ nest 2 (hardline ^^ separate_map hardline doc_instr then_instrs)
       ^^ hardline ^^ twice space ^^ string "} else {"
@@ -701,7 +701,7 @@ let instr_deps = function
   | I_reset (_, id) -> (NameSet.empty, NameSet.singleton id)
   | I_init (_, id, init) -> (init_deps init, NameSet.singleton id)
   | I_reinit (_, id, cval) -> (cval_deps cval, NameSet.singleton id)
-  | I_if (cval, _, _, _) -> (cval_deps cval, NameSet.empty)
+  | I_if (cval, _, _) -> (cval_deps cval, NameSet.empty)
   | I_jump (cval, _) -> (cval_deps cval, NameSet.empty)
   | I_funcall (creturn, _, _, cvals) ->
       let reads, writes = creturn_deps creturn in
@@ -782,13 +782,8 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     match instr with
     | I_decl (ctyp, id) -> I_decl (f ctyp, id)
     | I_init (ctyp, id, init) -> I_init (f ctyp, id, map_init_ctyp f init)
-    | I_if (cval, then_instrs, else_instrs, ctyp) ->
-        I_if
-          ( map_cval_ctyp f cval,
-            List.map (map_instr_ctyp f) then_instrs,
-            List.map (map_instr_ctyp f) else_instrs,
-            f ctyp
-          )
+    | I_if (cval, then_instrs, else_instrs) ->
+        I_if (map_cval_ctyp f cval, List.map (map_instr_ctyp f) then_instrs, List.map (map_instr_ctyp f) else_instrs)
     | I_jump (cval, label) -> I_jump (map_cval_ctyp f cval, label)
     | I_funcall (creturn, extern, (id, ctyps), cvals) ->
         I_funcall (map_creturn_ctyp f creturn, extern, (id, List.map f ctyps), List.map (map_cval_ctyp f) cvals)
@@ -827,13 +822,9 @@ let rec concatmap_instr f (I_aux (instr, aux)) =
     | I_decl _ | I_init _ | I_reset _ | I_reinit _ | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _
     | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_undefined _ | I_end _ ->
         instr
-    | I_if (cval, instrs1, instrs2, ctyp) ->
+    | I_if (cval, instrs1, instrs2) ->
         I_if
-          ( cval,
-            List.concat (List.map (concatmap_instr f) instrs1),
-            List.concat (List.map (concatmap_instr f) instrs2),
-            ctyp
-          )
+          (cval, List.concat (List.map (concatmap_instr f) instrs1), List.concat (List.map (concatmap_instr f) instrs2))
     | I_block instrs -> I_block (List.concat (List.map (concatmap_instr f) instrs))
     | I_try_block instrs -> I_try_block (List.concat (List.map (concatmap_instr f) instrs))
   in
@@ -844,7 +835,7 @@ let rec iter_instr f (I_aux (instr, aux)) =
   | I_decl _ | I_init _ | I_reset _ | I_reinit _ | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _
   | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_undefined _ | I_end _ ->
       f (I_aux (instr, aux))
-  | I_if (_, instrs1, instrs2, _) ->
+  | I_if (_, instrs1, instrs2) ->
       List.iter (iter_instr f) instrs1;
       List.iter (iter_instr f) instrs2
   | I_block instrs | I_try_block instrs -> List.iter (iter_instr f) instrs
@@ -856,7 +847,7 @@ let rec map_funcall f instrs =
   | [] -> []
   | (I_aux (I_funcall _, _) as funcall_instr) :: tail -> begin
       match tail with
-      | (I_aux (I_if (V_id (id, CT_bool), _, [], CT_unit), _) as exception_instr) :: tail'
+      | (I_aux (I_if (V_id (id, CT_bool), _, []), _) as exception_instr) :: tail'
         when Name.compare id have_exception == 0 ->
           f funcall_instr [exception_instr] @ map_funcall f tail'
       | _ -> f funcall_instr [] @ map_funcall f tail
@@ -867,7 +858,7 @@ let rec map_funcall f instrs =
         | I_decl _ | I_init _ | I_reset _ | I_reinit _ | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _
         | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_undefined _ | I_end _ ->
             instr
-        | I_if (cval, instrs1, instrs2, ctyp) -> I_if (cval, map_funcall f instrs1, map_funcall f instrs2, ctyp)
+        | I_if (cval, instrs1, instrs2) -> I_if (cval, map_funcall f instrs1, map_funcall f instrs2)
         | I_block instrs -> I_block (map_funcall f instrs)
         | I_try_block instrs -> I_try_block (map_funcall f instrs)
       in
@@ -926,8 +917,8 @@ let rec map_instrs f (I_aux (instr, aux)) =
   let instr =
     match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _ -> instr
-    | I_if (cval, instrs1, instrs2, ctyp) ->
-        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
+    | I_if (cval, instrs1, instrs2) ->
+        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2))
     | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
@@ -949,8 +940,8 @@ let rec filter_instrs f instrs =
   let filter_instrs' = function
     | I_aux (I_block instrs, aux) -> I_aux (I_block (filter_instrs f instrs), aux)
     | I_aux (I_try_block instrs, aux) -> I_aux (I_try_block (filter_instrs f instrs), aux)
-    | I_aux (I_if (cval, instrs1, instrs2, ctyp), aux) ->
-        I_aux (I_if (cval, filter_instrs f instrs1, filter_instrs f instrs2, ctyp), aux)
+    | I_aux (I_if (cval, instrs1, instrs2), aux) ->
+        I_aux (I_if (cval, filter_instrs f instrs1, filter_instrs f instrs2), aux)
     | instr -> instr
   in
   List.filter f (List.map filter_instrs' instrs)
@@ -1082,8 +1073,8 @@ let rec instr_ctyps (I_aux (instr, aux)) =
   | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp -> CTSet.singleton ctyp
   | I_init (ctyp, _, init) -> CTSet.add ctyp (init_ctyps init)
   | I_reinit (ctyp, _, cval) -> CTSet.add ctyp (CTSet.singleton (cval_ctyp cval))
-  | I_if (cval, instrs1, instrs2, ctyp) ->
-      CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2) |> CTSet.add (cval_ctyp cval) |> CTSet.add ctyp
+  | I_if (cval, instrs1, instrs2) ->
+      CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2) |> CTSet.add (cval_ctyp cval)
   | I_funcall (creturn, _, (_, ctyps), cvals) ->
       List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map cval_ctyp cvals)
       |> CTSet.union (CTSet.of_list ctyps)
