@@ -65,8 +65,8 @@ such as C and C++, and more similar to languages like OCaml and Rust,
 everything in Sail is an _expression_ which evaluates to a value. A
 block in Sail is simply a sequence of expressions surrounded by curly
 braces `{` and `}`, and separated by semicolons. The value returned by
-a block is the value returned by the last expressions, and likewise
-the type of a block is determined by it's final expressions, so
+a block is the value returned by the last expression, and likewise
+the type of a block is determined by its final expression, so
 `{{nbsp}A;{nbsp}B;{nbsp}C{nbsp}}`, will evaluate to the value of `C`
 after evaluating `A` and `B` in order. The expressions other than the
 final expression in the block must have type `unit`, which is
@@ -266,7 +266,7 @@ increasing bitvector as `v[0{nbsp}..{nbsp}31]`, i.e. the indexing
 order for decreasing vectors decreases, and the indexing order for
 increasing vectors increases.
 
-A vector `v` can have an index index using
+A vector `v` can have an index `index` using
 `[v{nbsp}with{nbsp}index{nbsp}={nbsp}expression]`. Similarly, a
 sub-range of v can be updated using
 `[v{nbsp}with{nbsp}n{nbsp}..{nbsp}m{nbsp}={nbsp}expression]` where the
@@ -850,7 +850,7 @@ val get_current_xlen : unit -> {32, 64}
 
 register R : bits(32)
 
-val example : int -> unit
+val example : unit -> unit
 
 function example() = {
   let xlen as int('n) = get_current_xlen()
@@ -863,7 +863,7 @@ function example() = {
 ----
 
 You can think of the `as int('n)` as matching on the return type of
-the `get_current_xlen` rather than the value, and binding it's length
+the `get_current_xlen` rather than the value, and binding its length
 to a new type variable `'n`, which we can subsequently use in types
 later in our function. Note that even though we only know if xlen will
 be 32 or 64 at runtime after the call to get_current_xlen, Sail is
