@@ -1,4 +1,6 @@
 sail_doc/
+sail_config/
+sail_schema/
 lib_sail_doc/
 module_sail_doc/
 

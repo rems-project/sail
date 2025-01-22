@@ -371,7 +371,7 @@ end = struct
         in
         let properties = List.sort (fun (p1, _) (p2, _) -> String.compare p1 p2) properties in
         let required = ("required", `List (List.map (fun (p, _) -> `String p) properties)) in
-        `Assoc (("type", `String "object") :: required :: properties)
+        `Assoc [("type", `String "object"); ("properties", `Assoc properties); required]
     | Sail_value (config_type, []) -> type_schema_or_error config_type
     | Sail_value (config_type, config_types) ->
         let schemas = config_type :: config_types |> List.map type_schema_or_error in
