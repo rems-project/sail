@@ -370,6 +370,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         match cval with
         | V_lit (vl, ctyp) -> literal vl ctyp
         | V_id (id, _) -> return (Var id)
+        | V_gid (id, _) -> return (Global_var id)
         | V_member (id, _) -> return (Member id)
         | V_call (List_hd, [arg]) ->
             let* l = current_location in

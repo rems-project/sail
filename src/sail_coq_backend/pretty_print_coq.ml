@@ -1479,7 +1479,7 @@ let doc_exp, doc_let =
         let env = env_of full_exp in
         let doc_loop_var (E_aux (e, (l, _)) as exp) =
           match e with
-          | E_id id ->
+          | E_id id | E_gid id ->
               let id_pp = doc_id ctxt id in
               let typ = general_typ_of exp in
               (id_pp, id_pp)
@@ -1917,7 +1917,7 @@ let doc_exp, doc_let =
       )
     | E_block [] -> string "tt"
     | E_block exps -> raise (report l __POS__ "Blocks should have been removed till now.")
-    | E_id id | E_ref id ->
+    | E_id id | E_gid id | E_ref id ->
         let env = env_of full_exp in
         let typ = typ_of full_exp in
         let eff = effect_of full_exp in
@@ -2016,6 +2016,7 @@ let doc_exp, doc_let =
           let var, let_pp =
             match e with
             | E_aux (E_id id, _) -> (id, empty)
+            | E_aux (E_gid id, _) -> (id, empty)
             | _ ->
                 let v = mk_id "_record" in
                 (* TODO: collision avoid *)

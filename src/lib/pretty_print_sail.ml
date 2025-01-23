@@ -533,6 +533,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_typ (typ, exp) -> separate space [doc_atomic_exp exp; colon; doc_typ typ]
     | E_lit lit -> doc_lit lit
     | E_id id -> doc_id id
+    | E_gid id -> doc_id id
     | E_ref id -> string "ref" ^^ space ^^ doc_id id
     | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
     | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid

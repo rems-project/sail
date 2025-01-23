@@ -98,6 +98,7 @@ and 'a apat_aux =
 and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
+  | AV_gid of id * 'a lvar
   | AV_abstract of id * 'a
   | AV_ref of id * 'a lvar
   | AV_tuple of 'a aval list
@@ -169,6 +170,7 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, annot)) =
 let rec aval_typ = function
   | AV_lit (_, typ) -> typ
   | AV_id (_, lvar) -> lvar_typ lvar
+  | AV_gid (_, lvar) -> lvar_typ lvar
   | AV_abstract (id, typ) -> typ
   | AV_ref (_, lvar) -> lvar_typ lvar
   | AV_tuple avals -> tuple_typ (List.map aval_typ avals)
@@ -201,6 +203,8 @@ let rec aval_rename from_id to_id = function
   | AV_lit (lit, typ) -> AV_lit (lit, typ)
   | AV_id (id, lvar) when Id.compare id from_id = 0 -> AV_id (to_id, lvar)
   | AV_id (id, lvar) -> AV_id (id, lvar)
+  | AV_gid (id, lvar) when Id.compare id from_id = 0 -> AV_gid (to_id, lvar)
+  | AV_gid (id, lvar) -> AV_gid (id, lvar)
   | AV_ref (id, lvar) when Id.compare id from_id = 0 -> AV_ref (to_id, lvar)
   | AV_ref (id, lvar) -> AV_ref (id, lvar)
   | AV_abstract (id, typ) ->
@@ -456,6 +460,8 @@ let pp_order = function Ord_aux (Ord_inc, _) -> string "inc" | Ord_aux (Ord_dec,
 
 let pp_id id = string (string_of_id id)
 
+let pp_gid id = pp_id id
+
 let rec pp_alexp = function
   | AL_id (id, typ) -> pp_annot typ (pp_id id)
   | AL_addr (id, typ) -> string "*" ^^ parens (pp_annot typ (pp_id id))
@@ -563,6 +569,7 @@ and pp_block = function
 and pp_aval = function
   | AV_lit (lit, typ) -> pp_annot typ (string (string_of_lit lit))
   | AV_id (id, lvar) -> pp_lvar lvar (pp_id id)
+  | AV_gid (id, lvar) -> pp_lvar lvar (pp_gid id)
   | AV_abstract (id, typ) -> string "sizeof" ^^ parens (pp_annot typ (pp_id id))
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
@@ -769,6 +776,11 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let lvar = Env.lookup_id id (env_of exp) in
       begin
         match lvar with _ -> mk_aexp (AE_val (AV_id (id, lvar)))
+      end
+  | E_gid id ->
+      let lvar = Env.lookup_id id (env_of exp) in
+      begin
+        match lvar with _ -> mk_aexp (AE_val (AV_gid (id, lvar)))
       end
   | E_ref id ->
       let lvar = Env.lookup_id id (env_of exp) in

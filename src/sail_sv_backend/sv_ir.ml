@@ -173,6 +173,9 @@ let rec visit_smt_exp (vis : svir_visitor) outer_smt_exp =
     | Var name ->
         let name' = visit_name (vis :> common_visitor) name in
         if name == name' then no_change else Var name'
+    | Global_var name ->
+        let name' = visit_name (vis :> common_visitor) name in
+        if name == name' then no_change else Global_var name'
     | ZeroExtend (n, m, exp) ->
         let exp' = visit_smt_exp vis exp in
         if exp == exp' then no_change else ZeroExtend (n, m, exp')

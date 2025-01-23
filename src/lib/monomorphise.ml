@@ -1048,7 +1048,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         let re e = E_aux (e, annot) in
         match e with
         | E_block es -> re (E_block (List.map map_exp es))
-        | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ -> ea
+        | E_id _ | E_gid _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ -> ea
         | E_typ (t, e') -> re (E_typ (t, map_exp e'))
         | E_app (id, es) ->
             let es' = List.map map_exp es in
@@ -2233,7 +2233,7 @@ module Analysis = struct
                 (d, assigns, merge r r')
           in
           aux env assigns es
-      | E_id id -> begin
+      | E_id id | E_gid id -> begin
           match Bindings.find id env.var_deps with
           | args -> (args, assigns, empty)
           | exception Not_found -> (

@@ -472,6 +472,8 @@ exp :: 'E_' ::=
     {{ com sequential block }}
   | id                                                  :: :: id
     {{ com identifier }}
+  | id                                                  :: :: gid
+    {{ com global identifier }}
   | lit                                                 :: :: lit
     {{ com literal constant }}
   | ( typ ) exp                                         :: :: typ

@@ -100,7 +100,7 @@ module Make_optimizer (S : Sequence) = struct
     let uses = NameHashtbl.create (Stack.length stack) in
 
     let rec uses_in_exp = function
-      | Var var -> begin
+      | Global_var var | Var var -> begin
           match NameHashtbl.find_opt uses var with
           | Some n -> NameHashtbl.replace uses var (n + 1)
           | None -> NameHashtbl.add uses var 1

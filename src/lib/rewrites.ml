@@ -2315,7 +2315,7 @@ let rewrite_ast_letbind_effects effect_info env =
     let pure_rewrap e = purify (rewrap e) in
     match exp_aux with
     | E_block es -> failwith "E_block should have been removed till now"
-    | E_id id -> k exp
+    | E_id id | E_gid id -> k exp
     | E_ref id -> k exp
     | E_lit _ -> k exp
     | E_typ (typ, exp') -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_typ (typ, exp'))))
@@ -4320,6 +4320,14 @@ let rewrite_unroll_constant_loops _type_env defs =
     { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
     defs
 
+(** Distinguish between local and global references by splitting 'E_id' nodes into
+    either 'E_id' for local ones or 'E_gid' for global ones. *)
+let rewrite_remove_global_vars (type_env : Type_check.Env.t) defs =
+  let toplevel_lets = Type_check.Env.get_toplevel_lets type_env in
+  let e_id id = if IdSet.mem id toplevel_lets then E_gid id else E_id id in
+  let rewrite_exp _rewriters = fold_exp { id_exp_alg with e_id } in
+  rewrite_ast_base { rewriters_base with rewrite_exp } defs
+
 (** Remove bitfield records and turn them into plain bitvectors
     This can improve performance for Isabelle, because processing record types is slow there
     (and we don't gain much by having record types with just a `bits` field).
@@ -4554,6 +4562,7 @@ let all_rewriters =
     ("mapping_patterns", basic_rewriter (fun _ -> Mappings.rewrite_ast));
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
     ("unroll_constant_loops", basic_rewriter rewrite_unroll_constant_loops);
+    ("remove_global_vars", basic_rewriter rewrite_remove_global_vars);
     ("mono_rewrites", basic_rewriter mono_rewrites);
     ("complete_record_params", basic_rewriter rewrite_complete_record_params);
     ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);

@@ -952,7 +952,7 @@ let sgen_value = function
   | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
 
 let rec sgen_cval = function
-  | V_id (id, _) -> sgen_name id
+  | V_gid (id, _) | V_id (id, _) -> sgen_name id
   | V_member (id, _) -> sgen_id id
   | V_lit (vl, _) -> sgen_value vl
   | V_call (op, cvals) -> sgen_call op cvals

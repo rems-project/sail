@@ -352,11 +352,16 @@ module Make (C : CONFIG) = struct
           ([iinit l ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs])
         )
         else ([], cval, [])
-    | AV_id (id, Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
+    | AV_gid (id, Enum typ) | AV_id (id, Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
     | AV_id (id, typ) -> begin
         match Bindings.find_opt id ctx.locals with
         | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
         | None -> ([], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
+      end
+    | AV_gid (id, typ) -> begin
+        match Bindings.find_opt id ctx.locals with
+        | Some (_, ctyp) -> ([], V_gid (name id, ctyp), [])
+        | None -> ([], V_gid (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
     | AV_abstract (id, typ) -> ([], V_call (Get_abstract, [V_id (name id, ctyp_of_typ ctx typ)]), [])
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])

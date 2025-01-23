@@ -129,6 +129,7 @@ uid :: 'UId_' ::=
 
 cval :: 'V_' ::=
   | name : ctyp                                     :: :: id
+  | name : ctyp                                     :: :: gid
   | id : ctyp                                       :: :: member
   | value : ctyp                                    :: :: lit
   | ( cval0 , ... , cvaln ) ctyp                    :: :: tuple

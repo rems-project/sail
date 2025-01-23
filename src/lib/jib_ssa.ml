@@ -539,6 +539,12 @@ let rename_variables globals graph root children =
           let i = top_stack id in
           V_id (ssa_name i id, ctyp)
         )
+    | V_gid (id, ctyp) ->
+        if NameSet.mem id globals then V_gid (id, ctyp)
+        else (
+          let i = top_stack id in
+          V_gid (ssa_name i id, ctyp)
+        )
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)

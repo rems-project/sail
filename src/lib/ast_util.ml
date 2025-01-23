@@ -842,6 +842,7 @@ let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
   | E_id id -> E_id id
+  | E_gid id -> E_gid id
   | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
   | E_typ (typ, exp) -> E_typ (typ, map_exp_annot f exp)
@@ -1242,7 +1243,7 @@ let string_of_order (Ord_aux (aux, _)) = match aux with Ord_inc -> "inc" | Ord_d
 let rec string_of_exp (E_aux (exp, _)) =
   match exp with
   | E_block exps -> "{ " ^ string_of_list "; " string_of_exp exps ^ " }"
-  | E_id v -> string_of_id v
+  | E_id v | E_gid v -> string_of_id v
   | E_ref id -> "ref " ^ string_of_id id
   | E_sizeof nexp -> "sizeof " ^ string_of_nexp nexp
   | E_constraint nc -> "constraint(" ^ string_of_n_constraint nc ^ ")"
@@ -1749,6 +1750,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     match e_aux with
     | E_block exps -> E_block (List.map (subst id value) exps)
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp value else E_id id'
+    | E_gid id' -> if Id.compare id id' = 0 then unaux_exp value else E_gid id'
     | E_lit lit -> E_lit lit
     | E_typ (typ, exp) -> E_typ (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
@@ -1987,6 +1989,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     match e_aux with
     | E_block exps -> E_block (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)
+    | E_gid id -> E_gid (locate_id f id)
     | E_lit lit -> E_lit (locate_lit f lit)
     | E_typ (typ, exp) -> E_typ (locate_typ f typ, locate f exp)
     | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)

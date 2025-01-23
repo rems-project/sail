@@ -309,6 +309,7 @@ let string_of_value = function
 
 let rec string_of_cval = function
   | V_id (id, _) -> string_of_name id
+  | V_gid (id, _) -> string_of_name id
   | V_member (id, _) -> Util.zencode_string (string_of_id id)
   | V_lit (VL_undefined, ctyp) -> string_of_value VL_undefined ^ " : " ^ string_of_ctyp ctyp
   | V_lit (vl, ctyp) -> string_of_value vl
@@ -646,6 +647,7 @@ let rec is_polymorphic = function
 
 let rec cval_deps = function
   | V_id (id, _) -> NameSet.singleton id
+  | V_gid (id, _) -> NameSet.singleton id
   | V_lit _ | V_member _ -> NameSet.empty
   | V_field (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) | V_tuple (cvals, _) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
@@ -735,6 +737,7 @@ let rec map_clexp_ctyp f = function
 
 let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
+  | V_gid (id, ctyp) -> V_gid (id, f ctyp)
   | V_member (id, ctyp) -> V_member (id, f ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, f ctyp)
   | V_ctor_kind (cval, (id, unifiers), ctyp) -> V_ctor_kind (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
@@ -999,6 +1002,7 @@ let rec infer_call op vs =
 
 and cval_ctyp = function
   | V_id (_, ctyp) -> ctyp
+  | V_gid (_, ctyp) -> ctyp
   | V_member (_, ctyp) -> ctyp
   | V_lit (_, ctyp) -> ctyp
   | V_ctor_kind _ -> CT_bool
