@@ -1125,6 +1125,44 @@ val operator <=_u : forall 'n. (bits('n), bits('n)) -> bool
 function operator <=_u(x, y) = unsigned(x) <= unsigned(y)
 ----
 
+By default, Sail defines the basic arithmetic operators `*`, `\`, `%`,
+`+`, and `-`, for integer multiplication, division, modulus, addition,
+and subtraction respectively. The Sail library also overloads addition
+and subtraction for bitvectors, performing two's complement arithmetic
+over bitvectors with matching sizes. Adding a bitvector and an integer
+is also allowed, i.e. `0x01 + N`. For small bitvectors and large
+integers this is equivalent to adding 1 to the bitvector `N` times,
+wrapping each time the value overflows, for example:
+
+[source,sail]
+----
+0xFF + 2 == (0xFF + 0x01) + 0x01 == 0x01
+// Wrapping multiple times:
+0b0 + 3 == ((0b0 + 0b1) + 0b1) + 0b1 = ((0b1 + 0b1) + 0b1) = 0b0 + 0b1 = 0b1
+----
+
+The comparison operators `<`, `<=`, `>`, `>=`, `!=`, and `==` all
+compare integers. We don't define bitvector comparisons by default, as
+bitvectors can be compared as either signed or unsigned. Individual
+ISA specifications may choose to overload these operators or define
+their own as needed.
+
+The boolean operators `&` (logical and) and `|` (logical or) compare
+boolean values. Note that when applied to booleans they have
+short-circuiting semantics. The standard library overloads these
+operators for bitwise operations on bitvectors of the same length.
+
+The exponentiation operator `^` is slightly special. The Sail parser
+recognises the special case `2 ^ x` directly and maps that to a
+special `pow2(x)` function. This is because `2 ^ x` is the only form
+of exponentiation we permit in numeric types. The `^` operator can
+otherwise be overloaded by ISA specs as a normal operator.
+
+The `@` operators is used to concatenate bitvectors and generic
+vectors. As demonstrated in the pattern matching section <<Pattern matching>>,
+it can also be used to destructure them. Similarly, the
+cons operator `::` is used to construct lists (see section <<The list type>>).
+
 ==== Built-in precedences
 
 The precedence of several common operators are built into Sail. These
@@ -1138,15 +1176,16 @@ summarised in the following table.
 |===
 | Precedence | Left associative | Non-associative | Right associative
 
-| 9 |         |                         |
-| 8 |         |                         | ^
-| 7 | *, \, % |                         |
-| 6 | +, -    |                         |
-| 4 |         | <, <=, >, >=, !=, =, == |
-| 3 |         |                         | &
-| 2 |         |                         | \|
-| 1 |         |                         |
-| 0 |         |                         |
+| 9 |         |                      |
+| 8 |         |                      | ^
+| 7 | *, \, % |                      |
+| 6 | +, -    |                      |
+| 5 |         |                      | ::, @
+| 4 |         | <, <=, >, >=, !=, == |
+| 3 |         |                      | &
+| 2 |         |                      | \|
+| 1 |         |                      |
+| 0 |         |                      |
 |===
 
 === Ad-hoc overloading
