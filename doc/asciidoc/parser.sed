@@ -35,7 +35,7 @@ s/TYPE/Type/g
 s/TyVar/TYPE_VARIABLE/g
 s/And/and/g
 s/As/as/g
-s/Attribute/$[ATTRIBUTE]/g
+s/Attribute/$[ATTRIBUTE/g
 s/Bidir/<->/g
 s/Forall/forall/g
 s/Bitzero/bitzero/g
