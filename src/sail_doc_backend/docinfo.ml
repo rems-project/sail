@@ -708,8 +708,21 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let docinfo = process_anchors docinfo in
 
     let process_spans docinfo =
+      let open Rewriter in
       let spans = ref Bindings.empty in
       let current_span = ref None in
+      let scan_exp e_aux annot =
+        match get_attribute "span" (Type_check.untyped_annot (snd annot)) with
+        | None -> E_aux (e_aux, annot)
+        | Some (_, Some (AD_aux (AD_string name, _))) ->
+            spans :=
+              Bindings.add (mk_id name)
+                (doc_loc (fst annot) Type_check.strip_exp Reformatter.doc_exp (E_aux (e_aux, annot)))
+                !spans;
+            E_aux (e_aux, annot)
+        | _ -> raise (Reporting.err_general (fst annot) "Invalid span attribute (expected string argument)")
+      in
+      let exp_alg = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot) } in
       List.iter
         (fun (DEF_aux (aux, def_annot)) ->
           match aux with
@@ -738,6 +751,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           | _ -> ()
         )
         ast.defs;
+      let _ = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ exp -> fold_exp exp_alg exp) } ast in
       { docinfo with spans = !spans }
     in
     let docinfo = process_spans docinfo in
