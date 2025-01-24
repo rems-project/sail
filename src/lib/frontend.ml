@@ -44,6 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Ast
 open Ast_util
 open Ast_defs
 
@@ -64,23 +65,83 @@ let finalize_ast asserts_termination ctx env ast =
   if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
   (ctx, ast, Type_check.Env.open_all_modules env, side_effects)
 
-let instantiate_abstract_types tgt insts ast =
+type abstract_instantiation = {
+  env_update : Type_check.env -> Type_check.env;
+  config_ids : (kind_aux * string list) Bindings.t;
+}
+
+let rec json_lookup key json =
+  match (key, json) with
+  | [], _ -> Some json
+  | first :: rest, `Assoc obj -> (
+      match List.assoc_opt first obj with Some json -> json_lookup rest json | None -> None
+    )
+  | _ -> None
+
+let instantiate_from_json ~at:l (json : Yojson.Safe.t) =
+  let instantiate_error k =
+    let msg =
+      Printf.sprintf "Failed to instantiate abstract type of kind %s from JSON %s" (string_of_kind_aux k)
+        (Yojson.Safe.to_string json)
+    in
+    raise (Reporting.err_general l msg)
+  in
+  function
+  | K_int -> (
+      match json with
+      | `Int n -> mk_typ_arg ~loc:l (A_nexp (nint n))
+      | `Intlit s -> mk_typ_arg ~loc:l (A_nexp (nconstant (Big_int.of_string s)))
+      | _ -> instantiate_error K_int
+    )
+  | K_bool -> (
+      match json with
+      | `Bool true -> mk_typ_arg ~loc:l (A_bool nc_true)
+      | `Bool false -> mk_typ_arg ~loc:l (A_bool nc_false)
+      | _ -> instantiate_error K_bool
+    )
+  | k -> instantiate_error k
+
+let instantiate_abstract_types tgt config insts ast =
   let open Ast in
+  let env_update = ref (fun env -> env) in
+  let config_ids = ref Bindings.empty in
+  let add_to_env_update l id arg =
+    let prev_env_update = !env_update in
+    env_update :=
+      Type_check.Env.(
+        fun env ->
+          prev_env_update env |> remove_abstract_typ id |> add_typ_synonym id (mk_empty_typquant ~loc:(gen_loc l)) arg
+      )
+  in
   let instantiate = function
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, _))), def_annot) as def -> begin
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_none), (l, _))), def_annot) as def -> (
         match Bindings.find_opt id insts with
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
+            add_to_env_update l id arg;
             DEF_aux
               ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
                 def_annot
               )
         | None -> def
-      end
+      )
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_key key), (l, _))), def_annot) as def -> (
+        config_ids := Bindings.add id (unaux_kind kind, key) !config_ids;
+        match json_lookup key config with
+        | Some json ->
+            let arg = instantiate_from_json ~at:l json (unaux_kind kind) in
+            add_to_env_update l id arg;
+            DEF_aux
+              ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
+                def_annot
+              )
+        | None -> def
+      )
     | def -> def
   in
   let defs = List.map instantiate ast.defs in
-  if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then { ast with defs }
+  let inst = { env_update = !env_update; config_ids = !config_ids } in
+  if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then ({ ast with defs }, inst)
   else (
     match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
     | Some (DEF_aux (_, def_annot)) ->
@@ -92,7 +153,7 @@ let instantiate_abstract_types tgt insts ast =
                 target_name
              )
           )
-    | None -> { ast with defs }
+    | None -> ({ ast with defs }, inst)
   )
 
 type parse_continuation = {

@@ -77,12 +77,14 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
+  abstracts : ctyp Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
   locals : (mut * ctyp) Bindings.t;
+  registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;

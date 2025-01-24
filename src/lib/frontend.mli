@@ -54,8 +54,23 @@ val opt_ddump_tc_ast : bool ref
 val opt_list_files : bool ref
 val opt_reformat : string option ref
 
+(** env_update: This function takes a pre abstract instantiation type
+    environment, and makes any abstract types concrete if they were
+    instantiated.
+
+    config_ids: The set of identifiers that were instantiated from the
+    provided configuration. *)
+type abstract_instantiation = {
+  env_update : Type_check.env -> Type_check.env;
+  config_ids : (kind_aux * string list) Bindings.t;
+}
+
 val instantiate_abstract_types :
-  Target.target option -> (kind_aux -> typ_arg) Bindings.t -> Type_check.typed_ast -> Type_check.typed_ast
+  Target.target option ->
+  Yojson.Safe.t ->
+  (kind_aux -> typ_arg) Bindings.t ->
+  Type_check.typed_ast ->
+  Type_check.typed_ast * abstract_instantiation
 
 (** The [FILE_HANDLER] module type allows plugins to define handlers
     for custom file types. It defines how those files are processed

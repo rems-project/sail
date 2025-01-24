@@ -1457,23 +1457,30 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | I_end _ -> assert false
     | I_exit _ -> string ("  sail_match_failure(\"" ^ String.escaped (string_of_id fid) ^ "\");")
 
-  let codegen_type_def =
+  let codegen_type_def ctx =
     let open Printf in
     function
-    | CTD_abstract (id, ctyp) ->
-        [
-          Header (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id));
-          HeaderOnly (ksprintf string "void sail_set_abstract_%s(%s value);" (string_of_id id) (sgen_ctyp ctyp));
-          Impl
-            (c_function ~return:"void"
-               (ksprintf string "sail_set_abstract_%s(%s value)" (string_of_id id) (sgen_ctyp ctyp))
-               [
-                 ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = value" (sgen_id id)
-                   else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, value" (sgen_id id)
-                 );
-               ]
-            );
-        ]
+    | CTD_abstract (id, ctyp, inst) ->
+        let setter_prototype, setter =
+          match inst with
+          | CTDI_none ->
+              ( ksprintf string "void sail_set_abstract_%s(%s v);" (string_of_id id) (sgen_ctyp ctyp),
+                c_function ~return:"void"
+                  (ksprintf string "sail_set_abstract_%s(%s v)" (string_of_id id) (sgen_ctyp ctyp))
+                  [
+                    ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = v" (sgen_id id)
+                      else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v" (sgen_id id)
+                    );
+                  ]
+              )
+          | CTDI_instrs init ->
+              ( ksprintf string "void sail_set_abstract_%s(void);" (string_of_id id),
+                c_function ~return:"void"
+                  (ksprintf string "sail_set_abstract_%s(void)" (string_of_id id))
+                  [separate_map hardline (codegen_instr (mk_id "set_abstract") ctx) init]
+              )
+        in
+        [HeaderOnly setter_prototype; Impl (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id)); Impl setter]
     | CTD_enum (id, (first_id :: _ as ids)) ->
         let enum_name = sgen_id id in
         let enum_eq =
@@ -1698,7 +1705,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
    been translated to C. **)
   let generated = ref IdSet.empty
 
-  let codegen_tup ctyps =
+  let codegen_tup ctx ctyps =
     let id = mk_id ("tuple_" ^ string_of_ctyp (CT_tup ctyps)) in
     if IdSet.mem id !generated then []
     else begin
@@ -1708,7 +1715,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           (0, Bindings.empty) ctyps
       in
       generated := IdSet.add id !generated;
-      codegen_type_def (CTD_struct (id, Bindings.bindings fields))
+      codegen_type_def ctx (CTD_struct (id, Bindings.bindings fields))
     end
 
   let codegen_list ctyp =
@@ -2098,7 +2105,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             ^^ hardline ^^ string "}"
             );
         ]
-    | CDEF_type ctype_def -> codegen_type_def ctype_def
+    | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
     | CDEF_startup (id, instrs) ->
         let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
         separate_map hardline codegen_decl instrs
@@ -2155,9 +2162,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       ->
         []
 
-  let codegen_ctg = function
+  let codegen_ctg ctx = function
     | CTG_vector ctyp -> codegen_vector ctyp
-    | CTG_tup ctyps -> codegen_tup ctyps
+    | CTG_tup ctyps -> codegen_tup ctx ctyps
     | CTG_list ctyp -> codegen_list ctyp
 
   (** When we generate code for a definition, we need to first generate
@@ -2174,7 +2181,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     )
     else (
       let deps = List.concat (List.map ctyp_dependencies ctyps) in
-      List.concat (List.map codegen_ctg deps) @ codegen_def' ctx def
+      List.concat (List.map (codegen_ctg ctx) deps) @ codegen_def' ctx def
     )
 
   let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false

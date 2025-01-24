@@ -865,6 +865,10 @@ let rec map_funcall f instrs =
       in
       I_aux (instr, aux) :: map_funcall f tail
 
+let ctype_def_map_funcall f = function
+  | CTD_abstract (id, ctyp, CTDI_instrs instrs) -> CTD_abstract (id, ctyp, CTDI_instrs (map_funcall f instrs))
+  | ctd -> ctd
+
 let cdef_aux_map_funcall f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, map_funcall f instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, map_funcall f instrs)
@@ -872,10 +876,15 @@ let cdef_aux_map_funcall f = function
   | CDEF_startup (id, instrs) -> CDEF_startup (id, map_funcall f instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, map_funcall f instrs)
   | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
-  | CDEF_type tdef -> CDEF_type tdef
+  | CDEF_type tdef -> CDEF_type (ctype_def_map_funcall f tdef)
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 let cdef_map_funcall f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_map_funcall f aux, def_annot)
+
+let ctype_def_concatmap_instr f = function
+  | CTD_abstract (id, ctyp, CTDI_instrs instrs) ->
+      CTD_abstract (id, ctyp, CTDI_instrs (List.concat (List.map (concatmap_instr f) instrs)))
+  | ctd -> ctd
 
 let cdef_aux_concatmap_instr f = function
   | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
@@ -885,13 +894,13 @@ let cdef_aux_concatmap_instr f = function
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_val (id, extern, ctyps, ctyp) -> CDEF_val (id, extern, ctyps, ctyp)
-  | CDEF_type tdef -> CDEF_type tdef
+  | CDEF_type tdef -> CDEF_type (ctype_def_concatmap_instr f tdef)
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 let cdef_concatmap_instr f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_concatmap_instr f aux, def_annot)
 
 let ctype_def_map_ctyp f = function
-  | CTD_abstract (id, ctyp) -> CTD_abstract (id, f ctyp)
+  | CTD_abstract (id, ctyp, inst) -> CTD_abstract (id, f ctyp, inst)
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
@@ -1094,12 +1103,12 @@ let ctype_def_ctyps = function
   | CTD_variant (_, ctors) -> List.map snd ctors
 
 let ctype_def_id = function
-  | CTD_abstract (id, _) | CTD_enum (id, _) -> id
+  | CTD_abstract (id, _, _) | CTD_enum (id, _) -> id
   | CTD_struct (id, _) -> id
   | CTD_variant (id, _) -> id
 
 let ctype_def_to_ctyp = function
-  | CTD_abstract (id, ctyp) -> ctyp
+  | CTD_abstract (id, ctyp, _) -> ctyp
   | CTD_enum (id, ids) -> CT_enum (id, ids)
   | CTD_struct (id, fields) -> CT_struct (id, fields)
   | CTD_variant (id, ctors) -> CT_variant (id, ctors)

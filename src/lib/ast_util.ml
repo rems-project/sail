@@ -1424,7 +1424,7 @@ let id_of_type_def_aux = function
   | TD_record (id, _, _, _)
   | TD_variant (id, _, _, _)
   | TD_enum (id, _, _)
-  | TD_abstract (id, _)
+  | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
 
@@ -1626,6 +1626,39 @@ and kopts_of_typ_arg (A_aux (ta, _)) =
 
 let kopts_of_quant_item (QI_aux (qi, _)) =
   match qi with QI_id kopt -> KOptSet.singleton kopt | QI_constraint nc -> kopts_of_constraint nc
+
+let rec ids_of_nexp (Nexp_aux (nexp, _)) =
+  match nexp with
+  | Nexp_id id -> IdSet.singleton id
+  | Nexp_var _ | Nexp_constant _ -> IdSet.empty
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> IdSet.union (ids_of_nexp n1) (ids_of_nexp n2)
+  | Nexp_exp n | Nexp_neg n -> ids_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left IdSet.union IdSet.empty (List.map ids_of_nexp nexps)
+  | Nexp_if (i, t, e) -> IdSet.union (ids_of_constraint i) (IdSet.union (ids_of_nexp t) (ids_of_nexp e))
+
+and ids_of_constraint (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> IdSet.union (ids_of_typ_arg arg1) (ids_of_typ_arg arg2)
+  | NC_ge (nexp1, nexp2) | NC_gt (nexp1, nexp2) | NC_le (nexp1, nexp2) | NC_lt (nexp1, nexp2) ->
+      IdSet.union (ids_of_nexp nexp1) (ids_of_nexp nexp2)
+  | NC_set (nexp, _) -> ids_of_nexp nexp
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (ids_of_constraint nc1) (ids_of_constraint nc2)
+  | NC_app (_, args) -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ_arg t)) IdSet.empty args
+  | NC_id id -> IdSet.singleton id
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
+
+and ids_of_typ (Typ_aux (t, _)) =
+  match t with
+  | Typ_internal_unknown | Typ_var _ -> IdSet.empty
+  | Typ_id id -> IdSet.singleton id
+  | Typ_fn (ts, t) -> List.fold_left IdSet.union (ids_of_typ t) (List.map ids_of_typ ts)
+  | Typ_bidir (t1, t2) -> IdSet.union (ids_of_typ t1) (ids_of_typ t2)
+  | Typ_tuple ts -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ t)) IdSet.empty ts
+  | Typ_app (_, tas) -> List.fold_left (fun s ta -> IdSet.union s (ids_of_typ_arg ta)) IdSet.empty tas
+  | Typ_exist (kids, nc, t) -> IdSet.union (ids_of_constraint nc) (ids_of_typ t)
+
+and ids_of_typ_arg (A_aux (ta, _)) =
+  match ta with A_nexp nexp -> ids_of_nexp nexp | A_typ typ -> ids_of_typ typ | A_bool nc -> ids_of_constraint nc
 
 let rec tyvars_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with

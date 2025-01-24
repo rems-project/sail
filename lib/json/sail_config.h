@@ -8,7 +8,7 @@
 /*  The ASL derived parts of the ARMv8.3 specification in                   */
 /*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               */
 /*                                                                          */
-/*  Copyright (c) 2024                                                      */
+/*  Copyright (c) 2024-2025                                                 */
 /*    Alasdair Armstrong                                                    */
 /*                                                                          */
 /*  All rights reserved.                                                    */
@@ -94,10 +94,22 @@ bool sail_config_is_bool_array(const sail_config_json config);
 bool sail_config_is_int(const sail_config_json config);
 bool sail_config_is_string(const sail_config_json config);
 
+void sail_config_unwrap_bit(lbits *bv, const sail_config_json config);
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config);
 bool sail_config_unwrap_bool(const sail_config_json config);
 void sail_config_unwrap_int(sail_int *n, const sail_config_json config);
 void sail_config_unwrap_string(sail_string *str, const sail_config_json config);
+
+/*
+ * Configurable abstract types require some special handling.
+ *
+ * Their length will be a string value like "xlen" or "mxlen". It is
+ * up to the user of this API to detect this and use the
+ * `unwrap_abstract_bits` variant after finding the correct width.
+ */
+bool sail_config_is_bits_abstract(const sail_config_json config);
+void sail_config_bits_abstract_len(sail_string *str, const sail_config_json config);
+void sail_config_unwrap_abstract_bits(lbits *bv, int64_t len, sail_config_json config);
 
 #ifdef __cplusplus
 }

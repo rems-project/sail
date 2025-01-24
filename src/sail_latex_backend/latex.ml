@@ -451,14 +451,6 @@ let process_pragma l command =
       Reporting.warn "Bad latex pragma at" l "";
       None
 
-let tdef_id = function
-  | TD_abstract (id, _) -> id
-  | TD_abbrev (id, _, _) -> id
-  | TD_record (id, _, _, _) -> id
-  | TD_variant (id, _, _, _) -> id
-  | TD_enum (id, _, _) -> id
-  | TD_bitfield (id, _, _) -> id
-
 let defs { defs; _ } =
   reset_state state;
 
@@ -510,8 +502,8 @@ let defs { defs; _ } =
               letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
               Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) (fst annot))
         end
-    | DEF_type (TD_aux (tdef, annot)) ->
-        let id = tdef_id tdef in
+    | DEF_type (TD_aux (_, annot) as tdef) ->
+        let id = id_of_type_def tdef in
         typedefs := Bindings.add id id !typedefs;
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)

@@ -136,6 +136,47 @@ void sail_config_set_file(const char *path);
 void sail_config_cleanup(void);
 ----
 
+=== Configurable abstract types
+
+The <<Abstract types>> section we described how to write a type like
+`xlen` below without providing a concrete value, in such a way that
+the specification is parametric over the choice of `xlen`.
+
+[source,sail]
+----
+type xlen : Int
+----
+
+In practice, we likely want to configure this type to have some
+specific value at runtime. This can be done by associating a
+configuration option with the abstract type as
+
+[source,sail]
+----
+type xlen : Int = config arch.xlen
+----
+
+which could be instantiated using the following configuration JSON
+
+[source,json]
+----
+{ "arch" : { "xlen" : 32 } }
+----
+
+We can then create (configurable) bitvector values of length `xlen`:
+[source,sail]
+----
+let x : bits(xlen) = config some.bitvector_value
+----
+
+In the configuration file, we specify these by using the string
+`"xlen"` as the length:
+
+[source,json]
+----
+{ "some" : { "bitvector_value" : { "len" : "xlen", "value": "0xFFFF_FFFF" } } }
+----
+
 === Validating Configurations with JSON Schema
 
 :confschema: sail_doc/config_schema.json

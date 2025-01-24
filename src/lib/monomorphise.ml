@@ -4665,7 +4665,7 @@ module ToplevelNexpRewrites = struct
       | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
-      | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
+      | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
       | TD_record (id, typq, typ_ids, flag) ->
           TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)

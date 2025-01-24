@@ -63,25 +63,6 @@ and visit_binding vis ((id, ctyp) as binding) =
   let ctyp' = visit_ctyp vis ctyp in
   if id == id' && ctyp == ctyp' then binding else (id', ctyp')
 
-let visit_ctype_def vis no_change =
-  match no_change with
-  | CTD_enum (id, members) ->
-      let id' = visit_id vis id in
-      let members' = map_no_copy (visit_id vis) members in
-      if id == id' && members == members' then no_change else CTD_enum (id', members')
-  | CTD_struct (id, fields) ->
-      let id' = visit_id vis id in
-      let fields' = map_no_copy (visit_binding vis) fields in
-      if id == id' && fields == fields' then no_change else CTD_struct (id', fields')
-  | CTD_variant (id, ctors) ->
-      let id' = visit_id vis id in
-      let ctors' = map_no_copy (visit_binding vis) ctors in
-      if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
-  | CTD_abstract (id, ctyp) ->
-      let id' = visit_id vis id in
-      let ctyp' = visit_ctyp vis ctyp in
-      if id == id' && ctyp == ctyp' then no_change else CTD_abstract (id', ctyp')
-
 let rec visit_clexp vis outer_clexp =
   let aux vis no_change =
     match no_change with
@@ -263,6 +244,32 @@ and visit_instrs vis outer_instrs =
     | [] -> []
   in
   do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
+
+and visit_ctype_def vis no_change =
+  match no_change with
+  | CTD_enum (id, members) ->
+      let id' = visit_id vis id in
+      let members' = map_no_copy (visit_id vis) members in
+      if id == id' && members == members' then no_change else CTD_enum (id', members')
+  | CTD_struct (id, fields) ->
+      let id' = visit_id vis id in
+      let fields' = map_no_copy (visit_binding vis) fields in
+      if id == id' && fields == fields' then no_change else CTD_struct (id', fields')
+  | CTD_variant (id, ctors) ->
+      let id' = visit_id vis id in
+      let ctors' = map_no_copy (visit_binding vis) ctors in
+      if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
+  | CTD_abstract (id, ctyp, init) ->
+      let id' = visit_id vis id in
+      let ctyp' = visit_ctyp vis ctyp in
+      let init' =
+        match init with
+        | CTDI_none -> init
+        | CTDI_instrs instrs ->
+            let instrs' = map_no_copy (visit_instr vis) instrs in
+            if instrs == instrs' then init else CTDI_instrs instrs'
+      in
+      if id == id' && ctyp == ctyp' && init == init' then no_change else CTD_abstract (id', ctyp', init')
 
 let visit_cdef vis outer_cdef =
   let aux vis (CDEF_aux (aux, def_annot) as no_change) =

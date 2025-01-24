@@ -527,6 +527,11 @@ val kopts_of_typ_arg : typ_arg -> KOptSet.t
 val kopts_of_constraint : n_constraint -> KOptSet.t
 val kopts_of_quant_item : quant_item -> KOptSet.t
 
+val ids_of_nexp : nexp -> IdSet.t
+val ids_of_constraint : n_constraint -> IdSet.t
+val ids_of_typ : typ -> IdSet.t
+val ids_of_typ_arg : typ_arg -> IdSet.t
+
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
 val tyvars_of_typ_arg : typ_arg -> KidSet.t

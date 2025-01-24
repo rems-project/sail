@@ -804,6 +804,9 @@ let add_abstract_typ id kind env =
       env
   )
 
+let remove_abstract_typ id env =
+  update_global (fun global -> { global with abstract_typs = Bindings.remove id global.abstract_typs }) env
+
 let get_abstract_typs env = filter_items env env.global.abstract_typs
 
 let is_abstract_typ id env = Bindings.mem id env.global.abstract_typs

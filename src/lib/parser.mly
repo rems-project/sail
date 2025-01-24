@@ -991,6 +991,12 @@ typaram:
   | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
     { mk_typq $2 [] $startpos $endpos }
 
+abstract_instantiation:
+  | Eq; Config; key=separated_nonempty_list(Dot, Id)
+    { Some key }
+  |
+    { None }
+
 type_def:
   | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, $3, None, $5)) $startpos $endpos }
@@ -1000,8 +1006,8 @@ type_def:
     { mk_td (TD_abbrev ($2, $3, Some $5, $7)) $startpos $endpos }
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, Some $4, $6)) $startpos $endpos }
-  | Typedef id Colon kind
-    { mk_td (TD_abstract ($2, $4)) $startpos $endpos }
+  | Typedef id Colon kind abstract_instantiation
+    { mk_td (TD_abstract ($2, $4, $5)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly

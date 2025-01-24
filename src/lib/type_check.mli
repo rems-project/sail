@@ -121,6 +121,12 @@ module Env : sig
 
   val add_scattered_variant : id -> typquant -> t -> t
 
+  val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
+
+  val is_abstract_typ : id -> t -> bool
+
+  val remove_abstract_typ : id -> t -> t
+
   (** Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
      instead *)

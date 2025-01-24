@@ -121,12 +121,14 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
+  abstracts : ctyp Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
   locals : (mut * ctyp) Bindings.t;
+  registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
@@ -168,12 +170,14 @@ let initial_ctx ?for_target env effect_info =
     records = Bindings.empty;
     enums = Bindings.empty;
     variants = Bindings.empty;
+    abstracts = Bindings.empty;
     valspecs = initial_valspecs;
     quants = KBindings.empty;
     local_env = env;
     tc_env = env;
     effect_info;
     locals = Bindings.empty;
+    registers = Bindings.empty;
     letbinds = [];
     letbind_ids = IdSet.empty;
     no_raw = false;
@@ -347,6 +351,13 @@ module Make (C : CONFIG) = struct
 
   let unit_cval = V_lit (VL_unit, CT_unit)
 
+  let get_variable_ctyp id ctx =
+    match Bindings.find_opt id ctx.locals with
+    | Some binding -> Some binding
+    | None -> (
+        match Bindings.find_opt id ctx.registers with Some ctyp -> Some (Mutable, ctyp) | None -> None
+      )
+
   let rec compile_aval l ctx = function
     | AV_cval (cval, typ) ->
         let ctyp = cval_ctyp cval in
@@ -358,7 +369,7 @@ module Make (C : CONFIG) = struct
         else ([], cval, [])
     | AV_id (id, Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
     | AV_id (id, typ) -> begin
-        match Bindings.find_opt id ctx.locals with
+        match get_variable_ctyp id ctx with
         | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
         | None -> ([], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
@@ -637,17 +648,15 @@ module Make (C : CONFIG) = struct
 
     (List.rev !setup, (fun clexp -> iextern l clexp (id, []) setup_args), !cleanup)
 
-  let compile_config l ctx args typ =
-    let ctyp = ctyp_of_typ ctx typ in
+  let select_abstract l ctx string_id f =
+    let rec if_chain = function [] -> [] | [(_, e)] -> e | (i, t) :: e -> [iif l i t (if_chain e)] in
+    Bindings.bindings ctx.abstracts
+    |> List.map (fun (id, ctyp) ->
+           (V_call (String_eq, [V_id (string_id, CT_string); V_lit (VL_string (string_of_id id), CT_string)]), f id ctyp)
+       )
+    |> if_chain
 
-    let key =
-      List.map
-        (function
-          | AV_lit (L_aux (L_string part, _), _) -> part
-          | _ -> Reporting.unreachable l __POS__ "Invalid argument when compiling config key"
-          )
-        args
-    in
+  let compile_config' l ctx key ctyp =
     let key_name = ngensym () in
     let json = ngensym () in
     let args = [V_lit (VL_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
@@ -674,16 +683,65 @@ module Make (C : CONFIG) = struct
       )
     in
 
+    let config_extract_bits ctyp json =
+      let value = ngensym () in
+      let is_abstract = ngensym () in
+      let abstract_name = ngensym () in
+      let setup, non_abstract_call, cleanup =
+        config_extract ctyp json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
+      in
+      ( [
+          idecl l CT_bool is_abstract;
+          iextern l (CL_id (is_abstract, CT_bool)) (mk_id "sail_config_is_bits_abstract", []) [V_id (json, CT_json)];
+          idecl l ctyp value;
+          iif l
+            (V_id (is_abstract, CT_bool))
+            ([
+               idecl l CT_string abstract_name;
+               iextern l
+                 (CL_id (abstract_name, CT_string))
+                 (mk_id "sail_config_bits_abstract_len", [])
+                 [V_id (json, CT_json)];
+             ]
+            @ select_abstract l ctx abstract_name (fun id abstract_ctyp ->
+                  match abstract_ctyp with
+                  | CT_fint 64 ->
+                      [
+                        iextern l
+                          (CL_id (value, ctyp))
+                          (mk_id "sail_config_unwrap_abstract_bits", [])
+                          [V_call (Get_abstract, [V_id (name id, abstract_ctyp)]); V_id (json, CT_json)];
+                      ]
+                  | CT_lint | CT_fint _ ->
+                      let len = ngensym () in
+                      [
+                        iinit l (CT_fint 64) len (V_call (Get_abstract, [V_id (name id, abstract_ctyp)]));
+                        iextern l
+                          (CL_id (value, ctyp))
+                          (mk_id "sail_config_unwrap_abstract_bits", [])
+                          [V_id (len, CT_fint 64); V_id (json, CT_json)];
+                      ]
+                  | _ -> []
+              )
+            @ [iclear CT_string abstract_name]
+            )
+            (setup @ [non_abstract_call (CL_id (value, ctyp))] @ cleanup);
+        ],
+        (fun clexp -> icopy l clexp (V_id (value, ctyp))),
+        [iclear ctyp value]
+      )
+    in
+
     let rec extract json = function
       | CT_string ->
           config_extract CT_string json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_string"
       | CT_unit -> ([], (fun clexp -> icopy l clexp unit_cval), [])
       | CT_lint -> config_extract CT_lint json ~validate:("sail_config_is_int", []) ~extract:"sail_config_unwrap_int"
       | CT_fint _ -> config_extract CT_lint json ~validate:("sail_config_is_int", []) ~extract:"sail_config_unwrap_int"
-      | CT_lbits ->
-          config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
-      | CT_fbits _ ->
-          config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
+      | CT_lbits -> config_extract_bits CT_lbits json
+      | CT_sbits _ -> config_extract_bits CT_lbits json
+      | CT_fbits _ -> config_extract_bits CT_lbits json
+      | CT_bit -> config_extract CT_lbits json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bit"
       | CT_bool -> config_extract CT_bool json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bool"
       | CT_enum (_, members) as enum_ctyp ->
           let enum_name = ngensym () in
@@ -897,6 +955,18 @@ module Make (C : CONFIG) = struct
     let setup, call, cleanup = extract json ctyp in
     (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
 
+  let compile_config l ctx args typ =
+    let ctyp = ctyp_of_typ ctx typ in
+    let key =
+      List.map
+        (function
+          | AV_lit (L_aux (L_string part, _), _) -> part
+          | _ -> Reporting.unreachable l __POS__ "Invalid argument when compiling config key"
+          )
+        args
+    in
+    compile_config' l ctx key ctyp
+
   let rec apat_ctyp ctx (AP_aux (apat, { env; _ })) =
     let ctx = { ctx with local_env = env } in
     match apat with
@@ -1013,10 +1083,10 @@ module Make (C : CONFIG) = struct
   let rec compile_alexp ctx alexp =
     match alexp with
     | AL_id (id, typ) ->
-        let ctyp = match Bindings.find_opt id ctx.locals with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
+        let ctyp = match get_variable_ctyp id ctx with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
         CL_id (name id, ctyp)
     | AL_addr (id, typ) ->
-        let ctyp = match Bindings.find_opt id ctx.locals with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
+        let ctyp = match get_variable_ctyp id ctx with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
         CL_addr (CL_id (name id, ctyp))
     | AL_field (alexp, field_id) -> CL_field (compile_alexp ctx alexp, field_id)
 
@@ -1644,12 +1714,21 @@ module Make (C : CONFIG) = struct
     | TD_bitfield _ -> Reporting.unreachable l __POS__ "Cannot compile TD_bitfield"
     (* All type abbreviations are filtered out in compile_def  *)
     | TD_abbrev _ -> Reporting.unreachable l __POS__ "Found TD_abbrev in compile_type_def"
-    | TD_abstract (id, K_aux (kind, _)) -> begin
+    | TD_abstract (id, K_aux (kind, _), inst) -> begin
+        let compile_inst ctyp = function
+          | TDC_key key ->
+              let setup, call, cleanup = compile_config' l ctx key ctyp in
+              CTDI_instrs (setup @ [call (CL_id (name id, ctyp))] @ cleanup)
+          | TDC_none -> CTDI_none
+        in
         match kind with
         | K_int ->
             let ctyp = ctyp_of_typ ctx (atom_typ (nid id)) in
-            (CTD_abstract (id, ctyp), ctx)
-        | K_bool -> (CTD_abstract (id, CT_bool), ctx)
+            let inst = compile_inst ctyp inst in
+            (CTD_abstract (id, ctyp, inst), { ctx with abstracts = Bindings.add id ctyp ctx.abstracts })
+        | K_bool ->
+            let inst = compile_inst CT_bool inst in
+            (CTD_abstract (id, CT_bool, inst), { ctx with abstracts = Bindings.add id CT_bool ctx.abstracts })
         | _ -> Reporting.unreachable l __POS__ "Found abstract type that was neither an integer nor a boolean"
       end
 
@@ -2026,13 +2105,19 @@ module Make (C : CONFIG) = struct
     let ctx = { ctx with def_annot = Some def_annot } in
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
-        ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, []), def_annot)], ctx)
+        let ctyp = ctyp_of_typ ctx typ in
+        ( [CDEF_aux (CDEF_register (id, ctyp, []), def_annot)],
+          { ctx with registers = Bindings.add id ctyp ctx.registers }
+        )
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
+        let ctyp = ctyp_of_typ ctx typ in
         let aexp = C.optimize_anf ctx (no_shadow ctx.letbind_ids (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
-        let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
+        let instrs = setup @ [call (CL_id (name id, ctyp))] @ cleanup in
         let instrs = unique_names instrs in
-        ([CDEF_aux (CDEF_register (id, ctyp_of_typ ctx typ, instrs), def_annot)], ctx)
+        ( [CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot)],
+          { ctx with registers = Bindings.add id ctyp ctx.registers }
+        )
     | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
         let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
         let extern =
@@ -2648,7 +2733,7 @@ module Make (C : CONFIG) = struct
     let cdefs = List.filter (fun cdef -> not (is_ctype_def cdef)) cdefs in
 
     let ctdef_id = function
-      | CTD_abstract (id, _) | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
+      | CTD_abstract (id, _, _) | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
     in
 
     let ctdef_ids = function

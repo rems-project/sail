@@ -15,12 +15,9 @@ parser = argparse.ArgumentParser("run_tests.py")
 parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')
 parser.add_argument("--compact", help="Compact output.", action='store_true')
 parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
-<<<<<<< HEAD
 parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
 parser.add_argument("--run-skips", help="Run tests that would otherwise be skipped", action="store_true")
-=======
 parser.add_argument("--test", help="Run only specified test.", action='append')
->>>>>>> a0fb7837 (Config: Add assertion to config integer parsing)
 args = parser.parse_args()
 
 def is_compact():
@@ -126,13 +123,8 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-<<<<<<< HEAD
-def step_with_status(string, expected_status=0, cwd=None, name=""):
+def step_with_status(string, expected_status=0, cwd=None, name='', stderr_file=''):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
-=======
-def step(string, expected_status=0, stderr_file=''):
-    p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
->>>>>>> a0fb7837 (Config: Add assertion to config integer parsing)
     out, err = p.communicate()
     status = p.wait()
     if status != expected_status:
@@ -145,13 +137,6 @@ def step(string, expected_status=0, stderr_file=''):
             print(out.decode('utf-8'))
             print('{}stderr{}:'.format(color.NOTICE, color.END))
             print(err.decode('utf-8'))
-<<<<<<< HEAD
-    return status
-
-def step(string, expected_status=0, cwd=None, name=""):
-    if step_with_status(string, expected_status=expected_status, cwd=cwd, name=name) != expected_status:
-        sys.exit(1)
-=======
             if stderr_file != '':
                 try:
                     with open(stderr_file, 'r') as file:
@@ -160,7 +145,11 @@ def step(string, expected_status=0, cwd=None, name=""):
                         print(content)
                 except FileNotFoundError:
                     print('File {} not found'.format(stderr_file))
->>>>>>> a0fb7837 (Config: Add assertion to config integer parsing)
+    return status
+
+def step(string, expected_status=0, cwd=None, name='', stderr_file=''):
+    if step_with_status(string, expected_status=expected_status, cwd=cwd, name=name) != expected_status:
+        sys.exit(1)
 
 def banner(string):
     print('-' * len(string))

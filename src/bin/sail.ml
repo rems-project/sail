@@ -441,7 +441,7 @@ let file_to_string filename =
     close_in chan;
     Buffer.contents buf
 
-let apply_model_config env ast =
+let get_model_config () =
   match !opt_config_file with
   | Some file ->
       if Sys.file_exists file then (
@@ -453,10 +453,10 @@ let apply_model_config env ast =
                  (Printf.sprintf "Failed to parse configuration file:\n%s" message)
               )
         in
-        Config.rewrite_ast env json ast
+        json
       )
       else raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file))
-  | None -> Config.rewrite_ast env (`Assoc []) ast
+  | None -> `Assoc []
 
 let run_sail (config : Yojson.Safe.t option) tgt =
   Target.run_pre_parse_hook tgt ();
@@ -516,8 +516,9 @@ let run_sail (config : Yojson.Safe.t option) tgt =
               arguments with the appropriate extension, but not both!"
           )
   in
-  let ast = Frontend.instantiate_abstract_types (Some tgt) !opt_instantiations ast in
-  let schema, ast = apply_model_config env ast in
+  let config_json = get_model_config () in
+  let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
+  let schema, ast = Config.rewrite_ast env instantiation config_json ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in

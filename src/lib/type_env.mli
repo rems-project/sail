@@ -126,6 +126,7 @@ val allow_user_undefined : id -> t -> t
 val add_abstract_typ : id -> kind -> t -> t
 val is_abstract_typ : id -> t -> bool
 val get_abstract_typs : t -> kind Bindings.t
+val remove_abstract_typ : id -> t -> t
 
 val is_variant : id -> t -> bool
 val add_variant : id -> typquant * type_union list -> t -> t

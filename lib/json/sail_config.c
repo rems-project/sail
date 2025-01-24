@@ -184,6 +184,29 @@ bool sail_config_is_bits(const sail_config_json config)
   return is_bool_array || is_bv_object;
 }
 
+bool sail_config_is_bits_abstract(const sail_config_json config)
+{
+  cJSON *json = (cJSON *)config;
+
+  if (!(cJSON_IsObject(json) && cJSON_HasObjectItem(json, "len"))) {
+    return false;
+  }
+
+  return cJSON_IsString(cJSON_GetObjectItemCaseSensitive(json, "len"));
+}
+
+void sail_config_bits_abstract_len(sail_string *str, const sail_config_json config)
+{
+  cJSON *json = (cJSON *)config;
+
+  cJSON *len_json = cJSON_GetObjectItemCaseSensitive(json, "len");
+  sail_string len_str = cJSON_GetStringValue(len_json);
+
+  size_t sz = strlen(len_str);
+  *str = (sail_string)realloc(*str, sz + 1);
+  *str = strcpy(*str, len_str);
+}
+
 void sail_config_unwrap_string(sail_string *str, const sail_config_json config)
 {
   sail_string conf_str = cJSON_GetStringValue((cJSON *)config);
@@ -213,6 +236,59 @@ void sail_config_truncate(lbits *rop) {
   mpz_clear(tmp);
 }
 
+void sail_config_unwrap_bit(lbits *bv, const sail_config_json config)
+{
+  cJSON *json = (cJSON *)config;
+
+  bv->len = 1;
+  if (cJSON_IsTrue(json)) {
+    mpz_set_ui(*bv->bits, 1);
+  } else {
+    mpz_set_ui(*bv->bits, 0);
+  }
+}
+
+void sail_config_set_bits_value(lbits *bv, char *v)
+{
+  size_t i = 0;
+  for (char *c = v; *c != '\0'; c++) {
+    if (*c != '_') {
+      v[i] = *c;
+      i++;
+    }
+  }
+  v[i] = '\0';
+
+  if (strncmp(v, "0x", 2) == 0) {
+    gmp_sscanf(v, "0x%Zx", bv->bits);
+  } else if (strncmp(v, "0b", 2) == 0) {
+    mp_bitcnt_t b = 0;
+    i--;
+    do {
+      if (v[i] == '1') {
+        mpz_setbit(*bv->bits, b);
+      }
+      b++;
+      i--;
+    } while (i >= 2);
+  } else {
+    gmp_sscanf(v, "%Zd", bv->bits);
+  }
+
+  sail_config_truncate(bv);
+}
+
+void sail_config_unwrap_abstract_bits(lbits *bv, int64_t len, sail_config_json config)
+{
+  cJSON *json = (cJSON *)config;
+  cJSON *value_json = cJSON_GetObjectItemCaseSensitive(json, "value");
+  char *v = value_json->valuestring;
+
+  bv->len = (mp_bitcnt_t)len;
+
+  sail_config_set_bits_value(bv, v);
+}
+
 void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;
@@ -236,36 +312,13 @@ void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
     char *v = value_json->valuestring;
     bool has_separator = false;
 
-    bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
-
-    size_t i = 0;
-    for (char *c = v; *c != '\0'; c++) {
-      if (*c != '_') {
-        v[i] = *c;
-        i++;
-      }
-    }
-    v[i] = '\0';
-
-    if (strncmp(v, "0x", 2) == 0) {
+    if (cJSON_IsNumber(len_json)) {
       bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
-      gmp_sscanf(v, "0x%Zx", bv->bits);
-    } else if (strncmp(v, "0b", 2) == 0) {
-      mp_bitcnt_t b = 0;
-      i--;
-      do {
-        if (v[i] == '1') {
-          mpz_setbit(*bv->bits, b);
-        }
-        b++;
-        i--;
-      } while (i >= 2);
     } else {
-      bv->len = (mp_bitcnt_t)atoi(len_json->valuestring);
-      gmp_sscanf(v, "%Zd", bv->bits);
+      bv->len = 32;
     }
 
-    sail_config_truncate(bv);
+    sail_config_set_bits_value(bv, v);
   }
 }
 

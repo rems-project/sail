@@ -209,13 +209,6 @@ clexp :: 'CL_' ::=
   | clexp . nat              :: :: tuple
   | void : ctyp              :: :: void
 
-ctype_def :: 'CTD_' ::=
-  {{ com C type definition }}
-  | enum id = id0 '|' ... '|' idn                    :: :: enum
-  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
-  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
-  | abstract id : ctyp                               :: :: abstract
-
 iannot :: '' ::=
   {{ phantom }}
   {{ lem iannot }}
@@ -270,6 +263,17 @@ instr :: 'I_' ::=
 % For optimising away allocations and copying.
   | reset ctyp name                                :: :: reset
   | ctyp name = cval                               :: :: reinit
+
+ctype_def_init :: 'CTDI_' ::=
+  | = { instr0 ; ... ; instrn } :: :: instrs
+  |                             :: :: none
+
+ctype_def :: 'CTD_' ::=
+  {{ com C type definition }}
+  | enum id = id0 '|' ... '|' idn                    :: :: enum
+  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
+  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | abstract id : ctyp ctype_def_init                :: :: abstract
 
 def_annot :: '' ::=
   {{ phantom }}

@@ -1689,20 +1689,20 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
-  | P.TD_abstract (id, kind) ->
+  | P.TD_abstract (id, kind, instantiation) -> (
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let id = to_ast_reserved_type_id ctx id in
-      begin
-        match to_ast_kind kind with
-        | Some kind ->
-            ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
-              {
-                ctx with
-                type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
-              }
-            )
-        | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
-      end
+      let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
+      match to_ast_kind kind with
+      | Some kind ->
+          ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
+            {
+              ctx with
+              type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+            }
+          )
+      | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
+    )
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
