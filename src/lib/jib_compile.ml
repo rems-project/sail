@@ -685,6 +685,31 @@ module Make (C : CONFIG) = struct
       | CT_fbits _ ->
           config_extract CT_lbits json ~validate:("sail_config_is_bits", []) ~extract:"sail_config_unwrap_bits"
       | CT_bool -> config_extract CT_bool json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bool"
+      | CT_enum (_, members) as enum_ctyp ->
+          let enum_name = ngensym () in
+          let enum_str = ngensym () in
+          let setup, get_string, cleanup =
+            config_extract CT_string json ~validate:("sail_config_is_string", []) ~extract:"sail_config_unwrap_string"
+          in
+          let enum_compare =
+            List.fold_left
+              (fun rest m ->
+                [
+                  iif l
+                    (V_call (String_eq, [V_id (enum_str, CT_string); V_lit (VL_string (string_of_id m), CT_string)]))
+                    [icopy l (CL_id (enum_name, enum_ctyp)) (V_member (m, enum_ctyp))]
+                    rest;
+                ]
+              )
+              [] members
+          in
+          ( [idecl l enum_ctyp enum_name; idecl l CT_string enum_str]
+            @ setup
+            @ [get_string (CL_id (enum_str, CT_string))]
+            @ enum_compare,
+            (fun clexp -> icopy l clexp (V_id (enum_name, enum_ctyp))),
+            cleanup @ [iclear CT_string enum_str; iclear enum_ctyp enum_name]
+          )
       | CT_variant (_, constructors) as variant_ctyp ->
           let variant_name = ngensym () in
           let ctor_checks, ctor_extracts =

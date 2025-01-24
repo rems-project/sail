@@ -244,6 +244,7 @@ let string_of_op = function
   | Concat -> "@concat"
   | Ite -> "@ite"
   | Get_abstract -> "@get_abstract"
+  | String_eq -> "@string_eq"
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
@@ -1014,6 +1015,7 @@ let rec infer_call op vs =
     end
   | Ite, [_; t; _] -> cval_ctyp t
   | Get_abstract, [v] -> cval_ctyp v
+  | String_eq, _ -> CT_bool
   | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
 
 and cval_ctyp = function

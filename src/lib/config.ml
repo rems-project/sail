@@ -61,6 +61,8 @@ let typ_is_variant env = function
   | Typ_aux (Typ_app (id, _), _) -> Env.is_variant id env
   | _ -> false
 
+let typ_is_enum env = function Typ_aux (Typ_id id, _) -> Env.is_enum id env | _ -> false
+
 let destruct_typ_args = function
   | Typ_aux (Typ_id id, _) -> Some (id, [])
   | Typ_aux (Typ_app (id, args), _) -> Some (id, args)
@@ -333,6 +335,10 @@ end = struct
             ]
           in
           Some (`Assoc variant_schema)
+      | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) when Env.is_enum id env ->
+          let members = Env.get_enum id env in
+          Some
+            (`Assoc [("type", `String "string"); ("enum", `List (List.map (fun m -> `String (string_of_id m)) members))])
       | [], NC_aux (NC_true, _), Typ_aux (Typ_id id, _) -> (
           match string_of_id id with
           | "string" -> Some (`Assoc [("type", `String "string")])
@@ -526,6 +532,7 @@ let rec sail_exp_from_json ~at:l env typ =
   | `Intlit n -> mk_lit_exp ~loc:l (L_num (Big_int.of_string n))
   | `String s ->
       if Option.is_some (Type_check.destruct_numeric typ) then mk_lit_exp ~loc:l (L_num (Big_int.of_string s))
+      else if typ_is_enum env typ then mk_exp ~loc:l (E_id (mk_id ~loc:l s))
       else mk_lit_exp ~loc:l (L_string s)
   | `Bool true -> mk_lit_exp ~loc:l L_true
   | `Bool false -> mk_lit_exp ~loc:l L_false

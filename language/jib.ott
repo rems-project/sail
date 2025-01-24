@@ -96,6 +96,7 @@ op :: '' ::=
   | neq               :: :: neq
   | ite               :: :: ite
   | get_abstract      :: :: get_abstract
+  | string_eq         :: :: string_eq
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq

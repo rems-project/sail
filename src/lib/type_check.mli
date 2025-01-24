@@ -155,6 +155,8 @@ module Env : sig
 
   val is_record : id -> t -> bool
 
+  val is_enum : id -> t -> bool
+
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
 

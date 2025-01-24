@@ -1161,6 +1161,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       end
     | Get_abstract, [v] -> sgen_cval v
     | Ite, [i; t; e] -> sprintf "(%s ? %s : %s)" (sgen_cval i) (sgen_cval t) (sgen_cval e)
+    | String_eq, [s1; s2] -> sprintf "(strcmp(%s, %s) == 0)" (sgen_cval s1) (sgen_cval s2)
     | _, _ -> failwith "Could not generate cval primop"
 
   let sgen_cval_param cval =

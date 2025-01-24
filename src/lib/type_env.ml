@@ -1318,6 +1318,8 @@ let get_enum id env =
 
 let get_enums env = filter_items_with snd env env.global.enums
 
+let is_enum id env = Bindings.mem id env.global.enums
+
 let add_scattered_id id attrs env =
   let updater = function None -> Some (Ok attrs) | previous -> previous in
   update_global (fun global -> { global with scattered_ids = Bindings.update id updater global.scattered_ids }) env
