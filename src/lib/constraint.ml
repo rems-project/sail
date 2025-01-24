@@ -302,7 +302,7 @@ let load_digests_err path =
   in
   try load () with End_of_file -> close_in in_chan
 
-let load_digests path = try load_digests_err (path) with Sys_error _ -> ()
+let load_digests path = try load_digests_err path with Sys_error _ -> ()
 
 let save_digests path =
   let out_chan = open_out_bin path in
