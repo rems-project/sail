@@ -66,6 +66,9 @@ function float_decompose(op) = {
   }
 }
 
+val      float_compose : forall 'n, 'n in { 16, 32, 64, 128 }. float_bits('n) -> bits('n)
+function float_compose(op) = op.sign @ op.exp @ op.mantissa
+
 val      float_has_max_exp : forall 'n, 'n in { 16, 32, 64, 128 }. bits('n) -> bool
 function float_has_max_exp (op) = {
   let fp = float_decompose (op);
