@@ -16,4 +16,10 @@ def truncateLSB {w: Nat} (x: BitVec w) (w': Nat) : BitVec w' :=
   x.extractLsb' 0 w'
 
 end BitVec
+
+namespace Int
+
+def intAbs (x : Int) : Int := Int.ofNat (Int.natAbs x)
+
+end Int
 end Sail

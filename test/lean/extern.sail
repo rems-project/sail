@@ -2,6 +2,8 @@ default Order dec
 
 $include <prelude.sail>
 
+/* Testing arith.sail */
+
 function extern_add() -> int = {
   return add_int(5, 4)
 }
@@ -12,6 +14,14 @@ function extern_sub() -> int = {
 
 function extern_sub_nat() -> nat = {
   return sub_nat(5, 4)
+}
+
+function extern_negate() -> int = {
+  return negate_int(5)
+}
+
+function extern_mult() -> int = {
+  return mult_int(5, 4)
 }
 
 function extern_tdiv() -> int = {
@@ -26,12 +36,41 @@ function extern_tmod_positive() -> int = {
   return _tmod_int_positive(5, 4)
 }
 
-function extern_negate() -> int = {
-  return negate_int(5)
+function extern_max() -> int = {
+  return max_int(5, 4)
 }
 
-function extern_mult() -> int = {
-  return mult_int(5, 4)
+function extern_min() -> int = {
+  return min_int(5, 4)
+}
+
+// TODO: Waiting for full AST to get translated.
+// function extern_fdiv_int() -> int = {
+//   return fdiv_int(5, 4)
+// }
+
+// TODO: Waiting for full AST to get translated.
+// function extern_fmod_int() -> int = {
+//   return fmod_int(5, 4)
+// }
+
+function extern_abs_int_plain() -> int = {
+  let x: int = -5;
+  return abs_int_plain(x)
+}
+
+/* Testing flow.sail */
+
+function extern_eq_unit() -> bool = {
+  return eq_unit((),())
+}
+
+function extern_eq_bit() -> bool = {
+  return eq_bit(bitzero, bitone)
+}
+
+function extern_not() -> bool = {
+  return not_bool(true)
 }
 
 function extern_and() -> bool = {
@@ -50,22 +89,32 @@ function extern_eq_bool() -> bool = {
   return eq_bool(true, false)
 }
 
-function extern_eq_bit() -> bool = {
-  return eq_bit(bitzero, bitone)
+function extern_eq_int() -> bool = {
+  return eq_int(5, 4)
 }
 
-
 // TODO: Waiting for full AST to get translated.
-// function extern_fdiv_int() -> int = {
-//   return fdiv_int(5, 4)
+// function extern_neq_int() -> bool = {
+//   return neq_int(5, 4)
 // }
 
 // TODO: Waiting for full AST to get translated.
-// function extern_fmod_int() -> int = {
-//   return fmod_int(5, 4)
+// function extern_neq_bool() -> bool = {
+//   return neq_bool(true, false)
 // }
 
-function extern_abs_int_plain() -> int = {
-  let x: int = -5;
-  return abs_int_plain(x)
+function extern_lteq_int() -> bool = {
+  return lteq_int(5, 4)
+}
+
+function extern_gteq_int() -> bool = {
+  return gteq_int(5, 4)
+}
+
+function extern_lt_int() -> bool = {
+  return lt_int(5, 4)
+}
+
+function extern_gt_int() -> bool = {
+  return gt_int(5, 4)
 }
