@@ -762,7 +762,7 @@ let mk_typquant ?loc:(l = Parse_ast.Unknown) qis = TypQ_aux (TypQ_tq qis, l)
 
 let mk_fexp ?loc:(l = Parse_ast.Unknown) id exp = FE_aux (FE_fexp (id, exp), (l, empty_uannot))
 
-type effect = bool
+type effects = bool
 
 let no_effect = false
 let monadic_effect = true

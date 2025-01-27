@@ -1279,7 +1279,7 @@ let can_be_undefined ~at:l env typ =
 type tannot' = {
   env : Env.t;
   typ : typ;
-  monadic : effect;
+  monadic : effects;
   expected : typ option;
   instantiation : typ_arg KBindings.t option;
 }

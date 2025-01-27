@@ -280,16 +280,16 @@ val constraint_conj : n_constraint -> n_constraint list
 (** Same as constraint_conj but for disjunctions *)
 val constraint_disj : n_constraint -> n_constraint list
 
-type effect
+type effects
 
-val no_effect : effect
-val monadic_effect : effect
+val no_effect : effects
+val monadic_effect : effects
 
-val effectful : effect -> bool
+val effectful : effects -> bool
 
-val equal_effects : effect -> effect -> bool
-val subseteq_effects : effect -> effect -> bool
-val union_effects : effect -> effect -> effect
+val equal_effects : effects -> effects -> bool
+val subseteq_effects : effects -> effects -> bool
+val union_effects : effects -> effects -> effects
 
 (** {2 Functions for building numeric expressions} *)
 

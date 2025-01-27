@@ -407,10 +407,10 @@ val env_of_mpat : tannot mpat -> Env.t
 val typ_of_mpexp : tannot mpexp -> typ
 val env_of_mpexp : tannot mpexp -> Env.t
 
-val effect_of : tannot exp -> effect
-val effect_of_pat : tannot pat -> effect
-val effect_of_annot : tannot -> effect
-val add_effect_annot : tannot -> effect -> tannot
+val effect_of : tannot exp -> effects
+val effect_of_pat : tannot pat -> effects
+val effect_of_annot : tannot -> effects
+val add_effect_annot : tannot -> effects -> tannot
 
 (** Returns the type that an expression was checked against, if any.
     Note that these may be removed if an expression is rewritten. *)
