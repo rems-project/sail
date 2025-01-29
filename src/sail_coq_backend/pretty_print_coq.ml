@@ -233,6 +233,7 @@ let doc_id_type global env (Id_aux (i, _) as id) =
   match i with
   | Id "int" -> string "Z"
   | Id "real" -> string "R"
+  | Id i when List.mem i !opt_extern_types -> string i
   | Id i when is_shadowed () -> string global.types_mod ^^ dot ^^ string (fix_id global.avoid_target_names false i)
   | Id i -> string (fix_id global.avoid_target_names false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
@@ -259,7 +260,7 @@ let doc_var ctxt kid =
 
 let doc_field_name ctxt typ_id field_id =
   if prefix_recordtype && string_of_id typ_id <> "regstate" then
-    doc_id ctxt typ_id ^^ string "_" ^^ doc_id ctxt field_id
+    doc_id ctxt (mk_id (string_of_id typ_id ^ "_" ^ string_of_id field_id))
   else doc_id ctxt field_id
 
 let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ))
@@ -4388,7 +4389,7 @@ let builtin_target_names defs =
       end
     | _ -> names
   in
-  List.fold_left check_def StringSet.empty defs
+  List.fold_left check_def (StringSet.of_list !opt_extern_types) defs
 
 (* Coq doesn't allow constructors and types to have the same name, so calculate a rewrite for type names. *)
 (* TODO: once I finally write a decent name management mechanism, use it to make sure that it's not renaming
