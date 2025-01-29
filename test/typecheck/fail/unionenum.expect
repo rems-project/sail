@@ -1,0 +1,9 @@
+[93mType error[0m:
+[96mfail/unionenum.sail[0m:10.12-17:
+10[96m |[0menum foo = {Hello, World}
+  [91m |[0m            [91m^---^[0m
+  [91m |[0m Cannot create enumeration member Hello, name is already bound to a union constructor
+  [91m |[0m 
+  [91m |[0m [96mfail/unionenum.sail[0m:5.2-7:
+  [91m |[0m 5[96m |[0m  Hello : unit,
+  [91m |[0m  [91m |[0m  [91m^---^[0m [91mprevious binding[0m

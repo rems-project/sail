@@ -5,4 +5,4 @@
 [96mfail/overload_bound.sail[0m:4.0-20:
 4[96m |[0moverload foo = {foo}
  [91m |[0m[91m^------------------^[0m
- [91m |[0m foo cannot be defined as an overload, as it is already bound
+ [91m |[0m foo cannot be defined as an overload, as it is already bound to a function
