@@ -33,7 +33,7 @@
   (synopsis "Helper tool for compiling Sail")
   (name sail_manifest)
   (depends
-    (ocaml (>= 4.08.1))))
+    (ocaml (>= 4.14.0))))
 
 (package
   (sites (share plugins))
@@ -114,7 +114,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (synopsis "Sail to LaTeX formatting")
   (depends
     (libsail (= :version))
-    (omd (and (>= 1.3.1) (< 1.4.0)))))
+    (cmarkit (>= 0.3.0))))
 
 (package
   (name sail_doc_backend)
@@ -122,7 +122,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (depends
     (libsail (= :version))
     (base64 (>= 3.1.0))
-    (omd (and (>= 1.3.1) (< 1.4.0)))))
+    (cmarkit (>= 0.3.0))))
 
 (package
   (name sail)

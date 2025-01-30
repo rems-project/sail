@@ -64,35 +64,92 @@ end
 
 module AsciidocConverter : CONVERTER = struct
   open Printf
-  open Omd
+  open Cmarkit
 
   type config = { this : Ast.id option; loc : Parse_ast.l; list_depth : int }
 
   let default_config ~loc = { this = None; loc; list_depth = 1 }
 
-  let rec format_elem (conf : config) = function
-    | Paragraph elems -> format conf elems ^ "\n\n"
-    | Text str -> str
-    | Emph elems -> sprintf "_%s_" (format conf elems)
-    | Bold elems -> sprintf "*%s*" (format conf elems)
-    | Code (_, code) -> sprintf "`%s`" code
-    | Code_block (lang, code) -> sprintf "[source,%s]\n----\n%s\n----\n\n" lang code
-    | Br -> "\n"
-    | NL -> "\n"
-    | H1 header -> "= " ^ format conf header ^ "\n"
-    | H2 header -> "== " ^ format conf header ^ "\n"
-    | H3 header -> "=== " ^ format conf header ^ "\n"
-    | H4 header -> "==== " ^ format conf header ^ "\n"
-    | Ul list | Ulp list ->
-        Util.string_of_list ""
-          (fun item ->
-            let new_conf = { conf with list_depth = conf.list_depth + 1 } in
-            "\n" ^ String.make conf.list_depth '*' ^ " " ^ format new_conf item
-          )
-          list
-    | _ -> raise (Reporting.err_general conf.loc "Cannot convert markdown element to Asciidoc")
+  let comment_loc l offset =
+    let open Lexing in
+    match Reporting.simp_loc l with
+    | Some (s, _) ->
+        let s = Reporting.Position.advance_position ~trim:false "/*!" s in
+        let start_line, start_bol = Textloc.first_line offset in
+        let start_cnum = Textloc.first_byte offset in
+        let start_bol_offset = if start_line <> 1 then s.pos_cnum - s.pos_bol else 0 in
+        let end_line, end_bol = Textloc.last_line offset in
+        let end_cnum = Textloc.last_byte offset in
+        let end_bol_offset = if end_line <> 1 then s.pos_cnum - s.pos_bol else 0 in
+        print_endline (Printf.sprintf "%d %d %d" start_line start_bol start_cnum);
+        let sc =
+          {
+            s with
+            pos_lnum = s.pos_lnum + start_line - 1;
+            pos_bol = s.pos_bol + start_bol + start_bol_offset;
+            pos_cnum = s.pos_cnum + start_cnum;
+          }
+        in
+        let ec =
+          {
+            s with
+            pos_lnum = s.pos_lnum + end_line - 1;
+            pos_bol = s.pos_bol + end_bol + end_bol_offset;
+            pos_cnum = s.pos_cnum + end_cnum + 1;
+          }
+        in
+        Parse_ast.Range (sc, ec)
+    | None -> Parse_ast.Unknown
 
-  and format conf elems = String.concat "" (List.map (format_elem conf) elems)
+  let rec format_block buf conf = function
+    | Block.Blocks (blocks, _) -> List.iter (format_block buf conf) blocks
+    | Block.Paragraph (para, _) ->
+        format_inline buf conf (Block.Paragraph.inline para);
+        Buffer.add_string buf "\n"
+    | Block.Blank_line _ -> Buffer.add_string buf "\n"
+    | Block.Code_block (cb, _) -> (
+        let code = Block.Code_block.code cb |> List.map Block_line.to_string |> String.concat "\n" in
+        match Block.Code_block.info_string cb with
+        | None -> ksprintf (Buffer.add_string buf) "----\n%s\n----\n" code
+        | Some (lang, _) -> ksprintf (Buffer.add_string buf) "[source,%s]\n----\n%s\n----\n" lang code
+      )
+    | Block.Heading (h, _) ->
+        let equals = String.make (Block.Heading.level h) '=' in
+        Buffer.add_string buf equals;
+        Buffer.add_char buf ' ';
+        format_inline buf conf (Block.Heading.inline h);
+        Buffer.add_char buf '\n'
+    | Block.Block_quote (bq, _) ->
+        Buffer.add_string buf "[quote]\n----\n";
+        format_block buf conf (Block.Block_quote.block bq);
+        Buffer.add_string buf "\n----\n"
+    | b ->
+        let offset = Block.meta b |> Meta.textloc in
+        let l = comment_loc conf.loc offset in
+        raise (Reporting.err_general l "Cannot convert markdown block to Asciidoc")
 
-  let convert conf comment = format conf (Omd.of_string comment)
+  and format_inline buf conf = function
+    | Inline.Text (str, _) -> Buffer.add_string buf str
+    | Inline.Break _ -> Buffer.add_char buf '\n'
+    | Inline.Code_span (c, _) -> ksprintf (Buffer.add_string buf) "`%s`" (Inline.Code_span.code c)
+    | Inline.Emphasis (emph, _) ->
+        Buffer.add_char buf '_';
+        format_inline buf conf (Inline.Emphasis.inline emph);
+        Buffer.add_char buf '_'
+    | Inline.Strong_emphasis (emph, _) ->
+        Buffer.add_char buf '*';
+        format_inline buf conf (Inline.Emphasis.inline emph);
+        Buffer.add_char buf '*'
+    | Inline.Inlines (inlines, _) -> List.iter (format_inline buf conf) inlines
+    | i ->
+        let offset = Inline.meta i |> Meta.textloc in
+        let l = comment_loc conf.loc offset in
+        raise (Reporting.err_general l "Cannot convert inline markdown element to Asciidoc")
+
+  and format conf doc =
+    let buf = Buffer.create 1024 in
+    format_block buf conf (Doc.block doc);
+    Buffer.contents buf
+
+  let convert conf comment = format conf (Doc.of_string ~strict:true ~locs:true comment)
 end

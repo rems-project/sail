@@ -436,8 +436,8 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let get_doc_comment def_annot =
     Option.map
-      (fun comment ->
-        let conf = Converter.default_config ~loc:def_annot.loc in
+      (fun (l, comment) ->
+        let conf = Converter.default_config ~loc:l in
         Converter.convert conf comment
       )
       def_annot.doc_comment
@@ -697,7 +697,10 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           | DEF_pragma ("anchor", arg, _) ->
               let links = hyperlinks files def in
               let anchor_info =
-                { source = doc_loc l Type_check.strip_def Reformatter.doc_def def; comment = def_annot.doc_comment }
+                {
+                  source = doc_loc l Type_check.strip_def Reformatter.doc_def def;
+                  comment = Option.map snd def_annot.doc_comment;
+                }
               in
               anchored := Bindings.add (mk_id arg) (anchor_info, links) !anchored
           | _ -> ()

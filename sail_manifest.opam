@@ -20,7 +20,7 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
-  "ocaml" {>= "4.08.1"}
+  "ocaml" {>= "4.14.0"}
   "odoc" {with-doc}
 ]
 build: [

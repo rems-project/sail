@@ -67,7 +67,10 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_attr attr arg = string (string_of_attribute attr arg) ^^ space
 
   let doc_def_annot def_annot =
-    (match def_annot.doc_comment with Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline | _ -> empty)
+    ( match def_annot.doc_comment with
+    | Some (_, str) -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
+    | _ -> empty
+    )
     ^^ ( match def_annot.attrs with
        | [] -> empty
        | attrs -> separate_map hardline (fun (_, attr, arg) -> doc_attr attr arg) attrs ^^ hardline
