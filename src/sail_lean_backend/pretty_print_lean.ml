@@ -37,12 +37,18 @@ let add_single_kid_id_rename ctx id kid =
 
 let implicit_parens x = enclose (string "{") (string "}") x
 
+let rec fix_id name =
+  match name with
+  (* Lean keywords to avoid, to expand as needed *)
+  | "rec" -> name ^ "'"
+  | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
+
 let doc_id_ctor (Id_aux (i, _)) =
-  match i with Id i -> string i | Operator x -> string (Util.zencode_string ("op " ^ x))
+  match i with Id i -> string (fix_id i) | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_kid ctx (Kid_aux (Var x, _) as ki) =
   match KBindings.find_opt ki ctx.kid_id_renames with
-  | Some (Some i) -> string (string_of_id i)
+  | Some (Some i) -> doc_id_ctor i
   | _ -> string ("k_" ^ String.sub x 1 (String.length x - 1))
 
 (* TODO do a proper renaming and keep track of it *)
@@ -188,14 +194,14 @@ let rec doc_nconstraint ctx (NC_aux (nc, _)) =
   | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
   | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "="; doc_typ_arg ctx a2]
   | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "≠"; doc_typ_arg ctx a2]
-  | NC_app (f, args) -> string (string_of_id f) ^^ parens (separate_map comma_sp (doc_typ_arg ctx) args)
+  | NC_app (f, args) -> doc_id_ctor f ^^ parens (separate_map comma_sp (doc_typ_arg ctx) args)
   | NC_false -> string "false"
   | NC_true -> string "true"
   | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
   | NC_le (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≤"; doc_nexp ctx n2]
   | NC_gt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string ">"; doc_nexp ctx n2]
   | NC_lt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "<"; doc_nexp ctx n2]
-  | NC_id i -> string (string_of_id i)
+  | NC_id i -> doc_id_ctor i
   | NC_set (n, vs) ->
       flow (break 1)
         [
@@ -355,7 +361,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   match e with
   | E_id id ->
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
-      else wrap_with_pure as_monadic (string (string_of_id id))
+      else wrap_with_pure as_monadic (doc_id_ctor id)
   | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
   | E_app (Id_aux (Id "undefined_int", _), _) (* TODO remove when we handle imports *)
   | E_app (Id_aux (Id "undefined_bit", _), _) (* TODO remove when we handle imports *)
@@ -451,7 +457,7 @@ let doc_binder ctx i t =
   in
   (* Overwrite the id if it's captured *)
   let ctx = match captured_typ_var (i, t) with Some (i, ki) -> add_single_kid_id_rename ctx i ki | _ -> ctx in
-  (ctx, separate space [string (string_of_id i); colon; doc_typ ctx t] |> paranthesizer)
+  (ctx, separate space [doc_id_ctor i; colon; doc_typ ctx t] |> paranthesizer)
 
 let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
@@ -495,11 +501,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let decl_val = [doc_ret_typ; coloneq] in
   (* Add do block for stateful functions *)
   let decl_val = if is_monadic then decl_val @ [string "do"] else decl_val in
-  ( typ_quant_comment,
-    separate space ([string "def"; string (string_of_id id)] @ binders @ [colon] @ decl_val),
-    env,
-    fixup_binders
-  )
+  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), env, fixup_binders)
 
 let doc_funcl_body fixup_binders global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
