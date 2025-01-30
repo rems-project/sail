@@ -2393,6 +2393,48 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
+      (* TODO: Formatting here isn't quite right. What are the arguments to jump? *)
+      let unit_test_functions =
+        string "unit (*const SAIL_TESTS[])(unit) = {"
+        ^^ hardline
+        ^^ jump 2 2
+             (IdSet.fold (fun id acc -> codegen_function_id id ^^ string "," ^^ hardline ^^ acc) ctx.unit_test_ids empty
+             ^^ string "0" ^^ hardline
+             )
+        ^^ string "};"
+      in
+
+      let unit_test_names =
+        string "const char* const SAIL_TEST_NAMES[] = {"
+        ^^ hardline
+        ^^ jump 2 2
+             (IdSet.fold
+                (fun id acc -> string ("\"" ^ String.escaped (string_of_id id) ^ "\"") ^^ string "," ^^ hardline ^^ acc)
+                ctx.unit_test_ids empty
+             ^^ string "0" ^^ hardline
+             )
+        ^^ string "};"
+      in
+
+      (* A simple function to run the unit tests. It isn't called from anywhere
+         by default and you don't need to use it - you can use SAIL_TESTS directly
+         in your own custom test runner. *)
+      let model_test =
+        [
+          Printf.sprintf "%svoid model_test()" (static ());
+          "{";
+          "  for (size_t i = 0; SAIL_TESTS[i] != 0 && SAIL_TEST_NAMES[i] != 0; ++i) {";
+          "    model_init();";
+          "    printf(\"Testing %s\\n\", SAIL_TEST_NAMES[i]);";
+          "    SAIL_TESTS[i](UNIT);";
+          "    printf(\"Pass\\n\");";
+          "    model_fini();";
+          "  }";
+          "}";
+        ]
+        |> List.map string |> separate hardline
+      in
+
       let model_main =
         let extra_pre =
           List.filter_map
@@ -2439,7 +2481,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
                else empty
              )
-          ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
+          ^^ model_main ^^ hlhl ^^ unit_test_functions ^^ hlhl ^^ unit_test_names ^^ hlhl ^^ model_test ^^ hardline
+          ^^ end_extern_cpp ^^ hardline
           )
       )
     with Type_error.Type_error (l, err) ->

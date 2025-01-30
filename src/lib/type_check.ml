@@ -4662,6 +4662,15 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
     | Some vs_l -> check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt
     | None -> ()
   end;
+  (* Check $[test] functions have type unit -> unit. *)
+  (* TODO: Does the annotation go on the type declaration or the function definition? *)
+  begin
+    if Option.is_some (get_def_attribute "test" def_annot) then (
+      match (vtyp_args, vtyp_ret) with
+      | [arg], ret when is_unit_typ arg && is_unit_typ ret -> ()
+      | _ -> typ_error l "$[test] functions must have type: unit -> unit"
+    )
+  end;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let funcl_env =
     if Option.is_some have_val_spec then Env.add_typquant l quant env

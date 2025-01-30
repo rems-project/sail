@@ -131,6 +131,7 @@ type ctx = {
   registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
+  unit_test_ids : IdSet.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;
@@ -181,6 +182,7 @@ let initial_ctx ?for_target env effect_info =
     registers = Bindings.empty;
     letbinds = [];
     letbind_ids = IdSet.empty;
+    unit_test_ids = IdSet.empty;
     no_raw = false;
     no_static = false;
     coverage_override = true;
@@ -2803,6 +2805,16 @@ module Make (C : CONFIG) = struct
 
     (if reverse then List.rev ctype_defs else ctype_defs) @ cdefs
 
+  let unit_tests_of_ast ast =
+    let unit_tests_of_def = function
+      | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), def_annot)
+        when Option.is_some (get_def_attribute "test" def_annot) ->
+          IdSet.singleton id
+      | _ -> IdSet.empty
+    in
+    let unit_tests_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map unit_tests_of_def defs) in
+    unit_tests_of_defs ast.defs |> IdSet.elements
+
   let toplevel_lets_of_ast ast =
     let toplevel_lets_of_def = function
       | DEF_aux (DEF_let (LB_aux (LB_val (pat, _), _)), _) -> pat_ids pat
@@ -2852,7 +2864,14 @@ module Make (C : CONFIG) = struct
     let module G = Graph.Make (Callgraph.Node) in
     let g = Callgraph.graph_of_ast ast in
     let module NodeSet = Set.Make (Callgraph.Node) in
-    let roots = Specialize.get_initial_calls () |> List.map (fun id -> Callgraph.Function id) |> NodeSet.of_list in
+    (* Get the list of unit tests (functions with $[test]). We can't do this in
+       compile_def because they would have already been dead-code elimintate by then. *)
+    let unit_tests = unit_tests_of_ast ast in
+    let ctx = { ctx with unit_test_ids = unit_tests |> IdSet.of_list } in
+
+    let roots =
+      Specialize.get_initial_calls () @ unit_tests |> List.map (fun id -> Callgraph.Function id) |> NodeSet.of_list
+    in
     let roots = IdSet.fold (fun id roots -> NodeSet.add (Callgraph.Type id) roots) C.preserve_types roots in
     let roots = NodeSet.add (Callgraph.Type (mk_id "exception")) roots in
     let roots =
@@ -2861,6 +2880,7 @@ module Make (C : CONFIG) = struct
     let roots =
       NodeSet.union (toplevel_lets_of_ast ast |> List.map (fun id -> Callgraph.Letbind id) |> NodeSet.of_list) roots
     in
+
     let g = G.prune roots NodeSet.empty g in
     let ast = Callgraph.filter_ast NodeSet.empty g ast in
 
