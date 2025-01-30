@@ -2225,13 +2225,26 @@ let compile_ast env effect_info output_chan c_includes ast =
     let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
     let hlhl = hardline ^^ hardline in
 
+    let unit_test_functions = string "unit (*const SAIL_TESTS[])(unit) = {" ^^ hardline ^^ jump 2 2 (
+      IdSet.fold (fun id acc -> codegen_function_id id ^^ string "," ^^ hardline ^^ acc) ctx.unit_test_ids empty
+      ^^ string "0" ^^ hardline
+    ) ^^ string "};" in
+
+    let unit_test_names = string "const char* const SAIL_TEST_NAMES[] = {" ^^ hardline ^^ jump 2 2 (
+      IdSet.fold (fun id acc -> string ("\"" ^ String.escaped (string_of_id id) ^ "\"") ^^ string "," ^^ hardline ^^ acc) ctx.unit_test_ids empty
+      ^^ string "0" ^^ hardline
+    ) ^^ string "};" in
+
     Document.to_string
       (preamble ^^ hlhl ^^ docs ^^ hlhl
       ^^ ( if not !opt_no_rts then
              model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
            else empty
          )
-      ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
+      ^^ model_main ^^ hlhl
+      ^^ unit_test_functions ^^ hlhl
+      ^^ unit_test_names ^^ hardline
+      ^^ end_extern_cpp ^^ hardline
       )
     |> output_string output_chan
   with Type_error.Type_error (l, err) ->
