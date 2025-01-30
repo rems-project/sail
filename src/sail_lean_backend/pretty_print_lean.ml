@@ -160,6 +160,7 @@ let rec doc_typ ctx (Typ_aux (t, _) as typ) =
       if provably_nneg ctx low then string "Nat" else string "Int"
   | Typ_var kid -> doc_kid ctx kid
   | Typ_app (id, _) -> doc_id_ctor id
+  | Typ_exist (_, _, typ) -> doc_typ ctx typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
 and doc_typ_app ctx (A_aux (t, _) as typ) =
