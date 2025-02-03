@@ -340,9 +340,9 @@ let wrap_with_pure (needs_return : bool) (d : document) =
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
 
-let rec doc_match_clause ctx (Pat_aux (cl, l)) =
+let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
-  | Pat_exp (pat, branch) -> string "| " ^^ doc_pat pat ^^ string " =>" ^^ space ^^ doc_exp false ctx branch
+  | Pat_exp (pat, branch) -> string "| " ^^ doc_pat pat ^^ string " =>" ^^ space ^^ doc_exp as_monadic ctx branch
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
@@ -425,7 +425,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
-      let cases = separate_map hardline (fun br -> doc_match_clause ctx br) brs in
+      let cases = separate_map hardline (fun br -> doc_match_clause as_monadic ctx br) brs in
       string "match " ^^ doc_exp (effectful (effect_of discr)) ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
       match le_act with

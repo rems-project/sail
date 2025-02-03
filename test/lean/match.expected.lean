@@ -6,7 +6,22 @@ inductive E where | A | B | C
   deriving Inhabited
 open E
 
-abbrev SailM := StateM Unit
+inductive Register : Type where
+  | r_C
+  | r_B
+  | r_A
+  deriving DecidableEq, Hashable
+open Register
+
+abbrev RegisterType : Register → Type
+  | .r_C => E
+  | .r_B => E
+  | .r_A => E
+
+open RegisterRef
+instance : Inhabited (RegisterRef RegisterType E) where
+  default := .Reg r_A
+abbrev SailM := PreSailM RegisterType
 
 def undefined_E (lit : Unit) : SailM E := do
   sorry
@@ -33,6 +48,14 @@ def match_pair (arg0 : Int) (arg1 : Int) : Int :=
   match x with
   | (a, b) => (HAdd.hAdd a b)
 
-def initialize_registers (lit : Unit) : Unit :=
-  ()
+def match_reg (x : E) : SailM E := do
+  match x with
+  | A => readReg r_A
+  | B => readReg r_B
+  | C => readReg r_C
+
+def initialize_registers (lit : Unit) : SailM Unit := do
+  writeReg r_A (← (undefined_E ()))
+  writeReg r_B (← (undefined_E ()))
+  writeReg r_C (← (undefined_E ()))
 
