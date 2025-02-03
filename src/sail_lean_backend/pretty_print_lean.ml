@@ -238,14 +238,31 @@ let rec captured_typ_var ((i, Typ_aux (t, _)) as typ) =
 
 let doc_typ_id ctx (typ, fid) = flow (break 1) [doc_id_ctor fid; colon; doc_typ ctx typ]
 
-let doc_kind (K_aux (k, _)) = match k with K_int -> string "Int" | K_bool -> string "Bool" | K_type -> string "Type"
+let doc_kind ctx (kid : kid) (K_aux (k, _)) =
+  match k with
+  | K_int -> if provably_nneg ctx (Nexp_aux (Nexp_var kid, Unknown)) then string "Nat" else string "Int"
+  | K_bool -> string "Bool"
+  | K_type -> string "Type"
 
-let doc_quant_item ctx (QI_aux (qi, _)) =
+let doc_quant_item_all ctx (QI_aux (qi, _)) =
   match qi with
-  | QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> flow (break 1) [doc_kid ctx ki; colon; doc_kind k]
+  | QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> flow (break 1) [doc_kid ctx ki; colon; doc_kind ctx ki k]
   | QI_constraint c -> doc_nconstraint ctx c
 
-let doc_typ_quant ctx tq = match tq with TypQ_tq qs -> List.map (doc_quant_item ctx) qs | TypQ_no_forall -> []
+(* Used to annotate types with the original constraints *)
+let doc_typ_quant_all ctx tq = match tq with TypQ_tq qs -> List.map (doc_quant_item_all ctx) qs | TypQ_no_forall -> []
+
+let doc_quant_item_relevant ctx (QI_aux (qi, annot)) =
+  match qi with
+  | QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> Some (flow (break 1) [doc_kid ctx ki; colon; doc_kind ctx ki k])
+  | QI_constraint c -> None
+
+(* Used to translate type parameters of types, so we drop the constraints *)
+let doc_typ_quant_relevant ctx (TypQ_aux (tq, _) as tq_full) =
+  (* We go through the type variables with an environment that contains all the constraints,
+     in order to detect when we can translate the Kind as Nat *)
+  let ctx = initial_context (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
+  match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_relevant ctx) qs | TypQ_no_forall -> []
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
@@ -520,7 +537,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
       )
       (ctx, []) binders
   in
-  let typ_quants = doc_typ_quant ctx tq in
+  let typ_quants = doc_typ_quant_all ctx tq in
   let typ_quant_comment =
     if List.length typ_quants > 0 then
       string "/-- Type quantifiers: " ^^ nest 2 (flow comma_sp typ_quants) ^^ string " -/" ^^ hardline
@@ -582,16 +599,16 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
         )
       ^^ hardline ^^ hardline ^^ string "open " ^^ string id
-  | TD_record (Id_aux (Id id, _), TypQ_aux (tq, _), fields, _) ->
+  | TD_record (Id_aux (Id id, _), tq, fields, _) ->
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
-      let rectyp = doc_typ_quant ctx tq in
-      (* TODO don't ignore type quantifiers *)
-      nest 2
-        (flow (break 1) [string "structure"; string id; string "where"]
-        ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving" ^^ space
-        ^^ nest 2 (flow comma_sp [string "Inhabited"; string "DecidableEq"])
-        )
+      let rectyp = doc_typ_quant_relevant ctx tq in
+      let rectyp = List.map (fun d -> parens d) rectyp in
+      let decl_start =
+        if List.is_empty rectyp then [string "structure"; string id; string "where"]
+        else [string "structure"; string id; separate space rectyp; string "where"]
+      in
+      nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_typ t, _)) ->
       nest 2 (flow (break 1) [string "abbrev"; string id; coloneq; doc_typ ctx t])
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_nexp ne, _)) ->

@@ -19,7 +19,7 @@ instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg R
 abbrev SailM := PreSailM RegisterType
 
-/-- Type quantifiers: n : Int, 0 ≤ n -/
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
 def elif (n : Nat) : (BitVec 1) :=
   if (Eq n 0)
   then 1#1
@@ -27,14 +27,14 @@ def elif (n : Nat) : (BitVec 1) :=
        then 1#1
        else 0#1
 
-/-- Type quantifiers: n : Int, 0 ≤ n -/
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_in_out (n : Nat) : SailM Nat := do
   if (← readReg B)
     then writeReg R n
     else (pure ())
   readReg R
 
-/-- Type quantifiers: n : Int, 0 ≤ n -/
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_lines (n : Nat) : SailM Unit := do
   let b := (Eq n 0)
   if b

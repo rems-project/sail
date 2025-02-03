@@ -5,11 +5,9 @@ open Sail
 structure rectangle where
   width : Int
   height : Int
-  deriving Inhabited, DecidableEq
 
 structure circle where
   radius : Int
-  deriving Inhabited, DecidableEq
 
 inductive shape where
   | Rectangle (_ : rectangle)

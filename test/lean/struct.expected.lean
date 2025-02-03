@@ -5,7 +5,15 @@ open Sail
 structure My_struct where
   field1 : Int
   field2 : (BitVec 1)
-  deriving Inhabited, DecidableEq
+
+structure Mem_write_request
+  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
+  va : (Option (BitVec k_vasize))
+  pa : k_pa
+  translation : k_ts
+  size : Int
+  value : (Option (BitVec (8 * k_n)))
+  tag : (Option Bool)
 
 abbrev SailM := StateM Unit
 

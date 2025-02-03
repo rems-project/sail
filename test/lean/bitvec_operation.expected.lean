@@ -52,7 +52,7 @@ def bitvector_unsigned (x : (BitVec 16)) : Nat :=
 def bitvector_signed (x : (BitVec 16)) : Int :=
   (BitVec.toInt x)
 
-/-- Type quantifiers: i : Int, 0 ≤ i ∧ i ≤ 15 -/
+/-- Type quantifiers: i : Nat, 0 ≤ i ∧ i ≤ 15 -/
 def bitvector_access' (x : (BitVec 16)) (i : Nat) : (BitVec 1) :=
   (BitVec.access x i)
 
