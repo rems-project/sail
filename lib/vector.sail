@@ -241,6 +241,7 @@ val add_bits_int = pure {
   interpreter: "add_vec_int",
   lem: "add_vec_int",
   coq: "add_vec_int",
+  lean: "BitVec.addInt",
   _: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 

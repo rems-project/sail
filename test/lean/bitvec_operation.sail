@@ -87,3 +87,7 @@ function bitvector_access'(x, i) = {
   x[i]
 }
 
+val bitvector_plus_int : (bits(16), int) -> bits(16)
+function bitvector_plus_int(x, i) = {
+  x + i
+}

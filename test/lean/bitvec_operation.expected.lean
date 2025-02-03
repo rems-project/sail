@@ -56,6 +56,10 @@ def bitvector_signed (x : (BitVec 16)) : Int :=
 def bitvector_access' (x : (BitVec 16)) (i : Nat) : (BitVec 1) :=
   (BitVec.access x i)
 
+/-- Type quantifiers: i : Int -/
+def bitvector_plus_int (x : (BitVec 16)) (i : Int) : (BitVec 16) :=
+  (BitVec.addInt x i)
+
 def initialize_registers (lit : Unit) : Unit :=
   ()
 
