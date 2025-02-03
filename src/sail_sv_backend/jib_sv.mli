@@ -63,6 +63,9 @@ module type CONFIG = sig
       which can hold bitvectors of at most this length. *)
   val max_unknown_bitvector_width : int
 
+  (** Prefix global signals with the provided name *)
+  val global_prefix : string option
+
   (** Output SystemVerilog line directives where possible *)
   val line_directives : bool
 
@@ -120,7 +123,7 @@ module Make (Config : CONFIG) : sig
     Jib.cdef ->
     Sv_ir.sv_def list * (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t
 
-  val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
+  val pp_def : spec_info -> Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
   (** Create a SystemVerilog module that wraps the provided Sail
       function in a more convenient interface.
@@ -150,9 +153,9 @@ module Make (Config : CONFIG) : sig
 
   val wrap_type : Jib.ctyp -> PPrint.document -> PPrint.document
 
-  val pp_id_string : Ast.id -> string
+  val pp_id_string : ?is_global:bool -> Ast.id -> string
 
-  val pp_id : Ast.id -> PPrint.document
+  val pp_id : ?is_global:bool -> Ast.id -> PPrint.document
 
   val main_args :
     Jib.cdef option ->
