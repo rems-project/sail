@@ -133,7 +133,7 @@ def test_lem(name):
             if tests[filename] == 0:
                 step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
-                step('mv {}*.lem _lbuild_{}'.format(basename, basename))
+                step('mv {}.lem {}_types.lem _lbuild_{}'.format(basename, basename, basename))
                 step('rm {}_lemmas.thy'.format(basename.capitalize()))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
                 step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
