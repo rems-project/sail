@@ -7,6 +7,7 @@ inductive e_test where | VAL
 
 open e_test
 
+
 structure s_test where
   f : e_test
 

@@ -57,15 +57,16 @@ let is_enum env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 
 let pat_is_plain_binder env (P_aux (p, _)) =
   match p with
-  | (P_id id | P_typ (_, P_aux (P_id id, _))) when not (is_enum env id) -> Some (Some id)
-  | P_wild | P_typ (_, P_aux (P_wild, _)) -> Some None
-  | P_var (_, _) -> Some (Some (Id_aux (Id "var", Unknown)))
-  | P_app (_, _) -> Some (Some (Id_aux (Id "app", Unknown)))
-  | P_vector _ -> Some (Some (Id_aux (Id "vect", Unknown)))
-  | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)))
-  | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)))
-  | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)))
-  | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)))
+  | P_id id when not (is_enum env id) -> Some (Some id, None)
+  | P_typ (typ, P_aux (P_id id, _)) when not (is_enum env id) -> Some (Some id, Some typ)
+  | P_wild | P_typ (_, P_aux (P_wild, _)) -> Some (None, None)
+  | P_var (_, _) -> Some (Some (Id_aux (Id "var", Unknown)), None)
+  | P_app (_, _) -> Some (Some (Id_aux (Id "app", Unknown)), None)
+  | P_vector _ -> Some (Some (Id_aux (Id "vect", Unknown)), None)
+  | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)), None)
+  | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)), None)
+  | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)), None)
+  | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)), None)
   | _ -> None
 
 (* Copied from the Coq PP *)
@@ -171,9 +172,9 @@ and doc_nconstraint ctx (NC_aux (nc, _)) =
   match nc with
   | NC_and (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∧"; doc_nconstraint ctx n2]
   | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
-  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "="; doc_typ_arg ctx a2]
-  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "≠"; doc_typ_arg ctx a2]
-  | NC_app (f, args) -> doc_id_ctor f ^^ parens (separate_map comma_sp (doc_typ_arg ctx) args)
+  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "="; doc_typ_arg ctx `All a2]
+  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "≠"; doc_typ_arg ctx `All a2]
+  | NC_app (f, args) -> doc_id_ctor f ^^ parens (separate_map comma_sp (doc_typ_arg ctx `All) args)
   | NC_false -> string "false"
   | NC_true -> string "true"
   | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
@@ -190,8 +191,13 @@ and doc_nconstraint ctx (NC_aux (nc, _)) =
         ]
   | NC_var ki -> doc_kid ctx ki
 
-and doc_typ_arg ctx (A_aux (t, _)) =
-  match t with A_typ t -> doc_typ ctx t | A_nexp n -> doc_nexp ctx n | A_bool nc -> parens (doc_nconstraint ctx nc)
+and doc_typ_arg ctx rel (A_aux (t, _)) =
+  match t with
+  | A_typ t -> doc_typ ctx t
+  | A_nexp n -> doc_nexp ctx n
+  | A_bool nc -> (
+      match rel with `Only_relevant -> empty | `All -> parens (doc_nconstraint ctx nc)
+    )
 
 and provably_nneg ctx x = Type_check.prove __POS__ ctx.env (nc_gteq x (nint 0))
 
@@ -219,7 +225,7 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
   | Typ_app (Id_aux (Id "range", _), [A_aux (A_nexp low, _); A_aux (A_nexp high, _)]) ->
       if provably_nneg ctx low then string "Nat" else string "Int"
   | Typ_var kid -> doc_kid ctx kid
-  | Typ_app (id, _) -> doc_id_ctor id
+  | Typ_app (id, args) -> doc_id_ctor id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args
   | Typ_exist (_, _, typ) -> doc_typ ctx typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
@@ -251,6 +257,12 @@ let doc_quant_item_all ctx (QI_aux (qi, _)) =
 
 (* Used to annotate types with the original constraints *)
 let doc_typ_quant_all ctx tq = match tq with TypQ_tq qs -> List.map (doc_quant_item_all ctx) qs | TypQ_no_forall -> []
+
+let doc_typ_quant_in_comment ctx (TypQ_aux (tq, _)) =
+  let typ_quants = doc_typ_quant_all ctx tq in
+  if List.length typ_quants > 0 then
+    string "/-- Type quantifiers: " ^^ nest 2 (flow comma_sp typ_quants) ^^ string " -/" ^^ hardline
+  else empty
 
 let doc_quant_item_relevant ctx (QI_aux (qi, annot)) =
   match qi with
@@ -452,17 +464,18 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) d_of_arg es))
   | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
-      let id =
+      let id_typ =
         match pat_is_plain_binder env lpat with
-        | Some (Some (Id_aux (Id id, _))) -> id
-        | Some None -> "x" (* TODO fresh name or wildcard instead of x *)
+        | Some (Some (Id_aux (Id id, _)), Some typ) -> string id ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
+        | Some (Some (Id_aux (Id id, _)), None) -> string id
+        | Some (None, _) -> string "x" (* TODO fresh name or wildcard instead of x *)
         | _ -> failwith "Let pattern not translatable yet."
       in
       let decl_val =
         if effectful (effect_of lexp) then [string "←"; string "do"; doc_exp true ctx lexp]
         else [coloneq; doc_exp false ctx lexp]
       in
-      nest 2 (flow (break 1) ([string "let"; string id] @ decl_val)) ^^ hardline ^^ doc_exp as_monadic ctx e
+      nest 2 (flow (break 1) ([string "let"; id_typ] @ decl_val)) ^^ hardline ^^ doc_exp as_monadic ctx e
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
   | E_struct fexps ->
       let args = List.map d_of_field fexps in
@@ -511,7 +524,7 @@ let doc_binder ctx i t =
 
 let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
-  let TypQ_aux (tq, l), typ = Env.get_val_spec_orig id env in
+  let (TypQ_aux (tq, l) as tq_all), typ = Env.get_val_spec_orig id env in
   let arg_typs, ret_typ, _ =
     match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ, no_effect)
@@ -523,8 +536,8 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     pats
     |> List.map (fun (pat, typ) ->
            match pat_is_plain_binder env pat with
-           | Some (Some id) -> (id, typ)
-           | Some None -> (Id_aux (Id "x", l), typ) (* TODO fresh name or wildcard instead of x *)
+           | Some (Some id, _) -> (id, typ)
+           | Some (None, _) -> (Id_aux (Id "x", l), typ) (* TODO fresh name or wildcard instead of x *)
            | _ -> failwith "Argument pattern not translatable yet."
        )
   in
@@ -537,12 +550,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
       )
       (ctx, []) binders
   in
-  let typ_quants = doc_typ_quant_all ctx tq in
-  let typ_quant_comment =
-    if List.length typ_quants > 0 then
-      string "/-- Type quantifiers: " ^^ nest 2 (flow comma_sp typ_quants) ^^ string " -/" ^^ hardline
-    else empty
-  in
+  let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
   let doc_ret_typ = doc_typ ctx ret_typ in
   let is_monadic = effectful (effect_of exp) in
@@ -609,14 +617,22 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
         | [] -> [string "structure"; string id; string "where"]
         | _ -> [string "structure"; string id; separate space rectyp; string "where"]
       in
-      nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
+      doc_typ_quant_in_comment ctx tq ^^ hardline ^^ nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_typ t, _)) ->
       nest 2 (flow (break 1) [string "abbrev"; string id; coloneq; doc_typ ctx t])
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_nexp ne, _)) ->
       nest 2 (flow (break 1) [string "abbrev"; string id; colon; string "Int"; coloneq; doc_nexp ctx ne])
-  | TD_variant (Id_aux (Id id, _), typq, ar, _) ->
+  | TD_variant (Id_aux (Id id, _), tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
-      nest 2 (nest 2 (flow space [string "inductive"; string id; string "where"]) ^^ pp_tus)
+      let rectyp = doc_typ_quant_relevant ctx tq in
+      let rectyp = List.map (fun d -> parens d) rectyp in
+      let decl_start =
+        match rectyp with
+        | [] -> [string "inductive"; string id; string "where"]
+        | _ -> [string "inductive"; string id; separate space rectyp; string "where"]
+      in
+      doc_typ_quant_in_comment ctx tq ^^ hardline
+      ^^ nest 2 (nest 2 (flow space decl_start) ^^ pp_tus)
       ^^ hardline ^^ hardline
       ^^ flow space [string "open"; string id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
