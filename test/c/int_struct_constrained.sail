@@ -3,7 +3,7 @@ default Order dec
 $include <prelude.sail>
 
 $[sv_module { stdout = true }]
-val print = "print_endline" : string -> unit
+val "print_endline" : string -> unit
 
 struct Foo('n: Int), 0 <= 'n <= 64 = {
   field: bits('n)
@@ -13,9 +13,9 @@ type Foo32 = Foo(32)
 
 function bar(foo: Foo32) -> unit = {
   if foo.field == 0xFFFF_FFFF then {
-    print("A")
+    print_endline("A")
   } else {
-    print("B")
+    print_endline("B")
   }
 }
 

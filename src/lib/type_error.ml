@@ -374,8 +374,10 @@ let message_of_type_error type_error =
         let simplified = constraint_simp check in
         let add_derivation msg =
           match derived_from with
-          | Some l -> Seq [msg; Line ""; Location ("constraint from ", Some "This type argument", l, Seq [])]
-          | None -> msg
+          | _ :: _ ->
+              let mk_msg l = [Line ""; Location ("constraint from ", Some "This type argument", l, Seq [])] in
+              Seq (msg :: List.concat (List.map mk_msg derived_from))
+          | [] -> msg
         in
         begin
           match simplified with

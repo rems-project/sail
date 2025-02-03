@@ -16,16 +16,40 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: System dependencies
       run: |
         sudo apt-get update
-        sudo apt-get -o Acquire::Retries=3 install build-essential libgmp-dev z3 cvc4 opam cargo verilator
+        sudo apt-get -o Acquire::Retries=3 install build-essential libgmp-dev z3 cvc4 opam cargo verilator git curl
+
+    - name: Restore cached elan
+      id: cache-elan-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.elan
+        key: ${{ matrix.os }}-${{ matrix.version }}-elan
+
+    - name: Install Lean version manager
+      if: steps.cache-elan-restore.outputs.cache-hit != 'true'
+      run: |
+        curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -- -y
+
+    - name: Save cached elan
+      if: steps.cache-elan-restore.outputs.cache-hit != 'true'
+      id: cache-elan-save
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.elan
+        key: ${{ steps.cache-elan-restore.outputs.cache-primary-key }}
+
+    - name: Set elan path
+      run: |
+        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
     - name: Restore cached opam
       id: cache-opam-restore
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: ~/.opam
         key: ${{ matrix.os }}-${{ matrix.version }}-cov
@@ -38,12 +62,12 @@ jobs:
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       id: cache-opam-save
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       with:
         path: ~/.opam
         key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
 
-    - name: Install Sail
+    - name: Install Sail dependencies
       run: |
         eval $(opam env)
         opam pin --yes --no-action add .
@@ -74,7 +98,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: |
@@ -87,7 +111,7 @@ jobs:
         bisect-ppx-report summary --per-file --coverage-path=test/ > coverage_summary.txt
 
     - name: Archive coverage
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: code-coverage
         path: |
@@ -97,7 +121,7 @@ jobs:
 
     - name: Upload event payload
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: event.json
         path: ${{ github.event_path }}

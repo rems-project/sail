@@ -1,41 +1,45 @@
 import Out.Sail.Sail
 
-def extern_add : Int :=
+open Sail
+
+abbrev SailM := StateM Unit
+
+def extern_add (lit : Unit) : Int :=
   (Int.add 5 4)
 
-def extern_sub : Int :=
-  (Int.sub 5 4)
+def extern_sub (lit : Unit) : Int :=
+  (Int.sub 5 (-4))
 
-def extern_tdiv : Int :=
+def extern_tdiv (lit : Unit) : Int :=
   (Int.tdiv 5 4)
 
-def extern_tmod : Int :=
+def extern_tmod (lit : Unit) : Int :=
   (Int.tmod 5 4)
 
-def extern_tmod_positive : Int :=
+def extern_tmod_positive (lit : Unit) : Int :=
   (Int.tmod 5 4)
 
-def extern_negate : Int :=
-  (Int.neg 5)
+def extern_negate (lit : Unit) : Int :=
+  (Int.neg (-5))
 
-def extern_mult : Int :=
-  (Int.mul 5 4)
+def extern_mult (lit : Unit) : Int :=
+  (Int.mul 5 (-4))
 
-def extern_and : Bool :=
+def extern_and (lit : Unit) : Bool :=
   (Bool.and true false)
 
-def extern_and_no_flow : Bool :=
+def extern_and_no_flow (lit : Unit) : Bool :=
   (Bool.and true false)
 
-def extern_or : Bool :=
+def extern_or (lit : Unit) : Bool :=
   (Bool.or true false)
 
-def extern_eq_bool : Bool :=
+def extern_eq_bool (lit : Unit) : Bool :=
   (Eq true false)
 
-def extern_eq_bit : Bool :=
+def extern_eq_bit (lit : Unit) : Bool :=
   (Eq 0#1 1#1)
 
-def initialize_registers : Unit :=
+def initialize_registers (lit : Unit) : Unit :=
   ()
 

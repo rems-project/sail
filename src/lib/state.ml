@@ -159,7 +159,8 @@ let generate_initial_regstate ctx env ast =
         | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
         | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "atom" -> string_of_nexp nexp
         | Typ_app (id, [A_aux (A_nexp nexp, _); _]) when string_of_id id = "range" -> string_of_nexp nexp
-        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _)]) when string_of_id id = "bitvector" ->
+        | Typ_app (id, [A_aux (A_nexp len, _)]) when string_of_id id = "bitvector" ->
+            let len = Type_check.solve_unique env len |> Option.get in
             (* Output a literal binary zero value if this is a bitvector
                and the environment has a default indexing order (required
                by the typechecker for binary and hex literals) *)
@@ -169,8 +170,8 @@ let generate_initial_regstate ctx env ast =
               if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
             in
             if literal_bitvec then "0b" ^ String.concat "" (elems len) else "[" ^ String.concat ", " (elems len) ^ "]"
-        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); A_aux (A_typ etyp, _)])
-          when string_of_id id = "vector" ->
+        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ etyp, _)]) when string_of_id id = "vector" ->
+            let len = Type_check.solve_unique env len |> Option.get in
             (* Output a list of initial values of the vector elements. *)
             let init_elem = lookup_init_val vals etyp in
             let rec elems len =

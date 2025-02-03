@@ -90,6 +90,7 @@ type global_env = {
   abstract_typs : kind env_item Bindings.t;
   constraints : (constraint_reason * n_constraint) list;
   enums : (bool * IdSet.t) env_item Bindings.t;
+  enum_ids : id env_item Bindings.t;
   records : (typquant * (typ * id) list) env_item Bindings.t;
   synonyms : (typquant * typ_arg) env_item Bindings.t;
   accessors : (typquant * typ) env_item IdPairMap.t;
@@ -117,6 +118,7 @@ let empty_global_env =
     abstract_typs = Bindings.empty;
     constraints = [];
     enums = Bindings.empty;
+    enum_ids = Bindings.empty;
     records = Bindings.empty;
     accessors = IdPairMap.empty;
     synonyms = Bindings.empty;
@@ -399,22 +401,24 @@ let already_bound str id env =
       let suffix = if Bindings.mem id builtin_typs then " as a built-in type" else "" in
       typ_error (id_loc id) ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound" ^ suffix)
 
-let bound_ctor_fn env id = Bindings.mem id env.global.val_specs || Bindings.mem id env.global.union_ids
+let bound_ctor_fn env id =
+  Bindings.mem id env.global.val_specs || Bindings.mem id env.global.union_ids || Bindings.mem id env.global.enum_ids
 
 let get_ctor_fn_binding_loc env id =
-  if Bindings.mem id env.global.val_specs then Some (item_loc (Bindings.find id env.global.val_specs))
-  else if Bindings.mem id env.global.union_ids then Some (item_loc (Bindings.find id env.global.union_ids))
+  (* union constructors also get a val_spec entry, so check unions first *)
+  if Bindings.mem id env.global.union_ids then
+    Some ("a union constructor", item_loc (Bindings.find id env.global.union_ids))
+  else if Bindings.mem id env.global.val_specs then Some ("a function", item_loc (Bindings.find id env.global.val_specs))
+  else if Bindings.mem id env.global.enum_ids then
+    Some ("an enumeration member", item_loc (Bindings.find id env.global.enum_ids))
   else None
 
 let already_bound_ctor_fn str id env =
   match get_ctor_fn_binding_loc env id with
-  | Some l ->
+  | Some (description, l) ->
       typ_raise (id_loc id)
         (Err_inner
-           ( Err_other
-               ("Cannot create " ^ str ^ " " ^ string_of_id id
-              ^ ", name is already bound to a union constructor or function"
-               ),
+           ( Err_other ("Cannot create " ^ str ^ " " ^ string_of_id id ^ ", name is already bound to " ^ description),
              l,
              "",
              Err_hint "previous binding"
@@ -459,10 +463,10 @@ let add_overloads l id ids env =
     (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"))
   [@coverage off];
   if bound_ctor_fn env id then (
-    let bound_l = Option.get (get_ctor_fn_binding_loc env id) in
+    let description, bound_l = Option.get (get_ctor_fn_binding_loc env id) in
     typ_error
       (Hint ("Previous binding", bound_l, l))
-      (string_of_id id ^ " cannot be defined as an overload, as it is already bound")
+      (string_of_id id ^ " cannot be defined as an overload, as it is already bound to " ^ description)
   );
   List.iter
     (fun overload ->
@@ -1299,32 +1303,18 @@ let add_enum' is_scattered id ids env =
                 typ_error
                   (Hint ("Register defined here ", item.loc, id_loc member))
                   ("Enumeration member " ^ string_of_id member ^ " is already bound as a register")
-            | None -> (
-                match
-                  List.find_opt
-                    (fun (_, { item = _, members; _ }) -> IdSet.mem member members)
-                    (Bindings.bindings env.global.enums)
-                with
-                | Some (previous_enum_id, item) ->
-                    typ_error
-                      (Hint
-                         ( "Previously defined as part of enum " ^ string_of_id previous_enum_id ^ " here",
-                           item.loc,
-                           id_loc member
-                         )
-                      )
-                      ("Enumeration member " ^ string_of_id member ^ " is already part of another enumeration")
-                | None -> ()
-              )
+            | None -> if bound_ctor_fn env member then already_bound_ctor_fn "enumeration member" member env else ()
           )
       )
       ids;
     typ_print (lazy (adding ^ "enum " ^ string_of_id id)) [@coverage off];
+    let id_set = IdSet.of_list ids in
     update_global
       (fun global ->
         {
           global with
-          enums = Bindings.add id (mk_item env ~loc:(id_loc id) (is_scattered, IdSet.of_list ids)) global.enums;
+          enums = Bindings.add id (mk_item env ~loc:(id_loc id) (is_scattered, id_set)) global.enums;
+          enum_ids = IdSet.fold (fun id' -> Bindings.add id' (mk_item env ~loc:(id_loc id') id)) id_set global.enum_ids;
         }
       )
       env

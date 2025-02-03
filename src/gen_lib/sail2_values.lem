@@ -496,12 +496,12 @@ let hex_char n =
   | 7 -> #'7'
   | 8 -> #'8'
   | 9 -> #'9'
-  | 10 -> #'A'
-  | 11 -> #'B'
-  | 12 -> #'C'
-  | 13 -> #'D'
-  | 14 -> #'E'
-  | 15 -> #'F'
+  | 10 -> #'a'
+  | 11 -> #'b'
+  | 12 -> #'c'
+  | 13 -> #'d'
+  | 14 -> #'e'
+  | 15 -> #'f'
   | _ -> failwith "hex_char: not a hexadecimal digit"
   end
 
@@ -516,13 +516,47 @@ declare {isabelle} termination_argument hex_str_aux = automatic
 val hex_str : integer -> string
 
 let hex_str i =
-  if i < 0 then failwith "hex_str: negative" else
+  if i < 0 then "-0x" ^ toString (hex_str_aux (naturalFromInteger (abs i)) []) else
   if i = 0 then "0x0" else
   "0x" ^ toString (hex_str_aux (naturalFromInteger (abs i)) [])
 
+val hex_char_upper : natural -> char
+
+let hex_char_upper n =
+  match n with
+  | 0 -> #'0'
+  | 1 -> #'1'
+  | 2 -> #'2'
+  | 3 -> #'3'
+  | 4 -> #'4'
+  | 5 -> #'5'
+  | 6 -> #'6'
+  | 7 -> #'7'
+  | 8 -> #'8'
+  | 9 -> #'9'
+  | 10 -> #'A'
+  | 11 -> #'B'
+  | 12 -> #'C'
+  | 13 -> #'D'
+  | 14 -> #'E'
+  | 15 -> #'F'
+  | _ -> failwith "hex_char_upper: not a hexadecimal digit"
+  end
+
+val hex_str_upper_aux : natural -> list char -> list char
+
+let rec hex_str_upper_aux n acc =
+  if n = 0 then acc else
+  hex_str_upper_aux (n div 16) (hex_char_upper (n mod 16) :: acc)
+
+declare {isabelle} termination_argument hex_str_upper_aux = automatic
+
 val hex_str_upper : integer -> string
 
-let hex_str_upper i = hex_str i
+let hex_str_upper i =
+  if i < 0 then "-0x" ^ toString (hex_str_upper_aux (naturalFromInteger (abs i)) []) else
+  if i = 0 then "0x0" else
+  "0x" ^ toString (hex_str_upper_aux (naturalFromInteger (abs i)) [])
 
 (*** List operations *)
 

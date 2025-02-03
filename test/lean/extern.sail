@@ -10,7 +10,7 @@ function extern_add() -> int = {
 }
 
 function extern_sub() -> int = {
-  return sub_int(5, 4)
+  return sub_int(5, -4)
 }
 
 function extern_sub_nat() -> nat = {

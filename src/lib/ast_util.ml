@@ -762,7 +762,7 @@ let mk_typquant ?loc:(l = Parse_ast.Unknown) qis = TypQ_aux (TypQ_tq qis, l)
 
 let mk_fexp ?loc:(l = Parse_ast.Unknown) id exp = FE_aux (FE_fexp (id, exp), (l, empty_uannot))
 
-type effect = bool
+type effects = bool
 
 let no_effect = false
 let monadic_effect = true
@@ -1137,6 +1137,11 @@ let prepend_id str = function
 
 let append_id id str =
   match id with Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l) | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
+
+let remove_id_suffix id str =
+  match id with
+  | Id_aux (Id v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Id s, l))
+  | Id_aux (Operator v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Operator s, l))
 
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)

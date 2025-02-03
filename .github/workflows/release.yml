@@ -16,8 +16,12 @@ jobs:
         include:
           - os: ubuntu-latest
             container: rockylinux:8
-            ocaml_version: 5.0.0
-            opam_cache_key: rocky8-5.0.0
+            ocaml_version: 5.2.1
+            opam_cache_key: rocky8-5.2.1
+          - os: macos-latest
+            container: ""
+            ocaml_version: 5.2.1
+            opam_cache_key: macos-latest-5.2.1
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -29,7 +33,8 @@ jobs:
     steps:
     # This must be before checkout otherwise Github will use a zip of the
     # code instead of git clone.
-    - name: System dependencies
+    - name: System dependencies (Linux)
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
         dnf install --assumeyes \
           gmp-devel \
@@ -49,23 +54,29 @@ jobs:
           diffutils \
           rsync \
           which
+        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
+        chmod +x /usr/local/bin/opam
+
+    - name: System dependencies (Mac)
+      if: startsWith(matrix.os, 'macos')
+      run: |
+        brew install --force --overwrite gpatch gmp z3 pkgconf opam git
 
     - uses: actions/checkout@v4
 
-    # Retreive git history (but not files) so that `git desribe` works. This is
+    # Retreive git history (but not files) so that `git describe` works. This is
     # used to set the version info in the compiler (printed by `sail --version`).
+    #
     # The safe.directory command is needed because the current user does not
     # own the git repo directory and that can be a security issue in some case
     # (but not this one).
+    #
+    # `git fetch --unshallow --filter=tree:0` can be used on Ubuntu to reduce
+    # the download size but unfortunately that causes `opam pin` to fail on Mac.
     - name: Unshallow git history
       run: |
         git config --global --add safe.directory '*'
-        git fetch --unshallow --filter=tree:0
-
-    - name: Download OPAM
-      run: |
-        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
-        chmod +x /usr/local/bin/opam
+        git fetch --unshallow
 
     - name: Restore cached ~/.opam
       id: cache-opam-restore
@@ -99,6 +110,7 @@ jobs:
     # Build Z3 from source since the binary releases only support glibc 2.31
     # and old distros like RHEL 8 have 2.28.
     - name: Build Z3
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
         git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
         mkdir z3/build

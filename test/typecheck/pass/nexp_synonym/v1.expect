@@ -3,3 +3,7 @@
 7[96m |[0mlet v : bits(LEN) = 0xFFFF_FFFF
  [91m |[0m                    [91m^---------^[0m
  [91m |[0m Failed to prove constraint: 32 == 33
+ [91m |[0m 
+ [91m |[0m constraint from [96mpass/nexp_synonym/v1.sail[0m:7.13-16:
+ [91m |[0m 7[96m |[0mlet v : bits(LEN) = 0xFFFF_FFFF
+ [91m |[0m  [91m |[0m             [91m^-^[0m [91mThis type argument[0m

@@ -277,8 +277,8 @@ module DigestMap = Map.Make (Digest)
 let known_problems = ref DigestMap.empty
 let known_uniques = ref DigestMap.empty
 
-let load_digests_err () =
-  let in_chan = open_in_bin "z3_problems" in
+let load_digests_err path =
+  let in_chan = open_in_bin path in
   let rec load () =
     let digest = Digest.input in_chan in
     let result = input_byte in_chan in
@@ -302,10 +302,10 @@ let load_digests_err () =
   in
   try load () with End_of_file -> close_in in_chan
 
-let load_digests () = try load_digests_err () with Sys_error _ -> ()
+let load_digests path = try load_digests_err path with Sys_error _ -> ()
 
-let save_digests () =
-  let out_chan = open_out_bin "z3_problems" in
+let save_digests path =
+  let out_chan = open_out_bin path in
   let output_problem digest result =
     Digest.output out_chan digest;
     match result with

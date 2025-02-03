@@ -81,3 +81,13 @@ val bitvector_signed : bits(16) -> int
 function bitvector_signed(x) = {
   signed (x)
 }
+
+val bitvector_access' : (bits(16), range(0,15)) -> bit
+function bitvector_access'(x, i) = {
+  x[i]
+}
+
+val bitvector_plus_int : (bits(16), int) -> bits(16)
+function bitvector_plus_int(x, i) = {
+  x + i
+}

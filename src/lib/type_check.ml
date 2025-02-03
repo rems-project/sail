@@ -1086,8 +1086,7 @@ and subtyp_arg l env (A_aux (aux1, arg_l1) as arg1) (A_aux (aux2, arg_l2) as arg
     (* If we don't have precise locations for both arguments, then
        don't try to use an argument location as the base location for
        the type error, as there are a few confusing corner cases. *)
-    let l = if Reporting.is_unknown_loc arg_l1 || Reporting.is_unknown_loc arg_l2 then l else arg_l2 in
-    let derived_from = if Reporting.is_unknown_loc arg_l1 then None else Some arg_l1 in
+    let derived_from = List.filter (fun l -> not (Reporting.is_unknown_loc l)) [arg_l2; arg_l1] in
     typ_raise l
       (Err_failed_constraint (nc, derived_from, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
   in
@@ -1280,7 +1279,7 @@ let can_be_undefined ~at:l env typ =
 type tannot' = {
   env : Env.t;
   typ : typ;
-  monadic : effect;
+  monadic : effects;
   expected : typ option;
   instantiation : typ_arg KBindings.t option;
 }
@@ -2346,27 +2345,27 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
             let inferred_bind = irule infer_exp env bind in
             (inferred_bind, typ_of inferred_bind)
       in
-      let tpat, env = bind_pat_no_guard env pat ptyp in
+      let tpat, inner_env = bind_pat_no_guard env pat ptyp in
       (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
-      let env =
+      let inner_env =
         match bind_exp with
         | E_aux (E_assert (constr_exp, _), _) -> begin
-            match assert_constraint env true constr_exp with
+            match assert_constraint inner_env true constr_exp with
             | Some nc ->
                 typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
-                Env.add_constraint nc env
-            | None -> env
+                Env.add_constraint nc inner_env
+            | None -> inner_env
           end
         | E_aux (E_if (cond, e_t, _), _) -> begin
             match unaux_exp (fst (uncast_exp e_t)) with
             | E_throw _ | E_block [E_aux (E_throw _, _)] ->
-                add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint env false cond)) env
-            | _ -> env
+                add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint inner_env false cond)) inner_env
+            | _ -> inner_env
           end
-        | _ -> env
+        | _ -> inner_env
       in
-      let checked_body = crule check_exp env body typ in
-      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
+      let checked_body = crule check_exp inner_env body typ in
+      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) (check_shadow_leaks l inner_env env typ)
   | E_vector vec, orig_typ -> begin
       let literal_len = List.length vec in
       let tyvars, nc, typ =
@@ -3351,9 +3350,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
             annot_lexp (LE_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len)
           else
             typ_raise l
-              (Err_failed_constraint
-                 (check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
-              )
+              (Err_failed_constraint (check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
       | _ -> typ_error l "Cannot assign slice of non vector type"
     end
   | LE_vector (v_lexp, exp) -> begin
@@ -3369,7 +3366,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           else
             typ_raise l
               (Err_failed_constraint
-                 (bounds_check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                 (bounds_check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
               )
       | Typ_app (id, [A_aux (A_nexp len, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
@@ -3380,7 +3377,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
           else
             typ_raise l
               (Err_failed_constraint
-                 (bounds_check, None, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
+                 (bounds_check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
               )
       | Typ_id id -> begin
           match exp with
@@ -3757,21 +3754,23 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
             let inferred_bind = irule infer_exp env bind in
             (inferred_bind, typ_of inferred_bind)
       in
-      let tpat, env = bind_pat_no_guard env pat ptyp in
+      let tpat, inner_env = bind_pat_no_guard env pat ptyp in
       (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
-      let env =
+      let inner_env =
         match bind_exp with
         | E_aux (E_assert (constr_exp, _), _) -> begin
             match assert_constraint env true constr_exp with
             | Some nc ->
                 typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
-                Env.add_constraint nc env
-            | None -> env
+                Env.add_constraint nc inner_env
+            | None -> inner_env
           end
-        | _ -> env
+        | _ -> inner_env
       in
-      let inferred_body = irule infer_exp env body in
-      annot_exp (E_internal_plet (tpat, bind_exp, inferred_body)) (typ_of inferred_body)
+      let inferred_body = irule infer_exp inner_env body in
+      annot_exp
+        (E_internal_plet (tpat, bind_exp, inferred_body))
+        (check_shadow_leaks l inner_env env (typ_of inferred_body))
   | E_let (LB_aux (letbind, (let_loc, _)), exp) ->
       let bind_exp, pat, ptyp =
         match letbind with

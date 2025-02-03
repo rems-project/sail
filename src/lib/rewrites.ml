@@ -1754,12 +1754,18 @@ let swaptyp typ (l, tannot) =
   | Some (env, typ') -> (l, mk_tannot env typ)
   | _ -> raise (Reporting.err_unreachable l __POS__ "swaptyp called with empty type annotation")
 
-let is_funcl_rec (FCL_aux (FCL_funcl (id, pexp), _)) =
+let recursive_fn_map ast =
+  let cg = Callgraph.function_call_graph ast in
+  let components = Callgraph.FCG.scc cg in
+  List.fold_left (fun m ids -> List.fold_left (fun m id -> Bindings.add id ids m) m ids) Bindings.empty components
+
+let is_funcl_rec rec_fns (FCL_aux (FCL_funcl (id, pexp), _)) =
+  let ids = Bindings.find id rec_fns in
   fold_pexp
     {
       (pure_exp_alg false ( || )) with
-      e_app = (fun (id', args) -> Id.compare id id' == 0 || List.exists (fun x -> x) args);
-      e_app_infix = (fun (arg1, id', arg2) -> arg1 || arg2 || Id.compare id id' == 0);
+      e_app = (fun (id', args) -> List.exists (fun id -> Id.compare id id' == 0) ids || List.exists (fun x -> x) args);
+      e_app_infix = (fun (arg1, id', arg2) -> arg1 || arg2 || List.exists (fun id -> Id.compare id id' == 0) ids);
     }
     pexp
 
@@ -1767,9 +1773,10 @@ let is_funcl_rec (FCL_aux (FCL_funcl (id, pexp), _)) =
    recursive, so if a backend needs them then this rewrite updates
    them.  (Also see minimise_recursive_functions.) *)
 let rewrite_add_unspecified_rec env ast =
+  let rec_fn_map = recursive_fn_map ast in
   let rewrite_function (FD_aux (FD_function (recopt, topt, funcls), ann) as fd) =
     match recopt with
-    | Rec_aux (Rec_nonrec, l) when List.exists is_funcl_rec funcls ->
+    | Rec_aux (Rec_nonrec, l) when List.exists (is_funcl_rec rec_fn_map) funcls ->
         FD_aux (FD_function (Rec_aux (Rec_rec, Generated l), topt, funcls), ann)
     | _ -> fd
   in
@@ -3484,9 +3491,12 @@ module MakeExhaustive = struct
   }
 
   let make_enum_mappings ids m =
-    IdSet.fold
-      (fun id m -> Bindings.add id (List.map (fun e -> RP_enum e) (IdSet.elements (IdSet.remove id ids))) m)
-      ids m
+    let all_ids = List.map (fun e -> RP_enum e) (IdSet.elements ids) in
+    IdSet.fold (fun id m -> Bindings.add id all_ids m) ids m
+
+  let get_residual_enum ctx id =
+    let all_ids = Bindings.find id ctx.enum_to_rest in
+    List.filter (function RP_enum id' -> Id.compare id id' <> 0 | _ -> false) all_ids
 
   let make_cstr_mappings env ids m =
     let ids = IdSet.elements ids in
@@ -3566,7 +3576,7 @@ module MakeExhaustive = struct
           match Env.lookup_id id ctx.env with
           | Enum enum -> (
               match res_pat with
-              | RP_any -> (Bindings.find id ctx.enum_to_rest, true)
+              | RP_any -> (get_residual_enum ctx id, true)
               | RP_enum id' -> if Id.compare id id' == 0 then ([], true) else ([res_pat], false)
               | _ -> inconsistent ()
             )
@@ -3819,14 +3829,15 @@ end
 
 (* Splitting a function (e.g., an execute function on an AST) can produce
    new functions that appear to be recursive but are not.  This checks to
-   see if the flag can be turned off.  Doesn't handle mutual recursion
-   for now. *)
+   see if the flag can be turned off. *)
+
 let minimise_recursive_functions env ast =
+  let rec_fn_map = recursive_fn_map ast in
   let rewrite_function (FD_aux (FD_function (recopt, topt, funcls), ann) as fd) =
     match recopt with
     | Rec_aux (Rec_nonrec, _) -> fd
     | Rec_aux ((Rec_rec | Rec_measure _), l) ->
-        if List.exists is_funcl_rec funcls then fd
+        if List.exists (is_funcl_rec rec_fn_map) funcls then fd
         else FD_aux (FD_function (Rec_aux (Rec_nonrec, Generated l), topt, funcls), ann)
   in
   let rewrite_def = function
@@ -3866,14 +3877,20 @@ let move_loop_measures ast =
         (Bindings.add id measures m, FCL_aux (FCL_funcl (id, pexp), ann) :: acc)
     | None -> (m, fcl :: acc)
   in
+  let do_fundef wrap (m, acc) (FD_aux (FD_function (r, t, fcls), ann)) =
+    let m, rfcls = List.fold_left do_funcl (m, []) fcls in
+    (m, wrap (FD_aux (FD_function (r, t, List.rev rfcls), ann)) :: acc)
+  in
   let unused, rev_defs =
     List.fold_left
       (fun (m, acc) d ->
         match d with
         | DEF_aux (DEF_loop_measures _, _) -> (m, acc)
-        | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), ann)), def_annot) ->
-            let m, rfcls = List.fold_left do_funcl (m, []) fcls in
-            (m, DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.rev rfcls), ann)), def_annot) :: acc)
+        | DEF_aux (DEF_fundef fundef, def_annot) ->
+            do_fundef (fun f -> DEF_aux (DEF_fundef f, def_annot)) (m, acc) fundef
+        | DEF_aux (DEF_internal_mutrec fundefs, def_annot) ->
+            let m, rfundefs = List.fold_left (do_fundef (fun f -> f)) (m, []) fundefs in
+            (m, DEF_aux (DEF_internal_mutrec (List.rev rfundefs), def_annot) :: acc)
         | _ -> (m, d :: acc)
       )
       (loop_measures, []) ast.defs
@@ -3888,30 +3905,73 @@ let move_loop_measures ast =
   in
   { ast with defs = List.rev rev_defs }
 
+let called_fns_in_exp exp =
+  fold_exp
+    {
+      (pure_exp_alg [] ( @ )) with
+      e_app = (fun (id', args) -> id' :: List.concat args);
+      e_app_infix = (fun (arg1, id', arg2) -> (id' :: arg1) @ arg2);
+    }
+    exp
+
 (* Move recursive function termination measures into the function definitions. *)
 let move_termination_measures env ast =
-  let measures =
+  (* To ensure that the result will type check, we need to move any valspecs for functions
+     directly used in the measure forward.  The definitions themselves will be rearranged
+     later by the sorting rewrite.  Note that the type checker will ensure that a valspec
+     always exists. *)
+  let measures, called_fns =
     List.fold_left
-      (fun m def ->
+      (fun (m, called) def ->
         match def with
         | DEF_aux (DEF_measure (id, pat, exp), ann) ->
             if Bindings.mem id m then
               raise (Reporting.err_general ann.loc ("Second termination measure given for " ^ string_of_id id))
-            else Bindings.add id (pat, exp) m
+            else (
+              let called_fns = called_fns_in_exp exp in
+              (Bindings.add id (pat, exp, called_fns) m, List.fold_left (fun s id -> IdSet.add id s) called called_fns)
+            )
+        | _ -> (m, called)
+      )
+      (Bindings.empty, IdSet.empty) ast.defs
+  in
+  let specs_of_called =
+    List.fold_left
+      (fun m def ->
+        match def with
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) as def when IdSet.mem id called_fns ->
+            Bindings.add id def m
         | _ -> m
       )
       Bindings.empty ast.defs
   in
+  let called_output = ref IdSet.empty in
   let rec aux acc = function
     | [] -> List.rev acc
     | (DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) as d) :: t -> begin
         let id = match fs with [] -> assert false (* TODO *) | FCL_aux (FCL_funcl (id, _), _) :: _ -> id in
         match Bindings.find_opt id measures with
         | None -> aux (d :: acc) t
-        | Some (pat, exp) ->
+        | Some (pat, exp, called_fns) ->
             let r = Rec_aux (Rec_measure (pat, exp), Generated l) in
-            aux (DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) :: acc) t
+            let new_def = DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) in
+            let moved_val_specs =
+              List.fold_left
+                (fun moved id ->
+                  if not (IdSet.mem id !called_output) then (
+                    called_output := IdSet.add id !called_output;
+                    Bindings.find id specs_of_called :: moved
+                  )
+                  else moved
+                )
+                [] called_fns
+            in
+            aux ((new_def :: moved_val_specs) @ acc) t
       end
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) :: t when IdSet.mem id !called_output -> aux acc t
+    | (DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) as d) :: t ->
+        called_output := IdSet.add id !called_output;
+        aux (d :: acc) t
     | DEF_aux (DEF_measure _, _) :: t -> aux acc t
     | h :: t -> aux (h :: acc) t
   in
@@ -4406,8 +4466,14 @@ let rewrite_toplevel_let_patterns env ast =
           let ids = pat_ids pat in
           let base_id = fresh_id "let" l in
           let base_annot = mk_tannot env (typ_of exp) in
+          (* We may need the type information for (e.g.) records *)
+          let add_pat_typ p =
+            match pat with P_aux (P_typ (typ, _), (l, _)) -> P_aux (P_typ (typ, p), (l, mk_tannot env typ)) | _ -> p
+          in
           let base_def =
-            mk_def (DEF_let (LB_aux (LB_val (P_aux (P_id base_id, (l, base_annot)), exp), (l, empty_tannot)))) env
+            mk_def
+              (DEF_let (LB_aux (LB_val (add_pat_typ (P_aux (P_id base_id, (l, base_annot))), exp), (l, empty_tannot))))
+              env
           in
           let id_defs =
             List.map

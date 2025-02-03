@@ -73,7 +73,7 @@ let opt_lean_output_dir : string option ref = ref None
 
 let opt_lean_force_output : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2024-09-25"
+let lean_version : string = "lean4:nightly-2025-01-22"
 
 let lean_options =
   [
@@ -91,6 +91,7 @@ let lean_options =
 let lean_rewrites =
   let open Rewrites in
   [
+    ("move_termination_measures", []);
     ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
@@ -108,8 +109,8 @@ let lean_rewrites =
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
-    ("remove_numeral_pats", []);
-    ("pattern_literals", [Literal_arg "lem"]);
+    (* ("remove_numeral_pats", []); *)
+    (* ("pattern_literals", [Literal_arg "lem"]); *)
     ("guarded_pats", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
@@ -121,7 +122,6 @@ let lean_rewrites =
        which has to be followed by type checking *)
     (* ("prover_regstate", [Bool_arg false]); *)
     (* ("remove_assert", rewrite_ast_remove_assert); *)
-    ("move_termination_measures", []);
     ("top_sort_defs", []);
     ("const_prop_mutrec", [String_arg "coq"]);
     ("exp_lift_assign", []);
@@ -141,7 +141,7 @@ let lean_rewrites =
     ("attach_effects", []);
     ("remove_blocks", []);
     ("attach_effects", []);
-    ("letbind_effects", []);
+    (*("letbind_effects", []);*)
     ("remove_e_assign", []);
     ("attach_effects", []);
     ("internal_lets", []);
@@ -187,17 +187,18 @@ let create_lake_project (out_name : string) default_sail_dir =
   in
   let project_main = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   output_string project_main ("import " ^ out_name_camel ^ ".Sail.Sail\n\n");
+  output_string project_main "open Sail\n\n";
   project_main
 
-let output (out_name : string) ast default_sail_dir =
+let output (out_name : string) env effect_info ast default_sail_dir =
   let project_main = create_lake_project out_name default_sail_dir in
   (* Uncomment for debug output of the Sail code after the rewrite passes *)
   (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
-  Pretty_print_lean.pp_ast_lean ast project_main;
+  Pretty_print_lean.pp_ast_lean env effect_info ast project_main;
   close_out project_main
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name ast default_sail_dir
+  output out_name env effect_info ast default_sail_dir
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target

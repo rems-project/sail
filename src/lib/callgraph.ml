@@ -296,6 +296,12 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         IdSet.iter (fun typ_id -> graph := G.add_edge self (Type typ_id) !graph) (typ_ids typ)
   in
 
+  let is_mapping_fn id =
+    Option.bind
+      (Util.option_first (remove_id_suffix id) ["_forwards"; "_forwards_matches"; "_backwards"; "_backwards_matches"])
+      (fun id -> if Env.is_mapping id def_annot.env then Some id else None)
+  in
+
   begin
     match def with
     | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _))
@@ -318,6 +324,9 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     | DEF_fundef fdef ->
         let id = id_of_fundef fdef in
         graph := G.add_edges (Function id) [] !graph;
+        (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
+           in the same component as the val_spec *)
+        Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
         scan_fundef_tannot (Function id) fdef;
         ignore (rewrite_fun (rewriters (Function id)) fdef)
     | DEF_mapdef mdef ->
@@ -573,3 +582,27 @@ let slice_instantiation_types sail_dir ast =
   let g = G.prune roots NodeSet.empty g in
   let ast = filter_ast_extra NodeSet.empty g ast false in
   filter_library_files sail_dir ast
+
+module FCG = Graph.Make (Id)
+
+let function_call_graph ast =
+  let module G = Graph.Make (Id) in
+  let scan_funcl graph (FCL_aux (FCL_funcl (id, pexp), _)) =
+    let callees =
+      fold_pexp
+        {
+          (pure_exp_alg [] ( @ )) with
+          e_app = (fun (id', args) -> id' :: List.concat args);
+          e_app_infix = (fun (arg1, id', arg2) -> (id' :: arg1) @ arg2);
+        }
+        pexp
+    in
+    FCG.add_edges id callees graph
+  in
+  let scan_function graph (FD_aux (FD_function (_, _, funcls), _)) = List.fold_left scan_funcl graph funcls in
+  let scan_def graph = function
+    | DEF_aux (DEF_fundef fd, _) -> scan_function graph fd
+    | DEF_aux (DEF_internal_mutrec fds, _) -> List.fold_left scan_function graph fds
+    | _ -> graph
+  in
+  List.fold_left scan_def FCG.empty ast.defs

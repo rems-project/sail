@@ -98,11 +98,21 @@ overload length = {bitvector_length, vector_length}
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 val count_trailing_zeros = pure "count_trailing_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
+$ifndef PRINT_EFFECTS
+
 $[sv_module { stdout = true }]
 val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit
 
 $[sv_module { stderr = true }]
 val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
+
+$else
+
+val print_bits = impure "print_bits_effect" : forall 'n. (string, bits('n)) -> unit
+
+val prerr_bits = impure "prerr_bits_effect" : forall 'n. (string, bits('n)) -> unit
+
+$endif
 
 val sail_sign_extend = pure {
   lean: "Sail.BitVec.signExtend",
@@ -134,7 +144,7 @@ val truncateLSB = pure {
   interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
-  lean: "Sail.BitVec.truncateLSB",
+  lean: "Sail.BitVec.truncateLsb",
   _: "sail_truncateLSB"
 } : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)
 
@@ -165,6 +175,7 @@ val bitvector_access = pure {
   interpreter: "access",
   lem: "access_vec_dec",
   coq: "access_vec_dec",
+  lean: "BitVec.access",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $else
@@ -182,6 +193,7 @@ val plain_vector_access = pure {
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
+  lean: "vectorAccess",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m)) -> 'a
 
@@ -229,6 +241,7 @@ val add_bits_int = pure {
   interpreter: "add_vec_int",
   lem: "add_vec_int",
   coq: "add_vec_int",
+  lean: "BitVec.addInt",
   _: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
@@ -289,6 +302,7 @@ val subrange_bits = pure {
   interpreter: "subrange",
   lem: "subrange_vec_dec",
   coq: "subrange_vec_dec",
+  lean: "Sail.BitVec.extractLsb",
   _: "vector_subrange"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
   (bits('n), int('m), int('o)) -> bits('m - 'o + 1)
@@ -311,6 +325,7 @@ val update_subrange_bits = pure {
   interpreter: "update_subrange",
   lem: "update_subrange_vec_dec",
   coq: "update_subrange_vec_dec",
+  lean: "Sail.BitVec.updateSubrange",
   _: "vector_update_subrange"
 } : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), int('m), int('o), bits('m - ('o - 1))) -> bits('n)
 $else

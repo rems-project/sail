@@ -1,8 +1,12 @@
 [93mType error[0m:
-[96mfail/issue853.sail[0m:4.30-32:
+[96mfail/issue853.sail[0m:4.13-33:
 4[96m |[0mfunction foo(addr : bitvector(64)) -> unit = ()
- [91m |[0m                              [91m^^[0m
+ [91m |[0m             [91m^------------------^[0m
  [91m |[0m Failed to prove constraint: 32 == 64
+ [91m |[0m 
+ [91m |[0m constraint from [96mfail/issue853.sail[0m:4.30-32:
+ [91m |[0m 4[96m |[0mfunction foo(addr : bitvector(64)) -> unit = ()
+ [91m |[0m  [91m |[0m                              [91m^^[0m [91mThis type argument[0m
  [91m |[0m 
  [91m |[0m constraint from [96mfail/issue853.sail[0m:2.20-22:
  [91m |[0m 2[96m |[0mval foo : bitvector(32) -> unit

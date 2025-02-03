@@ -57,8 +57,8 @@ val set_solver : string -> unit
 
 type smt_result = Unknown | Sat | Unsat
 
-val load_digests : unit -> unit
-val save_digests : unit -> unit
+val load_digests : string -> unit
+val save_digests : string -> unit
 
 val constraint_to_smt : l -> n_constraint -> string * (kid -> string * bool) * string list
 
