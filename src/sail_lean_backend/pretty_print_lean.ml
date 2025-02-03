@@ -369,6 +369,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_app (Id_aux (Id "internal_pick", _), _) ->
       (* TODO replace by actual implementation of internal_pick *)
       string "sorry"
+  | E_app (Id_aux (Id "None", _), _) -> string "none"
+  | E_app (Id_aux (Id "Some", _), args) ->
+      let d_id = string "some" in
+      let d_args = List.map d_of_arg args in
+      nest 2 (parens (flow (break 1) (d_id :: d_args)))
   | E_internal_plet (pat, e1, e2) ->
       let e0 = doc_pat pat in
       let e1_pp = doc_exp false ctx e1 in
