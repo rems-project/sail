@@ -120,14 +120,6 @@ let string_of_nexp_con (Nexp_aux (n, l)) =
   | Nexp_neg _ -> "Nexp_neg"
   | Nexp_exp _ -> "Nexp_exp"
 
-let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens (string (Big_int.to_string i))
-
-let doc_nexp ctx (Nexp_aux (n, l) as nexp) =
-  match n with
-  | Nexp_constant i -> doc_big_int i
-  | Nexp_var ki -> doc_kid ctx ki
-  | _ -> failwith ("NExp " ^ string_of_nexp_con nexp ^ " " ^ string_of_nexp nexp ^ " not translatable yet.")
-
 let string_of_typ_con (Typ_aux (t, _)) =
   match t with
   | Typ_app _ -> "Typ_app"
@@ -139,9 +131,71 @@ let string_of_typ_con (Typ_aux (t, _)) =
   | Typ_internal_unknown -> "Typ_internal_unknown"
   | Typ_id _ -> "Typ_id"
 
-let provably_nneg ctx x = Type_check.prove __POS__ ctx.env (nc_gteq x (nint 0))
+let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens (string (Big_int.to_string i))
 
-let rec doc_typ ctx (Typ_aux (t, _) as typ) =
+(* Adapted from Coq PP *)
+let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
+  let rec plussub (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
+    | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; mul n2]
+    | _ -> mul nexp
+  and mul (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
+  and uneg (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
+  and exp (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
+  and app (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_if (i, t, e) ->
+        separate space [string "if"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
+    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
+    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
+    | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
+    | _ -> atomic nexp
+  and atomic (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_constant i -> doc_big_int i
+    | Nexp_var ki -> doc_kid ctx ki
+    | Nexp_id id -> doc_id_ctor id
+    | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _ | Nexp_if _
+    | Nexp_app (Id_aux (Id ("div" | "mod"), _), [_; _])
+    | Nexp_app (Id_aux (Id "abs", _), [_]) ->
+        parens (plussub nexp)
+    | _ -> failwith ("NExp " ^ string_of_nexp_con nexp ^ " " ^ string_of_nexp nexp ^ " not translatable yet.")
+  in
+  atomic nexp
+
+and doc_nconstraint ctx (NC_aux (nc, _)) =
+  match nc with
+  | NC_and (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∧"; doc_nconstraint ctx n2]
+  | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
+  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "="; doc_typ_arg ctx a2]
+  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "≠"; doc_typ_arg ctx a2]
+  | NC_app (f, args) -> doc_id_ctor f ^^ parens (separate_map comma_sp (doc_typ_arg ctx) args)
+  | NC_false -> string "false"
+  | NC_true -> string "true"
+  | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
+  | NC_le (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≤"; doc_nexp ctx n2]
+  | NC_gt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string ">"; doc_nexp ctx n2]
+  | NC_lt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "<"; doc_nexp ctx n2]
+  | NC_id i -> doc_id_ctor i
+  | NC_set (n, vs) ->
+      flow (break 1)
+        [
+          doc_nexp ctx n;
+          string "∈";
+          implicit_parens (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
+        ]
+  | NC_var ki -> doc_kid ctx ki
+
+and doc_typ_arg ctx (A_aux (t, _)) =
+  match t with A_typ t -> doc_typ ctx t | A_nexp n -> doc_nexp ctx n | A_bool nc -> parens (doc_nconstraint ctx nc)
+
+and provably_nneg ctx x = Type_check.prove __POS__ ctx.env (nc_gteq x (nint 0))
+
+and doc_typ ctx (Typ_aux (t, _) as typ) =
   match t with
   | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
       (* TODO: remove duplication with exists, below *)
@@ -185,31 +239,6 @@ let rec captured_typ_var ((i, Typ_aux (t, _)) as typ) =
 let doc_typ_id ctx (typ, fid) = flow (break 1) [doc_id_ctor fid; colon; doc_typ ctx typ]
 
 let doc_kind (K_aux (k, _)) = match k with K_int -> string "Int" | K_bool -> string "Bool" | K_type -> string "Type"
-
-let doc_typ_arg ctx ta = string "foo" (* TODO implement *)
-
-let rec doc_nconstraint ctx (NC_aux (nc, _)) =
-  match nc with
-  | NC_and (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∧"; doc_nconstraint ctx n2]
-  | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
-  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "="; doc_typ_arg ctx a2]
-  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx a1; string "≠"; doc_typ_arg ctx a2]
-  | NC_app (f, args) -> doc_id_ctor f ^^ parens (separate_map comma_sp (doc_typ_arg ctx) args)
-  | NC_false -> string "false"
-  | NC_true -> string "true"
-  | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
-  | NC_le (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≤"; doc_nexp ctx n2]
-  | NC_gt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string ">"; doc_nexp ctx n2]
-  | NC_lt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "<"; doc_nexp ctx n2]
-  | NC_id i -> doc_id_ctor i
-  | NC_set (n, vs) ->
-      flow (break 1)
-        [
-          doc_nexp ctx n;
-          string "∈";
-          implicit_parens (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
-        ]
-  | NC_var ki -> doc_kid ctx ki
 
 let doc_quant_item ctx (QI_aux (qi, _)) =
   match qi with
