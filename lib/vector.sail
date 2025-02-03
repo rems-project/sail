@@ -175,6 +175,7 @@ val bitvector_access = pure {
   interpreter: "access",
   lem: "access_vec_dec",
   coq: "access_vec_dec",
+  lean: "BitVec.access",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $else
