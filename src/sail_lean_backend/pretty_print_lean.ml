@@ -605,8 +605,9 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp in
       let decl_start =
-        if List.is_empty rectyp then [string "structure"; string id; string "where"]
-        else [string "structure"; string id; separate space rectyp; string "where"]
+        match rectyp with
+        | [] -> [string "structure"; string id; string "where"]
+        | _ -> [string "structure"; string id; separate space rectyp; string "where"]
       in
       nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_typ t, _)) ->
