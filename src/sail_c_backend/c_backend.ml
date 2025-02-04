@@ -2225,6 +2225,7 @@ let compile_ast env effect_info output_chan c_includes ast =
     let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
     let hlhl = hardline ^^ hardline in
 
+    (* TODO: Formatting here isn't quite right. What are the arguments to jump? *)
     let unit_test_functions = string "unit (*const SAIL_TESTS[])(unit) = {" ^^ hardline ^^ jump 2 2 (
       IdSet.fold (fun id acc -> codegen_function_id id ^^ string "," ^^ hardline ^^ acc) ctx.unit_test_ids empty
       ^^ string "0" ^^ hardline
@@ -2235,6 +2236,25 @@ let compile_ast env effect_info output_chan c_includes ast =
       ^^ string "0" ^^ hardline
     ) ^^ string "};" in
 
+    (* A simple function to run the unit tests. It isn't called from anywhere
+       by default and you don't need to use it - you can use SAIL_TESTS directly
+       in your own custom test runner. *)
+    let model_test =
+      [
+        Printf.sprintf "%svoid model_test()" (static ());
+        "{";
+        "  for (size_t i = 0; SAIL_TESTS[i] != 0 && SAIL_TEST_NAMES[i] != 0; ++i) {";
+        "    model_init();";
+        "    printf(\"Testing %s\\n\", SAIL_TEST_NAMES[i]);";
+        "    SAIL_TESTS[i](UNIT);";
+        "    printf(\"Pass\\n\");";
+        "    model_fini();";
+        "  }";
+        "}";
+      ]
+      |> List.map string |> separate hardline
+    in
+
     Document.to_string
       (preamble ^^ hlhl ^^ docs ^^ hlhl
       ^^ ( if not !opt_no_rts then
@@ -2243,7 +2263,8 @@ let compile_ast env effect_info output_chan c_includes ast =
          )
       ^^ model_main ^^ hlhl
       ^^ unit_test_functions ^^ hlhl
-      ^^ unit_test_names ^^ hardline
+      ^^ unit_test_names ^^ hlhl
+      ^^ model_test ^^ hardline
       ^^ end_extern_cpp ^^ hardline
       )
     |> output_string output_chan
