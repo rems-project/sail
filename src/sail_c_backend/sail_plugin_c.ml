@@ -48,7 +48,9 @@ open Libsail
 
 open Interactive.State
 
+let opt_generate_header = ref false
 let opt_includes_c : string list ref = ref []
+let opt_includes_h : string list ref = ref []
 let opt_specialize_c = ref false
 
 let c_options =
@@ -56,6 +58,10 @@ let c_options =
     ( Flag.create ~prefix:["c"] ~arg:"filename" "include",
       Arg.String (fun i -> opt_includes_c := i :: !opt_includes_c),
       "provide additional include for C output"
+    );
+    ( Flag.create ~prefix:["c"] ~arg:"filename" "header_include",
+      Arg.String (fun i -> opt_includes_c := i :: !opt_includes_h),
+      "provide additional include for C header output"
     );
     (Flag.create ~prefix:["c"] "no_main", Arg.Set C_backend.opt_no_main, "do not generate the main() function");
     (Flag.create ~prefix:["c"] "no_rts", Arg.Set C_backend.opt_no_rts, "do not include the Sail runtime");
@@ -67,6 +73,7 @@ let c_options =
       Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
       "prefix generated C functions"
     );
+    (Flag.create ~prefix:["c"] "generate_header", Arg.Set opt_generate_header, "generate a separate header file");
     ( Flag.create ~prefix:["c"] ~arg:"parameters" "extra_params",
       Arg.String (fun params -> C_backend.opt_extra_params := Some params),
       "generate C functions with additional parameters"
@@ -145,10 +152,36 @@ let c_rewrites =
   ]
 
 let c_target out_file { ast; effect_info; env; _ } =
-  let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".c")) | None -> (false, stdout) in
+  let module Codegen = C_backend.Codegen (struct
+    let generate_header = !opt_generate_header
+    let includes = !opt_includes_c
+    let header_includes = !opt_includes_h
+  end) in
   Reporting.opt_warnings := true;
-  C_backend.compile_ast env effect_info output_chan !opt_includes_c ast;
-  flush output_chan;
-  if close then close_out output_chan
+  let echo_output, basename = match out_file with Some f -> (false, f) | None -> (true, "out") in
+
+  let header_opt, impl = Codegen.compile_ast env effect_info basename ast in
+
+  let impl_out = Util.open_output_with_check (basename ^ ".c") in
+  output_string impl_out.channel impl;
+  flush impl_out.channel;
+  Util.close_output_with_check impl_out;
+
+  ( match header_opt with
+  | None -> ()
+  | Some header ->
+      let header_out = Util.open_output_with_check (basename ^ ".h") in
+      output_string header_out.channel header;
+      flush header_out.channel;
+      Util.close_output_with_check header_out
+  );
+
+  if echo_output then (
+    Reporting.warn "Deprecated" Parse_ast.Unknown
+      "The default behaviour of printing C output to stdout when no output file is specified is deprecated. use the -o \
+       option to specify a file name";
+    output_string stdout impl;
+    flush stdout
+  )
 
 let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
