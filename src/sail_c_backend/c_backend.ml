@@ -103,8 +103,11 @@ let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
 (** This function is used to split types into those we allocate on the
-   stack, versus those which need to live on the heap, or otherwise
-   require some additional memory management *)
+    stack, versus those which need to live on the heap, or otherwise
+    require some additional memory management.
+
+    This is roughly the same distinction that Rust makes between copy
+    and non-copy types. *)
 let rec is_stack_ctyp ctyp =
   match ctyp with
   | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
@@ -115,10 +118,7 @@ let rec is_stack_ctyp ctyp =
   | CT_lbits -> false
   | CT_real | CT_string | CT_list _ | CT_vector _ | CT_fvector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
-  | CT_variant (_, _) ->
-      false
-      (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *)
-      (* FIXME *)
+  | CT_variant (_, _) -> false
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref _ -> true
   | CT_poly _ -> true
@@ -885,6 +885,19 @@ let optimize recursive_functions cdefs =
 (* 6. Code generation                                                     *)
 (**************************************************************************)
 
+(* The code generator produces a list of C definitions, some of
+   which should be in the header (if we generate one), and some in
+   the implementation. There are also definitions that are only
+   included in the header provided we generate one.
+
+   * Header - goes in header, or implemention if no header generated
+   * HeaderOnly - goes in header, omitted if no header generated
+   * Impl - goes in implemention
+*)
+type file_doc = Header of document | HeaderOnly of document | Impl of document
+
+let to_impl doc = [Impl doc]
+
 let sgen_uid uid = zencode_uid uid
 let sgen_name id = string_of_name ~deref_current_exception:true ~zencode:true id
 let codegen_id id = string (sgen_id id)
@@ -1381,15 +1394,19 @@ let codegen_type_def =
   let open Printf in
   function
   | CTD_abstract (id, ctyp) ->
-      ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id)
-      ^^ twice hardline
-      ^^ c_function ~return:"void"
-           (ksprintf string "sail_set_abstract_%s(%s v)" (string_of_id id) (sgen_ctyp ctyp))
-           [
-             ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = v" (sgen_id id)
-               else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v" (sgen_id id)
-             );
-           ]
+      [
+        Header (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id));
+        HeaderOnly (ksprintf string "void sail_set_abstract_%s(%s value);" (string_of_id id) (sgen_ctyp ctyp));
+        Impl
+          (c_function ~return:"void"
+             (ksprintf string "sail_set_abstract_%s(%s value)" (string_of_id id) (sgen_ctyp ctyp))
+             [
+               ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = value" (sgen_id id)
+                 else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, value" (sgen_id id)
+               );
+             ]
+          );
+      ]
   | CTD_enum (id, (first_id :: _ as ids)) ->
       let enum_name = sgen_id id in
       let enum_eq =
@@ -1401,11 +1418,16 @@ let codegen_type_def =
         let name = sgen_id id in
         string (Printf.sprintf "static enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
       in
-      string (Printf.sprintf "// enum %s" (string_of_id id))
-      ^^ hardline
-      ^^ separate space
-           [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
-      ^^ twice hardline ^^ enum_eq ^^ twice hardline ^^ enum_undefined
+      [
+        Header
+          (string (Printf.sprintf "// enum %s" (string_of_id id))
+          ^^ hardline
+          ^^ separate space
+               [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
+          );
+        Impl enum_eq;
+        Impl enum_undefined;
+      ]
   | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
   | CTD_struct (id, ctors) ->
       let struct_name = sgen_id id in
@@ -1440,15 +1462,21 @@ let codegen_type_def =
       in
       (* Generate the struct and add the generated functions *)
       let struct_field (id, ctyp) = string (sgen_ctyp ctyp) ^^ space ^^ codegen_id id in
-      string (Printf.sprintf "// struct %s" (string_of_id id))
-      ^^ hardline ^^ string "struct" ^^ space ^^ codegen_id id ^^ space
-      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) struct_field ctors ^^ semi) rbrace
-      ^^ semi ^^ twice hardline ^^ struct_copy
-      ^^ ( if not (is_stack_ctyp struct_ctyp) then
-             twice hardline ^^ separate (twice hardline) [derive sail_create; derive sail_recreate; derive sail_kill]
-           else empty
-         )
-      ^^ twice hardline ^^ struct_eq
+
+      [
+        Header
+          (string (Printf.sprintf "// struct %s" (string_of_id id))
+          ^^ hardline ^^ string "struct" ^^ space ^^ codegen_id id ^^ space
+          ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) struct_field ctors ^^ semi) rbrace
+          ^^ semi
+          );
+        Impl struct_copy;
+      ]
+      @ ( if not (is_stack_ctyp struct_ctyp) then
+            [Impl (derive sail_create); Impl (derive sail_recreate); Impl (derive sail_kill)]
+          else []
+        )
+      @ [Impl struct_eq]
   | CTD_variant (id, tus) ->
       let codegen_tu (ctor_id, ctyp) =
         separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
@@ -1544,47 +1572,49 @@ let codegen_type_def =
         let n = sgen_id id in
         c_function ~return:"static bool" (sail_equal n "struct %s op1, struct %s op2" n n) [codegen_eq_tests tus]
       in
-      string (Printf.sprintf "// union %s" (string_of_id id))
-      ^^ hardline ^^ string "enum" ^^ space
-      ^^ string ("kind_" ^ sgen_id id)
-      ^^ space
-      ^^ separate space
-           [
-             lbrace;
-             separate_map (comma ^^ space) (fun id -> string ("Kind_" ^ sgen_id id)) (List.map fst tus);
-             rbrace ^^ semi;
-           ]
-      ^^ twice hardline
-      ^^ separate (twice hardline)
-           [
-             string "struct" ^^ space ^^ codegen_id id ^^ space
-             ^^ surround 2 0 lbrace
-                  (separate space [string "enum"; string ("kind_" ^ sgen_id id); string "kind" ^^ semi]
-                  ^^ hardline ^^ string "union" ^^ space
-                  ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) codegen_tu tus ^^ semi) rbrace
-                  ^^ space ^^ string "variants" ^^ semi
-                  )
-                  rbrace
-             ^^ semi;
-             codegen_init;
-             codegen_reinit;
-             codegen_clear;
-             codegen_setter;
-             codegen_eq;
-           ]
-      ^^ twice hardline
-      ^^ separate_map (twice hardline) codegen_ctor tus
+      [
+        Header
+          (string (Printf.sprintf "// union %s" (string_of_id id))
+          ^^ hardline ^^ string "enum" ^^ space
+          ^^ string ("kind_" ^ sgen_id id)
+          ^^ space
+          ^^ separate space
+               [
+                 lbrace;
+                 separate_map (comma ^^ space) (fun id -> string ("Kind_" ^ sgen_id id)) (List.map fst tus);
+                 rbrace ^^ semi;
+               ]
+          );
+        Header
+          (string "struct" ^^ space ^^ codegen_id id ^^ space
+          ^^ surround 2 0 lbrace
+               (separate space [string "enum"; string ("kind_" ^ sgen_id id); string "kind" ^^ semi]
+               ^^ hardline ^^ string "union" ^^ space
+               ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) codegen_tu tus ^^ semi) rbrace
+               ^^ space ^^ string "variants" ^^ semi
+               )
+               rbrace
+          ^^ semi
+          );
+        Impl codegen_init;
+        Impl codegen_reinit;
+        Impl codegen_clear;
+        Impl codegen_setter;
+        Impl codegen_eq;
+      ]
+      @ List.map (fun tu -> Impl (codegen_ctor tu)) tus
       (* If this is the exception type, then we setup up some global variables to deal with exceptions. *)
-      ^^
+      @
       if string_of_id id = "exception" then
-        twice hardline
-        ^^ separate hardline
-             [
-               string "struct zexception *current_exception = NULL;";
-               string "bool have_exception = false;";
-               string "sail_string *throw_location = NULL;";
-             ]
-      else empty
+        [
+          HeaderOnly (string "extern struct zexception *current_exception;");
+          Impl (string "struct zexception *current_exception = NULL;");
+          HeaderOnly (string "extern bool have_exception;");
+          Impl (string "bool have_exception = false;");
+          HeaderOnly (string "extern sail_string *throw_location;");
+          Impl (string "sail_string *throw_location = NULL;");
+        ]
+      else []
 
 (** GLOBAL: because C doesn't have real anonymous tuple types
    (anonymous structs don't quite work the way we need) every tuple
@@ -1603,7 +1633,7 @@ let generated = ref IdSet.empty
 
 let codegen_tup ctyps =
   let id = mk_id ("tuple_" ^ string_of_ctyp (CT_tup ctyps)) in
-  if IdSet.mem id !generated then empty
+  if IdSet.mem id !generated then []
   else begin
     let _, fields =
       List.fold_left
@@ -1611,13 +1641,13 @@ let codegen_tup ctyps =
         (0, Bindings.empty) ctyps
     in
     generated := IdSet.add id !generated;
-    codegen_type_def (CTD_struct (id, Bindings.bindings fields)) ^^ twice hardline
+    codegen_type_def (CTD_struct (id, Bindings.bindings fields))
   end
 
 let codegen_list ctyp =
   let open Printf in
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
-  if IdSet.mem id !generated then empty
+  if IdSet.mem id !generated then []
   else (
     generated := IdSet.add id !generated;
     let codegen_node =
@@ -1711,28 +1741,26 @@ let codegen_list ctyp =
       ksprintf string "static void UNDEFINED(%s)(%s *rop, %s u) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)
       ^^ ksprintf string "  *rop = NULL;\n" ^^ string "}"
     in
-    separate (twice hardline)
-      [
-        codegen_node;
-        codegen_list_init;
-        codegen_inc_reference_count;
-        codegen_dec_reference_count;
-        codegen_list_clear;
-        codegen_list_recreate;
-        codegen_list_copy;
-        codegen_cons;
-        codegen_pick;
-        codegen_list_equal;
-        codegen_list_undefined;
-      ]
-    ^^ twice hardline
+    [
+      Header codegen_node;
+      Impl codegen_list_init;
+      Impl codegen_inc_reference_count;
+      Impl codegen_dec_reference_count;
+      Impl codegen_list_clear;
+      Impl codegen_list_recreate;
+      Impl codegen_list_copy;
+      Impl codegen_cons;
+      Impl codegen_pick;
+      Impl codegen_list_equal;
+      Impl codegen_list_undefined;
+    ]
   )
 
 (* Generate functions for working with non-bit vectors of some specific type. *)
 let codegen_vector ctyp =
   let open Printf in
   let id = mk_id (string_of_ctyp (CT_vector ctyp)) in
-  if IdSet.mem id !generated then empty
+  if IdSet.mem id !generated then []
   else (
     let vector_typedef =
       ksprintf string "struct %s {\n  size_t len;\n  %s *data;\n};\n" (sgen_id id) (sgen_ctyp ctyp)
@@ -1887,23 +1915,21 @@ let codegen_vector ctyp =
     in
     begin
       generated := IdSet.add id !generated;
-      separate (twice hardline)
-        [
-          vector_typedef;
-          vector_decl;
-          vector_clear;
-          vector_init;
-          vector_reinit;
-          vector_undefined;
-          vector_access;
-          vector_set;
-          vector_update;
-          vector_equal;
-          vector_length;
-          internal_vector_update;
-          internal_vector_init;
-        ]
-      ^^ twice hardline
+      [
+        Header vector_typedef;
+        Impl vector_decl;
+        Impl vector_clear;
+        Impl vector_init;
+        Impl vector_reinit;
+        Impl vector_undefined;
+        Impl vector_access;
+        Impl vector_set;
+        Impl vector_update;
+        Impl vector_equal;
+        Impl vector_length;
+        Impl internal_vector_update;
+        Impl internal_vector_init;
+      ]
     end
   )
 
@@ -1921,22 +1947,39 @@ let codegen_alloc = function
 let codegen_def' ctx (CDEF_aux (aux, _)) =
   match aux with
   | CDEF_register (id, ctyp, _) ->
-      string (Printf.sprintf "// register %s" (string_of_id id))
-      ^^ hardline
-      ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
+      [
+        HeaderOnly
+          (string (Printf.sprintf "// register %s" (string_of_id id))
+          ^^ hardline
+          ^^ string (Printf.sprintf "extern %s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
+          );
+        Impl
+          (string (Printf.sprintf "// register %s" (string_of_id id))
+          ^^ hardline
+          ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
+          );
+      ]
   | CDEF_val (id, _, arg_ctyps, ret_ctyp) ->
-      if ctx_is_extern id ctx then empty
+      if ctx_is_extern id ctx then []
       else if is_stack_ctyp ret_ctyp then
-        string
-          (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ())
-             (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
-          )
+        [
+          Header
+            (string
+               (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ())
+                  (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
+               )
+            );
+        ]
       else
-        string
-          (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ())
-             (sgen_ctyp ret_ctyp)
-             (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
-          )
+        [
+          Header
+            (string
+               (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ())
+                  (sgen_ctyp ret_ctyp)
+                  (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
+               )
+            );
+        ]
   | CDEF_fundef (id, ret_arg, args, instrs) ->
       let _, arg_ctyps, ret_ctyp, _ =
         match Bindings.find_opt id ctx.valspecs with
@@ -1976,9 +2019,13 @@ let codegen_def' ctx (CDEF_aux (aux, _)) =
             ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
             ^^ hardline
       in
-      function_header ^^ string "{"
-      ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
-      ^^ hardline ^^ string "}"
+      [
+        Impl
+          (function_header ^^ string "{"
+          ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
+          ^^ hardline ^^ string "}"
+          );
+      ]
   | CDEF_type ctype_def -> codegen_type_def ctype_def
   | CDEF_startup (id, instrs) ->
       let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
@@ -1986,12 +2033,14 @@ let codegen_def' ctx (CDEF_aux (aux, _)) =
       ^^ twice hardline ^^ startup_header ^^ hardline ^^ string "{"
       ^^ jump 0 2 (separate_map hardline codegen_alloc instrs)
       ^^ hardline ^^ string "}"
+      |> to_impl
   | CDEF_finish (id, instrs) ->
       let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" (static ()) (sgen_function_id id)) in
       separate_map hardline codegen_decl (List.filter is_decl instrs)
       ^^ twice hardline ^^ finish_header ^^ hardline ^^ string "{"
       ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
       ^^ hardline ^^ string "}"
+      |> to_impl
   | CDEF_let (number, bindings, instrs) ->
       let instrs = add_local_labels instrs in
       let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
@@ -2010,7 +2059,8 @@ let codegen_def' ctx (CDEF_aux (aux, _)) =
       ^^ string "{"
       ^^ jump 0 2 (separate_map hardline (codegen_instr (mk_id "let") ctx) cleanup)
       ^^ hardline ^^ string "}"
-  | CDEF_pragma _ -> empty
+      |> to_impl
+  | CDEF_pragma _ -> []
 
 (** As we generate C we need to generate specialized version of tuple,
    list, and vector type. These must be generated in the correct
@@ -2051,7 +2101,7 @@ let codegen_def ctx def =
   )
   else (
     let deps = List.concat (List.map ctyp_dependencies ctyps) in
-    separate_map hardline codegen_ctg deps ^^ codegen_def' ctx def
+    List.concat (List.map codegen_ctg deps) @ codegen_def' ctx def
   )
 
 let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
@@ -2075,170 +2125,207 @@ let get_recursive_functions cdefs =
   List.fold_left (fun rf component -> match component with [_] -> rf | mutual -> mutual @ rf) rf (IdGraph.scc graph)
   |> IdSet.of_list
 
-let jib_of_ast env effect_info ast =
-  let module Jibc = Make (C_config (struct
-    let branch_coverage = !opt_branch_coverage
-  end)) in
-  let env, effect_info = add_special_functions env effect_info in
-  let ctx = initial_ctx env effect_info in
-  Jibc.compile_ast ctx ast
+module type CODEGEN_CONFIG = sig
+  val generate_header : bool
+  val includes : string list
+  val header_includes : string list
+end
 
-let compile_ast env effect_info output_chan c_includes ast =
-  try
-    let cdefs, ctx = jib_of_ast env effect_info ast in
-    (* let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in *)
-    let cdefs = insert_heap_returns Bindings.empty cdefs in
-
-    let recursive_functions = get_recursive_functions cdefs in
-    let cdefs = optimize recursive_functions cdefs in
-
-    let docs = separate_map (hardline ^^ hardline) (codegen_def ctx) cdefs in
-
-    let coverage_include =
-      let header = string "#include \"sail_coverage.h\"" in
-      (* Generate a hook for the RTS to call if we have coverage
-         enabled, so it can set the output file with an option. *)
-      let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
-      let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
-      match !opt_branch_coverage with
-      | Some _ -> if !opt_no_rts then [header] else [header; coverage_hook]
-      | None -> if !opt_no_rts then [] else [no_coverage_hook]
+module Codegen (Config : CODEGEN_CONFIG) = struct
+  let merge_file_docs docs =
+    let rec no_header impl = function
+      | [] -> impl
+      | Header doc :: docs -> no_header (impl ^^ doc ^^ twice hardline) docs
+      | HeaderOnly _ :: docs -> no_header impl docs
+      | Impl doc :: docs -> no_header (impl ^^ doc ^^ twice hardline) docs
     in
-
-    let preamble =
-      separate hardline
-        ((if !opt_no_lib then [] else [string "#include \"sail.h\""])
-        @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
-        @ coverage_include
-        @ List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes
-        @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
-        )
+    let rec with_header hdr impl = function
+      | [] -> (hdr, impl)
+      | (Header doc | HeaderOnly doc) :: docs -> with_header (hdr ^^ doc ^^ twice hardline) impl docs
+      | Impl doc :: docs -> with_header hdr (impl ^^ doc ^^ twice hardline) docs
     in
+    if not Config.generate_header then (None, no_header empty docs)
+    else (
+      let hdr, impl = with_header empty empty docs in
+      (Some hdr, impl)
+    )
 
-    let exn_boilerplate =
-      if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], [])
-      else
-        ( [
-            "  current_exception = sail_new(struct zexception);";
-            "  CREATE(zexception)(current_exception);";
-            "  throw_location = sail_new(sail_string);";
-            "  CREATE(sail_string)(throw_location);";
-          ],
-          [
-            "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception: %s\\n\", *throw_location);}";
-            "  KILL(zexception)(current_exception);";
-            "  sail_free(current_exception);";
-            "  KILL(sail_string)(throw_location);";
-            "  sail_free(throw_location);";
-            "  if (have_exception) {exit(EXIT_FAILURE);}";
-          ]
-        )
-    in
+  let jib_of_ast env effect_info ast =
+    let module Jibc = Make (C_config (struct
+      let branch_coverage = !opt_branch_coverage
+    end)) in
+    let env, effect_info = add_special_functions env effect_info in
+    let ctx = initial_ctx env effect_info in
+    Jibc.compile_ast ctx ast
 
-    let letbind_initializers = List.map (fun n -> Printf.sprintf "  create_letbind_%d();" n) (List.rev ctx.letbinds) in
-    let letbind_finalizers = List.map (fun n -> Printf.sprintf "  kill_letbind_%d();" n) ctx.letbinds in
-    let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
-    let finish cdefs = List.map sgen_finish (List.filter is_cdef_finish cdefs) in
+  let compile_ast env effect_info basename ast =
+    try
+      let cdefs, ctx = jib_of_ast env effect_info ast in
+      (* let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in *)
+      let cdefs = insert_heap_returns Bindings.empty cdefs in
 
-    let regs = c_ast_registers cdefs in
+      let recursive_functions = get_recursive_functions cdefs in
+      let cdefs = optimize recursive_functions cdefs in
 
-    let register_init_clear (id, ctyp, instrs) =
-      if is_stack_ctyp ctyp then (List.map (sgen_instr (mk_id "reg") ctx) instrs, [])
-      else
-        ( [Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
-          @ List.map (sgen_instr (mk_id "reg") ctx) instrs,
-          [Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
-        )
-    in
+      let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 
-    let init_config_id = mk_id "__InitConfig" in
+      let coverage_include, coverage_hook =
+        let header = string "#include \"sail_coverage.h\"" in
+        (* Generate a hook for the RTS to call if we have coverage
+           enabled, so it can set the output file with an option. *)
+        let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
+        let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
+        match !opt_branch_coverage with
+        | Some _ -> if !opt_no_rts then ([header], []) else ([header], [coverage_hook])
+        | None -> if !opt_no_rts then ([], []) else ([], [no_coverage_hook])
+      in
 
-    let model_init =
-      separate hardline
-        (List.map string
-           ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
-           @ fst exn_boilerplate @ startup cdefs @ letbind_initializers
-           @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
-           @ (if regs = [] then [] else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))])
-           @ ( if ctx_has_val_spec init_config_id ctx then
-                 [Printf.sprintf "  %s(UNIT);" (sgen_function_id init_config_id)]
-               else []
+      let preamble in_header =
+        separate hardline
+          ((if !opt_no_lib then [] else [string "#include \"sail.h\""])
+          @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
+          @ coverage_include
+          @ ( if in_header then List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.header_includes
+              else List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.includes
+            )
+          @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
+          @ if in_header = Config.generate_header then coverage_hook else []
+          )
+      in
+
+      let exn_boilerplate =
+        if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], [])
+        else
+          ( [
+              "  current_exception = sail_new(struct zexception);";
+              "  CREATE(zexception)(current_exception);";
+              "  throw_location = sail_new(sail_string);";
+              "  CREATE(sail_string)(throw_location);";
+            ],
+            [
+              "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception: %s\\n\", *throw_location);}";
+              "  KILL(zexception)(current_exception);";
+              "  sail_free(current_exception);";
+              "  KILL(sail_string)(throw_location);";
+              "  sail_free(throw_location);";
+              "  if (have_exception) {exit(EXIT_FAILURE);}";
+            ]
+          )
+      in
+
+      let letbind_initializers =
+        List.map (fun n -> Printf.sprintf "  create_letbind_%d();" n) (List.rev ctx.letbinds)
+      in
+      let letbind_finalizers = List.map (fun n -> Printf.sprintf "  kill_letbind_%d();" n) ctx.letbinds in
+      let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
+      let finish cdefs = List.map sgen_finish (List.filter is_cdef_finish cdefs) in
+
+      let regs = c_ast_registers cdefs in
+
+      let register_init_clear (id, ctyp, instrs) =
+        if is_stack_ctyp ctyp then (List.map (sgen_instr (mk_id "reg") ctx) instrs, [])
+        else
+          ( [Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
+            @ List.map (sgen_instr (mk_id "reg") ctx) instrs,
+            [Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
+          )
+      in
+
+      let init_config_id = mk_id "__InitConfig" in
+
+      let model_init =
+        separate hardline
+          (List.map string
+             ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
+             @ fst exn_boilerplate @ startup cdefs @ letbind_initializers
+             @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
+             @ ( if regs = [] then []
+                 else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))]
+               )
+             @ ( if ctx_has_val_spec init_config_id ctx then
+                   [Printf.sprintf "  %s(UNIT);" (sgen_function_id init_config_id)]
+                 else []
+               )
+             @ ["}"]
              )
-           @ ["}"]
-           )
-        )
-    in
+          )
+      in
 
-    let model_fini =
-      separate hardline
-        (List.map string
-           ([Printf.sprintf "%svoid model_fini(void)" (static ()); "{"]
-           @ letbind_finalizers
-           @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
-           @ finish cdefs @ ["  cleanup_rts();"] @ snd exn_boilerplate @ ["}"]
-           )
-        )
-    in
+      let model_fini =
+        separate hardline
+          (List.map string
+             ([Printf.sprintf "%svoid model_fini(void)" (static ()); "{"]
+             @ letbind_finalizers
+             @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
+             @ finish cdefs @ ["  cleanup_rts();"] @ snd exn_boilerplate @ ["}"]
+             )
+          )
+      in
 
-    let model_pre_exit =
-      (["void model_pre_exit()"; "{"]
-      @
-      if Option.is_some !opt_branch_coverage then
+      let model_pre_exit =
+        (["void model_pre_exit()"; "{"]
+        @
+        if Option.is_some !opt_branch_coverage then
+          [
+            "  if (sail_coverage_exit() != 0) {";
+            "    fprintf(stderr, \"Could not write coverage information\\n\");";
+            "    exit(EXIT_FAILURE);";
+            "  }";
+            "}";
+          ]
+        else ["}"]
+        )
+        |> List.map string |> separate hardline
+      in
+
+      let model_default_main =
         [
-          "  if (sail_coverage_exit() != 0) {";
-          "    fprintf(stderr, \"Could not write coverage information\\n\");";
-          "    exit(EXIT_FAILURE);";
-          "  }";
+          Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
+          "{";
+          "  model_init();";
+          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
+          Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
+          "  model_fini();";
+          "  model_pre_exit();";
+          "  return EXIT_SUCCESS;";
           "}";
         ]
-      else ["}"]
-      )
-      |> List.map string |> separate hardline
-    in
-
-    let model_default_main =
-      [
-        Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
-        "{";
-        "  model_init();";
-        "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
-        Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
-        "  model_fini();";
-        "  model_pre_exit();";
-        "  return EXIT_SUCCESS;";
-        "}";
-      ]
-      |> List.map string |> separate hardline
-    in
-
-    let model_main =
-      let extra =
-        List.filter_map (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None) cdefs
+        |> List.map string |> separate hardline
       in
-      separate hardline
-        ( if !opt_no_main then []
-          else
-            List.map string
-              (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
-        )
-    in
-    let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
-    let hlhl = hardline ^^ hardline in
 
-    Document.to_string
-      (preamble ^^ hlhl ^^ docs ^^ hlhl
-      ^^ ( if not !opt_no_rts then
-             model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
-           else empty
-         )
-      ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
+      let model_main =
+        let extra =
+          List.filter_map
+            (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            cdefs
+        in
+        separate hardline
+          ( if !opt_no_main then []
+            else
+              List.map string
+                (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
+          )
+      in
+      let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
+      let hlhl = twice hardline in
+
+      let header =
+        Option.map
+          (fun header -> preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline |> Document.to_string)
+          header_doc_opt
+      in
+      ( header,
+        Document.to_string
+          (preamble false
+          ^^ (if Config.generate_header then hardline ^^ Printf.ksprintf string "#include \"%s.h\"" basename else empty)
+          ^^ hlhl ^^ docs ^^ hlhl
+          ^^ ( if not !opt_no_rts then
+                 model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
+               else empty
+             )
+          ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
+          )
       )
-    |> output_string output_chan
-  with Type_error.Type_error (l, err) ->
-    c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ fst (Type_error.string_of_type_error err))
-
-let compile_ast_clib env effect_info ast codegen =
-  let cdefs, ctx = jib_of_ast env effect_info ast in
-  (* let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in *)
-  let cdefs = insert_heap_returns Bindings.empty cdefs in
-  codegen ctx cdefs
+    with Type_error.Type_error (l, err) ->
+      c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ fst (Type_error.string_of_type_error err))
+end

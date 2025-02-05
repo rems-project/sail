@@ -38,7 +38,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
+                step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
@@ -47,27 +47,6 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
                 if valgrind and not basename.startswith('fail'):
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
-                print_ok(filename)
-                sys.exit()
-        results.collect(tests)
-    return results.finish()
-
-def test_c2(name, c_opts, sail_opts, valgrind):
-    banner('Testing {} with C (-c2) options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
-    results = Results(name)
-    for filenames in chunks(os.listdir('.'), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                step('\'{}\' -no_warn -c2 {} {} -o {}'.format(sail, sail_opts, filename, basename))
-                step('gcc {} {}.c {}_emu.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
-                step('./{} > {}.result 2>&1'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('diff {}.result {}.expect'.format(basename, basename))
-                if valgrind:
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('rm {}.c {} {}.result'.format(basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
@@ -212,8 +191,8 @@ def test_coq(name):
 xml = '<testsuites>\n'
 
 if 'c' in targets:
-    #xml += test_c2('unoptimized C', '', '', True)
     xml += test_c('unoptimized C', '', '', False)
+    xml += test_c('unoptimized C', '', '--c-generate-header', False)
     xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
     xml += test_c('optimized C', '-O2', '-O', True)
     xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')

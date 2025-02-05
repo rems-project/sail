@@ -3,7 +3,8 @@ import Out.Sail.Sail
 open Sail
 
 inductive E where | A | B | C
-  deriving Inhabited
+  deriving Inhabited, DecidableEq
+
 open E
 
 inductive Register : Type where

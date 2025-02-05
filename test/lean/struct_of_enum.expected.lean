@@ -3,8 +3,10 @@ import Out.Sail.Sail
 open Sail
 
 inductive e_test where | VAL
-  deriving Inhabited
+  deriving Inhabited, DecidableEq
+
 open e_test
+
 
 structure s_test where
   f : e_test
@@ -14,7 +16,7 @@ abbrev SailM := StateM Unit
 def undefined_e_test (lit : Unit) : SailM e_test := do
   sorry
 
-/-- Type quantifiers: arg_ : Int, 0 ≤ arg_ ∧ arg_ ≤ 0 -/
+/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 0 -/
 def e_test_of_num (arg_ : Nat) : e_test :=
   match arg_ with
   | _ => VAL

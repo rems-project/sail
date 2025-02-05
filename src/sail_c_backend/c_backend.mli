@@ -57,7 +57,7 @@ val opt_static : bool ref
 (** Do not generate a main function *)
 val opt_no_main : bool ref
 
-(** (WIP) Do not include rts.h (the runtime), and do not generate code
+(** Do not include rts.h (the runtime), and do not generate code
    that requires any setup or teardown routines to be run by a runtime
    before executing any instruction semantics. *)
 val opt_no_rts : bool ref
@@ -98,7 +98,13 @@ val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
-val jib_of_ast : Env.t -> Effects.side_effect_info -> typed_ast -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> Effects.side_effect_info -> out_channel -> string list -> typed_ast -> unit
+module type CODEGEN_CONFIG = sig
+  val generate_header : bool
+  val includes : string list
+  val header_includes : string list
+end
 
-val compile_ast_clib : Env.t -> Effects.side_effect_info -> typed_ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit
+module Codegen (Config : CODEGEN_CONFIG) : sig
+  val jib_of_ast : Env.t -> Effects.side_effect_info -> typed_ast -> cdef list * Jib_compile.ctx
+  val compile_ast : Env.t -> Effects.side_effect_info -> string -> typed_ast -> string option * string
+end

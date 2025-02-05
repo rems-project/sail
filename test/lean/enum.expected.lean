@@ -3,7 +3,8 @@ import Out.Sail.Sail
 open Sail
 
 inductive E where | A | B | C
-  deriving Inhabited
+  deriving Inhabited, DecidableEq
+
 open E
 
 abbrev SailM := StateM Unit
@@ -11,7 +12,7 @@ abbrev SailM := StateM Unit
 def undefined_E (lit : Unit) : SailM E := do
   sorry
 
-/-- Type quantifiers: arg_ : Int, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
+/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
 def E_of_num (arg_ : Nat) : E :=
   match arg_ with
   | 0 => A

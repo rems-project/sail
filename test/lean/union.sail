@@ -22,3 +22,8 @@ function is_none opt = match opt {
   MyNone()  => true
 }
 
+val use_is_none : forall ('a : Type). my_option('a) -> bool
+
+function use_is_none opt = {
+  is_none(opt)
+}
