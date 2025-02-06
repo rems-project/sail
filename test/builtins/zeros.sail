@@ -27,7 +27,7 @@ function main (() : unit) -> unit = {
   assert(zeros(128) == 128^0x0);
   assert(zeros(15)  == 15^0x0);
   assert(zeros(16)  == 16^0x0);
-  assert(zeros(2)   == 2^0x0);
+  assert(zeros(2)   == 02^0x0);
   assert(zeros(24)  == 24^0x0);
   assert(zeros(25)  == 25^0x0);
   assert(zeros(3)   == 3^0x0);

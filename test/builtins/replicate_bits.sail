@@ -14,7 +14,7 @@ function main (() : unit) -> unit = {
   assert(replicate_bits(1^0x0, 14) == 14^0x0, "replicate_bits(1^0x0, 14) == 14^0x0");
   assert(replicate_bits(1^0x0, 16) == 16^0x0, "replicate_bits(1^0x0, 16) == 16^0x0");
   assert(replicate_bits(1^0x0, 18) == 18^0x0, "replicate_bits(1^0x0, 18) == 18^0x0");
-  assert(replicate_bits(1^0x0, 2) == 2^0x0, "replicate_bits(1^0x0, 2) == 2^0x0");
+  assert(replicate_bits(1^0x0, 2) == 02^0x0, "replicate_bits(1^0x0, 2) == 02^0x0");
   assert(replicate_bits(1^0x0, 20) == 20^0x0, "replicate_bits(1^0x0, 20) == 20^0x0");
   assert(replicate_bits(1^0x0, 21) == 21^0x0, "replicate_bits(1^0x0, 21) == 21^0x0");
   assert(replicate_bits(1^0x0, 22) == 22^0x0, "replicate_bits(1^0x0, 22) == 22^0x0");
@@ -54,7 +54,7 @@ function main (() : unit) -> unit = {
   assert(replicate_bits(1^0x0, 8) == 8^0x0, "replicate_bits(1^0x0, 8) == 8^0x0");
   assert(replicate_bits(1^0x1, 1) == 1^0x1, "replicate_bits(1^0x1, 1) == 1^0x1");
   assert(replicate_bits(1^0x1, 16) == 16^0xffff, "replicate_bits(1^0x1, 16) == 16^0xffff");
-  assert(replicate_bits(1^0x1, 2) == 2^0x3, "replicate_bits(1^0x1, 2) == 2^0x3");
+  assert(replicate_bits(1^0x1, 2) == 02^0x3, "replicate_bits(1^0x1, 2) == 02^0x3");
   assert(replicate_bits(1^0x1, 3) == 3^0x7, "replicate_bits(1^0x1, 3) == 3^0x7");
   assert(replicate_bits(1^0x1, 32) == 32^0xffffffff, "replicate_bits(1^0x1, 32) == 32^0xffffffff");
   assert(replicate_bits(1^0x1, 36) == 36^0xfffffffff, "replicate_bits(1^0x1, 36) == 36^0xfffffffff");
@@ -70,10 +70,10 @@ function main (() : unit) -> unit = {
   assert(replicate_bits(16^0xff, 4) == 64^0xff00ff00ff00ff, "replicate_bits(16^0xff, 4) == 64^0xff00ff00ff00ff");
   assert(replicate_bits(16^0xff00, 4) == 64^0xff00ff00ff00ff00, "replicate_bits(16^0xff00, 4) == 64^0xff00ff00ff00ff00");
   assert(replicate_bits(16^0xffff, 4) == 64^0xffffffffffffffff, "replicate_bits(16^0xffff, 4) == 64^0xffffffffffffffff");
-  assert(replicate_bits(2^0x0, 32) == 64^0x0, "replicate_bits(2^0x0, 32) == 64^0x0");
-  assert(replicate_bits(2^0x1, 32) == 64^0x5555555555555555, "replicate_bits(2^0x1, 32) == 64^0x5555555555555555");
-  assert(replicate_bits(2^0x2, 32) == 64^0xaaaaaaaaaaaaaaaa, "replicate_bits(2^0x2, 32) == 64^0xaaaaaaaaaaaaaaaa");
-  assert(replicate_bits(2^0x3, 32) == 64^0xffffffffffffffff, "replicate_bits(2^0x3, 32) == 64^0xffffffffffffffff");
+  assert(replicate_bits(02^0x0, 32) == 64^0x0, "replicate_bits(02^0x0, 32) == 64^0x0");
+  assert(replicate_bits(02^0x1, 32) == 64^0x5555555555555555, "replicate_bits(02^0x1, 32) == 64^0x5555555555555555");
+  assert(replicate_bits(02^0x2, 32) == 64^0xaaaaaaaaaaaaaaaa, "replicate_bits(02^0x2, 32) == 64^0xaaaaaaaaaaaaaaaa");
+  assert(replicate_bits(02^0x3, 32) == 64^0xffffffffffffffff, "replicate_bits(02^0x3, 32) == 64^0xffffffffffffffff");
   assert(replicate_bits(32^0x0, 2) == 64^0x0, "replicate_bits(32^0x0, 2) == 64^0x0");
   assert(replicate_bits(32^0xffff, 2) == 64^0xffff0000ffff, "replicate_bits(32^0xffff, 2) == 64^0xffff0000ffff");
   assert(replicate_bits(32^0xffff0000, 2) == 64^0xffff0000ffff0000, "replicate_bits(32^0xffff0000, 2) == 64^0xffff0000ffff0000");

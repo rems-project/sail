@@ -65,8 +65,8 @@ function main (() : unit) -> unit = {
   assert(get_slice_int(1, 6, 6) == 1^0x0, "get_slice_int(1, 6, 6) == 1^0x0");
   assert(get_slice_int(1, 7, 6) == 1^0x0, "get_slice_int(1, 7, 6) == 1^0x0");
   assert(get_slice_int(11, 1024, 0) == 11^0x400, "get_slice_int(11, 1024, 0) == 11^0x400");
-  assert(get_slice_int(2, 1, 0) == 2^0x1, "get_slice_int(2, 1, 0) == 2^0x1");
-  assert(get_slice_int(2, 3, 0) == 2^0x3, "get_slice_int(2, 3, 0) == 2^0x3");
+  assert(get_slice_int(2, 1, 0) == 02^0x1, "get_slice_int(2, 1, 0) == 02^0x1");
+  assert(get_slice_int(2, 3, 0) == 02^0x3, "get_slice_int(2, 3, 0) == 02^0x3");
   assert(get_slice_int(3, 0, 0) == 3^0x0, "get_slice_int(3, 0, 0) == 3^0x0");
   assert(get_slice_int(3, 1, 0) == 3^0x1, "get_slice_int(3, 1, 0) == 3^0x1");
   assert(get_slice_int(3, 2, 0) == 3^0x2, "get_slice_int(3, 2, 0) == 3^0x2");

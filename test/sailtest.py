@@ -36,16 +36,16 @@ def get_sail_dir():
         return os.environ['SAIL_DIR']
     except KeyError:
         try:
-            p = subprocess.run(["opam", "var", "sail:share"], capture_output=True, text=True)
+            p = subprocess.run(["sail", "--dir"], capture_output=True, text=True)
         except Exception as e:
-            print('{}Unable to get Sail library directory from opam{}'.format(color.FAIL, color.END))
+            print('{}Unable to get Sail library directory from sail{}'.format(color.FAIL, color.END))
             print(e)
             sys.exit(1)
 
         if p.returncode == 0:
             return p.stdout.strip()
         else:
-            print('{}Unable to get Sail library directory from opam{}'.format(color.FAIL, color.END))
+            print('{}Unable to get Sail library directory from sail{}'.format(color.FAIL, color.END))
             print('{}stdout{}:'.format(color.NOTICE, color.END))
             print(p.stdout)
             print('{}stderr{}:'.format(color.NOTICE, color.END))

@@ -5,8 +5,8 @@ $include <flow.sail>
 $include <vector_dec.sail>
 
 function main (() : unit) -> unit = {
-  assert(set_slice_bits(2, 1, 2^0x0, 0, 1^0x0) == 2^0x0, "set_slice_bits(2, 1, 2^0x0, 0, 1^0x0) == 2^0x0");
-  assert(set_slice_bits(2, 1, 2^0x0, 1, 1^0x0) == 2^0x0, "set_slice_bits(2, 1, 2^0x0, 1, 1^0x0) == 2^0x0");
+  assert(set_slice_bits(2, 1, 02^0x0, 0, 1^0x0) == 02^0x0, "set_slice_bits(2, 1, 02^0x0, 0, 1^0x0) == 02^0x0");
+  assert(set_slice_bits(2, 1, 02^0x0, 1, 1^0x0) == 02^0x0, "set_slice_bits(2, 1, 02^0x0, 1, 1^0x0) == 02^0x0");
   assert(set_slice_bits(25, 16, 25^0x0, 0, 16^0x9) == 25^0x9, "set_slice_bits(25, 16, 25^0x0, 0, 16^0x9) == 25^0x9");
   assert(set_slice_bits(3, 1, 3^0x0, 0, 1^0x1) == 3^0x1, "set_slice_bits(3, 1, 3^0x0, 0, 1^0x1) == 3^0x1");
   assert(set_slice_bits(3, 1, 3^0x0, 1, 1^0x0) == 3^0x0, "set_slice_bits(3, 1, 3^0x0, 1, 1^0x0) == 3^0x0");
@@ -315,9 +315,9 @@ function main (() : unit) -> unit = {
   assert(set_slice_bits(32, 16, 32^0x18, 16, 16^0x5) == 32^0x50018, "set_slice_bits(32, 16, 32^0x18, 16, 16^0x5) == 32^0x50018");
   assert(set_slice_bits(32, 16, undefined, 0, 16^0x0) == 32^0x0, "set_slice_bits(32, 16, undefined, 0, 16^0x0) == 32^0x0");
   assert(set_slice_bits(32, 17, 32^0x0, 8, 17^0x0) == 32^0x0, "set_slice_bits(32, 17, 32^0x0, 8, 17^0x0) == 32^0x0");
-  assert(set_slice_bits(32, 2, 32^0x0, 0, 2^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 0, 2^0x0) == 32^0x0");
-  assert(set_slice_bits(32, 2, 32^0x0, 10, 2^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 10, 2^0x0) == 32^0x0");
-  assert(set_slice_bits(32, 2, 32^0x0, 12, 2^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 12, 2^0x0) == 32^0x0");
+  assert(set_slice_bits(32, 2, 32^0x0, 0, 02^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 0, 02^0x0) == 32^0x0");
+  assert(set_slice_bits(32, 2, 32^0x0, 10, 02^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 10, 02^0x0) == 32^0x0");
+  assert(set_slice_bits(32, 2, 32^0x0, 12, 02^0x0) == 32^0x0, "set_slice_bits(32, 2, 32^0x0, 12, 02^0x0) == 32^0x0");
   assert(set_slice_bits(32, 28, 32^0x0, 4, 28^0x0) == 32^0x0, "set_slice_bits(32, 28, 32^0x0, 4, 28^0x0) == 32^0x0");
   assert(set_slice_bits(32, 28, 32^0x2, 4, 28^0x0) == 32^0x2, "set_slice_bits(32, 28, 32^0x2, 4, 28^0x0) == 32^0x2");
   assert(set_slice_bits(32, 28, undefined, 4, 28^0x0) == 32^0x0, "set_slice_bits(32, 28, undefined, 4, 28^0x0) == 32^0x0");
@@ -544,8 +544,8 @@ function main (() : unit) -> unit = {
   assert(set_slice_bits(64, 16, 64^0x10, 16, 16^0x0) == 64^0x10, "set_slice_bits(64, 16, 64^0x10, 16, 16^0x0) == 64^0x10");
   assert(set_slice_bits(64, 16, 64^0x10, 32, 16^0x0) == 64^0x10, "set_slice_bits(64, 16, 64^0x10, 32, 16^0x0) == 64^0x10");
   assert(set_slice_bits(64, 16, 64^0x10, 48, 16^0x0) == 64^0x10, "set_slice_bits(64, 16, 64^0x10, 48, 16^0x0) == 64^0x10");
-  assert(set_slice_bits(64, 2, 64^0x0, 34, 2^0x0) == 64^0x0, "set_slice_bits(64, 2, 64^0x0, 34, 2^0x0) == 64^0x0");
-  assert(set_slice_bits(64, 2, 64^0x0, 8, 2^0x0) == 64^0x0, "set_slice_bits(64, 2, 64^0x0, 8, 2^0x0) == 64^0x0");
+  assert(set_slice_bits(64, 2, 64^0x0, 34, 02^0x0) == 64^0x0, "set_slice_bits(64, 2, 64^0x0, 34, 02^0x0) == 64^0x0");
+  assert(set_slice_bits(64, 2, 64^0x0, 8, 02^0x0) == 64^0x0, "set_slice_bits(64, 2, 64^0x0, 8, 02^0x0) == 64^0x0");
   assert(set_slice_bits(64, 20, 64^0x0, 44, 20^0x0) == 64^0x0, "set_slice_bits(64, 20, 64^0x0, 44, 20^0x0) == 64^0x0");
   assert(set_slice_bits(64, 21, 64^0xa200023, 0, 21^0x23) == 64^0xa200023, "set_slice_bits(64, 21, 64^0xa200023, 0, 21^0x23) == 64^0xa200023");
   assert(set_slice_bits(64, 21, undefined, 0, 21^0x23) == 64^0x23, "set_slice_bits(64, 21, undefined, 0, 21^0x23) == 64^0x23");
