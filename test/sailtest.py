@@ -113,8 +113,8 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step(string, expected_status=0):
-    p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+def step(string, expected_status=0, cwd=None):
+    p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
     if status != expected_status:
