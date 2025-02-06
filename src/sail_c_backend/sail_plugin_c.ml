@@ -48,13 +48,19 @@ open Libsail
 
 open Interactive.State
 
+let opt_branch_coverage = ref None
+let opt_build = ref false
 let opt_generate_header = ref false
 let opt_includes_c : string list ref = ref []
 let opt_includes_h : string list ref = ref []
+let opt_no_lib = ref false
+let opt_no_main = ref false
+let opt_no_rts = ref false
 let opt_specialize_c = ref false
 
 let c_options =
   [
+    (Flag.create ~prefix:["c"] "build", Arg.Set opt_build, "build the generated C output automatically");
     ( Flag.create ~prefix:["c"] ~arg:"filename" "include",
       Arg.String (fun i -> opt_includes_c := i :: !opt_includes_c),
       "provide additional include for C output"
@@ -63,10 +69,10 @@ let c_options =
       Arg.String (fun i -> opt_includes_c := i :: !opt_includes_h),
       "provide additional include for C header output"
     );
-    (Flag.create ~prefix:["c"] "no_main", Arg.Set C_backend.opt_no_main, "do not generate the main() function");
-    (Flag.create ~prefix:["c"] "no_rts", Arg.Set C_backend.opt_no_rts, "do not include the Sail runtime");
+    (Flag.create ~prefix:["c"] "no_main", Arg.Set opt_no_main, "do not generate the main() function");
+    (Flag.create ~prefix:["c"] "no_rts", Arg.Set opt_no_rts, "do not include the Sail runtime");
     ( Flag.create ~prefix:["c"] "no_lib",
-      Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
+      Arg.Tuple [Arg.Set opt_no_lib; Arg.Set opt_no_rts],
       "do not include the Sail runtime or library"
     );
     ( Flag.create ~prefix:["c"] ~arg:"prefix" "prefix",
@@ -92,7 +98,7 @@ let c_options =
       "remove comma separated list of functions from C output, replacing them with unit"
     );
     ( Flag.create ~prefix:["c"] ~arg:"file" "coverage",
-      Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
+      Arg.String (fun str -> opt_branch_coverage := Some (open_out str)),
       "Turn on coverage tracking and output information about all branches and functions to a file"
     );
     ( Flag.create ~prefix:["c"] ~hide_prefix:true "O",
@@ -101,7 +107,6 @@ let c_options =
           Arg.Set C_backend.optimize_primops;
           Arg.Set C_backend.optimize_hoist_allocations;
           Arg.Set Initial_check.opt_fast_undefined;
-          Arg.Set C_backend.optimize_struct_updates;
           Arg.Set C_backend.optimize_alias;
         ],
       "turn on optimizations for C compilation"
@@ -151,11 +156,15 @@ let c_rewrites =
     ("constant_fold", [String_arg "c"]);
   ]
 
-let c_target out_file { ast; effect_info; env; _ } =
+let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
   let module Codegen = C_backend.Codegen (struct
     let generate_header = !opt_generate_header
     let includes = !opt_includes_c
     let header_includes = !opt_includes_h
+    let no_main = !opt_no_main
+    let no_lib = !opt_no_lib
+    let no_rts = !opt_no_rts
+    let branch_coverage = !opt_branch_coverage
   end) in
   Reporting.opt_warnings := true;
   let echo_output, basename = match out_file with Some f -> (false, f) | None -> (true, "out") in
@@ -182,6 +191,13 @@ let c_target out_file { ast; effect_info; env; _ } =
        option to specify a file name";
     output_string stdout impl;
     flush stdout
+  );
+
+  if !opt_build then (
+    let sail_dir = Reporting.get_sail_dir default_sail_dir in
+    let cmd = Printf.sprintf "%s -lgmp -I '%s'/lib '%s'/lib/*.c %s.c -o %s" "gcc" sail_dir sail_dir basename basename in
+    let _ = Unix.system cmd in
+    ()
   )
 
 let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
