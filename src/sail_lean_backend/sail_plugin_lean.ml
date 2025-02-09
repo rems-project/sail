@@ -85,6 +85,10 @@ let lean_options =
       Arg.Unit (fun () -> opt_lean_force_output := true),
       "removes the content of the output directory if it is non-empty"
     );
+    ( Flag.create ~prefix:["lean"] ~arg:"typename" "extern_type",
+      Arg.String Pretty_print_lean.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
+      "do not generate a definition for the type"
+    );
   ]
 
 (* TODO[javra]: Currently these are the same as the Coq rewrites, we might want to change them. *)

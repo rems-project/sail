@@ -158,4 +158,53 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
   x + BitVec.ofInt w i
 
 end BitVec
+
+section concurrency_interface
+
+inductive Access_variety where
+| AV_plain
+| AV_exclusive
+| AV_atomic_rmw
+open Access_variety (AV_plain AV_exclusive AV_atomic_rmw)
+
+inductive Access_strength where
+| AS_normal
+| AS_rel_or_acq
+| AS_acq_rcpc
+export Access_strength(AS_normal AS_rel_or_acq AS_acq_rcpc)
+
+structure Explicit_accessKind where
+  variety : AccessVariety
+  strength : AccessStrength
+
+inductive Access_kind (arch : Type) where
+  | AK_explicit (_ : Explicit_access_kind)
+  | AK_ifetch (_ : Unit)
+  | AK_ttw (_ : Unit)
+  | AK_arch (_ : arch)
+export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
+
+structure Mem_read_request
+  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
+  access_kind : Access_kind k_arch_ak
+  va : (Option (BitVec k_vasize))
+  pa : k_pa
+  translation : k_ts
+  size : Int
+  tag : Bool
+
+structure Mem_write_request
+  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
+  access_kind : Access_kind k_arch_ak
+  va : (Option (BitVec k_vasize))
+  pa : k_pa
+  translation : k_ts
+  size : Int
+  value : (Option (BitVec (8 * k_n)))
+  tag : (Option Bool)
+
+def sail_mem_write (req : Mem_write_request n vasize pa ts arch) :  PreSailM RegisterType (Result (Option Bool) A.abort) e
+
+end concurrency_interface
+
 end Sail
