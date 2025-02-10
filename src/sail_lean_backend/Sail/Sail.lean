@@ -153,7 +153,6 @@ export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
 inductive Result (α : Type) (β : Type) where
   | Ok (_ : α)
   | Err (_ : β)
-deriving Hashable
 export Result(Ok Err)
 
 structure Mem_read_request
