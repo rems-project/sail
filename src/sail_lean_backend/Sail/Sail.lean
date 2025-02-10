@@ -1,4 +1,5 @@
 import Std.Data.DHashMap
+import Std.Data.HashMap
 namespace Sail
 
 section Regs
@@ -56,13 +57,14 @@ class Arch where
 inductive Error where
   | Exit
   | Unreachable
+  | UninitializedMemory
   | Assertion (s : String)
 open Error
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
   choiceState : c.α
-  mem : Unit
+  mem : Std.HashMap Nat (BitVec 8)
   tags : Unit
 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
@@ -172,9 +174,42 @@ structure Mem_write_request
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
 
-def sail_mem_write [Arch] (req : Mem_write_request n vasize pa ts arch) : PreSailM RegisterType (Result (Option Bool) Arch.abort) := sorry
+def write_byte (value : BitVec 8) (addr : Nat) : PreSailM RegisterType c PUnit := do
+  modify fun s => { s with mem := s.mem.insert addr value }
+  pure ()
 
-def sail_mem_read [Arch] (req : Mem_read_request n vasize pa ts arch) : PreSailM RegisterType (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := sorry
+def write_bytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
+  let list := List.ofFn (λ i : Fin n => (value.extractLsb' (8 * i) 8, addr + i))
+  List.forM list (λ (v, a) => write_byte v a)
+  pure true
+
+def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result (Option Bool) Arch.abort) := do
+  let addr := req.pa.toNat
+  let b ← match req.value with
+    | some v => write_bytes addr v
+    | none => pure true
+  pure (Ok (some b))
+
+def read_byte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
+  let .some s := (← get).mem.get? addr
+    | throw UninitializedMemory
+  pure s
+
+def read_bytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
+  match size with
+  | 0 => pure (default, some true)
+  | n+1 => do
+      let b ← read_byte addr
+      let (bytes, _) ← read_bytes n (addr+1)
+      have h : 8 + 8 * n = 8 * (n + 1) := by omega
+      return (h ▸  b.append bytes, some true)
+
+def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
+  let addr := req.pa.toNat
+  let value ← read_bytes n addr
+  pure (Ok value)
+
+def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
 
 end concurrency_interface
 
