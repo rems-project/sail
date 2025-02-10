@@ -26,14 +26,14 @@ inductive my_option (k_a : Type) where
 
 open my_option
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def undefined_rectangle (lit : Unit) : SailM rectangle := do
-  (pure { width := sorry
-          height := sorry })
+  (pure { width := (← (undefined_int ()))
+          height := (← (undefined_int ())) })
 
 def undefined_circle (lit : Unit) : SailM circle := do
-  (pure { radius := sorry })
+  (pure { radius := (← (undefined_int ())) })
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : my_option k_a) : Bool :=

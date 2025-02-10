@@ -13,7 +13,7 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
   default := .Reg dummy
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 /-- Type quantifiers: k_ex824# : Bool -/
 def test_exit (b : Bool) : SailM Unit := do
@@ -27,5 +27,5 @@ def test_assert (b : Bool) : SailM (BitVec 1) := do
   (pure 1#1)
 
 def initialize_registers (lit : Unit) : SailM Unit := do
-  writeReg dummy sorry
+  writeReg dummy (← (undefined_bit ()))
 

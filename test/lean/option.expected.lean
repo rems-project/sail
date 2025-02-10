@@ -2,7 +2,7 @@ import Out.Sail.Sail
 
 open Sail
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def match_option (x : (Option (BitVec 1))) : (BitVec 1) :=
   match x with

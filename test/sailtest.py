@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser("run_tests.py")
 parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')
 parser.add_argument("--compact", help="Compact output.", action='store_true')
 parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
+parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
 args = parser.parse_args()
 
 def is_compact():
@@ -36,7 +37,7 @@ def get_sail_dir():
         return os.environ['SAIL_DIR']
     except KeyError:
         try:
-            p = subprocess.run(["opam", "var", "sail:share"], capture_output=True, text=True)
+            p = subprocess.run([get_sail(), "--dir"], capture_output=True, text=True)
         except Exception as e:
             print('{}Unable to get Sail library directory from opam{}'.format(color.FAIL, color.END))
             print(e)
@@ -45,7 +46,7 @@ def get_sail_dir():
         if p.returncode == 0:
             return p.stdout.strip()
         else:
-            print('{}Unable to get Sail library directory from opam{}'.format(color.FAIL, color.END))
+            print('{}Unable to get Sail library directory from sail --dir{}'.format(color.FAIL, color.END))
             print('{}stdout{}:'.format(color.NOTICE, color.END))
             print(p.stdout)
             print('{}stderr{}:'.format(color.NOTICE, color.END))
@@ -113,8 +114,8 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step(string, expected_status=0):
-    p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+def step_with_status(string, expected_status=0, cwd=None):
+    p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
     if status != expected_status:
@@ -127,6 +128,10 @@ def step(string, expected_status=0):
             print(out.decode('utf-8'))
             print('{}stderr{}:'.format(color.NOTICE, color.END))
             print(err.decode('utf-8'))
+    return status
+
+def step(string, expected_status=0, cwd=None):
+    if step_with_status(string, cwd=cwd) != expected_status:
         sys.exit(1)
 
 def banner(string):

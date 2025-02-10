@@ -77,7 +77,7 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 def GPRs : (Vector (RegisterRef RegisterType (BitVec 64)) 31) :=
   #v[Reg R30, Reg R29, Reg R28, Reg R27, Reg R26, Reg R25, Reg R24, Reg R23, Reg R22, Reg R21,
@@ -111,36 +111,36 @@ def monad_test (r : Nat) : SailM (BitVec 1) := do
        else (pure 0#1)
 
 def initialize_registers (lit : Unit) : SailM Unit := do
-  writeReg _PC sorry
-  writeReg R30 sorry
-  writeReg R29 sorry
-  writeReg R28 sorry
-  writeReg R27 sorry
-  writeReg R26 sorry
-  writeReg R25 sorry
-  writeReg R24 sorry
-  writeReg R23 sorry
-  writeReg R22 sorry
-  writeReg R21 sorry
-  writeReg R20 sorry
-  writeReg R19 sorry
-  writeReg R18 sorry
-  writeReg R17 sorry
-  writeReg R16 sorry
-  writeReg R15 sorry
-  writeReg R14 sorry
-  writeReg R13 sorry
-  writeReg R12 sorry
-  writeReg R11 sorry
-  writeReg R10 sorry
-  writeReg R9 sorry
-  writeReg R8 sorry
-  writeReg R7 sorry
-  writeReg R6 sorry
-  writeReg R5 sorry
-  writeReg R4 sorry
-  writeReg R3 sorry
-  writeReg R2 sorry
-  writeReg R1 sorry
-  writeReg R0 sorry
+  writeReg _PC (← (undefined_bitvector 64))
+  writeReg R30 (← (undefined_bitvector 64))
+  writeReg R29 (← (undefined_bitvector 64))
+  writeReg R28 (← (undefined_bitvector 64))
+  writeReg R27 (← (undefined_bitvector 64))
+  writeReg R26 (← (undefined_bitvector 64))
+  writeReg R25 (← (undefined_bitvector 64))
+  writeReg R24 (← (undefined_bitvector 64))
+  writeReg R23 (← (undefined_bitvector 64))
+  writeReg R22 (← (undefined_bitvector 64))
+  writeReg R21 (← (undefined_bitvector 64))
+  writeReg R20 (← (undefined_bitvector 64))
+  writeReg R19 (← (undefined_bitvector 64))
+  writeReg R18 (← (undefined_bitvector 64))
+  writeReg R17 (← (undefined_bitvector 64))
+  writeReg R16 (← (undefined_bitvector 64))
+  writeReg R15 (← (undefined_bitvector 64))
+  writeReg R14 (← (undefined_bitvector 64))
+  writeReg R13 (← (undefined_bitvector 64))
+  writeReg R12 (← (undefined_bitvector 64))
+  writeReg R11 (← (undefined_bitvector 64))
+  writeReg R10 (← (undefined_bitvector 64))
+  writeReg R9 (← (undefined_bitvector 64))
+  writeReg R8 (← (undefined_bitvector 64))
+  writeReg R7 (← (undefined_bitvector 64))
+  writeReg R6 (← (undefined_bitvector 64))
+  writeReg R5 (← (undefined_bitvector 64))
+  writeReg R4 (← (undefined_bitvector 64))
+  writeReg R3 (← (undefined_bitvector 64))
+  writeReg R2 (← (undefined_bitvector 64))
+  writeReg R1 (← (undefined_bitvector 64))
+  writeReg R0 (← (undefined_bitvector 64))
 

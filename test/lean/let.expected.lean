@@ -2,7 +2,7 @@ import Out.Sail.Sail
 
 open Sail
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def foo (lit : Unit) : (BitVec 16) :=
   let z := (HOr.hOr (0xFFFF : (BitVec 16)) (0xABCD : (BitVec 16)))

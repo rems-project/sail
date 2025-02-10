@@ -398,6 +398,14 @@ let wrap_with_pure (needs_return : bool) (d : document) =
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
 
+let get_fn_implicits (Typ_aux (t, _)) : bool list =
+  let arg_implicit arg =
+    match arg with
+    | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]), _) -> true
+    | _ -> false
+  in
+  match t with Typ_fn (args, cod) -> List.map arg_implicit args | _ -> []
+
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) -> string "| " ^^ doc_pat pat ^^ string " =>" ^^ space ^^ doc_exp as_monadic ctx branch
@@ -419,14 +427,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
       else wrap_with_pure as_monadic (doc_id_ctor id)
   | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
-  | E_app (Id_aux (Id "undefined_int", _), _) (* TODO remove when we handle imports *)
-  | E_app (Id_aux (Id "undefined_bit", _), _) (* TODO remove when we handle imports *)
-  | E_app (Id_aux (Id "undefined_bitvector", _), _) (* TODO remove when we handle imports *)
-  | E_app (Id_aux (Id "undefined_bool", _), _) (* TODO remove when we handle imports *)
-  | E_app (Id_aux (Id "undefined_nat", _), _) (* TODO remove when we handle imports *)
-  | E_app (Id_aux (Id "internal_pick", _), _) ->
-      (* TODO replace by actual implementation of internal_pick *)
-      string "sorry"
   | E_app (Id_aux (Id "None", _), _) -> string "none"
   | E_app (Id_aux (Id "Some", _), args) ->
       let d_id = string "some" in
@@ -446,11 +446,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       in
       nest 2 (e0_pp ^^ e1_pp) ^^ hardline ^^ e2_pp
   | E_app (f, args) ->
+      let _, f_typ = Env.get_val_spec f env in
+      let implicits = get_fn_implicits f_typ in
       let d_id =
         if Env.is_extern f env "lean" then string (Env.get_extern f env "lean")
         else doc_exp false ctx (E_aux (E_id f, (l, annot)))
       in
       let d_args = List.map d_of_arg args in
+      let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
       let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
       nest 2
         (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
@@ -466,8 +469,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
       let id_typ =
         match pat_is_plain_binder env lpat with
-        | Some (Some (Id_aux (Id id, _)), Some typ) -> string id ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
-        | Some (Some (Id_aux (Id id, _)), None) -> string id
+        | Some (Some (Id_aux (Id id, _)), Some typ) -> string (fix_id id) ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
+        | Some (Some (Id_aux (Id id, _)), None) -> string (fix_id id)
         | Some (None, _) -> string "x" (* TODO fresh name or wildcard instead of x *)
         | _ -> failwith "Let pattern not translatable yet."
       in
@@ -507,6 +510,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_ref id -> string "Reg " ^^ doc_id_ctor id
   | E_exit _ -> string "throw Error.Exit"
   | E_assert (e1, e2) -> string "assert " ^^ d_of_arg e1 ^^ space ^^ d_of_arg e2
+  | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e
@@ -722,7 +726,10 @@ let doc_reg_info env global registers =
     [register_enums registers; type_enum ctx registers; string "open RegisterRef"; inhabit_enum ctx type_map; empty]
 
 let doc_monad_abbrev (has_registers : bool) =
-  let pp_register_type = if has_registers then string "PreSailM RegisterType" else string "StateM Unit" in
+  let pp_register_type =
+    if has_registers then string "PreSailM RegisterType trivialChoiceSource"
+    else string "PreSailM PEmpty.elim trivialChoiceSource"
+  in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =

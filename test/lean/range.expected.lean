@@ -2,7 +2,7 @@ import Out.Sail.Sail
 
 open Sail
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 /-- Type quantifiers: x : Nat, 0 ≤ x ∧ x ≤ 31 -/
 def f_int (x : Nat) : Int :=

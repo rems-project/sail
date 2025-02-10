@@ -11,10 +11,10 @@ open e_test
 structure s_test where
   f : e_test
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def undefined_e_test (lit : Unit) : SailM e_test := do
-  sorry
+  (internal_pick [VAL])
 
 /-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 0 -/
 def e_test_of_num (arg_ : Nat) : e_test :=

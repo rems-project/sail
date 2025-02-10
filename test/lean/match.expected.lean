@@ -22,10 +22,10 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 def undefined_E (lit : Unit) : SailM E := do
-  sorry
+  (internal_pick [A, B, C])
 
 def match_enum (x : E) : (BitVec 1) :=
   match x with

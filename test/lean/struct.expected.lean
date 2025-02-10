@@ -19,11 +19,11 @@ structure Mem_write_request
   value : (Option (BitVec (8 * k_n)))
   tag : (Option Bool)
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def undefined_My_struct (lit : Unit) : SailM My_struct := do
-  (pure { field1 := sorry
-          field2 := sorry })
+  (pure { field1 := (← (undefined_int ()))
+          field2 := (← (undefined_bit ())) })
 
 def struct_field2 (s : My_struct) : (BitVec 1) :=
   s.field2

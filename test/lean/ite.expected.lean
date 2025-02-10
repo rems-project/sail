@@ -17,7 +17,7 @@ instance : Inhabited (RegisterRef RegisterType Bool) where
   default := .Reg B
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg R
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def elif (n : Nat) : (BitVec 1) :=
@@ -43,6 +43,6 @@ def monadic_lines (n : Nat) : SailM Unit := do
   else writeReg B b
 
 def initialize_registers (lit : Unit) : SailM Unit := do
-  writeReg R sorry
-  writeReg B sorry
+  writeReg R (← (undefined_nat ()))
+  writeReg B (← (undefined_bool ()))
 

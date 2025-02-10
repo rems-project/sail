@@ -2,7 +2,7 @@ import Out.Sail.Sail
 
 open Sail
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 /-- Type quantifiers: k_a : Type -/
 def foo (x : k_a) : (k_a × k_a) :=

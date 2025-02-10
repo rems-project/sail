@@ -15,10 +15,10 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 8)) where
   default := .Reg R
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 def undefined_cr_type (lit : Unit) : SailM (BitVec 8) := do
-  sorry
+  (undefined_bitvector 8)
 
 def Mk_cr_type (v : (BitVec 8)) : (BitVec 8) :=
   v

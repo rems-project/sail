@@ -31,17 +31,17 @@ instance : Inhabited (RegisterRef RegisterType Int) where
   default := .Reg INT
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg NAT
-abbrev SailM := PreSailM RegisterType
+abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
 def test (lit : Unit) : SailM Int := do
   writeReg INT (HAdd.hAdd (← readReg INT) 1)
   readReg INT
 
 def initialize_registers (lit : Unit) : SailM Unit := do
-  writeReg R0 sorry
-  writeReg R1 sorry
-  writeReg INT sorry
-  writeReg BOOL sorry
-  writeReg NAT sorry
-  writeReg BIT sorry
+  writeReg R0 (← (undefined_bitvector 64))
+  writeReg R1 (← (undefined_bitvector 64))
+  writeReg INT (← (undefined_int ()))
+  writeReg BOOL (← (undefined_bool ()))
+  writeReg NAT (← (undefined_nat ()))
+  writeReg BIT (← (undefined_bit ()))
 

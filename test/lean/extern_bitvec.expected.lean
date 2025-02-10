@@ -2,7 +2,7 @@ import Out.Sail.Sail
 
 open Sail
 
-abbrev SailM := StateM Unit
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 def extern_const (lit : Unit) : (BitVec 64) :=
   (0xFFFF000012340000 : (BitVec 64))

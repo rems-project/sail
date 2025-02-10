@@ -73,7 +73,7 @@ let opt_lean_output_dir : string option ref = ref None
 
 let opt_lean_force_output : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2025-01-22"
+let lean_version : string = "lean4:nightly-2025-02-05"
 
 let lean_options =
   [
