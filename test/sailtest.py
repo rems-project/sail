@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser("run_tests.py")
 parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')
 parser.add_argument("--compact", help="Compact output.", action='store_true')
 parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
+parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
 args = parser.parse_args()
 
 def is_compact():
@@ -113,7 +114,7 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step(string, expected_status=0, cwd=None):
+def step_with_status(string, expected_status=0, cwd=None):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
@@ -127,6 +128,10 @@ def step(string, expected_status=0, cwd=None):
             print(out.decode('utf-8'))
             print('{}stderr{}:'.format(color.NOTICE, color.END))
             print(err.decode('utf-8'))
+    return status
+
+def step(string, expected_status=0, cwd=None):
+    if step_with_status(string, cwd=cwd) != expected_status:
         sys.exit(1)
 
 def banner(string):
