@@ -42,7 +42,7 @@ def trivialChoiceSource : ChoiceSource where
     | .bitvector _ => 0
 class Arch where
   va_size : Nat
-  pa : Type
+  pa_size : Nat
   arch_ak : Type
   translation : Type
   abort : Type
@@ -51,6 +51,8 @@ class Arch where
   tlb_op : Type
   fault : Type
   sys_reg_id : Type
+
+abbrev Arch.pa [Arch] : Type := BitVec Arch.pa_size
 
 /- The Units are placeholders for a future implementation of the state monad some Sail functions use. -/
 inductive Error where
