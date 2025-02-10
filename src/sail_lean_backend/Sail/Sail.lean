@@ -249,5 +249,4 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
   x + BitVec.ofInt w i
 
 end BitVec
-
 end Sail
