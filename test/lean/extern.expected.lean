@@ -19,6 +19,24 @@ def extern_negate (_ : Unit) : Int :=
 def extern_mult (_ : Unit) : Int :=
   (HMul.hMul 5 4)
 
+def extern__shl8 (_ : Unit) : Int :=
+  (Int.shiftl 8 2)
+
+def extern__shl32 (_ : Unit) : Int :=
+  (Int.shiftl 32 1)
+
+def extern__shl1 (_ : Unit) : Int :=
+  (Int.shiftl 1 2)
+
+def extern__shl_int (_ : Unit) : Int :=
+  (Int.shiftl 4 2)
+
+def extern__shr32 (_ : Unit) : Int :=
+  (Int.shiftl 30 1)
+
+def extern__shr_int (_ : Unit) : Int :=
+  (Int.shiftr 8 2)
+
 def extern_tdiv (_ : Unit) : Int :=
   (Int.tdiv 5 4)
 

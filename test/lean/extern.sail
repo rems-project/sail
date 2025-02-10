@@ -25,6 +25,30 @@ function extern_mult() -> int = {
   return mult_int(5, 4)
 }
 
+function extern__shl8() -> int = {
+  return _shl8(8, 2)
+}
+
+function extern__shl32() -> int = {
+  return _shl32(32, 1)
+}
+
+function extern__shl1() -> int = {
+  return _shl1(1, 2)
+}
+
+function extern__shl_int() -> int = {
+  return _shl_int(4, 2)
+}
+
+function extern__shr32() -> int = {
+  return _shr32(30, 1)
+}
+
+function extern__shr_int() -> int = {
+  return _shr_int(8, 2)
+}
+
 function extern_tdiv() -> int = {
   return tdiv_int(5, 4)
 }
