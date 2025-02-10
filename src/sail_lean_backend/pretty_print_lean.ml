@@ -740,13 +740,38 @@ let doc_monad_abbrev (has_registers : bool) =
   in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
+let doc_instantiations ctx env =
+  let params = Monad_params.find_monad_parameters env in
+  match params with
+  | None -> empty
+  | Some params ->
+      nest 2
+        (separate hardline
+           [
+             string "instance : Arch where";
+             string "va_size := 64";
+             string "pa := " ^^ doc_typ ctx params.pa_type;
+             string "abort := " ^^ doc_typ ctx params.abort_type;
+             string "translation := " ^^ doc_typ ctx params.translation_summary_type;
+             string "fault := " ^^ doc_typ ctx params.fault_type;
+             string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
+             string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
+             string "barrier := " ^^ doc_typ ctx params.barrier_type;
+             string "arch_ak := " ^^ doc_typ ctx params.arch_ak_type;
+             string "sys_reg_id := " ^^ doc_typ ctx params.sys_reg_id_type ^^ hardline;
+           ]
+        )
+      ^^ hardline
+
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
   let global = { effect_info } in
+  let ctx = initial_context env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in
-  let types, fundefs = doc_defs (initial_context env global) defs in
-  print o (types ^^ register_refs ^^ monad ^^ fundefs);
+  let instantiations = doc_instantiations ctx env in
+  let types, fundefs = doc_defs ctx defs in
+  print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs);
   ()
