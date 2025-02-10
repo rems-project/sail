@@ -147,32 +147,34 @@ inductive Access_kind (arch : Type) where
   | AK_arch (_ : arch)
 export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
 
-inductive Result (k_a : Type) (k_b : Type) where
-  | Ok (_ : k_a)
-  | Err (_ : k_b)
+inductive Result (α : Type) (β : Type) where
+  | Ok (_ : α)
+  | Err (_ : β)
 deriving Hashable
 export Result(Ok Err)
 
 structure Mem_read_request
-  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
-  access_kind : Access_kind k_arch_ak
-  va : (Option (BitVec k_vasize))
-  pa : k_pa
-  translation : k_ts
+  (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
+  access_kind : Access_kind arch_ak
+  va : (Option (BitVec vasize))
+  pa : pa
+  translation : ts
   size : Int
   tag : Bool
 
 structure Mem_write_request
-  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
-  access_kind : Access_kind k_arch_ak
-  va : (Option (BitVec k_vasize))
-  pa : k_pa
-  translation : k_ts
+  (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
+  access_kind : Access_kind arch_ak
+  va : (Option (BitVec vasize))
+  pa : pa
+  translation : ts
   size : Int
-  value : (Option (BitVec (8 * k_n)))
+  value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
 
 def sail_mem_write [Arch] (req : Mem_write_request n vasize pa ts arch) : PreSailM RegisterType (Result (Option Bool) Arch.abort) := sorry
+
+def sail_mem_read [Arch] (req : Mem_read_request n vasize pa ts arch) : PreSailM RegisterType (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := sorry
 
 end concurrency_interface
 
