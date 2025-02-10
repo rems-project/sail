@@ -174,13 +174,13 @@ structure Mem_write_request
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
 
-def write_byte (value : BitVec 8) (addr : Nat) : PreSailM RegisterType c PUnit := do
+def write_byte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
   modify fun s => { s with mem := s.mem.insert addr value }
   pure ()
 
 def write_bytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
-  let list := List.ofFn (λ i : Fin n => (value.extractLsb' (8 * i) 8, addr + i))
-  List.forM list (λ (v, a) => write_byte v a)
+  let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
+  List.forM list (λ (a, v) => write_byte a v)
   pure true
 
 def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result (Option Bool) Arch.abort) := do
