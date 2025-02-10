@@ -668,9 +668,6 @@ let doc_val ctx pat exp =
   let base_pp = doc_exp false ctx exp in
   nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp))
 
-(* | DEF_type t_def ->
-      if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
-      else doc_typdef global generic_eq_types countable_types enum_number_defs t_def *)
 let rec doc_defs_rec ctx defs types docdefs =
   match defs with
   | [] -> (types, docdefs)

@@ -41,6 +41,7 @@ def trivialChoiceSource : ChoiceSource where
     | .string => ""
     | .fin _ => 0
     | .bitvector _ => 0
+
 class Arch where
   va_size : Nat
   pa : Type
@@ -198,11 +199,11 @@ def read_byte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
 def read_bytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
   match size with
   | 0 => pure (default, some true)
-  | n+1 => do
+  | n + 1 => do
       let b ← read_byte addr
       let (bytes, _) ← read_bytes n (addr+1)
       have h : 8 + 8 * n = 8 * (n + 1) := by omega
-      return (h ▸  b.append bytes, some true)
+      return (h ▸ b.append bytes, some true)
 
 def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
   let addr := req.pa.toNat
