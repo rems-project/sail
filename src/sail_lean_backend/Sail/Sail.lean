@@ -40,6 +40,17 @@ def trivialChoiceSource : ChoiceSource where
     | .string => ""
     | .fin _ => 0
     | .bitvector _ => 0
+class Arch where
+  va_size : Nat
+  pa : Type
+  arch_ak : Type
+  translation : Type
+  abort : Type
+  barrier : Type
+  cache_op : Type
+  tlb_op : Type
+  fault : Type
+  sys_reg_id : Type
 
 /- The Units are placeholders for a future implementation of the state monad some Sail functions use. -/
 inductive Error where
