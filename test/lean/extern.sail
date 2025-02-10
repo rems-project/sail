@@ -2,6 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 $include <generic_equality.sail>
+$include <mapping.sail>
 
 /* Testing arith.sail */
 
@@ -134,3 +135,8 @@ function extern_vector_update() -> vector(5, dec, int) = {
   vector_update([23, 23, 23, 23, 23], 2, 42)
 }
 
+/* Testing mapping.sail */
+
+function extern_string_take() -> string = {
+  return string_take("Hello, world", 5)
+}

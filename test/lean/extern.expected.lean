@@ -99,6 +99,9 @@ def extern_eq_anything (_ : Unit) : Bool :=
 def extern_vector_update (_ : Unit) : (Vector Int 5) :=
   (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
 
+def extern_string_take (_ : Unit) : String :=
+  (String.take "Hello, world" 5)
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 

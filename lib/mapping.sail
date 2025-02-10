@@ -51,7 +51,10 @@ $include <arith.sail>
 $include <option.sail>
 
 $[sv_function { types = "int #1" }]
-val string_take = pure "string_take" : (string, nat) -> string
+val string_take = pure {
+  lean: "String.take",
+  _: "string_take"
+}: (string, nat) -> string
 
 $[sv_function { types = "int #1" }]
 val string_drop = pure "string_drop" : (string, nat) -> string
