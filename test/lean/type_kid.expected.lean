@@ -8,6 +8,6 @@ abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 def foo (x : k_a) : (k_a × k_a) :=
   (x, x)
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

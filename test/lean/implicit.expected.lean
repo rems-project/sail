@@ -11,6 +11,6 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def foo (x : (BitVec 8)) : (BitVec 16) :=
   (EXTZ x)
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

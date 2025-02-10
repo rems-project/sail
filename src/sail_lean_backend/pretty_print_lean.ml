@@ -66,6 +66,7 @@ let pat_is_plain_binder env (P_aux (p, _)) =
   | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)), None)
   | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)), None)
   | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)), None)
+  | P_lit (L_aux (L_unit, _)) -> Some (Some (Id_aux (Id "_", Unknown)), None)
   | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)), None)
   | _ -> None
 

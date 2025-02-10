@@ -21,7 +21,7 @@ structure Mem_write_request
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
-def undefined_My_struct (lit : Unit) : SailM My_struct := do
+def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := (← (undefined_int ()))
           field2 := (← (undefined_bit ())) })
 
@@ -43,6 +43,6 @@ def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
 def undef_struct (x : (BitVec 1)) : SailM My_struct := do
   ((undefined_My_struct ()) : SailM My_struct)
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

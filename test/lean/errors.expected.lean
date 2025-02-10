@@ -26,6 +26,6 @@ def test_assert (b : Bool) : SailM (BitVec 1) := do
   assert b "b is false"
   (pure 1#1)
 
-def initialize_registers (lit : Unit) : SailM Unit := do
+def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg dummy (← (undefined_bit ()))
 
