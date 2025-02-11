@@ -24,6 +24,6 @@ def f_nnegvar (x : Nat) : Nat :=
 def f_unkn (x : Int) : Int :=
   x
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

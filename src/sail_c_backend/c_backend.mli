@@ -54,17 +54,6 @@ open Type_check
 (** Define generated functions as static *)
 val opt_static : bool ref
 
-(** Do not generate a main function *)
-val opt_no_main : bool ref
-
-(** Do not include rts.h (the runtime), and do not generate code
-   that requires any setup or teardown routines to be run by a runtime
-   before executing any instruction semantics. *)
-val opt_no_rts : bool ref
-
-(** Do not include sail.h by default *)
-val opt_no_lib : bool ref
-
 (** Ordinarily we use plain z-encoding to name-mangle generated Sail
    identifiers into a form suitable for C. If opt_prefix is set, then
    the "z" which is added on the front of each generated C function
@@ -87,21 +76,43 @@ val opt_extra_params : string option ref
 
 val opt_extra_arguments : string option ref
 
-val opt_branch_coverage : out_channel option ref
-
 (** Optimization flags *)
 
 val optimize_primops : bool ref
 val optimize_hoist_allocations : bool ref
-val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
 module type CODEGEN_CONFIG = sig
+  (** If this is true, then we will generate a separate header file,
+      otherwise a single C file will be generated without a header
+      file. *)
   val generate_header : bool
+
+  (** A list of includes for the generated C file *)
   val includes : string list
+
+  (** A list of includes for the generated header (if it is
+      created). *)
   val header_includes : string list
+
+  (** Do not generate a main function *)
+  val no_main : bool
+
+  (** Do not include sail.h automatically *)
+  val no_lib : bool
+
+  (** Do not include rts.h (the runtime), and do not generate code
+      that requires any setup or teardown routines to be run by a runtime
+      before executing any instruction semantics. *)
+  val no_rts : bool
+
+  (** If [Some channel], the generated C code will be instrumented to
+      track branch coverage information. Information about all the
+      possible branches will be written to the provided output
+      channel. *)
+  val branch_coverage : out_channel option
 end
 
 module Codegen (Config : CODEGEN_CONFIG) : sig

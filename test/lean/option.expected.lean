@@ -14,6 +14,6 @@ def option_match (x : (Option Unit)) (y : (BitVec 1)) : (Option (BitVec 1)) :=
   | some () => (some y)
   | none => none
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

@@ -54,7 +54,7 @@ $include <flow.sail>
 val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "HAdd.hAdd", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "Int.add",  _: "add_int"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "HAdd.hAdd", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
@@ -63,7 +63,7 @@ overload operator + = {add_atom, add_int}
 val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "HSub.hSub", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "Int.sub", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "HSub.hSub", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -77,18 +77,18 @@ val sub_nat = pure {
 
 // ***** Negation *****
 
-val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
+val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
 
-val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Int.neg", _: "neg_int"} : int -> int
+val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", _: "mult_int"} : forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "HMul.hMul", _: "mult_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "Int.mul", _: "mult_int"} : (int, int) -> int
+val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "HMul.hMul", _: "mult_int"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -195,15 +195,26 @@ val abs_int_plain = pure {
   interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
+  lean: "Sail.Int.intAbs",
   _: "abs_int"
 } : int -> int
 
 overload abs_int = {abs_int_plain}
 
-val max_int = pure {lem: "integerMax", coq: "Z.max", _: "max_int"} : forall 'x 'y.
+val max_int = pure {
+  lem: "integerMax",
+  coq: "Z.max",
+  lean: "Max.max",
+  _: "max_int"
+} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}
 
-val min_int = pure {lem: "integerMin", coq: "Z.min", _: "min_int"} : forall 'x 'y.
+val min_int = pure {
+  lem: "integerMin",
+  coq: "Z.min",
+  lean: "Min.min",
+  _: "min_int"
+} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}
 
 $endif

@@ -63,13 +63,10 @@ module Big_int = Nat_big_num
 
 let opt_static = ref false
 let static () = if !opt_static then "static " else ""
-let opt_no_main = ref false
-let opt_no_lib = ref false
 let opt_no_rts = ref false
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
-let opt_branch_coverage = ref None
 
 let extra_params () = match !opt_extra_params with Some str -> str ^ ", " | _ -> ""
 
@@ -78,7 +75,6 @@ let extra_arguments is_extern = match !opt_extra_arguments with Some str when no
 (* Optimization flags *)
 let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
-let optimize_struct_updates = ref false
 let optimize_alias = ref false
 let optimize_fixed_int = ref false
 let optimize_fixed_bits = ref false
@@ -872,14 +868,13 @@ let combine_variables = visit_cdefs (new Combine_variables.visitor)
 
 let concatMap f xs = List.concat (List.map f xs)
 
-let optimize recursive_functions cdefs =
+let optimize ~have_rts recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_alias then concatMap remove_alias else nothing)
   |> (if !optimize_alias then combine_variables else nothing)
   (* We need the runtime to initialize hoisted allocations *)
-  |>
-  if !optimize_hoist_allocations && not !opt_no_rts then concatMap (hoist_allocations recursive_functions) else nothing
+  |> if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing
 
 (**************************************************************************)
 (* 6. Code generation                                                     *)
@@ -2129,6 +2124,10 @@ module type CODEGEN_CONFIG = sig
   val generate_header : bool
   val includes : string list
   val header_includes : string list
+  val no_main : bool
+  val no_lib : bool
+  val no_rts : bool
+  val branch_coverage : out_channel option
 end
 
 module Codegen (Config : CODEGEN_CONFIG) = struct
@@ -2152,7 +2151,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let jib_of_ast env effect_info ast =
     let module Jibc = Make (C_config (struct
-      let branch_coverage = !opt_branch_coverage
+      let branch_coverage = Config.branch_coverage
     end)) in
     let env, effect_info = add_special_functions env effect_info in
     let ctx = initial_ctx env effect_info in
@@ -2165,7 +2164,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let cdefs = insert_heap_returns Bindings.empty cdefs in
 
       let recursive_functions = get_recursive_functions cdefs in
-      let cdefs = optimize recursive_functions cdefs in
+      let cdefs = optimize ~have_rts:(not Config.no_rts) recursive_functions cdefs in
 
       let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 
@@ -2175,15 +2174,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
            enabled, so it can set the output file with an option. *)
         let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
         let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
-        match !opt_branch_coverage with
-        | Some _ -> if !opt_no_rts then ([header], []) else ([header], [coverage_hook])
-        | None -> if !opt_no_rts then ([], []) else ([], [no_coverage_hook])
+        match Config.branch_coverage with
+        | Some _ -> if Config.no_rts then ([header], []) else ([header], [coverage_hook])
+        | None -> if Config.no_rts then ([], []) else ([], [no_coverage_hook])
       in
 
       let preamble in_header =
         separate hardline
-          ((if !opt_no_lib then [] else [string "#include \"sail.h\""])
-          @ (if !opt_no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
+          ((if Config.no_lib then [] else [string "#include \"sail.h\""])
+          @ (if Config.no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
           @ coverage_include
           @ ( if in_header then List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.header_includes
               else List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.includes
@@ -2265,7 +2264,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let model_pre_exit =
         (["void model_pre_exit()"; "{"]
         @
-        if Option.is_some !opt_branch_coverage then
+        if Option.is_some Config.branch_coverage then
           [
             "  if (sail_coverage_exit() != 0) {";
             "    fprintf(stderr, \"Could not write coverage information\\n\");";
@@ -2300,7 +2299,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             cdefs
         in
         separate hardline
-          ( if !opt_no_main then []
+          ( if Config.no_main then []
             else
               List.map string
                 (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
@@ -2319,7 +2318,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           (preamble false
           ^^ (if Config.generate_header then hardline ^^ Printf.ksprintf string "#include \"%s.h\"" basename else empty)
           ^^ hlhl ^^ docs ^^ hlhl
-          ^^ ( if not !opt_no_rts then
+          ^^ ( if not Config.no_rts then
                  model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
                else empty
              )

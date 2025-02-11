@@ -28,11 +28,11 @@ open my_option
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
-def undefined_rectangle (lit : Unit) : SailM rectangle := do
+def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := (← (undefined_int ()))
           height := (← (undefined_int ())) })
 
-def undefined_circle (lit : Unit) : SailM circle := do
+def undefined_circle (_ : Unit) : SailM circle := do
   (pure { radius := (← (undefined_int ())) })
 
 /-- Type quantifiers: k_a : Type -/
@@ -45,6 +45,6 @@ def is_none (opt : my_option k_a) : Bool :=
 def use_is_none (opt : my_option k_a) : Bool :=
   (is_none opt)
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

@@ -18,6 +18,6 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def EXTS {m : _} (v : (BitVec k_n)) : (BitVec m) :=
   (Sail.BitVec.signExtend v m)
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

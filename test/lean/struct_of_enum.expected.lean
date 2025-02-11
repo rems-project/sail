@@ -13,7 +13,7 @@ structure s_test where
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
-def undefined_e_test (lit : Unit) : SailM e_test := do
+def undefined_e_test (_ : Unit) : SailM e_test := do
   (internal_pick [VAL])
 
 /-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 0 -/
@@ -25,9 +25,9 @@ def num_of_e_test (arg_ : e_test) : Int :=
   match arg_ with
   | VAL => 0
 
-def undefined_s_test (lit : Unit) : SailM s_test := do
+def undefined_s_test (_ : Unit) : SailM s_test := do
   (pure { f := (← (undefined_e_test ())) })
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

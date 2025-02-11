@@ -4,9 +4,9 @@ open Sail
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
-def foo (lit : Unit) : Bool :=
+def foo (_ : Unit) : Bool :=
   true
 
-def initialize_registers (lit : Unit) : Unit :=
+def initialize_registers (_ : Unit) : Unit :=
   ()
 

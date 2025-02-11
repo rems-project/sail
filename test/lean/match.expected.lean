@@ -24,7 +24,7 @@ instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
 abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
-def undefined_E (lit : Unit) : SailM E := do
+def undefined_E (_ : Unit) : SailM E := do
   (internal_pick [A, B, C])
 
 def match_enum (x : E) : (BitVec 1) :=
@@ -55,7 +55,17 @@ def match_reg (x : E) : SailM E := do
   | B => readReg r_B
   | C => readReg r_C
 
-def initialize_registers (lit : Unit) : SailM Unit := do
+/-- Type quantifiers: y : Int -/
+def match_let (x : E) (y : Int) : SailM Int := do
+  match x with
+  | A =>
+    let x := (HAdd.hAdd y y)
+    let z := (HAdd.hAdd (HAdd.hAdd y y) (← (undefined_int ())))
+    (pure (HAdd.hAdd z x))
+  | B => (pure 42)
+  | C => (pure 23)
+
+def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))
   writeReg r_B (← (undefined_E ()))
   writeReg r_C (← (undefined_E ()))

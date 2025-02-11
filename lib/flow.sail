@@ -55,13 +55,12 @@ therefore be included in just about every Sail specification.
 
 */
 
-val eq_unit : (unit, unit) -> bool(true)
+val eq_unit = pure { lean : "Eq", _ : "eq_unit" } : (unit, unit) -> bool(true)
+function eq_unit(_, _) = true
 
 val eq_bit = pure { lem : "eq", lean : "Eq", _ : "eq_bit" } : (bit, bit) -> bool
 
-function eq_unit(_, _) = true
-
-val not_bool = pure {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
+val not_bool = pure {coq: "negb", lean: "Bool.not", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
 /* NB: There are special cases in Sail for effectful uses of and_bool and
    or_bool that are not shown here. */
 
@@ -81,10 +80,10 @@ function neq_int (x, y) = not_bool(eq_int(x, y))
 val neq_bool : (bool, bool) -> bool
 function neq_bool (x, y) = not_bool(eq_bool(x, y))
 
-val lteq_int = pure {coq: "Z.leb", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
-val gteq_int = pure {coq: "Z.geb", _:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
-val lt_int = pure {coq: "Z.ltb", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
-val gt_int = pure {coq: "Z.gtb", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
+val lteq_int = pure {coq: "Z.leb", lean: "LE.le", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
+val gteq_int = pure {coq: "Z.geb", lean: "GE.ge",_:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
+val lt_int = pure {coq: "Z.ltb", lean: "LT.lt", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
+val gt_int = pure {coq: "Z.gtb", lean: "GT.gt", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
 
 overload operator == = {eq_int, eq_bit, eq_bool, eq_unit}
 overload operator != = {neq_int, neq_bool}

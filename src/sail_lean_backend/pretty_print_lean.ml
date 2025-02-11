@@ -69,6 +69,7 @@ let pat_is_plain_binder env (P_aux (p, _)) =
   | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)), None)
   | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)), None)
   | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)), None)
+  | P_lit (L_aux (L_unit, _)) -> Some (Some (Id_aux (Id "_", Unknown)), None)
   | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)), None)
   | _ -> None
 
@@ -411,7 +412,8 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
-  | Pat_exp (pat, branch) -> string "| " ^^ doc_pat pat ^^ string " =>" ^^ space ^^ doc_exp as_monadic ctx branch
+  | Pat_exp (pat, branch) ->
+      group (nest 2 (string "| " ^^ doc_pat pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =

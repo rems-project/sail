@@ -17,7 +17,7 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 8)) where
   default := .Reg R
 abbrev SailM := PreSailM RegisterType trivialChoiceSource
 
-def undefined_cr_type (lit : Unit) : SailM (BitVec 8) := do
+def undefined_cr_type (_ : Unit) : SailM (BitVec 8) := do
   (undefined_bitvector 8)
 
 def Mk_cr_type (v : (BitVec 8)) : (BitVec 8) :=
@@ -83,6 +83,6 @@ def _set_cr_type_LT (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVec
   let r := (← (reg_deref r_ref))
   writeRegRef r_ref (_update_cr_type_LT r v)
 
-def initialize_registers (lit : Unit) : SailM Unit := do
+def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_cr_type ()))
 
