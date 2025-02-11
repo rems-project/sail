@@ -153,8 +153,15 @@ let lean_rewrites =
     ("attach_effects", []);
   ]
 
-let create_lake_project (out_name : string) default_sail_dir =
-  (* Change the base directory if the option '--lean-output-dir' is set *)
+type lean_context = {
+  out_name : string;
+  out_name_camel : string;
+  sail_dir : string;
+  main_file : out_channel;
+  lakefile : out_channel;
+}
+
+let start_lean_output (out_name : string) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
   if !opt_lean_force_output && Sys.file_exists project_dir && Sys.is_directory project_dir then (
@@ -167,35 +174,44 @@ let create_lake_project (out_name : string) default_sail_dir =
   output_string gitignore "/.lake";
   close_out gitignore;
   let lean_toolchain = open_out (Filename.concat project_dir "lean-toolchain") in
-  (* Set the Lean version *)
   output_string lean_toolchain ("leanprover/" ^ lean_version);
   close_out lean_toolchain;
-  (* Camel-case the output name *)
+  let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
-  let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
-  output_string lakefile
-    ("name = \"" ^ out_name ^ "\"\ndefaultTargets = [\"" ^ out_name_camel ^ "\"]\n\n[[lean_lib]]\nname = \""
-   ^ out_name_camel ^ "\""
-    );
-  close_out lakefile;
   let lean_src_dir = Filename.concat project_dir out_name_camel in
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
-  let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let _ =
     Unix.system
       ("cp -r " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail") ^ " " ^ Filename.quote lean_src_dir)
   in
-  let project_main = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
-  output_string project_main ("import " ^ out_name_camel ^ ".Sail.Sail\n\n");
-  output_string project_main "open Sail\n\n";
-  project_main
+  let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
+  output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n\n");
+  output_string main_file "open Sail\n\n";
+  let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
+  { out_name; out_name_camel; sail_dir; main_file; lakefile }
+
+let close_context ctx =
+  close_out ctx.main_file;
+  close_out ctx.lakefile
+
+let create_lake_project (ctx : lean_context) executable =
+  (* Change the base directory if the option '--lean-output-dir' is set *)
+  output_string ctx.lakefile
+    ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel ^ "\"]\n\n[[lean_lib]]\nname = \""
+   ^ ctx.out_name_camel ^ "\""
+    );
+  if executable then (
+    output_string ctx.lakefile "\n\n[[lean_exe]]\n";
+    output_string ctx.lakefile "name = \"run\"\n";
+    output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
+  )
 
 let output (out_name : string) env effect_info ast default_sail_dir =
-  let project_main = create_lake_project out_name default_sail_dir in
-  (* Uncomment for debug output of the Sail code after the rewrite passes *)
-  (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
-  Pretty_print_lean.pp_ast_lean env effect_info ast project_main;
-  close_out project_main
+  let ctx = start_lean_output out_name default_sail_dir in
+  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.main_file in
+  create_lake_project ctx executable
+(* Uncomment for debug output of the Sail code after the rewrite passes *)
+(* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in

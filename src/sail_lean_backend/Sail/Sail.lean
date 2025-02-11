@@ -48,11 +48,17 @@ inductive Error where
   | Assertion (s : String)
 open Error
 
+def Error.print : Error → String
+| Exit => "Exit"
+| Unreachable => "Unreachable"
+| Assertion s => s!"Assertion failed: {s}"
+
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
   choiceState : c.α
   mem : Unit
   tags : Unit
+  sail_output : Array String -- TODO: be able to use the IO monad to run
 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
   | Reg (r : Register) : RegisterRef _ (RegisterType r)
@@ -111,6 +117,23 @@ def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
 def assert (p : Bool) (s : String) : PreSailM RegisterType c Unit :=
   if p then pure () else throw (Assertion s)
 
+/- def print_effect (s : String) : IO Unit := IO.print s -/
+
+def print_effect (str : String) : PreSailM RegisterType c Unit :=
+  modify fun s ↦ { s with sail_output := s.sail_output.push str }
+
+def print_endline_effect (str : String) : PreSailM RegisterType c Unit :=
+  print_effect s!"{str}\n"
+
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c Unit) : IO Unit := do
+  let res := main () |>.run initialState
+  match res with
+  | .ok _ s => do
+    for m in s.sail_output do
+      IO.print m
+  | .error e _ => do
+    IO.println s!"Error while running the sail program!: {e.print}"
+
 end Regs
 
 namespace BitVec
@@ -153,4 +176,5 @@ namespace Int
 def intAbs (x : Int) : Int := Int.ofNat (Int.natAbs x)
 
 end Int
+
 end Sail

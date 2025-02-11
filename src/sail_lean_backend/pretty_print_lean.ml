@@ -11,6 +11,8 @@ open Pretty_print_common
 
 type global_context = { effect_info : Effects.side_effect_info }
 
+let the_main_function_has_been_seen = ref false
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -41,6 +43,9 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "rec" -> name ^ "'"
+  | "main" ->
+      the_main_function_has_been_seen := true;
+      "sail_main"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -734,6 +739,17 @@ let doc_monad_abbrev (has_registers : bool) =
   in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
+let main_function_stub =
+  nest 2
+    (separate hardline
+       [
+         string "def main (_ : List String) : IO UInt32 := do";
+         string "main_of_sail_main ⟨default, (), default, default, default⟩ sail_main";
+         string "return 0";
+         empty;
+       ]
+    )
+
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
@@ -742,5 +758,6 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in
   let types, fundefs = doc_defs (initial_context env global) defs in
-  print o (types ^^ register_refs ^^ monad ^^ fundefs);
-  ()
+  let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
+  print o (types ^^ register_refs ^^ monad ^^ fundefs ^^ main_function);
+  !the_main_function_has_been_seen

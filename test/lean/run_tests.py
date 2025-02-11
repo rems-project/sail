@@ -55,10 +55,10 @@ def test_lean(subdir: str, allowed_list: set[str] | None = None, runnable: bool 
                 ] if runnable else [ ])
                 step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename))
                 if runnable:
+                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out')
+                else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
                     step('lake build', cwd=f'{basename}/out')
-                else:
-                    step(f'lake run > expect 2> err_status', cwd=f'{basename}/out')
 
                 status = step_with_status(f'diff {basename}/out/Out.lean {basename}.expected.lean')
                 if status != 0:
