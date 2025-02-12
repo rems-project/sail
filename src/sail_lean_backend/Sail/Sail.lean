@@ -127,7 +127,7 @@ def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 def assert (p : Bool) (s : String) : PreSailM RegisterType c Unit :=
   if p then pure () else throw (Assertion s)
 
-section concurrency_interface
+section ConcurrencyInterface
 
 inductive Access_variety where
 | AV_plain
@@ -176,44 +176,44 @@ structure Mem_write_request
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
 
-def write_byte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
+def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
   modify fun s => { s with mem := s.mem.insert addr value }
   pure ()
 
-def write_bytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
+def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
   let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
-  List.forM list (λ (a, v) => write_byte a v)
+  List.forM list (λ (a, v) => writeByte a v)
   pure true
 
 def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result (Option Bool) Arch.abort) := do
   let addr := req.pa.toNat
   let b ← match req.value with
-    | some v => write_bytes addr v
+    | some v => writeBytes addr v
     | none => pure true
   pure (Ok (some b))
 
-def read_byte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
+def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
   let .some s := (← get).mem.get? addr
     | throw UninitializedMemory
   pure s
 
-def read_bytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
+def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
   match size with
   | 0 => pure (default, some true)
   | n + 1 => do
-      let b ← read_byte addr
-      let (bytes, bool) ← read_bytes n (addr+1)
-      have h : 8 + 8 * n = 8 * (n + 1) := by omega
-      return (h ▸ b.append bytes, bool)
+    let b ← readByte addr
+    let (bytes, bool) ← readBytes n (addr+1)
+    have h : 8 + 8 * n = 8 * (n + 1) := by omega
+    return (h ▸ b.append bytes, bool)
 
 def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
   let addr := req.pa.toNat
-  let value ← read_bytes n addr
+  let value ← readBytes n addr
   pure (Ok value)
 
 def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
 
-end concurrency_interface
+end ConcurrencyInterface
 
 end Regs
 
