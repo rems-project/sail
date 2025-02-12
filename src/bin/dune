@@ -209,6 +209,12 @@
   (%{workspace_root}/src/gen_lib/sail2_concurrency_interface.lem
    as
    src/gen_lib/sail2_concurrency_interface.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_mwords.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_mwords.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_bitlists.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_bitlists.lem)
   (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem
    as
    src/gen_lib/sail2_deep_shallow_convert.lem)
