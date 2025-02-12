@@ -58,7 +58,7 @@ class Arch where
 inductive Error where
   | Exit
   | Unreachable
-  | UninitializedMemory
+  | OutOfMemoryRange
   | Assertion (s : String)
 open Error
 
@@ -180,8 +180,9 @@ structure Mem_write_request
   tag : (Option Bool)
 
 def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
-  modify fun s => { s with mem := s.mem.insert addr value }
-  pure ()
+  match (← get).mem.containsThenInsert addr value with
+    | (true, m) => modify fun s => { s with mem := m }
+    | (false, _) => throw OutOfMemoryRange
 
 def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
   let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
@@ -197,7 +198,7 @@ def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts 
 
 def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
   let .some s := (← get).mem.get? addr
-    | throw UninitializedMemory
+    | throw OutOfMemoryRange
   pure s
 
 def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
