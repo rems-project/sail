@@ -133,10 +133,15 @@ let generate_initial_regstate ctx env ast =
     (* We need to turn off intialisation of registers without an
        initialiser to avoid calling undefined_* functions that might
        not exist (when -undefined_gen is off). *)
-    let _, initial_state =
-      Interpreter.initial_state ~registers:true ~undef_registers:false ast env Constant_fold.safe_primops
-    in
-    initial_state.Interpreter.registers
+    try
+      let _, initial_state =
+        Interpreter.initial_state ~registers:true ~undef_registers:false ast env Constant_fold.safe_primops
+      in
+      initial_state.Interpreter.registers
+    with e ->
+      Reporting.warn ~force_show:true "Unable to evaluate initial state, using default values only" Parse_ast.Unknown
+        (Printexc.to_string e);
+      Bindings.empty
   in
   let defs = ast.defs in
   let registers = find_registers defs in
