@@ -196,12 +196,17 @@ def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts 
     | none => pure true
   pure (Ok (some b))
 
+def write_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) (value : BitVec (8 * data_size)) :
+    PreSailM RegisterType c Unit := do
+  let _ ← writeBytes addr.toNat value 
+  pure ()
+
 def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
   let .some s := (← get).mem.get? addr
     | throw OutOfMemoryRange
   pure s
 
-def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × (Option Bool)) :=
+def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × Option Bool) :=
   match size with
   | 0 => pure (default, some true)
   | n + 1 => do
@@ -214,6 +219,11 @@ def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts ar
   let addr := req.pa.toNat
   let value ← readBytes n addr
   pure (Ok value)
+
+def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c (BitVec (8 * data_size)) := do
+  let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
+  pure bytes
+
 
 def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
 

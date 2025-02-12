@@ -356,6 +356,27 @@ let string_of_pat_con (P_aux (p, _)) =
   | P_string_append _ -> "P_string_append"
   | P_struct _ -> "P_struct"
 
+let string_of_def (DEF_aux (d, _)) =
+  match d with
+  | DEF_type _ -> "DEF_type"
+  | DEF_constraint _ -> "DEF_constraint"
+  | DEF_fundef _ -> "DEF_fundef"
+  | DEF_mapdef _ -> "DEF_mapdef"
+  | DEF_impl _ -> "DEF_impl"
+  | DEF_let _ -> "DEF_let"
+  | DEF_val (VS_aux (VS_val_spec (_, id, _), _)) -> "DEF_val " ^ string_of_id id
+  | DEF_outcome _ -> "DEF_outcome"
+  | DEF_instantiation _ -> "DEF_instantiation"
+  | DEF_fixity _ -> "DEF_fixity"
+  | DEF_overload _ -> "DEF_overload"
+  | DEF_default _ -> "DEF_default"
+  | DEF_scattered _ -> "DEF_scattered"
+  | DEF_measure _ -> "DEF_measure"
+  | DEF_loop_measures _ -> "DEF_loop_measures"
+  | DEF_register _ -> "DEF_register"
+  | DEF_internal_mutrec _ -> "DEF_internal_mutrec"
+  | DEF_pragma _ -> "DEF_pragma"
+
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | _ -> id), l) | _ -> id'
@@ -679,7 +700,9 @@ let rec doc_defs_rec ctx defs types docdefs =
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
       doc_defs_rec ctx defs' types (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
-  | _ :: defs' -> doc_defs_rec ctx defs' types docdefs
+  | _ :: defs' ->
+      (* Printf.printf "Ignoring %s\n" (string_of_def d); *)
+      doc_defs_rec ctx defs' types docdefs
 
 let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
 
@@ -761,6 +784,7 @@ let doc_instantiations ctx env =
       ^^ hardline
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
+  (* TODO: remove the following line once we can handle the includes *)
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
   let global = { effect_info } in
