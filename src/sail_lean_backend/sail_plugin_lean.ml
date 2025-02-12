@@ -94,7 +94,7 @@ let lean_rewrites =
     ("move_termination_measures", []);
     ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
-    ("remove_vector_subrange_pats", []);
+    (* ("remove_vector_subrange_pats", []); *)
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
@@ -107,8 +107,8 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
+    (* ("remove_vector_concat", []); *)
+    (* ("remove_bitvector_pats", []); *)
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)
     ("guarded_pats", []);
@@ -129,7 +129,7 @@ let lean_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    ("make_cases_exhaustive", []);
+    (* ("make_cases_exhaustive", []); *)
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);
@@ -185,7 +185,8 @@ let start_lean_output (out_name : string) default_sail_dir =
       ("cp -r " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail") ^ " " ^ Filename.quote lean_src_dir)
   in
   let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
-  output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n\n");
+  output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
+  output_string main_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
   output_string main_file "open Sail\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   { out_name; out_name_camel; sail_dir; main_file; lakefile }

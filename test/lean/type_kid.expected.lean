@@ -1,4 +1,5 @@
 import Out.Sail.Sail
+import Out.Sail.BitVec
 
 open Sail
 
