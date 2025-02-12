@@ -14,6 +14,8 @@ let opt_extern_types : string list ref = ref []
 
 type global_context = { effect_info : Effects.side_effect_info }
 
+let the_main_function_has_been_seen = ref false
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -44,6 +46,9 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "rec" -> name ^ "'"
+  | "main" ->
+      the_main_function_has_been_seen := true;
+      "sail_main"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -700,9 +705,7 @@ let rec doc_defs_rec ctx defs types docdefs =
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
       doc_defs_rec ctx defs' types (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
-  | _ :: defs' ->
-      (* Printf.printf "Ignoring %s\n" (string_of_def d); *)
-      doc_defs_rec ctx defs' types docdefs
+  | _ :: defs' -> doc_defs_rec ctx defs' types docdefs
 
 let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
 
@@ -782,6 +785,16 @@ let doc_instantiations ctx env =
            ]
         )
       ^^ hardline
+let main_function_stub =
+  nest 2
+    (separate hardline
+       [
+         string "def main (_ : List String) : IO UInt32 := do";
+         string "main_of_sail_main ⟨default, (), default, default, default⟩ sail_main";
+         string "return 0";
+         empty;
+       ]
+    )
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
   (* TODO: remove the following line once we can handle the includes *)
@@ -794,5 +807,6 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let monad = doc_monad_abbrev has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
-  print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs);
-  ()
+  let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
+  print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs ^^ main_function);
+  !the_main_function_has_been_seen

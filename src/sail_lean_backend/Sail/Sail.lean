@@ -58,15 +58,22 @@ class Arch where
 inductive Error where
   | Exit
   | Unreachable
-  | OutOfMemoryRange
+  | OutOfMemoryRange (n : Nat)
   | Assertion (s : String)
 open Error
+
+def Error.print : Error → String
+  | Exit => "Exit"
+  | Unreachable => "Unreachable"
+  | OutOfMemoryRange n => s!"{n} Out of Memory Range"
+  | Assertion s => s!"Assertion failed: {s}"
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
   choiceState : c.α
   mem : Std.HashMap Nat (BitVec 8)
   tags : Unit
+  sail_output : Array String -- TODO: be able to use the IO monad to run
 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
   | Reg (r : Register) : RegisterRef _ (RegisterType r)
@@ -182,7 +189,7 @@ structure Mem_write_request
 def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
   match (← get).mem.containsThenInsert addr value with
     | (true, m) => modify fun s => { s with mem := m }
-    | (false, _) => throw OutOfMemoryRange
+    | (false, _) => throw (OutOfMemoryRange addr)
 
 def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
   let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
@@ -198,12 +205,12 @@ def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts 
 
 def write_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) (value : BitVec (8 * data_size)) :
     PreSailM RegisterType c Unit := do
-  let _ ← writeBytes addr.toNat value 
+  let _ ← writeBytes addr.toNat value
   pure ()
 
 def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
   let .some s := (← get).mem.get? addr
-    | throw OutOfMemoryRange
+    | throw (OutOfMemoryRange addr)
   pure s
 
 def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × Option Bool) :=
@@ -228,6 +235,21 @@ def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : Pr
 def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
 
 end ConcurrencyInterface
+
+def print_effect (str : String) : PreSailM RegisterType c Unit :=
+  modify fun s ↦ { s with sail_output := s.sail_output.push str }
+
+def print_endline_effect (str : String) : PreSailM RegisterType c Unit :=
+  print_effect s!"{str}\n"
+
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c Unit) : IO Unit := do
+  let res := main () |>.run initialState
+  match res with
+  | .ok _ s => do
+    for m in s.sail_output do
+      IO.print m
+  | .error e _ => do
+    IO.println s!"Error while running the sail program!: {e.print}"
 
 end Regs
 
@@ -273,4 +295,5 @@ namespace Int
 def intAbs (x : Int) : Int := Int.ofNat (Int.natAbs x)
 
 end Int
+
 end Sail

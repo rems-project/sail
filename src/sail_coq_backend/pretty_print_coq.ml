@@ -4481,6 +4481,8 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
                string "  Definition translation : Type := " ^^ pp_typ params.translation_summary_type ^^ string ".";
                string "  Definition translation_eq : EqDecision translation := _.";
+               string "  Definition trans_start := " ^^ pp_typ params.trans_start_type ^^ string ".";
+               string "  Definition trans_end := " ^^ pp_typ params.trans_end_type ^^ string ".";
                string "  Definition abort : Type := " ^^ pp_typ params.abort_type ^^ string ".";
                string "  Definition abort_eq : EqDecision abort := _.";
                string "  Definition barrier : Type := " ^^ pp_typ params.barrier_type ^^ string ".";

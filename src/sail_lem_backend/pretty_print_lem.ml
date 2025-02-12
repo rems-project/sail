@@ -1830,6 +1830,8 @@ let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_i
                params.pa_type;
                params.tlbi_type;
                params.translation_summary_type;
+               params.trans_start_type;
+               params.trans_end_type;
                params.arch_ak_type;
              ]
   in
