@@ -28,7 +28,7 @@ include_selftests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
-def test_lean(subdir: str, allowed_list: set[str] | None = None, runnable: bool = False):
+def test_lean(subdir: str, allowed_list = None, runnable: bool = False):
     """
     Run all Sail files available in the `subdir`.
     If `runnable` is set to `True`, it will do `lake run`
