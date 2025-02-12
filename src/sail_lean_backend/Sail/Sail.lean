@@ -96,6 +96,9 @@ def undefined_string (_ : Unit) : PreSailM RegisterType c String :=
 def undefined_bitvector (n : Nat) : PreSailM RegisterType c (BitVec n) :=
   choose <| .bitvector n
 
+def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c (Vector α n) :=
+  pure <| .mkVector n a
+
 def internal_pick {α : Type} : List α → PreSailM RegisterType c α
   | [] => .error .Unreachable
   | (a :: as) => do

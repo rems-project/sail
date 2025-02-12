@@ -1787,7 +1787,7 @@ def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   let base_addr := (← (rX n))
   let offset := (← (rX m))
   let addr := (HAdd.hAdd base_addr offset)
-  let x := (wMem_Addr addr)
+  let _ := (wMem_Addr addr)
   let data := (← (rX t))
   (wMem addr data)
 

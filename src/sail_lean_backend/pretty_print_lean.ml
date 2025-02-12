@@ -474,10 +474,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
       let id_typ =
         match pat_is_plain_binder env lpat with
-        | Some (Some (Id_aux (Id id, _)), Some typ) -> string (fix_id id) ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
-        | Some (Some (Id_aux (Id id, _)), None) -> string (fix_id id)
-        | Some (None, _) -> string "x" (* TODO fresh name or wildcard instead of x *)
-        | _ -> failwith "Let pattern not translatable yet."
+        | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
+        | _ -> doc_pat lpat
       in
       let decl_val =
         if effectful (effect_of lexp) then [string "←"; string "do"; doc_exp true ctx lexp]
