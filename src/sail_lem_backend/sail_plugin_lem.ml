@@ -168,7 +168,14 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let monad_modules =
     if Option.is_some concurrency_monad_params then
-      ["Sail2_concurrency_interface"; "Sail2_monadic_combinators"; "Sail2_undefined_concurrency_interface"]
+      [
+        "Sail2_concurrency_interface";
+        "Sail2_monadic_combinators";
+        "Sail2_undefined_concurrency_interface";
+        ( if !Monomorphise.opt_mwords then "Sail2_concurrency_interface_mwords"
+          else "Sail2_concurrency_interface_bitlists"
+        );
+      ]
     else ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_undefined"]
   in
   let operators_module = if !Monomorphise.opt_mwords then "Sail2_operators_mwords" else "Sail2_operators_bitlists" in
