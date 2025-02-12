@@ -37,7 +37,6 @@ def test_lean(subdir: str, allowed_list: set[str] | None = None, runnable: bool 
     banner(f'Testing lean target (sub-directory: {subdir})')
     results = Results(subdir)
     for filenames in chunks(os.listdir(f'../{subdir}'), parallel()):
-        os.chdir(f'../{subdir}')
         tests = {}
         for filename in filenames:
             if allowed_list is not None and filename not in allowed_list:
@@ -46,6 +45,7 @@ def test_lean(subdir: str, allowed_list: set[str] | None = None, runnable: bool 
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
+                os.chdir(f'../{subdir}')
                 step('rm -r {} || true'.format(basename))
                 step('mkdir -p {}'.format(basename))
                 # TODO: should probably be dependent on whether print should be pure or effectful.
