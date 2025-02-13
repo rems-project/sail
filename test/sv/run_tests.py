@@ -17,7 +17,6 @@ sail = get_sail()
 skip_tests = {
     'all_even_vector_length', # loops
     'assign_rename_bug', # loops
-    'cheri128_hsb', # loops
     'for_shadow', # loops
     'loop_exception', # loops
     'read_write_ram', # memory

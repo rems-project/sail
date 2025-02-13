@@ -782,10 +782,13 @@ module Simplifier = struct
     | _ -> NoChange
 
   let is_bvfunction = function
-    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" -> true
+    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" | "bvslt" | "bvsle"
+    | "bvsgt" | "bvsge" ->
+        true
     | _ -> false
 
   let rule_bvfunction_literal =
+    let open Sail2_values in
     let open Sail2_operators_bitlists in
     mk_simple_rule __LOC__ @@ function
     | Fn (f, args) -> (
@@ -808,6 +811,26 @@ module Simplifier = struct
         | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (arith_shiftr lhs shift)) | None -> NoChange
           end
+        | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsle", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less_equal lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsgt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsge", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater_equal lhs rhs))
+            | _ -> NoChange
+          )
         | _ -> NoChange
       )
     | _ -> NoChange
