@@ -298,6 +298,12 @@ let doc_lit (L_aux (lit, l)) =
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real s -> utf8string s (* TODO test if this is really working *)
 
+let doc_vec_lit (L_aux (lit, _) as l) =
+  match lit with
+  | L_zero -> string "0"
+  | L_one -> string "1"
+  | _ -> failwith "Unexpected litteral found in vector: " ^^ doc_lit l
+
 let string_of_exp_con (E_aux (e, _)) =
   match e with
   | E_block _ -> "E_block"
@@ -362,17 +368,25 @@ let string_of_pat_con (P_aux (p, _)) =
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | _ -> id), l) | _ -> id'
 
-let rec doc_pat (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   match p with
   | P_wild -> underscore
+  | P_lit lit when in_vector -> doc_vec_lit lit
   | P_lit lit -> doc_lit lit
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
+    when in_vector && (id = "bits" || id = "bitvector") ->
+      doc_pat p ^^ string ":" ^^ doc_big_int i
   | P_typ (ptyp, p) -> doc_pat p
   | P_id id -> fixup_match_id id |> doc_id_ctor
   | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
   | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
+  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
+  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) -> doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
-  | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
+  | P_as (pat, id) -> doc_pat pat
+  | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -411,6 +425,13 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
     | _ -> false
   in
   match t with Typ_fn (args, cod) -> List.map arg_implicit args | _ -> []
+
+let rec is_bitvector_pattern (P_aux (pat, _)) =
+  match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
+
+let match_or_match_bv brs =
+  if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
+  else "match "
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
@@ -493,8 +514,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
-      let cases = separate_map hardline (fun br -> doc_match_clause as_monadic ctx br) brs in
-      string "match " ^^ doc_exp (effectful (effect_of discr)) ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
+      string (match_or_match_bv brs)
+      ^^ doc_exp (effectful (effect_of discr)) ctx discr
+      ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
       match le_act with
       | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ doc_exp false ctx e
