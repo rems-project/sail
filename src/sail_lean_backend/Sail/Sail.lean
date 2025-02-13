@@ -215,7 +215,7 @@ def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
 
 def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × Option Bool) :=
   match size with
-  | 0 => pure (default, some true)
+  | 0 => pure (default, none)
   | n + 1 => do
     let b ← readByte addr
     let (bytes, bool) ← readBytes n (addr+1)
