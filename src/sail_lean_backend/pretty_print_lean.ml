@@ -514,7 +514,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           (* The body has the right type for deciding whether a proof is necessary *)
           (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
           let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor loopvar] vartuple in
-          let vartuple_pp = if effects then parens (string "pure " ^^ vartuple_pp) else vartuple_pp in
           let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
           (* TODO: this should probably be construct_dep_pairs, but we would need
              to change it to use the updated context. *)
