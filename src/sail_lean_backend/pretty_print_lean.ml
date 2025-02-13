@@ -513,7 +513,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             let mkpp f vs = separate (string ", ") (List.map f vs) in
             let tup_pp = mkpp (fun (pp, _) -> pp) vs in
             let match_pp = mkpp (fun (_, pp) -> pp) vs in
-            (parens tup_pp, separate space ((string "λ" :: extra_binders) @ [squote ^^ parens match_pp; string "=>"]))
+            (parens tup_pp, separate space ((string "λ" :: extra_binders) @ [parens match_pp; string "=>"]))
         | _ ->
             let exp_pp, match_pp = doc_loop_var varstuple in
             (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))

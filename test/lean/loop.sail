@@ -28,3 +28,21 @@ function foreachloopboth(m : nat, n : nat) -> int = {
   };
   res + 1
 }
+
+function foreachloopmultiplevar(m : nat, n : nat) -> int = {
+  var res : int = 0;
+  var mult : int = 1;
+  foreach (i from m to n) {
+    res = res + 1;
+    mult = res * mult;
+  };
+  mult
+}
+
+function foreachloopuseindex(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
+  foreach (i from m to n) {
+    res = res + i;
+  };
+  res
+}
