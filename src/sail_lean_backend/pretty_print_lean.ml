@@ -16,6 +16,8 @@ type global_context = { effect_info : Effects.side_effect_info }
 
 let the_main_function_has_been_seen = ref false
 
+let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -285,6 +287,13 @@ let doc_typ_quant_relevant ctx (TypQ_aux (tq, _) as tq_full) =
      in order to detect when we can translate the Kind as Nat *)
   let ctx = initial_context (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
   match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_relevant ctx) qs | TypQ_no_forall -> []
+
+let doc_quant_item_only_vars ctx (QI_aux (qi, annot)) =
+  match qi with QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> Some (doc_kid ctx ki) | QI_constraint c -> None
+
+(* Used to translate type parameters of type abbreviations *)
+let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
+  match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_only_vars ctx) qs | TypQ_no_forall -> []
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
@@ -666,28 +675,24 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
-      let rectyp = List.map (fun d -> parens d) rectyp in
-      let decl_start =
-        match rectyp with
-        | [] -> [string "structure"; string id; string "where"]
-        | _ -> [string "structure"; string id; separate space rectyp; string "where"]
-      in
-      doc_typ_quant_in_comment ctx tq ^^ hardline ^^ nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
-  | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_typ t, _)) ->
-      nest 2 (flow (break 1) [string "abbrev"; string id; coloneq; doc_typ ctx t])
+      let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      doc_typ_quant_in_comment ctx tq ^^ hardline
+      ^^ nest 2
+           (flow (break 1) (remove_empties [string "structure"; string id; rectyp; string "where"])
+           ^^ hardline ^^ fields_doc
+           )
+  | TD_abbrev ((Id_aux (Id id, _) as theid), tq, A_aux (A_typ t, _)) ->
+      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = separate space vars in
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; string id; vars; coloneq; doc_typ ctx t]))
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_nexp ne, _)) ->
       nest 2 (flow (break 1) [string "abbrev"; string id; colon; string "Int"; coloneq; doc_nexp ctx ne])
   | TD_variant (Id_aux (Id id, _), tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in
-      let rectyp = List.map (fun d -> parens d) rectyp in
-      let decl_start =
-        match rectyp with
-        | [] -> [string "inductive"; string id; string "where"]
-        | _ -> [string "inductive"; string id; separate space rectyp; string "where"]
-      in
+      let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       doc_typ_quant_in_comment ctx tq ^^ hardline
-      ^^ nest 2 (nest 2 (flow space decl_start) ^^ pp_tus)
+      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; string id; rectyp; string "where"])) ^^ pp_tus)
       ^^ hardline ^^ hardline
       ^^ flow space [string "open"; string id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
