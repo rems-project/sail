@@ -503,10 +503,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                 ) ->
                 (id, body)
             | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
-          in          
-          let effects = effectful (effect_of body) in
-          let combinator = if as_monadic && effects then "foreach_M" else "foreach_" 
           in
+          let effects = effectful (effect_of body) in
+          let combinator = if as_monadic && effects then "foreach_M" else "foreach_" in
           let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
           let from_exp_pp, to_exp_pp, step_exp_pp =
             (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
