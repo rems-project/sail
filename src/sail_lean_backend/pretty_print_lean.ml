@@ -594,7 +594,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
         | _ -> doc_pat lpat
       in
-      let pp_let_line_f = (fun l -> group (nest 2 (flow (break 1) l))) in
+      let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
         if effectful (effect_of lexp) then
           if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
