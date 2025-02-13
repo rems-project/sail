@@ -1,0 +1,107 @@
+name: Upload test coverage
+
+on:
+  workflow_run:
+    workflows: ["Test matrix"]
+    types:
+    - completed
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  build:
+    # GitHub allows matrix variables in more places than env variables
+    strategy:
+      matrix:
+        version: [5.2.1]
+        os: [ubuntu-24.04]
+
+    runs-on: ${{ matrix.os }}
+
+    if: github.event.workflow_run.conclusion != 'skipped'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get -o Acquire::Retries=3 install build-essential libgmp-dev z3 opam git curl
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.os }}-${{ matrix.version }}-cov
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Sail dependencies
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add .
+        opam install . --yes --deps-only
+
+    - name: Build Sail with coverage
+      run: |
+        eval $(opam env)
+        dune build --release --instrument-with bisect_ppx
+
+    - name: Download artifacts
+      uses: actions/github-script@v6
+      with:
+        script: |
+          var fs = require('fs');
+          var artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+             owner: context.repo.owner,
+             repo: context.repo.repo,
+             run_id: ${{ github.event.workflow_run.id }},
+          });
+          var matchArtifacts = artifacts.data.artifacts.filter((artifact) => {
+            return artifact.name.startsWith('test-results-') || artifact.name == 'event.json'
+          });
+          var count = matchArtifacts.length;
+          for (var i = 0; i < count; i++) {
+            var matchArtifact = matchArtifacts[i];
+            var download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            var name = matchArtifact.name;
+            var dest = name + '.zip'
+            fs.writeFileSync('${{ github.workspace }}/' + dest, Buffer.from(download.data));
+            console.log("Downloaded", name, "as", dest);
+          }
+
+    - name: Extract test results
+      run: |
+        find . -maxdepth 1 -name 'test-results-*.zip' -print0 | xargs -0 -I {} -P 1 unzip {}
+
+    - name: Collect coverage
+      run: |
+        eval $(opam env)
+        bisect-ppx-report html --coverage-path=.
+        bisect-ppx-report summary --per-file --coverage-path=. > coverage_summary.txt
+
+    - name: Archive coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage
+        path: |
+          coverage_summary.txt
+          _coverage/*
+          _coverage/src/lib/*

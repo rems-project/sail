@@ -82,7 +82,7 @@ def chunks(filenames, cores):
     ys = []
     chunk = []
     for filename in filenames:
-        if re.match('.+\.sail$', filename):
+        if re.match(r'.+\.sail$', filename):
             chunk.append(filename)
         if len(chunk) >= cores:
             ys.append(list(chunk))
@@ -106,7 +106,7 @@ def project_chunks(filenames, cores):
     ys = []
     chunk = []
     for filename in filenames:
-        if re.match('.+\.sail_project$', filename):
+        if re.match(r'.+\.sail_project$', filename):
             chunk.append(filename)
         if len(chunk) >= cores:
             ys.append(list(chunk))

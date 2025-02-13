@@ -9,3 +9,12 @@ val foo : bits(8) -> bits(16)
 function foo x = {
   EXTZ(x)
 }
+
+val slice_mask2 : forall 'n, 'n >= 0. (implicit('n), bits('n), bits('n), bool) -> bits('n)
+function slice_mask2(n,i,l,b) =
+  if b then {
+    i
+  } else {
+    let one : bits('n) = EXTZ(n, l) in
+    one + one
+  }

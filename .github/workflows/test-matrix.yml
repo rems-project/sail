@@ -1,4 +1,4 @@
-name: Test coverage
+name: Test matrix
 
 on: [push, pull_request, workflow_dispatch]
 
@@ -12,6 +12,7 @@ jobs:
       matrix:
         version: [5.2.1]
         os: [ubuntu-24.04]
+        suite: [typecheck, exec, sv, prover, other]
 
     runs-on: ${{ matrix.os }}
 
@@ -94,33 +95,21 @@ jobs:
       run: |
         eval $(opam env)
         export SAIL_DIR=$(pwd)
-        etc/ci_coverage_tests.sh
+        etc/ci_coverage_tests.sh ${{ matrix.suite }}
+        bisect-ppx-report merge --coverage-path=test/ test/suite-${{ matrix.suite }}.coverage
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
+        name: test-results-${{ matrix.suite }}
         path: |
           test/**/tests.xml
+          test/suite-${{ matrix.suite }}.coverage 
 
-    - name: Collect coverage
-      run: |
-        eval $(opam env)
-        bisect-ppx-report html --coverage-path=test/
-        bisect-ppx-report summary --per-file --coverage-path=test/ > coverage_summary.txt
-
-    - name: Archive coverage
-      uses: actions/upload-artifact@v4
-      with:
-        name: code-coverage
-        path: |
-          coverage_summary.txt
-          _coverage/*
-          _coverage/src/lib/*
-
+    # Only do this for one job in the test matrix
     - name: Upload event payload
-      if: always()
+      if: matrix.suite == 'typecheck'
       uses: actions/upload-artifact@v4
       with:
         name: event.json

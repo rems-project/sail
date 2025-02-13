@@ -145,10 +145,12 @@ let lean_rewrites =
     ("attach_effects", []);
     ("remove_blocks", []);
     ("attach_effects", []);
-    (*("letbind_effects", []);*)
+    (* ("letbind_effects", []); *)
     ("remove_e_assign", []);
+    (* ^^^^ replace loops by dummy function calls *)
     ("attach_effects", []);
     ("internal_lets", []);
+    (* ^^^^ transforms var into let *)
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
     ("bit_lists_to_lits", []);
