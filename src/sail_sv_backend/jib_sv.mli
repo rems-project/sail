@@ -74,6 +74,13 @@ module type CONFIG = sig
       SystemVerilog. *)
   val no_strings : bool
 
+  (** If true, the global signals (originally defined at toplevel)
+      will be now defined in the sail_toplevel module
+      and references to those global signals will be prepend with
+      a customizable SAIL_GLOBALS macro so they can be resolved
+      with a SV hierarchical reference. *)
+  val no_toplevel_globals : bool
+
   val no_packed : bool
 
   (** If true, then all assertions are treated as no-ops *)
@@ -120,7 +127,7 @@ module Make (Config : CONFIG) : sig
     Jib.cdef ->
     Sv_ir.sv_def list * (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t
 
-  val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
+  val pp_def : ?prepend_globals:bool -> Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
   (** Create a SystemVerilog module that wraps the provided Sail
       function in a more convenient interface.
@@ -150,9 +157,9 @@ module Make (Config : CONFIG) : sig
 
   val wrap_type : Jib.ctyp -> PPrint.document -> PPrint.document
 
-  val pp_id_string : Ast.id -> string
+  val pp_id_string : ?prepend_globals:bool -> Libsail.Ast.id -> string
 
-  val pp_id : Ast.id -> PPrint.document
+  val pp_id : ?prepend_globals:bool -> Ast.id -> PPrint.document
 
   val main_args :
     Jib.cdef option ->

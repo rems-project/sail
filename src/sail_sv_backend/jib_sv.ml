@@ -66,6 +66,8 @@ module IntMap = Util.IntMap
 let gensym, _ = symbol_generator "sv"
 let ngensym () = name (gensym ())
 
+let sv_globals : StringSet.t option ref = ref None
+
 let sv_type_of_string = Initial_check.parse_from_string (Sv_type_parser.sv_type Sv_type_lexer.token)
 
 let parse_sv_type = function
@@ -362,6 +364,8 @@ type spec_info = {
   initialized_registers : Ast.id list;
   (* A list of constructor functions *)
   constructors : IdSet.t;
+  (* A map from global lets to types *)
+  globals : ctyp Bindings.t;
   (* Global letbindings *)
   global_lets : NameSet.t;
   (* Global let numbers *)
@@ -402,17 +406,19 @@ let collect_spec_info ctx cdefs =
       )
       IdSet.empty cdefs
   in
-  let global_lets, global_let_numbers =
+  let global_lets, global_let_numbers, globals =
     List.fold_left
-      (fun (names, nums) cdef ->
+      (fun (names, nums, globs) cdef ->
         match cdef with
         | CDEF_aux (CDEF_let (n, bindings, _), _) ->
             ( List.fold_left (fun acc (id, _) -> NameSet.add (name id) acc) names bindings,
-              IntMap.add n (List.map fst bindings) nums
+              IntMap.add n (List.map fst bindings) nums,
+              List.fold_left (fun acc (id, ctyp) -> Bindings.add id ctyp acc) globs bindings
             )
-        | _ -> (names, nums)
+        | _ -> (names, nums, globs)
       )
-      (NameSet.empty, IntMap.empty) cdefs
+      (NameSet.empty, IntMap.empty, Bindings.empty)
+      cdefs
   in
   let footprints =
     List.fold_left
@@ -535,11 +541,16 @@ let collect_spec_info ctx cdefs =
       )
       CT_unit cdefs
   in
+  let global_names : StringSet.t =
+    NameSet.fold (fun name acc -> StringSet.add (string_of_name ~zencode:false name) acc) global_lets StringSet.empty
+  in
+  sv_globals := Some global_names;
   {
     register_ctyp_map;
     registers;
     initialized_registers;
     constructors;
+    globals;
     global_lets;
     global_let_numbers;
     footprints;
@@ -552,6 +563,7 @@ module type CONFIG = sig
   val max_unknown_bitvector_width : int
   val line_directives : bool
   val no_strings : bool
+  val no_toplevel_globals : bool
   val no_packed : bool
   val no_assertions : bool
   val never_pack_unions : bool
@@ -592,17 +604,22 @@ module Make (Config : CONFIG) = struct
     in
     Str.string_match regexp s 0
 
-  let pp_id_string id =
+  let is_sv_global s =
+    match !sv_globals with
+    | None -> failwith "USED is_sv_global BUT sv_globals IS UNSET"
+    | Some smap -> StringSet.mem s smap
+
+  let pp_id_string ?(prepend_globals = true) id =
     let s = string_of_id id in
     if
       valid_sv_identifier s
       && (not (has_bad_prefix s))
       && (not (StringSet.mem s Keywords.sv_reserved_words))
       && not (StringSet.mem s Keywords.sv_used_words)
-    then s
+    then if Config.no_toplevel_globals && is_sv_global s && prepend_globals then "`SAIL_GLOBALS." ^ s else s
     else Util.zencode_string s
 
-  let pp_id id = string (pp_id_string id)
+  let pp_id ?(prepend_globals = true) id = string (pp_id_string ~prepend_globals id)
 
   let pp_sv_name_string = function SVN_id id -> pp_id_string id | SVN_string s -> s
 
@@ -719,10 +736,10 @@ module Make (Config : CONFIG) = struct
   let mapM = Smt_gen.mapM
   let fmap = Smt_gen.fmap
 
-  let pp_name =
+  let pp_name ?(prepend_globals = true) =
     let ssa_num n = if n = -1 then empty else string ("_" ^ string_of_int n) in
     function
-    | Name (id, n) -> pp_id id ^^ ssa_num n
+    | Name (id, n) -> pp_id ~prepend_globals id ^^ ssa_num n
     | Have_exception n -> string "sail_have_exception" ^^ ssa_num n
     | Current_exception n -> string "sail_current_exception" ^^ ssa_num n
     | Throw_location n -> string "sail_throw_location" ^^ ssa_num n
@@ -1398,17 +1415,18 @@ module Make (Config : CONFIG) = struct
     | I_clear _ | I_reset _ | I_reinit _ ->
         Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
-  let rec pp_place = function
-    | SVP_id id -> pp_name id
-    | SVP_index (place, i) -> pp_place place ^^ lbracket ^^ pp_smt i ^^ rbracket
-    | SVP_field (place, field) -> pp_place place ^^ dot ^^ pp_id field
-    | SVP_multi places -> parens (separate_map (comma ^^ space) pp_place places)
+  let rec pp_place ?(prepend_globals = true) = function
+    | SVP_id id -> pp_name ~prepend_globals id
+    | SVP_index (place, i) -> pp_place ~prepend_globals place ^^ lbracket ^^ pp_smt i ^^ rbracket
+    | SVP_field (place, field) -> pp_place ~prepend_globals place ^^ dot ^^ pp_id field
+    | SVP_multi places -> parens (separate_map (comma ^^ space) (pp_place ~prepend_globals) places)
     | SVP_void _ -> string "void"
 
   let pp_sv_name = function SVN_id id -> pp_id id | SVN_string s -> string s
 
-  let rec pp_statement ?(terminator = semi ^^ hardline) (SVS_aux (aux, l)) =
+  let rec pp_statement ?(prepend_globals = true) ?(terminator = semi ^^ hardline) (SVS_aux (aux, l)) =
     let ld = sv_line_directive l in
+    let self = pp_statement ~prepend_globals in
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
@@ -1418,7 +1436,7 @@ module Make (Config : CONFIG) = struct
         ^^ terminator
     | SVS_foreach (i, exp, stmt) ->
         separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
-        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
+        ^^ nest 4 (hardline ^^ self ~terminator:empty stmt)
         ^^ terminator
     | SVS_for (loop, stmt) ->
         let vars =
@@ -1431,7 +1449,7 @@ module Make (Config : CONFIG) = struct
           | SVF_decrement i -> pp_name i ^^ string "--"
         in
         separate space [string "for"; parens (separate (semi ^^ space) [vars; pp_smt loop.for_cond; modifier])]
-        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
+        ^^ nest 4 (hardline ^^ self ~terminator:empty stmt)
         ^^ terminator
     | SVS_var (id, ctyp, init_opt) -> begin
         match init_opt with
@@ -1439,9 +1457,10 @@ module Make (Config : CONFIG) = struct
         | None -> ld ^^ wrap_type ctyp (pp_name id) ^^ terminator
       end
     | SVS_return smt -> string "return" ^^ space ^^ pp_smt smt ^^ terminator
-    | SVS_assign (place, value) -> ld ^^ separate space [pp_place place; equals; pp_smt value] ^^ terminator
+    | SVS_assign (place, value) ->
+        ld ^^ separate space [pp_place ~prepend_globals place; equals; pp_smt value] ^^ terminator
     | SVS_continuous_assign (place, value) ->
-        ld ^^ separate space [pp_place place; string "<="; pp_smt value] ^^ terminator
+        ld ^^ separate space [pp_place ~prepend_globals place; string "<="; pp_smt value] ^^ terminator
     | SVS_call (place, ctor, args) ->
         ld
         ^^ separate space [pp_place place; equals; pp_sv_name ctor]
@@ -1450,21 +1469,17 @@ module Make (Config : CONFIG) = struct
     | SVS_if (_, None, None) -> empty
     | SVS_if (cond, None, Some else_block) ->
         let cond = pp_smt (Fn ("not", [cond])) in
-        string "if" ^^ space ^^ parens cond ^^ space ^^ pp_statement else_block
-    | SVS_if (cond, Some then_block, None) ->
-        string "if" ^^ space ^^ parens (pp_smt cond) ^^ space ^^ pp_statement then_block
+        string "if" ^^ space ^^ parens cond ^^ space ^^ self else_block
+    | SVS_if (cond, Some then_block, None) -> string "if" ^^ space ^^ parens (pp_smt cond) ^^ space ^^ self then_block
     | SVS_if (cond, Some then_block, Some else_block) ->
         string "if" ^^ space
         ^^ parens (pp_smt cond)
-        ^^ space
-        ^^ pp_statement ~terminator:hardline then_block
-        ^^ string "else" ^^ space ^^ pp_statement else_block
+        ^^ space ^^ self ~terminator:hardline then_block ^^ string "else" ^^ space ^^ self else_block
     | SVS_case { head_exp; cases; fallthrough } ->
-        let pp_case (exp, statement) = separate space [pp_smt exp; colon; pp_statement ~terminator:semi statement] in
+        let pp_case (exp, statement) = separate space [pp_smt exp; colon; self ~terminator:semi statement] in
         let pp_fallthrough = function
           | None -> empty
-          | Some statement ->
-              hardline ^^ separate space [string "default"; colon; pp_statement ~terminator:semi statement]
+          | Some statement -> hardline ^^ separate space [string "default"; colon; self ~terminator:semi statement]
         in
         string "case" ^^ space
         ^^ parens (pp_smt head_exp)
@@ -1474,10 +1489,7 @@ module Make (Config : CONFIG) = struct
         let statements = List.filter (fun stmt -> not (is_skip stmt)) statements in
         let block_terminator last = if last then semi else semi ^^ hardline in
         string "begin"
-        ^^ nest 4
-             (hardline
-             ^^ concat (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last)) statements)
-             )
+        ^^ nest 4 (hardline ^^ concat (Util.map_last (fun last -> self ~terminator:(block_terminator last)) statements))
         ^^ hardline ^^ string "end" ^^ terminator
     | SVS_raw (s, _, _) -> string s ^^ terminator
     | SVS_skip -> string "begin" ^^ hardline ^^ string "end" ^^ terminator
@@ -2302,6 +2314,9 @@ module Make (Config : CONFIG) = struct
           (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
       )
     in
+    let global_defs =
+      Bindings.fold (fun id ctyp acc -> SVD_var (Name (mk_id (string_of_id id), -1), ctyp) :: acc) spec_info.globals []
+    in
     let initialize_registers =
       let reset_target reg = prepend_id (if clk then "reset_" else "in_") reg in
       List.mapi
@@ -2326,6 +2341,7 @@ module Make (Config : CONFIG) = struct
       register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes @ return_def
       @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_block]
     in
+    let defs = if Config.no_toplevel_globals then global_defs @ defs else defs in
     {
       name = SVN_string "sail_toplevel";
       recursive = false;
@@ -2338,8 +2354,18 @@ module Make (Config : CONFIG) = struct
       defs = List.map mk_def defs;
     }
 
-  let rec pp_module m =
+  let rec pp_module ?(prepend_globals = true) m =
     let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
+    let prepend_globals =
+      let module_name = string_of_sv_name m.name in
+      let starts_with ~prefix str =
+        let prefix_len = String.length prefix in
+        let str_len = String.length str in
+        str_len >= prefix_len && String.equal prefix (String.sub str 0 prefix_len)
+      in
+      Config.no_toplevel_globals
+      && not (starts_with ~prefix:"sail_setup_let_" module_name || String.equal "sail_toplevel" module_name)
+    in
     let ports =
       match (m.input_ports, m.output_ports) with
       | [], [] -> semi
@@ -2349,7 +2375,7 @@ module Make (Config : CONFIG) = struct
             let external_name_hint =
               if external_name = "" then empty else space ^^ string (Printf.sprintf "/* %s */" external_name)
             in
-            string dir ^^ space ^^ wrap_type typ (pp_name name) ^^ external_name_hint
+            string dir ^^ space ^^ wrap_type typ (pp_name ~prepend_globals name) ^^ external_name_hint
           in
           nest 4 (char '(' ^^ hardline ^^ separate_map (comma ^^ hardline) pp_port ports)
           ^^ hardline ^^ char ')' ^^ semi
@@ -2362,7 +2388,7 @@ module Make (Config : CONFIG) = struct
       else doc
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
-    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def (Some m.name)) m.defs))
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ~prepend_globals (Some m.name)) m.defs))
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f =
@@ -2386,8 +2412,12 @@ module Make (Config : CONFIG) = struct
     let block_terminator last = if last then semi else semi ^^ hardline in
     let pp_body = function
       | SVS_aux (SVS_block statements, _) ->
-          concat (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last)) statements)
-      | statement -> pp_statement ~terminator:semi statement
+          concat
+            (Util.map_last
+               (fun last -> pp_statement ?prepend_globals:None ~terminator:(block_terminator last))
+               statements
+            )
+      | statement -> pp_statement ?prepend_globals:None ~terminator:semi statement
     in
     typedef
     ^^ separate space [string "function"; string "automatic"; ret_ty; pp_sv_name f.function_name]
@@ -2396,15 +2426,18 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ pp_body f.body)
     ^^ hardline ^^ string "endfunction"
 
-  and pp_def in_module (SVD_aux (aux, _)) =
+  and pp_def ?(prepend_globals = true) in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
-    | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
-    | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi statement
+    | SVD_var (id, ctyp) ->
+        if Config.no_toplevel_globals && Option.is_none in_module then empty
+        else wrap_type ctyp (pp_name ~prepend_globals id) ^^ semi
+    | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~prepend_globals ~terminator:semi statement
     | SVD_always_ff statement ->
         let posedge_clk = char '@' ^^ parens (string "posedge" ^^ space ^^ string "clk") in
-        separate space [string "always_ff"; posedge_clk; pp_statement ~terminator:semi statement]
-    | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
+        separate space [string "always_ff"; posedge_clk; pp_statement ~prepend_globals ~terminator:semi statement]
+    | SVD_always_comb statement ->
+        string "always_comb" ^^ space ^^ pp_statement ~prepend_globals ~terminator:semi statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
         let params =
           match in_module with
@@ -2412,7 +2445,7 @@ module Make (Config : CONFIG) = struct
           | _ -> empty
         in
         let inputs = List.map (fun exp -> pp_smt exp) input_connections in
-        let outputs = List.map pp_place output_connections in
+        let outputs = List.map (pp_place ~prepend_globals) output_connections in
         let connections =
           match inputs @ outputs with
           | [] -> parens empty
@@ -2420,7 +2453,7 @@ module Make (Config : CONFIG) = struct
         in
         pp_sv_name module_name ^^ params ^^ space ^^ string instance_name ^^ connections ^^ semi
     | SVD_fundef f -> pp_fundef f
-    | SVD_module m -> pp_module m
+    | SVD_module m -> pp_module ~prepend_globals m
     | SVD_type type_def -> pp_type_def type_def
     | SVD_dpi_function { function_name; return_type; param_types } ->
         let ret_ty, typedef =
