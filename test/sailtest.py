@@ -114,7 +114,7 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step_with_status(string, expected_status=0, cwd=None):
+def step_with_status(string, expected_status=0, cwd=None, name=""):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
@@ -122,7 +122,7 @@ def step_with_status(string, expected_status=0, cwd=None):
         if is_compact():
             compact_char(color.FAIL, 'X')
         else:
-            print("{}Failed{}: {}".format(color.FAIL, color.END, string))
+            print("{}Failed{}: {} {}".format(color.FAIL, color.END, name, string))
         if not args.hide_error_output:
             print('{}stdout{}:'.format(color.NOTICE, color.END))
             print(out.decode('utf-8'))
@@ -130,8 +130,8 @@ def step_with_status(string, expected_status=0, cwd=None):
             print(err.decode('utf-8'))
     return status
 
-def step(string, expected_status=0, cwd=None):
-    if step_with_status(string, expected_status=expected_status, cwd=cwd) != expected_status:
+def step(string, expected_status=0, cwd=None, name=""):
+    if step_with_status(string, expected_status=expected_status, cwd=cwd, name=name) != expected_status:
         sys.exit(1)
 
 def banner(string):

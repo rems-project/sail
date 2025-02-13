@@ -53,14 +53,14 @@ def test_lean(subdir: str, allowed_list = None, runnable: bool = False):
                     '--splice',
                     'coq-print.splice'
                 ] if runnable else [ ])
-                step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename))
+                step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable:
-                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out')
+                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
-                    step('lake build', cwd=f'{basename}/out')
+                    step('lake build', cwd=f'{basename}/out', name=filename)
 
-                status = step_with_status(f'diff {basename}/out/Out.lean {basename}.expected.lean')
+                status = step_with_status(f'diff {basename}/out/Out.lean {basename}.expected.lean', name=filename)
                 if status != 0:
                     if update_expected:
                         print(f'Overriding file {basename}.expected.lean')
@@ -69,7 +69,7 @@ def test_lean(subdir: str, allowed_list = None, runnable: bool = False):
                         sys.exit(1)
 
                 if runnable:
-                    status = step_with_status(f'diff {basename}/out/expected {basename}.expect')
+                    status = step_with_status(f'diff {basename}/out/expected {basename}.expect', name=filename)
                     if status != 0:
                         sys.exit(1)
                 step('rm -r {}'.format(basename))
