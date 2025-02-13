@@ -257,8 +257,7 @@ section Loops
 def foreach_' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars := Id.run do
   let mut vars := vars
   let step := 1 + (step - 1)
-  have h : step > 0 := by omega
-  let range := Std.Range.mk from' to step h
+  let range := Std.Range.mk from' to step (by omega)
   for i in range do
     vars := body i vars
   pure vars
@@ -271,8 +270,7 @@ def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : 
 def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars := do
   let mut vars := vars
   let step := 1 + (step - 1)
-  have h : step > 0 := by omega
-  let range := Std.Range.mk from' to step h
+  let range := Std.Range.mk from' to step (by omega)
   for i in range do
     vars ← body i vars
   pure vars
