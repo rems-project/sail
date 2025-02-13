@@ -26,7 +26,8 @@ type context = {
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
 }
 
-let initial_context env global = { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
+let context_init env global = { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
+let context_with_env ctx env = { ctx with env }
 
 let add_single_kid_id_rename ctx id kid =
   let kir =
@@ -283,7 +284,7 @@ let doc_quant_item_relevant ctx (QI_aux (qi, annot)) =
 let doc_typ_quant_relevant ctx (TypQ_aux (tq, _) as tq_full) =
   (* We go through the type variables with an environment that contains all the constraints,
      in order to detect when we can translate the Kind as Nat *)
-  let ctx = initial_context (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
+  let ctx = context_init (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
   match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_relevant ctx) qs | TypQ_no_forall -> []
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
@@ -596,7 +597,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            | _ -> failwith "Argument pattern not translatable yet."
        )
   in
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let ctx, binders =
     List.fold_left
       (fun (ctx, bs) (i, t) ->
@@ -614,21 +615,20 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let decl_val = [doc_ret_typ; coloneq] in
   (* Add do block for stateful functions *)
   let decl_val = if is_monadic then decl_val @ [string "do"] else decl_val in
-  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), env, fixup_binders)
+  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), ctx, fixup_binders)
 
-let doc_funcl_body fixup_binders global (FCL_aux (FCL_funcl (id, pexp), annot)) =
+let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
-  let ctx = initial_context env in
   let _, _, exp, _ = destruct_pexp pexp in
   (* If an argument was [x : (Int, Int)], which is transformed to [(arg0: Int) (arg1: Int)],
      this adds a let binding at the beginning of the function, of the form [let x := (arg0, arg1)] *)
   let exp = fixup_binders exp in
   let is_monadic = effectful (effect_of exp) in
-  doc_exp is_monadic (initial_context env global) exp
+  doc_exp is_monadic (context_with_env ctx env) exp
 
 let doc_funcl ctx funcl =
-  let comment, signature, env, fixup_binders = doc_funcl_init ctx.global funcl in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx.global funcl)
+  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
 
 let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot)) =
   match fcls with
@@ -772,7 +772,7 @@ let inhabit_enum ctx typ_map =
     typ_map
 
 let doc_reg_info env global registers =
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let type_map = List.fold_left add_reg_typ Bindings.empty registers in
   let type_map = Bindings.bindings type_map in
   separate hardline
@@ -823,7 +823,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
   let global = { effect_info } in
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in
