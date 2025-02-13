@@ -75,6 +75,7 @@ type smt_exp =
   | Real_lit of string
   | String_lit of string
   | Var of Jib.name
+  | Global_var of Jib.name
   | Unit
   | Member of Ast.id
   | Fn of string * smt_exp list
@@ -98,7 +99,7 @@ let rec pp_smt_exp =
   | Real_lit str -> string str
   | String_lit str -> string ("\"" ^ str ^ "\"")
   | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
-  | Var id -> string (zencode_name id)
+  | Global_var id | Var id -> string (zencode_name id)
   | Member id -> string (zencode_id id)
   | Unit -> string "unit"
   | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
@@ -134,7 +135,9 @@ let rec fold_smt_exp f = function
   | Tl (tl_op, xs) -> f (Tl (tl_op, fold_smt_exp f xs))
   | Struct (struct_id, fields) ->
       f (Struct (struct_id, List.map (fun (field_id, exp) -> (field_id, fold_smt_exp f exp)) fields))
-  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list) as exp -> f exp
+  | (Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Global_var _ | Var _ | Unit | Member _ | Empty_list) as exp
+    ->
+      f exp
 
 let rec iter_smt_exp f exp =
   f exp;
@@ -158,7 +161,7 @@ let rec iter_smt_exp f exp =
       iter_smt_exp f index;
       iter_smt_exp f exp
   | Struct (_, fields) -> List.iter (fun (_, field) -> iter_smt_exp f field) fields
-  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> ()
+  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Global_var _ | Var _ | Unit | Member _ | Empty_list -> ()
 
 let rec smt_exp_size = function
   | Fn (_, args) -> 1 + List.fold_left (fun n arg -> n + smt_exp_size arg) 0 args
@@ -174,7 +177,7 @@ let rec smt_exp_size = function
       1 + smt_exp_size exp
   | Store (_, _, arr, index, exp) -> 1 + smt_exp_size arr + smt_exp_size index + smt_exp_size exp
   | Struct (_, fields) -> 1 + List.fold_left (fun n (_, field) -> n + smt_exp_size field) 0 fields
-  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> 1
+  | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Global_var _ | Var _ | Unit | Member _ | Empty_list -> 1
 
 let extract ~from i j x = Extract (i, j, from, x)
 
@@ -887,7 +890,8 @@ module Simplifier = struct
       | Struct (struct_id, fields) ->
           let fields' = map_no_copy (fun (field_id, exp) -> (field_id, go simpset exp)) fields in
           if fields == fields' then no_change else Struct (struct_id, fields')
-      | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Var _ | Unit | Member _ | Empty_list -> no_change
+      | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Global_var _ | Var _ | Unit | Member _ | Empty_list ->
+          no_change
     in
     let exp = go simpset exp in
     (!changes, exp)
@@ -929,7 +933,7 @@ let simp simpset exp =
                Repeat rule_or_assume;
              ]
           )
-    | Var _ -> run_strategy simpset exp rule_var
+    | Global_var _ | Var _ -> run_strategy simpset exp rule_var
     | Fn ("=", _) -> run_strategy simpset exp (Then [rule_inequality; rule_simp_eq; rule_concat_literal_eq])
     | Fn ("not", _) ->
         run_strategy simpset exp

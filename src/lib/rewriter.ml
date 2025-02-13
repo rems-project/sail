@@ -177,7 +177,7 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
-  | E_id _ | E_lit _ -> rewrap exp
+  | E_id _ | E_gid _ | E_lit _ -> rewrap exp
   | E_typ (typ, exp) -> rewrap (E_typ (typ, rewrite exp))
   | E_app (id, exps) -> rewrap (E_app (id, List.map rewrite exps))
   | E_app_infix (el, id, er) -> rewrap (E_app_infix (rewrite el, id, rewrite er))
@@ -476,6 +476,7 @@ type ( 'a,
      exp_alg = {
   e_block : 'exp list -> 'exp_aux;
   e_id : id -> 'exp_aux;
+  e_gid : id -> 'exp_aux;
   e_ref : id -> 'exp_aux;
   e_lit : lit -> 'exp_aux;
   e_typ : Ast.typ * 'exp -> 'exp_aux;
@@ -538,6 +539,7 @@ type ( 'a,
 let rec fold_exp_aux alg = function
   | E_block es -> alg.e_block (List.map (fold_exp alg) es)
   | E_id id -> alg.e_id id
+  | E_gid id -> alg.e_gid id
   | E_ref id -> alg.e_ref id
   | E_lit lit -> alg.e_lit lit
   | E_typ (typ, e) -> alg.e_typ (typ, fold_exp alg e)
@@ -620,6 +622,7 @@ let id_exp_alg =
   {
     e_block = (fun es -> E_block es);
     e_id = (fun id -> E_id id);
+    e_gid = (fun id -> E_gid id);
     e_ref = (fun id -> E_ref id);
     e_lit = (fun lit -> E_lit lit);
     e_typ = (fun (typ, e) -> E_typ (typ, e));
@@ -729,6 +732,7 @@ let compute_exp_alg bot join =
   {
     e_block = split_join (fun es -> E_block es);
     e_id = (fun id -> (bot, E_id id));
+    e_gid = (fun id -> (bot, E_gid id));
     e_ref = (fun id -> (bot, E_ref id));
     e_lit = (fun lit -> (bot, E_lit lit));
     e_typ = (fun (typ, (v, e)) -> (v, E_typ (typ, e)));
@@ -850,6 +854,7 @@ let pure_exp_alg bot join =
   {
     e_block = join_list;
     e_id = (fun id -> bot);
+    e_gid = (fun id -> bot);
     e_ref = (fun id -> bot);
     e_lit = (fun lit -> bot);
     e_typ = (fun (typ, v) -> v);
@@ -997,7 +1002,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_block (List.rev es)))
-  | E_id _ | E_ref _ | E_lit _ -> (x, exp)
+  | E_id _ | E_gid _ | E_ref _ | E_lit _ -> (x, exp)
   | E_typ (typ, e) ->
       let x, e = f x e in
       (x, re (E_typ (typ, e)))

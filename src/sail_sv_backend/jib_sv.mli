@@ -74,6 +74,8 @@ module type CONFIG = sig
       SystemVerilog. *)
   val no_strings : bool
 
+  val no_toplevel_globals : bool
+
   val no_packed : bool
 
   (** If true, then all assertions are treated as no-ops *)
@@ -150,9 +152,9 @@ module Make (Config : CONFIG) : sig
 
   val wrap_type : Jib.ctyp -> PPrint.document -> PPrint.document
 
-  val pp_id_string : Ast.id -> string
+  val pp_id_string : ?is_global:bool -> Ast.id -> string
 
-  val pp_id : Ast.id -> PPrint.document
+  val pp_id : ?is_global:bool -> Ast.id -> PPrint.document
 
   val main_args :
     Jib.cdef option ->

@@ -353,6 +353,7 @@ let string_of_exp_con (E_aux (e, _)) =
   | E_internal_assume _ -> "E_internal_assume"
   | E_internal_value _ -> "E_internal_value"
   | E_id _ -> "E_id"
+  | E_gid _ -> "E_gid"
   | E_lit _ -> "E_lit"
   | E_typ _ -> "E_typ"
   | E_app _ -> "E_app"

@@ -126,6 +126,10 @@ let rec visit_cval vis outer_cval =
         let name' = visit_name vis name in
         let ctyp' = visit_ctyp vis ctyp in
         if name == name' && ctyp == ctyp' then no_change else V_id (name', ctyp')
+    | V_gid (name, ctyp) ->
+        let name' = visit_name vis name in
+        let ctyp' = visit_ctyp vis ctyp in
+        if name == name' && ctyp == ctyp' then no_change else V_gid (name', ctyp')
     | V_member (id, ctyp) ->
         let ctyp' = visit_ctyp vis ctyp in
         if ctyp == ctyp' then no_change else V_member (id, ctyp')

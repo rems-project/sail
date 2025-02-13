@@ -141,7 +141,7 @@ let unique_per_function_ids cdefs =
   List.mapi unique_cdef cdefs
 
 let rec cval_subst id subst = function
-  | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
+  | (V_gid (id', ctyp) as v) | (V_id (id', ctyp) as v) -> if Name.compare id id' = 0 then subst else v
   | V_member (id, ctyp) -> V_member (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
@@ -154,6 +154,7 @@ let rec cval_subst id subst = function
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
+  | V_gid (id, ctyp) -> V_gid (f id, ctyp)
   | V_member (id, ctyp) -> V_member (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
@@ -498,6 +499,7 @@ let remove_tuples cdefs ctx =
         ctyp
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
+    | V_gid (id, ctyp) -> V_gid (id, ctyp)
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_ctor_kind (cval, ctor, ctyp) -> V_ctor_kind (fix_cval cval, ctor, ctyp)

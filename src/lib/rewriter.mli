@@ -131,6 +131,7 @@ type ( 'a,
      exp_alg = {
   e_block : 'exp list -> 'exp_aux;
   e_id : id -> 'exp_aux;
+  e_gid : id -> 'exp_aux;
   e_ref : id -> 'exp_aux;
   e_lit : lit -> 'exp_aux;
   e_typ : Ast.typ * 'exp -> 'exp_aux;

@@ -91,6 +91,7 @@ let opt_max_unknown_integer_width = ref 128
 let opt_max_unknown_bitvector_width = ref 128
 
 let opt_no_strings = ref false
+let opt_no_toplevel_globals = ref false
 let opt_no_packed = ref false
 let opt_no_assertions = ref false
 let opt_never_pack_unions = ref false
@@ -170,6 +171,10 @@ let verilog_options =
       "set the maximum width for bitvectors with unknown width"
     );
     (Flag.create ~prefix:["sv"] "no_strings", Arg.Set opt_no_strings, "don't emit any strings, instead emit units");
+    ( Flag.create ~prefix:["sv"] "no_toplevel_globals",
+      Arg.Set opt_no_toplevel_globals,
+      "declare global signals in 'sail_toplevel' module instead of toplevel."
+    );
     (Flag.create ~prefix:["sv"] "no_packed", Arg.Set opt_no_packed, "don't emit packed datastructures");
     (Flag.create ~prefix:["sv"] "no_assertions", Arg.Set opt_no_assertions, "ignore all Sail asserts");
     (Flag.create ~prefix:["sv"] "never_pack_unions", Arg.Set opt_never_pack_unions, "never emit a packed union");
@@ -227,6 +232,7 @@ let verilog_rewrites =
     ("merge_function_clauses", []);
     ("recheck_defs", []);
     ("constant_fold", [String_arg "systemverilog"]);
+    ("remove_global_vars", []);
     ("unroll_constant_loops", [If_flag opt_unroll_loops]);
   ]
 
@@ -446,6 +452,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width
     let line_directives = !opt_line_directives
     let no_strings = !opt_no_strings
+    let no_toplevel_globals = !opt_no_toplevel_globals
     let no_packed = !opt_no_packed
     let no_assertions = !opt_no_assertions
     let never_pack_unions = !opt_never_pack_unions

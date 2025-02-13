@@ -1000,7 +1000,7 @@ let doc_exp_lem, doc_let_lem =
       )
     | E_block [] -> string "()"
     | E_block exps -> raise (report l __POS__ "Blocks should have been removed till now.")
-    | E_id id | E_ref id ->
+    | E_id id | E_gid id | E_ref id ->
         let env = env_of full_exp in
         let typ = typ_of full_exp in
         let base_typ = Env.base_typ_of env typ in

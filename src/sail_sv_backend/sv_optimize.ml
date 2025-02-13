@@ -316,7 +316,7 @@ module RemoveUnusedVariables = struct
         else Forbid
     | Field (_, _, x) -> can_propagate stack name x
     | Unwrap (_, _, x) -> can_propagate stack name x
-    | Var v ->
+    | Global_var v | Var v ->
         let rec walk found = function
           | Block (_, vars) :: tail ->
               let found = found || NameMap.mem name vars in
@@ -365,7 +365,7 @@ module RemoveUnusedVariables = struct
 
       method! vsmt_exp =
         function
-        | Var name -> begin
+        | Global_var name | Var name -> begin
             match self#get_vnum name with
             | Some (_, vnum, ctyp) ->
                 let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
@@ -524,7 +524,7 @@ module RemoveUnusedVariables = struct
     | None -> ()
 
   let rec smt_uses ?(propagated = false) stack uses = function
-    | Var name -> add_use ~read:true ~propagated name stack uses
+    | Global_var name | Var name -> add_use ~read:true ~propagated name stack uses
     | Bool_lit _ | Bitvec_lit _ | Real_lit _ | String_lit _ | Unit | Member _ | Empty_list -> ()
     | SignExtend (_, _, exp)
     | ZeroExtend (_, _, exp)

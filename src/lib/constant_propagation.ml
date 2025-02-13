@@ -345,7 +345,7 @@ let const_props target ast =
       | E_block es ->
           let es', assigns = threaded_map (const_prop_exp substs) assigns es in
           re (E_block es') assigns
-      | E_id id ->
+      | E_id id | E_gid id ->
           let env = Type_check.env_of_annot (l, annot) in
           ( ( try
                 match Env.lookup_id id env with
