@@ -550,6 +550,7 @@ let collect_spec_info ctx cdefs =
 module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
+  val global_prefix : string option
   val line_directives : bool
   val no_strings : bool
   val no_packed : bool
@@ -592,17 +593,20 @@ module Make (Config : CONFIG) = struct
     in
     Str.string_match regexp s 0
 
-  let pp_id_string id =
+  let pp_id_string ?(is_global = false) id =
     let s = string_of_id id in
-    if
-      valid_sv_identifier s
-      && (not (has_bad_prefix s))
-      && (not (StringSet.mem s Keywords.sv_reserved_words))
-      && not (StringSet.mem s Keywords.sv_used_words)
-    then s
-    else Util.zencode_string s
+    let s =
+      if
+        valid_sv_identifier s
+        && (not (has_bad_prefix s))
+        && (not (StringSet.mem s Keywords.sv_reserved_words))
+        && not (StringSet.mem s Keywords.sv_used_words)
+      then s
+      else Util.zencode_string s
+    in
+    match Config.global_prefix with Some prefix when is_global -> prefix ^ "." ^ s | _ -> s
 
-  let pp_id id = string (pp_id_string id)
+  let pp_id ?(is_global = false) id = string (pp_id_string ~is_global id)
 
   let pp_sv_name_string = function SVN_id id -> pp_id_string id | SVN_string s -> s
 
@@ -719,10 +723,10 @@ module Make (Config : CONFIG) = struct
   let mapM = Smt_gen.mapM
   let fmap = Smt_gen.fmap
 
-  let pp_name =
+  let pp_name ?(is_global = false) =
     let ssa_num n = if n = -1 then empty else string ("_" ^ string_of_int n) in
     function
-    | Name (id, n) -> pp_id id ^^ ssa_num n
+    | Name (id, n) -> pp_id ~is_global id ^^ ssa_num n
     | Have_exception n -> string "sail_have_exception" ^^ ssa_num n
     | Current_exception n -> string "sail_current_exception" ^^ ssa_num n
     | Throw_location n -> string "sail_throw_location" ^^ ssa_num n
@@ -730,6 +734,9 @@ module Make (Config : CONFIG) = struct
     | Channel (Chan_stderr, n) -> string "sail_stderr" ^^ ssa_num n
     | Memory_writes n -> string "sail_writes" ^^ ssa_num n
     | Return n -> string "sail_return" ^^ ssa_num n
+
+  let pp_var spec_info name =
+    if NameSet.mem name spec_info.global_lets then pp_name ~is_global:true name else pp_name ~is_global:false name
 
   let wrap_type ctyp doc =
     match sv_ctyp ctyp with
@@ -990,113 +997,112 @@ module Make (Config : CONFIG) = struct
     | _ -> None
 
   (* Convert a SMTLIB expression into SystemVerilog *)
-  let rec pp_smt ?(need_parens = false) =
-    let pp_smt_parens exp = pp_smt ~need_parens:true exp in
-    let opt_parens doc = if need_parens then parens doc else doc in
-    function
-    | Bitvec_lit [] -> string "SAIL_ZWBV"
-    | Bitvec_lit bits ->
-        let len = List.length bits in
-        if all_zeros bits then ksprintf string "%d'h0" len
-        else if len mod 4 = 0 && not (has_undefined_bit bits) then
-          ksprintf string "%d'h%s" len (hex_bitvector ~drop_leading_zeros:true bits)
-        else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
-    | Bool_lit true -> string "1'h1"
-    | Bool_lit false -> string "1'h0"
-    | String_lit s -> if Config.no_strings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
-    | Unit -> string "SAIL_UNIT"
-    | Member id -> string (string_of_id id)
-    | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
-    | Fn ("Bits", [size; bv]) -> squote ^^ lbrace ^^ pp_smt size ^^ comma ^^ space ^^ pp_smt bv ^^ rbrace
-    | Fn ("concat", xs) -> lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
-    | Fn ("not", [Fn ("not", [x])]) -> pp_smt ~need_parens x
-    | Fn ("not", [Fn ("=", [x; y])]) -> opt_parens (separate space [pp_smt_parens x; string "!="; pp_smt_parens y])
-    | Fn ("not", [x]) -> opt_parens (char '!' ^^ pp_smt_parens x)
-    | Fn ("=", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "=="; pp_smt_parens y])
-    | Fn ("and", xs) -> opt_parens (separate_map (space ^^ string "&&" ^^ space) pp_smt_parens xs)
-    | Fn ("or", xs) -> opt_parens (separate_map (space ^^ string "||" ^^ space) pp_smt_parens xs)
-    | Fn ("bvnot", [x]) -> opt_parens (char '~' ^^ pp_smt_parens x)
-    | Fn ("bvneg", [x]) -> opt_parens (char '-' ^^ pp_smt_parens x)
-    | Fn ("bvand", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '&'; pp_smt_parens y])
-    | Fn ("bvnand", [x; y]) ->
-        opt_parens (char '~' ^^ parens (separate space [pp_smt_parens x; char '&'; pp_smt_parens y]))
-    | Fn ("bvor", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '|'; pp_smt_parens y])
-    | Fn ("bvnor", [x; y]) ->
-        opt_parens (char '~' ^^ parens (separate space [pp_smt_parens x; char '|'; pp_smt_parens y]))
-    | Fn ("bvxor", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '^'; pp_smt_parens y])
-    | Fn ("bvxnor", [x; y]) ->
-        opt_parens (char '~' ^^ parens (separate space [pp_smt_parens x; char '^'; pp_smt_parens y]))
-    | Fn ("bvadd", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '+'; pp_smt_parens y])
-    | Fn ("bvsub", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '-'; pp_smt_parens y])
-    | Fn ("bvmul", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '*'; pp_smt_parens y])
-    | Fn ("bvult", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '<'; pp_smt_parens y])
-    | Fn ("bvule", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "<="; pp_smt_parens y])
-    | Fn ("bvugt", [x; y]) -> opt_parens (separate space [pp_smt_parens x; char '>'; pp_smt_parens y])
-    | Fn ("bvuge", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">="; pp_smt_parens y])
-    | Fn ("bvslt", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); char '<'; sv_signed (pp_smt y)])
-    | Fn ("bvsle", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "<="; sv_signed (pp_smt y)])
-    | Fn ("bvsgt", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); char '>'; sv_signed (pp_smt y)])
-    | Fn ("bvsge", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string ">="; sv_signed (pp_smt y)])
-    | Fn ("bvshl", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "<<"; sv_signed (pp_smt y)])
-    | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>"; sv_signed (pp_smt y)])
-    | Fn ("bvashr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>>"; sv_signed (pp_smt y)])
-    (* SV LRM: The integer division shall truncate any fractional part toward zero
-       SMTLIB bvsdiv: Truncation is towards zero (could not find official reference, but z3 and cvc5 are consistent). *)
-    | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "/"; sv_signed (pp_smt y)])
-    (* SV LRM: The result of a modulus operation shall take the sign of the first operand (dividend).
-       SMTLIB bvsrem: Sign follows dividend *)
-    | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
-    | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
-    | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "bits"
-    | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)
-    | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "size"
-    | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pp_smt x)
-    | Fn ("cons", [x; xs]) -> lbrace ^^ pp_smt x ^^ comma ^^ space ^^ pp_smt xs ^^ rbrace
-    | Fn ("str.++", xs) -> lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
-    | Fn ("Array", xs) -> squote ^^ lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
-    | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) pp_smt args)
-    | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pp_smt [arr; i; x])
-    | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pp_smt x ^^ string "})))"
-    | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ pp_smt x ^^ string "})"
-    | Extract (n, m, _, Bitvec_lit bits) ->
-        pp_smt (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
-    | Extract (n, m, len, Var v) ->
-        if len = 1 then pp_name v
-        else if n = m then pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
-        else pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
-    | Extract (n, m, len, x) ->
-        if len = 1 then pp_smt x
-        else if n = m then braces (pp_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
-        else braces (pp_smt x) ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
-    | Var v -> pp_name v
-    | Tester (ctor, v) ->
-        opt_parens
-          (separate space
-             [pp_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> zencode_id |> String.uppercase_ascii)]
-          )
-    | Unwrap (ctor, packed, v) ->
-        let packed_ctor = if Config.union_padding then pp_id ctor ^^ dot ^^ pp_id ctor else pp_id ctor in
-        if packed then pp_smt v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else pp_smt v ^^ dot ^^ pp_id ctor
-    | Field (_, field, v) -> pp_smt v ^^ dot ^^ pp_id field
-    | Ite (cond, then_exp, else_exp) ->
-        parens (separate space [pp_smt_parens cond; char '?'; pp_smt_parens then_exp; char ':'; pp_smt_parens else_exp])
-    | Empty_list -> string "{}"
-    | Hd (op, arg) -> begin
-        match tails arg with
-        | Some (index, v) -> pp_name v ^^ brackets (string (string_of_int index))
-        | None -> string op ^^ parens (pp_smt arg)
-      end
-    | Tl (op, arg) -> string op ^^ parens (pp_smt arg)
-    | _ -> empty
+  let pp_smt spec_info exp =
+    let rec pretty ?(need_parens = false) =
+      let with_parens exp = pretty ~need_parens:true exp in
+      let opt_parens doc = if need_parens then parens doc else doc in
+      function
+      | Bitvec_lit [] -> string "SAIL_ZWBV"
+      | Bitvec_lit bits ->
+          let len = List.length bits in
+          if all_zeros bits then ksprintf string "%d'h0" len
+          else if len mod 4 = 0 && not (has_undefined_bit bits) then
+            ksprintf string "%d'h%s" len (hex_bitvector ~drop_leading_zeros:true bits)
+          else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
+      | Bool_lit true -> string "1'h1"
+      | Bool_lit false -> string "1'h0"
+      | String_lit s -> if Config.no_strings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
+      | Unit -> string "SAIL_UNIT"
+      | Member id -> string (string_of_id id)
+      | Fn ("reg_ref", [String_lit r]) -> ksprintf string "SAIL_REG_%s" (Util.zencode_upper_string r)
+      | Fn ("Bits", [size; bv]) -> squote ^^ lbrace ^^ pretty size ^^ comma ^^ space ^^ pretty bv ^^ rbrace
+      | Fn ("concat", xs) -> lbrace ^^ separate_map (comma ^^ space) pretty xs ^^ rbrace
+      | Fn ("not", [Fn ("not", [x])]) -> pretty ~need_parens x
+      | Fn ("not", [Fn ("=", [x; y])]) -> opt_parens (separate space [with_parens x; string "!="; with_parens y])
+      | Fn ("not", [x]) -> opt_parens (char '!' ^^ with_parens x)
+      | Fn ("=", [x; y]) -> opt_parens (separate space [with_parens x; string "=="; with_parens y])
+      | Fn ("and", xs) -> opt_parens (separate_map (space ^^ string "&&" ^^ space) with_parens xs)
+      | Fn ("or", xs) -> opt_parens (separate_map (space ^^ string "||" ^^ space) with_parens xs)
+      | Fn ("bvnot", [x]) -> opt_parens (char '~' ^^ with_parens x)
+      | Fn ("bvneg", [x]) -> opt_parens (char '-' ^^ with_parens x)
+      | Fn ("bvand", [x; y]) -> opt_parens (separate space [with_parens x; char '&'; with_parens y])
+      | Fn ("bvnand", [x; y]) ->
+          opt_parens (char '~' ^^ parens (separate space [with_parens x; char '&'; with_parens y]))
+      | Fn ("bvor", [x; y]) -> opt_parens (separate space [with_parens x; char '|'; with_parens y])
+      | Fn ("bvnor", [x; y]) -> opt_parens (char '~' ^^ parens (separate space [with_parens x; char '|'; with_parens y]))
+      | Fn ("bvxor", [x; y]) -> opt_parens (separate space [with_parens x; char '^'; with_parens y])
+      | Fn ("bvxnor", [x; y]) ->
+          opt_parens (char '~' ^^ parens (separate space [with_parens x; char '^'; with_parens y]))
+      | Fn ("bvadd", [x; y]) -> opt_parens (separate space [with_parens x; char '+'; with_parens y])
+      | Fn ("bvsub", [x; y]) -> opt_parens (separate space [with_parens x; char '-'; with_parens y])
+      | Fn ("bvmul", [x; y]) -> opt_parens (separate space [with_parens x; char '*'; with_parens y])
+      | Fn ("bvult", [x; y]) -> opt_parens (separate space [with_parens x; char '<'; with_parens y])
+      | Fn ("bvule", [x; y]) -> opt_parens (separate space [with_parens x; string "<="; with_parens y])
+      | Fn ("bvugt", [x; y]) -> opt_parens (separate space [with_parens x; char '>'; with_parens y])
+      | Fn ("bvuge", [x; y]) -> opt_parens (separate space [with_parens x; string ">="; with_parens y])
+      | Fn ("bvslt", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); char '<'; sv_signed (pretty y)])
+      | Fn ("bvsle", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); string "<="; sv_signed (pretty y)])
+      | Fn ("bvsgt", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); char '>'; sv_signed (pretty y)])
+      | Fn ("bvsge", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); string ">="; sv_signed (pretty y)])
+      | Fn ("bvshl", [x; y]) -> opt_parens (separate space [with_parens x; string "<<"; sv_signed (pretty y)])
+      | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [with_parens x; string ">>"; sv_signed (pretty y)])
+      | Fn ("bvashr", [x; y]) -> opt_parens (separate space [with_parens x; string ">>>"; sv_signed (pretty y)])
+      (* SV LRM: The integer division shall truncate any fractional part toward zero
+         SMTLIB bvsdiv: Truncation is towards zero (could not find official reference, but z3 and cvc5 are consistent). *)
+      | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); string "/"; sv_signed (pretty y)])
+      (* SV LRM: The result of a modulus operation shall take the sign of the first operand (dividend).
+         SMTLIB bvsrem: Sign follows dividend *)
+      | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pretty x); string "%"; sv_signed (pretty y)])
+      | Fn ("select", [x; i]) -> with_parens x ^^ lbracket ^^ pretty i ^^ rbracket
+      | Fn ("contents", [Var v]) -> pp_var spec_info v ^^ dot ^^ string "bits"
+      | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pretty x)
+      | Fn ("len", [Var v]) -> pp_var spec_info v ^^ dot ^^ string "size"
+      | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pretty x)
+      | Fn ("cons", [x; xs]) -> lbrace ^^ pretty x ^^ comma ^^ space ^^ pretty xs ^^ rbrace
+      | Fn ("str.++", xs) -> lbrace ^^ separate_map (comma ^^ space) pretty xs ^^ rbrace
+      | Fn ("Array", xs) -> squote ^^ lbrace ^^ separate_map (comma ^^ space) pretty xs ^^ rbrace
+      | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) pretty args)
+      | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pretty [arr; i; x])
+      | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pretty x ^^ string "})))"
+      | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ pretty x ^^ string "})"
+      | Extract (n, m, _, Bitvec_lit bits) ->
+          pretty (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
+      | Extract (n, m, len, Var v) ->
+          if len = 1 then pp_var spec_info v
+          else if n = m then pp_var spec_info v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+          else
+            pp_var spec_info v ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
+      | Extract (n, m, len, x) ->
+          if len = 1 then pretty x
+          else if n = m then braces (pretty x) ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
+          else
+            braces (pretty x) ^^ lbracket ^^ string (string_of_int n) ^^ colon ^^ string (string_of_int m) ^^ rbracket
+      | Var v -> pp_var spec_info v
+      | Tester (ctor, v) ->
+          opt_parens
+            (separate space
+               [pretty v ^^ dot ^^ string "tag"; string "=="; string (ctor |> zencode_id |> String.uppercase_ascii)]
+            )
+      | Unwrap (ctor, packed, v) ->
+          let packed_ctor = if Config.union_padding then pp_id ctor ^^ dot ^^ pp_id ctor else pp_id ctor in
+          if packed then pretty v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else pretty v ^^ dot ^^ pp_id ctor
+      | Field (_, field, v) -> pretty v ^^ dot ^^ pp_id field
+      | Ite (cond, then_exp, else_exp) ->
+          parens (separate space [with_parens cond; char '?'; with_parens then_exp; char ':'; with_parens else_exp])
+      | Empty_list -> string "{}"
+      | Hd (op, arg) -> begin
+          match tails arg with
+          | Some (index, v) -> pp_var spec_info v ^^ brackets (string (string_of_int index))
+          | None -> string op ^^ parens (pretty arg)
+        end
+      | Tl (op, arg) -> string op ^^ parens (pretty arg)
+      | _ -> empty
+    in
+    pretty exp
 
-  let sv_cval cval =
+  let sv_cval spec_info cval =
     let* smt = Smt.smt_cval cval in
-    return (pp_smt smt)
-
-  let rec sv_clexp = function
-    | CL_id (id, _) -> pp_name id
-    | CL_field (clexp, field) -> sv_clexp clexp ^^ dot ^^ pp_id field
-    | clexp -> string ("// CLEXP " ^ Jib_util.string_of_clexp clexp)
+    return (pp_smt spec_info smt)
 
   let svir_update_fbits = function
     | [bv; index; bit] -> begin
@@ -1129,13 +1135,6 @@ module Make (Config : CONFIG) = struct
     | Some (p1, _) when Config.line_directives ->
         ksprintf string "`line %d \"%s\" 0" p1.pos_lnum p1.pos_fname ^^ hardline
     | _ -> empty
-
-  let sv_assign clexp value =
-    match clexp with
-    | CL_addr (CL_id (id, CT_ref reg_ctyp)) ->
-        let encoded = Util.zencode_string (string_of_ctyp reg_ctyp) in
-        ksprintf string "sail_reg_assign_%s" encoded ^^ parens (pp_name id ^^ comma ^^ space ^^ value) ^^ semi
-    | _ -> sv_clexp clexp ^^ space ^^ equals ^^ space ^^ value ^^ semi
 
   let rec svir_clexp ?(parents = []) = function
     | CL_id (id, _) -> ([], SVP_id id)
@@ -1398,76 +1397,85 @@ module Make (Config : CONFIG) = struct
     | I_clear _ | I_reset _ | I_reinit _ ->
         Reporting.unreachable l __POS__ "Cleanup commands should not appear in SystemVerilog backend"
 
-  let rec pp_place = function
-    | SVP_id id -> pp_name id
-    | SVP_index (place, i) -> pp_place place ^^ lbracket ^^ pp_smt i ^^ rbracket
-    | SVP_field (place, field) -> pp_place place ^^ dot ^^ pp_id field
-    | SVP_multi places -> parens (separate_map (comma ^^ space) pp_place places)
+  let rec pp_place spec_info = function
+    | SVP_id id -> pp_var spec_info id
+    | SVP_index (place, i) -> pp_place spec_info place ^^ lbracket ^^ pp_smt spec_info i ^^ rbracket
+    | SVP_field (place, field) -> pp_place spec_info place ^^ dot ^^ pp_id field
+    | SVP_multi places -> parens (separate_map (comma ^^ space) (pp_place spec_info) places)
     | SVP_void _ -> string "void"
 
   let pp_sv_name = function SVN_id id -> pp_id id | SVN_string s -> string s
 
-  let rec pp_statement ?(terminator = semi ^^ hardline) (SVS_aux (aux, l)) =
+  let rec pp_statement ?(terminator = semi ^^ hardline) spec_info (SVS_aux (aux, l)) =
     let ld = sv_line_directive l in
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
     | SVS_assert (cond, msg) ->
         separate space
-          [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
+          [
+            string "if";
+            parens (pp_smt spec_info cond) ^^ semi;
+            string "else";
+            string "$fatal" ^^ parens (pp_smt spec_info msg);
+          ]
         ^^ terminator
     | SVS_foreach (i, exp, stmt) ->
-        separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
-        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
+        separate space [string "foreach"; parens (pp_smt spec_info exp ^^ brackets (pp_sv_name i))]
+        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty spec_info stmt)
         ^^ terminator
     | SVS_for (loop, stmt) ->
         let vars =
           let i, ctyp, init = loop.for_var in
-          separate space [wrap_type ctyp (pp_name i); equals; pp_smt init]
+          separate space [wrap_type ctyp (pp_name i); equals; pp_smt spec_info init]
         in
         let modifier =
           match loop.for_modifier with
           | SVF_increment i -> pp_name i ^^ string "++"
           | SVF_decrement i -> pp_name i ^^ string "--"
         in
-        separate space [string "for"; parens (separate (semi ^^ space) [vars; pp_smt loop.for_cond; modifier])]
-        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
+        separate space
+          [string "for"; parens (separate (semi ^^ space) [vars; pp_smt spec_info loop.for_cond; modifier])]
+        ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty spec_info stmt)
         ^^ terminator
     | SVS_var (id, ctyp, init_opt) -> begin
         match init_opt with
-        | Some init -> ld ^^ separate space [wrap_type ctyp (pp_name id); equals; pp_smt init] ^^ terminator
+        | Some init -> ld ^^ separate space [wrap_type ctyp (pp_name id); equals; pp_smt spec_info init] ^^ terminator
         | None -> ld ^^ wrap_type ctyp (pp_name id) ^^ terminator
       end
-    | SVS_return smt -> string "return" ^^ space ^^ pp_smt smt ^^ terminator
-    | SVS_assign (place, value) -> ld ^^ separate space [pp_place place; equals; pp_smt value] ^^ terminator
+    | SVS_return smt -> string "return" ^^ space ^^ pp_smt spec_info smt ^^ terminator
+    | SVS_assign (place, value) ->
+        ld ^^ separate space [pp_place spec_info place; equals; pp_smt spec_info value] ^^ terminator
     | SVS_continuous_assign (place, value) ->
-        ld ^^ separate space [pp_place place; string "<="; pp_smt value] ^^ terminator
+        ld ^^ separate space [pp_place spec_info place; string "<="; pp_smt spec_info value] ^^ terminator
     | SVS_call (place, ctor, args) ->
         ld
-        ^^ separate space [pp_place place; equals; pp_sv_name ctor]
-        ^^ parens (separate_map (comma ^^ space) pp_smt args)
+        ^^ separate space [pp_place spec_info place; equals; pp_sv_name ctor]
+        ^^ parens (separate_map (comma ^^ space) (pp_smt spec_info) args)
         ^^ terminator
     | SVS_if (_, None, None) -> empty
     | SVS_if (cond, None, Some else_block) ->
-        let cond = pp_smt (Fn ("not", [cond])) in
-        string "if" ^^ space ^^ parens cond ^^ space ^^ pp_statement else_block
+        let cond = pp_smt spec_info (Fn ("not", [cond])) in
+        string "if" ^^ space ^^ parens cond ^^ space ^^ pp_statement spec_info else_block
     | SVS_if (cond, Some then_block, None) ->
-        string "if" ^^ space ^^ parens (pp_smt cond) ^^ space ^^ pp_statement then_block
+        string "if" ^^ space ^^ parens (pp_smt spec_info cond) ^^ space ^^ pp_statement spec_info then_block
     | SVS_if (cond, Some then_block, Some else_block) ->
         string "if" ^^ space
-        ^^ parens (pp_smt cond)
+        ^^ parens (pp_smt spec_info cond)
         ^^ space
-        ^^ pp_statement ~terminator:hardline then_block
-        ^^ string "else" ^^ space ^^ pp_statement else_block
+        ^^ pp_statement ~terminator:hardline spec_info then_block
+        ^^ string "else" ^^ space ^^ pp_statement spec_info else_block
     | SVS_case { head_exp; cases; fallthrough } ->
-        let pp_case (exp, statement) = separate space [pp_smt exp; colon; pp_statement ~terminator:semi statement] in
+        let pp_case (exp, statement) =
+          separate space [pp_smt spec_info exp; colon; pp_statement ~terminator:semi spec_info statement]
+        in
         let pp_fallthrough = function
           | None -> empty
           | Some statement ->
-              hardline ^^ separate space [string "default"; colon; pp_statement ~terminator:semi statement]
+              hardline ^^ separate space [string "default"; colon; pp_statement ~terminator:semi spec_info statement]
         in
         string "case" ^^ space
-        ^^ parens (pp_smt head_exp)
+        ^^ parens (pp_smt spec_info head_exp)
         ^^ nest 4 (hardline ^^ separate_map hardline pp_case cases ^^ pp_fallthrough fallthrough)
         ^^ hardline ^^ string "endcase" ^^ terminator
     | SVS_block statements ->
@@ -1476,7 +1484,8 @@ module Make (Config : CONFIG) = struct
         string "begin"
         ^^ nest 4
              (hardline
-             ^^ concat (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last)) statements)
+             ^^ concat
+                  (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last) spec_info) statements)
              )
         ^^ hardline ^^ string "end" ^^ terminator
     | SVS_raw (s, _, _) -> string s ^^ terminator
@@ -1484,7 +1493,7 @@ module Make (Config : CONFIG) = struct
 
   let sv_instr spec_info ctx instr =
     let* statement_opt = svir_instr spec_info ctx instr in
-    match statement_opt with Some statement -> return (pp_statement statement) | None -> return empty
+    match statement_opt with Some statement -> return (pp_statement spec_info statement) | None -> return empty
 
   let sv_checked_instr spec_info ctx (I_aux (_, (_, l)) as instr) =
     let v, _ = Smt_gen.run (sv_instr spec_info ctx instr) l in
@@ -2338,7 +2347,7 @@ module Make (Config : CONFIG) = struct
       defs = List.map mk_def defs;
     }
 
-  let rec pp_module m =
+  let rec pp_module spec_info m =
     let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
     let ports =
       match (m.input_ports, m.output_ports) with
@@ -2362,10 +2371,10 @@ module Make (Config : CONFIG) = struct
       else doc
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
-    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def (Some m.name)) m.defs))
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def spec_info (Some m.name)) m.defs))
     ^^ hardline ^^ string "endmodule"
 
-  and pp_fundef f =
+  and pp_fundef spec_info f =
     let ret_ty, typedef =
       match f.return_type with
       | Some ret_ctyp ->
@@ -2386,8 +2395,8 @@ module Make (Config : CONFIG) = struct
     let block_terminator last = if last then semi else semi ^^ hardline in
     let pp_body = function
       | SVS_aux (SVS_block statements, _) ->
-          concat (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last)) statements)
-      | statement -> pp_statement ~terminator:semi statement
+          concat (Util.map_last (fun last -> pp_statement ~terminator:(block_terminator last) spec_info) statements)
+      | statement -> pp_statement ~terminator:semi spec_info statement
     in
     typedef
     ^^ separate space [string "function"; string "automatic"; ret_ty; pp_sv_name f.function_name]
@@ -2396,31 +2405,31 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ pp_body f.body)
     ^^ hardline ^^ string "endfunction"
 
-  and pp_def in_module (SVD_aux (aux, _)) =
+  and pp_def spec_info in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
     | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
-    | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi statement
+    | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi spec_info statement
     | SVD_always_ff statement ->
         let posedge_clk = char '@' ^^ parens (string "posedge" ^^ space ^^ string "clk") in
-        separate space [string "always_ff"; posedge_clk; pp_statement ~terminator:semi statement]
-    | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi statement
+        separate space [string "always_ff"; posedge_clk; pp_statement ~terminator:semi spec_info statement]
+    | SVD_always_comb statement -> string "always_comb" ^^ space ^^ pp_statement ~terminator:semi spec_info statement
     | SVD_instantiate { module_name; instance_name; input_connections; output_connections } ->
         let params =
           match in_module with
           | Some name when SVName.compare module_name name = 0 -> space ^^ string "#(RECURSION_DEPTH - 1)"
           | _ -> empty
         in
-        let inputs = List.map (fun exp -> pp_smt exp) input_connections in
-        let outputs = List.map pp_place output_connections in
+        let inputs = List.map (fun exp -> pp_smt spec_info exp) input_connections in
+        let outputs = List.map (pp_place spec_info) output_connections in
         let connections =
           match inputs @ outputs with
           | [] -> parens empty
           | connections -> parens (separate (comma ^^ space) connections)
         in
         pp_sv_name module_name ^^ params ^^ space ^^ string instance_name ^^ connections ^^ semi
-    | SVD_fundef f -> pp_fundef f
-    | SVD_module m -> pp_module m
+    | SVD_fundef f -> pp_fundef spec_info f
+    | SVD_module m -> pp_module spec_info m
     | SVD_type type_def -> pp_type_def type_def
     | SVD_dpi_function { function_name; return_type; param_types } ->
         let ret_ty, typedef =
@@ -2469,7 +2478,7 @@ module Make (Config : CONFIG) = struct
     ^^ hardline ^^ string "endfunction"
 
   let sv_fundef spec_info ctx f params param_ctyps ret_ctyp body =
-    pp_module (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
+    pp_module spec_info (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 

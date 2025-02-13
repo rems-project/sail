@@ -69,6 +69,8 @@ let opt_includes = ref []
 
 let opt_toplevel = ref "main"
 
+let opt_global_prefix = ref None
+
 type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
@@ -123,6 +125,10 @@ let verilog_options =
           opt_toplevel := s
         ),
       "Sail function to use as toplevel module"
+    );
+    ( Flag.create ~prefix:["sv"] "global_prefix",
+      Arg.String (fun s -> opt_global_prefix := Some s),
+      "declare global signals in a named module instead of toplevel"
     );
     ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"compile|run" ~override:"sv_verilate" "mode",
       Arg.String
@@ -444,6 +450,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let module SV = Jib_sv.Make (struct
     let max_unknown_integer_width = !opt_max_unknown_integer_width
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width
+    let global_prefix = !opt_global_prefix
     let line_directives = !opt_line_directives
     let no_strings = !opt_no_strings
     let no_packed = !opt_no_packed
@@ -525,9 +532,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
       )
       empty (StringSet.elements !opt_dpi_sets)
     ^^ string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
-    ^^ separate_map (twice hardline) (pp_def None) svir_types
+    ^^ separate_map (twice hardline) (pp_def spec_info None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
-    ^^ separate_map (twice hardline) (pp_def None) svir
+    ^^ separate_map (twice hardline) (pp_def spec_info None) svir
   in
 
   (*
