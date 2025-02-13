@@ -259,8 +259,8 @@ def foreach_' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) :
   let step := 1 + (step - 1)
   have h : step > 0 := by omega
   let range := Std.Range.mk from' to step h
-  for _ in range do
-    vars := body from' vars
+  for i in range do
+    vars := body i vars
   pure vars
 
 def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars :=
@@ -273,8 +273,8 @@ def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSai
   let step := 1 + (step - 1)
   have h : step > 0 := by omega
   let range := Std.Range.mk from' to step h
-  for _ in range do
-    vars ← body from' vars
+  for i in range do
+    vars ← body i vars
   pure vars
 
 def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars :=
