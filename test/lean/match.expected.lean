@@ -61,7 +61,7 @@ def match_let (x : E) (y : Int) : SailM Int := do
   match x with
   | A =>
     let x := (HAdd.hAdd y y)
-    let z ← do (pure (HAdd.hAdd (HAdd.hAdd y y) (← (undefined_int ()))))
+    let z ← (pure (HAdd.hAdd (HAdd.hAdd y y) (← (undefined_int ()))))
     (pure (HAdd.hAdd z x))
   | B => (pure 42)
   | C => (pure 23)
