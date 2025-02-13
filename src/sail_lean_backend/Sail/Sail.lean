@@ -290,10 +290,29 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
 
 end BitVec
 
+namespace Nat
+
+-- NB: below is taken from Mathlib.Logic.Function.Iterate
+/-- Iterate a function. -/
+def iterate {α : Sort u} (op : α → α) : Nat → α → α
+  | 0, a => a
+  | Nat.succ k, a => iterate op k (op a)
+
+end Nat
+
 namespace Int
 
 def intAbs (x : Int) : Int := Int.ofNat (Int.natAbs x)
 
-end Int
+def shiftl (a : Int) (n : Int) : Int :=
+  match n with
+  | Int.ofNat n => Sail.Nat.iterate (fun x => x * 2) n a
+  | Int.negSucc n => Sail.Nat.iterate (fun x => x / 2) (n+1) a
 
+def shiftr (a : Int) (n : Int) : Int :=
+  match n with
+  | Int.ofNat n => Sail.Nat.iterate (fun x => x / 2) n a
+  | Int.negSucc n => Sail.Nat.iterate (fun x => x * 2) (n+1) a
+
+end Int
 end Sail
