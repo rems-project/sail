@@ -256,12 +256,19 @@ module SimpSet = struct
   let add_var_inequality v exp simpset =
     match to_simp_var v with
     | None -> simpset
-    | Some v ->
-        {
-          simpset with
-          inequalities =
-            SimpVarMap.update v (function None -> Some [exp] | Some exps -> Some (exp :: exps)) simpset.inequalities;
-        }
+    | Some simp_v -> (
+        match exp with
+        | Bitvec_lit [Sail2_values.B0] -> add_var v (Bitvec_lit [Sail2_values.B1]) simpset
+        | Bitvec_lit [Sail2_values.B1] -> add_var v (Bitvec_lit [Sail2_values.B0]) simpset
+        | _ ->
+            {
+              simpset with
+              inequalities =
+                SimpVarMap.update simp_v
+                  (function None -> Some [exp] | Some exps -> Some (exp :: exps))
+                  simpset.inequalities;
+            }
+      )
 
   let add_var_is_ctor v ctor simpset = { simpset with is_ctor = NameMap.add v ctor simpset.is_ctor }
 
@@ -681,6 +688,11 @@ module Simplifier = struct
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
         Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
 
+  let rule_ite_assume =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Ite ((Fn ("=", [v; lit]) as i), t, e) when is_literal lit && SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, e, fun e -> Ite (i, t, e)) | _ -> NoChange
+
   let is_equality = function
     | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some (v, lit)
     | _ -> None
@@ -924,7 +936,11 @@ let simp simpset exp =
     match exp with
     | Ite _ ->
         run_strategy simpset exp
-          (Then [rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal])
+          (Then
+             [
+               rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal; Repeat rule_ite_assume;
+             ]
+          )
     | Fn ("and", _) ->
         run_strategy simpset exp
           (Then
