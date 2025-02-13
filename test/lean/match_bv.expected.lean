@@ -5,19 +5,27 @@ open Sail
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
-def decode (merge_var : (BitVec 32)) : Bool :=
-  match_bv merge_var with
-  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
-    if (Eq Rm Rn)
-    then true
-    else false
-  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
-    if (Eq Rn Rd)
-    then true
-    else false
-  | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => true
-  | [1,011010,0,imm19:19,Rt:5] => false
-  | _ => true
+def decode (v__0 : (BitVec 32)) : Bool :=
+  if (Bool.and (Eq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
+       (Bool.and (Eq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
+         (Eq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
+  then let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+       let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+       if (Eq Rm Rn)
+       then true
+       else false
+  else if (Eq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
+       then let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+            let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
+            if (Eq Rn Rd)
+            then true
+            else false
+       else if (Bool.and (Eq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
+                 (Eq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
+            then true
+            else if (Eq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
+                 then false
+                 else true
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

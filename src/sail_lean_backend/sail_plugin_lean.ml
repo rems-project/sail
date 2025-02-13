@@ -98,7 +98,7 @@ let lean_rewrites =
     ("move_termination_measures", []);
     ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
-    (* ("remove_vector_subrange_pats", []); *)
+    ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
@@ -111,8 +111,8 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
-    (* ("remove_vector_concat", []); *)
-    (* ("remove_bitvector_pats", []); *)
+    ("remove_vector_concat", []);
+    ("remove_bitvector_pats", []);
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)
     ("guarded_pats", []);
@@ -133,7 +133,7 @@ let lean_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    (* ("make_cases_exhaustive", []); *)
+    ("make_cases_exhaustive", []);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);

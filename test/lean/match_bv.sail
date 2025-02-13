@@ -27,3 +27,17 @@ function clause decode (0b1@0b011010@0b0@(imm19:bits(19))@(Rt:bits(5))) = {
 }
 
 function clause decode(_) = { true }
+
+let xlen = 32
+val write_CSR : (bits(12)) -> bool
+function clause write_CSR((0b1011000 : bits(7) /* 0xB00 */ @ index : bits(5)) if unsigned(index) >= 3) = {
+  true
+}
+function clause write_CSR((0b1011100 /* 0xB80 */ @ index : bits(5)) if xlen == 32 & unsigned(index) >= 3) = {
+  true
+}
+
+val write_CSR2 : (bits(12)) -> bool
+function write_CSR2((0b1011100 /* 0xB80 */ @ index : bits(5)) if xlen == 32 & unsigned(index) >= 3) = {
+  true
+}
