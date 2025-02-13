@@ -1276,13 +1276,6 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
          else separate_map hardline doc_field fs *)
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let env = Env.add_typquant l typq env in
@@ -1387,14 +1380,6 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
     )
   | TD_enum (id, enums, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
       | Id_aux (Id "regfp", _) -> empty
       | Id_aux (Id "niafp", _) -> empty
       | Id_aux (Id "diafp", _) -> empty
