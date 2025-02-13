@@ -156,16 +156,16 @@ def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : 
     then foreach_' from' to step vars body
     else foreach_' to from' step vars body
 
-def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : PreSailM RegisterType c Vars := do
+def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars := do
   let mut vars := vars
   let step := 1 + (step - 1)
   have h : step > 0 := by omega
   let range := Std.Range.mk from' to step h
   for _ in range do
-    vars := body from' vars
+    vars ← body from' vars
   pure vars
 
-def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : PreSailM RegisterType c Vars :=
+def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars :=
   if from' < to
     then foreach_M' from' to step vars body
     else foreach_M' to from' step vars body

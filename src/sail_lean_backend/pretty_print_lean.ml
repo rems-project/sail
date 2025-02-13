@@ -460,7 +460,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             let id_pp = doc_id_ctor id in
             let typ = typ_of exp in
             (id_pp, id_pp)
-        | E_lit (L_aux (L_unit, _)) -> (string "tt", underscore)
+        | E_lit (L_aux (L_unit, _)) -> (string "()", underscore)
         | _ -> raise (Reporting.err_unreachable l __POS__ ("Bad expression for variable in loop: " ^ string_of_exp exp))
       in
       let make_loop_vars extra_binders varstuple =
@@ -504,15 +504,18 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                 (id, body)
             | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
           in          
-          let combinator = if as_monadic && effectful (effect_of body) then "foreach_M" else "foreach_" 
+          let effects = effectful (effect_of body) in
+          let combinator = if as_monadic && effects then "foreach_M" else "foreach_" 
           in
           let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
           let from_exp_pp, to_exp_pp, step_exp_pp =
-            (doc_exp as_monadic ctx from_exp, doc_exp as_monadic ctx to_exp, doc_exp as_monadic ctx step_exp)
+            (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
           in
           (* The body has the right type for deciding whether a proof is necessary *)
           (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
           let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor loopvar] vartuple in
+          let vartuple_pp = if effects then parens (string "pure " ^^ vartuple_pp) else vartuple_pp in
+          let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
           (* TODO: this should probably be construct_dep_pairs, but we would need
              to change it to use the updated context. *)
           let body_pp = doc_exp as_monadic body_ctxt body in

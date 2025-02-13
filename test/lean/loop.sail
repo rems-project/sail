@@ -3,6 +3,8 @@ default Order dec
 $include <prelude.sail>
 $include <arith.sail>
 
+register r : int
+
 function foreachloop(m : nat, n : nat) -> int = {
   var res : int = 0;
   foreach (i from m to n) {
@@ -11,16 +13,9 @@ function foreachloop(m : nat, n : nat) -> int = {
   res
 }
 
-/*
-function whileloop(n : nat) -> int = {
-  var res : int = 0;
-  while res < n do {
-    if res == 3 then {
-      res = res + 1;
-    } else {
-      res = res + 4;
-    }
+function foreachloopmon(m : nat, n : nat) -> int = {
+  foreach (i from n to m) {
+    r = r + 1;
   };
-  res
+  r
 }
-*/
