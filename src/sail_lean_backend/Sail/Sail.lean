@@ -1,4 +1,5 @@
 import Std.Data.DHashMap
+import Std.Data.HashMap
 namespace Sail
 
 section Regs
@@ -41,22 +42,36 @@ def trivialChoiceSource : ChoiceSource where
     | .fin _ => 0
     | .bitvector _ => 0
 
+class Arch where
+  va_size : Nat
+  pa : Type
+  arch_ak : Type
+  translation : Type
+  abort : Type
+  barrier : Type
+  cache_op : Type
+  tlb_op : Type
+  fault : Type
+  sys_reg_id : Type
+
 /- The Units are placeholders for a future implementation of the state monad some Sail functions use. -/
 inductive Error where
   | Exit
   | Unreachable
+  | OutOfMemoryRange (n : Nat)
   | Assertion (s : String)
 open Error
 
 def Error.print : Error → String
-| Exit => "Exit"
-| Unreachable => "Unreachable"
-| Assertion s => s!"Assertion failed: {s}"
+  | Exit => "Exit"
+  | Unreachable => "Unreachable"
+  | OutOfMemoryRange n => s!"{n} Out of Memory Range"
+  | Assertion s => s!"Assertion failed: {s}"
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
   choiceState : c.α
-  mem : Unit
+  mem : Std.HashMap Nat (BitVec 8)
   tags : Unit
   sail_output : Array String -- TODO: be able to use the IO monad to run
 
@@ -122,7 +137,104 @@ def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 def assert (p : Bool) (s : String) : PreSailM RegisterType c Unit :=
   if p then pure () else throw (Assertion s)
 
-/- def print_effect (s : String) : IO Unit := IO.print s -/
+section ConcurrencyInterface
+
+inductive Access_variety where
+| AV_plain
+| AV_exclusive
+| AV_atomic_rmw
+export Access_variety (AV_plain AV_exclusive AV_atomic_rmw)
+
+inductive Access_strength where
+| AS_normal
+| AS_rel_or_acq
+| AS_acq_rcpc
+export Access_strength(AS_normal AS_rel_or_acq AS_acq_rcpc)
+
+structure Explicit_access_kind where
+  variety : Access_variety
+  strength : Access_strength
+
+inductive Access_kind (arch : Type) where
+  | AK_explicit (_ : Explicit_access_kind)
+  | AK_ifetch (_ : Unit)
+  | AK_ttw (_ : Unit)
+  | AK_arch (_ : arch)
+export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
+
+inductive Result (α : Type) (β : Type) where
+  | Ok (_ : α)
+  | Err (_ : β)
+export Result(Ok Err)
+
+structure Mem_read_request
+  (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
+  access_kind : Access_kind arch_ak
+  va : (Option (BitVec vasize))
+  pa : pa
+  translation : ts
+  size : Int
+  tag : Bool
+
+structure Mem_write_request
+  (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
+  access_kind : Access_kind arch_ak
+  va : (Option (BitVec vasize))
+  pa : pa
+  translation : ts
+  size : Int
+  value : (Option (BitVec (8 * n)))
+  tag : (Option Bool)
+
+def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
+  match (← get).mem.containsThenInsert addr value with
+    | (true, m) => modify fun s => { s with mem := m }
+    | (false, _) => throw (OutOfMemoryRange addr)
+
+def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
+  let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
+  List.forM list (λ (a, v) => writeByte a v)
+  pure true
+
+def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result (Option Bool) Arch.abort) := do
+  let addr := req.pa.toNat
+  let b ← match req.value with
+    | some v => writeBytes addr v
+    | none => pure true
+  pure (Ok (some b))
+
+def write_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) (value : BitVec (8 * data_size)) :
+    PreSailM RegisterType c Unit := do
+  let _ ← writeBytes addr.toNat value
+  pure ()
+
+def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
+  let .some s := (← get).mem.get? addr
+    | throw (OutOfMemoryRange addr)
+  pure s
+
+def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × Option Bool) :=
+  match size with
+  | 0 => pure (default, none)
+  | n + 1 => do
+    let b ← readByte addr
+    let (bytes, bool) ← readBytes n (addr+1)
+    have h : 8 + 8 * n = 8 * (n + 1) := by omega
+    return (h ▸ b.append bytes, bool)
+
+def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
+  let addr := req.pa.toNat
+  let value ← readBytes n addr
+  pure (Ok value)
+
+def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c (BitVec (8 * data_size)) := do
+  let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
+  pure bytes
+
+
+def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
+
+end ConcurrencyInterface
 
 def print_effect (str : String) : PreSailM RegisterType c Unit :=
   modify fun s ↦ { s with sail_output := s.sail_output.push str }
@@ -211,10 +323,29 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
 
 end BitVec
 
+namespace Nat
+
+-- NB: below is taken from Mathlib.Logic.Function.Iterate
+/-- Iterate a function. -/
+def iterate {α : Sort u} (op : α → α) : Nat → α → α
+  | 0, a => a
+  | Nat.succ k, a => iterate op k (op a)
+
+end Nat
+
 namespace Int
 
 def intAbs (x : Int) : Int := Int.ofNat (Int.natAbs x)
 
-end Int
+def shiftl (a : Int) (n : Int) : Int :=
+  match n with
+  | Int.ofNat n => Sail.Nat.iterate (fun x => x * 2) n a
+  | Int.negSucc n => Sail.Nat.iterate (fun x => x / 2) (n+1) a
 
+def shiftr (a : Int) (n : Int) : Int :=
+  match n with
+  | Int.ofNat n => Sail.Nat.iterate (fun x => x / 2) n a
+  | Int.negSucc n => Sail.Nat.iterate (fun x => x * 2) (n+1) a
+
+end Int
 end Sail

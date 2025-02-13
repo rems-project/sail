@@ -19,3 +19,12 @@ function foreachloopmon(m : nat, n : nat) -> int = {
   };
   r
 }
+
+function foreachloopboth(m : nat, n : nat) -> int = {
+  var res : int = 0;
+  foreach (i from n to m) {
+    res = res + 1;
+    r = r + res;
+  };
+  res + 1
+}

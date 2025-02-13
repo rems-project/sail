@@ -53,6 +53,7 @@ $include <concurrency_interface/common.sail>
 
 $option -lem_extern_type Access_variety
 $option -coq_extern_type Access_variety
+$option -lean_extern_type Access_variety
 enum Access_variety = {
   AV_plain,
   AV_exclusive,
@@ -61,6 +62,7 @@ enum Access_variety = {
 
 $option -lem_extern_type Access_strength
 $option -coq_extern_type Access_strength
+$option -lean_extern_type Access_strength
 enum Access_strength = {
   AS_normal,
   AS_rel_or_acq, // Release or acquire
@@ -69,6 +71,7 @@ enum Access_strength = {
 
 $option -lem_extern_type Explicit_access_kind
 $option -coq_extern_type Explicit_access_kind
+$option -lean_extern_type Explicit_access_kind
 struct Explicit_access_kind = {
   variety : Access_variety,
   strength : Access_strength
@@ -76,6 +79,7 @@ struct Explicit_access_kind = {
 
 $option -lem_extern_type Access_kind
 $option -coq_extern_type Access_kind
+$option -lean_extern_type Access_kind
 union Access_kind('arch_ak : Type) = {
   AK_explicit: Explicit_access_kind,
   AK_ifetch : unit, // Instruction fetch
@@ -85,6 +89,7 @@ union Access_kind('arch_ak : Type) = {
 
 $option -lem_extern_type Mem_read_request
 $option -coq_extern_type Mem_read_request
+$option -lean_extern_type Mem_read_request
 struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                         'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),
@@ -181,6 +186,7 @@ with
 
 $option -lem_extern_type Mem_write_request
 $option -coq_extern_type Mem_write_request
+$option -lean_extern_type Mem_write_request
 struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                          'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),

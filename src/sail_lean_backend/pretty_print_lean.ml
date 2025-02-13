@@ -9,6 +9,9 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+(* Command line options *)
+let opt_extern_types : string list ref = ref []
+
 type global_context = { effect_info : Effects.side_effect_info }
 
 let the_main_function_has_been_seen = ref false
@@ -140,6 +143,8 @@ let string_of_typ_con (Typ_aux (t, _)) =
 
 let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens (string (Big_int.to_string i))
 
+let is_unit t = match t with Typ_aux (Typ_id (Id_aux (Id "unit", _)), _) -> true | _ -> false
+
 (* Adapted from Coq PP *)
 let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   let rec plussub (Nexp_aux (n, l) as nexp) =
@@ -214,6 +219,7 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
       nest 2 (parens (flow space [string "Vector"; doc_typ ctx elem_typ; doc_nexp ctx m]))
   | Typ_id (Id_aux (Id "unit", _)) -> string "Unit"
   | Typ_id (Id_aux (Id "int", _)) -> string "Int"
+  | Typ_id (Id_aux (Id "string", _)) -> string "String"
   | Typ_app (Id_aux (Id "atom_bool", _), _) | Typ_id (Id_aux (Id "bool", _)) -> string "Bool"
   | Typ_id (Id_aux (Id "bit", _)) -> parens (string "BitVec 1")
   | Typ_id (Id_aux (Id "nat", _)) -> string "Nat"
@@ -298,6 +304,12 @@ let doc_lit (L_aux (lit, l)) =
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real s -> utf8string s (* TODO test if this is really working *)
 
+let doc_vec_lit (L_aux (lit, _) as l) =
+  match lit with
+  | L_zero -> string "0"
+  | L_one -> string "1"
+  | _ -> failwith "Unexpected litteral found in vector: " ^^ doc_lit l
+
 let string_of_exp_con (E_aux (e, _)) =
   match e with
   | E_block _ -> "E_block"
@@ -338,6 +350,14 @@ let string_of_exp_con (E_aux (e, _)) =
   | E_vector _ -> "E_vector"
   | E_let _ -> "E_let"
 
+let rec is_anonymous_pat (P_aux (p, _) as full_pat) =
+  match p with
+  | P_wild -> true
+  | P_id (Id_aux (Id s, _)) -> String.sub s 0 1 = "_"
+  | P_lit (L_aux _) -> true
+  | P_typ (_, p) -> is_anonymous_pat p
+  | _ -> false
+
 let string_of_pat_con (P_aux (p, _)) =
   match p with
   | P_app _ -> "P_app"
@@ -358,22 +378,51 @@ let string_of_pat_con (P_aux (p, _)) =
   | P_string_append _ -> "P_string_append"
   | P_struct _ -> "P_struct"
 
+let string_of_def (DEF_aux (d, _)) =
+  match d with
+  | DEF_type _ -> "DEF_type"
+  | DEF_constraint _ -> "DEF_constraint"
+  | DEF_fundef _ -> "DEF_fundef"
+  | DEF_mapdef _ -> "DEF_mapdef"
+  | DEF_impl _ -> "DEF_impl"
+  | DEF_let _ -> "DEF_let"
+  | DEF_val (VS_aux (VS_val_spec (_, id, _), _)) -> "DEF_val " ^ string_of_id id
+  | DEF_outcome _ -> "DEF_outcome"
+  | DEF_instantiation _ -> "DEF_instantiation"
+  | DEF_fixity _ -> "DEF_fixity"
+  | DEF_overload _ -> "DEF_overload"
+  | DEF_default _ -> "DEF_default"
+  | DEF_scattered _ -> "DEF_scattered"
+  | DEF_measure _ -> "DEF_measure"
+  | DEF_loop_measures _ -> "DEF_loop_measures"
+  | DEF_register _ -> "DEF_register"
+  | DEF_internal_mutrec _ -> "DEF_internal_mutrec"
+  | DEF_pragma _ -> "DEF_pragma"
+
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | _ -> id), l) | _ -> id'
 
-let rec doc_pat (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   match p with
   | P_wild -> underscore
+  | P_lit lit when in_vector -> doc_vec_lit lit
   | P_lit lit -> doc_lit lit
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
+    when in_vector && (id = "bits" || id = "bitvector") ->
+      doc_pat p ^^ string ":" ^^ doc_big_int i
   | P_typ (ptyp, p) -> doc_pat p
   | P_id id -> fixup_match_id id |> doc_id_ctor
   | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
   | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
+  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
+  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) -> doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
   | P_var (p, _) -> doc_pat p
-  | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
+  | P_as (pat, id) -> doc_pat pat
+  | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -413,6 +462,13 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
   in
   match t with Typ_fn (args, cod) -> List.map arg_implicit args | _ -> []
 
+let rec is_bitvector_pattern (P_aux (pat, _)) =
+  match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
+
+let match_or_match_bv brs =
+  if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
+  else "match "
+
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) ->
@@ -440,19 +496,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let d_id = string "some" in
       let d_args = List.map d_of_arg args in
       nest 2 (parens (flow (break 1) (d_id :: d_args)))
-  | E_internal_plet (pat, e1, e2) ->
-      let e0 = doc_pat pat in
-      let e1_pp = doc_exp false ctx e1 in
-      let e2' = rebind_cast_pattern_vars pat (typ_of e1) e2 in
-      let e2_pp = doc_exp as_monadic ctx e2' in
-      let e0_pp =
-        begin
-          match pat with
-          | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> string ""
-          | _ -> flow (break 1) [string "let"; e0; string ":="] ^^ space
-        end
-      in
-      nest 2 (e0_pp ^^ e1_pp) ^^ hardline ^^ e2_pp
   | E_app (Id_aux (Id "foreach#", _), args) -> begin
       let doc_loop_var (E_aux (e, (l, _)) as exp) =
         match e with
@@ -545,13 +588,20 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         parens (separate space [doc_exp as_monadic ctx e; colon; string "SailM"; doc_typ ctx typ])
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) d_of_arg es))
-  | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
-      let id_typ = doc_pat lpat in
-      let decl_val =
-        if effectful (effect_of lexp) then [string "←"; string "do"; doc_exp true ctx lexp]
-        else [coloneq; doc_exp false ctx lexp]
+  | E_internal_plet (lpat, lexp, e) | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
+      let id_typ =
+        match pat_is_plain_binder env lpat with
+        | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
+        | _ -> doc_pat lpat
       in
-      nest 2 (flow (break 1) ([string "let"; id_typ] @ decl_val)) ^^ hardline ^^ doc_exp as_monadic ctx e
+      let pp_let_line_f = (fun l -> group (nest 2 (flow (break 1) l))) in
+      let pp_let_line =
+        if effectful (effect_of lexp) then
+          if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
+          else pp_let_line_f [separate space [string "let"; id_typ; string "← do"]; doc_exp true ctx lexp]
+        else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
+      in
+      pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
   | E_struct fexps ->
       let args = List.map d_of_field fexps in
@@ -565,8 +615,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
-      let cases = separate_map hardline (fun br -> doc_match_clause as_monadic ctx br) brs in
-      string "match " ^^ doc_exp (effectful (effect_of discr)) ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
+      string (match_or_match_bv brs) ^^ doc_exp false ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
       match le_act with
       | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ doc_exp false ctx e
@@ -743,6 +793,8 @@ let rec doc_defs_rec ctx defs types docdefs =
   | [] -> (types, docdefs)
   | DEF_aux (DEF_fundef fdef, _) :: defs' ->
       doc_defs_rec ctx defs' types (docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline)
+  | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
+      doc_defs_rec ctx defs' types docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
@@ -805,6 +857,28 @@ let doc_monad_abbrev (has_registers : bool) =
   in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
+let doc_instantiations ctx env =
+  let params = Monad_params.find_monad_parameters env in
+  match params with
+  | None -> empty
+  | Some params ->
+      nest 2
+        (separate hardline
+           [
+             string "instance : Arch where";
+             string "va_size := 64";
+             string "pa := " ^^ doc_typ ctx params.pa_type;
+             string "abort := " ^^ doc_typ ctx params.abort_type;
+             string "translation := " ^^ doc_typ ctx params.translation_summary_type;
+             string "fault := " ^^ doc_typ ctx params.fault_type;
+             string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
+             string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
+             string "barrier := " ^^ doc_typ ctx params.barrier_type;
+             string "arch_ak := " ^^ doc_typ ctx params.arch_ak_type;
+             string "sys_reg_id := " ^^ doc_typ ctx params.sys_reg_id_type ^^ hardline;
+           ]
+        )
+      ^^ hardline
 let main_function_stub =
   nest 2
     (separate hardline
@@ -817,13 +891,16 @@ let main_function_stub =
     )
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
+  (* TODO: remove the following line once we can handle the includes *)
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
   let global = { effect_info } in
+  let ctx = initial_context env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in
-  let types, fundefs = doc_defs (initial_context env global) defs in
+  let instantiations = doc_instantiations ctx env in
+  let types, fundefs = doc_defs ctx defs in
   let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
-  print o (types ^^ register_refs ^^ monad ^^ fundefs ^^ main_function);
+  print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs ^^ main_function);
   !the_main_function_has_been_seen

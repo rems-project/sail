@@ -2,6 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 $include <generic_equality.sail>
+$include <mapping.sail>
 
 /* Testing arith.sail */
 
@@ -23,6 +24,30 @@ function extern_negate() -> int = {
 
 function extern_mult() -> int = {
   return mult_int(5, 4)
+}
+
+function extern__shl8() -> int = {
+  return _shl8(8, 2)
+}
+
+function extern__shl32() -> int = {
+  return _shl32(32, 1)
+}
+
+function extern__shl1() -> int = {
+  return _shl1(1, 2)
+}
+
+function extern__shl_int() -> int = {
+  return _shl_int(4, 2)
+}
+
+function extern__shr32() -> int = {
+  return _shr32(30, 1)
+}
+
+function extern__shr_int() -> int = {
+  return _shr_int(8, 2)
 }
 
 function extern_tdiv() -> int = {
@@ -110,3 +135,24 @@ function extern_vector_update() -> vector(5, dec, int) = {
   vector_update([23, 23, 23, 23, 23], 2, 42)
 }
 
+/* Testing mapping.sail */
+
+function extern_string_take() -> string = {
+  return string_take("Hello, world", 5)
+}
+
+function extern_string_drop() -> string = {
+  return string_drop("Hello, world", 5)
+}
+
+function extern_string_length() -> int = {
+  return string_length("Hello, world")
+}
+
+function extern_string_append() -> string = {
+  return string_append("Hello, ", "world")
+}
+
+function extern_string_startswith() -> bool = {
+  return string_startswith("Hello, world", "Hello")
+}
