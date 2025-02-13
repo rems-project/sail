@@ -10,6 +10,7 @@ $option -undefined_gen
 
 val sub_vec_int = {
   c: "sub_bits_int",
+  systemverilog: "sub_bits_int",
   _: "sub_vec_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
