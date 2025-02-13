@@ -131,7 +131,7 @@ def step_with_status(string, expected_status=0, cwd=None):
     return status
 
 def step(string, expected_status=0, cwd=None):
-    if step_with_status(string, cwd=cwd) != expected_status:
+    if step_with_status(string, expected_status=expected_status, cwd=cwd) != expected_status:
         sys.exit(1)
 
 def banner(string):

@@ -11,6 +11,8 @@ open Pretty_print_common
 
 type global_context = { effect_info : Effects.side_effect_info }
 
+let the_main_function_has_been_seen = ref false
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -41,6 +43,9 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "rec" -> name ^ "'"
+  | "main" ->
+      the_main_function_has_been_seen := true;
+      "sail_main"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -409,7 +414,8 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
-  | Pat_exp (pat, branch) -> string "| " ^^ doc_pat pat ^^ string " =>" ^^ space ^^ doc_exp as_monadic ctx branch
+  | Pat_exp (pat, branch) ->
+      group (nest 2 (string "| " ^^ doc_pat pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
@@ -468,13 +474,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) d_of_arg es))
   | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
-      let id_typ =
-        match pat_is_plain_binder env lpat with
-        | Some (Some (Id_aux (Id id, _)), Some typ) -> string (fix_id id) ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
-        | Some (Some (Id_aux (Id id, _)), None) -> string (fix_id id)
-        | Some (None, _) -> string "x" (* TODO fresh name or wildcard instead of x *)
-        | _ -> failwith "Let pattern not translatable yet."
-      in
+      let id_typ = doc_pat lpat in
       let decl_val =
         if effectful (effect_of lexp) then [string "←"; string "do"; doc_exp true ctx lexp]
         else [coloneq; doc_exp false ctx lexp]
@@ -733,6 +733,17 @@ let doc_monad_abbrev (has_registers : bool) =
   in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
+let main_function_stub =
+  nest 2
+    (separate hardline
+       [
+         string "def main (_ : List String) : IO UInt32 := do";
+         string "main_of_sail_main ⟨default, (), default, default, default⟩ sail_main";
+         string "return 0";
+         empty;
+       ]
+    )
+
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
@@ -741,5 +752,6 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in
   let types, fundefs = doc_defs (initial_context env global) defs in
-  print o (types ^^ register_refs ^^ monad ^^ fundefs);
-  ()
+  let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
+  print o (types ^^ register_refs ^^ monad ^^ fundefs ^^ main_function);
+  !the_main_function_has_been_seen

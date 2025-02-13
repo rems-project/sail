@@ -55,6 +55,16 @@ def match_reg (x : E) : SailM E := do
   | B => readReg r_B
   | C => readReg r_C
 
+/-- Type quantifiers: y : Int -/
+def match_let (x : E) (y : Int) : SailM Int := do
+  match x with
+  | A =>
+    let x := (HAdd.hAdd y y)
+    let z := (HAdd.hAdd (HAdd.hAdd y y) (← (undefined_int ())))
+    (pure (HAdd.hAdd z x))
+  | B => (pure 42)
+  | C => (pure 23)
+
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))
   writeReg r_B (← (undefined_E ()))

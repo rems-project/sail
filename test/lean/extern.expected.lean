@@ -53,7 +53,7 @@ def extern_min (_ : Unit) : Int :=
   (Min.min 5 4)
 
 def extern_abs_int_plain (_ : Unit) : Int :=
-  let x : Int := (-5)
+  let x := (-5)
   (Sail.Int.intAbs x)
 
 def extern_eq_unit (_ : Unit) : Bool :=
@@ -94,6 +94,9 @@ def extern_gt_int (_ : Unit) : Bool :=
 
 def extern_eq_anything (_ : Unit) : Bool :=
   (BEq.beq true true)
+
+def extern_vector_update (_ : Unit) : (Vector Int 5) :=
+  (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

@@ -43,3 +43,14 @@ function match_reg(x : E) -> E = {
     C => r_C,
   }
 }
+
+function match_let (x : E, y : int) -> int = {
+  match x {
+    A => 
+    let x = y + y in
+    let z = y + y + undefined_int() in
+    z + x,
+    B => 42,
+    C => 23
+  }
+}

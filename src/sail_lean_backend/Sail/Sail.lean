@@ -48,11 +48,17 @@ inductive Error where
   | Assertion (s : String)
 open Error
 
+def Error.print : Error → String
+| Exit => "Exit"
+| Unreachable => "Unreachable"
+| Assertion s => s!"Assertion failed: {s}"
+
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
   choiceState : c.α
   mem : Unit
   tags : Unit
+  sail_output : Array String -- TODO: be able to use the IO monad to run
 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
   | Reg (r : Register) : RegisterRef _ (RegisterType r)
@@ -82,10 +88,13 @@ def undefined_string (_ : Unit) : PreSailM RegisterType c String :=
 def undefined_bitvector (n : Nat) : PreSailM RegisterType c (BitVec n) :=
   choose <| .bitvector n
 
+def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c (Vector α n) :=
+  pure <| .mkVector n a
+
 def internal_pick {α : Type} : List α → PreSailM RegisterType c α
   | [] => .error .Unreachable
   | (a :: as) => do
-    let idx ← choose <| Primitive.fin (as.length)
+    let idx ← choose <| .fin (as.length)
     pure <| (a :: as).get idx
 
 def writeReg (r : Register) (v : RegisterType r) : PreSailM RegisterType c PUnit :=
@@ -108,8 +117,27 @@ def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM Regis
 
 def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
 
+def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
+
 def assert (p : Bool) (s : String) : PreSailM RegisterType c Unit :=
   if p then pure () else throw (Assertion s)
+
+/- def print_effect (s : String) : IO Unit := IO.print s -/
+
+def print_effect (str : String) : PreSailM RegisterType c Unit :=
+  modify fun s ↦ { s with sail_output := s.sail_output.push str }
+
+def print_endline_effect (str : String) : PreSailM RegisterType c Unit :=
+  print_effect s!"{str}\n"
+
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c Unit) : IO Unit := do
+  let res := main () |>.run initialState
+  match res with
+  | .ok _ s => do
+    for m in s.sail_output do
+      IO.print m
+  | .error e _ => do
+    IO.println s!"Error while running the sail program!: {e.print}"
 
 end Regs
 
@@ -139,6 +167,8 @@ def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) 
 
 def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
   updateSubrange' x lo _ y
+
+def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
 
 def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
   BitVec.ofBool x[i]!

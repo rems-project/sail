@@ -9,8 +9,8 @@ open import Sail2_monadic_combinators
    Changes here need to be reflected in ../../lib/hol/sail2_undefined.lem
    (identical except for type class constraints). *)
 
-val undefined_bitvector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e. Bitvector 'a, Register_Value 'rv =>
-  integer -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e
+val undefined_bitvector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'rv 'a 'e. Bitvector 'a, Register_Value 'rv =>
+  integer -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'rv 'a 'e
 let undefined_bitvector n = choose_bitvector "undefined_bitvector" (natFromInteger n)
 
 let undefined_unit () = return ()
@@ -25,6 +25,6 @@ let undefined_range i j = choose_int_in_range "undefined_range" i j
 let undefined_atom i = return i
 
 (* TODO: Choose each vector element individually *)
-val undefined_vector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv 'a 'e.
-  integer -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'arch_ak 'rv (list 'a) 'e
+val undefined_vector : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'rv 'a 'e.
+  integer -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'rv (list 'a) 'e
 let undefined_vector len u = return (repeat [u] len)

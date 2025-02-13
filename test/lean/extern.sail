@@ -129,3 +129,8 @@ function extern_gt_int() -> bool = {
 function extern_eq_anything() -> bool = {
   return eq_anything(true, true)
 }
+
+function extern_vector_update() -> vector(5, dec, int) = {
+  vector_update([23, 23, 23, 23, 23], 2, 42)
+}
+
