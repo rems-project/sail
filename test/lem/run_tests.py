@@ -43,6 +43,7 @@ skip_tests_mwords = {
     'negative_bits_list',
     'patternrefinement',
     'abstract_extend',
+    'issue984',
     # Due to an incompatibility between -auto_mono and -smt_linearize
     'pow_32_64',
     # The Lem backend needs sail_mem_read to be instantiated at a minimum

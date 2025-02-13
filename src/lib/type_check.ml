@@ -1136,7 +1136,8 @@ let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
       in
       let locals = Env.get_locals env |> Bindings.bindings in
       let locals = move_to_front (fun local -> likely = string_of_id (fst local)) [] locals in
-      let same_size (_, (_, Typ_aux (aux, _))) =
+      let same_size (_, (_, typ)) =
+        let (Typ_aux (aux, _)) = Env.expand_synonyms env typ in
         match aux with
         | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)])
           when string_of_id id = "atom" && Kid.compare v v' = 0 ->
