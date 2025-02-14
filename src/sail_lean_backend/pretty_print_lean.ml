@@ -49,6 +49,7 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "rec" -> name ^ "'"
+  | "def" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
@@ -235,6 +236,8 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
   | Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]) ->
       underscore (* TODO check if the type of implicit arguments can really be always inferred *)
   | Typ_app (Id_aux (Id "option", _), [A_aux (A_typ typ, _)]) -> parens (string "Option " ^^ doc_typ ctx typ)
+  | Typ_app (Id_aux (Id "list", _), args) ->
+      parens (string "List" ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
   | Typ_tuple ts -> parens (separate_map (space ^^ string "×" ^^ space) (doc_typ ctx) ts)
   | Typ_id id -> doc_id_ctor id
   | Typ_app (Id_aux (Id "range", _), [A_aux (A_nexp low, _); A_aux (A_nexp high, _)]) ->
@@ -437,6 +440,7 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   | P_struct (pats, _) ->
       let pats = List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat pat]) pats in
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
+  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
@@ -658,6 +662,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
   | E_assert (e1, e2) -> string "assert " ^^ d_of_arg e1 ^^ space ^^ d_of_arg e2
   | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
+  | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e

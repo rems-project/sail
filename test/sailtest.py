@@ -10,6 +10,7 @@ parser.add_argument("--hide-error-output", help="Hide error information.", actio
 parser.add_argument("--compact", help="Compact output.", action='store_true')
 parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
 parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
+parser.add_argument("--run-skips", help="Run tests that would otherwise be skipped", action="store_true")
 args = parser.parse_args()
 
 def is_compact():

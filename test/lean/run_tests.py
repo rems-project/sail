@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.realpath('..'))
 from sailtest import *
 
 update_expected = args.update_expected
+run_skips = args.run_skips
 
 sail_dir = get_sail_dir()
 sail = get_sail()
@@ -25,7 +26,6 @@ skip_selftests = {
     'struct_pattern_partial',
     'issue202_1',
     'list_rec_functions2',
-    'list_mut',
     'eq_struct',
     'either_rvbug',
     'bv_literal',
@@ -41,7 +41,6 @@ skip_selftests = {
     'match_bind',
     'sv_dpi',
     'rev_bits_in_byte',
-    'list_let',
     'foreach_none',
     'letbind',
     'enum_map',
@@ -77,7 +76,6 @@ skip_selftests = {
     'constructor247',
     'config_bit',
     'varswap',
-    'empty_list',
     'struct_fn_arg',
     'rv_format2',
     'let_option_shadow',
@@ -100,11 +98,9 @@ skip_selftests = {
     'concurrency_interface',
     'vector_example',
     'reg_init_let',
-    'list_scope',
     'for_shadow',
     'list_torture',
     'rv_format',
-    'list_scope3',
     'option_nest',
     'vector_subrange_pattern',
     'string_literal_type',
@@ -115,9 +111,7 @@ skip_selftests = {
     'bitvector',
     'xlen32',
     'rv_duopod_bug',
-    'warl2',
     'mapping',
-    'list_scope2',
     'issue232_2',
     'poly_int_record',
     'cheri_capreg',
@@ -199,10 +193,14 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
+            is_skip = False
 
             if skip_list is not None and basename in skip_list:
-                print_skip(filename)
-                continue
+                if run_skips:
+                    is_skip = True
+                else:
+                    print_skip(filename)
+                    continue
 
             tests[filename] = os.fork()
             if tests[filename] == 0:
@@ -229,12 +227,15 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                             step(f'cp {basename}/out/Out.lean {basename}.expected.lean')
                         else:
                             sys.exit(1)
-
-                if runnable:
+                else:
                     status = step_with_status(f'diff {basename}/out/expected {basename}.expect', name=filename)
                     if status != 0:
                         sys.exit(1)
+
                 step('rm -r {}'.format(basename))
+
+                if is_skip:
+                    print(f'{basename} now passes!')
                 print_ok(filename)
                 sys.exit(0)
         results.collect(tests)
