@@ -307,6 +307,18 @@ val sail_instr_announce : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 't
   monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval unit 'e
 let sail_instr_announce pa = return ()
 
+(* We treat the cycle count operations as dummy operations.  We don't currently use cycle_count as an end-of-instruction marker
+   in the Lem targets, and we're going to move get_cycle_count into the Arm model directly soon. *)
+val cycle_count : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval unit 'e
+let cycle_count () = return ()
+
+val get_cycle_count : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval integer 'e
+let get_cycle_count () = return 0
+
 (* Event traces *)
 
 val emitEvent : forall 'abort 'barrier 'cache_op 'fault 'pa 'tlb_op 'translation_summary 'trans_start 'trans_end 'arch_ak 'regval 'a 'e.
