@@ -88,7 +88,7 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
-abbrev SailM := PreSailM RegisterType trivialChoiceSource
+abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

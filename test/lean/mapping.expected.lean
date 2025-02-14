@@ -18,7 +18,7 @@ inductive word_width where | BYTE | HALF | WORD | DOUBLE
 
 open word_width
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

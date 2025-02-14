@@ -492,7 +492,7 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
-abbrev SailM := PreSailM RegisterType trivialChoiceSource
+abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
 instance : Arch where
   va_size := 64

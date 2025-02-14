@@ -13,7 +13,7 @@ inductive option (k_a : Type) where
 
 open option
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 def spc_forwards (_ : Unit) : String :=
   " "

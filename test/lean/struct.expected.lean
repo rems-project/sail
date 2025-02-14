@@ -30,7 +30,7 @@ structure Mem_write_request
   value : (Option (BitVec (8 * k_n)))
   tag : (Option Bool)
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

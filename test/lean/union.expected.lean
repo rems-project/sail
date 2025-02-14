@@ -27,7 +27,7 @@ inductive my_option (k_a : Type) where
 
 open my_option
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := (← (undefined_int ()))

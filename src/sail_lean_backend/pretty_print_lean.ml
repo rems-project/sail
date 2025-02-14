@@ -645,6 +645,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
   | E_ref id -> string "Reg " ^^ doc_id_ctor id
   | E_exit _ -> string "throw Error.Exit"
+  | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
+  | E_try (e, cases) ->
+      let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
+      let cases = doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot))) in
+      string "sailTryCatch "
+      ^^ parens (doc_exp false ctx e)
+      ^^ space
+      ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
   | E_assert (e1, e2) -> string "assert " ^^ d_of_arg e1 ^^ space ^^ d_of_arg e2
   | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
@@ -864,10 +872,18 @@ let doc_reg_info env global registers =
   separate hardline
     [register_enums registers; type_enum ctx registers; string "open RegisterRef"; inhabit_enum ctx type_map; empty]
 
-let doc_monad_abbrev (has_registers : bool) =
+let doc_monad_abbrev defs (has_registers : bool) =
+  let find_exc_typ defs =
+    let is_exc_typ_def = function
+      | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+      | _ -> false
+    in
+    if List.exists is_exc_typ_def defs then "exception" else "Unit"
+  in
+  let exc = find_exc_typ defs in
   let pp_register_type =
-    if has_registers then string "PreSailM RegisterType trivialChoiceSource"
-    else string "PreSailM PEmpty.elim trivialChoiceSource"
+    if has_registers then string "PreSailM RegisterType trivialChoiceSource " ^^ string exc
+    else string "PreSailM PEmpty.elim trivialChoiceSource " ^^ string exc
   in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
@@ -912,7 +928,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
-  let monad = doc_monad_abbrev has_registers in
+  let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
   let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in

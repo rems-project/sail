@@ -3,7 +3,7 @@ import Out.Sail.BitVec
 
 open Sail
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 /-- Type quantifiers: n : Int -/
 def foo (n : Int) : SailM (Bool × (BitVec 1) × Int × Nat × (BitVec 3)) := do

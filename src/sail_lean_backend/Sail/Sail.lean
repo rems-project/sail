@@ -55,18 +55,20 @@ class Arch where
   sys_reg_id : Type
 
 /- The Units are placeholders for a future implementation of the state monad some Sail functions use. -/
-inductive Error where
+inductive Error (ue: Type) where
   | Exit
   | Unreachable
   | OutOfMemoryRange (n : Nat)
   | Assertion (s : String)
+  | User (e : ue)
 open Error
 
-def Error.print : Error → String
+def Error.print : Error UE → String
   | Exit => "Exit"
   | Unreachable => "Unreachable"
   | OutOfMemoryRange n => s!"{n} Out of Memory Range"
   | Assertion s => s!"Assertion failed: {s}"
+  | User _ => "Uncaught user exception"
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.DHashMap Register RegisterType
@@ -78,63 +80,72 @@ structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
   | Reg (r : Register) : RegisterRef _ (RegisterType r)
 
-abbrev PreSailM (RegisterType : Register → Type) (c : ChoiceSource) :=
-  EStateM Error (SequentialState RegisterType c)
+abbrev PreSailM (RegisterType : Register → Type) (c : ChoiceSource) (ue: Type) :=
+  EStateM (Error ue) (SequentialState RegisterType c)
 
-def choose (p : Primitive) : PreSailM RegisterType c p.reflect :=
+def sailTryCatch (e :PreSailM RegisterType c ue α) (h : ue → PreSailM RegisterType c ue α) :
+    PreSailM RegisterType c ue α :=
+  EStateM.tryCatch e fun e =>
+    match e with
+    | User u => h u
+    | _ => EStateM.throw e
+
+def sailThrow (e : ue) :PreSailM RegisterType c ue α := EStateM.throw (User e)
+
+def choose (p : Primitive) : PreSailM RegisterType c ue p.reflect :=
   modifyGet
     (fun σ => (c.choose _ σ.choiceState, { σ with choiceState := c.nextState p σ.choiceState }))
 
-def undefined_bit (_ : Unit) : PreSailM RegisterType c (BitVec 1) :=
+def undefined_bit (_ : Unit) : PreSailM RegisterType c ue (BitVec 1) :=
   choose .bit
 
-def undefined_bool (_ : Unit) : PreSailM RegisterType c Bool :=
+def undefined_bool (_ : Unit) : PreSailM RegisterType c ue Bool :=
   choose .bool
 
-def undefined_int (_ : Unit) : PreSailM RegisterType c Int :=
+def undefined_int (_ : Unit) : PreSailM RegisterType c ue Int :=
   choose .int
 
-def undefined_nat (_ : Unit) : PreSailM RegisterType c Nat :=
+def undefined_nat (_ : Unit) : PreSailM RegisterType c ue Nat :=
   choose .nat
 
-def undefined_string (_ : Unit) : PreSailM RegisterType c String :=
+def undefined_string (_ : Unit) : PreSailM RegisterType c ue String :=
   choose .string
 
-def undefined_bitvector (n : Nat) : PreSailM RegisterType c (BitVec n) :=
+def undefined_bitvector (n : Nat) : PreSailM RegisterType c ue (BitVec n) :=
   choose <| .bitvector n
 
-def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c (Vector α n) :=
+def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c ue (Vector α n) :=
   pure <| .mkVector n a
 
-def internal_pick {α : Type} : List α → PreSailM RegisterType c α
+def internal_pick {α : Type} : List α → PreSailM RegisterType c ue α
   | [] => .error .Unreachable
   | (a :: as) => do
     let idx ← choose <| .fin (as.length)
     pure <| (a :: as).get idx
 
-def writeReg (r : Register) (v : RegisterType r) : PreSailM RegisterType c PUnit :=
+def writeReg (r : Register) (v : RegisterType r) : PreSailM RegisterType c ue PUnit :=
   modify fun s => { s with regs := s.regs.insert r v }
 
-def readReg (r : Register) : PreSailM RegisterType c (RegisterType r) := do
+def readReg (r : Register) : PreSailM RegisterType c ue (RegisterType r) := do
   let .some s := (← get).regs.get? r
     | throw Unreachable
   pure s
 
-def readRegRef (reg_ref : @RegisterRef Register RegisterType α) : PreSailM RegisterType c α := do
+def readRegRef (reg_ref : @RegisterRef Register RegisterType α) : PreSailM RegisterType c ue α := do
   match reg_ref with | .Reg r => readReg r
 
 def writeRegRef (reg_ref : @RegisterRef Register RegisterType α) (a : α) :
-  PreSailM RegisterType c Unit := do
+  PreSailM RegisterType c ue Unit := do
   match reg_ref with | .Reg r => writeReg r a
 
-def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM RegisterType c α :=
+def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM RegisterType c ue α :=
   readRegRef reg_ref
 
 def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
-def assert (p : Bool) (s : String) : PreSailM RegisterType c Unit :=
+def assert (p : Bool) (s : String) : PreSailM RegisterType c ue Unit :=
   if p then pure () else throw (Assertion s)
 
 section ConcurrencyInterface
@@ -186,17 +197,17 @@ structure Mem_write_request
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
 
-def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c PUnit := do
+def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c ue PUnit := do
   match (← get).mem.containsThenInsert addr value with
     | (true, m) => modify fun s => { s with mem := m }
     | (false, _) => throw (OutOfMemoryRange addr)
 
-def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c Bool := do
+def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c ue Bool := do
   let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
   List.forM list (λ (a, v) => writeByte a v)
   pure true
 
-def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result (Option Bool) Arch.abort) := do
+def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result (Option Bool) Arch.abort) := do
   let addr := req.pa.toNat
   let b ← match req.value with
     | some v => writeBytes addr v
@@ -204,16 +215,16 @@ def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts 
   pure (Ok (some b))
 
 def write_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) (value : BitVec (8 * data_size)) :
-    PreSailM RegisterType c Unit := do
+    PreSailM RegisterType c ue Unit := do
   let _ ← writeBytes addr.toNat value
   pure ()
 
-def readByte (addr : Nat) : PreSailM RegisterType c (BitVec 8) := do
+def readByte (addr : Nat) : PreSailM RegisterType c ue (BitVec 8) := do
   let .some s := (← get).mem.get? addr
     | throw (OutOfMemoryRange addr)
   pure s
 
-def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * size)) × Option Bool) :=
+def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ue ((BitVec (8 * size)) × Option Bool) :=
   match size with
   | 0 => pure (default, none)
   | n + 1 => do
@@ -222,27 +233,27 @@ def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ((BitVec (8 * 
     have h : 8 + 8 * n = 8 * (n + 1) := by omega
     return (h ▸ b.append bytes, bool)
 
-def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
+def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
   let addr := req.pa.toNat
   let value ← readBytes n addr
   pure (Ok value)
 
-def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c (BitVec (8 * data_size)) := do
+def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c ue (BitVec (8 * data_size)) := do
   let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
   pure bytes
 
 
-def sail_barrier (_ : α) : PreSailM RegisterType c Unit := pure ()
+def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
 
 end ConcurrencyInterface
 
-def print_effect (str : String) : PreSailM RegisterType c Unit :=
+def print_effect (str : String) : PreSailM RegisterType c ue Unit :=
   modify fun s ↦ { s with sail_output := s.sail_output.push str }
 
-def print_endline_effect (str : String) : PreSailM RegisterType c Unit :=
+def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
-def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c Unit) : IO Unit := do
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c ue Unit) : IO Unit := do
   let res := main () |>.run initialState
   match res with
   | .ok _ s => do
@@ -267,7 +278,7 @@ def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : 
     then foreach_' from' to step vars body
     else foreach_' to from' step vars body
 
-def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars := do
+def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
   let mut vars := vars
   let step := 1 + (step - 1)
   let range := Std.Range.mk from' to step (by omega)
@@ -275,7 +286,7 @@ def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSai
     vars ← body i vars
   pure vars
 
-def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars :=
+def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars :=
   if from' < to
     then foreach_M' from' to step vars body
     else foreach_M' to from' step vars body

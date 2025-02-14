@@ -33,7 +33,7 @@ abbrev RegisterType : Register → Type
 open RegisterRef
 instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
-abbrev SailM := PreSailM RegisterType trivialChoiceSource
+abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

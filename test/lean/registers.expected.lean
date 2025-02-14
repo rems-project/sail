@@ -42,7 +42,7 @@ instance : Inhabited (RegisterRef RegisterType Int) where
   default := .Reg INT
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg NAT
-abbrev SailM := PreSailM RegisterType trivialChoiceSource
+abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

@@ -21,7 +21,7 @@ abbrev xlenbits := (BitVec 64)
 
 abbrev my_bits k_n := (BitVec k_n)
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

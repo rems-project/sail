@@ -3,7 +3,7 @@ import Out.Sail.BitVec
 
 open Sail
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
+abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 def let0 := (20, 300000000000000000000000)
 
