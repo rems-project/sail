@@ -6,18 +6,11 @@ $include <option.sail>
 $include <vector_dec.sail>
 $include <exception_basic.sail>
 
+$option --sv-specialize 1
+
 val modulus = {ocaml: "modulus", lem: "hardware_mod", coq: "ZEuclid.modulo", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
-val add_range = {ocaml: "add_int", lem: "integerAdd", coq: "add_range", c: "add_int"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
-
-val sub_range = {ocaml: "sub_int", lem: "integerMinus", coq: "sub_range"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
-
-val min = {ocaml: "min_int", lem: "min", coq: "min_atom", c:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c == 'a | 'c == 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
-
-overload operator + = {add_range}
-overload operator - = {sub_range}
+val min = {ocaml: "min_int", lem: "min", coq: "min_atom", _:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c == 'a | 'c == 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
 infix 1 >>
 infix 1 <<

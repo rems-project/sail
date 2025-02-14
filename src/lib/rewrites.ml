@@ -840,9 +840,9 @@ let subst_id_exp exp (id1, id2) =
     (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, empty_tannot)))
     exp
 
-let rec pat_to_exp (P_aux (pat, (l, annot)) as p_aux) =
+let rec pat_to_exp env (P_aux (pat, (l, annot)) as p_aux) =
+  let pat_to_exp = pat_to_exp env in
   let rewrap e = E_aux (e, (l, annot)) in
-  let env = env_of_pat p_aux in
   let typ = typ_of_pat p_aux in
   match pat with
   | P_lit lit -> rewrap (E_lit lit)
@@ -973,11 +973,12 @@ let rewrite_toplevel_guarded_clauses mk_fallthrough l env pat_typ typ
     | (pat, guard, body, annot) :: ((pat', guard', body', annot') as c') :: cs -> (
         match guard with
         | Some exp ->
+            let env = env_of exp in
             let else_exp =
               if equiv_pats current_pat pat' then if_exp fallthrough current_pat (c' :: cs)
-              else case_exp (pat_to_exp current_pat) (typ_of body') (group fallthrough (c' :: cs))
+              else case_exp (pat_to_exp env current_pat) (typ_of body') (group fallthrough (c' :: cs))
             in
-            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc (env_of exp) (typ_of body)
+            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
         | None -> body
       )
     | [(pat, guard, body, annot)] -> (
@@ -988,8 +989,9 @@ let rewrite_toplevel_guarded_clauses mk_fallthrough l env pat_typ typ
         let fallthrough = List.filter overlapping_clause fallthrough in
         match (guard, fallthrough) with
         | Some exp, _ :: _ ->
-            let else_exp = case_exp (pat_to_exp current_pat) (typ_of body) fallthrough in
-            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc (env_of exp) (typ_of body)
+            let env = env_of exp in
+            let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
+            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
         | _, _ -> body
       )
     | [] -> raise (Reporting.err_unreachable l __POS__ "if_exp given empty list in rewrite_guarded_clauses")
@@ -1450,7 +1452,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
       if effectful e then (
         let (E_aux (_, (el, eannot))) = e in
         let pat_e' = fresh_id_pat "p__" (el, mk_tannot (env_of e) (typ_of e)) in
-        let exp_e' = pat_to_exp pat_e' in
+        let exp_e' = pat_to_exp (env_of e) pat_e' in
         let letbind_e = LB_aux (LB_val (pat_e', e), (el, eannot)) in
         let exp' = add_mapping_match (case_exp exp_e' (typ_of full_exp) clauses) in
         rewrap (E_let (letbind_e, exp'))

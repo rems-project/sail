@@ -16,6 +16,8 @@ type global_context = { effect_info : Effects.side_effect_info }
 
 let the_main_function_has_been_seen = ref false
 
+let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -26,7 +28,8 @@ type context = {
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
 }
 
-let initial_context env global = { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
+let context_init env global = { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
+let context_with_env ctx env = { ctx with env }
 
 let add_single_kid_id_rename ctx id kid =
   let kir =
@@ -285,8 +288,15 @@ let doc_quant_item_relevant ctx (QI_aux (qi, annot)) =
 let doc_typ_quant_relevant ctx (TypQ_aux (tq, _) as tq_full) =
   (* We go through the type variables with an environment that contains all the constraints,
      in order to detect when we can translate the Kind as Nat *)
-  let ctx = initial_context (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
+  let ctx = context_init (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
   match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_relevant ctx) qs | TypQ_no_forall -> []
+
+let doc_quant_item_only_vars ctx (QI_aux (qi, annot)) =
+  match qi with QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> Some (doc_kid ctx ki) | QI_constraint c -> None
+
+(* Used to translate type parameters of type abbreviations *)
+let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
+  match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_only_vars ctx) qs | TypQ_no_forall -> []
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
@@ -420,6 +430,7 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) -> doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
+  | P_var (p, _) -> doc_pat p
   | P_as (pat, id) -> doc_pat pat
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
@@ -495,6 +506,77 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let d_id = string "some" in
       let d_args = List.map d_of_arg args in
       nest 2 (parens (flow (break 1) (d_id :: d_args)))
+  | E_app (Id_aux (Id "foreach#", _), args) -> begin
+      let doc_loop_var (E_aux (e, (l, _)) as exp) =
+        match e with
+        | E_id id ->
+            let id_pp = doc_id_ctor id in
+            let typ = typ_of exp in
+            (id_pp, id_pp)
+        | E_lit (L_aux (L_unit, _)) -> (string "()", underscore)
+        | _ -> raise (Reporting.err_unreachable l __POS__ ("Bad expression for variable in loop: " ^ string_of_exp exp))
+      in
+      let make_loop_vars extra_binders varstuple =
+        match varstuple with
+        | E_aux (E_tuple vs, _) ->
+            let vs = List.map doc_loop_var vs in
+            let mkpp f vs = separate (string ", ") (List.map f vs) in
+            let tup_pp = mkpp (fun (pp, _) -> pp) vs in
+            let match_pp = mkpp (fun (_, pp) -> pp) vs in
+            (parens tup_pp, separate space ((string "λ" :: extra_binders) @ [parens match_pp; string "=>"]))
+        | _ ->
+            let exp_pp, match_pp = doc_loop_var varstuple in
+            (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))
+      in
+      match args with
+      | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
+          let loopvar, body =
+            match body with
+            | E_aux
+                ( E_if
+                    ( _,
+                      E_aux
+                        ( E_let
+                            ( LB_aux
+                                ( LB_val
+                                    ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
+                                      | P_aux (P_var (P_aux (P_id id, _), _), _)
+                                      | P_aux (P_id id, _) ),
+                                      _
+                                    ),
+                                  _
+                                ),
+                              body
+                            ),
+                          _
+                        ),
+                      _
+                    ),
+                  _
+                ) ->
+                (id, body)
+            | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
+          in
+          let effects = effectful (effect_of body) in
+          let combinator = if as_monadic && effects then "foreach_M" else "foreach_" in
+          let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
+          let from_exp_pp, to_exp_pp, step_exp_pp =
+            (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
+          in
+          (* The body has the right type for deciding whether a proof is necessary *)
+          (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
+          let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor loopvar] vartuple in
+          let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
+          (* TODO: this should probably be construct_dep_pairs, but we would need
+             to change it to use the updated context. *)
+          let body_pp = doc_exp as_monadic body_ctxt body in
+          parens
+            ((prefix 2 1)
+               ((separate space) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp])
+               (parens (prefix 2 1 (group body_lambda) body_pp))
+            )
+      | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+    end
   | E_app (f, args) ->
       let _, f_typ = Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
@@ -522,13 +604,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
         | _ -> doc_pat lpat
       in
+      let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
         if effectful (effect_of lexp) then
-          if is_unit (typ_of lexp) && is_anonymous_pat lpat then [doc_exp true ctx lexp]
-          else [separate space [string "let"; id_typ; string "←"]; doc_exp true ctx lexp]
-        else [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
+          if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
+          else pp_let_line_f [separate space [string "let"; id_typ; string "← do"]; doc_exp true ctx lexp]
+        else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
       in
-      group (nest 2 (flow (break 1) pp_let_line)) ^^ hardline ^^ doc_exp as_monadic ctx e
+      pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
   | E_struct fexps ->
       let args = List.map d_of_field fexps in
@@ -595,7 +678,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            | _ -> failwith "Argument pattern not translatable yet."
        )
   in
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let ctx, binders =
     List.fold_left
       (fun (ctx, bs) (i, t) ->
@@ -613,21 +696,20 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let decl_val = [doc_ret_typ; coloneq] in
   (* Add do block for stateful functions *)
   let decl_val = if is_monadic then decl_val @ [string "do"] else decl_val in
-  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), env, fixup_binders)
+  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), ctx, fixup_binders)
 
-let doc_funcl_body fixup_binders global (FCL_aux (FCL_funcl (id, pexp), annot)) =
+let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
-  let ctx = initial_context env in
   let _, _, exp, _ = destruct_pexp pexp in
   (* If an argument was [x : (Int, Int)], which is transformed to [(arg0: Int) (arg1: Int)],
      this adds a let binding at the beginning of the function, of the form [let x := (arg0, arg1)] *)
   let exp = fixup_binders exp in
   let is_monadic = effectful (effect_of exp) in
-  doc_exp is_monadic (initial_context env global) exp
+  doc_exp is_monadic (context_with_env ctx env) exp
 
 let doc_funcl ctx funcl =
-  let comment, signature, env, fixup_binders = doc_funcl_init ctx.global funcl in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx.global funcl)
+  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
 
 let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot)) =
   match fcls with
@@ -665,28 +747,24 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
-      let rectyp = List.map (fun d -> parens d) rectyp in
-      let decl_start =
-        match rectyp with
-        | [] -> [string "structure"; string id; string "where"]
-        | _ -> [string "structure"; string id; separate space rectyp; string "where"]
-      in
-      doc_typ_quant_in_comment ctx tq ^^ hardline ^^ nest 2 (flow (break 1) decl_start ^^ hardline ^^ fields_doc)
-  | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_typ t, _)) ->
-      nest 2 (flow (break 1) [string "abbrev"; string id; coloneq; doc_typ ctx t])
+      let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      doc_typ_quant_in_comment ctx tq ^^ hardline
+      ^^ nest 2
+           (flow (break 1) (remove_empties [string "structure"; string id; rectyp; string "where"])
+           ^^ hardline ^^ fields_doc
+           )
+  | TD_abbrev ((Id_aux (Id id, _) as theid), tq, A_aux (A_typ t, _)) ->
+      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = separate space vars in
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; string id; vars; coloneq; doc_typ ctx t]))
   | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_nexp ne, _)) ->
       nest 2 (flow (break 1) [string "abbrev"; string id; colon; string "Int"; coloneq; doc_nexp ctx ne])
   | TD_variant (Id_aux (Id id, _), tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in
-      let rectyp = List.map (fun d -> parens d) rectyp in
-      let decl_start =
-        match rectyp with
-        | [] -> [string "inductive"; string id; string "where"]
-        | _ -> [string "inductive"; string id; separate space rectyp; string "where"]
-      in
+      let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       doc_typ_quant_in_comment ctx tq ^^ hardline
-      ^^ nest 2 (nest 2 (flow space decl_start) ^^ pp_tus)
+      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; string id; rectyp; string "where"])) ^^ pp_tus)
       ^^ hardline ^^ hardline
       ^^ flow space [string "open"; string id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
@@ -771,7 +849,7 @@ let inhabit_enum ctx typ_map =
     typ_map
 
 let doc_reg_info env global registers =
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let type_map = List.fold_left add_reg_typ Bindings.empty registers in
   let type_map = Bindings.bindings type_map in
   separate hardline
@@ -822,7 +900,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let defs = remove_imports defs 0 in
   let regs = State.find_registers defs in
   let global = { effect_info } in
-  let ctx = initial_context env global in
+  let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in
   let monad = doc_monad_abbrev has_registers in

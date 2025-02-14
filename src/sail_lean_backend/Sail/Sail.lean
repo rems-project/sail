@@ -251,6 +251,37 @@ def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Un
   | .error e _ => do
     IO.println s!"Error while running the sail program!: {e.print}"
 
+
+section Loops
+
+def foreach_' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars := Id.run do
+  let mut vars := vars
+  let step := 1 + (step - 1)
+  let range := Std.Range.mk from' to step (by omega)
+  for i in range do
+    vars := body i vars
+  pure vars
+
+def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars :=
+  if from' < to
+    then foreach_' from' to step vars body
+    else foreach_' to from' step vars body
+
+def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars := do
+  let mut vars := vars
+  let step := 1 + (step - 1)
+  let range := Std.Range.mk from' to step (by omega)
+  for i in range do
+    vars ← body i vars
+  pure vars
+
+def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c Vars) : PreSailM RegisterType c Vars :=
+  if from' < to
+    then foreach_M' from' to step vars body
+    else foreach_M' to from' step vars body
+
+end Loops
+
 end Regs
 
 namespace BitVec

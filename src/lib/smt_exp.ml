@@ -256,12 +256,19 @@ module SimpSet = struct
   let add_var_inequality v exp simpset =
     match to_simp_var v with
     | None -> simpset
-    | Some v ->
-        {
-          simpset with
-          inequalities =
-            SimpVarMap.update v (function None -> Some [exp] | Some exps -> Some (exp :: exps)) simpset.inequalities;
-        }
+    | Some simp_v -> (
+        match exp with
+        | Bitvec_lit [Sail2_values.B0] -> add_var v (Bitvec_lit [Sail2_values.B1]) simpset
+        | Bitvec_lit [Sail2_values.B1] -> add_var v (Bitvec_lit [Sail2_values.B0]) simpset
+        | _ ->
+            {
+              simpset with
+              inequalities =
+                SimpVarMap.update simp_v
+                  (function None -> Some [exp] | Some exps -> Some (exp :: exps))
+                  simpset.inequalities;
+            }
+      )
 
   let add_var_is_ctor v ctor simpset = { simpset with is_ctor = NameMap.add v ctor simpset.is_ctor }
 
@@ -681,6 +688,11 @@ module Simplifier = struct
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
         Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
 
+  let rule_ite_assume =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Ite ((Fn ("=", [v; lit]) as i), t, e) when is_literal lit && SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, e, fun e -> Ite (i, t, e)) | _ -> NoChange
+
   let is_equality = function
     | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some (v, lit)
     | _ -> None
@@ -782,10 +794,13 @@ module Simplifier = struct
     | _ -> NoChange
 
   let is_bvfunction = function
-    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" -> true
+    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" | "bvslt" | "bvsle"
+    | "bvsgt" | "bvsge" ->
+        true
     | _ -> false
 
   let rule_bvfunction_literal =
+    let open Sail2_values in
     let open Sail2_operators_bitlists in
     mk_simple_rule __LOC__ @@ function
     | Fn (f, args) -> (
@@ -808,6 +823,26 @@ module Simplifier = struct
         | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (arith_shiftr lhs shift)) | None -> NoChange
           end
+        | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsle", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less_equal lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsgt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsge", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater_equal lhs rhs))
+            | _ -> NoChange
+          )
         | _ -> NoChange
       )
     | _ -> NoChange
@@ -901,7 +936,11 @@ let simp simpset exp =
     match exp with
     | Ite _ ->
         run_strategy simpset exp
-          (Then [rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal])
+          (Then
+             [
+               rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal; Repeat rule_ite_assume;
+             ]
+          )
     | Fn ("and", _) ->
         run_strategy simpset exp
           (Then

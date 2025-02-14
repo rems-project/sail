@@ -993,6 +993,12 @@ module Make (Config : CONFIG) = struct
   let rec pp_smt ?(need_parens = false) =
     let pp_smt_parens exp = pp_smt ~need_parens:true exp in
     let opt_parens doc = if need_parens then parens doc else doc in
+    let rec pp_smt_ite = function
+      | Ite (cond, then_exp, else_exp) ->
+          prefix 2 1 (pp_smt_parens cond ^^ space ^^ char '?') (pp_smt_parens then_exp)
+          ^^ break 1 ^^ char ':' ^^ space ^^ pp_smt_ite else_exp
+      | exp -> pp_smt_parens exp
+    in
     function
     | Bitvec_lit [] -> string "SAIL_ZWBV"
     | Bitvec_lit bits ->
@@ -1079,7 +1085,12 @@ module Make (Config : CONFIG) = struct
         if packed then pp_smt v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else pp_smt v ^^ dot ^^ pp_id ctor
     | Field (_, field, v) -> pp_smt v ^^ dot ^^ pp_id field
     | Ite (cond, then_exp, else_exp) ->
-        parens (separate space [pp_smt_parens cond; char '?'; pp_smt_parens then_exp; char ':'; pp_smt_parens else_exp])
+        opt_parens
+          (align
+             (prefix 2 1 (pp_smt_parens cond ^^ space ^^ char '?') (pp_smt_parens then_exp)
+             ^^ break 1 ^^ char ':' ^^ space ^^ pp_smt_ite else_exp
+             )
+          )
     | Empty_list -> string "{}"
     | Hd (op, arg) -> begin
         match tails arg with

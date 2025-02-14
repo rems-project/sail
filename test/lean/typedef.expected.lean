@@ -9,6 +9,8 @@ abbrev xlen_bytes : Int := 8
 
 abbrev xlenbits := (BitVec 64)
 
+abbrev my_bits k_n := (BitVec k_n)
+
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource
 
 /-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
