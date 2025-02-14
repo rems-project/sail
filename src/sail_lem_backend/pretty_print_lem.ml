@@ -862,11 +862,17 @@ let doc_exp_lem, doc_let_lem =
                       separate space [string "fun"; doc_id_lem loopvar; string "unit_var"; arrow]
                   | _ -> separate space [string "fun"; doc_id_lem loopvar; expY vartuple; arrow]
                 in
-                parens
-                  ((prefix 2 1)
-                     ((separate space) [string combinator; indices_pp; expY vartuple])
-                     (parens (prefix 2 1 (group body_lambda) (expN body)))
-                  )
+                let body_ctxt = { ctxt with monadic = effectful (effect_of body) } in
+                let loop_pp =
+                  parens
+                    ((prefix 2 1)
+                       ((separate space) [string combinator; indices_pp; expY vartuple])
+                       (parens (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body)))
+                    )
+                in
+                if ctxt.monadic && (not body_ctxt.monadic) && has_early_return body then
+                  parens (string "pure_early_return_embed" ^/^ loop_pp)
+                else loop_pp
             | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
           end
         | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
