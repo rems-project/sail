@@ -27,6 +27,28 @@ def decode (v__0 : (BitVec 32)) : Bool :=
                  then false
                  else true
 
+def xlen := 32
+
+def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
+  if (Bool.and (Eq (Sail.BitVec.extractLsb v__26 11 5) (0b1011000 : (BitVec 7)))
+       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
+       (GE.ge (BitVec.toNat index) 3) : Bool))
+  then (pure true)
+  else if (Bool.and (Eq (Sail.BitVec.extractLsb v__26 11 5) (0b1011100 : (BitVec 7)))
+            (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
+            (Bool.and (Eq xlen 32) ((GE.ge (BitVec.toNat index) 3) : Bool))))
+       then (pure true)
+       else assert false "Pattern match failure at match_bv.sail:36.0-38.1"
+            throw Error.Exit
+
+def write_CSR2 (v__30 : (BitVec 12)) : SailM Bool := do
+  if (Bool.and (Eq (Sail.BitVec.extractLsb v__30 11 5) (0b1011100 : (BitVec 7)))
+       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__30 4 0)
+       (Bool.and (Eq xlen 32) ((GE.ge (BitVec.toNat index) 3) : Bool))))
+  then (pure true)
+  else assert false "Pattern match failure at match_bv.sail:41.0-43.1"
+       throw Error.Exit
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
