@@ -20,6 +20,7 @@ elif [ "$1" = "prover" ]; then
 elif [ "$1" = "other" ]; then
     test/lexing/run_tests.py || returncode=1
     test/pattern_completeness/run_tests.py || returncode=1
+    test/mono/run_tests.py || returncode=1
     test/sailcov/run_tests.py || returncode=1
     test/format/run_tests.py || returncode=1
     test/oneoff/run_tests.py || returncode=1
