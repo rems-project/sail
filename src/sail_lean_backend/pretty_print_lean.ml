@@ -434,6 +434,9 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   | P_app (cons, pats) -> doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
   | P_var (p, _) -> doc_pat p
   | P_as (pat, id) -> doc_pat pat
+  | P_struct (pats, _) ->
+      let pats = List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat pat]) pats in
+      braces (space ^^ separate (comma ^^ space) pats ^^ space)
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)

@@ -119,6 +119,14 @@ def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
 def undef_struct (x : (BitVec 1)) : SailM My_struct := do
   ((undefined_My_struct ()) : SailM My_struct)
 
+def match_struct (value : My_struct) : SailM Int := do
+  match value with
+  | { field2 := 0#1, field1 := g__0 } => (pure 0)
+  | { field1 := field1, field2 := 1#1 } => (pure field1)
+  | _ =>
+    assert false "Pattern match failure at struct.sail:39.4-42.5"
+    throw Error.Exit
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 

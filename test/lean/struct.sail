@@ -35,6 +35,13 @@ function undef_struct (x) = {
   (undefined_My_struct(): My_struct)
 }
 
+function match_struct(value : My_struct) -> int = {
+    match value {
+        struct { _, field2 = bitzero } => 0,
+        struct { field1, field2 = bitone } => field1
+    }
+}
+
 struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
                          'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   va : option(bits('vasize)),
