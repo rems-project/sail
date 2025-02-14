@@ -742,42 +742,52 @@ let string_of_type_def_con (TD_aux (td, _)) =
 
 let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   match td with
-  | TD_enum (Id_aux (Id id, _), fields, _) ->
+  | TD_enum (id, fields, _) ->
       let fields = List.map doc_id_ctor fields in
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
       let derivers =
         if List.length fields == 0 then [string "DecidableEq"] else [string "Inhabited"; string "DecidableEq"]
       in
       let enums_doc = concat fields in
+      let id = doc_id_ctor id in
       nest 2
-        (flow (break 1) [string "inductive"; string id; string "where"]
+        (flow (break 1) [string "inductive"; id; string "where"]
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
         )
-      ^^ hardline ^^ hardline ^^ string "open " ^^ string id
-  | TD_record (Id_aux (Id id, _), tq, fields, _) ->
+      ^^ hardline ^^ hardline ^^ string "open " ^^ id
+  | TD_record (id, tq, fields, _) ->
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       doc_typ_quant_in_comment ctx tq ^^ hardline
       ^^ nest 2
-           (flow (break 1) (remove_empties [string "structure"; string id; rectyp; string "where"])
+           (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
            ^^ hardline ^^ fields_doc
            )
-  | TD_abbrev ((Id_aux (Id id, _) as theid), tq, A_aux (A_typ t, _)) ->
+  | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
+      let vars = doc_typ_quant_relevant ctx tq in
+      let vars = List.map parens vars in
+      let vars = separate space vars in
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
+  | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
-      nest 2 (flow (break 1) (remove_empties [string "abbrev"; string id; vars; coloneq; doc_typ ctx t]))
-  | TD_abbrev (Id_aux (Id id, _), tq, A_aux (A_nexp ne, _)) ->
-      nest 2 (flow (break 1) [string "abbrev"; string id; colon; string "Int"; coloneq; doc_nexp ctx ne])
-  | TD_variant (Id_aux (Id id, _), tq, ar, _) ->
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
+  | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
+      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = separate space vars in
+      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Int"; coloneq; doc_nexp ctx ne])
+  | TD_abbrev (id, tq, A_aux (A_bool nc, _)) -> empty
+  | TD_variant (id, tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      let id = doc_id_ctor id in
       doc_typ_quant_in_comment ctx tq ^^ hardline
-      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; string id; rectyp; string "where"])) ^^ pp_tus)
+      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"])) ^^ pp_tus)
       ^^ hardline ^^ hardline
-      ^^ flow space [string "open"; string id]
+      ^^ flow space [string "open"; id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
