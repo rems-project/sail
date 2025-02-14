@@ -855,6 +855,18 @@ module Simplifier = struct
         change (Bitvec_lit (Sail2_operators_bitlists.sign_extend bv (Big_int.of_int to_len)))
     | _ -> NoChange
 
+  let rule_extract_shift =
+    let open Sail2_operators_bitlists in
+    mk_simple_rule __LOC__ @@ function
+    | Extract (n, m, len, Fn ("bvlshr", [bv; Bitvec_lit shift])) -> (
+        match sint_maybe shift with
+        | Some shift when Big_int.less (Big_int.add (Big_int.of_int n) shift) (Big_int.of_int len) ->
+            let shift = Big_int.to_int shift in
+            change (Extract (n + shift, m + shift, len, bv))
+        | _ -> NoChange
+      )
+    | _ -> NoChange
+
   let rule_extract =
     mk_simple_rule __LOC__ @@ function
     | Extract (n, m, _, Bitvec_lit bv) ->
@@ -977,7 +989,7 @@ let simp simpset exp =
     | Fn (bvf, _) when is_bvfunction bvf -> run_strategy simpset exp rule_bvfunction_literal
     | ZeroExtend _ -> run_strategy simpset exp rule_extend_literal
     | SignExtend _ -> run_strategy simpset exp rule_extend_literal
-    | Extract _ -> run_strategy simpset exp rule_extract
+    | Extract _ -> run_strategy simpset exp (Then [rule_extract_shift; rule_extract])
     | Field _ -> run_strategy simpset exp (Then [rule_var; rule_access_ite])
     | Unwrap _ -> run_strategy simpset exp rule_access_ite
     | Tester _ -> run_strategy simpset exp (Then [rule_tester; rule_access_ite])
