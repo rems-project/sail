@@ -22,7 +22,7 @@ type context = {
   global : global_context;
   env : Type_check.env;
       (** The typechecking environment of the current function. This environment is reset using [initial_context] when
-          we start processing a new function.  *)
+          we start processing a new function. Note that we use it to store paths of the form id.x.y.z.  *)
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
@@ -67,19 +67,22 @@ let doc_kid ctx (Kid_aux (Var x, _) as ki) =
 
 let is_enum env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 
-let pat_is_plain_binder env (P_aux (p, _)) =
+let pat_is_plain_binder ?(suffix = "") env (P_aux (p, _)) =
   match p with
   | P_id id when not (is_enum env id) -> Some (Some id, None)
+  | P_id _ -> Some (Some (Id_aux (Id ("id" ^ suffix), Unknown)), None)
   | P_typ (typ, P_aux (P_id id, _)) when not (is_enum env id) -> Some (Some id, Some typ)
   | P_wild | P_typ (_, P_aux (P_wild, _)) -> Some (None, None)
-  | P_var (_, _) -> Some (Some (Id_aux (Id "var", Unknown)), None)
-  | P_app (_, _) -> Some (Some (Id_aux (Id "app", Unknown)), None)
-  | P_vector _ -> Some (Some (Id_aux (Id "vect", Unknown)), None)
-  | P_tuple _ -> Some (Some (Id_aux (Id "tuple", Unknown)), None)
-  | P_list _ -> Some (Some (Id_aux (Id "list", Unknown)), None)
-  | P_cons (_, _) -> Some (Some (Id_aux (Id "cons", Unknown)), None)
+  | P_var (_, _) -> Some (Some (Id_aux (Id ("var" ^ suffix), Unknown)), None)
+  | P_app (_, _) -> Some (Some (Id_aux (Id ("app" ^ suffix), Unknown)), None)
+  | P_vector _ -> Some (Some (Id_aux (Id ("vect" ^ suffix), Unknown)), None)
+  | P_tuple _ -> Some (Some (Id_aux (Id ("tuple" ^ suffix), Unknown)), None)
+  | P_list _ -> Some (Some (Id_aux (Id ("list" ^ suffix), Unknown)), None)
+  | P_cons (_, _) -> Some (Some (Id_aux (Id ("cons" ^ suffix), Unknown)), None)
   | P_lit (L_aux (L_unit, _)) -> Some (Some (Id_aux (Id "_", Unknown)), None)
-  | P_lit _ -> Some (Some (Id_aux (Id "lit", Unknown)), None)
+  | P_lit _ -> Some (Some (Id_aux (Id ("lit" ^ suffix), Unknown)), None)
+  | P_typ _ -> Some (Some (Id_aux (Id ("typ" ^ suffix), Unknown)), None)
+  | P_struct _ -> Some (Some (Id_aux (Id ("struct_pat" ^ suffix), Unknown)), None)
   | _ -> None
 
 (* Copied from the Coq PP *)
@@ -434,7 +437,8 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
   | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
-  | P_app (cons, pats) -> doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
+  | P_app (cons, pats) ->
+      string "." ^^ doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
   | P_var (p, _) -> doc_pat p
   | P_as (pat, id) -> doc_pat pat
   | P_struct (pats, _) ->
@@ -668,7 +672,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e
 
 let doc_binder ctx i t =
-  let paranthesizer =
+  let parenthesizer =
     match t with
     | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]), _) ->
         implicit_parens
@@ -676,7 +680,39 @@ let doc_binder ctx i t =
   in
   (* Overwrite the id if it's captured *)
   let ctx = match captured_typ_var (i, t) with Some (i, ki) -> add_single_kid_id_rename ctx i ki | _ -> ctx in
-  (ctx, separate space [doc_id_ctor i; colon; doc_typ ctx t] |> paranthesizer)
+  (ctx, separate space [doc_id_ctor i; colon; doc_typ ctx t] |> parenthesizer)
+
+(** Find all patterns in the arguments of the sail function that Lean cannot handle in a [def],
+and add them as let bindings in the prelude of the translation of the function. This assumes
+that the pattern is irrefutable. *)
+let add_function_pattern ctx fixup_binders (P_aux (pat, pat_annot) as pat_full) var typ =
+  match pat with
+  | P_id _ | P_typ (_, P_aux (P_id _, _)) | P_tuple [] | P_lit _ | P_wild -> fixup_binders
+  | _ ->
+      fun (E_aux (_, body_annot) as body : tannot exp) ->
+        E_aux
+          ( E_let (LB_aux (LB_val (pat_full, E_aux (E_id var, (Unknown, mk_tannot ctx.env typ))), pat_annot), body),
+            body_annot
+          )
+        |> fixup_binders
+
+(** Find all the [int] and [atom] types in the function pattern and express them as paths that use the
+lean variables, so that we can use them in the return type of the function. For example, see the function
+[two_tuples_atom] in the test case test/lean/typquant.sail.
+*)
+let rec add_path_renamings ~path ctx (P_aux (pat, pat_annot)) (Typ_aux (typ, typ_annot) as typ_full) =
+  match (pat, typ) with
+  | P_tuple pats, Typ_tuple typs ->
+      List.fold_left
+        (fun (ctx, i) (pat, typ) -> (add_path_renamings ~path:(Printf.sprintf "%s.%i" path i) ctx pat typ, i + 1))
+        (ctx, 1) (List.combine pats typs)
+      |> fst
+  | P_id id, typ -> (
+      match captured_typ_var (id, typ_full) with
+      | Some (_, kid) -> add_single_kid_id_rename ctx (mk_id path) kid
+      | None -> ctx
+    )
+  | _ -> ctx
 
 let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
@@ -688,23 +724,26 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   in
   let pat, _, exp, _ = destruct_pexp pexp in
   let pats, fixup_binders = untuple_args_pat arg_typs pat in
-  let binders : (id * typ) list =
+  let binders : (tannot pat * id * typ) list =
     pats
-    |> List.map (fun (pat, typ) ->
-           match pat_is_plain_binder env pat with
-           | Some (Some id, _) -> (id, typ)
-           | Some (None, _) -> (Id_aux (Id "x", l), typ) (* TODO fresh name or wildcard instead of x *)
+    |> List.mapi (fun i (pat, typ) ->
+           match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
+           | Some (Some id, _) -> (pat, id, typ)
+           | Some (None, _) ->
+               (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
            | _ -> failwith "Argument pattern not translatable yet."
        )
   in
   let ctx = context_init env global in
-  let ctx, binders =
+  let ctx, binders, fixup_binders =
     List.fold_left
-      (fun (ctx, bs) (i, t) ->
+      (fun (ctx, bs, fixup_binders) (pat, i, t) ->
         let ctx, d = doc_binder ctx i t in
-        (ctx, bs @ [d])
+        let fixup_binders = add_function_pattern ctx fixup_binders pat i t in
+        let ctx = add_path_renamings ~path:(string_of_id i) ctx pat t in
+        (ctx, bs @ [d], fixup_binders)
       )
-      (ctx, []) binders
+      (ctx, [], fixup_binders) binders
   in
   let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)

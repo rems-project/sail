@@ -39,8 +39,8 @@ def undefined_circle (_ : Unit) : SailM circle := do
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : my_option k_a) : Bool :=
   match opt with
-  | MySome _ => false
-  | MyNone () => true
+  | .MySome _ => false
+  | .MyNone () => true
 
 /-- Type quantifiers: k_a : Type -/
 def use_is_none (opt : my_option k_a) : Bool :=

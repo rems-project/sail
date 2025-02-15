@@ -21,7 +21,7 @@ def spc_forwards (_ : Unit) : String :=
 def spc_forwards_matches (_ : Unit) : Bool :=
   true
 
-def spc_backwards (x : String) : Unit :=
+def spc_backwards (x_0 : String) : Unit :=
   ()
 
 def spc_backwards_matches (s : String) : Bool :=
@@ -34,7 +34,7 @@ def opt_spc_forwards (_ : Unit) : String :=
 def opt_spc_forwards_matches (_ : Unit) : Bool :=
   true
 
-def opt_spc_backwards (x : String) : Unit :=
+def opt_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def opt_spc_backwards_matches (s : String) : Bool :=
@@ -46,7 +46,7 @@ def def_spc_forwards (_ : Unit) : String :=
 def def_spc_forwards_matches (_ : Unit) : Bool :=
   true
 
-def def_spc_backwards (x : String) : Unit :=
+def def_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def def_spc_backwards_matches (s : String) : Bool :=

@@ -72,13 +72,13 @@ def fmod_int (n : Int) (m : Int) : Int :=
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => false
+  | .some _ => false
   | none => true
 
 /-- Type quantifiers: k_a : Type -/
 def is_some (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => true
+  | .some _ => true
   | none => false
 
 /-- Type quantifiers: k_n : Int -/

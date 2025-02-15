@@ -63,13 +63,13 @@ def fmod_int (n : Int) (m : Int) : Int :=
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => false
+  | .some _ => false
   | none => true
 
 /-- Type quantifiers: k_a : Type -/
 def is_some (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => true
+  | .some _ => true
   | none => false
 
 /-- Type quantifiers: k_n : Int -/
@@ -82,12 +82,12 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 def match_option (x : (Option (BitVec 1))) : (BitVec 1) :=
   match x with
-  | some x => x
+  | .some x => x
   | none => 0#1
 
 def option_match (x : (Option Unit)) (y : (BitVec 1)) : (Option (BitVec 1)) :=
   match x with
-  | some () => (some y)
+  | .some () => (some y)
   | none => none
 
 def initialize_registers (_ : Unit) : Unit :=

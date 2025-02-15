@@ -554,13 +554,13 @@ def fmod_int (n : Int) (m : Int) : Int :=
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => false
+  | .some _ => false
   | none => true
 
 /-- Type quantifiers: k_a : Type -/
 def is_some (opt : (Option k_a)) : Bool :=
   match opt with
-  | some _ => true
+  | .some _ => true
   | none => false
 
 /-- Type quantifiers: k_n : Int -/
@@ -1846,11 +1846,11 @@ def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
       value := (some value)
       tag := none }
   match (← (sail_mem_write req)) with
-  | Ok _ => (pure ())
-  | Err _ => throw Error.Exit
+  | .Ok _ => (pure ())
+  | .Err _ => throw Error.Exit
 
-/-- Type quantifiers: x : Nat, x ∈ {32, 64} -/
-def sail_address_announce (x : Nat) (x : (BitVec x)) : Unit :=
+/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+def sail_address_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 
 def wMem_Addr (addr : (BitVec 64)) : Unit :=
@@ -1878,8 +1878,8 @@ def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
       size := 8
       tag := false }
   match (← (sail_mem_read req)) with
-  | Ok (value, _) => (pure value)
-  | Err _ => throw Error.Exit
+  | .Ok (value, _) => (pure value)
+  | .Err _ => throw Error.Exit
 
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m
   ∧ m ≤ 31 -/
@@ -1919,11 +1919,11 @@ def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
 
 def execute (merge_var : ast) : SailM Unit := do
   match merge_var with
-  | LoadRegister (t, n, m) => (execute_LoadRegister t n m)
-  | StoreRegister (t, n, m) => (execute_StoreRegister t n m)
-  | ExclusiveOr (d, n, m) => (execute_ExclusiveOr d n m)
-  | DataMemoryBarrier arg0 => (execute_DataMemoryBarrier arg0)
-  | CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
+  | .LoadRegister (t, n, m) => (execute_LoadRegister t n m)
+  | .StoreRegister (t, n, m) => (execute_StoreRegister t n m)
+  | .ExclusiveOr (d, n, m) => (execute_ExclusiveOr d n m)
+  | .DataMemoryBarrier arg0 => (execute_DataMemoryBarrier arg0)
+  | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
   if (Bool.and (Eq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
@@ -1964,52 +1964,52 @@ def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
       size := 4
       tag := false }
   match (← (sail_mem_read req)) with
-  | Ok (value, _) => (pure value)
-  | Err _ => throw Error.Exit
+  | .Ok (value, _) => (pure value)
+  | .Err _ => throw Error.Exit
 
 def fetch_and_execute (_ : Unit) : SailM Unit := do
   let machineCode ← do (iFetch (← readReg _PC))
   let instr := (decode machineCode)
   match instr with
-  | some instr => (execute instr)
+  | .some instr => (execute instr)
   | none => assert false "Unsupported Encoding"
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def is_ok (r : (Result k_a k_b)) : Bool :=
   match r with
-  | Ok _ => true
-  | Err _ => false
+  | .Ok _ => true
+  | .Err _ => false
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def is_err (r : (Result k_a k_b)) : Bool :=
   match r with
-  | Ok _ => false
-  | Err _ => true
+  | .Ok _ => false
+  | .Err _ => true
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def ok_option (r : (Result k_a k_b)) : (Option k_a) :=
   match r with
-  | Ok x => (some x)
-  | Err _ => none
+  | .Ok x => (some x)
+  | .Err _ => none
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def err_option (r : (Result k_a k_b)) : (Option k_b) :=
   match r with
-  | Ok _ => none
-  | Err err => (some err)
+  | .Ok _ => none
+  | .Err err => (some err)
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def unwrap_or (r : (Result k_a k_b)) (y : k_a) : k_a :=
   match r with
-  | Ok x => x
-  | Err _ => y
+  | .Ok x => x
+  | .Err _ => y
 
 /-- Type quantifiers: k_n : Nat, k_n > 0 -/
-def sail_instr_announce (x : (BitVec k_n)) : Unit :=
+def sail_instr_announce (x_0 : (BitVec k_n)) : Unit :=
   ()
 
-/-- Type quantifiers: x : Nat, x ∈ {32, 64} -/
-def sail_branch_announce (x : Nat) (x : (BitVec x)) : Unit :=
+/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+def sail_branch_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 
 def sail_reset_registers (_ : Unit) : Unit :=
@@ -2019,11 +2019,11 @@ def sail_synchronize_registers (_ : Unit) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type -/
-def sail_mark_register (x : (RegisterRef RegisterType k_a)) (x : String) : Unit :=
+def sail_mark_register (x_0 : (RegisterRef RegisterType k_a)) (x_1 : String) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
-def sail_mark_register_pair (x : (RegisterRef RegisterType k_a)) (x : (RegisterRef RegisterType k_b)) (x : String) : Unit :=
+def sail_mark_register_pair (x_0 : (RegisterRef RegisterType k_a)) (x_1 : (RegisterRef RegisterType k_b)) (x_2 : String) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type -/
@@ -2078,7 +2078,7 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
   match request.access_kind with
-  | AK_explicit eak =>
+  | .AK_explicit eak =>
     match eak.variety with
     | AV_exclusive => true
     | _ => false
@@ -2088,7 +2088,7 @@ def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa 
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_read_request_is_ifetch (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
   match request.access_kind with
-  | AK_ifetch () => true
+  | .AK_ifetch () => true
   | _ => false
 
 def __monomorphize_reads : Bool := false
@@ -2099,7 +2099,7 @@ def __monomorphize_writes : Bool := false
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_write_request_is_exclusive (request : Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
   match request.access_kind with
-  | AK_explicit eak =>
+  | .AK_explicit eak =>
     match eak.variety with
     | AV_exclusive => true
     | _ => false
