@@ -1451,8 +1451,8 @@ let rewrite_exp_guarded_pats fun_only rewriters (E_aux (exp, (l, annot)) as full
       let clauses =
         List.map
           (fun (pat, _, body, annot) -> (pat, body, annot))
-          (rewrite_guarded_clauses fun_only mk_pattern_match_failure_pexp l (env_of full_exp) (typ_of e) (typ_of full_exp)
-             (List.map clause ps)
+          (rewrite_guarded_clauses fun_only mk_pattern_match_failure_pexp l (env_of full_exp) (typ_of e)
+             (typ_of full_exp) (List.map clause ps)
           )
       in
       let e = rewrite_rec e in
@@ -1472,7 +1472,8 @@ let rewrite_exp_guarded_pats fun_only rewriters (E_aux (exp, (l, annot)) as full
         | Pat_aux (Pat_when (pat, guard, body), annot) -> (pat, Some (rewrite_rec guard), rewrite_rec body, annot)
       in
       let clauses =
-        rewrite_guarded_clauses fun_only mk_rethrow_pexp l (env_of full_exp) exc_typ (typ_of full_exp) (List.map clause ps)
+        rewrite_guarded_clauses fun_only mk_rethrow_pexp l (env_of full_exp) exc_typ (typ_of full_exp)
+          (List.map clause ps)
       in
       let pexp (pat, _, body, annot) = Pat_aux (Pat_exp (pat, body), annot) in
       let ps = List.map pexp clauses in
@@ -1521,7 +1522,8 @@ let rewrite_ast_guarded_pats env =
     { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats false; rewrite_fun = rewrite_fun_guarded_pats false }
 
 let rewrite_ast_fun_guarded_pats env =
-  rewrite_ast_base { rewriters_base with  rewrite_exp = rewrite_exp_guarded_pats true; rewrite_fun = rewrite_fun_guarded_pats true }
+  rewrite_ast_base
+    { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats true; rewrite_fun = rewrite_fun_guarded_pats true }
 
 let rec rewrite_lexp_to_rhs (LE_aux (lexp, ((l, _) as annot)) as le) =
   match lexp with

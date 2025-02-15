@@ -651,7 +651,7 @@ let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l)
            ^^ break 1 ^^ doc_exp as_monadic ctx branch
            )
         )
-  | Pat_when (pat, when_, branch) -> 
+  | Pat_when (pat, when_, branch) ->
       failwith ("The Lean backend does not support 'when' clauses in patterns:\n" ^ string_of_pexp p)
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
