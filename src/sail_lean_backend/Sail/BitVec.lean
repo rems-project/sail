@@ -15,7 +15,7 @@ open BitVec
 /- Bitvector pattern component syntax category, originally written by
 Leonardo de Moura. -/
 declare_syntax_cat bvpat_comp
-syntax num : bvpat_comp
+syntax num (":" num)? : bvpat_comp
 syntax ident (":" num)? : bvpat_comp
 syntax "_" ":" num : bvpat_comp
 
@@ -24,7 +24,7 @@ Bitvector pattern syntax category.
 Example: [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5]
 -/
 declare_syntax_cat bvpat
-syntax "[" bvpat_comp,* "]" : bvpat
+syntax "[" bvpat_comp,* "]" ("if" term)? : bvpat
 
 open Lean
 
@@ -34,7 +34,7 @@ abbrev BVPat := TSyntax `bvpat
 /-- Return the number of bits in a bit-vector component pattern. -/
 def BVPatComp.length (c : BVPatComp) : Nat := Id.run do
   match c with
-  | `(bvpat_comp| $n:num) =>
+  | `(bvpat_comp| $n:num $[: $_]?) =>
     let some str := n.raw.isLit? `num | pure 0
     return str.length
   | `(bvpat_comp| $_:ident : $n:num) =>
@@ -52,7 +52,7 @@ denoting it.
 -/
 def BVPatComp.toBVLit? (c : BVPatComp) : MacroM (Option Term) := do
   match c with
-  | `(bvpat_comp| $n:num) =>
+  | `(bvpat_comp| $n:num $[: $_]?) =>
     let len := c.length
     let some str := n.raw.isLit? `num | Macro.throwErrorAt c "invalid bit-vector literal"
     let bs := str.toList
@@ -78,37 +78,19 @@ def BVPatComp.toBVVar? (c : BVPatComp) : MacroM (Option (TSyntax `ident)) := do
     return some x
   | _ => return none
 
-def BVPat.getComponents (p : BVPat) : Array BVPatComp :=
+def BVPat.getComponents (p : BVPat) : (Array BVPatComp) × Option Term :=
   match p with
-  | `(bvpat| [$comp,*]) => comp.getElems.reverse
-  | _ => #[]
+  | `(bvpat| [$comp,*] $[if $t]?) => (comp.getElems.reverse,t)
+  | _ => (#[],none)
 
 /--
 Return the number of bits in a bit-vector pattern.
 -/
 def BVPat.length (p : BVPat) : Nat := Id.run do
   let mut sz := 0
-  for c in p.getComponents do
+  for c in p.getComponents.1 do
     sz := sz + c.length
   return sz
-
-/--
-Return a term that evaluates to `true` if `var` is an instance of the pattern `pat`.
--/
-def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat) : MacroM Term := do
-  if vars.size != pats.size then
-    Macro.throwError "incorrect number of patterns"
-  let mut result ← `(true)
-
-  for (pat, var) in pats.zip vars do
-    let mut shift := 0
-    for c in pat.getComponents do
-      let len := c.length
-      if let some bv ← c.toBVLit? then
-        let test ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var == $bv)
-        result ← `($result && $test)
-      shift := shift + len
-  return result
 
 /--
 Given a variable `var` representing a term that matches the pattern `pat`, and a term `rhs`,
@@ -125,12 +107,35 @@ def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : MacroM
   let mut result := rhs
   for (pat, var) in pats.zip vars do
     let mut shift  := 0
-    for c in pat.getComponents do
+    for c in pat.getComponents.1 do
       let len := c.length
       if let some y ← c.toBVVar? then
         let rhs ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var)
         result ← `(let $y := $rhs; $result)
       shift := shift + len
+  return result
+
+
+/--
+Return a term that evaluates to `true` if `var` is an instance of the pattern `pat`.
+-/
+def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat): MacroM Term := do
+  if vars.size != pats.size then
+    Macro.throwError "incorrect number of patterns"
+  let mut result ← `(true)
+
+  for (pat, var) in pats.zip vars do
+    let mut shift := 0
+    let (cs,if') := pat.getComponents
+    for c in cs do
+      let len := c.length
+      if let some bv ← c.toBVLit? then
+        let test ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var == $bv)
+        result ← `($result && $test)
+      shift := shift + len
+    if let some t := if' then
+      let t ← declBVPatVars vars pats t
+      result ← `($result && $t)
   return result
 
 /--
@@ -156,7 +161,7 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
         -- compare the length to that of the type of the discriminant
         if let some pLen' := len then
           unless pLen == pLen' do
-            throwErrorAt p "Exprected pattern of length {pLen}, found {pLen'} instead"
+            throwErrorAt p "Expected pattern of length {pLen'}, found {pLen} instead"
 
         -- compare the lengths of the patterns
         if let some pLen' := patLen then
@@ -170,7 +175,10 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
 -- exaustivity of the pattern matching.
 abbrev dite_gather {α : Sort u} {old : Prop} (c : Prop) [h : Decidable c]
         (t : old ∧ c → α) (e : old ∧ ¬ c → α) (ho : old) : α :=
-  h.casesOn (λ hc => e (And.intro ho hc)) (λ hc => t (And.intro ho hc))
+  if hc : c then
+    t (And.intro ho hc)
+  else
+    e (And.intro ho hc)
 
 @[term_elab matchBv]
 partial
@@ -210,3 +218,68 @@ def elabMatchBv : TermElab := fun stx typ? =>
     let res ← liftMacroM <| `($result True.intro)
     elabTerm res typ?
   | _ => throwError "invalid syntax"
+
+
+----------- TESTS -----------
+
+-- def test_1 (x : BitVec 32) : BitVec 16 :=
+--    match_bv x with
+--    | [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5] => sf ++ Rm ++ Rn ++ Rd
+--    | [sf:1,0000010000,11111000000,Rn:5,Rd:5] => sf ++ Rn ++ Rd ++ Rd
+--    | _ => 0#16
+
+-- def test_2 (x y : BitVec 32) : BitVec 16 :=
+--    match_bv x, y with
+--    | [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5], [sf':1,0000010000,11111000000,Rn':5,Rd':5]
+--        => sf ++ Rm ++ Rn ++ Rd
+--    | [sf:1,0000010000,11111000000,Rn:5,Rd:5], [sf:1,0000010000,11111000000,Rn:5,Rd:5] => sf ++ Rn ++ Rd ++ Rd
+--    | _ => 0#16
+
+-- /-- error: Expected pattern of length 33, found 32 instead -/
+-- #guard_msgs in
+-- def test_fail_length_one_pat (x : BitVec 33) : Bool :=
+--    match_bv x with
+--    | [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5] => true
+--    | [sf:1,0000010000,11111000000,Rn:6,Rd:5] => false
+--    | _ => true
+
+-- /-- error: Expected pattern of length 33, found 32 instead -/
+-- #guard_msgs in
+-- def test_fail_length_two_pats (x : BitVec 32) (y : BitVec 33) : BitVec 16 :=
+--    match_bv x, y with
+--    | [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5], [sf':1,0000010000,11111000000,Rn':6,Rd':5]
+--        => sf ++ Rm ++ Rn ++ Rd
+--    | [sf:1,0000010000,11111000000,Rn:5,Rd:5], [sf:1,0000010000,11111000000,Rn:5,Rd:5] => sf ++ Rn ++ Rd ++ Rd
+--    | _ => 0#16
+
+
+-- def xlen := 32
+
+-- def write_CSR (x : BitVec 12): Bool := match_bv x with
+--   | [1011100,index:5] if xlen == 32 && index >= 3 => true
+--   | [1011000,index:5] if index >= 3 => true
+--   | _ => true
+
+-- -- TODO: it would be nice to check that the pattern length corresponds to the
+-- -- length of the bit-vector being pattern match against...
+-- def test_exhaustive_1 (x : BitVec 1) : Bool :=
+--   match_bv x with
+--   | [0] => true
+--   | [1] => false
+
+-- def test_exhaustive_2 (x : BitVec 2) : Bool :=
+--   match_bv x with
+--   | [0, _:1] => true
+--   | [1, _:1] => false
+
+-- -- Failing test, because it is not exhaustive!
+-- -- TODO: have a more informative error message
+-- /--
+-- error: The prover found a counterexample, consider the following assignment:
+-- x = 0x0#2
+-- -/
+-- #guard_msgs in
+-- def test_fail_exhaustive_3 (x : BitVec 2) : Bool :=
+--   match_bv x with
+--   | [01] => true
+--   | [1, _:1] => false

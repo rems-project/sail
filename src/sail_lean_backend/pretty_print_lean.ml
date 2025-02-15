@@ -545,9 +545,8 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
 let rec is_bitvector_pattern (P_aux (pat, _)) =
   match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
 
-let match_or_match_bv brs =
-  if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
-  else "match "
+let is_match_bv =
+  List.exists (function Pat_aux (Pat_exp (pat, _), _) | Pat_aux (Pat_when (pat, _, _), _) -> is_bitvector_pattern pat)
 
 let rec doc_implicit_args ?(docs = []) ns ims d_args =
   match (ns, ims, d_args) with
@@ -632,12 +631,28 @@ let prepend_monad ctx exp doc =
   | false, true -> [string "ExceptM"; string "_"; doc]
   | false, false -> [string "Id"; doc]
 
-let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
+let match_or_match_bv (is_match_bv : bool) brs = if is_match_bv then "match_bv " else "match "
+
+let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) =
   match cl with
   | Pat_exp (pat, branch) ->
       group
-        (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
-  | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
+        (nest 2
+           (string "| " ^^ doc_pat pat ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ doc_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) when is_bv ->
+      group
+        (nest 2
+           (string "| " ^^ doc_pat pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ doc_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) -> 
+      failwith ("The Lean backend does not support 'when' clauses in patterns:\n" ^ string_of_pexp p)
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
@@ -871,12 +886,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
+      let is_match_bv = is_match_bv brs in
       let as_monadic' =
         List.exists (fun x -> effectful (effect_of_annot (match x with Pat_aux (_, (_, annot)) -> annot))) brs
         || as_monadic
       in
-      let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
-      string (match_or_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let cases = separate_map hardline (doc_match_clause is_match_bv as_monadic' ctx) brs in
+      string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
         ( match le_act with
@@ -1026,11 +1042,21 @@ let doc_funcl ctx funcl =
   let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
   comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
 
+let string_of_pexp p =
+  let pat, guard, exp, _ = destruct_pexp p in
+  let guard_str = match guard with None -> "" | Some guard -> " if " ^ string_of_exp guard in
+  "| " ^ string_of_pat pat ^ guard_str ^ " -> " ^ string_of_exp exp ^ "\n"
+
 let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot) as full_fundef) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [funcl] -> doc_funcl ctx funcl
-  | _ -> failwith "FD_function with more than one clause"
+  | funcls ->
+      failwith
+        (List.fold_left
+           (fun acc (FCL_aux (FCL_funcl (id, pexp), annot)) -> acc ^ string_of_pexp pexp)
+           "FD_function with more than one clause :\n" funcls
+        )
 
 let doc_type_union ctx (Tu_aux (Tu_ty_id (ty, i), _)) =
   nest 2 (flow space [pipe; doc_id_ctor i; parens (flow space [underscore; colon; doc_typ ctx ty])])

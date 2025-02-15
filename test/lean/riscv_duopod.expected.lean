@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev xlen : Int := 64
 
@@ -32,7 +32,7 @@ inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
-  deriving Inhabited, BEq
+  deriving BEq
 
 inductive Register : Type where
   | Xs
@@ -77,7 +77,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1030# : Bool, k_ex1029# : Bool -/
+/-- Type quantifiers: k_ex849# : Bool, k_ex848# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -161,10 +161,9 @@ def zeros (n : Nat) : (BitVec n) :=
   (BitVec.replicateBits (0b0 : (BitVec 1)) n)
 
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
-  let b__0 := r
-  if (BEq.beq b__0 (0b00000 : (BitVec 5)))
-  then (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
-  else (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
+  match_bv r with
+  | 00000 => do (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
+  | _ => do (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
   if (bne r (0b00000 : (BitVec 5)))
@@ -202,40 +201,25 @@ def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : Sail
   let result ← (( do (read_mem addr 8) ) : SailM xlenbits )
   (wX rd result)
 
-def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (arg3 : iop) : SailM Unit := do
-  let merge_var := (arg0, arg1, arg2, arg3)
-  match merge_var with
-  | (imm, rs1, rd, RISCV_ADDI) =>
-    let rs1_val ← do (rX rs1)
-    let imm_ext : xlenbits := (EXTS (m := 64) imm)
-    let result := (rs1_val + imm_ext)
-    (wX rd result)
-  | _ => throw Error.Exit
+def execute_ITYPE (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) (id_3 : iop) : SailM Unit := do
+  let rs1_val ← do (rX rs1)
+  let imm_ext : xlenbits := (EXTS (m := 64) imm)
+  let result := (rs1_val + imm_ext)
+  (wX rd result)
 
 def execute (merge_var : ast) : SailM Unit := do
   match merge_var with
   | .ITYPE (imm, rs1, rd, arg3) => (execute_ITYPE imm rs1 rd arg3)
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
+  | _ =>
+    assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
+    throw Error.Exit
 
-def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b000 : (BitVec 3)))
-       (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0010011 : (BitVec 7))))
-  then
-    let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-    let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-    let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-    let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-    (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
-  else
-    if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b011 : (BitVec 3)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0000011 : (BitVec 7))))
-    then
-      let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-      let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-      let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-      let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-      (some (LOAD (imm, rs1, rd)))
-    else none
+def decode (merge_var : (BitVec 32)) : (Option ast) :=
+  match_bv merge_var with
+  | [imm:12,rs1:regbits,000,rd:regbits,0010011] => (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
+  | [imm:12,rs1:regbits,011,rd:regbits,0000011] => (some (LOAD (imm, rs1, rd)))
+  | _ => none
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg PC (← (undefined_bitvector 64))

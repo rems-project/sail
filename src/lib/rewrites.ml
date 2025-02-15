@@ -930,74 +930,10 @@ let pats_complete l env ps typ =
    strategy to ours: group *mutually exclusive* clauses, and try to merge them
    into a pattern match first instead of an if-then-else cascade.
 *)
-let rewrite_toplevel_guarded_clauses mk_fallthrough l env pat_typ typ
+let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
     (cs : (tannot pat * tannot exp option * tannot exp * tannot clause_annot) list) =
   let annot_from_clause (def_annot, tannot) = (def_annot.loc, tannot) in
   let fix_fallthrough (pat, guard, exp, (l, tannot)) = (pat, guard, exp, (mk_def_annot l (), tannot)) in
-
-  let rec group fallthrough clauses =
-    let add_clause (pat, cls, annot) c = (pat, cls @ [c], annot) in
-    let rec group_aux current acc = function
-      | ((pat, guard, body, annot) as c) :: cs -> (
-          let current_pat, _, _ = current in
-          match subsumes_pat current_pat pat with
-          | Some substs ->
-              let pat' = List.fold_left subst_id_pat pat substs in
-              let guard' =
-                match guard with Some exp -> Some (List.fold_left subst_id_exp exp substs) | None -> None
-              in
-              let body' = List.fold_left subst_id_exp body substs in
-              let c' = (pat', guard', body', annot) in
-              group_aux (add_clause current c') acc cs
-          | None ->
-              let pat = match cs with _ :: _ -> remove_wildcards "g__" pat | _ -> pat in
-              group_aux (pat, [c], annot_from_clause annot) (acc @ [current]) cs
-        )
-      | [] -> acc @ [current]
-    in
-    let groups =
-      match clauses with
-      | [((pat, guard, body, annot) as c)] -> [(pat, [c], annot_from_clause annot)]
-      | ((pat, guard, body, annot) as c) :: cs ->
-          group_aux (remove_wildcards "g__" pat, [c], annot_from_clause annot) [] cs
-      | _ -> raise (Reporting.err_unreachable l __POS__ "group given empty list in rewrite_guarded_clauses")
-    in
-    let add_group cs groups = if_pexp (groups @ fallthrough) cs :: groups in
-    List.fold_right add_group groups []
-  and if_pexp fallthrough (pat, cs, annot) =
-    match cs with
-    | c :: _ ->
-        let body = if_exp fallthrough pat cs in
-        (pat, body, annot)
-    | [] -> raise (Reporting.err_unreachable l __POS__ "if_pexp given empty list in rewrite_guarded_clauses")
-  and if_exp fallthrough current_pat = function
-    | (pat, guard, body, annot) :: ((pat', guard', body', annot') as c') :: cs -> (
-        match guard with
-        | Some exp ->
-            let env = env_of exp in
-            let else_exp =
-              if equiv_pats current_pat pat' then if_exp fallthrough current_pat (c' :: cs)
-              else case_exp (pat_to_exp env current_pat) (typ_of body') (group fallthrough (c' :: cs))
-            in
-            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
-        | None -> body
-      )
-    | [(pat, guard, body, annot)] -> (
-        (* For singleton clauses with a guard, use fallthrough clauses if the
-           guard is not satisfied, but only those fallthrough clauses that are
-           not disjoint with the current pattern *)
-        let overlapping_clause (pat, _, _) = not (disjoint_pat env current_pat pat) in
-        let fallthrough = List.filter overlapping_clause fallthrough in
-        match (guard, fallthrough) with
-        | Some exp, _ :: _ ->
-            let env = env_of exp in
-            let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
-            annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
-        | _, _ -> body
-      )
-    | [] -> raise (Reporting.err_unreachable l __POS__ "if_exp given empty list in rewrite_guarded_clauses")
-  in
-
   let is_complete =
     pats_complete l env
       (List.map (fun (pat, guard, body, cl_annot) -> construct_pexp (pat, guard, body, annot_from_clause cl_annot)) cs)
@@ -1006,13 +942,79 @@ let rewrite_toplevel_guarded_clauses mk_fallthrough l env pat_typ typ
   let fallthrough =
     if not is_complete then [fix_fallthrough (destruct_pexp (mk_fallthrough l env pat_typ typ))] else []
   in
-  group [] (cs @ fallthrough)
+  if fun_only && is_bitvector_typ pat_typ then
+    List.map (fun (pat, guard, body, annot) -> (pat, guard, body, annot_from_clause annot)) (cs @ fallthrough)
+  else (
+    let rec group fallthrough clauses =
+      let add_clause (pat, cls, annot) c = (pat, cls @ [c], annot) in
+      let rec group_aux current acc = function
+        | ((pat, guard, body, annot) as c) :: cs -> (
+            let current_pat, _, _ = current in
+            match subsumes_pat current_pat pat with
+            | Some substs ->
+                let pat' = List.fold_left subst_id_pat pat substs in
+                let guard' =
+                  match guard with Some exp -> Some (List.fold_left subst_id_exp exp substs) | None -> None
+                in
+                let body' = List.fold_left subst_id_exp body substs in
+                let c' = (pat', guard', body', annot) in
+                group_aux (add_clause current c') acc cs
+            | None ->
+                let pat = match cs with _ :: _ -> remove_wildcards "g__" pat | _ -> pat in
+                group_aux (pat, [c], annot_from_clause annot) (acc @ [current]) cs
+          )
+        | [] -> acc @ [current]
+      in
+      let groups =
+        match clauses with
+        | [((pat, guard, body, annot) as c)] -> [(pat, [c], annot_from_clause annot)]
+        | ((pat, guard, body, annot) as c) :: cs ->
+            group_aux (remove_wildcards "g__" pat, [c], annot_from_clause annot) [] cs
+        | _ -> raise (Reporting.err_unreachable l __POS__ "group given empty list in rewrite_guarded_clauses")
+      in
+      let add_group cs groups = if_pexp (groups @ fallthrough) cs :: groups in
+      List.fold_right add_group groups []
+    and if_pexp fallthrough (pat, cs, annot) =
+      match cs with
+      | c :: _ ->
+          let body = if_exp fallthrough pat cs in
+          (pat, body, annot)
+      | [] -> raise (Reporting.err_unreachable l __POS__ "if_pexp given empty list in rewrite_guarded_clauses")
+    and if_exp fallthrough current_pat = function
+      | (pat, guard, body, annot) :: ((pat', _, body', _) as c') :: cs -> (
+          match guard with
+          | Some exp ->
+              let env = env_of exp in
+              let else_exp =
+                if equiv_pats current_pat pat' then if_exp fallthrough current_pat (c' :: cs)
+                else case_exp (pat_to_exp env current_pat) (typ_of body') (group fallthrough (c' :: cs))
+              in
+              annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
+          | None -> body
+        )
+      | [(pat, guard, body, annot)] -> (
+          (* For singleton clauses with a guard, use fallthrough clauses if the
+             guard is not satisfied, but only those fallthrough clauses that are
+             not disjoint with the current pattern *)
+          let overlapping_clause (pat, _, _) = not (disjoint_pat env current_pat pat) in
+          let fallthrough = List.filter overlapping_clause fallthrough in
+          match (guard, fallthrough) with
+          | Some exp, _ :: _ ->
+              let env = env_of exp in
+              let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
+              annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
+          | _, _ -> body
+        )
+      | [] -> raise (Reporting.err_unreachable l __POS__ "if_exp given empty list in rewrite_guarded_clauses")
+    in
+    List.map (fun (pat, exp, annot) -> (pat, None, exp, annot)) (group [] (cs @ fallthrough))
+  )
 
-let rewrite_guarded_clauses mk_fallthrough l env pat_typ typ
+let rewrite_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
     (cs : (tannot pat * tannot exp option * tannot exp * tannot annot) list) =
   let map_clause_annot f cs = List.map (fun (pat, guard, body, annot) -> (pat, guard, body, f annot)) cs in
   let cs = map_clause_annot (fun (l, tannot) -> (mk_def_annot l (), tannot)) cs in
-  rewrite_toplevel_guarded_clauses mk_fallthrough l env pat_typ typ cs
+  rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ cs
 
 let mk_pattern_match_failure_pexp l env pat_typ typ =
   let p = P_aux (P_wild, (gen_loc l, mk_tannot env pat_typ)) in
@@ -1428,7 +1430,7 @@ let rewrite_bit_lists_to_lits env =
 
 (* Remove pattern guards by rewriting them to if-expressions within the
    pattern expression. *)
-let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
+let rewrite_exp_guarded_pats fun_only rewriters (E_aux (exp, (l, annot)) as full_exp) =
   let rewrap e = E_aux (e, (l, annot)) in
   let rewrite_rec = rewriters.rewrite_exp rewriters in
   let rewrite_base = rewrite_exp rewriters in
@@ -1447,8 +1449,11 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
         | Pat_aux (Pat_when (pat, guard, body), annot) -> (pat, Some (rewrite_rec guard), rewrite_rec body, annot)
       in
       let clauses =
-        rewrite_guarded_clauses mk_pattern_match_failure_pexp l (env_of full_exp) (typ_of e) (typ_of full_exp)
-          (List.map clause ps)
+        List.map
+          (fun (pat, _, body, annot) -> (pat, body, annot))
+          (rewrite_guarded_clauses fun_only mk_pattern_match_failure_pexp l (env_of full_exp) (typ_of e) (typ_of full_exp)
+             (List.map clause ps)
+          )
       in
       let e = rewrite_rec e in
       if effectful e then (
@@ -1467,14 +1472,14 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp, (l, annot)) as full_exp) =
         | Pat_aux (Pat_when (pat, guard, body), annot) -> (pat, Some (rewrite_rec guard), rewrite_rec body, annot)
       in
       let clauses =
-        rewrite_guarded_clauses mk_rethrow_pexp l (env_of full_exp) exc_typ (typ_of full_exp) (List.map clause ps)
+        rewrite_guarded_clauses fun_only mk_rethrow_pexp l (env_of full_exp) exc_typ (typ_of full_exp) (List.map clause ps)
       in
-      let pexp (pat, body, annot) = Pat_aux (Pat_exp (pat, body), annot) in
+      let pexp (pat, _, body, annot) = Pat_aux (Pat_exp (pat, body), annot) in
       let ps = List.map pexp clauses in
       annot_exp (E_try (e, ps)) l (env_of full_exp) (typ_of full_exp)
   | _ -> rewrite_base full_exp
 
-let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r, t, funcls), (l, fdannot))) =
+let rewrite_fun_guarded_pats fun_only rewriters (FD_aux (FD_function (r, t, funcls), (l, fdannot))) =
   let funcls =
     match funcls with
     | FCL_aux (FCL_funcl (id, pexp), fcl_annot) :: _ ->
@@ -1495,14 +1500,14 @@ let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r, t, funcls), (l, 
           | exception _ -> (pexp_pat_typ, pexp_ret_typ)
         in
         let cs =
-          rewrite_toplevel_guarded_clauses mk_pattern_match_failure_pexp l
+          rewrite_toplevel_guarded_clauses fun_only mk_pattern_match_failure_pexp l
             (env_of_tannot (snd fcl_annot))
             pat_typ ret_typ (List.map clause funcls)
         in
         List.map
-          (fun (pat, exp, annot) ->
+          (fun (pat, guard, exp, annot) ->
             FCL_aux
-              ( FCL_funcl (id, construct_pexp (pat, None, exp, (Parse_ast.Unknown, empty_tannot))),
+              ( FCL_funcl (id, construct_pexp (pat, guard, exp, (Parse_ast.Unknown, empty_tannot))),
                 (mk_def_annot (fst annot) (), snd annot)
               )
           )
@@ -1513,7 +1518,10 @@ let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r, t, funcls), (l, 
 
 let rewrite_ast_guarded_pats env =
   rewrite_ast_base
-    { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats; rewrite_fun = rewrite_fun_guarded_pats }
+    { rewriters_base with rewrite_exp = rewrite_exp_guarded_pats false; rewrite_fun = rewrite_fun_guarded_pats false }
+
+let rewrite_ast_fun_guarded_pats env =
+  rewrite_ast_base { rewriters_base with  rewrite_exp = rewrite_exp_guarded_pats true; rewrite_fun = rewrite_fun_guarded_pats true }
 
 let rec rewrite_lexp_to_rhs (LE_aux (lexp, ((l, _) as annot)) as le) =
   match lexp with
@@ -4669,6 +4677,7 @@ let all_rewriters =
     ("remove_bitvector_pats", basic_rewriter rewrite_ast_remove_bitvector_pats);
     ("remove_numeral_pats", basic_rewriter rewrite_ast_remove_numeral_pats);
     ("guarded_pats", basic_rewriter rewrite_ast_guarded_pats);
+    ("fun_guarded_pats", basic_rewriter rewrite_ast_fun_guarded_pats);
     ("bit_lists_to_lits", basic_rewriter rewrite_bit_lists_to_lits);
     ("exp_lift_assign", basic_rewriter rewrite_ast_exp_lift_assign);
     ("early_return", base_rewriter rewrite_ast_early_return);

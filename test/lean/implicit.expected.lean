@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -45,7 +45,7 @@ open option
 
 namespace Functions
 
-/-- Type quantifiers: k_ex789# : Bool, k_ex788# : Bool -/
+/-- Type quantifiers: k_ex775# : Bool, k_ex774# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -123,7 +123,7 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def foo (x : (BitVec 8)) : (BitVec 16) :=
   (EXTZ (m := 16) x)
 
-/-- Type quantifiers: k_ex882# : Bool, n : Nat, n ≥ 0 -/
+/-- Type quantifiers: k_ex868# : Bool, n : Nat, n ≥ 0 -/
 def slice_mask2 {n : _} (i : (BitVec n)) (l : (BitVec n)) (b : Bool) : (BitVec n) :=
   if b
   then i

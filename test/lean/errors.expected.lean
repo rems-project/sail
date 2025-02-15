@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 inductive Register : Type where
   | dummy
@@ -53,7 +53,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex731# : Bool, k_ex730# : Bool -/
+/-- Type quantifiers: k_ex716# : Bool, k_ex715# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -124,13 +124,13 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-/-- Type quantifiers: k_ex824# : Bool -/
+/-- Type quantifiers: k_ex809# : Bool -/
 def test_exit (b : Bool) : SailM Unit := do
   if b
   then throw Error.Exit
   else (pure ())
 
-/-- Type quantifiers: k_ex826# : Bool -/
+/-- Type quantifiers: k_ex811# : Bool -/
 def test_assert (b : Bool) : SailM (BitVec 1) := do
   assert b "b is false"
   (pure 1#1)

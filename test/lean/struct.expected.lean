@@ -16,12 +16,12 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 structure My_struct where
   field1 : Int
   field2 : (BitVec 1)
-  deriving Inhabited, BEq
+  deriving BEq
 
 /-- Type quantifiers: k_n : Int, k_vasize : Int, k_pa : Type, k_ts : Type, k_arch_ak : Type, k_n > 0
   ∧ k_vasize ≥ 0 -/
@@ -33,7 +33,7 @@ structure My_mem_write_request
   size : Int
   value : (Option (BitVec (8 * k_n)))
   tag : (Option Bool)
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -62,7 +62,7 @@ open option
 
 namespace Functions
 
-/-- Type quantifiers: k_ex760# : Bool, k_ex759# : Bool -/
+/-- Type quantifiers: k_ex749# : Bool, k_ex748# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 

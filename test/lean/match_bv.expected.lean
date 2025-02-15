@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -45,7 +45,7 @@ open option
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1669# : Bool, k_ex1668# : Bool -/
+/-- Type quantifiers: k_ex1255# : Bool, k_ex1254# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -116,55 +116,36 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-def decode (v__0 : (BitVec 32)) : Bool :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
-       (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
-  then
-    let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-    let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+def decode (merge_var : (BitVec 32)) : Bool :=
+  match_bv merge_var with
+  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
     if (BEq.beq Rm Rn)
     then true
     else false
-  else
-    if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
-    then
-      let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-      let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-      if (BEq.beq Rn Rd)
-      then true
-      else false
-    else
-      if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
-           (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
-      then true
-      else
-        if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
-        then false
-        else true
+  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
+    if (BEq.beq Rn Rd)
+    then true
+    else false
+  | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => true
+  | [1,011010,0,imm19:19,Rt:5] => false
+  | _ => true
 
 def xlen := 32
 
-def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011000 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
-       ((BitVec.toNat index) ≥b 3) : Bool))
-  then (pure true)
-  else
-    if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011100 : (BitVec 7)))
-         (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
-         (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool))))
-    then (pure true)
-    else
-      assert false "Pattern match failure at match_bv.sail:36.0-38.1"
-      throw Error.Exit
+def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
+  match_bv merge_var with
+  | [1011000:7,index:5] if ((BitVec.toNat index) ≥b 3) => do (pure true)
+  | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
+    (pure true)
+  | _ => do
+    assert false "Pattern match failure at match_bv.sail:36.0-38.1"
+    throw Error.Exit
 
-def write_CSR2 (v__30 : (BitVec 12)) : SailM Bool := do
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__30 11 5) (0b1011100 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__30 4 0)
-       (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool))))
-  then (pure true)
-  else
+def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
+  match_bv merge_var with
+  | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
+    (pure true)
+  | _ => do
     assert false "Pattern match failure at match_bv.sail:41.0-43.1"
     throw Error.Exit
 

@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev reg_index := Nat
 
@@ -117,7 +117,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex2434# : Bool, k_ex2433# : Bool -/
+/-- Type quantifiers: k_ex2416# : Bool, k_ex2415# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 

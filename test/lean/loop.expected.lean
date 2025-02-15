@@ -53,7 +53,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1941# : Bool, k_ex1940# : Bool -/
+/-- Type quantifiers: k_ex1832# : Bool, k_ex1831# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -255,4 +255,3 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
 
 end Functions
 open Functions
-

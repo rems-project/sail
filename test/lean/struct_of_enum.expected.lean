@@ -16,14 +16,14 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving BEq
 
 inductive e_test where | VAL
   deriving Inhabited, BEq
 
 structure s_test where
   f : e_test
-  deriving Inhabited, BEq
+  deriving BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -53,7 +53,7 @@ open e_test
 
 namespace Functions
 
-/-- Type quantifiers: k_ex705# : Bool, k_ex704# : Bool -/
+/-- Type quantifiers: k_ex694# : Bool, k_ex693# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
