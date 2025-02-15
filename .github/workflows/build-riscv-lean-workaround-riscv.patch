@@ -1,0 +1,12 @@
+diff --git a/model/riscv_step.sail b/model/riscv_step.sail
+index 7a6d9450..dd38bdc3 100644
+--- a/model/riscv_step.sail
++++ b/model/riscv_step.sail
+@@ -118,6 +118,7 @@ function loop () : unit -> unit = {
+         /* for now, we drive the platform i/o at every clock tick. */
+         tick_platform();
+         i = 0;
++	()
+       }
+     }
+   }

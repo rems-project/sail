@@ -969,7 +969,10 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            | Some (Some id, _) -> (pat, id, typ)
            | Some (None, _) ->
                (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
-           | _ -> failwith "Argument pattern not translatable yet."
+           | _ -> ( pat, Id_aux (Id "TODO_ARG_PATTERN", Unknown),
+                    Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
+                  )
+            (*failwith "Argument pattern not translatable yet."*)
        )
   in
   let ctx = context_init env global in
