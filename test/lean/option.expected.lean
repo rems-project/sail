@@ -1,6 +1,10 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+
 open Sail
 
 abbrev bits k_n := (BitVec k_n)

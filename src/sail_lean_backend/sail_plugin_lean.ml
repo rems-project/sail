@@ -193,6 +193,9 @@ let start_lean_output (out_name : string) default_sail_dir =
   let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string main_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
+  output_string main_file "set_option maxHeartbeats 1_000_000_000\n";
+  output_string main_file "set_option maxRecDepth 10_000\n";
+  output_string main_file "set_option linter.unusedVariables false\n\n";
   output_string main_file "open Sail\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   { out_name; out_name_camel; sail_dir; main_file; lakefile }
