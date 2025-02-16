@@ -85,10 +85,10 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def bitvector_eq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (Eq x y)
+  (BEq.beq x y)
 
 def bitvector_neq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (Ne x y)
+  (bne x y)
 
 def bitvector_len (x : (BitVec 16)) : Nat :=
   (Sail.BitVec.length x)

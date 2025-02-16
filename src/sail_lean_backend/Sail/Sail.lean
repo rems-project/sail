@@ -143,6 +143,8 @@ def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM Regis
 
 def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
 
+def bitvectorUpdate (v : BitVec m) (n : Nat) (b : Bool) := v[n]! = b
+
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
 def assert (p : Bool) (s : String) : PreSailM RegisterType c ue Unit :=

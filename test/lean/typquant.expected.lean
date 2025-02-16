@@ -136,7 +136,7 @@ def hex_bits_signed2_forwards_matches (bv : (BitVec k_nn)) : Bool :=
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) :=
   let (notn, str) := tuple_0
-  if (Eq str "-")
+  if (BEq.beq str "-")
   then (BitVec.zero notn)
   else let parsed := (BitVec.zero notn)
        if (Eq (BitVec.access parsed (HSub.hSub notn 1)) 0#1)

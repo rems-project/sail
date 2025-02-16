@@ -55,7 +55,7 @@ therefore be included in just about every Sail specification.
 
 */
 
-val eq_unit = pure { lean : "Eq", _ : "eq_unit" } : (unit, unit) -> bool(true)
+val eq_unit = pure { lean : "BEq.beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
 
 val eq_bit = pure { lem : "eq", lean : "Eq", _ : "eq_bit" } : (bit, bit) -> bool
@@ -70,11 +70,11 @@ val and_bool_no_flow = pure {coq: "andb", lean: "Bool.and", _: "and_bool"} : (bo
 
 val or_bool = pure {coq: "orb", lean: "Bool.or", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
-val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", lean: "Eq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
+val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", lean: "BEq.beq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 
-val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", lean: "Eq", _: "eq_bool"} : (bool, bool) -> bool
+val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", lean: "BEq.beq", _: "eq_bool"} : (bool, bool) -> bool
 
-val neq_int = pure {lem: "neq", lean: "Ne"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
+val neq_int = pure {lem: "neq", lean: "bne"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
 function neq_int (x, y) = not_bool(eq_int(x, y))
 
 val neq_bool : (bool, bool) -> bool

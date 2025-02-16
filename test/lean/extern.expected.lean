@@ -30,7 +30,7 @@ def spc_backwards (x_0 : String) : Unit :=
 
 def spc_backwards_matches (s : String) : Bool :=
   let len := (String.length s)
-  (Bool.and (Eq (String.leadingSpaces s) len) (GT.gt len 0))
+  (Bool.and (BEq.beq (String.leadingSpaces s) len) (GT.gt len 0))
 
 def opt_spc_forwards (_ : Unit) : String :=
   ""
@@ -42,7 +42,7 @@ def opt_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def opt_spc_backwards_matches (s : String) : Bool :=
-  (Eq (String.leadingSpaces s) (String.length s))
+  (BEq.beq (String.leadingSpaces s) (String.length s))
 
 def def_spc_forwards (_ : Unit) : String :=
   " "
@@ -54,7 +54,7 @@ def def_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def def_spc_backwards_matches (s : String) : Bool :=
-  (Eq (String.leadingSpaces s) (String.length s))
+  (BEq.beq (String.leadingSpaces s) (String.length s))
 
 def sep_forwards (arg_ : Unit) : String :=
   match arg_ with
@@ -127,7 +127,7 @@ def extern_abs_int_plain (_ : Unit) : Int :=
   (Sail.Int.intAbs x)
 
 def extern_eq_unit (_ : Unit) : Bool :=
-  (Eq () ())
+  (BEq.beq () ())
 
 def extern_eq_bit (_ : Unit) : Bool :=
   (Eq 0#1 1#1)
@@ -145,10 +145,10 @@ def extern_or (_ : Unit) : Bool :=
   (Bool.or true false)
 
 def extern_eq_bool (_ : Unit) : Bool :=
-  (Eq true false)
+  (BEq.beq true false)
 
 def extern_eq_int (_ : Unit) : Bool :=
-  (Eq 5 4)
+  (BEq.beq 5 4)
 
 def extern_lteq_int (_ : Unit) : Bool :=
   (LE.le 5 4)
@@ -163,7 +163,7 @@ def extern_gt_int (_ : Unit) : Bool :=
   (GT.gt 5 4)
 
 def extern_eq_anything (_ : Unit) : Bool :=
-  (Eq true true)
+  (BEq.beq true true)
 
 def extern_vector_update (_ : Unit) : (Vector Int 5) :=
   (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
@@ -184,7 +184,7 @@ def extern_string_startswith (_ : Unit) : Bool :=
   (String.startsWith "Hello, world" "Hello")
 
 def extern_eq_string (_ : Unit) : Bool :=
-  (Eq "Hello" "world")
+  (BEq.beq "Hello" "world")
 
 def extern_concat_str (_ : Unit) : String :=
   (HAppend.hAppend "Hello, " "world")

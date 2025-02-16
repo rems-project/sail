@@ -60,7 +60,7 @@ val eq_bits = pure {
   interpreter: "eq_list",
   lem: "eq_vec",
   coq: "eq_vec",
-  lean: "Eq",
+  lean: "BEq.beq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -70,7 +70,7 @@ val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
   c: "neq_bits",
-  lean: "Ne"
+  lean: "bne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
@@ -91,7 +91,10 @@ val vector_length = pure {
   _: "length"
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
-val vector_init = pure "vector_init" : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
+val vector_init = pure { 
+  lean: "Vector.mkVector",
+  _: "vector_init" 
+} : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
 
 overload length = {bitvector_length, vector_length}
 
@@ -205,7 +208,7 @@ val bitvector_update = pure {
   interpreter: "update",
   lem: "update_vec_dec",
   coq: "update_vec_dec",
-  lean: "vectorUpdate",
+  lean: "bitvectorUpdate",
   _: "vector_update"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $else

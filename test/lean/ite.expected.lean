@@ -101,9 +101,9 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def elif (n : Nat) : (BitVec 1) :=
-  if (Eq n 0)
+  if (BEq.beq n 0)
   then 1#1
-  else if (Eq n 1)
+  else if (BEq.beq n 1)
        then 1#1
        else 0#1
 
@@ -116,7 +116,7 @@ def monadic_in_out (n : Nat) : SailM Nat := do
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_lines (n : Nat) : SailM Unit := do
-  let b := (Eq n 0)
+  let b := (BEq.beq n 0)
   if b
   then writeReg R n
        writeReg B b

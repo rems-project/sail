@@ -1790,13 +1790,13 @@ def GPRs : (Vector (RegisterRef RegisterType (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  if (Ne n 31)
+  if (bne n 31)
   then writeRegRef (vectorAccess GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  if (Ne n 31)
+  if (bne n 31)
   then (reg_deref (vectorAccess GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -1810,11 +1810,11 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   let t : reg_index := (BitVec.toNat Rt)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  if (Bool.or (Ne option_v (0b011 : (BitVec 3))) (Eq S 1#1))
+  if (Bool.or (bne option_v (0b011 : (BitVec 3))) (Eq S 1#1))
   then none
-  else if (Eq opc (0b00 : (BitVec 2)))
+  else if (BEq.beq opc (0b00 : (BitVec 2)))
        then (some (LoadRegister (t, n, m)))
-       else if (Eq opc (0b01 : (BitVec 2)))
+       else if (BEq.beq opc (0b01 : (BitVec 2)))
             then (some (StoreRegister (t, n, m)))
             else none
 
@@ -1824,12 +1824,12 @@ def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (R
   let m : reg_index := (BitVec.toNat Rm)
   if (Bool.and (Eq sf 0#1) (Eq (BitVec.access imm6 5) 1#1))
   then none
-  else if (Ne imm6 (0b000000 : (BitVec 6)))
+  else if (bne imm6 (0b000000 : (BitVec 6)))
        then none
        else (some (ExclusiveOr (d, n, m)))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
-  if (Ne CRm (0xF : (BitVec 4)))
+  if (bne CRm (0xF : (BitVec 4)))
   then none
   else (some (DataMemoryBarrier ()))
 
@@ -1915,7 +1915,7 @@ def execute_DataMemoryBarrier (_ : Unit) : SailM Unit := do
 /-- Type quantifiers: t : Nat, 0 ≤ t ∧ t ≤ 31 -/
 def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
-  if (Eq operand (0x0000000000000000 : (BitVec 64)))
+  if (BEq.beq operand (0x0000000000000000 : (BitVec 64)))
   then let base ← do (rPC ())
        let addr := (HAdd.hAdd base offset)
        (wPC addr)
@@ -1930,9 +1930,9 @@ def execute (merge_var : ast) : SailM Unit := do
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (Eq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
-       (Bool.and (Eq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
-         (Eq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
+  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
+       (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
+         (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
   then let S := (BitVec.access v__0 12)
        let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
        let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
@@ -1940,7 +1940,7 @@ def decode (v__0 : (BitVec 32)) : (Option ast) :=
        let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
        let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
        (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
-  else if (Eq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
+  else if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
        then let sf := (BitVec.access v__0 31)
             let N := (BitVec.access v__0 21)
             let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
@@ -1949,11 +1949,11 @@ def decode (v__0 : (BitVec 32)) : (Option ast) :=
             let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
             let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
             (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
-       else if (Bool.and (Eq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
-                 (Eq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
+       else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
+                 (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
             then let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
                  (decodeDataMemoryBarrier CRm)
-            else if (Eq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
+            else if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
                  then let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
                       let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
                       (decodeCompareAndBranch imm19 Rt)
