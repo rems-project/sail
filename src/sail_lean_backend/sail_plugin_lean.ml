@@ -73,6 +73,10 @@ let opt_lean_output_dir : string option ref = ref None
 
 let opt_lean_force_output : bool ref = ref false
 
+let opt_lean_import_files : string list ref = ref []
+
+let opt_lean_noncomputable : bool ref = ref false
+
 let lean_version : string = "lean4:nightly-2025-02-05"
 
 let lean_options =
@@ -85,9 +89,17 @@ let lean_options =
       Arg.Unit (fun () -> opt_lean_force_output := true),
       "removes the content of the output directory if it is non-empty"
     );
+    ( Flag.create ~prefix:["lean"] "noncomputable",
+      Arg.Unit (fun () -> opt_lean_noncomputable := true),
+      "add a 'noncomputable section' at the beginning of the output"
+    );
     ( Flag.create ~prefix:["lean"] ~arg:"typename" "extern_type",
       Arg.String Pretty_print_lean.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
       "do not generate a definition for the type"
+    );
+    ( Flag.create ~prefix:["lean"] ~arg:"file" "import_file",
+      Arg.String (fun file -> opt_lean_import_files := file :: !opt_lean_import_files),
+      "import this file in the generated model"
     );
   ]
 
@@ -167,6 +179,10 @@ type lean_context = {
   lakefile : out_channel;
 }
 
+let file_to_module (filename : string) =
+  let base = Filename.basename filename in
+  Filename.chop_extension base
+
 let start_lean_output (out_name : string) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
@@ -190,9 +206,20 @@ let start_lean_output (out_name : string) default_sail_dir =
     Unix.system
       ("cp -r " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail") ^ " " ^ Filename.quote lean_src_dir)
   in
+  List.iter
+    (fun filename ->
+      Unix.system ("cp " ^ Filename.quote filename ^ " " ^ Filename.quote lean_src_dir) |> ignore;
+      let filepath = Filename.concat lean_src_dir (file_to_module filename) in
+      Unix.system (Printf.sprintf "sed -i '' 's/THE_MODULE_NAME/%s/g' %s.lean" out_name_camel filepath) |> ignore
+    )
+    !opt_lean_import_files;
   let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string main_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
+  List.iter
+    (fun filename -> output_string main_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n\n"))
+    !opt_lean_import_files;
+  if !opt_lean_noncomputable then output_string main_file "noncomputable section\n\n";
   output_string main_file "set_option maxHeartbeats 1_000_000_000\n";
   output_string main_file "set_option maxRecDepth 10_000\n";
   output_string main_file "set_option linter.unusedVariables false\n\n";
