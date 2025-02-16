@@ -50,6 +50,7 @@ let rec fix_id name =
   (* Lean keywords to avoid, to expand as needed *)
   | "rec" -> name ^ "'"
   | "def" -> name ^ "'"
+  | "not" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
