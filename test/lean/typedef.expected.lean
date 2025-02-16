@@ -29,6 +29,10 @@ abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 namespace Functions
 
+/-- Type quantifiers: k_ex715# : Bool, k_ex714# : Bool -/
+def neq_bool (x : Bool) (y : Bool) : Bool :=
+  (Bool.not (BEq.beq x y))
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x

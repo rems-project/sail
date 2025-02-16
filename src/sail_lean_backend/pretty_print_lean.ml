@@ -867,10 +867,9 @@ let rec doc_defs_rec ctx defs types docdefs =
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
-        if Env.is_extern (id_of_fundef fdef) env "lean" then empty
+        if Env.is_extern (id_of_fundef fdef) env "lean" then docdefs
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
-
       doc_defs_rec ctx defs' types pp_f
   | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
       doc_defs_rec ctx defs' types docdefs
