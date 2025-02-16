@@ -33,6 +33,8 @@ open my_option
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := (← (undefined_int ()))
           height := (← (undefined_int ())) })
@@ -52,4 +54,8 @@ def use_is_none (opt : my_option k_a) : Bool :=
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

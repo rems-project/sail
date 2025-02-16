@@ -24,6 +24,8 @@ open word_width
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -217,4 +219,8 @@ def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

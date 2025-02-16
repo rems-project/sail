@@ -19,6 +19,8 @@ open option
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -98,4 +100,8 @@ def baz (_ : Unit) : SailM (BitVec 16) := do
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

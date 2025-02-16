@@ -19,6 +19,8 @@ open option
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 def spc_forwards (_ : Unit) : String :=
   " "
 
@@ -194,4 +196,8 @@ def extern_n_leading_spaces (_ : Unit) : Nat :=
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

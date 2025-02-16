@@ -36,6 +36,8 @@ structure Mem_write_request
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -133,4 +135,8 @@ def match_struct (value : My_struct) : SailM Int := do
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

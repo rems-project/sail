@@ -28,6 +28,8 @@ structure s_test where
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -110,4 +112,8 @@ def undefined_s_test (_ : Unit) : SailM s_test := do
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

@@ -30,6 +30,8 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
   default := .Reg dummy
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -108,4 +110,8 @@ def test_assert (b : Bool) : SailM (BitVec 1) := do
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg dummy (← (undefined_bit ()))
+
+end Functions
+
+open Functions
 

@@ -27,6 +27,8 @@ abbrev my_bits k_n := (BitVec k_n)
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -92,6 +94,8 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
+def xlen := 64
+
 /-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
 def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
   (Sail.BitVec.zeroExtend v m)
@@ -100,6 +104,13 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def EXTS {m : _} (v : (BitVec k_n)) : (BitVec m) :=
   (Sail.BitVec.signExtend v m)
 
+def uses_xlen_term (_ : Unit) : Int :=
+  xlen
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

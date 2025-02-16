@@ -39,6 +39,8 @@ instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -149,4 +151,8 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))
   writeReg r_B (← (undefined_E ()))
   writeReg r_C (← (undefined_E ()))
+
+end Functions
+
+open Functions
 

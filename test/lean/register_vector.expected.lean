@@ -94,6 +94,8 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -223,4 +225,8 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R2 (← (undefined_bitvector 64))
   writeReg R1 (← (undefined_bitvector 64))
   writeReg R0 (← (undefined_bitvector 64))
+
+end Functions
+
+open Functions
 

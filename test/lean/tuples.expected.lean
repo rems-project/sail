@@ -9,6 +9,8 @@ open Sail
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
+namespace Functions
+
 def let0 := (20, 300000000000000000000000)
 
 def y :=
@@ -27,4 +29,8 @@ def tuple2 (_ : Unit) : SailM (Int × Int) := do
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
+
+end Functions
+
+open Functions
 

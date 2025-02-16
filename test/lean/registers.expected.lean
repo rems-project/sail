@@ -48,6 +48,8 @@ instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg NAT
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -124,4 +126,8 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg BOOL (← (undefined_bool ()))
   writeReg NAT (← (undefined_nat ()))
   writeReg BIT (← (undefined_bit ()))
+
+end Functions
+
+open Functions
 

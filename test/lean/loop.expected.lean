@@ -30,6 +30,8 @@ instance : Inhabited (RegisterRef RegisterType Int) where
   default := .Reg r
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -146,4 +148,8 @@ def foreachloopuseindex (m : Nat) (n : Nat) : Nat :=
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_int ()))
+
+end Functions
+
+open Functions
 

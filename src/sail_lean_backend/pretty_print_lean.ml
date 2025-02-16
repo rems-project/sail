@@ -988,6 +988,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
+  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n\nopen Functions\n\n" in
   let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
   print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs ^^ main_function);
   !the_main_function_has_been_seen

@@ -34,6 +34,8 @@ instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg R
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
+namespace Functions
+
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
@@ -125,4 +127,8 @@ def monadic_lines (n : Nat) : SailM Unit := do
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_nat ()))
   writeReg B (← (undefined_bool ()))
+
+end Functions
+
+open Functions
 
