@@ -1,6 +1,6 @@
 name: Test matrix
 
-on: [push, pull_request, workflow_dispatch]
+on: [pull_request, workflow_dispatch]
 
 env:
   OPAMVERBOSE: 1
