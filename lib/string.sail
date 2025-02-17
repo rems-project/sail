@@ -72,7 +72,7 @@ val hex_str = pure "hex_str" : int -> string
 val hex_str_upper = pure "hex_str_upper" : int -> string
 
 val bits_str = pure {
-   lean: "BitVec.toHex",
+   lean: "BitVec.string_of_bits",
    _: "string_of_bits"} : forall 'n. bitvector('n, dec) -> string
 
 val concat_str_bits : forall 'n. (string, bitvector('n, dec)) -> string

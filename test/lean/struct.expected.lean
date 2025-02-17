@@ -101,7 +101,7 @@ def is_some (opt : (Option k_a)) : Bool :=
 
 /-- Type quantifiers: k_n : Int -/
 def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
-  (HAppend.hAppend str (BitVec.toHex x))
+  (HAppend.hAppend str (BitVec.string_of_bits x))
 
 /-- Type quantifiers: x : Int -/
 def concat_str_dec (str : String) (x : Int) : String :=

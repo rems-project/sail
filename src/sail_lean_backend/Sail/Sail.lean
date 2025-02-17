@@ -2,6 +2,59 @@ import Std.Data.DHashMap
 import Std.Data.HashMap
 namespace Sail
 
+namespace BitVec
+
+def length {w : Nat} (_ : BitVec w) : Nat := w
+
+def signExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
+  x.signExtend w'
+
+def zeroExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
+  x.zeroExtend w'
+
+def truncate {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
+  x.truncate w'
+
+def truncateLsb {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
+  x.extractLsb' (w - w') w'
+
+def extractLsb {w : Nat} (x : BitVec w) (hi lo : Nat) : BitVec (hi - lo + 1) :=
+  x.extractLsb hi lo
+
+def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) : BitVec w :=
+  let mask := ~~~(((BitVec.allOnes len).zeroExtend w) <<< start)
+  let y' := mask ||| ((y.zeroExtend w) <<< start)
+  x &&& y'
+
+def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
+  updateSubrange' x lo _ y
+
+def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
+
+def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
+  BitVec.ofBool x[i]!
+
+def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
+  x + BitVec.ofInt w i
+
+def subInt (x : BitVec w) (i : Int) : BitVec w :=
+  x - BitVec.ofInt w i
+
+def append' (x : BitVec n) (y : BitVec m) {mn}
+    (hmn : mn = n + m := by (conv => rhs; dsimp); try rfl) : BitVec mn :=
+  hmn ▸ x.append y
+
+def string_of_bits {w : Nat} (x : BitVec w) : String :=
+  if (length x % 4) == 0 then
+    s!"0x{String.toUpper (BitVec.toHex x)}"
+  else
+    s!"0b{toString x}"
+
+instance : Coe (BitVec (1 * n)) (BitVec n) where
+  coe x := x.cast (by simp)
+
+end BitVec
+
 section Regs
 
 variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
@@ -252,6 +305,12 @@ end ConcurrencyInterface
 def print_effect (str : String) : PreSailM RegisterType c ue Unit :=
   modify fun s ↦ { s with sail_output := s.sail_output.push str }
 
+def print_int_effect (str : String) (n : Int) : PreSailM RegisterType c ue Unit :=
+  print_effect s!"{str}{n}\n"
+
+def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM RegisterType c ue Unit :=
+  print_effect s!"{str}{BitVec.string_of_bits x}\n"
+
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
@@ -296,53 +355,6 @@ def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSail
 end Loops
 
 end Regs
-
-namespace BitVec
-
-def length {w : Nat} (_ : BitVec w) : Nat := w
-
-def signExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
-  x.signExtend w'
-
-def zeroExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
-  x.zeroExtend w'
-
-def truncate {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
-  x.truncate w'
-
-def truncateLsb {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
-  x.extractLsb' (w - w') w'
-
-def extractLsb {w : Nat} (x : BitVec w) (hi lo : Nat) : BitVec (hi - lo + 1) :=
-  x.extractLsb hi lo
-
-def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) : BitVec w :=
-  let mask := ~~~(((BitVec.allOnes len).zeroExtend w) <<< start)
-  let y' := mask ||| ((y.zeroExtend w) <<< start)
-  x &&& y'
-
-def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
-  updateSubrange' x lo _ y
-
-def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
-
-def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
-  BitVec.ofBool x[i]!
-
-def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
-  x + BitVec.ofInt w i
-
-def subInt (x : BitVec w) (i : Int) : BitVec w :=
-  x - BitVec.ofInt w i
-
-def append' (x : BitVec n) (y : BitVec m) {mn}
-    (hmn : mn = n + m := by (conv => rhs; dsimp); try rfl) : BitVec mn :=
-  hmn ▸ x.append y
-
-instance : Coe (BitVec (1 * n)) (BitVec n) where
-  coe x := x.cast (by simp)
-
-end BitVec
 
 namespace Nat
 
