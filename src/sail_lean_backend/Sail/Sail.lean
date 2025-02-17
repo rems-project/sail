@@ -44,11 +44,14 @@ def append' (x : BitVec n) (y : BitVec m) {mn}
     (hmn : mn = n + m := by (conv => rhs; dsimp); try rfl) : BitVec mn :=
   hmn ▸ x.append y
 
-def string_of_bits {w : Nat} (x : BitVec w) : String :=
+def toBin {w : Nat} (x : BitVec w) : String :=
+  List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
+
+def toFormatted {w : Nat} (x : BitVec w) : String :=
   if (length x % 4) == 0 then
     s!"0x{String.toUpper (BitVec.toHex x)}"
   else
-    s!"0b{toString x}"
+    s!"0b{BitVec.toBin x}"
 
 instance : Coe (BitVec (1 * n)) (BitVec n) where
   coe x := x.cast (by simp)
@@ -309,7 +312,7 @@ def print_int_effect (str : String) (n : Int) : PreSailM RegisterType c ue Unit 
   print_effect s!"{str}{n}\n"
 
 def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM RegisterType c ue Unit :=
-  print_effect s!"{str}{BitVec.string_of_bits x}\n"
+  print_effect s!"{str}{BitVec.toFormatted x}\n"
 
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
