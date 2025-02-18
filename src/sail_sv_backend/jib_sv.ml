@@ -592,15 +592,26 @@ module Make (Config : CONFIG) = struct
     in
     Str.string_match regexp s 0
 
-  let pp_id_string id =
-    let s = string_of_id id in
-    if
-      valid_sv_identifier s
-      && (not (has_bad_prefix s))
-      && (not (StringSet.mem s Keywords.sv_reserved_words))
-      && not (StringSet.mem s Keywords.sv_used_words)
-    then s
-    else Util.zencode_string s
+  module NameGen =
+    Name_generator.Make
+      (struct
+        type style = unit
+
+        let allowed s =
+          valid_sv_identifier s
+          && (not (has_bad_prefix s))
+          && (not (StringSet.mem s Keywords.sv_reserved_words))
+          && not (StringSet.mem s Keywords.sv_used_words)
+
+        let pretty () s = s
+
+        let mangle () s = Util.zencode_string s
+
+        let variant s = function 0 -> s | n -> s ^ string_of_int n
+      end)
+      ()
+
+  let pp_id_string id = NameGen.to_string () id
 
   let pp_id id = string (pp_id_string id)
 
@@ -608,7 +619,7 @@ module Make (Config : CONFIG) = struct
 
   let pp_sv_name = function SVN_id id -> pp_id id | SVN_string s -> string s
 
-  let sv_type_id_string id = "t_" ^ pp_id_string id
+  let sv_type_id_string id = NameGen.to_string ~prefix:"t_" () id
 
   let sv_type_id id = string (sv_type_id_string id)
 
