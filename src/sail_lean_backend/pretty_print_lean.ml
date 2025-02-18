@@ -504,7 +504,7 @@ let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   if ctx.early_ret && not (has_early_return full_exp) then (
-    let d = parens (doc_exp false { ctx with early_ret = false } full_exp) in
+    let d = parens (doc_exp false (remove_er ctx) full_exp) in
     wrap_with_pure as_monadic (parens (nest 2 (flow space [string "cont"; d])))
   )
   else (
