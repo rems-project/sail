@@ -1139,28 +1139,25 @@ let parse_hex_bits (n, s) =
 
 let valid_dec_bits (n, s) =
   if String.length s > 0 && s.[0] = '-' then false
-  else
+  else (
     let is_valid = ref true in
-    String.iter (fun c -> is_valid := !is_valid && ('0' <= c && c <= '9')) s;
+    String.iter (fun c -> is_valid := !is_valid && '0' <= c && c <= '9') s;
     if not !is_valid then false
-    else
-      let rec count_bits n =
-        if Big_int.equal n Big_int.zero then 0
-        else 1 + count_bits (Big_int.shift_right n 1)
-      in
+    else (
+      let rec count_bits n = if Big_int.equal n Big_int.zero then 0 else 1 + count_bits (Big_int.shift_right n 1) in
       let dec_value = Big_int.of_string s in
       count_bits dec_value <= Big_int.to_int n
+    )
+  )
 
 let parse_dec_bits (n, s) =
   let padding = zeros n in
   if not (valid_dec_bits (n, s)) then padding
-  else
+  else (
     let dec_value = Big_int.of_string s in
     let bits = bits_of_big_int (Big_int.to_int n) dec_value in
-    padding @ bits
-    |> List.rev
-    |> Util.take (Big_int.to_int n)
-    |> List.rev
+    padding @ bits |> List.rev |> Util.take (Big_int.to_int n) |> List.rev
+  )
 
 let trace_memory_write (_, _, _) = ()
 let trace_memory_read (_, _, _) = ()
