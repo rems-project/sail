@@ -630,8 +630,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
              (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
           )
     | E_vector vals ->
-        string "#v"
-        ^^ wrap_with_pure as_monadic (brackets (nest 2 (flow (comma ^^ break 1) (List.map (d_of_arg ctx) vals))))
+        let pp =
+          match typ_of full_exp with
+          | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
+          | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
+              nest 2 (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)])
+          | _ -> string "#v" ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) vals)))
+        in
+        pp
     | E_typ (typ, e) ->
         if effectful (effect_of e) then doc_exp as_monadic ctx e
         else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))

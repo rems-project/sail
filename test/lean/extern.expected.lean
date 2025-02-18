@@ -201,7 +201,7 @@ def extern_eq_unit (_ : Unit) : Bool :=
   (BEq.beq () ())
 
 def extern_eq_bit (_ : Unit) : Bool :=
-  (Eq 0#1 1#1)
+  (BEq.beq 0#1 1#1)
 
 def extern_not (_ : Unit) : Bool :=
   (Bool.not true)

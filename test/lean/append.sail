@@ -14,3 +14,7 @@ function unif_subrange_bits(x: bitvector(16)) -> bitvector(17 - 10 + 1) = {
     subrange_bits(x, 10, 3)
 }
 
+val unif_vector_subrange : forall 'n, 'n >= 0. (int('n), bitvector(8 * 'n + 8)) -> bitvector(8)
+function unif_vector_subrange(i, v) = {
+    vector_subrange(v, 8 * i + 7, 8 * i)
+}

@@ -97,7 +97,11 @@ def unif_bitvec_replicate (x : (BitVec 4)) : (BitVec (2 * 8)) :=
   (BitVec.replicateBits x 4)
 
 def unif_subrange_bits (x : (BitVec 16)) : (BitVec (17 - 10 + 1)) :=
-  (Sail.BitVec.extractLsb x 10 3)
+  (Sail.BitVec.extractLsbUnif x 10 3)
+
+/-- Type quantifiers: i : Nat, i ≥ 0 -/
+def unif_vector_subrange (i : Nat) (v : (BitVec (8 * i + 8))) : (BitVec 8) :=
+  (Sail.BitVec.extractLsbUnif v (HAdd.hAdd (HMul.hMul 8 i) 7) (HMul.hMul 8 i))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

@@ -92,7 +92,7 @@ val vector_length = pure {
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
 val vector_init = pure { 
-  lean: "Vector.mkVector",
+  lean: "vectorInit",
   _: "vector_init" 
 } : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
 
@@ -307,7 +307,7 @@ val subrange_bits = pure {
   interpreter: "subrange",
   lem: "subrange_vec_dec",
   coq: "subrange_vec_dec",
-  lean: "Sail.BitVec.extractLsb",
+  lean: "Sail.BitVec.extractLsbUnif",
   _: "vector_subrange"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
   (bits('n), int('m), int('o)) -> bits('m - 'o + 1)

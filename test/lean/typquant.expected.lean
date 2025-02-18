@@ -130,7 +130,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    if (Eq (BitVec.access bv (HSub.hSub len 1)) 1#1)
+    if (BEq.beq (BitVec.access bv (HSub.hSub len 1)) 1#1)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -145,7 +145,7 @@ def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) 
   if (BEq.beq str "-")
   then (BitVec.zero notn)
   else let parsed := (BitVec.zero notn)
-       if (Eq (BitVec.access parsed (HSub.hSub notn 1)) 0#1)
+       if (BEq.beq (BitVec.access parsed (HSub.hSub notn 1)) 0#1)
        then parsed
        else (BitVec.zero notn)
 

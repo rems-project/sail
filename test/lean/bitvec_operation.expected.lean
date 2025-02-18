@@ -21,7 +21,7 @@ abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 namespace Functions
 
-/-- Type quantifiers: k_ex779# : Bool, k_ex778# : Bool -/
+/-- Type quantifiers: k_ex820# : Bool, k_ex819# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -145,6 +145,13 @@ def bitvector_access' (x : (BitVec 16)) (i : Nat) : (BitVec 1) :=
 /-- Type quantifiers: i : Int -/
 def bitvector_plus_int (x : (BitVec 16)) (i : Int) : (BitVec 16) :=
   (BitVec.addInt x i)
+
+def bitvector_literal (x : (BitVec 1)) (y : (BitVec 1)) : (BitVec 2) :=
+  BitVec.join1 [x, y]
+
+/-- Type quantifiers: y : Int, x : Int -/
+def vector_literal (x : Int) (y : Int) : (Vector Int 2) :=
+  #v[x, y]
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

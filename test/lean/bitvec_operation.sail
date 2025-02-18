@@ -91,3 +91,12 @@ val bitvector_plus_int : (bits(16), int) -> bits(16)
 function bitvector_plus_int(x, i) = {
   x + i
 }
+
+function bitvector_literal(x: bit, y: bit) -> bits(2) = {
+  [x, y]
+}
+
+function vector_literal(x: int, y: int) -> vector(2, int) = {
+  [x, y]
+}
+

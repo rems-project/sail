@@ -41,8 +41,12 @@ def subInt (x : BitVec w) (i : Int) : BitVec w :=
   x - BitVec.ofInt w i
 
 def append' (x : BitVec n) (y : BitVec m) {mn}
-    (hmn : mn = n + m := by (conv => rhs; dsimp); try rfl) : BitVec mn :=
-  hmn ▸ x.append y
+    (hmn : mn = n + m := by (conv => rhs; simp); try rfl) : BitVec mn :=
+  (x.append y).cast hmn.symm
+
+def extractLsbUnif {w : Nat} (x : BitVec w) (hi lo : Nat) {w}
+    (hw : w = hi - lo + 1 := by (conv => rhs; simp [Nat.add_sub_cancel_left]); try rfl) : BitVec w :=
+  (extractLsb x hi lo).cast hw.symm
 
 def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
 
@@ -54,6 +58,9 @@ def toFormatted {w : Nat} (x : BitVec w) : String :=
     s!"0x{String.toUpper (BitVec.toHex x)}"
   else
     s!"0b{BitVec.toBin x}"
+
+def join1 (xs : List (BitVec 1)) : BitVec xs.length :=
+  (BitVec.ofBoolListLE (xs.map fun x => x[0])).cast (by simp)
 
 instance : Coe (BitVec (1 * n)) (BitVec n) where
   coe x := x.cast (by simp)
@@ -199,7 +206,9 @@ def writeRegRef (reg_ref : @RegisterRef Register RegisterType α) (a : α) :
 def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM RegisterType c ue α :=
   readRegRef reg_ref
 
-def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
+def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) : α := v[n]!
+
+def vectorInit {n : Nat} (a : α) : Vector α n := Vector.mkVector n a
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
@@ -261,7 +270,7 @@ def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c ue PUnit
     | (false, _) => throw (OutOfMemoryRange addr)
 
 def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c ue Bool := do
-  let list := List.ofFn (λ i : Fin n => (addr + i, value.extractLsb' (8 * i) 8))
+  let list := List.ofFn (λ i : Fin n => (addr + i.val, value.extractLsb' (8 * i.val) 8))
   List.forM list (λ (a, v) => writeByte a v)
   pure true
 
@@ -299,7 +308,6 @@ def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts ar
 def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c ue (BitVec (8 * data_size)) := do
   let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
   pure bytes
-
 
 def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
 
