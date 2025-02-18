@@ -44,6 +44,8 @@ def append' (x : BitVec n) (y : BitVec m) {mn}
     (hmn : mn = n + m := by (conv => rhs; dsimp); try rfl) : BitVec mn :=
   hmn ▸ x.append y
 
+def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
+
 def toBin {w : Nat} (x : BitVec w) : String :=
   List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
 
@@ -199,8 +201,6 @@ def reg_deref (reg_ref : @RegisterRef Register RegisterType α) : PreSailM Regis
 
 def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) := v[n]!
 
-def bitvectorUpdate (v : BitVec m) (n : Nat) (b : Bool) := v[n]! = b
-
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
 def assert (p : Bool) (s : String) : PreSailM RegisterType c ue Unit :=
@@ -325,7 +325,6 @@ def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Un
       IO.print m
   | .error e _ => do
     IO.println s!"Error while running the sail program!: {e.print}"
-
 
 section Loops
 

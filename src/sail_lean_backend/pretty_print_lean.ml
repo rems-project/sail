@@ -515,11 +515,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
       else wrap_with_pure as_monadic (doc_id_ctor id)
   | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
-  | E_app (Id_aux (Id "None", _), _) -> string "none"
+  | E_app (Id_aux (Id "None", _), _) -> wrap_with_pure as_monadic (string "none")
   | E_app (Id_aux (Id "Some", _), args) ->
-      let d_id = string "some" in
-      let d_args = List.map d_of_arg args in
-      nest 2 (parens (flow (break 1) (d_id :: d_args)))
+      wrap_with_pure as_monadic
+        (let d_id = string "some" in
+         let d_args = List.map d_of_arg args in
+         nest 2 (parens (flow (break 1) (d_id :: d_args)))
+        )
   | E_app (Id_aux (Id "foreach#", _), args) -> begin
       let doc_loop_var (E_aux (e, (l, _)) as exp) =
         match e with

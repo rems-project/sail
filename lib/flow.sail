@@ -58,7 +58,7 @@ therefore be included in just about every Sail specification.
 val eq_unit = pure { lean : "BEq.beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
 
-val eq_bit = pure { lem : "eq", lean : "Eq", _ : "eq_bit" } : (bit, bit) -> bool
+val eq_bit = pure { lem : "eq", lean : "BEq.beq", _ : "eq_bit" } : (bit, bit) -> bool
 
 val not_bool = pure {coq: "negb", lean: "Bool.not", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
 /* NB: There are special cases in Sail for effectful uses of and_bool and
