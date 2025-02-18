@@ -502,7 +502,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
   let d_of_arg arg =
     let arg_monadic = effectful (effect_of arg) in
-    let wrap = match arg with E_aux (E_let _, _) | E_aux (E_internal_plet _, _) -> parens | _ -> fun x -> x in
+    let wrap = match arg with E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux ( E_if _, _) -> parens | _ -> fun x -> x in
     wrap_with_left_arrow arg_monadic (wrap (doc_exp arg_monadic ctx arg))
   in
   let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
