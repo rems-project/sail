@@ -127,7 +127,7 @@ def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
     field2 := b }
 
 def undef_struct (x : (BitVec 1)) : SailM My_struct := do
-  ((undefined_My_struct ()) : SailM My_struct)
+  (undefined_My_struct ())
 
 def match_struct (value : My_struct) : SailM Int := do
   match value with

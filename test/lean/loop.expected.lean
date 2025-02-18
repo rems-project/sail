@@ -32,7 +32,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1303# : Bool, k_ex1302# : Bool -/
+/-- Type quantifiers: k_ex1485# : Bool, k_ex1484# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -106,14 +106,13 @@ def foreachloop (m : Nat) (n : Nat) : Int :=
   let res : Int := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  (foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res 1)))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreachloopmon (m : Nat) (n : Nat) : SailM Int := do
   let loop_i_lower := n
   let loop_i_upper := m
-  (foreach_M loop_i_lower loop_i_upper 1 ()
-    (λ i _ => do (writeReg r (HAdd.hAdd (← readReg r) 1) : SailM Unit)))
+  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r (HAdd.hAdd (← readReg r) 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -122,11 +121,11 @@ def foreachloopboth (m : Nat) (n : Nat) : SailM Int := do
   let res : Int ← do
     let loop_i_lower := n
     let loop_i_upper := m
-    (foreach_M loop_i_lower loop_i_upper 1 res
+    foreach_M loop_i_lower loop_i_upper 1 res
       (λ i res => do
         let res : Int := (HAdd.hAdd res 1)
         writeReg r (HAdd.hAdd (← readReg r) res)
-        (pure res)))
+        (pure res))
   (pure (HAdd.hAdd res 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -136,11 +135,11 @@ def foreachloopmultiplevar (m : Nat) (n : Nat) : Int :=
   let (mult, res) :=
     let loop_i_lower := m
     let loop_i_upper := n
-    (foreach_ loop_i_lower loop_i_upper 1 (mult, res)
+    foreach_ loop_i_lower loop_i_upper 1 (mult, res)
       (λ i (mult, res) =>
         let res : Int := (HAdd.hAdd res 1)
         let mult : Int := (HMul.hMul res mult)
-        (mult, res)))
+        (mult, res))
   mult
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -148,7 +147,33 @@ def foreachloopuseindex (m : Nat) (n : Nat) : Nat :=
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  (foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res i)))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res i))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def earlyreturneffect (n : Nat) : SailM Bool := do
+  let loop_i_lower := 0
+  let loop_i_upper := n
+  catchEarlyReturn
+  (foreach_ME loop_i_lower loop_i_upper 1 ()
+    (λ i _ => do
+      if (GT.gt i 5)
+      then (pure (early_return (false : Bool)))
+      else (pure (cont ((← writeReg r (HAdd.hAdd (← readReg r) 1)))))))
+  (pure (GT.gt (← readReg r) n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def earlyreturnpure (n : Nat) : Bool := Id.run do
+  let res : Nat := 0
+  let res : Nat ← do
+    let loop_i_lower := 0
+    let loop_i_upper := n
+    catchEarlyReturnPure
+    (foreach_E loop_i_lower loop_i_upper 1 res
+      (λ i res =>
+        if (GT.gt i 5)
+        then (early_return (false : Bool))
+        else (cont ((HAdd.hAdd res i)))))
+  (pure (GT.gt res n))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_int ()))

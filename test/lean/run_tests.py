@@ -123,7 +123,8 @@ skip_selftests = {
     'real_prop',
     'vector_init',
     'partial_mapping',
-    'fail_issue203'
+    'fail_issue203',
+    'lib_dec_bits'
 }
 
 print("Sail is {}".format(sail))

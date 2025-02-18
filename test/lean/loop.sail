@@ -46,3 +46,20 @@ function foreachloopuseindex(m : nat, n : nat) -> nat = {
   };
   res
 }
+
+function earlyreturneffect(n : nat) -> bool = {
+  foreach (i from 0 to n) {
+    if i > 5 then return false;
+    r = r + 1;
+  };
+  r > n
+}
+
+function earlyreturnpure(n : nat) -> bool = {
+  var res : nat = 0;
+  foreach (i from 0 to n) {
+    if i > 5 then return false;
+    res = res + i;
+  };
+  res > n
+}

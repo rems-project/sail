@@ -64,7 +64,15 @@ function dec_bits_backwards(n, str) = parse_dec_bits(n, str)
 function dec_bits_backwards_matches(n, str) = valid_dec_bits(n, str)
 
 mapping dec_bits_1 : bits(1) <-> string = { dec_bits(1, s) <-> s }
+mapping dec_bits_2 : bits(2) <-> string = { dec_bits(2, s) <-> s }
+mapping dec_bits_3 : bits(3) <-> string = { dec_bits(3, s) <-> s }
+mapping dec_bits_4 : bits(4) <-> string = { dec_bits(4, s) <-> s }
+mapping dec_bits_5 : bits(5) <-> string = { dec_bits(5, s) <-> s }
+mapping dec_bits_6 : bits(6) <-> string = { dec_bits(6, s) <-> s }
+mapping dec_bits_7 : bits(7) <-> string = { dec_bits(7, s) <-> s }
 mapping dec_bits_8 : bits(8) <-> string = { dec_bits(8, s) <-> s }
+mapping dec_bits_9 : bits(9) <-> string = { dec_bits(9, s) <-> s }
+mapping dec_bits_10 : bits(10) <-> string = { dec_bits(10, s) <-> s }
 mapping dec_bits_32 : bits(32) <-> string = { dec_bits(32, s) <-> s }
 
 $endif _DEC_BITS
