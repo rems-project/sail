@@ -325,14 +325,18 @@ def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM Registe
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
-def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c ue Unit) : IO Unit := do
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c ue Unit) : IO UInt32 := do
   let res := main () |>.run initialState
   match res with
   | .ok _ s => do
     for m in s.sail_output do
       IO.print m
-  | .error e _ => do
-    IO.println s!"Error while running the sail program!: {e.print}"
+    return 0
+  | .error e s => do
+    for m in s.sail_output do
+      IO.print m
+    IO.eprintln s!"Error while running the sail program!: {e.print}"
+    return 1
 
 section Loops
 

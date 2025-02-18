@@ -1013,7 +1013,6 @@ let main_function_stub has_registers =
        [
          string "def main (_ : List String) : IO UInt32 := do";
          Printf.ksprintf string "main_of_sail_main ⟨default, (), default, default, default⟩ %s" main_call;
-         string "return 0";
          empty;
        ]
     )

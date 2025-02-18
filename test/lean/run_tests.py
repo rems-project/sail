@@ -53,7 +53,6 @@ skip_selftests = {
     'union_variant_names',
     'lib_hex_bits',
     'lib_hex_bits_signed',
-    'fail_assert_mono_bug',
     'config_bit',
     'varswap',
     'try_return',
@@ -115,7 +114,6 @@ skip_selftests = {
     'real_prop',
     'vector_init',
     'partial_mapping',
-    'fail_issue203',
     'lib_dec_bits',
     'list_list_eq'
 }
@@ -156,7 +154,9 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     '--strict-bitvector'
                 ] if runnable else [ ])
                 step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
-                if runnable:
+                if runnable and basename.startswith('fail'):
+                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename, expected_status=1)
+                elif runnable:
                     step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
