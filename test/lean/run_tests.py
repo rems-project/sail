@@ -41,7 +41,6 @@ skip_selftests = {
     'tuple_conversion',
     'pow2',
     'primop',
-    'zero_length_bv',
     'poly_pair',
     'assign_rename_bug',
     'warl',
@@ -57,7 +56,6 @@ skip_selftests = {
     'fail_assert_mono_bug',
     'config_bit',
     'varswap',
-    'rv_format2',
     'try_return',
     'real',
     'inc_tests',
@@ -75,7 +73,6 @@ skip_selftests = {
     'reg_init_let',
     'for_shadow',
     'list_torture',
-    'rv_format',
     'option_nest',
     'string_literal_type',
     'hex_str_negative',
@@ -88,7 +85,6 @@ skip_selftests = {
     'type_if_bits',
     'poly_union',
     'dec_str_fixed',
-    'nested_fields',
     'nexp_simp_euclidian',
     'config_register_ones',
     'toplevel_tyvar',
@@ -114,14 +110,14 @@ skip_selftests = {
     'simple_bitmanip',
     'poly_mapping',
     'gvectorlit',
-    'fvector_update',
     'split',
     'new_bitfields',
     'real_prop',
     'vector_init',
     'partial_mapping',
     'fail_issue203',
-    'lib_dec_bits'
+    'lib_dec_bits',
+    'list_list_eq'
 }
 
 print("Sail is {}".format(sail))
@@ -156,7 +152,8 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 # TODO: should probably be dependent on whether print should be pure or effectful.
                 extra_flags = ' '.join([
                     '--splice',
-                    'coq-print.splice'
+                    'coq-print.splice',
+                    '--strict-bitvector'
                 ] if runnable else [ ])
                 step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable:

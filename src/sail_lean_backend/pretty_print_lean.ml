@@ -318,6 +318,7 @@ let doc_lit (L_aux (lit, l)) =
   | L_false -> string "false"
   | L_true -> string "true"
   | L_num i -> doc_big_int i
+  | L_hex "" | L_bin "" -> string "BitVec.nil"
   | L_hex n -> utf8string ("0x" ^ n)
   | L_bin n -> utf8string ("0b" ^ n)
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
@@ -1004,12 +1005,14 @@ let doc_instantiations ctx env =
            ]
         )
       ^^ hardline
-let main_function_stub =
+
+let main_function_stub has_registers =
+  let main_call = if has_registers then "(initialize_registers >=> sail_main)" else "sail_main" in
   nest 2
     (separate hardline
        [
          string "def main (_ : List String) : IO UInt32 := do";
-         string "main_of_sail_main ⟨default, (), default, default, default⟩ sail_main";
+         Printf.ksprintf string "main_of_sail_main ⟨default, (), default, default, default⟩ %s" main_call;
          string "return 0";
          empty;
        ]
@@ -1027,6 +1030,6 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
   let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n\nopen Functions\n\n" in
-  let main_function = if !the_main_function_has_been_seen then main_function_stub else empty in
+  let main_function = if !the_main_function_has_been_seen then main_function_stub has_registers else empty in
   print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs ^^ main_function);
   !the_main_function_has_been_seen
