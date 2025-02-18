@@ -494,6 +494,8 @@ let match_or_match_bv brs =
   if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
   else "match "
 
+let remove_er ctx = { ctx with early_ret = false }
+
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) ->
@@ -501,181 +503,193 @@ let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
-  let env = env_of_tannot annot in
-  let d_of_arg arg =
-    let arg_monadic = effectful (effect_of arg) in
-    let wrap = match arg with E_aux (E_let _, _) | E_aux (E_internal_plet _, _) -> parens | _ -> fun x -> x in
-    wrap_with_left_arrow arg_monadic (wrap (doc_exp arg_monadic ctx arg))
-  in
-  let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
-    let field_monadic = effectful (effect_of e) in
-    doc_fexp field_monadic ctx fexp
-  in
-  (* string (" /- " ^ string_of_exp_con full_exp ^ " -/ ") ^^ *)
-  match e with
-  | E_id id ->
-      if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
-      else wrap_with_pure as_monadic (doc_id_ctor id)
-  | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
-  | E_app (Id_aux (Id "None", _), _) -> string "none"
-  | E_app (Id_aux (Id "Some", _), args) ->
-      let d_id = string "some" in
-      let d_args = List.map d_of_arg args in
-      nest 2 (parens (flow (break 1) (d_id :: d_args)))
-  | E_app (Id_aux (Id "foreach#", _), args) -> begin
-      let doc_loop_var (E_aux (e, (l, _)) as exp) =
-        match e with
-        | E_id id ->
-            let id_pp = doc_id_ctor id in
-            let typ = typ_of exp in
-            (id_pp, id_pp)
-        | E_lit (L_aux (L_unit, _)) -> (string "()", underscore)
-        | _ -> raise (Reporting.err_unreachable l __POS__ ("Bad expression for variable in loop: " ^ string_of_exp exp))
-      in
-      let make_loop_vars extra_binders varstuple =
-        match varstuple with
-        | E_aux (E_tuple vs, _) ->
-            let vs = List.map doc_loop_var vs in
-            let mkpp f vs = separate (string ", ") (List.map f vs) in
-            let tup_pp = mkpp (fun (pp, _) -> pp) vs in
-            let match_pp = mkpp (fun (_, pp) -> pp) vs in
-            (parens tup_pp, separate space ((string "λ" :: extra_binders) @ [parens match_pp; string "=>"]))
-        | _ ->
-            let exp_pp, match_pp = doc_loop_var varstuple in
-            (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))
-      in
-      match args with
-      | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
-          let loopvar, body =
-            match body with
-            | E_aux
-                ( E_if
-                    ( _,
-                      E_aux
-                        ( E_let
-                            ( LB_aux
-                                ( LB_val
-                                    ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
-                                      | P_aux (P_var (P_aux (P_id id, _), _), _)
-                                      | P_aux (P_id id, _) ),
-                                      _
-                                    ),
-                                  _
-                                ),
-                              body
-                            ),
-                          _
-                        ),
-                      _
-                    ),
-                  _
-                ) ->
-                (id, body)
-            | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
-          in
-          let effects = effectful (effect_of body) in
-          let early_return = has_early_return body in
-          let combinator, catch =
-            match (as_monadic && effects, early_return) with
-            | true, true -> ("foreach_ME", string "catchEarlyReturn")
-            | true, false -> ("foreach_M", empty)
-            | false, true -> ("foreach_E", string "catchEarlyReturnPure")
-            | false, false -> ("foreach_", empty)
-          in
-          let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
-          let body_ctxt = { body_ctxt with early_ret = early_return } in
-          let from_exp_pp, to_exp_pp, step_exp_pp =
-            (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
-          in
-          (* The body has the right type for deciding whether a proof is necessary *)
-          (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
-          let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor loopvar] vartuple in
-          let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
-          (* TODO: this should probably be construct_dep_pairs, but we would need
-             to change it to use the updated context. *)
-          let body_pp = doc_exp as_monadic body_ctxt body in
-          let loop_head = flow (break 1) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp] in
-          let loop_head = if early_return then flow (break 1) [catch; parens loop_head] else loop_head in
-          (prefix 2 1) loop_head (parens (prefix 2 1 (group body_lambda) body_pp))
-      | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-    end
-  | E_app (f, args) ->
-      let _, f_typ = Env.get_val_spec f env in
-      let implicits = get_fn_implicits f_typ in
-      let d_id =
-        if Env.is_extern f env "lean" then string (Env.get_extern f env "lean")
-        else doc_exp false ctx (E_aux (E_id f, (l, annot)))
-      in
-      let d_args = List.map d_of_arg args in
-      let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
-      let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
-      nest 2
-        (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
-           (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
-        )
-  | E_vector vals ->
-      string "#v" ^^ wrap_with_pure as_monadic (brackets (nest 2 (flow (comma ^^ break 1) (List.map d_of_arg vals))))
-  | E_typ (typ, e) ->
-      if effectful (effect_of e) then
-        parens (separate space [doc_exp as_monadic ctx e; colon; string "SailM"; doc_typ ctx typ])
-      else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
-  | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) d_of_arg es))
-  | E_internal_plet (lpat, lexp, e) | E_let (LB_aux (LB_val (lpat, lexp), _), e) ->
-      let id_typ =
-        match pat_is_plain_binder env lpat with
-        | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
-        | _ -> doc_pat lpat
-      in
-      let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
-      let pp_let_line =
-        if effectful (effect_of lexp) && is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
-        else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
-      in
-      pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e
-  | E_internal_return e ->
-      if ctx.early_ret then flow (break 1) [string "cont"; parens (doc_exp false ctx e)]
-      else doc_exp false ctx e (* ??? *)
-  | E_struct fexps ->
-      let args = List.map d_of_field fexps in
-      wrap_with_pure as_monadic (braces (space ^^ align (separate hardline args) ^^ space))
-  | E_field (exp, id) ->
-      (* TODO *)
-      wrap_with_pure as_monadic (doc_exp false ctx exp ^^ dot ^^ doc_id_ctor id)
-  | E_struct_update (exp, fexps) ->
-      let args = List.map d_of_field fexps in
-      (* TODO *)
-      wrap_with_pure as_monadic
-        (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
-  | E_match (discr, brs) ->
-      let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
-      string (match_or_match_bv brs) ^^ doc_exp false ctx discr ^^ string " with" ^^ hardline ^^ cases
-  | E_assign ((LE_aux (le_act, tannot) as le), e) -> (
-      match le_act with
-      | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ doc_exp false ctx e
-      | LE_deref e' -> string "writeRegRef " ^^ doc_exp false ctx e' ^^ space ^^ doc_exp false ctx e
-      | _ -> failwith ("assign " ^ string_of_lexp le ^ "not implemented yet")
-    )
-  | E_if (i, t, e) ->
-      let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
-      nest 2 (string "if" ^^ space ^^ nest 1 (doc_exp false ctx i))
-      ^^ hardline
-      ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
-      ^^ hardline
-      ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
-  | E_ref id -> string "Reg " ^^ doc_id_ctor id
-  | E_exit _ -> string "throw Error.Exit"
-  | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
-  | E_try (e, cases) ->
-      let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
-      let cases = doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot))) in
-      string "sailTryCatch "
-      ^^ parens (doc_exp false ctx e)
-      ^^ space
-      ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
-  | E_assert (e1, e2) -> string "assert " ^^ d_of_arg e1 ^^ space ^^ d_of_arg e2
-  | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
-  | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
-  | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
+  if ctx.early_ret && not (has_early_return full_exp) then (
+    let d = parens (doc_exp false { ctx with early_ret = false } full_exp) in
+    wrap_with_pure as_monadic (parens (nest 2 (flow space [string "cont"; d])))
+  )
+  else (
+    let env = env_of_tannot annot in
+    let d_of_arg ctx arg =
+      let arg_monadic = effectful (effect_of arg) in
+      let wrap = match arg with E_aux (E_let _, _) | E_aux (E_internal_plet _, _) -> parens | _ -> fun x -> x in
+      wrap_with_left_arrow arg_monadic (wrap (doc_exp arg_monadic ctx arg))
+    in
+    let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
+      let field_monadic = effectful (effect_of e) in
+      doc_fexp field_monadic ctx fexp
+    in
+    (* string (" /- " ^ string_of_exp_con full_exp ^ " -/ ") ^^ *)
+    match e with
+    | E_id id ->
+        if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
+        else wrap_with_pure as_monadic (doc_id_ctor id)
+    | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
+    | E_app (Id_aux (Id "None", _), _) -> string "none"
+    | E_app (Id_aux (Id "Some", _), args) ->
+        let d_id = string "some" in
+        let d_args = List.map (d_of_arg ctx) args in
+        nest 2 (parens (flow (break 1) (d_id :: d_args)))
+    | E_app (Id_aux (Id "foreach#", _), args) -> begin
+        let doc_loop_var (E_aux (e, (l, _)) as exp) =
+          match e with
+          | E_id id ->
+              let id_pp = doc_id_ctor id in
+              let typ = typ_of exp in
+              (id_pp, id_pp)
+          | E_lit (L_aux (L_unit, _)) -> (string "()", underscore)
+          | _ ->
+              raise (Reporting.err_unreachable l __POS__ ("Bad expression for variable in loop: " ^ string_of_exp exp))
+        in
+        let make_loop_vars extra_binders varstuple =
+          match varstuple with
+          | E_aux (E_tuple vs, _) ->
+              let vs = List.map doc_loop_var vs in
+              let mkpp f vs = separate (string ", ") (List.map f vs) in
+              let tup_pp = mkpp (fun (pp, _) -> pp) vs in
+              let match_pp = mkpp (fun (_, pp) -> pp) vs in
+              (parens tup_pp, separate space ((string "λ" :: extra_binders) @ [parens match_pp; string "=>"]))
+          | _ ->
+              let exp_pp, match_pp = doc_loop_var varstuple in
+              (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))
+        in
+        match args with
+        | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
+            let loopvar, body =
+              match body with
+              | E_aux
+                  ( E_if
+                      ( _,
+                        E_aux
+                          ( E_let
+                              ( LB_aux
+                                  ( LB_val
+                                      ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
+                                        | P_aux (P_var (P_aux (P_id id, _), _), _)
+                                        | P_aux (P_id id, _) ),
+                                        _
+                                      ),
+                                    _
+                                  ),
+                                body
+                              ),
+                            _
+                          ),
+                        _
+                      ),
+                    _
+                  ) ->
+                  (id, body)
+              | _ ->
+                  raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
+            in
+            let effects = effectful (effect_of body) in
+            let early_return = has_early_return body in
+            let combinator, catch, as_monadic =
+              match (as_monadic && effects, early_return) with
+              | true, true -> ("foreach_ME", string "catchEarlyReturn", true)
+              | true, false -> ("foreach_M", empty, true)
+              | false, true -> ("foreach_E", string "catchEarlyReturnPure", false)
+              | false, false -> ("foreach_", empty, false)
+            in
+            let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
+            let body_ctxt = { body_ctxt with early_ret = early_return } in
+            let from_exp_pp, to_exp_pp, step_exp_pp =
+              (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
+            in
+            (* The body has the right type for deciding whether a proof is necessary *)
+            (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
+            let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor loopvar] vartuple in
+            let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
+            (* TODO: this should probably be construct_dep_pairs, but we would need
+               to change it to use the updated context. *)
+            let body_pp = doc_exp as_monadic body_ctxt body in
+            let loop_head = flow (break 1) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp] in
+            let full_loop = (prefix 2 1) loop_head (parens (prefix 2 1 (group body_lambda) body_pp)) in
+            if early_return then flow (break 1) [catch; parens full_loop] else full_loop
+        | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+      end
+    | E_app (f, args) ->
+        let ctx = match f with Id_aux (Id "early_return", _) -> remove_er ctx | _ -> ctx in
+        let _, f_typ = Env.get_val_spec f env in
+        let implicits = get_fn_implicits f_typ in
+        let d_id =
+          if Env.is_extern f env "lean" then string (Env.get_extern f env "lean")
+          else doc_exp false ctx (E_aux (E_id f, (l, annot)))
+        in
+        let d_args = List.map (d_of_arg ctx) args in
+        let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
+        let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
+        nest 2
+          (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
+             (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
+          )
+    | E_vector vals ->
+        string "#v"
+        ^^ wrap_with_pure as_monadic (brackets (nest 2 (flow (comma ^^ break 1) (List.map (d_of_arg ctx) vals))))
+    | E_typ (typ, e) ->
+        if effectful (effect_of e) then doc_exp as_monadic ctx e
+        else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
+    | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
+    | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
+        let arrow = match e with E_let _ -> string "←" | _ -> string "← do" in
+        let id_typ =
+          match pat_is_plain_binder env lpat with
+          | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
+          | _ -> doc_pat lpat
+        in
+        let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
+        let pp_let_line =
+          if effectful (effect_of lexp) || has_early_return lexp then
+            if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true (remove_er ctx) lexp
+            else pp_let_line_f [separate space [string "let"; id_typ; arrow]; doc_exp true (remove_er ctx) lexp]
+          else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false (remove_er ctx) lexp]
+        in
+        pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
+    | E_internal_return e -> doc_exp false ctx e (* ??? *)
+    | E_struct fexps ->
+        let args = List.map d_of_field fexps in
+        wrap_with_pure as_monadic (braces (space ^^ align (separate hardline args) ^^ space))
+    | E_field (exp, id) ->
+        (* TODO *)
+        wrap_with_pure as_monadic (doc_exp false ctx exp ^^ dot ^^ doc_id_ctor id)
+    | E_struct_update (exp, fexps) ->
+        let args = List.map d_of_field fexps in
+        (* TODO *)
+        wrap_with_pure as_monadic
+          (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
+    | E_match (discr, brs) ->
+        let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
+        string (match_or_match_bv brs) ^^ doc_exp false (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
+    | E_assign ((LE_aux (le_act, tannot) as le), e) ->
+        wrap_with_left_arrow (not as_monadic)
+          ( match le_act with
+          | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ doc_exp false ctx e
+          | LE_deref e' -> string "writeRegRef " ^^ doc_exp false ctx e' ^^ space ^^ doc_exp false ctx e
+          | _ -> failwith ("assign " ^ string_of_lexp le ^ "not implemented yet")
+          )
+    | E_if (i, t, e) ->
+        let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
+        nest 2 (string "if" ^^ space ^^ nest 1 (doc_exp false (remove_er ctx) i))
+        ^^ hardline
+        ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
+        ^^ hardline
+        ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
+    | E_ref id -> string "Reg " ^^ doc_id_ctor id
+    | E_exit _ -> string "throw Error.Exit"
+    | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
+    | E_try (e, cases) ->
+        let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
+        let cases = doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot))) in
+        string "sailTryCatch "
+        ^^ parens (doc_exp false ctx e)
+        ^^ space
+        ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
+    | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
+    | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
+    | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
+    | _ ->
+        failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
+  )
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e
 
