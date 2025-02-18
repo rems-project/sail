@@ -355,6 +355,45 @@ def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSail
     then foreach_M' from' to step vars body
     else foreach_M' to from' step vars body
 
+inductive ER (α β : Type)
+ | early_return (r : α)
+ | cont (x : β)
+export ER(early_return cont)
+
+def foreach_E' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> ER T Vars) : ER T Vars := Id.run do
+  let mut vars := vars
+  let step := 1 + (step - 1)
+  let range := Std.Range.mk from' to step (by omega)
+  for i in range do
+    match body i vars with
+     | early_return x => return early_return x
+     | cont x => vars := x
+  pure (cont vars)
+
+def foreach_E (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> ER T Vars) : ER T Vars := Id.run do
+  if from' < to
+    then foreach_E' from' to step vars body
+    else foreach_E' to from' step vars body
+
+def foreach_ME' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
+  let mut vars := vars
+  let step := 1 + (step - 1)
+  let range := Std.Range.mk from' to step (by omega)
+  for i in range do
+    let b ← body i vars
+    match b with
+      | early_return v => return early_return v
+      | cont x => vars := x
+  pure (cont vars)
+
+def foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
+  if from' < to
+    then foreach_ME' from' to step vars body
+    else foreach_ME' to from' step vars body
+
+macro "catchEarlyReturn" m:term : doElem => `(doElem| match ← $m with | early_return x => return x | cont x => pure x)
+macro "catchEarlyReturnPure" m:term : doElem => `(doElem| match ($m) with | early_return x => return x | cont x => x)
+
 end Loops
 
 end Regs
