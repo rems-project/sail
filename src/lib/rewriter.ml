@@ -54,6 +54,7 @@ type ('a, 'b) rewriters = {
   rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
   rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
@@ -172,6 +173,22 @@ let rewrite_pat rewriters (P_aux (pat, (l, annot))) =
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
   | P_struct (fpats, fwild) -> rewrap (P_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats, fwild))
 
+let rewrite_mpat rewriters (MP_aux (pat, (l, annot))) =
+  let rewrap p = MP_aux (p, (l, annot)) in
+  let rewrite = rewriters.rewrite_mpat rewriters in
+  match pat with
+  | MP_lit _ | MP_id _ | MP_vector_subrange _ -> rewrap pat
+  | MP_as (pat, id) -> rewrap (MP_as (rewrite pat, id))
+  | MP_typ (pat, typ) -> rewrap (MP_typ (rewrite pat, typ))
+  | MP_app (id, pats) -> rewrap (MP_app (id, List.map rewrite pats))
+  | MP_vector pats -> rewrap (MP_vector (List.map rewrite pats))
+  | MP_vector_concat pats -> rewrap (MP_vector_concat (List.map rewrite pats))
+  | MP_tuple pats -> rewrap (MP_tuple (List.map rewrite pats))
+  | MP_list pats -> rewrap (MP_list (List.map rewrite pats))
+  | MP_cons (pat1, pat2) -> rewrap (MP_cons (rewrite pat1, rewrite pat2))
+  | MP_string_append pats -> rewrap (MP_string_append (List.map rewrite pats))
+  | MP_struct fpats -> rewrap (MP_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats))
+
 let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrap e = E_aux (e, (l, annot)) in
   let rewrite = rewriters.rewrite_exp rewriters in
@@ -275,15 +292,15 @@ let rewrite_fun rewriters (FD_aux (FD_function (recopt, tannotopt, funcls), (l, 
 let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
   let aux =
     match aux with
-    | MPat_pat mpat -> MPat_pat mpat
-    | MPat_when (mpat, exp) -> MPat_when (mpat, rewriters.rewrite_exp rewriters exp)
+    | MPat_pat mpat -> MPat_pat (rewriters.rewrite_mpat rewriters mpat)
+    | MPat_when (mpat, exp) -> MPat_when (rewriters.rewrite_mpat rewriters mpat, rewriters.rewrite_exp rewriters exp)
   in
   MPat_aux (aux, (l, annot))
 
 let rewrite_mapcl rewriters (MCL_aux (aux, def_annot)) =
   let aux =
     match aux with
-    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
+    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, rewrite_mpexp rewriters mpexp2)
     | MCL_forwards pexp -> MCL_forwards (rewrite_pexp rewriters pexp)
     | MCL_backwards pexp -> MCL_backwards (rewrite_pexp rewriters pexp)
   in
@@ -347,7 +364,16 @@ let rewrite_ast_base_progress prefix rewriters ast =
   { ast with defs = rewrite 1 ast.defs }
 
 let rewriters_base =
-  { rewrite_exp; rewrite_pat; rewrite_let; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
+  {
+    rewrite_exp;
+    rewrite_pat;
+    rewrite_mpat;
+    rewrite_let;
+    rewrite_lexp;
+    rewrite_fun;
+    rewrite_def;
+    rewrite_ast = rewrite_ast_base;
+  }
 
 let rewrite_ast ast = rewrite_ast_base rewriters_base ast
 
@@ -453,7 +479,12 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_list = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps));
     p_cons = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt));
     p_string_append = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps));
-    p_struct = (fun _ -> None);
+    p_struct =
+      (fun (fs, _) ->
+        Option.map
+          (fun fs -> MP_struct fs)
+          (List.map (fun (id, v) -> Option.map (fun v -> (id, v)) v) fs |> Util.option_all)
+      );
     p_aux = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat, annot)) pat);
   }
 
