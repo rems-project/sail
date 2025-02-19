@@ -73,6 +73,7 @@ val abs_int_atom = pure {
   interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
+  lean: "Int.natAbs",
   _: "abs_int"
 } : forall 'n. int('n) -> int(abs('n))
 
