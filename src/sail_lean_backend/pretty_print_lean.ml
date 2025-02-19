@@ -166,7 +166,7 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   and uneg (Nexp_aux (n, l) as nexp) =
     match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
   and exp (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
+    match n with Nexp_exp n -> separate space [string "pow2"; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
@@ -250,7 +250,7 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
   | Typ_app (Id_aux (Id "result", _), [A_aux (A_typ typ1, _); A_aux (A_typ typ2, _)]) ->
       parens (separate space [string "Result"; doc_typ ctx typ1; doc_typ ctx typ2])
   | Typ_var kid -> doc_kid ctx kid
-  | Typ_app (id, args) -> doc_id_ctor id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args
+  | Typ_app (id, args) -> parens (doc_id_ctor id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
   | Typ_exist (_, _, typ) -> doc_typ ctx typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
@@ -474,8 +474,9 @@ let rebind_cast_pattern_vars pat typ exp =
   in
   List.fold_left add_lb exp lbs
 
-let wrap_with_pure (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow space [string "pure"; d])) else d
+let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
+  if needs_return then let d = if with_parens then parens d else d in
+    parens (nest 2 (flow space [string "pure"; d])) else d
 
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
@@ -591,7 +592,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             in
             let effects = effectful (effect_of body) in
             let early_return = has_early_return body in
-            let combinator, catch, as_monadic =
+            let combinator, catch, body_as_monadic =
               match (as_monadic && effects, early_return) with
               | true, true -> ("foreach_ME", string "catchEarlyReturn", true)
               | true, false -> ("foreach_M", empty, true)
@@ -609,10 +610,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda in
             (* TODO: this should probably be construct_dep_pairs, but we would need
                to change it to use the updated context. *)
-            let body_pp = doc_exp as_monadic body_ctxt body in
+            let body_pp = doc_exp body_as_monadic body_ctxt body in
             let loop_head = flow (break 1) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp] in
             let full_loop = (prefix 2 1) loop_head (parens (prefix 2 1 (group body_lambda) body_pp)) in
-            if early_return then flow (break 1) [catch; parens full_loop] else full_loop
+            let full_loop = if early_return then flow (break 1) [catch; parens full_loop] else full_loop in
+            wrap_with_pure ( as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
     | E_app (f, args) ->
@@ -635,7 +637,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           match typ_of full_exp with
           | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
           | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
-              nest 2 (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)])
+              nest 2 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
           | _ -> string "#v" ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) vals)))
         in
         pp
@@ -676,8 +678,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     | E_assign ((LE_aux (le_act, tannot) as le), e) ->
         wrap_with_left_arrow (not as_monadic)
           ( match le_act with
-          | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ doc_exp false ctx e
-          | LE_deref e' -> string "writeRegRef " ^^ doc_exp false ctx e' ^^ space ^^ doc_exp false ctx e
+          | LE_id id | LE_typ (_, id) -> string "writeReg " ^^ doc_id_ctor id ^^ space ^^ d_of_arg ctx e
+          | LE_deref e' -> string "writeRegRef " ^^ d_of_arg ctx e' ^^ space ^^ d_of_arg ctx e
           | _ -> failwith ("assign " ^ string_of_lexp le ^ "not implemented yet")
           )
     | E_if (i, t, e) ->

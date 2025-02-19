@@ -112,7 +112,8 @@ def foreachloop (m : Nat) (n : Nat) : Int :=
 def foreachloopmon (m : Nat) (n : Nat) : SailM Int := do
   let loop_i_lower := n
   let loop_i_upper := m
-  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r (HAdd.hAdd (← readReg r) 1))
+  foreach_M loop_i_lower loop_i_upper 1 ()
+    (λ i _ => do writeReg r (← (pure (HAdd.hAdd (← readReg r) 1))))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -124,7 +125,7 @@ def foreachloopboth (m : Nat) (n : Nat) : SailM Int := do
     foreach_M loop_i_lower loop_i_upper 1 res
       (λ i res => do
         let res : Int := (HAdd.hAdd res 1)
-        writeReg r (HAdd.hAdd (← readReg r) res)
+        writeReg r (← (pure (HAdd.hAdd (← readReg r) res)))
         (pure res))
   (pure (HAdd.hAdd res 1))
 
@@ -158,7 +159,7 @@ def earlyreturneffect (n : Nat) : SailM Bool := do
     (λ i _ => do
       if (GT.gt i 5)
       then (pure (early_return (false : Bool)))
-      else (pure (cont ((← writeReg r (HAdd.hAdd (← readReg r) 1)))))))
+      else (pure (cont ((← writeReg r (← (pure (HAdd.hAdd (← readReg r) 1)))))))))
   (pure (GT.gt (← readReg r) n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/

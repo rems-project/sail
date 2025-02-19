@@ -1844,7 +1844,7 @@ def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast
   (some (CompareAndBranch (t, offset)))
 
 def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
-  let req : Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1868,7 +1868,7 @@ def wMem_Addr (addr : (BitVec 64)) : Unit :=
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m
   ∧ m ≤ 31 -/
 def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
-  writeReg _PC (BitVec.addInt (← readReg _PC) 4)
+  writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
   let base_addr ← do (rX n)
   let offset ← do (rX m)
   let addr := (HAdd.hAdd base_addr offset)
@@ -1877,7 +1877,7 @@ def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   (wMem addr data)
 
 def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
-  let req : Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1893,7 +1893,7 @@ def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m
   ∧ m ≤ 31 -/
 def execute_LoadRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
-  writeReg _PC (BitVec.addInt (← readReg _PC) 4)
+  writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
   let base_addr ← do (rX n)
   let offset ← do (rX m)
   let addr := (HAdd.hAdd base_addr offset)
@@ -1924,7 +1924,7 @@ def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   then let base ← do (rPC ())
        let addr := (HAdd.hAdd base offset)
        (wPC addr)
-  else writeReg _PC (BitVec.addInt (← readReg _PC) 4)
+  else writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
 
 def execute (merge_var : ast) : SailM Unit := do
   match merge_var with
@@ -1965,7 +1965,7 @@ def decode (v__0 : (BitVec 32)) : (Option ast) :=
                  else none
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
-  let req : Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_ifetch ())
       va := (some addr)
       pa := (Sail.BitVec.truncate addr 56)
@@ -2085,7 +2085,7 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
     match eak.variety with
@@ -2095,7 +2095,7 @@ def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa 
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_read_request_is_ifetch (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_read_request_is_ifetch (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_ifetch () => true
   | _ => false
@@ -2106,7 +2106,7 @@ def __monomorphize_writes : Bool := false
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_write_request_is_exclusive (request : Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
     match eak.variety with

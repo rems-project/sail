@@ -43,13 +43,13 @@ def undefined_circle (_ : Unit) : SailM circle := do
   (pure { radius := (← (undefined_int ())) })
 
 /-- Type quantifiers: k_a : Type -/
-def is_none (opt : my_option k_a) : Bool :=
+def is_none (opt : (my_option k_a)) : Bool :=
   match opt with
   | .MySome _ => false
   | .MyNone () => true
 
 /-- Type quantifiers: k_a : Type -/
-def use_is_none (opt : my_option k_a) : Bool :=
+def use_is_none (opt : (my_option k_a)) : Bool :=
   (is_none opt)
 
 def initialize_registers (_ : Unit) : Unit :=

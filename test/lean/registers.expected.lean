@@ -120,7 +120,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def test (_ : Unit) : SailM Int := do
-  writeReg INT (HAdd.hAdd (← readReg INT) 1)
+  writeReg INT (← (pure (HAdd.hAdd (← readReg INT) 1)))
   readReg INT
 
 def initialize_registers (_ : Unit) : SailM Unit := do
