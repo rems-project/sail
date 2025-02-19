@@ -147,7 +147,7 @@ def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
   if (bne r (0b00000 : (BitVec 5)))
-  then writeReg Xs (← (pure (vectorUpdate (← readReg Xs) (BitVec.toNat r) v)))
+  then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNat r) v)
   else (pure ())
 
 /-- Type quantifiers: width : Nat, width ≥ 0 -/

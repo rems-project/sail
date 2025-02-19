@@ -1868,7 +1868,7 @@ def wMem_Addr (addr : (BitVec 64)) : Unit :=
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m
   ∧ m ≤ 31 -/
 def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
-  writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
+  writeReg _PC (BitVec.addInt (← readReg _PC) 4)
   let base_addr ← do (rX n)
   let offset ← do (rX m)
   let addr := (HAdd.hAdd base_addr offset)
@@ -1893,7 +1893,7 @@ def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m
   ∧ m ≤ 31 -/
 def execute_LoadRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
-  writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
+  writeReg _PC (BitVec.addInt (← readReg _PC) 4)
   let base_addr ← do (rX n)
   let offset ← do (rX m)
   let addr := (HAdd.hAdd base_addr offset)
@@ -1924,7 +1924,7 @@ def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   then let base ← do (rPC ())
        let addr := (HAdd.hAdd base offset)
        (wPC addr)
-  else writeReg _PC (← (pure (BitVec.addInt (← readReg _PC) 4)))
+  else writeReg _PC (BitVec.addInt (← readReg _PC) 4)
 
 def execute (merge_var : ast) : SailM Unit := do
   match merge_var with
