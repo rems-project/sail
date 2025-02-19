@@ -165,8 +165,7 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
     match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
   and uneg (Nexp_aux (n, l) as nexp) =
     match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
-  and exp (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_exp n -> separate space [string "pow2"; exp n] | _ -> app nexp
+  and exp (Nexp_aux (n, l) as nexp) = match n with Nexp_exp n -> separate space [string "pow2"; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
@@ -475,8 +474,11 @@ let rebind_cast_pattern_vars pat typ exp =
   List.fold_left add_lb exp lbs
 
 let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
-  if needs_return then let d = if with_parens then parens d else d in
-    parens (nest 2 (flow space [string "pure"; d])) else d
+  if needs_return then (
+    let d = if with_parens then parens d else d in
+    parens (nest 2 (flow space [string "pure"; d]))
+  )
+  else d
 
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
@@ -614,7 +616,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             let loop_head = flow (break 1) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp] in
             let full_loop = (prefix 2 1) loop_head (parens (prefix 2 1 (group body_lambda) body_pp)) in
             let full_loop = if early_return then flow (break 1) [catch; parens full_loop] else full_loop in
-            wrap_with_pure ( as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop
+            wrap_with_pure (as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
     | E_app (f, args) ->
