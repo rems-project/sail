@@ -56,12 +56,24 @@ jobs:
         eval $(opam config env)
         cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
         # This patch is needed to work around https://github.com/rems-project/sail/issues/1003.
-        patch -p1 < ../../sail/.github/workflows/build-riscv-lean-workaround-riscv.patch
+        patch -p1 < ../../sail/.github/workflows/build-riscv-lean/workaround-riscv.patch
         cmake --build build/ --target generated_lean_rv64d_lean
+	cd ..
+
+    - name: Use Lean to build the model and record errors
+      run: |
+        wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh
+        bash install_debian.sh ; rm -f install_debian.sh
+        source ~/.profile
+        cp .github/workflows/build-riscv-lean/README.md.template sail-riscv/build/model/Lean_RV64D_LEAN/
+        cp .github/workflows/build-riscv-lean/report.py sail-riscv/build/model/Lean_RV64D_LEAN/
+        cd sail-riscv/build/model/Lean_RV64D_LEAN/
+        (lake build | tee build_log.txt || true)
+        cp README.md.template README.md
+        ./report.py >> README.md
+        cd ../../../..
 
       - uses: mshick/add-pr-comment@v2
         with:
-          message: |
-            **Hello**
-            🌏
-            !
+          message-path: |
+            README.md
