@@ -152,7 +152,21 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     end;
     P_aux (p_aux, annot)
   in
+  let scan_mpat self p_aux annot =
+    let env = env_of_annot annot in
+    begin
+      match p_aux with
+      | Some (MP_app (id, _)) ->
+          graph :=
+            let node = if Env.is_union_constructor id env then Constructor id else Mapping id in
+            G.add_edge self node !graph
+      | Some (MP_typ (_, typ)) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+      | _ -> ()
+    end;
+    Option.map (fun p_aux -> MP_aux (p_aux, annot)) p_aux
+  in
   let rw_pat self = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
+  let rw_mpat self = { id_mpat_alg with p_aux = (fun (p_aux, annot) -> scan_mpat self p_aux annot) } in
 
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
@@ -234,6 +248,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
       rewriters_base with
       rewrite_exp = (fun _ -> fold_exp (rw_exp self));
       rewrite_pat = (fun _ -> fold_pat (rw_pat self));
+      rewrite_mpat = (fun _ mpat -> Option.get (fold_mpat (rw_mpat self) mpat));
       rewrite_let = (fun _ -> fold_letbind (rw_exp self));
     }
   in
