@@ -14,6 +14,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
+  deriving DecidableEq
 
 open option
 
@@ -34,6 +35,7 @@ open iop
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
+  deriving DecidableEq
 
 open ast
 

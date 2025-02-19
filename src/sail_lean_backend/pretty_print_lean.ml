@@ -853,7 +853,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       doc_typ_quant_in_comment ctx tq ^^ hardline
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving DecidableEq"
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -875,7 +875,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let id = doc_id_ctor id in
       doc_typ_quant_in_comment ctx tq ^^ hardline
-      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"])) ^^ pp_tus)
+      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"])) ^^ pp_tus ^^ hardline ^^ string "deriving DecidableEq")
       ^^ hardline ^^ hardline
       ^^ flow space [string "open"; id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")

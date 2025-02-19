@@ -14,12 +14,14 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
+  deriving DecidableEq
 
 open option
 
 
 inductive virtaddr where
   | virtaddr (_ : (BitVec 32))
+  deriving DecidableEq
 
 open virtaddr
 
