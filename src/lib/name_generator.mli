@@ -64,5 +64,6 @@ module type CONFIG = sig
 end
 
 module Make (Config : CONFIG) () : sig
+  val translate : ?prefix:string -> ?suffix:string -> Config.style -> string -> string
   val to_string : ?prefix:string -> ?suffix:string -> Config.style -> Ast.id -> string
 end

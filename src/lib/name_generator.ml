@@ -59,8 +59,7 @@ module Make (Config : CONFIG) () = struct
   let names = Hashtbl.create 1024
   let generated = Hashtbl.create 1024
 
-  let to_string ?(prefix = "") ?(suffix = "") style id =
-    let orig_str = string_of_id id in
+  let translate ?(prefix = "") ?(suffix = "") style orig_str =
     match Hashtbl.find_opt names (prefix, orig_str, suffix) with
     | Some result -> result
     | None ->
@@ -76,4 +75,6 @@ module Make (Config : CONFIG) () = struct
           )
         in
         variant_str 0
+
+  let to_string ?(prefix = "") ?(suffix = "") style id = translate ~prefix ~suffix style (string_of_id id)
 end
