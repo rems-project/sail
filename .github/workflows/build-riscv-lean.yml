@@ -58,3 +58,10 @@ jobs:
         # This patch is needed to work around https://github.com/rems-project/sail/issues/1003.
         patch -p1 < ../../sail/.github/workflows/build-riscv-lean-workaround-riscv.patch
         cmake --build build/ --target generated_lean_rv64d_lean
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            **Hello**
+            🌏
+            !
