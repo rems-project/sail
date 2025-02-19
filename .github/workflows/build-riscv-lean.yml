@@ -58,10 +58,10 @@ jobs:
         # This patch is needed to work around https://github.com/rems-project/sail/issues/1003.
         patch -p1 < ../../sail/.github/workflows/build-riscv-lean/workaround-riscv.patch
         cmake --build build/ --target generated_lean_rv64d_lean
-
-    - name: Use Lean to build the model and record errors
-      run: |
         cd ..
+
+    - name: Build Model
+      run: |
         wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh
         bash install_debian.sh ; rm -f install_debian.sh
         source ~/.profile
