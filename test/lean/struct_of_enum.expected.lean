@@ -14,19 +14,19 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open option
 
 inductive e_test where | VAL
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open e_test
 
 
 structure s_test where
   f : e_test
-  deriving DecidableEq
+  deriving BEq
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 

@@ -14,12 +14,12 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open option
 
 inductive word_width where | BYTE | HALF | WORD | DOUBLE
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open word_width
 

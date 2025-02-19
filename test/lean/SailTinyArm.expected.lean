@@ -14,7 +14,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open option
 
@@ -25,7 +25,7 @@ abbrev S1PIRType := (BitVec 64)
 abbrev S2PIRType := (BitVec 64)
 
 inductive SecurityState where | SS_NonSecure | SS_Root | SS_Realm | SS_Secure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open SecurityState
 
@@ -34,7 +34,7 @@ abbrev PARTIDtype := (BitVec 16)
 abbrev PMGtype := (BitVec 8)
 
 inductive PARTIDspaceType where | PIdSpace_Secure | PIdSpace_Root | PIdSpace_Realm | PIdSpace_NonSecure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open PARTIDspaceType
 
@@ -43,40 +43,40 @@ structure MPAMinfo where
   mpam_sp : PARTIDspaceType
   partid : PARTIDtype
   pmg : PMGtype
-  deriving DecidableEq
+  deriving BEq
 
 inductive AccessType where | AccessType_IFETCH | AccessType_GPR | AccessType_ASIMD | AccessType_SVE | AccessType_SME | AccessType_IC | AccessType_DC | AccessType_DCZero | AccessType_AT | AccessType_NV2 | AccessType_SPE | AccessType_GCS | AccessType_GPTW | AccessType_TTW
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open AccessType
 
 inductive VARange where | VARange_LOWER | VARange_UPPER
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open VARange
 
 inductive MemAtomicOp where | MemAtomicOp_GCSSS1 | MemAtomicOp_ADD | MemAtomicOp_BIC | MemAtomicOp_EOR | MemAtomicOp_ORR | MemAtomicOp_SMAX | MemAtomicOp_SMIN | MemAtomicOp_UMAX | MemAtomicOp_UMIN | MemAtomicOp_SWP | MemAtomicOp_CAS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open MemAtomicOp
 
 inductive CacheOp where | CacheOp_Clean | CacheOp_Invalidate | CacheOp_CleanInvalidate
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open CacheOp
 
 inductive CacheOpScope where | CacheOpScope_SetWay | CacheOpScope_PoU | CacheOpScope_PoC | CacheOpScope_PoE | CacheOpScope_PoP | CacheOpScope_PoDP | CacheOpScope_PoPA | CacheOpScope_ALLU | CacheOpScope_ALLUIS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open CacheOpScope
 
 inductive CacheType where | CacheType_Data | CacheType_Tag | CacheType_Data_Tag | CacheType_Instruction
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open CacheType
 
 inductive CachePASpace where | CPAS_NonSecure | CPAS_Any | CPAS_RealmNonSecure | CPAS_Realm | CPAS_Root | CPAS_SecureNonSecure | CPAS_Secure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open CachePASpace
 
@@ -115,15 +115,15 @@ structure AccessDescriptor where
   tagchecked : Bool
   tagaccess : Bool
   mpam : MPAMinfo
-  deriving DecidableEq
+  deriving BEq
 
 inductive MemType where | MemType_Normal | MemType_Device
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open MemType
 
 inductive DeviceType where | DeviceType_GRE | DeviceType_nGRE | DeviceType_nGnRE | DeviceType_nGnRnE
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open DeviceType
 
@@ -132,15 +132,15 @@ structure MemAttrHints where
   attrs : (BitVec 2)
   hints : (BitVec 2)
   transient : Bool
-  deriving DecidableEq
+  deriving BEq
 
 inductive Shareability where | Shareability_NSH | Shareability_ISH | Shareability_OSH
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open Shareability
 
 inductive MemTagType where | MemTag_Untagged | MemTag_AllocationTagged | MemTag_CanonicallyTagged
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open MemTagType
 
@@ -154,10 +154,10 @@ structure MemoryAttributes where
   tags : MemTagType
   notagaccess : Bool
   xs : (BitVec 1)
-  deriving DecidableEq
+  deriving BEq
 
 inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open PASpace
 
@@ -165,10 +165,10 @@ open PASpace
 structure FullAddress where
   paspace : PASpace
   address : (BitVec 56)
-  deriving DecidableEq
+  deriving BEq
 
 inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GPCF_Fail
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open GPCF
 
@@ -176,15 +176,15 @@ open GPCF
 structure GPCFRecord where
   gpf : GPCF
   level : Int
-  deriving DecidableEq
+  deriving BEq
 
 inductive Fault where | Fault_None | Fault_AccessFlag | Fault_Alignment | Fault_Background | Fault_Domain | Fault_Permission | Fault_Translation | Fault_AddressSize | Fault_SyncExternal | Fault_SyncExternalOnWalk | Fault_SyncParity | Fault_SyncParityOnWalk | Fault_GPCFOnWalk | Fault_GPCFOnOutput | Fault_AsyncParity | Fault_AsyncExternal | Fault_TagCheck | Fault_Debug | Fault_TLBConflict | Fault_BranchTarget | Fault_HWUpdateAccessFlag | Fault_Lockdown | Fault_Exclusive | Fault_ICacheMaint
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open Fault
 
 inductive ErrorState where | ErrorState_UC | ErrorState_UEU | ErrorState_UEO | ErrorState_UER | ErrorState_CE | ErrorState_Uncategorized | ErrorState_IMPDEF
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open ErrorState
 
@@ -210,15 +210,15 @@ structure FaultRecord where
   domain : (BitVec 4)
   merrorstate : ErrorState
   debugmoe : (BitVec 4)
-  deriving DecidableEq
+  deriving BEq
 
 inductive MBReqDomain where | MBReqDomain_Nonshareable | MBReqDomain_InnerShareable | MBReqDomain_OuterShareable | MBReqDomain_FullSystem
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open MBReqDomain
 
 inductive MBReqTypes where | MBReqTypes_Reads | MBReqTypes_Writes | MBReqTypes_All
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open MBReqTypes
 
@@ -242,15 +242,15 @@ structure CacheRecord where
   asid : (BitVec 16)
   security : SecurityState
   cpas : CachePASpace
-  deriving DecidableEq
+  deriving BEq
 
 inductive Regime where | Regime_EL3 | Regime_EL30 | Regime_EL2 | Regime_EL20 | Regime_EL10
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open Regime
 
 inductive TGx where | TGx_4KB | TGx_16KB | TGx_64KB
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open TGx
 
@@ -296,7 +296,7 @@ structure S1TTWParams where
   dc : (BitVec 1)
   sif : (BitVec 1)
   mair : MAIRType
-  deriving DecidableEq
+  deriving BEq
 
 
 structure S2TTWParams where
@@ -331,7 +331,7 @@ structure S2TTWParams where
   ee : (BitVec 1)
   ptw : (BitVec 1)
   vm : (BitVec 1)
-  deriving DecidableEq
+  deriving BEq
 
 
 structure TranslationInfo where
@@ -344,20 +344,20 @@ structure TranslationInfo where
   s1params : (Option S1TTWParams)
   s2params : (Option S2TTWParams)
   memattrs : MemoryAttributes
-  deriving DecidableEq
+  deriving BEq
 
 inductive TLBILevel where | TLBILevel_Any | TLBILevel_Last
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open TLBILevel
 
 inductive TLBIOp where | TLBIOp_DALL | TLBIOp_DASID | TLBIOp_DVA | TLBIOp_IALL | TLBIOp_IASID | TLBIOp_IVA | TLBIOp_ALL | TLBIOp_ASID | TLBIOp_IPAS2 | TLBIPOp_IPAS2 | TLBIOp_VAA | TLBIOp_VA | TLBIPOp_VAA | TLBIPOp_VA | TLBIOp_VMALL | TLBIOp_VMALLS12 | TLBIOp_RIPAS2 | TLBIPOp_RIPAS2 | TLBIOp_RVAA | TLBIOp_RVA | TLBIPOp_RVAA | TLBIPOp_RVA | TLBIOp_RPA | TLBIOp_PAALL
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open TLBIOp
 
 inductive TLBIMemAttr where | TLBI_AllAttr | TLBI_ExcludeXS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
 open TLBIMemAttr
 
@@ -378,7 +378,7 @@ structure TLBIRecord where
   d128 : Bool
   ttl : (BitVec 4)
   tg : (BitVec 2)
-  deriving DecidableEq
+  deriving BEq
 
 
 inductive arm_acc_type where
@@ -393,7 +393,7 @@ inductive arm_acc_type where
   | SAcc_SPE (_ : Unit)
   | SAcc_GCS (_ : Unit)
   | SAcc_GPTW (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open arm_acc_type
 
@@ -401,14 +401,14 @@ open arm_acc_type
 structure TLBIInfo where
   rec' : TLBIRecord
   shareability : Shareability
-  deriving DecidableEq
+  deriving BEq
 
 
 structure DxB where
   domain : MBReqDomain
   types : MBReqTypes
   nXS : Bool
-  deriving DecidableEq
+  deriving BEq
 
 
 inductive Barrier where
@@ -418,7 +418,7 @@ inductive Barrier where
   | Barrier_SSBB (_ : Unit)
   | Barrier_PSSBB (_ : Unit)
   | Barrier_SB (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open Barrier
 
@@ -437,7 +437,7 @@ inductive ast where
   | ExclusiveOr (_ : (reg_index × reg_index × reg_index))
   | DataMemoryBarrier (_ : Unit)
   | CompareAndBranch (_ : (reg_index × (BitVec 64)))
-  deriving DecidableEq
+  deriving BEq
 
 open ast
 

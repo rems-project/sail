@@ -11,18 +11,18 @@ open Sail
 structure rectangle where
   width : Int
   height : Int
-  deriving DecidableEq
+  deriving BEq
 
 
 structure circle where
   radius : Int
-  deriving DecidableEq
+  deriving BEq
 
 
 inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
-  deriving DecidableEq
+  deriving BEq
 
 open shape
 
@@ -31,7 +31,7 @@ open shape
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
-  deriving DecidableEq
+  deriving BEq
 
 open my_option
 

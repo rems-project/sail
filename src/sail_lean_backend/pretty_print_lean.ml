@@ -516,7 +516,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     let d_of_arg ctx arg =
       let wrap =
         match arg with
-        | E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux (E_if _, _) -> parens
+        | E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux (E_if _, _) | E_aux (E_match _, _) -> parens
         | _ -> fun x -> x
       in
       wrap (doc_exp false ctx arg)
@@ -675,7 +675,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
     | E_match (discr, brs) ->
         let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
-        string (match_or_match_bv brs) ^^ doc_exp false (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
+        string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
     | E_assign ((LE_aux (le_act, tannot) as le), e) ->
         wrap_with_left_arrow (not as_monadic)
           ( match le_act with
@@ -685,7 +685,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           )
     | E_if (i, t, e) ->
         let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
-        nest 2 (string "if" ^^ space ^^ nest 1 (doc_exp false (remove_er ctx) i))
+        nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
         ^^ hardline
         ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
         ^^ hardline
@@ -835,9 +835,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   | TD_enum (id, fields, _) ->
       let fields = List.map doc_id_ctor fields in
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
-      let derivers =
-        if List.length fields == 0 then [string "DecidableEq"] else [string "Inhabited"; string "DecidableEq"]
-      in
+      let derivers = if List.length fields == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
       let enums_doc = concat fields in
       let id = doc_id_ctor id in
       nest 2
@@ -853,7 +851,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       doc_typ_quant_in_comment ctx tq ^^ hardline
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving DecidableEq"
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving BEq"
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -875,7 +873,10 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let id = doc_id_ctor id in
       doc_typ_quant_in_comment ctx tq ^^ hardline
-      ^^ nest 2 (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"])) ^^ pp_tus ^^ hardline ^^ string "deriving DecidableEq")
+      ^^ nest 2
+           (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
+           ^^ pp_tus ^^ hardline ^^ string "deriving BEq"
+           )
       ^^ hardline ^^ hardline
       ^^ flow space [string "open"; id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
