@@ -224,15 +224,16 @@ def assert (p : Bool) (s : String) : PreSailM RegisterType c ue Unit :=
 section ConcurrencyInterface
 
 inductive Access_variety where
-| AV_plain
-| AV_exclusive
-| AV_atomic_rmw
+  | AV_plain
+  | AV_exclusive
+  | AV_atomic_rmw
+deriving DecidableEq
 export Access_variety (AV_plain AV_exclusive AV_atomic_rmw)
 
 inductive Access_strength where
-| AS_normal
-| AS_rel_or_acq
-| AS_acq_rcpc
+  | AS_normal
+  | AS_rel_or_acq
+  | AS_acq_rcpc
 export Access_strength(AS_normal AS_rel_or_acq AS_acq_rcpc)
 
 structure Explicit_access_kind where
