@@ -111,7 +111,7 @@ $endif
 /*!
 We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
 */
-val pow2 = pure "pow2" : forall 'n. int('n) -> int(2 ^ 'n)
+val pow2 = pure {lean : "(2 ^ ·)", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
 
 // ***** Integer shifts *****
 
