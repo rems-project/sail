@@ -169,3 +169,8 @@ function extern_n_leading_spaces() -> nat = {
   return n_leading_spaces("   Belated Hello world!")
 }
 
+/* Testing vector.sail */
+
+function extern_hex_str() -> string = {
+  return hex_str(123)
+}

@@ -418,6 +418,10 @@ def iterate {α : Sort u} (op : α → α) : Nat → α → α
   | 0, a => a
   | Nat.succ k, a => iterate op k (op a)
 
+def toHex (n : Nat) : String :=
+  have nbv : BitVec (Nat.log2 n + 1) := BitVec.ofNat _ n
+  nbv.toHex
+
 end Nat
 
 namespace Int

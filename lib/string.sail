@@ -67,7 +67,7 @@ val dec_str = pure {
   lean: "Int.repr",
   _: "dec_str"} : int -> string
 
-val hex_str = pure "hex_str" : int -> string
+val hex_str = pure { lean: "Nat.toHex", _: "hex_str" } : int -> string
 
 val hex_str_upper = pure "hex_str_upper" : int -> string
 

@@ -264,6 +264,9 @@ def extern_concat_str (_ : Unit) : String :=
 def extern_n_leading_spaces (_ : Unit) : Nat :=
   (String.leadingSpaces "   Belated Hello world!")
 
+def extern_hex_str (_ : Unit) : String :=
+  (Nat.toHex 123)
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
