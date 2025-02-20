@@ -483,6 +483,9 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
 
+let wrap_with_do (needs_return : bool) (d : document) =
+  if needs_return then parens (nest 2 (flow space [string "← do"; d])) else d
+
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
     match arg with
@@ -674,8 +677,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         wrap_with_pure as_monadic
           (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
     | E_match (discr, brs) ->
-        let cases = separate_map hardline (doc_match_clause as_monadic ctx) brs in
-        string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
+        let as_monadic' = effectful (effect_of full_exp) || as_monadic in
+        let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
+        wrap_with_do
+          (effectful (effect_of full_exp) && not as_monadic)
+          (string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases)
     | E_assign ((LE_aux (le_act, tannot) as le), e) ->
         wrap_with_left_arrow (not as_monadic)
           ( match le_act with
@@ -685,11 +691,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           )
     | E_if (i, t, e) ->
         let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
-        nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
-        ^^ hardline
-        ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
-        ^^ hardline
-        ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
+
+        wrap_with_do (statements_monadic && not as_monadic)
+          (nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
+          ^^ hardline
+          ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
+          ^^ hardline
+          ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
+          )
     | E_ref id -> string "Reg " ^^ doc_id_ctor id
     | E_exit _ -> string "throw Error.Exit"
     | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)

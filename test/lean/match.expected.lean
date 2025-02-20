@@ -152,6 +152,13 @@ def match_let (x : E) (y : Int) : SailM Int := do
   | B => (pure 42)
   | C => (pure 23)
 
+def match_read (x : E) : SailM Unit := do
+  writeReg r_A (← do
+  match x with
+  | A => readReg r_A
+  | B => readReg r_B
+  | C => readReg r_C)
+
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))
   writeReg r_B (← (undefined_E ()))
