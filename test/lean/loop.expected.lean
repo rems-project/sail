@@ -56,7 +56,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then (HShiftLeft.hShiftLeft (sail_ones n) i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -73,14 +73,22 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
+  then ((Int.tdiv (n + 1) m)
+         -
+         1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+       then ((Int.tdiv (n - 1) m)
+              -
+              1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n
+    -
+    (m
+      *
+      (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -107,13 +115,13 @@ def foreachloop (m : Nat) (n : Nat) : Int :=
   let res : Int := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res 1))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreachloopmon (m : Nat) (n : Nat) : SailM Int := do
   let loop_i_lower := n
   let loop_i_upper := m
-  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r (HAdd.hAdd (← readReg r) 1))
+  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) + 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -124,10 +132,12 @@ def foreachloopboth (m : Nat) (n : Nat) : SailM Int := do
     let loop_i_upper := m
     foreach_M loop_i_lower loop_i_upper 1 res
       (λ i res => do
-        let res : Int := (HAdd.hAdd res 1)
-        writeReg r (HAdd.hAdd (← readReg r) res)
+        let res : Int := (res + 1)
+        writeReg r ((← readReg r)
+          +
+          res)
         (pure res))
-  (pure (HAdd.hAdd res 1))
+  (pure (res + 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreachloopmultiplevar (m : Nat) (n : Nat) : Int :=
@@ -138,8 +148,8 @@ def foreachloopmultiplevar (m : Nat) (n : Nat) : Int :=
     let loop_i_upper := n
     foreach_ loop_i_lower loop_i_upper 1 (mult, res)
       (λ i (mult, res) =>
-        let res : Int := (HAdd.hAdd res 1)
-        let mult : Int := (HMul.hMul res mult)
+        let res : Int := (res + 1)
+        let mult : Int := (res * mult)
         (mult, res))
   mult
 
@@ -148,7 +158,7 @@ def foreachloopuseindex (m : Nat) (n : Nat) : Nat :=
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (HAdd.hAdd res i))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + i))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def earlyreturneffect (n : Nat) : SailM Bool := do
@@ -159,7 +169,7 @@ def earlyreturneffect (n : Nat) : SailM Bool := do
     (λ i _ => do
       if (GT.gt i 5)
       then (pure (early_return (false : Bool)))
-      else (pure (cont ((← writeReg r (HAdd.hAdd (← readReg r) 1)))))))
+      else (pure (cont ((← writeReg r ((← readReg r) + 1)))))))
   (pure (GT.gt (← readReg r) n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -173,7 +183,7 @@ def earlyreturnpure (n : Nat) : Bool := Id.run do
       (λ i res =>
         if (GT.gt i 5)
         then (early_return (false : Bool))
-        else (cont ((HAdd.hAdd res i)))))
+        else (cont ((res + i)))))
   (pure (GT.gt res n))
 
 def initialize_registers (_ : Unit) : SailM Unit := do

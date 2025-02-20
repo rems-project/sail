@@ -52,7 +52,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then (HShiftLeft.hShiftLeft (sail_ones n) i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -69,14 +69,22 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
+  then ((Int.tdiv (n + 1) m)
+         -
+         1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+       then ((Int.tdiv (n - 1) m)
+              -
+              1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n
+    -
+    (m
+      *
+      (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -132,7 +140,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    if (BEq.beq (BitVec.access bv (HSub.hSub len 1)) 1#1)
+    if (BEq.beq (BitVec.access bv (len - 1)) 1#1)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -147,7 +155,7 @@ def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) 
   if (BEq.beq str "-")
   then (BitVec.zero notn)
   else let parsed := (BitVec.zero notn)
-       if (BEq.beq (BitVec.access parsed (HSub.hSub notn 1)) 0#1)
+       if (BEq.beq (BitVec.access parsed (notn - 1)) 0#1)
        then parsed
        else (BitVec.zero notn)
 

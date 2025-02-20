@@ -237,7 +237,7 @@ val add_bits = pure {
   interpreter: "add_vec",
   lem: "add_vec",
   coq: "add_vec",
-  lean: "HAdd.hAdd",
+  lean: "_lean_add",
   _: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -257,7 +257,7 @@ val sub_bits = pure {
   interpreter: "sub_vec",
   lem: "sub_vec",
   coq: "sub_vec",
-  lean: "HSub.hSub",
+  lean: "_lean_sub",
   _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -307,7 +307,7 @@ val subrange_bits = pure {
   interpreter: "subrange",
   lem: "subrange_vec_dec",
   coq: "subrange_vec_dec",
-  lean: "Sail.BitVec.extractLsbUnif",
+  lean: "Sail.BitVec.extractLsb",
   _: "vector_subrange"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
   (bits('n), int('m), int('o)) -> bits('m - 'o + 1)

@@ -83,7 +83,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then (HShiftLeft.hShiftLeft (sail_ones n) i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -100,14 +100,22 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
+  then ((Int.tdiv (n + 1) m)
+         -
+         1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+       then ((Int.tdiv (n - 1) m)
+              -
+              1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n
+    -
+    (m
+      *
+      (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -179,7 +187,7 @@ def num_of_iop (arg_ : iop) : Int :=
   | RISCV_ANDI => 5
 
 def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : SailM Unit := do
-  let addr : xlenbits ← do (pure (HAdd.hAdd (← (rX rs1)) (EXTS imm)))
+  let addr : xlenbits ← do (pure ((← (rX rs1)) + (EXTS imm)))
   let result : xlenbits ← do (read_mem addr 8)
   (wX rd result)
 
@@ -189,7 +197,7 @@ def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (
   | (imm, rs1, rd, RISCV_ADDI) =>
     let rs1_val ← do (rX rs1)
     let imm_ext : xlenbits := (EXTS imm)
-    let result := (HAdd.hAdd rs1_val imm_ext)
+    let result := (rs1_val + imm_ext)
     (wX rd result)
   | _ => throw Error.Exit
 
@@ -199,19 +207,19 @@ def execute (merge_var : ast) : SailM Unit := do
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsbUnif v__0 14 12) (0b000 : (BitVec 3)))
-       (BEq.beq (Sail.BitVec.extractLsbUnif v__0 6 0) (0b0010011 : (BitVec 7))))
-  then let imm : (BitVec 12) := (Sail.BitVec.extractLsbUnif v__0 31 20)
-       let rs1 : regbits := (Sail.BitVec.extractLsbUnif v__0 19 15)
-       let rd : regbits := (Sail.BitVec.extractLsbUnif v__0 11 7)
-       let imm : (BitVec 12) := (Sail.BitVec.extractLsbUnif v__0 31 20)
+  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b000 : (BitVec 3)))
+       (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0010011 : (BitVec 7))))
+  then let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
+       let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
+       let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
+       let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
        (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
-  else if (Bool.and (BEq.beq (Sail.BitVec.extractLsbUnif v__0 14 12) (0b011 : (BitVec 3)))
-            (BEq.beq (Sail.BitVec.extractLsbUnif v__0 6 0) (0b0000011 : (BitVec 7))))
-       then let imm : (BitVec 12) := (Sail.BitVec.extractLsbUnif v__0 31 20)
-            let rs1 : regbits := (Sail.BitVec.extractLsbUnif v__0 19 15)
-            let rd : regbits := (Sail.BitVec.extractLsbUnif v__0 11 7)
-            let imm : (BitVec 12) := (Sail.BitVec.extractLsbUnif v__0 31 20)
+  else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b011 : (BitVec 3)))
+            (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0000011 : (BitVec 7))))
+       then let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
+            let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
+            let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
+            let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
             (some (LOAD (imm, rs1, rd)))
        else none
 

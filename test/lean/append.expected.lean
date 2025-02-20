@@ -45,7 +45,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then (HShiftLeft.hShiftLeft (sail_ones n) i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -62,14 +62,22 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
+  then ((Int.tdiv (n + 1) m)
+         -
+         1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+       then ((Int.tdiv (n - 1) m)
+              -
+              1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n
+    -
+    (m
+      *
+      (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -98,11 +106,11 @@ def unif_bitvec_replicate (x : (BitVec 4)) : (BitVec (2 * 8)) :=
   (BitVec.replicateBits x 4)
 
 def unif_subrange_bits (x : (BitVec 16)) : (BitVec (17 - 10 + 1)) :=
-  (Sail.BitVec.extractLsbUnif x 10 3)
+  (Sail.BitVec.extractLsb x 10 3)
 
 /-- Type quantifiers: i : Nat, i ≥ 0 -/
 def unif_vector_subrange (i : Nat) (v : (BitVec (8 * i + 8))) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v (HAdd.hAdd (HMul.hMul 8 i) 7) (HMul.hMul 8 i))
+  (Sail.BitVec.extractLsb v ((8 * i) + 7) (8 * i))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

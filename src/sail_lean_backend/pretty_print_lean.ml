@@ -502,6 +502,14 @@ let match_or_match_bv brs =
   if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
   else "match "
 
+let binop_of_id id =
+  match id with
+  | Some "_lean_add" -> Some "+"
+  | Some "_lean_sub" -> Some "-"
+  | Some "_lean_mul" -> Some "*"
+  | Some "_lean_div" -> Some "/"
+  | _ -> None
+
 let remove_er ctx = { ctx with early_ret = false }
 
 let rec list_any (l : 'a list) (f : 'a -> bool) = match l with t :: q -> f t || list_any q f | _ -> false
@@ -625,21 +633,27 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             wrap_with_pure (as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
-    | E_app (f, args) ->
+    | E_app (f, args) -> (
         let ctx = match f with Id_aux (Id "early_return", _) -> remove_er ctx | _ -> ctx in
         let _, f_typ = Env.get_val_spec f env in
         let implicits = get_fn_implicits f_typ in
-        let d_id =
-          if Env.is_extern f env "lean" then string (Env.get_extern f env "lean")
-          else doc_exp false ctx (E_aux (E_id f, (l, annot)))
-        in
+        let extern_id = if Env.is_extern f env "lean" then Some (Env.get_extern f env "lean") else None in
+        let d_id = Option.fold ~some:string ~none:(doc_exp false ctx (E_aux (E_id f, (l, annot)))) extern_id in
         let d_args = List.map (d_of_arg ctx) args in
         let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
         let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
-        nest 2
-          (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
-             (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
-          )
+        match binop_of_id extern_id with
+        | Some op ->
+            let e1 = List.nth d_args 0 in
+            let e2 = List.nth d_args 1 in
+            let res = e1 ^^ break 1 ^^ string op ^^ break 1 ^^ e2 in
+            wrap_with_pure as_monadic (parens res) |> nest 2
+        | None ->
+            nest 2
+              (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
+                 (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
+              )
+      )
     | E_vector vals ->
         let pp =
           match typ_of full_exp with

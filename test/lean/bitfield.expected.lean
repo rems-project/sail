@@ -58,7 +58,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then (HShiftLeft.hShiftLeft (sail_ones n) i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -75,14 +75,22 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
+  then ((Int.tdiv (n + 1) m)
+         -
+         1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+       then ((Int.tdiv (n - 1) m)
+              -
+              1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n
+    -
+    (m
+      *
+      (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -111,17 +119,17 @@ def Mk_cr_type (v : (BitVec 8)) : (BitVec 8) :=
   v
 
 def _get_cr_type_bits (v : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v (HSub.hSub 8 1) 0)
+  (Sail.BitVec.extractLsb v (8 - 1) 0)
 
 def _update_cr_type_bits (v : (BitVec 8)) (x : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v (HSub.hSub 8 1) 0 x)
+  (Sail.BitVec.updateSubrange v (8 - 1) 0 x)
 
 def _set_cr_type_bits (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_cr_type_bits r v)
 
 def _get_cr_type_CR0 (v : (BitVec 8)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 7 4)
+  (Sail.BitVec.extractLsb v 7 4)
 
 def _update_cr_type_CR0 (v : (BitVec 8)) (x : (BitVec 4)) : (BitVec 8) :=
   (Sail.BitVec.updateSubrange v 7 4 x)
@@ -131,7 +139,7 @@ def _set_cr_type_CR0 (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVe
   writeRegRef r_ref (_update_cr_type_CR0 r v)
 
 def _get_cr_type_CR1 (v : (BitVec 8)) : (BitVec 2) :=
-  (Sail.BitVec.extractLsbUnif v 3 2)
+  (Sail.BitVec.extractLsb v 3 2)
 
 def _update_cr_type_CR1 (v : (BitVec 8)) (x : (BitVec 2)) : (BitVec 8) :=
   (Sail.BitVec.updateSubrange v 3 2 x)
@@ -141,7 +149,7 @@ def _set_cr_type_CR1 (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVe
   writeRegRef r_ref (_update_cr_type_CR1 r v)
 
 def _get_cr_type_CR3 (v : (BitVec 8)) : (BitVec 2) :=
-  (Sail.BitVec.extractLsbUnif v 1 0)
+  (Sail.BitVec.extractLsb v 1 0)
 
 def _update_cr_type_CR3 (v : (BitVec 8)) (x : (BitVec 2)) : (BitVec 8) :=
   (Sail.BitVec.updateSubrange v 1 0 x)
@@ -151,7 +159,7 @@ def _set_cr_type_CR3 (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVe
   writeRegRef r_ref (_update_cr_type_CR3 r v)
 
 def _get_cr_type_GT (v : (BitVec 8)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsbUnif v 6 6)
+  (Sail.BitVec.extractLsb v 6 6)
 
 def _update_cr_type_GT (v : (BitVec 8)) (x : (BitVec 1)) : (BitVec 8) :=
   (Sail.BitVec.updateSubrange v 6 6 x)
@@ -161,7 +169,7 @@ def _set_cr_type_GT (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVec
   writeRegRef r_ref (_update_cr_type_GT r v)
 
 def _get_cr_type_LT (v : (BitVec 8)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsbUnif v 7 7)
+  (Sail.BitVec.extractLsb v 7 7)
 
 def _update_cr_type_LT (v : (BitVec 8)) (x : (BitVec 1)) : (BitVec 8) :=
   (Sail.BitVec.updateSubrange v 7 7 x)
