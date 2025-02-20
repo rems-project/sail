@@ -14,6 +14,15 @@ instance : HAdd (BitVec n) (BitVec m) (BitVec n) where
 instance : HSub (BitVec n) (BitVec m) (BitVec n) where
   hSub x y := x - y
 
+instance : HAnd (BitVec n) (BitVec m) (BitVec n) where
+  hAnd x y := x &&& y
+
+instance : HOr (BitVec n) (BitVec m) (BitVec n) where
+  hOr x y := x ||| y
+
+instance : HXor (BitVec n) (BitVec m) (BitVec n) where
+  hXor x y := x ^^^ y
+
 namespace BitVec
 
 def length {w : Nat} (_ : BitVec w) : Nat := w
@@ -462,3 +471,4 @@ instance : HShiftRight (BitVec w) Int (BitVec w) where
   hShiftRight b i := b <<< (-i)
 
 end Sail
+

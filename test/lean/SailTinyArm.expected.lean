@@ -551,9 +551,9 @@ def sail_ones (n : Nat) : (BitVec n) :=
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
+  then ((sail_ones n) <<< i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
+       (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -570,22 +570,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m)
-         -
-         1)
+  then ((Int.tdiv (n + 1) m) - 1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m)
-              -
-              1)
+       then ((Int.tdiv (n - 1) m) - 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n
-    -
-    (m
-      *
-      (fdiv_int n m)))
+  (n - (m * (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -1865,8 +1857,7 @@ def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
   let t : reg_index := (BitVec.toNat Rt)
-  let offset : (BitVec 64) :=
-    (Sail.BitVec.signExtend (Sail.BitVec.append' imm19 (0b00 : (BitVec 2))) 64)
+  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64)
   (some (CompareAndBranch (t, offset)))
 
 def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
@@ -1931,7 +1922,7 @@ def execute_LoadRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
 def execute_ExclusiveOr (d : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   let operand1 ← do (rX n)
   let operand2 ← do (rX m)
-  (wX d (HXor.hXor operand1 operand2))
+  (wX d (operand1 ^^^ operand2))
 
 def dataMemoryBarrier (_ : Unit) : SailM Unit := do
   (sail_barrier

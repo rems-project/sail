@@ -81,9 +81,9 @@ def sail_ones (n : Nat) : (BitVec n) :=
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
+  then ((sail_ones n) <<< i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
+       (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -100,22 +100,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m)
-         -
-         1)
+  then ((Int.tdiv (n + 1) m) - 1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m)
-              -
-              1)
+       then ((Int.tdiv (n - 1) m) - 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n
-    -
-    (m
-      *
-      (fdiv_int n m)))
+  (n - (m * (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=

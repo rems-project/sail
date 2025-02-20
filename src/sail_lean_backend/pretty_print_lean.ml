@@ -516,6 +516,12 @@ let binop_of_id id =
   | Some "_lean_sub" -> Some "-"
   | Some "_lean_mul" -> Some "*"
   | Some "_lean_div" -> Some "/"
+  | Some "_lean_app" -> Some "++"
+  | Some "_lean_bvand" -> Some "&&&"
+  | Some "_lean_bvor" -> Some "|||"
+  | Some "_lean_bvxor" -> Some "^^^"
+  | Some "_lean_shiftl" -> Some "<<<"
+  | Some "_lean_shiftr" -> Some ">>>"
   | _ -> None
 
 let remove_er ctx = { ctx with early_ret = false }
@@ -654,7 +660,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | Some op ->
             let e1 = List.nth d_args 0 in
             let e2 = List.nth d_args 1 in
-            let res = e1 ^^ break 1 ^^ string op ^^ break 1 ^^ e2 in
+            let res = e1 ^^ space ^^ string op ^^ space ^^ e2 in
             wrap_with_pure as_monadic (parens res) |> nest 2
         | None ->
             nest 2
