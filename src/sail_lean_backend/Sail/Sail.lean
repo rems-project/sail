@@ -454,6 +454,14 @@ def iterate {α : Sort u} (op : α → α) : Nat → α → α
   | 0, a => a
   | Nat.succ k, a => iterate op k (op a)
 
+def toHex (n : Nat) : String :=
+  have nbv : BitVec (Nat.log2 n + 1) := BitVec.ofNat _ n
+  "0x" ++ nbv.toHex
+
+def toHexUpper (n : Nat) : String :=
+  have nbv : BitVec (Nat.log2 n + 1) := BitVec.ofNat _ n
+  "0x" ++ nbv.toHex.toUpper
+
 end Nat
 
 namespace Int
@@ -469,6 +477,17 @@ def shiftr (a : Int) (n : Int) : Int :=
   match n with
   | Int.ofNat n => Sail.Nat.iterate (fun x => x / 2) n a
   | Int.negSucc n => Sail.Nat.iterate (fun x => x * 2) (n+1) a
+
+
+def toHex (i : Int) : String :=
+  match i with
+  | Int.ofNat n => Nat.toHex n
+  | Int.negSucc n => "-" ++ Nat.toHex (n+1)
+
+def toHexUpper (i : Int) : String :=
+  match i with
+  | Int.ofNat n => Nat.toHexUpper n
+  | Int.negSucc n => "-" ++ Nat.toHexUpper (n+1)
 
 end Int
 
