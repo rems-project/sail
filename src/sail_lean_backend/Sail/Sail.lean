@@ -2,12 +2,6 @@ import Std.Data.DHashMap
 import Std.Data.HashMap
 namespace Sail
 
-instance : CoeT Int x Nat where
-  coe := x.toNat
-
-instance : CoeT (BitVec n) x (BitVec m) where
-  coe := x.setWidth m
-
 namespace BitVec
 
 def length {w : Nat} (_ : BitVec w) : Nat := w
