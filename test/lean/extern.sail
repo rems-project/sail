@@ -174,3 +174,7 @@ function extern_n_leading_spaces() -> nat = {
 function extern_hex_str() -> string = {
   return hex_str(123)
 }
+
+function extern_hex_str_upper() -> string = {
+  return hex_str_upper(123)
+}
