@@ -208,9 +208,10 @@ let start_lean_output (out_name : string) default_sail_dir =
   in
   List.iter
     (fun filename ->
-      Unix.system ("cp " ^ Filename.quote filename ^ " " ^ Filename.quote lean_src_dir) |> ignore;
       let filepath = Filename.concat lean_src_dir (file_to_module filename) in
-      Unix.system (Printf.sprintf "sed -i '' 's/THE_MODULE_NAME/%s/g' %s.lean" out_name_camel filepath) |> ignore
+      Unix.system
+        (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel (Filename.quote filename) filepath)
+      |> ignore
     )
     !opt_lean_import_files;
   let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
