@@ -165,7 +165,8 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
     match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
   and uneg (Nexp_aux (n, l) as nexp) =
     match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
-  and exp (Nexp_aux (n, l) as nexp) = match n with Nexp_exp n -> separate space [string "pow2"; exp n] | _ -> app nexp
+  and exp (Nexp_aux (n, l) as nexp) =
+    match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
