@@ -515,7 +515,7 @@ let defs { defs; _ } =
         typedefs := Bindings.add id id !typedefs;
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
-    | DEF_pragma ("latex", command, l) -> process_pragma l command
+    | DEF_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command
     | DEF_register (DEC_aux (_, annot) as dec) ->
         let id = id_of_dec_spec dec in
         regdefs := Bindings.add id id !regdefs;

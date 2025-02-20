@@ -25,6 +25,7 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
+(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -44,60 +45,56 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Ast_util
+open Libsail
 
-let parse_override obj =
-  let open Util.Option_monad in
-  let* id = Option.bind (List.assoc_opt "id" obj) attribute_data_string in
-  let* target = Option.bind (List.assoc_opt "target" obj) attribute_data_string in
-  let* prefix =
-    match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
-  in
-  let* suffix =
-    match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
-  in
-  Some ((prefix, id, suffix), target)
+let c_used_words = ["main"; "have_exception"; "current_exception"; "throw_location"] |> Util.StringSet.of_list
 
-module Overrides = Map.Make (struct
-  type t = string * string * string
-
-  let compare (p1, n1, s1) (p2, n2, s2) = Util.lex_ord_list String.compare [p1; n1; s1] [p2; n2; s2]
-end)
-
-module type CONFIG = sig
-  type style
-
-  val allowed : string -> bool
-  val pretty : style -> string -> string
-  val mangle : style -> string -> string
-  val variant : string -> int -> string
-  val overrides : string Overrides.t
-end
-
-module Make (Config : CONFIG) () = struct
-  let names = Hashtbl.create 1024
-  let generated = Hashtbl.create 1024
-
-  let translate ?(prefix = "") ?(suffix = "") style orig_str =
-    match Overrides.find_opt (prefix, orig_str, suffix) Config.overrides with
-    | Some result -> result
-    | None -> (
-        match Hashtbl.find_opt names (prefix, orig_str, suffix) with
-        | Some result -> result
-        | None ->
-            let str = if Config.allowed orig_str then Config.pretty style orig_str else Config.mangle style orig_str in
-            let str = prefix ^ str ^ suffix in
-            let rec variant_str n =
-              let modified = Config.variant str n in
-              if Hashtbl.mem generated modified then variant_str (n + 1)
-              else (
-                Hashtbl.add generated modified ();
-                Hashtbl.add names (prefix, orig_str, suffix) modified;
-                modified
-              )
-            in
-            variant_str 0
-      )
-
-  let to_string ?(prefix = "") ?(suffix = "") style id = translate ~prefix ~suffix style (string_of_id id)
-end
+let c_reserved_words =
+  [
+    "alignas";
+    "alignof";
+    "auto";
+    "bool";
+    "break";
+    "case";
+    "char";
+    "const";
+    "constexpr";
+    "continue";
+    "default";
+    "do";
+    "double";
+    "else";
+    "enum";
+    "extern";
+    "false";
+    "float";
+    "for";
+    "goto";
+    "if";
+    "inline";
+    "int";
+    "long";
+    "nullptr";
+    "register";
+    "restrict";
+    "return";
+    "short";
+    "signed";
+    "sizeof";
+    "static";
+    "static_assert";
+    "struct";
+    "switch";
+    "thread_local";
+    "true";
+    "typedef";
+    "typeof";
+    "typeof_unqual";
+    "union";
+    "unsigned";
+    "void";
+    "volatile";
+    "while";
+  ]
+  |> Util.StringSet.of_list

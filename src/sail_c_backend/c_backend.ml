@@ -152,33 +152,6 @@ let literal_to_fragment (L_aux (l_aux, _)) =
   | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
 
-let sgen_id id = Util.zencode_string (string_of_id id)
-
-let rec sgen_ctyp_name = function
-  | CT_unit -> "unit"
-  | CT_bit -> "fbits"
-  | CT_bool -> "bool"
-  | CT_fbits _ -> "fbits"
-  | CT_sbits _ -> "sbits"
-  | CT_fint _ -> "mach_int"
-  | CT_constant _ -> "mach_int"
-  | CT_lint -> "sail_int"
-  | CT_lbits -> "lbits"
-  | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
-  | CT_struct (id, _) -> sgen_id id
-  | CT_enum (id, _) -> sgen_id id
-  | CT_variant (id, _) -> sgen_id id
-  | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
-  | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
-  | CT_fvector (_, typ) -> sgen_ctyp_name (CT_vector typ)
-  | CT_string -> "sail_string"
-  | CT_real -> "real"
-  | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
-  | CT_float n -> "float" ^ string_of_int n
-  | CT_rounding_mode -> "rounding_mode"
-  | CT_memory_writes -> "sail_memory_writes"
-  | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-
 let sail_create ?(prefix = "") ?(suffix = "") ctyp fmt =
   let open Printf in
   ksprintf (fun s -> ksprintf string "%sCREATE(%s)(%s)%s" prefix ctyp s suffix) fmt
@@ -872,6 +845,14 @@ let optimize ~have_rts recursive_functions cdefs =
 (* 6. Code generation                                                     *)
 (**************************************************************************)
 
+let mk_regexp_check regexp_str =
+  let regexp = Str.regexp regexp_str in
+  fun s -> Str.string_match regexp s 0
+
+let valid_c_identifier = mk_regexp_check "^[A-Za-z_][A-Za-z0-9_]*$"
+
+let c_int_type_name = mk_regexp_check "^[u]?int[0-9]+_t$"
+
 (* The code generator produces a list of C definitions, some of
    which should be in the header (if we generate one), and some in
    the implementation. There are also definitions that are only
@@ -892,21 +873,41 @@ module type CODEGEN_CONFIG = sig
   val no_main : bool
   val no_lib : bool
   val no_rts : bool
+  val no_mangle : bool
+  val reserved_words : Util.StringSet.t
+  val overrides : string Name_generator.Overrides.t
   val branch_coverage : out_channel option
 end
 
 module Codegen (Config : CODEGEN_CONFIG) = struct
+  open Printf
+
   module NameGen =
     Name_generator.Make
       (struct
         type style = unit
 
-        let allowed _ = true
-        let pretty () s = Util.zencode_string s
+        let allowed s =
+          let valid_name s =
+            valid_c_identifier s
+            && (not (Util.StringSet.mem s Keywords.c_reserved_words))
+            && (not (Util.StringSet.mem s Keywords.c_used_words))
+            && (not (Util.StringSet.mem s Config.reserved_words))
+            && not (c_int_type_name s)
+          in
+          (not Config.no_mangle) || valid_name s
+
+        let pretty () s = if Config.no_mangle then s else Util.zencode_string s
+
         let mangle () s = Util.zencode_string s
+
         let variant s = function 0 -> s | n -> s ^ string_of_int n
+
+        let overrides = Config.overrides
       end)
       ()
+
+  let sgen_id id = NameGen.to_string () id
 
   let sgen_uid (id, ctyps) =
     match ctyps with
@@ -930,11 +931,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let sgen_function_id id =
     let str = NameGen.to_string () id in
-    !opt_prefix ^ String.sub str 1 (String.length str - 1)
+    if Config.no_mangle then str else !opt_prefix ^ String.sub str 1 (String.length str - 1)
 
   let sgen_function_uid uid =
     let str = sgen_uid uid in
-    !opt_prefix ^ String.sub str 1 (String.length str - 1)
+    if Config.no_mangle then str else !opt_prefix ^ String.sub str 1 (String.length str - 1)
 
   let codegen_function_id id = string (sgen_function_id id)
 
@@ -963,6 +964,31 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_memory_writes -> "sail_memory_writes"
     | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
+  let rec sgen_ctyp_name = function
+    | CT_unit -> "unit"
+    | CT_bit -> "fbits"
+    | CT_bool -> "bool"
+    | CT_fbits _ -> "fbits"
+    | CT_sbits _ -> "sbits"
+    | CT_fint _ -> "mach_int"
+    | CT_constant _ -> "mach_int"
+    | CT_lint -> "sail_int"
+    | CT_lbits -> "lbits"
+    | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
+    | CT_struct (id, _) -> sgen_id id
+    | CT_enum (id, _) -> sgen_id id
+    | CT_variant (id, _) -> sgen_id id
+    | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
+    | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
+    | CT_fvector (_, typ) -> sgen_ctyp_name (CT_vector typ)
+    | CT_string -> "sail_string"
+    | CT_real -> "real"
+    | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
+    | CT_float n -> "float" ^ string_of_int n
+    | CT_rounding_mode -> "rounding_mode"
+    | CT_memory_writes -> "sail_memory_writes"
+    | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+
   let sgen_const_ctyp = function CT_string -> "const_sail_string" | ty -> sgen_ctyp ty
 
   let sgen_mask n =
@@ -987,25 +1013,25 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | VL_real str -> str
     | VL_string str -> "\"" ^ str ^ "\""
     | VL_enum element -> Util.zencode_string element
-    | VL_ref r -> "&" ^ Util.zencode_string r
+    | VL_ref r -> "&" ^ sgen_id (mk_id r)
     | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
+
+  let sgen_tuple_id n = sgen_id (mk_id ("tup" ^ string_of_int n))
 
   let rec sgen_cval = function
     | V_id (id, _) -> sgen_name id
     | V_member (id, _) -> sgen_id id
     | V_lit (vl, _) -> sgen_value vl
     | V_call (op, cvals) -> sgen_call op cvals
-    | V_field (f, field) -> Printf.sprintf "%s.%s" (sgen_cval f) (sgen_id field)
-    | V_tuple_member (f, _, n) -> Printf.sprintf "%s.ztup%d" (sgen_cval f) n
+    | V_field (f, field) -> sprintf "%s.%s" (sgen_cval f) (sgen_id field)
+    | V_tuple_member (f, _, n) -> sprintf "%s.%s" (sgen_cval f) (sgen_tuple_id n)
     | V_ctor_kind (f, ctor, _) -> sgen_cval f ^ ".kind" ^ " != Kind_" ^ sgen_uid ctor
     | V_struct (fields, _) ->
-        Printf.sprintf "{%s}"
-          (Util.string_of_list ", " (fun (field, cval) -> sgen_id field ^ " = " ^ sgen_cval cval) fields)
-    | V_ctor_unwrap (f, ctor, _) -> Printf.sprintf "%s.variants.%s" (sgen_cval f) (sgen_uid ctor)
+        sprintf "{%s}" (Util.string_of_list ", " (fun (field, cval) -> sgen_id field ^ " = " ^ sgen_cval cval) fields)
+    | V_ctor_unwrap (f, ctor, _) -> sprintf "%s.variants.%s" (sgen_cval f) (sgen_uid ctor)
     | V_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for a tuple literal"
 
   and sgen_call op cvals =
-    let open Printf in
     match (op, cvals) with
     | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
     | Band, vs -> "(" ^ Util.string_of_list " && " sgen_cval vs ^ ")"
@@ -1143,7 +1169,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
     | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
     | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ sgen_id field ^ ")"
-    | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
+    | CL_tuple (clexp, n) -> sprintf "&((%s)->%s)" (sgen_clexp l clexp) (sgen_tuple_id n)
     | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
     | CL_void _ -> assert false
     | CL_rmw _ -> assert false
@@ -1157,7 +1183,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
     | CL_id (Name (id, _), _) -> sgen_id id
     | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ sgen_id field
-    | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
+    | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ "." ^ sgen_tuple_id n
     | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
     | CL_void _ -> assert false
     | CL_rmw _ -> assert false
@@ -1167,7 +1193,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
    integers (or vice versa), or from arbitrary-length bitvectors to
    and from uint64 bitvectors as needed. *)
   let rec codegen_conversion l clexp cval =
-    let open Printf in
     let ctyp_to = clexp_ctyp clexp in
     let ctyp_from = cval_ctyp cval in
     match (ctyp_to, ctyp_from) with
@@ -1241,7 +1266,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let sq_separate_map sep f xs = separate sep (squash_empty (List.map f xs))
 
   let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
-    let open Printf in
     match instr with
     | I_decl (ctyp, id) when is_stack_ctyp ctyp -> ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name id)
     | I_decl (ctyp, id) ->
@@ -1289,7 +1313,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         let fname =
           match (fname, ctyp) with
-          | "internal_pick", _ -> Printf.sprintf "pick_%s" (sgen_ctyp_name ctyp)
+          | "internal_pick", _ -> sprintf "pick_%s" (sgen_ctyp_name ctyp)
           | "sail_cons", _ -> begin
               match snd f with
               | [ctyp] -> Util.zencode_string ("cons#" ^ string_of_ctyp ctyp)
@@ -1297,29 +1321,29 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             end
           | "eq_anything", _ -> begin
               match args with
-              | cval :: _ -> Printf.sprintf "eq_%s" (sgen_ctyp_name (cval_ctyp cval))
+              | cval :: _ -> sprintf "eq_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "eq_anything function with bad arity."
             end
           | "length", _ -> begin
               match args with
-              | cval :: _ -> Printf.sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
+              | cval :: _ -> sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "length function with bad arity."
             end
           | "vector_access", CT_bit -> "bitvector_access"
           | "vector_access_inc", CT_bit -> "bitvector_access_inc"
           | "vector_access", _ -> begin
               match args with
-              | cval :: _ -> Printf.sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
+              | cval :: _ -> sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "vector access function with bad arity."
             end
-          | "vector_init", _ -> Printf.sprintf "vector_init_%s" (sgen_ctyp_name ctyp)
-          | "vector_update_subrange", _ -> Printf.sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
-          | "vector_update_subrange_inc", _ -> Printf.sprintf "vector_update_subrange_inc_%s" (sgen_ctyp_name ctyp)
-          | "vector_subrange", _ -> Printf.sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
-          | "vector_subrange_inc", _ -> Printf.sprintf "vector_subrange_inc_%s" (sgen_ctyp_name ctyp)
+          | "vector_init", _ -> sprintf "vector_init_%s" (sgen_ctyp_name ctyp)
+          | "vector_update_subrange", _ -> sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
+          | "vector_update_subrange_inc", _ -> sprintf "vector_update_subrange_inc_%s" (sgen_ctyp_name ctyp)
+          | "vector_subrange", _ -> sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
+          | "vector_subrange_inc", _ -> sprintf "vector_subrange_inc_%s" (sgen_ctyp_name ctyp)
           | "vector_update", CT_fbits _ -> "update_fbits"
           | "vector_update", CT_lbits -> "update_lbits"
-          | "vector_update", _ -> Printf.sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
+          | "vector_update", _ -> sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
           | "vector_update_inc", CT_fbits _ -> "update_fbits_inc"
           | "vector_update_inc", CT_lbits -> "update_lbits_inc"
           | "string_of_bits", _ -> begin
@@ -1334,17 +1358,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               | CT_lbits -> "decimal_string_of_lbits"
               | _ -> assert false
             end
-          | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
-          | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
+          | "internal_vector_update", _ -> sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
+          | "internal_vector_init", _ -> sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
           | "undefined_bitvector", CT_fbits _ -> "UNDEFINED(fbits)"
           | "undefined_bitvector", CT_lbits -> "UNDEFINED(lbits)"
           | "undefined_bit", _ -> "UNDEFINED(fbits)"
-          | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
-          | "undefined_list", _ -> Printf.sprintf "UNDEFINED(%s)" (sgen_ctyp_name ctyp)
+          | "undefined_vector", _ -> sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
+          | "undefined_list", _ -> sprintf "UNDEFINED(%s)" (sgen_ctyp_name ctyp)
           | fname, _ -> fname
         in
         if fname = "reg_deref" then
-          if is_stack_ctyp ctyp then string (Printf.sprintf "  %s = *(%s);" (sgen_clexp_pure l x) c_args)
+          if is_stack_ctyp ctyp then ksprintf string "  %s = *(%s);" (sgen_clexp_pure l x) c_args
           else sail_copy ~prefix:"  " ~suffix:";" (sgen_ctyp_name ctyp) "&%s, *(%s)" (sgen_clexp_pure l x) c_args
         else if is_stack_ctyp ctyp then
           string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure l x) fname (extra_arguments is_extern) c_args)
@@ -1375,12 +1399,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               let gs = ngensym () in
               let fold (n, ctyp) (inits, prev) =
                 let init, prev' = codegen_exn_return ctyp in
-                (Printf.sprintf ".ztup%d = %s" n init :: inits, prev @ prev')
+                (sprintf ".%s = %s" (sgen_tuple_id n) init :: inits, prev @ prev')
               in
               let inits, prev = List.fold_right fold (List.mapi (fun i x -> (i, x)) ctyps) ([], []) in
               ( sgen_name gs,
                 [
-                  Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
+                  sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
                   ^ Util.string_of_list ", " (fun x -> x) inits
                   ^ " };";
                 ]
@@ -1390,12 +1414,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               let gs = ngensym () in
               let fold (id, ctyp) (inits, prev) =
                 let init, prev' = codegen_exn_return ctyp in
-                (Printf.sprintf ".%s = %s" (sgen_id id) init :: inits, prev @ prev')
+                (sprintf ".%s = %s" (sgen_id id) init :: inits, prev @ prev')
               in
               let inits, prev = List.fold_right fold ctors ([], []) in
               ( sgen_name gs,
                 [
-                  Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
+                  sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
                   ^ Util.string_of_list ", " (fun x -> x) inits
                   ^ " };";
                 ]
@@ -1633,8 +1657,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         @
         if string_of_id id = "exception" then
           [
-            HeaderOnly (string "extern struct zexception *current_exception;");
-            Impl (string "struct zexception *current_exception = NULL;");
+            HeaderOnly (ksprintf string "extern struct %s *current_exception;" (sgen_id id));
+            Impl (ksprintf string "struct %s *current_exception = NULL;" (sgen_id id));
             HeaderOnly (string "extern bool have_exception;");
             Impl (string "bool have_exception = false;");
             HeaderOnly (string "extern sail_string *throw_location;");
@@ -2217,18 +2241,20 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           )
       in
 
+      let exception_type = sgen_id (mk_id "exception") in
+
       let exn_boilerplate =
         if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], [])
         else
           ( [
-              "  current_exception = sail_new(struct zexception);";
-              "  CREATE(zexception)(current_exception);";
+              sprintf "  current_exception = sail_new(struct %s);" exception_type;
+              sprintf "  CREATE(%s)(current_exception);" exception_type;
               "  throw_location = sail_new(sail_string);";
               "  CREATE(sail_string)(throw_location);";
             ],
             [
               "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception: %s\\n\", *throw_location);}";
-              "  KILL(zexception)(current_exception);";
+              sprintf "  KILL(%s)(current_exception);" exception_type;
               "  sail_free(current_exception);";
               "  KILL(sail_string)(throw_location);";
               "  sail_free(throw_location);";

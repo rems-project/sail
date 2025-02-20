@@ -448,13 +448,14 @@ let filter_ast_extra cuts g ast keep_std =
     | DEF_aux (DEF_measure (id, _, _), _) :: defs when NS.mem (Function id) cuts -> filter_ast' g defs
     | (DEF_aux (DEF_measure (id, _, _), _) as def) :: defs when NM.mem (Function id) g -> def :: filter_ast' g defs
     | DEF_aux (DEF_measure _, _) :: defs -> filter_ast' g defs
-    | (DEF_aux (DEF_pragma ("include_start", file_name, _), _) as def) :: defs when keep_std ->
+    | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file_name, _)), _) as def) :: defs when keep_std ->
         (* TODO: proper check *)
         let d = Filename.dirname file_name in
         if Filename.basename d = "lib" && Filename.basename (Filename.dirname d) = "sail" then (
           let rec in_file = function
             | [] -> []
-            | (DEF_aux (DEF_pragma ("include_end", file_name', _), _) as def) :: defs when file_name = file_name' ->
+            | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file_name', _)), _) as def) :: defs
+              when file_name = file_name' ->
                 def :: filter_ast' g defs
             | def :: defs -> def :: in_file defs
           in
@@ -546,13 +547,15 @@ let filter_library_files sail_dir ast =
   let rec include_defs defs =
     match defs with
     | [] -> []
-    | DEF_aux (DEF_pragma ("include_start", file_name, _), _) :: ds when Util.starts_with ~prefix:lib_dir file_name ->
+    | DEF_aux (DEF_pragma ("include_start", Pragma_line (file_name, _)), _) :: ds
+      when Util.starts_with ~prefix:lib_dir file_name ->
         exclude_defs file_name defs
     | d :: ds -> d :: include_defs ds
   and exclude_defs file_name defs =
     match defs with
     | [] -> []
-    | DEF_aux (DEF_pragma ("include_end", file_name', _), _) :: ds when file_name = file_name' -> include_defs ds
+    | DEF_aux (DEF_pragma ("include_end", Pragma_line (file_name', _)), _) :: ds when file_name = file_name' ->
+        include_defs ds
     | _d :: ds -> exclude_defs file_name ds
   in
   { ast with defs = include_defs ast.defs }

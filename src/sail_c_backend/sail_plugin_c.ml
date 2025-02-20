@@ -55,6 +55,7 @@ let opt_includes_c : string list ref = ref []
 let opt_includes_h : string list ref = ref []
 let opt_no_lib = ref false
 let opt_no_main = ref false
+let opt_no_mangle = ref false
 let opt_no_rts = ref false
 let opt_specialize_c = ref false
 
@@ -69,6 +70,7 @@ let c_options =
       Arg.String (fun i -> opt_includes_c := i :: !opt_includes_h),
       "provide additional include for C header output"
     );
+    (Flag.create ~prefix:["c"] "no_mangle", Arg.Set opt_no_mangle, "produce readable names");
     (Flag.create ~prefix:["c"] "no_main", Arg.Set opt_no_main, "do not generate the main() function");
     (Flag.create ~prefix:["c"] "no_rts", Arg.Set opt_no_rts, "do not include the Sail runtime");
     ( Flag.create ~prefix:["c"] "no_lib",
@@ -156,7 +158,32 @@ let c_rewrites =
     ("constant_fold", [String_arg "c"]);
   ]
 
+let collect_c_name_info ast =
+  let open Ast in
+  let open Ast_defs in
+  let reserved = ref Util.StringSet.empty in
+  let overrides = ref Name_generator.Overrides.empty in
+  List.iter
+    (function
+      | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, extern), _)), _) -> (
+          match Ast_util.extern_assoc "c" extern with
+          | Some name -> reserved := Util.StringSet.add name !reserved
+          | None -> ()
+        )
+      | DEF_aux (DEF_pragma ("c_reserved", Pragma_line (name, _)), _) -> reserved := Util.StringSet.add name !reserved
+      | DEF_aux (DEF_pragma ("c_override", Pragma_structured data), def_annot) -> (
+          match Name_generator.parse_override data with
+          | Some (from, target) -> overrides := Name_generator.Overrides.add from target !overrides
+          | None -> raise (Reporting.err_general def_annot.loc "Failed to interpret $c_override directive")
+        )
+      | _ -> ()
+      )
+    ast.defs;
+  (!reserved, !overrides)
+
 let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
+  let reserveds, overrides = collect_c_name_info ast in
+
   let module Codegen = C_backend.Codegen (struct
     let generate_header = !opt_generate_header
     let includes = !opt_includes_c
@@ -164,6 +191,9 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     let no_main = !opt_no_main
     let no_lib = !opt_no_lib
     let no_rts = !opt_no_rts
+    let no_mangle = !opt_no_mangle
+    let reserved_words = reserveds
+    let overrides = overrides
     let branch_coverage = !opt_branch_coverage
   end) in
   Reporting.opt_warnings := true;
@@ -200,4 +230,8 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     ()
   )
 
-let _ = Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
+let _ =
+  Pragma.register "c_in_main";
+  Pragma.register "c_reserved";
+  Pragma.register "c_override";
+  Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target

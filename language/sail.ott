@@ -68,6 +68,11 @@ metavar value ::=
   {{ lem value }}
   {{ isa value }}
 
+metavar attribute_data ::=
+  {{ phantom }}
+  {{ ocaml attribute_data }}
+  {{ lem attribute_data }}
+
 embed
 {{ ocaml
 
@@ -776,6 +781,11 @@ loop_measure :: '' ::= {{ lem (loop * exp unit) }}
    {{ auxparam 'a }}
    | loop exp :: :: Loop
 
+pragma :: 'Pragma_' ::=
+  {{ com pragma contents }}
+  | string l                                                    :: :: line
+  | string1 = attribute_data1 , ... , stringn = attribute_datan :: :: structured
+
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ aux _ def_annot }} {{ auxparam 'a 'b }}
@@ -813,7 +823,7 @@ def :: 'DEF_' ::=
     {{ com register declaration }}
   | fundef1 .. fundefn                                 :: I :: internal_mutrec
     {{ com internal representation of mutually recursive functions }}
-  | $ string1 string2 l                                :: :: pragma
+  | $ string pragma                                    :: :: pragma
     {{ com compiler directive }}
 
 terminals :: '' ::=

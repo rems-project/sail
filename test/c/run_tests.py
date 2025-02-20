@@ -191,6 +191,7 @@ def test_coq(name):
 xml = '<testsuites>\n'
 
 if 'c' in targets:
+    xml += test_c('unoptimized C', '', '--c-no-mangle', False)
     xml += test_c('unoptimized C', '', '', False)
     xml += test_c('unoptimized C', '', '--c-generate-header', False)
     xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')

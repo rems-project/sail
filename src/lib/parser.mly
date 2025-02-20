@@ -241,6 +241,7 @@ let set_syntax_deprecated l =
 %token <string> OpId
 
 %token <string * string> Pragma
+%token <string> StructuredPragma
 %token <string> Attribute
 
 %token <Parse_ast.fixity_token> Fixity
@@ -1347,10 +1348,12 @@ def_aux:
     { DEF_constraint $2 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
+  | pragma = StructuredPragma; kvs = separated_list(Comma, attribute_data_key_value); Rcurly
+    { DEF_pragma (pragma, Pragma_structured kvs) }
   | Pragma
     { let (pragma, arg) = $1 in
       let ltrim = pragma_left_spaces pragma $startpos arg in
-      DEF_pragma (pragma, String.trim arg, ltrim) }
+      DEF_pragma (pragma, Pragma_line (String.trim arg, ltrim)) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures

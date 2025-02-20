@@ -424,6 +424,9 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = prec * Big_int.num * string
 
+type pragma = (* pragma contents *)
+  | Pragma_line of string * int | Pragma_structured of (string * attribute_data) list
+
 type def_aux =
   (* Top-level definition *)
   | DEF_type of type_def (* type definition *)
@@ -442,7 +445,7 @@ type def_aux =
   | DEF_measure of id * pat * exp (* separate termination measure declaration *)
   | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
   | DEF_register of dec_spec (* register declaration *)
-  | DEF_pragma of string * string * int
+  | DEF_pragma of string * pragma
   | DEF_private of def
   | DEF_attribute of string * attribute_data option * def
   | DEF_doc of string * def

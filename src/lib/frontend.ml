@@ -116,7 +116,7 @@ let wrap_module proj parsed_module =
   let module P = Parse_ast in
   let open Project in
   let name, l = module_name proj parsed_module.id in
-  let bracket_pragma p = [Generated [P.DEF_aux (P.DEF_pragma (p, name, 1), to_loc l)]] in
+  let bracket_pragma p = [Generated [P.DEF_aux (P.DEF_pragma (p, P.Pragma_line (name, 1)), to_loc l)]] in
   { parsed_module with files = bracket_pragma "start_module#" @ parsed_module.files @ bracket_pragma "end_module#" }
 
 let filter_modules proj is_included ast =
@@ -127,13 +127,13 @@ let filter_modules proj is_included ast =
     | None -> Reporting.unreachable l __POS__ "Failed to get module id"
   in
   let rec go skipping acc = function
-    | DEF_aux (DEF_pragma ("ended_module#", name, l), def_annot) :: defs ->
+    | DEF_aux (DEF_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in
         begin
           match skipping with Some skip_id when mod_id = skip_id -> go None acc defs | _ -> go skipping acc defs
         end
     | _ :: defs when Option.is_some skipping -> go skipping acc defs
-    | DEF_aux (DEF_pragma ("started_module#", name, l), def_annot) :: defs ->
+    | DEF_aux (DEF_pragma ("started_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in
         if is_included mod_id then go None acc defs else go (Some mod_id) acc defs
     | def :: defs -> go None (def :: acc) defs

@@ -8,7 +8,7 @@
 (*  The ASL derived parts of the ARMv8.3 specification in                   *)
 (*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               *)
 (*                                                                          *)
-(*  Copyright (c) 2013-2025                                                 *)
+(*  Copyright (c) 2013-2021                                                 *)
 (*    Kathyrn Gray                                                          *)
 (*    Shaked Flur                                                           *)
 (*    Stephen Kell                                                          *)
@@ -44,60 +44,37 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Ast_util
+open Util
 
-let parse_override obj =
-  let open Util.Option_monad in
-  let* id = Option.bind (List.assoc_opt "id" obj) attribute_data_string in
-  let* target = Option.bind (List.assoc_opt "target" obj) attribute_data_string in
-  let* prefix =
-    match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
-  in
-  let* suffix =
-    match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
-  in
-  Some ((prefix, id, suffix), target)
+let pragma_set =
+  List.fold_left
+    (fun set str -> StringSet.add str set)
+    StringSet.empty
+    [
+      "define";
+      "anchor";
+      "span";
+      "include";
+      "include_error";
+      "ifdef";
+      "ifndef";
+      "iftarget";
+      "else";
+      "endif";
+      "option";
+      "optimize";
+      "latex";
+      "property";
+      "counterexample";
+      "suppress_warnings";
+      "include_start";
+      "include_end";
+      "sail_internal";
+      "target_set";
+      "non_exec";
+    ]
+  |> ref
 
-module Overrides = Map.Make (struct
-  type t = string * string * string
+let all () = !pragma_set
 
-  let compare (p1, n1, s1) (p2, n2, s2) = Util.lex_ord_list String.compare [p1; n1; s1] [p2; n2; s2]
-end)
-
-module type CONFIG = sig
-  type style
-
-  val allowed : string -> bool
-  val pretty : style -> string -> string
-  val mangle : style -> string -> string
-  val variant : string -> int -> string
-  val overrides : string Overrides.t
-end
-
-module Make (Config : CONFIG) () = struct
-  let names = Hashtbl.create 1024
-  let generated = Hashtbl.create 1024
-
-  let translate ?(prefix = "") ?(suffix = "") style orig_str =
-    match Overrides.find_opt (prefix, orig_str, suffix) Config.overrides with
-    | Some result -> result
-    | None -> (
-        match Hashtbl.find_opt names (prefix, orig_str, suffix) with
-        | Some result -> result
-        | None ->
-            let str = if Config.allowed orig_str then Config.pretty style orig_str else Config.mangle style orig_str in
-            let str = prefix ^ str ^ suffix in
-            let rec variant_str n =
-              let modified = Config.variant str n in
-              if Hashtbl.mem generated modified then variant_str (n + 1)
-              else (
-                Hashtbl.add generated modified ();
-                Hashtbl.add names (prefix, orig_str, suffix) modified;
-                modified
-              )
-            in
-            variant_str 0
-      )
-
-  let to_string ?(prefix = "") ?(suffix = "") style id = translate ~prefix ~suffix style (string_of_id id)
-end
+let register name = pragma_set := StringSet.add name !pragma_set

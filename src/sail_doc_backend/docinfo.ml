@@ -642,8 +642,8 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       (* Maintain a stack of booleans, for each file if it was not
          specified via -doc_file, we push true to skip it. If no
          -doc_file flags are passed, include everything. *)
-      | DEF_pragma (("file_start" | "include_start"), path, _) -> (docinfo, skip_file path :: skips)
-      | DEF_pragma (("file_end" | "include_end"), _, _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
+      | DEF_pragma (("file_start" | "include_start"), Pragma_line (path, _)) -> (docinfo, skip_file path :: skips)
+      | DEF_pragma (("file_end" | "include_end"), _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
           let id = id_of_fundef fdef in
@@ -694,7 +694,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
         (fun (DEF_aux (aux, def_annot) as def) ->
           let l = def_loc def in
           match aux with
-          | DEF_pragma ("anchor", arg, _) ->
+          | DEF_pragma ("anchor", Pragma_line (arg, _)) ->
               let links = hyperlinks files def in
               let anchor_info =
                 { source = doc_loc l Type_check.strip_def Reformatter.doc_def def; comment = def_annot.doc_comment }
@@ -726,12 +726,12 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       List.iter
         (fun (DEF_aux (aux, def_annot)) ->
           match aux with
-          | DEF_pragma ("span", arg, _) when Option.is_none !current_span -> begin
+          | DEF_pragma ("span", Pragma_line (arg, _)) when Option.is_none !current_span -> begin
               match String.split_on_char ' ' arg with
               | ["start"; name] -> current_span := Some (name, def_annot.loc)
               | _ -> raise (Reporting.err_general def_annot.loc "Invalid span directive")
             end
-          | DEF_pragma ("span", arg, _) when arg = "end" -> begin
+          | DEF_pragma ("span", Pragma_line (arg, _)) when arg = "end" -> begin
               match !current_span with
               | Some (name, start_l) ->
                   current_span := None;
@@ -746,7 +746,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                   end
               | None -> raise (Reporting.err_general def_annot.loc "No start span for this end span")
             end
-          | DEF_pragma ("span", _, _) ->
+          | DEF_pragma ("span", _) ->
               raise (Reporting.err_general def_annot.loc "Previous span must be ended before this one can begin")
           | _ -> ()
         )

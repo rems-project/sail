@@ -93,7 +93,7 @@ let highlights ~filename ~contents =
     | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield ->
         mark Highlight.Keyword;
         go ()
-    | Pragma _ | Attribute _ | Fixity _ ->
+    | StructuredPragma _ | Pragma _ | Attribute _ | Fixity _ ->
         mark Highlight.Pragma;
         go ()
     | InternalPLet | InternalReturn | InternalAssume ->

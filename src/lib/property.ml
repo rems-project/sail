@@ -52,7 +52,8 @@ open Parser_combinators
 
 let find_properties { defs; _ } =
   let rec find_prop acc = function
-    | DEF_aux (DEF_pragma ((("property" | "counterexample") as prop_type), command, l), _) :: defs -> begin
+    | DEF_aux (DEF_pragma ((("property" | "counterexample") as prop_type), Pragma_line (command, l)), _) :: defs ->
+      begin
         match Util.find_next (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs with
         | _, Some (DEF_aux (DEF_val vs, _), defs) -> find_prop ((prop_type, command, l, vs) :: acc) defs
         | _, _ -> raise (Reporting.err_general l "Property is not attached to any function signature")

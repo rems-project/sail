@@ -4,6 +4,12 @@ import sys
 import subprocess
 import datetime
 import argparse
+import signal
+
+def signal_handler(sig, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 parser = argparse.ArgumentParser("run_tests.py")
 parser.add_argument("--hide-error-output", help="Hide error information.", action='store_true')

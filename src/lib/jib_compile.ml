@@ -1820,8 +1820,9 @@ module Make (C : CONFIG) = struct
     | DEF_overload _ -> ([], ctx)
     (* Only the parser and sail pretty printer care about this. *)
     | DEF_fixity _ -> ([], ctx)
-    | DEF_pragma ("abstract", id_str, _) -> ([CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
-    | DEF_pragma ("c_in_main", source, _) -> ([CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
+    | DEF_pragma ("abstract", Pragma_line (id_str, _)) -> ([CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
+    | DEF_pragma ("c_in_main", Pragma_line (source, _)) ->
+        ([CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
     (* We just ignore any pragmas we don't want to deal with. *)
     | DEF_pragma _ -> ([], ctx)
     (* Termination measures only needed for Coq, and other theorem prover output *)

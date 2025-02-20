@@ -108,6 +108,14 @@ module type CODEGEN_CONFIG = sig
       before executing any instruction semantics. *)
   val no_rts : bool
 
+  (** Do not mangle generated C identifiers, prefer readable names
+      when possible. *)
+  val no_mangle : bool
+
+  val reserved_words : Util.StringSet.t
+
+  val overrides : string Name_generator.Overrides.t
+
   (** If [Some channel], the generated C code will be instrumented to
       track branch coverage information. Information about all the
       possible branches will be written to the provided output

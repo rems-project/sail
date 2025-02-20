@@ -1032,7 +1032,7 @@ and map_def_annot f (DEF_aux (aux, annot)) =
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
     | DEF_register ds -> DEF_register (map_register_annot f ds)
     | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
-    | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
   in
   DEF_aux (aux, annot)
 
@@ -1058,7 +1058,7 @@ let rec map_def_def_annot f (DEF_aux (aux, annot)) =
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
     | DEF_register ds -> DEF_register ds
     | DEF_internal_mutrec fds -> DEF_internal_mutrec fds
-    | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
   in
   DEF_aux (aux, f annot)
 

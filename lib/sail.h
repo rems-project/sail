@@ -147,7 +147,7 @@ bool EQUAL(sail_string)(const_sail_string, const_sail_string);
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2);
 bool string_startswith(const_sail_string s, const_sail_string prefix);
 
-                       
+
 /* ***** Sail integers ***** */
 
 typedef int64_t mach_int;
@@ -352,7 +352,7 @@ void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
-                     
+
 void sail_truncate(lbits *rop, const lbits op, const sail_int len);
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 

@@ -1989,30 +1989,32 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let nc = to_ast_constraint ctx nc in
       ([DEF_aux (DEF_constraint nc, annot)], ctx)
-  | P.DEF_pragma (pragma, arg, ltrim) ->
+  | P.DEF_pragma (pragma, P.Pragma_line (arg, ltrim)) ->
       let l = pragma_arg_loc pragma ltrim l in
       begin
         match pragma with
         | "sail_internal" -> begin
             match Reporting.loc_file l with
             | Some file ->
-                ( [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)],
+                ( [DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)],
                   { ctx with internal_files = StringSet.add file ctx.internal_files }
                 )
-            | None -> ([DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx)
+            | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
           end
         | "target_set" ->
             let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
             begin
               match args with
               | set :: targets ->
-                  ( [DEF_aux (DEF_pragma ("target_set", arg, l), annot)],
+                  ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
                     { ctx with target_sets = StringMap.add set targets ctx.target_sets }
                   )
               | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
             end
-        | _ -> ([DEF_aux (DEF_pragma (pragma, arg, l), annot)], ctx)
+        | _ -> ([DEF_aux (DEF_pragma (pragma, Pragma_line (arg, l)), annot)], ctx)
       end
+  | P.DEF_pragma (pragma, P.Pragma_structured data) ->
+      ([DEF_aux (DEF_pragma (pragma, Pragma_structured data), annot)], ctx)
   | P.DEF_internal_mutrec _ ->
       (* Should never occur because of remove_mutrec *)
       raise (Reporting.err_unreachable l __POS__ "Internal mutual block found when processing scattered defs")
@@ -2044,9 +2046,9 @@ let to_ast ctx (P.Defs files) =
     (List.rev defs, ctx)
   in
   let wrap_file file defs =
-    [mk_def (DEF_pragma ("file_start", file, P.Unknown)) ()]
+    [mk_def (DEF_pragma ("file_start", Pragma_line (file, P.Unknown))) ()]
     @ defs
-    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown)) ()]
+    @ [mk_def (DEF_pragma ("file_end", Pragma_line (file, P.Unknown))) ()]
   in
   let defs, ctx =
     List.fold_left

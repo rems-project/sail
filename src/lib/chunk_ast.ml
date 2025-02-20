@@ -1306,9 +1306,14 @@ let rec chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
       begin
         match def with
         | DEF_fundef fdef -> chunk_fundef comments chunks fdef
-        | DEF_pragma (pragma, arg, _) ->
+        | DEF_pragma (pragma, Pragma_line (arg, _)) ->
             Queue.add (Pragma (pragma, arg)) chunks;
             pragma_span := true
+        | DEF_pragma (pragma, Pragma_structured data) ->
+            let open Parse_ast.Attribute_data in
+            Queue.add
+              (Pragma (pragma, Ast_util.string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown))))
+              chunks
         | DEF_default dts -> chunk_default_typing_spec comments chunks dts
         | DEF_fixity (prec, n, id) ->
             pop_comments comments chunks (id_loc id);

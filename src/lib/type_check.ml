@@ -5246,19 +5246,19 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
         ],
         env
       )
-  | DEF_pragma ("project#", arg, l) ->
+  | DEF_pragma ("project#", Pragma_line (arg, l)) ->
       let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
       let proj_defs = Initial_check.parse_project ?inline:start_p ~contents:arg () in
       let proj = Project.initialize_project_structure ~variables:(ref Util.StringMap.empty) proj_defs in
       typ_print (lazy "set modules");
       ([], Env.set_modules proj env)
-  | DEF_pragma ("start_module#", arg, l) ->
+  | DEF_pragma ("start_module#", Pragma_line (arg, l)) ->
       let mod_id = Env.get_module_id ~at:l env arg in
       typ_print (lazy (Printf.sprintf "module start %d '%s'" (Project.ModId.to_int mod_id) arg));
-      ([DEF_aux (DEF_pragma ("started_module#", arg, l), def_annot)], Env.start_module ~at:l mod_id env)
-  | DEF_pragma ("end_module#", arg, l) ->
-      ([DEF_aux (DEF_pragma ("ended_module#", arg, l), def_annot)], Env.end_module env)
-  | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
+      ([DEF_aux (DEF_pragma ("started_module#", Pragma_line (arg, l)), def_annot)], Env.start_module ~at:l mod_id env)
+  | DEF_pragma ("end_module#", Pragma_line (arg, l)) ->
+      ([DEF_aux (DEF_pragma ("ended_module#", Pragma_line (arg, l)), def_annot)], Env.end_module env)
+  | DEF_pragma (pragma, cmd) -> ([DEF_aux (DEF_pragma (pragma, cmd), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
   | DEF_loop_measures (id, measures) ->

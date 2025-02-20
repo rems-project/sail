@@ -608,6 +608,8 @@ module Make (Config : CONFIG) = struct
         let mangle () s = Util.zencode_string s
 
         let variant s = function 0 -> s | n -> s ^ string_of_int n
+
+        let overrides = Name_generator.Overrides.empty
       end)
       ()
 

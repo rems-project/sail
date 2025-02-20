@@ -316,7 +316,7 @@ let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
     | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
     | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
     | DEF_let letbind -> DEF_let (rewriters.rewrite_let rewriters letbind)
-    | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
+    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
     | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
     | DEF_measure (id, pat, exp) ->
         DEF_measure (id, rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)

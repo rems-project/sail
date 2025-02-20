@@ -940,8 +940,8 @@ let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
   match defs with
   | [] -> []
-  | DEF_aux (DEF_pragma ("include_start", _, _), _) :: ds -> remove_imports ds (depth + 1)
-  | DEF_aux (DEF_pragma ("include_end", _, _), _) :: ds -> remove_imports ds (depth - 1)
+  | DEF_aux (DEF_pragma ("include_start", _), _) :: ds -> remove_imports ds (depth + 1)
+  | DEF_aux (DEF_pragma ("include_end", _), _) :: ds -> remove_imports ds (depth - 1)
   | d :: ds -> if depth > 0 then remove_imports ds depth else d :: remove_imports ds depth
 
 let add_reg_typ typ_map (typ, id, _) =

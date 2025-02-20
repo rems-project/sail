@@ -185,6 +185,8 @@ val _tmod_int_positive = pure {
 
 overload tmod_int = {_tmod_int_positive, _tmod_int}
 
+$c_reserved fdiv_int
+
 function fdiv_int(n: int, m: int) -> int = {
   if n < 0 & m > 0 then {
     tdiv_int(n + 1, m) - 1
@@ -194,6 +196,8 @@ function fdiv_int(n: int, m: int) -> int = {
     tdiv_int(n, m)
   }
 }
+
+$c_reserved fmod_int
 
 function fmod_int(n: int, m: int) -> int = {
   n - (m * fdiv_int(n, m))

@@ -44,6 +44,12 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+val parse_override : (string * Ast.attribute_data) list -> ((string * string * string) * string) option
+
+module Overrides : sig
+  include Map.S with type key = string * string * string
+end
+
 module type CONFIG = sig
   type style
 
@@ -61,6 +67,8 @@ module type CONFIG = sig
 
   (** Create the n-th variant of a name. It should be the case that [variant s 0 = s] *)
   val variant : string -> int -> string
+
+  val overrides : string Overrides.t
 end
 
 module Make (Config : CONFIG) () : sig

@@ -103,15 +103,15 @@ let cond_pragma l defs =
   let push_def def = if !in_then then then_defs := def :: !then_defs else else_defs := def :: !else_defs in
 
   let rec scan = function
-    | DEF_aux (DEF_pragma ("endif", _, _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
-    | DEF_aux (DEF_pragma ("else", _, _), _) :: defs when !depth = 0 ->
+    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
+    | DEF_aux (DEF_pragma ("else", _), _) :: defs when !depth = 0 ->
         in_then := false;
         scan defs
-    | (DEF_aux (DEF_pragma (p, _, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
+    | (DEF_aux (DEF_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
         incr depth;
         push_def def;
         scan defs
-    | (DEF_aux (DEF_pragma ("endif", _, _), _) as def) :: defs ->
+    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs ->
         decr depth;
         push_def def;
         scan defs
@@ -122,41 +122,12 @@ let cond_pragma l defs =
   in
   scan defs
 
-(* We want to provide warnings for e.g. a mispelled pragma rather than
-   just silently ignoring them, so we have a list here of all
-   recognised pragmas. *)
-let all_pragmas =
-  List.fold_left
-    (fun set str -> StringSet.add str set)
-    StringSet.empty
-    [
-      "define";
-      "anchor";
-      "span";
-      "include";
-      "ifdef";
-      "ifndef";
-      "iftarget";
-      "else";
-      "endif";
-      "option";
-      "optimize";
-      "latex";
-      "property";
-      "counterexample";
-      "suppress_warnings";
-      "include_start";
-      "include_end";
-      "sail_internal";
-      "target_set";
-      "non_exec";
-      "c_in_main";
-    ]
-
 let wrap_include l file = function
   | [] -> []
   | defs ->
-      [DEF_aux (DEF_pragma ("include_start", file, 1), l)] @ defs @ [DEF_aux (DEF_pragma ("include_end", file, 1), l)]
+      [DEF_aux (DEF_pragma ("include_start", Pragma_line (file, 1)), l)]
+      @ defs
+      @ [DEF_aux (DEF_pragma ("include_end", Pragma_line (file, 1)), l)]
 
 type argv_offsets = Argv_actual | Argv_unknown | Argv_inline of int ref * Lexing.position * int list
 
@@ -198,10 +169,10 @@ let preprocess dir target opts =
   let module P = Parse_ast in
   let rec aux includes acc = function
     | [] -> List.rev acc
-    | DEF_aux (DEF_pragma ("define", symbol, _), _) :: defs ->
+    | DEF_aux (DEF_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
         symbols := StringSet.add symbol !symbols;
         aux includes acc defs
-    | DEF_aux (DEF_pragma ("include_error", message, _), l) :: defs -> begin
+    | DEF_aux (DEF_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> begin
         match List.rev includes with
         | [] -> raise (Reporting.err_general (pragma_loc l) message)
         | (include_root, l) :: ls ->
@@ -215,7 +186,7 @@ let preprocess dir target opts =
             format_message message (buffer_formatter b);
             raise (Reporting.err_general l (Buffer.contents b))
       end
-    | (DEF_aux (DEF_pragma ("option", command, ltrim), l) as opt_pragma) :: defs ->
+    | (DEF_aux (DEF_pragma ("option", Pragma_line (command, ltrim)), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
         let first_line err_msg =
           match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
@@ -236,22 +207,22 @@ let preprocess dir target opts =
         end;
         reset ();
         aux includes (opt_pragma :: acc) defs
-    | DEF_aux (DEF_pragma ("ifndef", symbol, _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("ifndef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if not (StringSet.mem symbol !symbols) then aux includes acc (then_defs @ defs)
         else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("ifdef", symbol, _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("ifdef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if StringSet.mem symbol !symbols then aux includes acc (then_defs @ defs)
         else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("iftarget", t, _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (t, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         begin
           match target with
           | Some t' when t = t' -> aux includes acc (then_defs @ defs)
           | _ -> aux includes acc (else_defs @ defs)
         end
-    | DEF_aux (DEF_pragma ("include", file, _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
           Reporting.warn "" (pragma_loc l) "Skipping bad $include. No file argument.";
@@ -288,7 +259,7 @@ let preprocess dir target opts =
           Reporting.warn "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
           aux includes acc defs
         )
-    | DEF_aux (DEF_pragma ("suppress_warnings", _, _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
         begin
           match Reporting.simp_loc l with
           | None -> () (* This shouldn't happen, but if it does just continue *)
@@ -298,10 +269,10 @@ let preprocess dir target opts =
     (* Filter file_start and file_end out of the AST so when we
        round-trip files through the compiler we don't end up with
        incorrect start/end annotations *)
-    | (DEF_aux (DEF_pragma ("file_start", _, _), _) | DEF_aux (DEF_pragma ("file_end", _, _), _)) :: defs ->
+    | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs ->
         aux includes acc defs
-    | (DEF_aux (DEF_pragma (p, _, _), l) as pragma_def) :: defs ->
-        if not (StringSet.mem p all_pragmas || String.contains p '#') then
+    | (DEF_aux (DEF_pragma (p, _), l) as pragma_def) :: defs ->
+        if not (StringSet.mem p (Pragma.all ()) || String.contains p '#') then
           Reporting.warn "" (pragma_loc l) ("Unrecognised directive: " ^ p);
         aux includes (pragma_def :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->

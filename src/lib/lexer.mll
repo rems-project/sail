@@ -204,6 +204,8 @@ rule token comments = parse
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
     { Attribute i }
+  | "$" (ident+ as i) wsc* "{"
+    { StructuredPragma i }
   | "$" (ident+ as i)
     { let startpos = Lexing.lexeme_start_p lexbuf in
       let arg = pragma comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in
