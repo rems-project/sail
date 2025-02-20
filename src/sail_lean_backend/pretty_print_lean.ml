@@ -691,7 +691,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           )
     | E_if (i, t, e) ->
         let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
-
         wrap_with_do (statements_monadic && not as_monadic)
           (nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
           ^^ hardline
