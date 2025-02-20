@@ -484,7 +484,7 @@ let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
 
 let wrap_with_do (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow space [string "← do"; d])) else d
+  if needs_return then parens (nest 2 (flow hardline [string "← do"; d])) else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
@@ -503,6 +503,8 @@ let match_or_match_bv brs =
 
 let remove_er ctx = { ctx with early_ret = false }
 
+let rec list_any (l : 'a list) (f : 'a -> bool) = match l with t :: q -> f t || list_any q f | _ -> false
+
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) ->
@@ -517,12 +519,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   else (
     let env = env_of_tannot annot in
     let d_of_arg ctx arg =
-      let wrap =
+      let wrap, arg_monadic =
         match arg with
-        | E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux (E_if _, _) | E_aux (E_match _, _) -> parens
-        | _ -> fun x -> x
+        | E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux (E_if _, _) | E_aux (E_match _, _) ->
+            if effectful (effect_of arg) then ((fun x -> wrap_with_do true x), true) else (parens, false)
+        | _ -> ((fun x -> x), false)
       in
-      wrap (doc_exp false ctx arg)
+      wrap (doc_exp arg_monadic ctx arg)
     in
     let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
       let field_monadic = effectful (effect_of e) in
@@ -677,11 +680,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         wrap_with_pure as_monadic
           (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
     | E_match (discr, brs) ->
-        let as_monadic' = effectful (effect_of full_exp) || as_monadic in
+        let as_monadic' =
+          list_any brs (fun x -> effectful (effect_of_annot (match x with Pat_aux (_, (_, annot)) -> annot)))
+          || as_monadic
+        in
         let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
-        wrap_with_do
-          (effectful (effect_of full_exp) && not as_monadic)
-          (string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases)
+        string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
     | E_assign ((LE_aux (le_act, tannot) as le), e) ->
         wrap_with_left_arrow (not as_monadic)
           ( match le_act with
@@ -691,13 +695,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           )
     | E_if (i, t, e) ->
         let statements_monadic = as_monadic || effectful (effect_of t) || effectful (effect_of e) in
-        wrap_with_do (statements_monadic && not as_monadic)
-          (nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
-          ^^ hardline
-          ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
-          ^^ hardline
-          ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
-          )
+        nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
+        ^^ hardline
+        ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
+        ^^ hardline
+        ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
     | E_ref id -> string "Reg " ^^ doc_id_ctor id
     | E_exit _ -> string "throw Error.Exit"
     | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
