@@ -12,7 +12,7 @@ open Pretty_print_common
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
-type global_context = { effect_info : Effects.side_effect_info }
+type global_context = { effect_info : Effects.side_effect_info; fun_args : string list Bindings.t }
 
 let the_main_function_has_been_seen = ref false
 
@@ -510,6 +510,15 @@ let match_or_match_bv brs =
   if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
   else "match "
 
+let rec doc_implicit_args ?(docs = []) ns ims d_args =
+  match (ns, ims, d_args) with
+  | [], [], [] -> docs
+  | n :: ns, im :: ims, d_arg :: d_args ->
+      (* It would be nice to be able to know if the argument was in the source code. *)
+      let docs = if im then parens (string n ^^ space ^^ coloneq ^^ space ^^ d_arg) :: docs else docs in
+      doc_implicit_args ~docs ns ims d_args
+  | _, _, _ -> []
+
 let binop_of_id id =
   match id with
   | Some "_lean_add" -> Some "+"
@@ -567,6 +576,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
            let d_args = List.map (d_of_arg ctx) args in
            nest 2 (parens (flow (break 1) (d_id :: d_args)))
           )
+    | E_app (Id_aux (Id "__id", _), [e]) -> doc_exp as_monadic ctx e
     | E_app (Id_aux (Id "foreach#", _), args) -> begin
         let doc_loop_var (E_aux (e, (l, _)) as exp) =
           match e with
@@ -651,9 +661,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         let ctx = match f with Id_aux (Id "early_return", _) -> remove_er ctx | _ -> ctx in
         let _, f_typ = Env.get_val_spec f env in
         let implicits = get_fn_implicits f_typ in
+        let arg_names = Bindings.find_opt f ctx.global.fun_args in
+        let arg_names = Option.value ~default:[] arg_names in
         let extern_id = if Env.is_extern f env "lean" then Some (Env.get_extern f env "lean") else None in
         let d_id = Option.fold ~some:string ~none:(doc_exp false ctx (E_aux (E_id f, (l, annot)))) extern_id in
         let d_args = List.map (d_of_arg ctx) args in
+        let d_imargs = doc_implicit_args arg_names implicits d_args in
         let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
         let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
         match binop_of_id extern_id with
@@ -665,7 +678,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | None ->
             nest 2
               (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
-                 (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) (d_id :: d_args))))
+                 (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) ((d_id :: d_imargs) @ d_args))))
               )
       )
     | E_vector vals ->
@@ -1061,11 +1074,33 @@ let main_function_stub has_registers =
        ]
     )
 
+let populate_fun_args defs =
+  let add_args args (DEF_aux (d, _)) =
+    match d with
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (P_aux (p, _), _), _)), _)]), _))
+      -> (
+        match p with
+        | P_tuple ps ->
+            let arg =
+              List.map
+                (fun (P_aux (p, _)) ->
+                  match p with P_id id | P_typ (_, P_aux (P_id id, _)) -> string_of_id id | _ -> ""
+                )
+                ps
+            in
+            Bindings.add id arg args
+        | P_id arg -> Bindings.add id [string_of_id arg] args
+        | P_typ (_, P_aux (P_id arg, _)) -> Bindings.add id [string_of_id arg] args
+        | _ -> args
+      )
+    | _ -> args
+  in
+  List.fold_left (fun args d -> add_args args d) Bindings.empty defs
+
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
-  (* TODO: remove the following line once we can handle the includes *)
-  (* let defs = remove_imports defs 0 in *)
   let regs = State.find_registers defs in
-  let global = { effect_info } in
+  let fun_args = populate_fun_args defs in
+  let global = { effect_info; fun_args } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs = if has_registers then doc_reg_info env global regs else empty in

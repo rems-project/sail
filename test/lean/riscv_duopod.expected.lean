@@ -144,7 +144,7 @@ def zeros (n : Nat) : (BitVec n) :=
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
   let b__0 := r
   if (BEq.beq b__0 (0b00000 : (BitVec 5)))
-  then (pure (EXTZ (0x0 : (BitVec 4))))
+  then (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
   else (pure (vectorAccess (← readReg Xs) (BitVec.toNat r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
@@ -154,7 +154,7 @@ def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
 
 /-- Type quantifiers: width : Nat, width ≥ 0 -/
 def read_mem (addr : (BitVec 64)) (width : Nat) : SailM (BitVec (8 * width)) := do
-  (read_ram 64 width (EXTZ (0x0 : (BitVec 4))) addr)
+  (read_ram 64 width (EXTZ (m := 64) (0x0 : (BitVec 4))) addr)
 
 def undefined_iop (_ : Unit) : SailM iop := do
   (internal_pick [RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU, RISCV_XORI, RISCV_ORI, RISCV_ANDI])
@@ -179,7 +179,7 @@ def num_of_iop (arg_ : iop) : Int :=
   | RISCV_ANDI => 5
 
 def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : SailM Unit := do
-  let addr : xlenbits ← do (pure ((← (rX rs1)) + (EXTS imm)))
+  let addr : xlenbits ← do (pure ((← (rX rs1)) + (EXTS (m := 64) imm)))
   let result : xlenbits ← do (read_mem addr 8)
   (wX rd result)
 
@@ -188,7 +188,7 @@ def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (
   match merge_var with
   | (imm, rs1, rd, RISCV_ADDI) =>
     let rs1_val ← do (rX rs1)
-    let imm_ext : xlenbits := (EXTS imm)
+    let imm_ext : xlenbits := (EXTS (m := 64) imm)
     let result := (rs1_val + imm_ext)
     (wX rd result)
   | _ => throw Error.Exit
