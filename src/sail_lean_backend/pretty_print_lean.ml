@@ -424,6 +424,14 @@ let string_of_def (DEF_aux (d, _)) =
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | _ -> id), l) | _ -> id'
 
+let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
+  match p with
+  | P_var (P_aux (P_id id, _), TP_aux (TP_var kid, tp_l)) -> add_single_kid_id_rename ctx id kid
+  | P_typ (_, p') | P_as (p', _) | P_var (p', _) -> update_ctx_pat ctx p'
+  | P_app (_, pats) | P_vector pats | P_vector_concat pats | P_tuple pats | P_list pats | P_string_append pats ->
+      List.fold_left update_ctx_pat ctx pats
+  | _ -> ctx
+
 let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   match p with
   | P_wild -> underscore
@@ -660,6 +668,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
           | _ -> doc_pat lpat
         in
+        let ctx = update_ctx_pat ctx lpat in
         let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
         let pp_let_line =
           if effectful (effect_of lexp) || has_early_return lexp then
