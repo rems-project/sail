@@ -606,9 +606,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
               let exp_pp, match_pp = doc_loop_var varstuple in
               (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))
         in
-        let lambda lambda_pp d =
-          (parens (prefix 2 1 (group lambda_pp) d))
-        in
+        let lambda lambda_pp d = parens (prefix 2 1 (group lambda_pp) d) in
         let cond, varstuple, body, measure =
           match args with
           | [cond; varstuple; body] -> (cond, varstuple, body, None)
