@@ -23,7 +23,6 @@ sail = get_sail()
 # Not all self-tests are supported.
 skip_selftests = {
     'list_rec_functions2',
-    'eq_struct',
     'either_rvbug',
     'bv_literal',
     'issue362',
@@ -32,7 +31,6 @@ skip_selftests = {
     'large_bitvector',
     'exn_hello_world',
     'poly_union_rev',
-    'match_bind',
     'rev_bits_in_byte',
     'foreach_none',
     'all_even_vector_length',
@@ -43,11 +41,8 @@ skip_selftests = {
     'primop',
     'poly_pair',
     'assign_rename_bug',
-    'warl',
     'config',
-    'spc_mappings_small',
     'cheri128_hsb',
-    'instruction',
     'gvector',
     'small_slice',
     'union_variant_names',
@@ -64,7 +59,6 @@ skip_selftests = {
     'return_leak',
     'custom_flow',
     'pointer_assign',
-    'two_mapping',
     'ctz',
     'spc_mappings',
     'concurrency_interface',
@@ -76,7 +70,6 @@ skip_selftests = {
     'string_literal_type',
     'hex_str_negative',
     'xlen32',
-    'issue232_2',
     'cheri_capreg',
     'loop_exception',
     'issue429',
@@ -96,12 +89,9 @@ skip_selftests = {
     'enum_vector',
     'issue136',
     'reg_32_64',
-    'issue232',
-    'issue243_fixed',
     'int_struct_constrained',
     'get_slice_int',
     'fail_exception',
-    'zeros_mapping',
     'natural_sort_reg',
     'option_option',
     'anf_as_pattern',
@@ -115,7 +105,8 @@ skip_selftests = {
     'vector_init',
     'partial_mapping',
     'lib_dec_bits',
-    'list_list_eq'
+    'list_list_eq',
+    'constructor247'
 }
 
 print("Sail is {}".format(sail))
@@ -157,7 +148,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 if runnable and basename.startswith('fail'):
                     step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename, expected_status=1)
                 elif runnable:
-                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
+                    step(f'timeout 90s lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
                     step('lake build', cwd=f'{basename}/out', name=filename)
