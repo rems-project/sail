@@ -25,10 +25,10 @@ inductive Register : Type where
 open Register
 
 abbrev RegisterType : Register → Type
-  | .r => Int
+  | .r => Nat
 
 open RegisterRef
-instance : Inhabited (RegisterRef RegisterType Int) where
+instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg r
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
 
@@ -104,23 +104,23 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loop (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
+def foreach_loop (m : Nat) (n : Nat) : Nat :=
+  let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
   foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loopmon (m : Nat) (n : Nat) : SailM Int := do
+def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
   foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) + 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loopboth (m : Nat) (n : Nat) : SailM Int := do
-  let res : Int := 0
-  let res : Int ← do
+def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
+  let res : Nat := 0
+  let res : Nat ← do
     let loop_i_lower := n
     let loop_i_upper := m
     foreach_M loop_i_lower loop_i_upper 1 res
@@ -131,9 +131,9 @@ def foreach_loopboth (m : Nat) (n : Nat) : SailM Int := do
   (pure (res + 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loopmultiplevar (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
-  let mult : Int := 1
+def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
+  let res : Nat := 0
+  let mult : Nat := 1
   let (mult, res) :=
     let loop_i_lower := m
     let loop_i_upper := n
@@ -178,37 +178,37 @@ def foreach_earlyreturnpure (n : Nat) : Bool := Id.run do
   (pure (GT.gt res n))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loop (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
-  while_ (λ res => (LT.lt res n)) res (λ res => ((HAdd.hAdd res 1) : Int))
+def while_loop (m : Nat) (n : Nat) : Nat :=
+  let res : Nat := 0
+  while_ (λ res => (LT.lt res n)) res (λ res => ((HAdd.hAdd res 1) : Nat))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loopmon (m : Nat) (n : Nat) : SailM Int := do
+def while_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   while_M (λ _ => do (pure (LT.lt (← readReg r) n))) ()
     (λ _ => do writeReg r (HAdd.hAdd (← readReg r) 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loopboth (m : Nat) (n : Nat) : SailM Int := do
-  let res : Int := 0
-  let res : Int ← do
+def while_loopboth (m : Nat) (n : Nat) : SailM Nat := do
+  let res : Nat := 0
+  let res : Nat ← do
     while_M (λ res => do (pure (LT.lt res n))) res
       (λ res => do
-        let res : Int := (HAdd.hAdd res 1)
+        let res : Nat := (HAdd.hAdd res 1)
         writeReg r (HAdd.hAdd (← readReg r) res)
         (pure res))
   (pure (HAdd.hAdd res 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loopmultiplevar (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
-  let mult : Int := 1
+def while_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
+  let res : Nat := 0
+  let mult : Nat := 1
   let (mult, res) :=
     while_ (λ (mult, res) => (LT.lt res n)) (mult, res)
       (λ (mult, res) =>
-        (let res : Int := (HAdd.hAdd res 1)
-        let mult : Int := (HMul.hMul res mult)
-        (mult, res) : (Int × Int)))
+        (let res : Nat := (HAdd.hAdd res 1)
+        let mult : Nat := (HMul.hMul res mult)
+        (mult, res) : (Nat × Nat)))
   mult
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -234,7 +234,7 @@ def while_earlyreturnpure (n : Nat) : Bool := Id.run do
   (pure (GT.gt res n))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
-  writeReg r (← (undefined_int ()))
+  writeReg r (← (undefined_nat ()))
 
 end Functions
 
