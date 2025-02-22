@@ -265,10 +265,10 @@ def extern_n_leading_spaces (_ : Unit) : Nat :=
   (String.leadingSpaces "   Belated Hello world!")
 
 def extern_hex_str (_ : Unit) : String :=
-  (Nat.toHex 123)
+  (Int.toHex 123)
 
 def extern_hex_str_upper (_ : Unit) : String :=
-  (Nat.toHexUpper 123)
+  (Int.toHexUpper 123)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
