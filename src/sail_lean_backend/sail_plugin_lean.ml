@@ -235,8 +235,8 @@ let close_context ctx =
 let create_lake_project (ctx : lean_context) executable =
   (* Change the base directory if the option '--lean-output-dir' is set *)
   output_string ctx.lakefile
-    ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel ^ "\"]\n\n[[lean_lib]]\nname = \""
-   ^ ctx.out_name_camel ^ "\""
+    ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel
+   ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
   if executable then (
     output_string ctx.lakefile "\n\n[[lean_exe]]\n";
