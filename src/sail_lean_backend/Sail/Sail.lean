@@ -422,7 +422,9 @@ def toHex (n : Nat) : String :=
   have nbv : BitVec (Nat.log2 n + 1) := BitVec.ofNat _ n
   "0x" ++ nbv.toHex
 
-def toHexUpper (n : Nat) : String := (toHex n).toUpper
+def toHexUpper (n : Nat) : String :=
+  have nbv : BitVec (Nat.log2 n + 1) := BitVec.ofNat _ n
+  "0x" ++ nbv.toHex.toUpper
 
 end Nat
 
