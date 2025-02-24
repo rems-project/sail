@@ -74,7 +74,6 @@ skip_selftests = {
     'list_torture',
     'option_nest',
     'string_literal_type',
-    'hex_str_negative',
     'xlen32',
     'issue232_2',
     'cheri_capreg',
