@@ -9,6 +9,7 @@ set_option match.ignoreUnusedAlts true
 open Sail
 
 
+
 structure rectangle where
   width : Int
   height : Int
@@ -25,7 +26,7 @@ inductive shape where
   | Circle (_ : circle)
   deriving BEq
 
-open shape
+
 
 /-- Type quantifiers: k_a : Type -/
 
@@ -34,9 +35,27 @@ inductive my_option (k_a : Type) where
   | MyNone (_ : Unit)
   deriving BEq
 
-open my_option
+
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open shape
+open my_option
 
 namespace Functions
 
@@ -61,6 +80,5 @@ def initialize_registers (_ : Unit) : Unit :=
   ()
 
 end Functions
-
 open Functions
 

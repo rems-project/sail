@@ -174,6 +174,7 @@ structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) 
 
 inductive RegisterRef (RegisterType : Register → Type) : Type → Type where
   | Reg (r : Register) : RegisterRef _ (RegisterType r)
+export RegisterRef (Reg)
 
 abbrev PreSailM (RegisterType : Register → Type) (c : ChoiceSource) (ue: Type) :=
   EStateM (Error ue) (SequentialState RegisterType c)

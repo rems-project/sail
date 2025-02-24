@@ -8,6 +8,7 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -17,12 +18,12 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 inductive E where | A | B | C
   deriving Inhabited, BEq
 
-open E
+
 
 inductive Register : Type where
   | r_C
@@ -36,10 +37,28 @@ abbrev RegisterType : Register → Type
   | .r_B => E
   | .r_A => E
 
-open RegisterRef
 instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open Register
+open E
 
 namespace Functions
 
@@ -166,6 +185,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_C (← (undefined_E ()))
 
 end Functions
-
 open Functions
 

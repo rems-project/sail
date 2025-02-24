@@ -136,11 +136,15 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     step('lake build', cwd=f'{basename}/out', name=filename)
 
                 if not runnable:
-                    status = step_with_status(f'diff {basename}/out/Out.lean {basename}.expected.lean', name=filename)
+                    output = f"{basename}/output"
+                    step(f'cat {basename}/out/Out/Defs.lean > {output}')
+                    step(f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}')
+                    step(f'cat {basename}/out/Out.lean >> {output}')
+                    status = step_with_status(f'diff {output} {basename}.expected.lean', name=filename)
                     if status != 0:
                         if update_expected:
                             print(f'Overriding file {basename}.expected.lean')
-                            step(f'cp {basename}/out/Out.lean {basename}.expected.lean')
+                            step(f'cp {output} {basename}.expected.lean')
                         else:
                             sys.exit(1)
                 else:

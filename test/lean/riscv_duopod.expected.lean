@@ -8,6 +8,7 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -17,7 +18,7 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 abbrev xlen : Int := 64
 
@@ -30,7 +31,7 @@ abbrev regbits := (BitVec 5)
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
   deriving Inhabited, BEq
 
-open iop
+
 
 
 inductive ast where
@@ -38,7 +39,7 @@ inductive ast where
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
   deriving BEq
 
-open ast
+
 
 inductive Register : Type where
   | Xs
@@ -52,12 +53,31 @@ abbrev RegisterType : Register → Type
   | .nextPC => (BitVec 64)
   | .PC => (BitVec 64)
 
-open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg PC
 instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 64) 32)) where
   default := .Reg Xs
 abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open iop
+open ast
+open Register
 
 namespace Functions
 
@@ -222,6 +242,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg Xs (← (undefined_vector 32 (← (undefined_bitvector 64))))
 
 end Functions
-
 open Functions
 
