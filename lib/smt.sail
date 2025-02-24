@@ -55,6 +55,7 @@ val ediv_int = pure {
   interpreter: "quotient",
   lem: "integerDiv",
   coq: "ZEuclid.div",
+  lean: "Int.ediv",
   _: "ediv_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
@@ -63,6 +64,7 @@ val emod_int = pure {
   interpreter: "modulus",
   lem: "integerMod",
   coq: "ZEuclid.modulo",
+  lean: "Int.emod",
   _: "emod_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 

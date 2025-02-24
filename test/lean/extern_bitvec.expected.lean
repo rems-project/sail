@@ -22,7 +22,7 @@ abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
 
 namespace Functions
 
-/-- Type quantifiers: k_ex699# : Bool, k_ex698# : Bool -/
+/-- Type quantifiers: k_ex705# : Bool, k_ex704# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -99,6 +99,12 @@ def extern_add (_ : Unit) : (BitVec 16) :=
 
 def extern_replicate_bits (_ : Unit) : (BitVec 64) :=
   (BitVec.replicateBits (0x1234 : (BitVec 16)) 4)
+
+def extern_slice (x : (BitVec 16)) : (BitVec 4) :=
+  (BitVec.slice x 2 4)
+
+def extern_vector_length (x : (Vector Int 3)) : Int :=
+  (Vector.length x)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

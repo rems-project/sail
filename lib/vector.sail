@@ -88,6 +88,7 @@ val vector_length = pure {
   interpreter: "length",
   lem: "length_list",
   coq: "vec_length",
+  lean: "Vector.length",
   _: "length"
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
@@ -369,7 +370,9 @@ function sail_ones(n) = not_vec(sail_zeros(n))
 // Some ARM specific builtins
 
 $ifdef _DEFAULT_DEC
-val slice = pure "slice" : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
+val slice = pure {
+  lean: "BitVec.slice",
+  _: "slice"} : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
   (bits('m), int('o), int('n)) -> bits('n)
 $else
 val slice = pure "slice_inc" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.

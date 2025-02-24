@@ -47,6 +47,9 @@ def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) 
   let y' := mask ||| ((y.zeroExtend w) <<< start)
   x &&& y'
 
+def slice {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
+  x.extractLsb' start len
+
 def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
   updateSubrange' x lo _ y
 
@@ -457,9 +460,17 @@ def shiftr (a : Int) (n : Int) : Int :=
 
 end Int
 
+def get_slice_int (len n lo : Nat) : BitVec len :=
+  BitVec.extractLsb' lo len (BitVec.ofInt (lo + len + 1) n)
+
+def set_slice_int (len n lo : Nat) (x : BitVec len) : Int :=
+  BitVec.toInt (BitVec.updateSubrange' (BitVec.ofInt len n) lo len x)
+
 def String.leadingSpaces (s : String) : Nat :=
   s.length - (s.dropWhile (· = ' ')).length
 
+def Vector.length (_v : Vector α n) : Nat :=
+  n
 
 instance : HShiftLeft (BitVec w) Int (BitVec w) where
   hShiftLeft b i :=
@@ -471,4 +482,3 @@ instance : HShiftRight (BitVec w) Int (BitVec w) where
   hShiftRight b i := b <<< (-i)
 
 end Sail
-
