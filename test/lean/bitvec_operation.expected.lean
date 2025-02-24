@@ -152,7 +152,7 @@ def bitvector_literal (x : (BitVec 1)) (y : (BitVec 1)) : (BitVec 2) :=
 
 /-- Type quantifiers: y : Int, x : Int -/
 def vector_literal (x : Int) (y : Int) : (Vector Int 2) :=
-  #v[x, y]
+  #v[y, x]
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

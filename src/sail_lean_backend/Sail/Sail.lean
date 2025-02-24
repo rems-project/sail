@@ -23,8 +23,8 @@ def extractLsb {w : Nat} (x : BitVec w) (hi lo : Nat) : BitVec (hi - lo + 1) :=
 
 def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) : BitVec w :=
   let mask := ~~~(((BitVec.allOnes len).zeroExtend w) <<< start)
-  let y' := mask ||| ((y.zeroExtend w) <<< start)
-  x &&& y'
+  let y' := ((y.zeroExtend w) <<< start)
+  (mask &&& x) ||| y'
 
 def slice {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
   x.extractLsb' start len
@@ -393,7 +393,7 @@ def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : 
 def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
   let mut vars := vars
   let step := 1 + (step - 1)
-  let range := Std.Range.mk from' to step (by omega)
+  let range := Std.Range.mk from' (to + 1) step (by omega)
   for i in range do
     vars ← body i vars
   pure vars
