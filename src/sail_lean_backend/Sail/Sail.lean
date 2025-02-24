@@ -442,12 +442,16 @@ def shiftr (a : Int) (n : Int) : Int :=
   | Int.ofNat n => Sail.Nat.iterate (fun x => x / 2) n a
   | Int.negSucc n => Sail.Nat.iterate (fun x => x * 2) (n+1) a
 
+
 def toHex (i : Int) : String :=
   match i with
   | Int.ofNat n => Nat.toHex n
   | Int.negSucc n => "-" ++ Nat.toHex (n+1)
 
-def toHexUpper (i : Int) : String := (toHex i).toUpper
+def toHexUpper (i : Int) : String :=
+  match i with
+  | Int.ofNat n => Nat.toHexUpper n
+  | Int.negSucc n => "-" ++ Nat.toHexUpper (n+1)
 
 end Int
 
