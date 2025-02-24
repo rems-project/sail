@@ -16,6 +16,8 @@ type global_context = { effect_info : Effects.side_effect_info }
 
 let the_main_function_has_been_seen = ref false
 
+let opt_noncomputable_functions : IdSet.t ref = ref IdSet.empty
+
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
 type context = {
@@ -837,7 +839,12 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     else if early_return then decl_val @ [string "Id.run"; string "do"]
     else decl_val
   in
-  (typ_quant_comment, separate space ([string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val), ctx, fixup_binders)
+  let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
+  ( typ_quant_comment,
+    separate space (remove_empties [computability; string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val),
+    ctx,
+    fixup_binders
+  )
 
 let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in

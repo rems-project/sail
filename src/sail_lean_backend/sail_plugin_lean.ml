@@ -66,7 +66,7 @@
 (****************************************************************************)
 
 open Libsail
-
+open Ast_util
 open Interactive.State
 
 let opt_lean_output_dir : string option ref = ref None
@@ -100,6 +100,11 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] ~arg:"file" "import_file",
       Arg.String (fun file -> opt_lean_import_files := file :: !opt_lean_import_files),
       "import this file in the generated model"
+    );
+    ( Flag.create ~prefix:["lean"] ~arg:"func-name" "noncomputable_function",
+      Arg.String
+        Pretty_print_lean.(fun fn -> opt_noncomputable_functions := IdSet.add (mk_id fn) !opt_noncomputable_functions),
+      "do not generate a definition for the type"
     );
   ]
 
