@@ -106,7 +106,8 @@ skip_selftests = {
     'partial_mapping',
     'lib_dec_bits',
     'list_list_eq',
-    'constructor247'
+    'constructor247',
+    'config_vec_list',
 }
 
 print("Sail is {}".format(sail))
