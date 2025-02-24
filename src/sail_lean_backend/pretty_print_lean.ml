@@ -521,19 +521,22 @@ let rec doc_implicit_args ?(docs = []) ns ims d_args =
       doc_implicit_args ~docs ns ims d_args
   | _, _, _ -> []
 
-let binop_of_id id =
+let op_of_id id =
   match id with
-  | Some "_lean_add" -> Some "+"
-  | Some "_lean_sub" -> Some "-"
-  | Some "_lean_mul" -> Some "*"
-  | Some "_lean_div" -> Some "/"
-  | Some "_lean_app" -> Some "++"
-  | Some "_lean_bvand" -> Some "&&&"
-  | Some "_lean_bvor" -> Some "|||"
-  | Some "_lean_bvxor" -> Some "^^^"
-  | Some "_lean_shiftl" -> Some "<<<"
-  | Some "_lean_shiftr" -> Some ">>>"
-  | _ -> None
+  | Some "_lean_add" -> `Binop "+"
+  | Some "_lean_sub" -> `Binop "-"
+  | Some "_lean_mul" -> `Binop "*"
+  | Some "_lean_div" -> `Binop "/"
+  | Some "_lean_app" -> `Binop "++"
+  | Some "_lean_bvand" -> `Binop "&&&"
+  | Some "_lean_bvor" -> `Binop "|||"
+  | Some "_lean_bvxor" -> `Binop "^^^"
+  | Some "_lean_shiftl" -> `Binop "<<<"
+  | Some "_lean_shiftr" -> `Binop ">>>"
+  | Some "_lean_pow2" -> `Unnop "2 ^"
+  | _ -> `NotOp
+
+let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
 
 let remove_er ctx = { ctx with early_ret = false }
 
@@ -671,13 +674,17 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         let d_imargs = doc_implicit_args arg_names implicits d_args in
         let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
         let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
-        match binop_of_id extern_id with
-        | Some op ->
+        match op_of_id extern_id with
+        | `Binop op ->
             let e1 = List.nth d_args 0 in
             let e2 = List.nth d_args 1 in
             let res = e1 ^^ space ^^ string op ^^ space ^^ e2 in
             wrap_with_pure as_monadic (parens res) |> nest 2
-        | None ->
+        | `Unnop op ->
+            let e = List.nth d_args 0 in
+            let res = string op ^^ space ^^ e in
+            wrap_with_pure as_monadic (parens res) |> nest 2
+        | `NotOp ->
             nest 2
               (wrap_with_left_arrow ((not as_monadic) && fn_monadic)
                  (wrap_with_pure (as_monadic && not fn_monadic) (parens (flow (break 1) ((d_id :: d_imargs) @ d_args))))

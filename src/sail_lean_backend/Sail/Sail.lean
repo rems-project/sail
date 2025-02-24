@@ -500,6 +500,9 @@ instance : CoeT Int x Nat where
 instance : CoeT (BitVec n) x (BitVec m) where
   coe := x.setWidth m
 
+instance: CoeT (Vector (BitVec n₁) m) x (Vector (BitVec n₂) m) where
+  coe := x.map fun (bv : BitVec n₁) => bv.setWidth n₂
+
 instance : HAdd (BitVec n) (BitVec m) (BitVec n) where
   hAdd x y := x + y
 
@@ -515,5 +518,8 @@ instance : HOr (BitVec n) (BitVec m) (BitVec n) where
 instance : HXor (BitVec n) (BitVec m) (BitVec n) where
   hXor x y := x ^^^ y
 
-instance : HPow Nat Int Int where
+instance : HPow Nat Int Nat where
+  hPow x n := x ^ n.toNat
+
+instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat
