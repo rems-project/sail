@@ -11,6 +11,7 @@ default Order dec
 
 $include <prelude.sail>
 $include <float/add.sail>
+$include <float/rounding.sail>
 $include "data.sail"
 $include "tuple_equality.sail"
 
@@ -58,35 +59,35 @@ function test_float_add () -> unit = {
   assert(float_add (fp16_neg_normal_add_4_op_0, fp16_neg_normal_add_4_op_1) == (fp16_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp16_neg_normal_add_5_op_0, fp16_neg_normal_add_5_op_1) == (fp16_neg_normal_add_5_sum, fp_eflag_none));
 
-  fp_rounding_global = fp_rounding_rne;
+  float_set_rounding (fp_rounding_rne);
 
   assert(float_add (fp16_pos_normal_add_6_op_0, fp16_pos_normal_add_6_op_1) == (fp16_pos_normal_add_6_sum_rne, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_7_op_0, fp16_neg_normal_add_7_op_1) == (fp16_neg_normal_add_7_sum_rne, fp_eflag_inexact));
   assert(float_add (fp16_pos_normal_add_8_op_0, fp16_pos_normal_add_8_op_1) == (fp16_pos_normal_add_8_sum_rne, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_9_op_0, fp16_neg_normal_add_9_op_1) == (fp16_neg_normal_add_9_sum_rne, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rna;
+  float_set_rounding (fp_rounding_rna);
 
   assert(float_add (fp16_pos_normal_add_6_op_0, fp16_pos_normal_add_6_op_1) == (fp16_pos_normal_add_6_sum_rna, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_7_op_0, fp16_neg_normal_add_7_op_1) == (fp16_neg_normal_add_7_sum_rna, fp_eflag_inexact));
   assert(float_add (fp16_pos_normal_add_8_op_0, fp16_pos_normal_add_8_op_1) == (fp16_pos_normal_add_8_sum_rna, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_9_op_0, fp16_neg_normal_add_9_op_1) == (fp16_neg_normal_add_9_sum_rna, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rdn;
+  float_set_rounding (fp_rounding_rdn);
 
   assert(float_add (fp16_pos_normal_add_6_op_0, fp16_pos_normal_add_6_op_1) == (fp16_pos_normal_add_6_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_7_op_0, fp16_neg_normal_add_7_op_1) == (fp16_neg_normal_add_7_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp16_pos_normal_add_8_op_0, fp16_pos_normal_add_8_op_1) == (fp16_pos_normal_add_8_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_9_op_0, fp16_neg_normal_add_9_op_1) == (fp16_neg_normal_add_9_sum_rdn, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rup;
+  float_set_rounding (fp_rounding_rup);
 
   assert(float_add (fp16_pos_normal_add_6_op_0, fp16_pos_normal_add_6_op_1) == (fp16_pos_normal_add_6_sum_rup, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_7_op_0, fp16_neg_normal_add_7_op_1) == (fp16_neg_normal_add_7_sum_rup, fp_eflag_inexact));
   assert(float_add (fp16_pos_normal_add_8_op_0, fp16_pos_normal_add_8_op_1) == (fp16_pos_normal_add_8_sum_rup, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_9_op_0, fp16_neg_normal_add_9_op_1) == (fp16_neg_normal_add_9_sum_rup, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rtz;
+  float_set_rounding (fp_rounding_rtz);
 
   assert(float_add (fp16_pos_normal_add_6_op_0, fp16_pos_normal_add_6_op_1) == (fp16_pos_normal_add_6_sum_rtz, fp_eflag_inexact));
   assert(float_add (fp16_neg_normal_add_7_op_0, fp16_neg_normal_add_7_op_1) == (fp16_neg_normal_add_7_sum_rtz, fp_eflag_inexact));
@@ -136,35 +137,35 @@ function test_float_add () -> unit = {
   assert(float_add (fp32_neg_normal_add_4_op_0, fp32_neg_normal_add_4_op_1) == (fp32_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp32_neg_normal_add_5_op_0, fp32_neg_normal_add_5_op_1) == (fp32_neg_normal_add_5_sum, fp_eflag_none));
 
-  fp_rounding_global = fp_rounding_rne;
+  float_set_rounding (fp_rounding_rne);
 
   assert(float_add (fp32_pos_normal_add_6_op_0, fp32_pos_normal_add_6_op_1) == (fp32_pos_normal_add_6_sum_rne, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_7_op_0, fp32_neg_normal_add_7_op_1) == (fp32_neg_normal_add_7_sum_rne, fp_eflag_inexact));
   assert(float_add (fp32_pos_normal_add_8_op_0, fp32_pos_normal_add_8_op_1) == (fp32_pos_normal_add_8_sum_rne, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_9_op_0, fp32_neg_normal_add_9_op_1) == (fp32_neg_normal_add_9_sum_rne, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rna;
+  float_set_rounding (fp_rounding_rna);
 
   assert(float_add (fp32_pos_normal_add_6_op_0, fp32_pos_normal_add_6_op_1) == (fp32_pos_normal_add_6_sum_rna, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_7_op_0, fp32_neg_normal_add_7_op_1) == (fp32_neg_normal_add_7_sum_rna, fp_eflag_inexact));
   assert(float_add (fp32_pos_normal_add_8_op_0, fp32_pos_normal_add_8_op_1) == (fp32_pos_normal_add_8_sum_rna, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_9_op_0, fp32_neg_normal_add_9_op_1) == (fp32_neg_normal_add_9_sum_rna, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rdn;
+  float_set_rounding (fp_rounding_rdn);
 
   assert(float_add (fp32_pos_normal_add_6_op_0, fp32_pos_normal_add_6_op_1) == (fp32_pos_normal_add_6_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_7_op_0, fp32_neg_normal_add_7_op_1) == (fp32_neg_normal_add_7_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp32_pos_normal_add_8_op_0, fp32_pos_normal_add_8_op_1) == (fp32_pos_normal_add_8_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_9_op_0, fp32_neg_normal_add_9_op_1) == (fp32_neg_normal_add_9_sum_rdn, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rup;
+  float_set_rounding (fp_rounding_rup);
 
   assert(float_add (fp32_pos_normal_add_6_op_0, fp32_pos_normal_add_6_op_1) == (fp32_pos_normal_add_6_sum_rup, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_7_op_0, fp32_neg_normal_add_7_op_1) == (fp32_neg_normal_add_7_sum_rup, fp_eflag_inexact));
   assert(float_add (fp32_pos_normal_add_8_op_0, fp32_pos_normal_add_8_op_1) == (fp32_pos_normal_add_8_sum_rup, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_9_op_0, fp32_neg_normal_add_9_op_1) == (fp32_neg_normal_add_9_sum_rup, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rtz;
+  float_set_rounding (fp_rounding_rtz);
 
   assert(float_add (fp32_pos_normal_add_6_op_0, fp32_pos_normal_add_6_op_1) == (fp32_pos_normal_add_6_sum_rtz, fp_eflag_inexact));
   assert(float_add (fp32_neg_normal_add_7_op_0, fp32_neg_normal_add_7_op_1) == (fp32_neg_normal_add_7_sum_rtz, fp_eflag_inexact));
@@ -214,35 +215,35 @@ function test_float_add () -> unit = {
   assert(float_add (fp64_neg_normal_add_4_op_0, fp64_neg_normal_add_4_op_1) == (fp64_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp64_neg_normal_add_5_op_0, fp64_neg_normal_add_5_op_1) == (fp64_neg_normal_add_5_sum, fp_eflag_none));
 
-  fp_rounding_global = fp_rounding_rne;
+  float_set_rounding (fp_rounding_rne);
 
   assert(float_add (fp64_pos_normal_add_6_op_0, fp64_pos_normal_add_6_op_1) == (fp64_pos_normal_add_6_sum_rne, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_7_op_0, fp64_neg_normal_add_7_op_1) == (fp64_neg_normal_add_7_sum_rne, fp_eflag_inexact));
   assert(float_add (fp64_pos_normal_add_8_op_0, fp64_pos_normal_add_8_op_1) == (fp64_pos_normal_add_8_sum_rne, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_9_op_0, fp64_neg_normal_add_9_op_1) == (fp64_neg_normal_add_9_sum_rne, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rna;
+  float_set_rounding (fp_rounding_rna);
 
   assert(float_add (fp64_pos_normal_add_6_op_0, fp64_pos_normal_add_6_op_1) == (fp64_pos_normal_add_6_sum_rna, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_7_op_0, fp64_neg_normal_add_7_op_1) == (fp64_neg_normal_add_7_sum_rna, fp_eflag_inexact));
   assert(float_add (fp64_pos_normal_add_8_op_0, fp64_pos_normal_add_8_op_1) == (fp64_pos_normal_add_8_sum_rna, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_9_op_0, fp64_neg_normal_add_9_op_1) == (fp64_neg_normal_add_9_sum_rna, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rdn;
+  float_set_rounding (fp_rounding_rdn);
 
   assert(float_add (fp64_pos_normal_add_6_op_0, fp64_pos_normal_add_6_op_1) == (fp64_pos_normal_add_6_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_7_op_0, fp64_neg_normal_add_7_op_1) == (fp64_neg_normal_add_7_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp64_pos_normal_add_8_op_0, fp64_pos_normal_add_8_op_1) == (fp64_pos_normal_add_8_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_9_op_0, fp64_neg_normal_add_9_op_1) == (fp64_neg_normal_add_9_sum_rdn, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rup;
+  float_set_rounding (fp_rounding_rup);
 
   assert(float_add (fp64_pos_normal_add_6_op_0, fp64_pos_normal_add_6_op_1) == (fp64_pos_normal_add_6_sum_rup, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_7_op_0, fp64_neg_normal_add_7_op_1) == (fp64_neg_normal_add_7_sum_rup, fp_eflag_inexact));
   assert(float_add (fp64_pos_normal_add_8_op_0, fp64_pos_normal_add_8_op_1) == (fp64_pos_normal_add_8_sum_rup, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_9_op_0, fp64_neg_normal_add_9_op_1) == (fp64_neg_normal_add_9_sum_rup, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rtz;
+  float_set_rounding (fp_rounding_rtz);
 
   assert(float_add (fp64_pos_normal_add_6_op_0, fp64_pos_normal_add_6_op_1) == (fp64_pos_normal_add_6_sum_rtz, fp_eflag_inexact));
   assert(float_add (fp64_neg_normal_add_7_op_0, fp64_neg_normal_add_7_op_1) == (fp64_neg_normal_add_7_sum_rtz, fp_eflag_inexact));
@@ -292,35 +293,35 @@ function test_float_add () -> unit = {
   assert(float_add (fp128_neg_normal_add_4_op_0, fp128_neg_normal_add_4_op_1) == (fp128_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp128_neg_normal_add_5_op_0, fp128_neg_normal_add_5_op_1) == (fp128_neg_normal_add_5_sum, fp_eflag_none));
 
-  fp_rounding_global = fp_rounding_rne;
+  float_set_rounding (fp_rounding_rne);
 
   assert(float_add (fp128_pos_normal_add_6_op_0, fp128_pos_normal_add_6_op_1) == (fp128_pos_normal_add_6_sum_rne, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_7_op_0, fp128_neg_normal_add_7_op_1) == (fp128_neg_normal_add_7_sum_rne, fp_eflag_inexact));
   assert(float_add (fp128_pos_normal_add_8_op_0, fp128_pos_normal_add_8_op_1) == (fp128_pos_normal_add_8_sum_rne, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_9_op_0, fp128_neg_normal_add_9_op_1) == (fp128_neg_normal_add_9_sum_rne, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rna;
+  float_set_rounding (fp_rounding_rna);
 
   assert(float_add (fp128_pos_normal_add_6_op_0, fp128_pos_normal_add_6_op_1) == (fp128_pos_normal_add_6_sum_rna, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_7_op_0, fp128_neg_normal_add_7_op_1) == (fp128_neg_normal_add_7_sum_rna, fp_eflag_inexact));
   assert(float_add (fp128_pos_normal_add_8_op_0, fp128_pos_normal_add_8_op_1) == (fp128_pos_normal_add_8_sum_rna, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_9_op_0, fp128_neg_normal_add_9_op_1) == (fp128_neg_normal_add_9_sum_rna, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rdn;
+  float_set_rounding (fp_rounding_rdn);
 
   assert(float_add (fp128_pos_normal_add_6_op_0, fp128_pos_normal_add_6_op_1) == (fp128_pos_normal_add_6_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_7_op_0, fp128_neg_normal_add_7_op_1) == (fp128_neg_normal_add_7_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp128_pos_normal_add_8_op_0, fp128_pos_normal_add_8_op_1) == (fp128_pos_normal_add_8_sum_rdn, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_9_op_0, fp128_neg_normal_add_9_op_1) == (fp128_neg_normal_add_9_sum_rdn, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rup;
+  float_set_rounding (fp_rounding_rup);
 
   assert(float_add (fp128_pos_normal_add_6_op_0, fp128_pos_normal_add_6_op_1) == (fp128_pos_normal_add_6_sum_rup, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_7_op_0, fp128_neg_normal_add_7_op_1) == (fp128_neg_normal_add_7_sum_rup, fp_eflag_inexact));
   assert(float_add (fp128_pos_normal_add_8_op_0, fp128_pos_normal_add_8_op_1) == (fp128_pos_normal_add_8_sum_rup, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_9_op_0, fp128_neg_normal_add_9_op_1) == (fp128_neg_normal_add_9_sum_rup, fp_eflag_inexact));
 
-  fp_rounding_global = fp_rounding_rtz;
+  float_set_rounding (fp_rounding_rtz);
 
   assert(float_add (fp128_pos_normal_add_6_op_0, fp128_pos_normal_add_6_op_1) == (fp128_pos_normal_add_6_sum_rtz, fp_eflag_inexact));
   assert(float_add (fp128_neg_normal_add_7_op_0, fp128_neg_normal_add_7_op_1) == (fp128_neg_normal_add_7_sum_rtz, fp_eflag_inexact));
