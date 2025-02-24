@@ -725,6 +725,8 @@ exp0:
 case:
   | p = pat; EqGt; body = exp
     { mk_pexp (Pat_exp (p, body)) $startpos $endpos }
+  | ps = pat_list; EqGt; body = exp
+    { mk_pexp (Pat_many (ps, body)) $startpos $endpos }
   | p = pat; If_; guard = exp; EqGt; body = exp
     { mk_pexp (Pat_when (p, guard, body)) $startpos $endpos }
   | a = attribute; Lparen; c = case; Rparen

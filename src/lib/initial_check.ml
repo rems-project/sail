@@ -1304,7 +1304,7 @@ and to_ast_exp ctx exp =
             | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
           )
         | P.E_field (exp, id) -> E_field (to_ast_exp ctx exp, to_ast_id ctx id)
-        | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
+        | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.mapi (to_ast_match_case_i ctx) pexps)
         | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
         | P.E_let (leb, exp) -> E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp)
         | P.E_assign (lexp, exp) -> E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp)
@@ -1391,8 +1391,26 @@ and to_ast_case ctx (P.Pat_aux (pexp_aux, l) : P.pexp) : uannot pexp =
       let annot = add_attribute l attr arg annot in
       Pat_aux (pexp, (pexp_l, annot))
   | P.Pat_exp (pat, exp) -> Pat_aux (Pat_exp (to_ast_pat ctx pat, to_ast_exp ctx exp), (l, empty_uannot))
+  | P.Pat_many (pats, exp) -> raise (Reporting.err_typ l "Only Match supports pat_list")
   | P.Pat_when (pat, guard, exp) ->
       Pat_aux (Pat_when (to_ast_pat ctx pat, to_ast_exp ctx guard, to_ast_exp ctx exp), (l, empty_uannot))
+
+and to_ast_match_case_i ctx i ((P.Pat_aux (pexp_aux, l) : P.pexp) as pat) : uannot pexp =
+  match pexp_aux with
+  | P.Pat_many (pats, exp) ->
+      let id = mk_id ("p#" ^ string_of_int i) in
+      let p = mk_pat (P_id id) in
+      let guard =
+        mk_exp
+          (E_match
+             ( mk_exp (E_id id),
+               List.mapi (fun i p -> mk_pexp (Pat_exp (to_ast_pat ctx p, mk_exp (E_lit (mk_lit L_true))))) pats
+               @ [mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_lit (mk_lit L_false))))]
+             )
+          )
+      in
+      Pat_aux (Pat_when (p, guard, to_ast_exp ctx exp), (l, empty_uannot))
+  | _ -> to_ast_case ctx pat
 
 and to_ast_fexps (fail_on_error : bool) ctx (exps : P.exp list) : uannot fexp list option =
   match exps with

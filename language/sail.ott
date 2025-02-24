@@ -563,7 +563,9 @@ pexp :: 'Pat_' ::=
   {{ com pattern match }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | pat => exp                        :: :: exp
+  | pat1 ... patn => exp              :: :: many
   | pat if exp1 => exp                :: :: when
+
 % apparently could use -> or => for this.
 
 %% % psexp :: 'Pats' ::=

@@ -1304,6 +1304,8 @@ and string_of_fexp (FE_aux (FE_fexp (field, exp), _)) = string_of_id field ^ " =
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
   | Pat_exp (pat, exp) -> string_of_pat pat ^ " => " ^ string_of_exp exp
+  | Pat_many (pats, exp) ->
+      String.concat "," (List.map (fun pat -> string_of_pat pat) pats) ^ " => " ^ string_of_exp exp
   | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " if " ^ string_of_exp guard ^ " => " ^ string_of_exp exp
 
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
