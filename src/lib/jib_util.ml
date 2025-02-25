@@ -909,6 +909,7 @@ let cdef_concatmap_instr f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_conc
 let ctype_def_map_ctyp f = function
   | CTD_abstract (id, ctyp, inst) -> CTD_abstract (id, f ctyp, inst)
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
+  | CTD_abbrev (id, ctyp) -> CTD_abbrev (id, f ctyp)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
 
@@ -1108,16 +1109,16 @@ and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr
 
 let ctype_def_ctyps = function
   | CTD_enum _ | CTD_abstract _ -> []
+  | CTD_abbrev (_, ctyp) -> [ctyp]
   | CTD_struct (_, fields) -> List.map snd fields
   | CTD_variant (_, ctors) -> List.map snd ctors
 
 let ctype_def_id = function
-  | CTD_abstract (id, _, _) | CTD_enum (id, _) -> id
-  | CTD_struct (id, _) -> id
-  | CTD_variant (id, _) -> id
+  | CTD_abstract (id, _, _) | CTD_enum (id, _) | CTD_abbrev (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
 
 let ctype_def_to_ctyp = function
   | CTD_abstract (id, ctyp, _) -> ctyp
+  | CTD_abbrev (_, ctyp) -> ctyp
   | CTD_enum (id, ids) -> CT_enum (id, ids)
   | CTD_struct (id, fields) -> CT_struct (id, fields)
   | CTD_variant (id, ctors) -> CT_variant (id, ctors)

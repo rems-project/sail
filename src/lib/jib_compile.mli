@@ -167,6 +167,9 @@ module type CONFIG = sig
       control-flow like this is useful for the Sail->SV and Sail->SMT
       backends. *)
   val eager_control_flow : bool
+
+  (** Types to preserve in the Jib output *)
+  val preserve_types : IdSet.t
 end
 
 module IdGraph : sig

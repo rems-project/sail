@@ -756,6 +756,7 @@ module Make (Config : CONFIG) = struct
   let pp_type_def = function
     | CTD_abstract (id, _, _) ->
         Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
+    | CTD_abbrev _ -> empty
     | CTD_enum (id, ids) ->
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
