@@ -62,3 +62,22 @@ function match_read(x : E) -> unit = {
     C => r_C,
   }
 }
+
+function const16() -> (bitvector(16), bool) = {
+  (0xFFFF, true)
+}
+
+function const32() -> (bitvector(32), bool) = {
+  (0xEEEE_EEEE, false)
+}
+
+val match_width : forall 'n, 'n >= 0. bitvector('n) -> bitvector(2 * 'n)
+function match_width x = {
+  let (foo, _) : (bitvector('n), bool) = match 'n {
+    16 => const16(),
+    32 => const32(),
+    n => (sail_zeros(n), false)
+  } in
+  bitvector_concat(foo, foo)
+}
+
