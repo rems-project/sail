@@ -760,11 +760,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
     | E_try (e, cases) ->
         let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
-        let cases = doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot))) in
-        string "sailTryCatch "
+        let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
+        nest 2 (string "sailTryCatch "
         ^^ parens (doc_exp false ctx e)
         ^^ space
-        ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
+        ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases))
     | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
     | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
     | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
