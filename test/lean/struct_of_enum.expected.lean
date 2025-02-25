@@ -8,6 +8,7 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -17,12 +18,12 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 inductive e_test where | VAL
   deriving Inhabited, BEq
 
-open e_test
+
 
 
 structure s_test where
@@ -30,6 +31,24 @@ structure s_test where
   deriving BEq
 
 abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open e_test
 
 namespace Functions
 
@@ -121,6 +140,5 @@ def initialize_registers (_ : Unit) : Unit :=
   ()
 
 end Functions
-
 open Functions
 
