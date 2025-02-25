@@ -1629,6 +1629,24 @@ let to_ast_record ctx id typq fields =
   let fields = List.map (fun (atyp, id) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) fields in
   (id, typq, fields, add_constructor id typq K_type ctx)
 
+let check_duplicate_enum_ids ids =
+  let _ =
+    List.fold_left
+      (fun seen id ->
+        let l = id_loc id in
+        match Bindings.find_opt id seen with
+        | Some previous ->
+            raise
+              (Reporting.err_general
+                 (Hint ("previous occurence here", previous, l))
+                 (Printf.sprintf "Enumeration member %s occurs twice in enum declaration" (string_of_id id))
+              )
+        | None -> Bindings.add id (id_loc id) seen
+      )
+      Bindings.empty ids
+  in
+  ()
+
 let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind_opt, atyp) ->
@@ -1681,12 +1699,13 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
         @ generated_records,
         add_constructor id typq K_type ctx
       )
-  | P.TD_enum (id, fns, enums) ->
+  | P.TD_enum (id, fns, members) ->
       let id = to_ast_reserved_type_id ctx id in
       let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
-      let fns = generate_enum_functions l ctx id fns enums in
-      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
+      let fns = generate_enum_functions l ctx id fns members in
+      let members = List.map (fun e -> to_ast_id ctx (fst e)) members in
+      check_duplicate_enum_ids members;
+      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
   | P.TD_abstract (id, kind, instantiation) -> (
