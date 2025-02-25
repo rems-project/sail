@@ -90,7 +90,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
@@ -193,11 +193,11 @@ def const32 (_ : Unit) : ((BitVec 32) × Bool) :=
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
 def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
-  let (foo, _) :=
+  let (foo, _) := (
     match (Sail.BitVec.length x) with
     | 16 => (const16 ())
     | 32 => (const32 ())
-    | n => ((BitVec.zero n), false)
+    | n => ((BitVec.zero n), false) : ((BitVec k_n) × Bool) )
   (foo ++ foo)
 
 def initialize_registers (_ : Unit) : SailM Unit := do

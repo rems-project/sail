@@ -72,7 +72,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
@@ -223,7 +223,7 @@ def extern_min (_ : Unit) : Int :=
   (Min.min 5 4)
 
 def extern_abs_int_plain (_ : Unit) : Int :=
-  let x : Int := (-5)
+  let x := ( (-5) : Int )
   (Sail.Int.intAbs x)
 
 def extern_eq_unit (_ : Unit) : Bool :=

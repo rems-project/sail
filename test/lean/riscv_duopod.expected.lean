@@ -109,7 +109,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
@@ -206,8 +206,8 @@ def num_of_iop (arg_ : iop) : Int :=
   | RISCV_ANDI => 5
 
 def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : SailM Unit := do
-  let addr : xlenbits ← do (pure ((← (rX rs1)) + (EXTS (m := 64) imm)))
-  let result : xlenbits ← do (read_mem addr 8)
+  let addr := ← ((do (pure ((← (rX rs1)) + (EXTS (m := 64) imm))) ) : SailM xlenbits )
+  let result := ← ((do (read_mem addr 8) ) : SailM xlenbits )
   (wX rd result)
 
 def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (arg3 : iop) : SailM Unit := do
@@ -215,7 +215,7 @@ def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (
   match merge_var with
   | (imm, rs1, rd, RISCV_ADDI) =>
     let rs1_val ← do (rX rs1)
-    let imm_ext : xlenbits := (EXTS (m := 64) imm)
+    let imm_ext := ( (EXTS (m := 64) imm) : xlenbits )
     let result := (rs1_val + imm_ext)
     (wX rd result)
   | _ => throw Error.Exit
@@ -228,17 +228,17 @@ def execute (merge_var : ast) : SailM Unit := do
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
   if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b000 : (BitVec 3)))
        (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0010011 : (BitVec 7))))
-  then let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-       let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-       let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-       let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
+  then let imm := ( (Sail.BitVec.extractLsb v__0 31 20) : (BitVec 12) )
+       let rs1 := ( (Sail.BitVec.extractLsb v__0 19 15) : regbits )
+       let rd := ( (Sail.BitVec.extractLsb v__0 11 7) : regbits )
+       let imm := ( (Sail.BitVec.extractLsb v__0 31 20) : (BitVec 12) )
        (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
   else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b011 : (BitVec 3)))
             (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0000011 : (BitVec 7))))
-       then let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-            let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-            let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-            let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
+       then let imm := ( (Sail.BitVec.extractLsb v__0 31 20) : (BitVec 12) )
+            let rs1 := ( (Sail.BitVec.extractLsb v__0 19 15) : regbits )
+            let rd := ( (Sail.BitVec.extractLsb v__0 11 7) : regbits )
+            let imm := ( (Sail.BitVec.extractLsb v__0 31 20) : (BitVec 12) )
             (some (LOAD (imm, rs1, rd)))
        else none
 

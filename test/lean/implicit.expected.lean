@@ -72,7 +72,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
@@ -130,7 +130,7 @@ def foo (x : (BitVec 8)) : (BitVec 16) :=
 def slice_mask2 {n : _} (i : (BitVec n)) (l : (BitVec n)) (b : Bool) : (BitVec n) :=
   if b
   then i
-  else let one : (BitVec n) := (EXTZ (m := n) l)
+  else let one := ( (EXTZ (m := n) l) : (BitVec n) )
        (one + one)
 
 def initialize_registers (_ : Unit) : Unit :=

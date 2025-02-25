@@ -72,7 +72,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (GE.ge l n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
@@ -123,14 +123,14 @@ def decode (v__0 : (BitVec 32)) : Bool :=
   if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
        (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
          (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
-  then let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-       let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+  then let Rn := ( (Sail.BitVec.extractLsb v__0 9 5) : (BitVec 5) )
+       let Rm := ( (Sail.BitVec.extractLsb v__0 20 16) : (BitVec 5) )
        if (BEq.beq Rm Rn)
        then true
        else false
   else if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
-       then let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-            let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
+       then let Rn := ( (Sail.BitVec.extractLsb v__0 9 5) : (BitVec 5) )
+            let Rd := ( (Sail.BitVec.extractLsb v__0 4 0) : (BitVec 5) )
             if (BEq.beq Rn Rd)
             then true
             else false
@@ -145,11 +145,11 @@ def xlen := 32
 
 def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
   if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011000 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
+       (let index := ( (Sail.BitVec.extractLsb v__26 4 0) : (BitVec 5) )
        (GE.ge (BitVec.toNat index) 3) : Bool))
   then (pure true)
   else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011100 : (BitVec 7)))
-            (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
+            (let index := ( (Sail.BitVec.extractLsb v__26 4 0) : (BitVec 5) )
             (Bool.and (BEq.beq xlen 32) ((GE.ge (BitVec.toNat index) 3) : Bool))))
        then (pure true)
        else assert false "Pattern match failure at match_bv.sail:36.0-38.1"
@@ -157,7 +157,7 @@ def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
 
 def write_CSR2 (v__30 : (BitVec 12)) : SailM Bool := do
   if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__30 11 5) (0b1011100 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__30 4 0)
+       (let index := ( (Sail.BitVec.extractLsb v__30 4 0) : (BitVec 5) )
        (Bool.and (BEq.beq xlen 32) ((GE.ge (BitVec.toNat index) 3) : Bool))))
   then (pure true)
   else assert false "Pattern match failure at match_bv.sail:41.0-43.1"
