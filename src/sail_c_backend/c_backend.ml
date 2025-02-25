@@ -203,6 +203,7 @@ let c_return exp = string "return" ^^ space ^^ exp ^^ semi
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
+  val preserve_types : IdSet.t
 end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
@@ -545,6 +546,7 @@ end) : CONFIG = struct
   let track_throw = true
   let use_void = false
   let eager_control_flow = false
+  let preserve_types = Opts.preserve_types
 end
 
 (** Functions that have heap-allocated return types are implemented by
@@ -883,6 +885,7 @@ module type CODEGEN_CONFIG = sig
   val reserved_words : Util.StringSet.t
   val overrides : string Name_generator.Overrides.t
   val branch_coverage : out_channel option
+  val preserve_types : IdSet.t
 end
 
 module Codegen (Config : CODEGEN_CONFIG) = struct
@@ -1505,6 +1508,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           Impl enum_undefined;
         ]
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
+    | CTD_abbrev (id, ctyp) ->
+        [
+          Header
+            (ksprintf string "// type abbreviation %s" (string_of_id id)
+            ^^ hardline
+            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); codegen_id id]
+            ^^ semi
+            );
+        ]
     | CTD_struct (id, ctors) ->
         let struct_name = sgen_id id in
         let struct_ctyp = CT_struct (id, ctors) in
@@ -2228,6 +2240,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let jib_of_ast env effect_info ast =
     let module Jibc = Make (C_config (struct
       let branch_coverage = Config.branch_coverage
+      let preserve_types = Config.preserve_types
     end)) in
     let ctx = initial_ctx env effect_info in
     Jibc.compile_ast ctx ast
@@ -2392,9 +2405,18 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
       let hlhl = twice hardline in
 
+      let include_guard contents =
+        let symbol = sprintf "SAIL_MODEL_HEADER_%s" (String.uppercase_ascii basename) in
+        ksprintf string "#ifndef %s" symbol ^^ hardline ^^ ksprintf string "#define %s" symbol ^^ hlhl ^^ contents
+        ^^ hardline ^^ string "#endif" ^^ hardline
+      in
+
       let header =
         Option.map
-          (fun header -> preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline |> Document.to_string)
+          (fun header ->
+            preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline
+            |> include_guard |> Document.to_string
+          )
           header_doc_opt
       in
       ( header,

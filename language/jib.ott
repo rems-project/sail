@@ -274,6 +274,7 @@ ctype_def :: 'CTD_' ::=
   | enum id = id0 '|' ... '|' idn                    :: :: enum
   | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
   | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | abbrev id = ctyp                                 :: :: abbrev
   | abstract id : ctyp ctype_def_init                :: :: abstract
 
 def_annot :: '' ::=

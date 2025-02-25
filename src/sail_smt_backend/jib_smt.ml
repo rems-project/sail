@@ -646,7 +646,9 @@ module Make (Config : CONFIG) = struct
 
   let smt_ctype_def = function
     | CTD_abstract (id, _, _) -> Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SMT target"
-    | CTD_enum (id, elems) -> return (declare_datatypes (mk_enum (zencode_upper_id id) (List.map zencode_id elems)))
+    | CTD_abbrev _ -> return None
+    | CTD_enum (id, elems) ->
+        return (Some (declare_datatypes (mk_enum (zencode_upper_id id) (List.map zencode_id elems))))
     | CTD_struct (id, fields) ->
         let* fields =
           mapM
@@ -656,7 +658,7 @@ module Make (Config : CONFIG) = struct
             )
             fields
         in
-        return (declare_datatypes (mk_record (zencode_upper_id id) fields))
+        return (Some (declare_datatypes (mk_record (zencode_upper_id id) fields)))
     | CTD_variant (id, ctors) ->
         let* ctors =
           mapM
@@ -666,12 +668,12 @@ module Make (Config : CONFIG) = struct
             )
             ctors
         in
-        return (declare_datatypes (mk_variant (zencode_upper_id id) ctors))
+        return (Some (declare_datatypes (mk_variant (zencode_upper_id id) ctors)))
 
   let rec generate_ctype_defs acc = function
     | CDEF_aux (CDEF_type ctd, _) :: cdefs ->
-        let* smt_type_def = smt_ctype_def ctd in
-        generate_ctype_defs (smt_type_def :: acc) cdefs
+        let* smt_type_def_opt = smt_ctype_def ctd in
+        generate_ctype_defs (Option.to_list smt_type_def_opt @ acc) cdefs
     | _ :: cdefs -> generate_ctype_defs acc cdefs
     | [] -> return (List.rev acc)
 
@@ -1314,6 +1316,7 @@ end) : Jib_compile.CONFIG = struct
   let track_throw = false
   let use_void = false
   let eager_control_flow = true
+  let preserve_types = IdSet.empty
 end
 
 (* In order to support register references, we need to build a map
