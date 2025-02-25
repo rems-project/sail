@@ -641,8 +641,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           | false, true -> ("while_E", string "catchEarlyReturnPure", false)
           | false, false -> ("while_", empty, false)
         in
-        let varstuple_retyped = check_exp env (strip_exp varstuple) (typ_of full_exp) in
-        let varstuple_pp, body_lambda = make_loop_vars [] varstuple_retyped in
+        let varstuple_pp, body_lambda = make_loop_vars [] varstuple in
         (* let body_ctxt = add_single_kid_id_rename ctx varstuple (mk_kid ("loop_" ^ string_of_id varstuple)) in *)
         let body_ctxt = { ctx with early_ret = early_return } in
         (* The body has the right type for deciding whether a proof is necessary *)
