@@ -1390,6 +1390,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         match init with
         | Init_cval cval ->
             codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
+        | Init_static VL_undefined -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+        | Init_static vl -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
         | Init_json_key parts ->
             ksprintf string "  sail_config_key %s = {%s};" (sgen_name id)
               (Util.string_of_list ", " (fun part -> "\"" ^ part ^ "\"") parts)
@@ -2368,16 +2370,23 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       in
 
       let model_main =
-        let extra =
+        let extra_pre =
           List.filter_map
             (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            cdefs
+        in
+        let extra_post =
+          List.filter_map
+            (function CDEF_aux (CDEF_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         separate hardline
           ( if Config.no_main then []
             else
               List.map string
-                (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
+                (["int main(int argc, char *argv[])"; "{"; "  int retcode;"]
+                @ extra_pre @ ["  retcode = model_main(argc, argv);"] @ extra_post @ ["  return retcode;"; "}"]
+                )
           )
       in
       let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in

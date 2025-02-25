@@ -1308,7 +1308,8 @@ module Make (Config : CONFIG) = struct
         | Init_cval cval ->
             let* value = Smt.smt_cval cval in
             wrap (SVS_var (id, ctyp, Some value))
-        | Init_json_key _ -> Reporting.unreachable l __POS__ "Json key found in SV backend"
+        | Init_json_key _ | Init_static _ ->
+            Reporting.unreachable l __POS__ "Unexpected cval initializer found in SV backend"
       )
     | I_return cval ->
         let* value = Smt.smt_cval cval in

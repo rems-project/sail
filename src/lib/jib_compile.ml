@@ -132,6 +132,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
@@ -181,6 +182,7 @@ let initial_ctx ?for_target env effect_info =
     letbinds = [];
     letbind_ids = IdSet.empty;
     no_raw = false;
+    no_static = false;
     coverage_override = true;
     def_annot = None;
   }
@@ -656,6 +658,21 @@ module Make (C : CONFIG) = struct
        )
     |> if_chain
 
+  let static_load l ctyp f =
+    let loaded, loaded_instr = istatic l CT_bool (VL_bool false) in
+    let s, s_instr = istatic l ctyp VL_undefined in
+    ( [
+        loaded_instr;
+        s_instr;
+        iif l
+          (V_call (Bnot, [V_id (loaded, CT_bool)]))
+          (f s @ [icopy l (CL_id (loaded, CT_bool)) (V_lit (VL_bool true, CT_bool))])
+          [];
+      ],
+      (fun clexp -> icopy l clexp (V_id (s, ctyp))),
+      []
+    )
+
   let compile_config' l ctx key ctyp =
     let key_name = ngensym () in
     let json = ngensym () in
@@ -953,7 +970,11 @@ module Make (C : CONFIG) = struct
     in
 
     let setup, call, cleanup = extract json ctyp in
-    (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
+    if ctx.no_static then (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
+    else
+      static_load l ctyp (fun s ->
+          init @ setup @ [call (CL_id (s, ctyp))] @ cleanup @ [iclear CT_json json; iclear CT_json_key key_name]
+      )
 
   let compile_config l ctx args typ =
     let ctyp = ctyp_of_typ ctx typ in
@@ -1717,7 +1738,9 @@ module Make (C : CONFIG) = struct
     | TD_abstract (id, K_aux (kind, _), inst) -> begin
         let compile_inst ctyp = function
           | TDC_key key ->
-              let setup, call, cleanup = compile_config' l ctx key ctyp in
+              (* The abstract initialisers are ran very early, before the rest of the model,
+                 so we can't rely on Jib static initialisers being set up. *)
+              let setup, call, cleanup = compile_config' l { ctx with no_static = true } key ctyp in
               CTDI_instrs (setup @ [call (CL_id (name id, ctyp))] @ cleanup)
           | TDC_none -> CTDI_none
         in
@@ -2777,6 +2800,44 @@ module Make (C : CONFIG) = struct
     let toplevel_lets_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map toplevel_lets_of_def defs) in
     toplevel_lets_of_defs ast.defs |> IdSet.elements
 
+  class static_visitor statics =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
+      method! vinstr =
+        function
+        | I_aux (I_init (ctyp, Name (id, _), Init_static VL_undefined), (_, l)) ->
+            statics := (l, ctyp, id, None) :: !statics;
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
+        | I_aux (I_init (ctyp, Name (id, _), Init_static vl), (_, l)) ->
+            statics := (l, ctyp, id, Some vl) :: !statics;
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
+        | _ -> DoChildren
+    end
+
+  let lift_statics cdefs =
+    List.map
+      (fun cdef ->
+        let statics = ref [] in
+        let cdef = visit_cdef (new static_visitor statics) cdef in
+        List.rev_map
+          (fun (l, ctyp, id, vl_opt) ->
+            match vl_opt with
+            | None -> CDEF_aux (CDEF_register (id, ctyp, []), mk_def_annot l ())
+            | Some vl ->
+                CDEF_aux
+                  (CDEF_register (id, ctyp, [icopy l (CL_id (name id, ctyp)) (V_lit (vl, ctyp))]), mk_def_annot l ())
+          )
+          !statics
+        @ [cdef]
+      )
+      cdefs
+    |> List.concat
+
   let compile_ast ctx ast =
     let module G = Graph.Make (Callgraph.Node) in
     let g = Callgraph.graph_of_ast ast in
@@ -2830,5 +2891,6 @@ module Make (C : CONFIG) = struct
     let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = make_calls_precise ctx cdefs in
     let cdefs = sort_ctype_defs false cdefs in
+    let cdefs = lift_statics cdefs in
     (cdefs, ctx)
 end

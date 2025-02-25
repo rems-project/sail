@@ -160,7 +160,7 @@ let visit_init vis no_change =
   | Init_cval cval ->
       let cval' = visit_cval vis cval in
       if cval == cval' then no_change else Init_cval cval'
-  | Init_json_key _ -> no_change
+  | Init_static _ | Init_json_key _ -> no_change
 
 let rec visit_instr vis outer_instr =
   let aux vis no_change =

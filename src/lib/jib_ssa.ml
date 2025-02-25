@@ -552,6 +552,7 @@ let rename_variables globals graph root children =
 
   let fold_init = function
     | Init_cval cval -> Init_cval (fold_cval cval)
+    | Init_static vl -> Init_static vl
     | Init_json_key parts -> Init_json_key parts
   in
 

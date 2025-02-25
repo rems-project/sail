@@ -241,7 +241,7 @@ end
 let remove_functions_to_references = Jib_visitor.visit_instrs (new Remove_functions_to_references.visitor)
 
 let init_subst id subst init =
-  match init with Init_cval cval -> Init_cval (cval_subst id subst cval) | Init_json_key _ -> init
+  match init with Init_cval cval -> Init_cval (cval_subst id subst cval) | Init_static _ | Init_json_key _ -> init
 
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
@@ -546,7 +546,11 @@ let remove_tuples cdefs ctx =
     | CR_one clexp -> CR_one (fix_clexp clexp)
     | CR_multi clexps -> CR_multi (List.map fix_clexp clexps)
   in
-  let fix_init = function Init_cval cval -> Init_cval (fix_cval cval) | Init_json_key parts -> Init_json_key parts in
+  let fix_init = function
+    | Init_cval cval -> Init_cval (fix_cval cval)
+    | Init_static vl -> Init_static vl
+    | Init_json_key parts -> Init_json_key parts
+  in
   let rec fix_instr_aux = function
     | I_funcall (creturn, extern, id, args) -> I_funcall (fix_creturn creturn, extern, id, List.map fix_cval args)
     | I_copy (clexp, cval) -> I_copy (fix_clexp clexp, fix_cval cval)
