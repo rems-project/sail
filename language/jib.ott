@@ -220,6 +220,7 @@ creturn :: 'CR_' ::=
 
 init :: 'Init_' ::=
   | cval                             :: :: cval
+  | static value                     :: :: static
   | json_key string0 . ... . stringn :: :: json_key
 
 instr :: 'I_' ::=

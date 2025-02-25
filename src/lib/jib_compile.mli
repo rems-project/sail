@@ -88,6 +88,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }

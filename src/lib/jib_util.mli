@@ -58,6 +58,7 @@ open Jib
 val symbol_generator : string -> (unit -> id) * (unit -> unit)
 
 val idecl : l -> ctyp -> name -> instr
+val istatic : l -> ctyp -> Value2.vl -> name * instr
 val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
 val ijson_key : l -> name -> string list -> instr
