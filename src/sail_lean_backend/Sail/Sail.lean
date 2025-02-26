@@ -82,10 +82,10 @@ def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
 def valid_hex_bits (n : Nat) (str : String) : Bool := str.length = n ∧ str.all fun x =>
   x.toLower ∈ ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
-def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n := 
+def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv <<< sh
 
-def shift_bits_right (bv : BitVec n) (sh : BitVec m) : BitVec n := 
+def shift_bits_right (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv >>> sh
 
 def shiftl (bv : BitVec n) (m : Nat) : BitVec n :=
@@ -543,3 +543,8 @@ instance : HPow Nat Int Nat where
 
 instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat
+
+instance : HSub Nat Nat Int where
+  hSub m n := (m : Int) - (n : Int)
+
+infixl:65 " -i "   => HSub.hSub (γ := Int)

@@ -616,14 +616,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m) - 1)
+  then ((Int.tdiv (n + 1) m) -i 1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m) - 1)
+       then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n - (m * (fdiv_int n m)))
+  (n -i (m * (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -652,26 +652,26 @@ def Mk_MAIRType (v : (BitVec 64)) : (BitVec 64) :=
   v
 
 def _get_MAIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsb v (64 - 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _update_MAIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (64 - 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _update_S1PIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (64 - 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _update_S2PIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (64 - 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _set_MAIRType_bits (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_bits r v)
 
 def _get_S1PIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsb v (64 - 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _get_S2PIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsb v (64 - 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _set_S1PIRType_bits (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)

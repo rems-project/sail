@@ -94,14 +94,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m) - 1)
+  then ((Int.tdiv (n + 1) m) -i 1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m) - 1)
+       then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n - (m * (fdiv_int n m)))
+  (n -i (m * (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -130,10 +130,10 @@ def Mk_cr_type (v : (BitVec 8)) : (BitVec 8) :=
   v
 
 def _get_cr_type_bits (v : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsb v (8 - 1) 0)
+  (Sail.BitVec.extractLsb v (8 -i 1) 0)
 
 def _update_cr_type_bits (v : (BitVec 8)) (x : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v (8 - 1) 0 x)
+  (Sail.BitVec.updateSubrange v (8 -i 1) 0 x)
 
 def _set_cr_type_bits (r_ref : (RegisterRef RegisterType (BitVec 8))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)

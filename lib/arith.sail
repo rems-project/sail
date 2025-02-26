@@ -60,10 +60,10 @@ overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_sub", _: "sub_int"} : forall 'n 'm.
+val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_sub", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -71,7 +71,7 @@ val sub_nat = pure {
   ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
   lem: "integerMinus",
   coq: "Z.sub",
-  lean: "_lean_sub",
+  lean: "_lean_subi",
   _: "sub_nat"
 } : (nat, nat) -> nat
 
