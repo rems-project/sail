@@ -20,6 +20,8 @@ let opt_noncomputable_functions : IdSet.t ref = ref IdSet.empty
 
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
+let opens = ref IdSet.empty
+
 type context = {
   global : global_context;
   env : Type_check.env;
@@ -835,11 +837,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
     | E_try (e, cases) ->
         let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
-        let cases = doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot))) in
-        string "sailTryCatch "
-        ^^ parens (doc_exp false ctx e)
-        ^^ space
-        ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
+        let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
+        nest 2
+          (string "sailTryCatch "
+          ^^ parens (doc_exp false ctx e)
+          ^^ space
+          ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
+          )
     | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
     | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
     | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
@@ -982,12 +986,13 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
       let derivers = if List.length fields == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
       let enums_doc = concat fields in
+      let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
       nest 2
         (flow (break 1) [string "inductive"; id; string "where"]
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
         )
-      ^^ hardline ^^ hardline ^^ string "open " ^^ id
+      ^^ hardline ^^ hardline
   | TD_record (id, tq, fields, _) ->
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
@@ -1016,6 +1021,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
       doc_typ_quant_in_comment ctx tq ^^ hardline
       ^^ nest 2
@@ -1023,7 +1029,6 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
            ^^ pp_tus ^^ hardline ^^ string "deriving BEq"
            )
       ^^ hardline ^^ hardline
-      ^^ flow space [string "open"; id]
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
@@ -1083,6 +1088,7 @@ let add_reg_typ typ_map (typ, id, _) =
   Bindings.add typ_id (id, typ) typ_map
 
 let register_enums registers =
+  opens := IdSet.add (mk_id "Register") !opens;
   separate hardline
     [
       string "inductive Register : Type where";
@@ -1114,8 +1120,7 @@ let doc_reg_info env global registers =
   let ctx = context_init env global in
   let type_map = List.fold_left add_reg_typ Bindings.empty registers in
   let type_map = Bindings.bindings type_map in
-  separate hardline
-    [register_enums registers; type_enum ctx registers; string "open RegisterRef"; inhabit_enum ctx type_map; empty]
+  separate hardline [register_enums registers; type_enum ctx registers; inhabit_enum ctx type_map; empty]
 
 let doc_monad_abbrev defs (has_registers : bool) =
   let find_exc_typ defs =
@@ -1189,7 +1194,8 @@ let populate_fun_args defs =
   in
   List.fold_left (fun args d -> add_args args d) Bindings.empty defs
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) o =
+let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) types_file
+    funcs_file =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args } in
@@ -1199,7 +1205,9 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
-  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n\nopen Functions\n\n" in
+  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n" in
   let main_function = if !the_main_function_has_been_seen then main_function_stub has_registers else empty in
-  print o (types ^^ register_refs ^^ monad ^^ instantiations ^^ fundefs ^^ main_function);
+  let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
+  print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
+  print funcs_file (opens ^^ hardline ^^ fundefs ^^ string "open Functions\n\n" ^^ main_function);
   !the_main_function_has_been_seen

@@ -356,6 +356,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let use_real = false
   let use_void = false
   let eager_control_flow = true
+  let preserve_types = IdSet.empty
 end
 
 let register_types cdefs =

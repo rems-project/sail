@@ -756,6 +756,7 @@ module Make (Config : CONFIG) = struct
   let pp_type_def = function
     | CTD_abstract (id, _, _) ->
         Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
+    | CTD_abbrev _ -> empty
     | CTD_enum (id, ids) ->
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
@@ -1308,7 +1309,8 @@ module Make (Config : CONFIG) = struct
         | Init_cval cval ->
             let* value = Smt.smt_cval cval in
             wrap (SVS_var (id, ctyp, Some value))
-        | Init_json_key _ -> Reporting.unreachable l __POS__ "Json key found in SV backend"
+        | Init_json_key _ | Init_static _ ->
+            Reporting.unreachable l __POS__ "Unexpected cval initializer found in SV backend"
       )
     | I_return cval ->
         let* value = Smt.smt_cval cval in

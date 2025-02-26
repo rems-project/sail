@@ -76,6 +76,12 @@ let idecl l ctyp id = I_aux (I_decl (ctyp, id), (instr_number (), l))
 
 let ireset l ctyp id = I_aux (I_reset (ctyp, id), (instr_number (), l))
 
+let generate_static_var, _ = symbol_generator "gen_static"
+
+let istatic l ctyp value =
+  let id = Name (generate_static_var (), -1) in
+  (id, I_aux (I_init (ctyp, id, Init_static value), (instr_number (), l)))
+
 let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_number (), l))
 
 let ijson_key l id parts = I_aux (I_init (CT_json_key, id, Init_json_key parts), (instr_number (), l))
@@ -351,6 +357,7 @@ let string_of_creturn = function
 
 let string_of_init = function
   | Init_cval cval -> string_of_cval cval
+  | Init_static vl -> "static " ^ string_of_value vl
   | Init_json_key parts -> Util.string_of_list "." (fun part -> "\"" ^ part ^ "\"") parts
 
 let rec doc_instr (I_aux (aux, _)) =
@@ -694,7 +701,7 @@ let creturn_deps = function
         )
         (NameSet.empty, NameSet.empty) clexps
 
-let init_deps = function Init_cval cval -> cval_deps cval | Init_json_key _ -> NameSet.empty
+let init_deps = function Init_cval cval -> cval_deps cval | Init_static _ | Init_json_key _ -> NameSet.empty
 
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
@@ -776,7 +783,7 @@ let map_creturn_ctyp f = function
   | CR_multi clexps -> CR_multi (List.map (map_clexp_ctyp f) clexps)
 
 let map_init_ctyp f init =
-  match init with Init_cval cval -> Init_cval (map_cval_ctyp f cval) | Init_json_key _ -> init
+  match init with Init_cval cval -> Init_cval (map_cval_ctyp f cval) | Init_static _ | Init_json_key _ -> init
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr =
@@ -902,6 +909,7 @@ let cdef_concatmap_instr f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_conc
 let ctype_def_map_ctyp f = function
   | CTD_abstract (id, ctyp, inst) -> CTD_abstract (id, f ctyp, inst)
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
+  | CTD_abbrev (id, ctyp) -> CTD_abbrev (id, f ctyp)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
   | CTD_variant (id, ctors) -> CTD_variant (id, List.map (fun (id, ctyp) -> (id, f ctyp)) ctors)
 
@@ -1077,7 +1085,9 @@ let rec clexp_ctyp = function
 
 let creturn_ctyp = function CR_one clexp -> clexp_ctyp clexp | CR_multi clexps -> CT_tup (List.map clexp_ctyp clexps)
 
-let init_ctyps = function Init_cval cval -> CTSet.singleton (cval_ctyp cval) | Init_json_key _ -> CTSet.empty
+let init_ctyps = function
+  | Init_cval cval -> CTSet.singleton (cval_ctyp cval)
+  | Init_static _ | Init_json_key _ -> CTSet.empty
 
 let rec instr_ctyps (I_aux (instr, aux)) =
   match instr with
@@ -1099,16 +1109,16 @@ and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr
 
 let ctype_def_ctyps = function
   | CTD_enum _ | CTD_abstract _ -> []
+  | CTD_abbrev (_, ctyp) -> [ctyp]
   | CTD_struct (_, fields) -> List.map snd fields
   | CTD_variant (_, ctors) -> List.map snd ctors
 
 let ctype_def_id = function
-  | CTD_abstract (id, _, _) | CTD_enum (id, _) -> id
-  | CTD_struct (id, _) -> id
-  | CTD_variant (id, _) -> id
+  | CTD_abstract (id, _, _) | CTD_enum (id, _) | CTD_abbrev (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
 
 let ctype_def_to_ctyp = function
   | CTD_abstract (id, ctyp, _) -> ctyp
+  | CTD_abbrev (_, ctyp) -> ctyp
   | CTD_enum (id, ids) -> CT_enum (id, ids)
   | CTD_struct (id, fields) -> CT_struct (id, fields)
   | CTD_variant (id, ctors) -> CT_variant (id, ctors)

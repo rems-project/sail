@@ -160,7 +160,7 @@ let visit_init vis no_change =
   | Init_cval cval ->
       let cval' = visit_cval vis cval in
       if cval == cval' then no_change else Init_cval cval'
-  | Init_json_key _ -> no_change
+  | Init_static _ | Init_json_key _ -> no_change
 
 let rec visit_instr vis outer_instr =
   let aux vis no_change =
@@ -259,6 +259,10 @@ and visit_ctype_def vis no_change =
       let id' = visit_id vis id in
       let ctors' = map_no_copy (visit_binding vis) ctors in
       if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
+  | CTD_abbrev (id, ctyp) ->
+      let id' = visit_id vis id in
+      let ctyp' = visit_ctyp vis ctyp in
+      if id == id' && ctyp == ctyp' then no_change else CTD_abbrev (id', ctyp')
   | CTD_abstract (id, ctyp, init) ->
       let id' = visit_id vis id in
       let ctyp' = visit_ctyp vis ctyp in

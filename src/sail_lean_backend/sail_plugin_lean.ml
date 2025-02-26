@@ -180,13 +180,25 @@ type lean_context = {
   out_name : string;
   out_name_camel : string;
   sail_dir : string;
-  main_file : out_channel;
+  types_file : out_channel;
+  funcs_file : out_channel;
   lakefile : out_channel;
 }
 
 let file_to_module (filename : string) =
   let base = Filename.basename filename in
   Filename.chop_extension base
+
+let file_prelude =
+  {|set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+|}
 
 let start_lean_output (out_name : string) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
@@ -219,23 +231,25 @@ let start_lean_output (out_name : string) default_sail_dir =
       |> ignore
     )
     !opt_lean_import_files;
-  let main_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
-  output_string main_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
-  output_string main_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
+  let types_file = open_out (Filename.concat lean_src_dir "Defs.lean") in
+  output_string types_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
+  output_string types_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
+  output_string types_file file_prelude;
+  let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
+  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
+  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
+  output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n\n");
   List.iter
-    (fun filename -> output_string main_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n\n"))
+    (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n\n"))
     !opt_lean_import_files;
-  if !opt_lean_noncomputable then output_string main_file "noncomputable section\n\n";
-  output_string main_file "set_option maxHeartbeats 1_000_000_000\n";
-  output_string main_file "set_option maxRecDepth 10_000\n";
-  output_string main_file "set_option linter.unusedVariables false\n";
-  output_string main_file "set_option match.ignoreUnusedAlts true\n\n";
-  output_string main_file "open Sail\n\n";
+  output_string funcs_file file_prelude;
+  if !opt_lean_noncomputable then output_string funcs_file "noncomputable section\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
-  { out_name; out_name_camel; sail_dir; main_file; lakefile }
+  { out_name; out_name_camel; sail_dir; types_file; funcs_file; lakefile }
 
 let close_context ctx =
-  close_out ctx.main_file;
+  close_out ctx.types_file;
+  close_out ctx.funcs_file;
   close_out ctx.lakefile
 
 let create_lake_project (ctx : lean_context) executable =
@@ -252,7 +266,7 @@ let create_lake_project (ctx : lean_context) executable =
 
 let output (out_name : string) env effect_info ast default_sail_dir =
   let ctx = start_lean_output out_name default_sail_dir in
-  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.main_file in
+  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.types_file ctx.funcs_file in
   create_lake_project ctx executable
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)

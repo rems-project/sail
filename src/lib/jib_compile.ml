@@ -132,6 +132,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
@@ -181,6 +182,7 @@ let initial_ctx ?for_target env effect_info =
     letbinds = [];
     letbind_ids = IdSet.empty;
     no_raw = false;
+    no_static = false;
     coverage_override = true;
     def_annot = None;
   }
@@ -255,6 +257,7 @@ module type CONFIG = sig
   val track_throw : bool
   val use_void : bool
   val eager_control_flow : bool
+  val preserve_types : IdSet.t
 end
 
 module IdGraph = Graph.Make (Id)
@@ -656,6 +659,21 @@ module Make (C : CONFIG) = struct
        )
     |> if_chain
 
+  let static_load l ctyp f =
+    let loaded, loaded_instr = istatic l CT_bool (VL_bool false) in
+    let s, s_instr = istatic l ctyp VL_undefined in
+    ( [
+        loaded_instr;
+        s_instr;
+        iif l
+          (V_call (Bnot, [V_id (loaded, CT_bool)]))
+          (f s @ [icopy l (CL_id (loaded, CT_bool)) (V_lit (VL_bool true, CT_bool))])
+          [];
+      ],
+      (fun clexp -> icopy l clexp (V_id (s, ctyp))),
+      []
+    )
+
   let compile_config' l ctx key ctyp =
     let key_name = ngensym () in
     let json = ngensym () in
@@ -953,7 +971,11 @@ module Make (C : CONFIG) = struct
     in
 
     let setup, call, cleanup = extract json ctyp in
-    (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
+    if ctx.no_static then (init @ setup, call, cleanup @ [iclear CT_json json; iclear CT_json_key key_name])
+    else
+      static_load l ctyp (fun s ->
+          init @ setup @ [call (CL_id (s, ctyp))] @ cleanup @ [iclear CT_json json; iclear CT_json_key key_name]
+      )
 
   let compile_config l ctx args typ =
     let ctyp = ctyp_of_typ ctx typ in
@@ -1689,7 +1711,8 @@ module Make (C : CONFIG) = struct
    it returns a ctypdef * ctx pair. **)
   let compile_type_def ctx (TD_aux (type_def, (l, _))) =
     match type_def with
-    | TD_enum (id, ids, _) -> (CTD_enum (id, ids), { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums })
+    | TD_enum (id, ids, _) ->
+        (Some (CTD_enum (id, ids)), { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums })
     | TD_record (id, typq, ctors, _) ->
         let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
         let ctors =
@@ -1698,7 +1721,9 @@ module Make (C : CONFIG) = struct
             Bindings.empty ctors
         in
         let params = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in
-        (CTD_struct (id, Bindings.bindings ctors), { ctx with records = Bindings.add id (params, ctors) ctx.records })
+        ( Some (CTD_struct (id, Bindings.bindings ctors)),
+          { ctx with records = Bindings.add id (params, ctors) ctx.records }
+        )
     | TD_variant (id, typq, tus, _) ->
         let compile_tu = function
           | Tu_aux (Tu_ty_id (typ, id), _) ->
@@ -1709,15 +1734,24 @@ module Make (C : CONFIG) = struct
           List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus)
         in
         let params = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in
-        (CTD_variant (id, Bindings.bindings ctus), { ctx with variants = Bindings.add id (params, ctus) ctx.variants })
-    (* Will be re-written before here, see bitfield.ml *)
-    | TD_bitfield _ -> Reporting.unreachable l __POS__ "Cannot compile TD_bitfield"
+        ( Some (CTD_variant (id, Bindings.bindings ctus)),
+          { ctx with variants = Bindings.add id (params, ctus) ctx.variants }
+        )
     (* All type abbreviations are filtered out in compile_def  *)
-    | TD_abbrev _ -> Reporting.unreachable l __POS__ "Found TD_abbrev in compile_type_def"
-    | TD_abstract (id, K_aux (kind, _), inst) -> begin
+    | TD_abbrev (id, typq, arg) -> (
+        match arg with
+        | A_aux (A_typ typ, _) when string_of_id id <> "bits" && not (List.exists is_typ_kopt (quant_kopts typq)) ->
+            let abbrev_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
+            let ctyp = ctyp_of_typ abbrev_ctx typ in
+            (Some (CTD_abbrev (id, ctyp)), ctx)
+        | _ -> (None, ctx)
+      )
+    | TD_abstract (id, K_aux (kind, _), inst) -> (
         let compile_inst ctyp = function
           | TDC_key key ->
-              let setup, call, cleanup = compile_config' l ctx key ctyp in
+              (* The abstract initialisers are ran very early, before the rest of the model,
+                 so we can't rely on Jib static initialisers being set up. *)
+              let setup, call, cleanup = compile_config' l { ctx with no_static = true } key ctyp in
               CTDI_instrs (setup @ [call (CL_id (name id, ctyp))] @ cleanup)
           | TDC_none -> CTDI_none
         in
@@ -1725,12 +1759,14 @@ module Make (C : CONFIG) = struct
         | K_int ->
             let ctyp = ctyp_of_typ ctx (atom_typ (nid id)) in
             let inst = compile_inst ctyp inst in
-            (CTD_abstract (id, ctyp, inst), { ctx with abstracts = Bindings.add id ctyp ctx.abstracts })
+            (Some (CTD_abstract (id, ctyp, inst)), { ctx with abstracts = Bindings.add id ctyp ctx.abstracts })
         | K_bool ->
             let inst = compile_inst CT_bool inst in
-            (CTD_abstract (id, CT_bool, inst), { ctx with abstracts = Bindings.add id CT_bool ctx.abstracts })
+            (Some (CTD_abstract (id, CT_bool, inst)), { ctx with abstracts = Bindings.add id CT_bool ctx.abstracts })
         | _ -> Reporting.unreachable l __POS__ "Found abstract type that was neither an integer nor a boolean"
-      end
+      )
+    (* Will be re-written before here, see bitfield.ml *)
+    | TD_bitfield _ -> Reporting.unreachable l __POS__ "Cannot compile TD_bitfield"
 
   let generate_cleanup instrs =
     let generate_cleanup' (I_aux (instr, _)) =
@@ -2146,12 +2182,9 @@ module Make (C : CONFIG) = struct
         raise (Reporting.err_general l "Encountered function with no clauses")
     | DEF_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with multiple clauses")
-    (* All abbreviations should expanded by the typechecker, so we don't
-       need to translate type abbreviations into C typedefs. *)
-    | DEF_type (TD_aux (TD_abbrev _, _)) -> ([], ctx)
     | DEF_type type_def ->
-        let tdef, ctx = compile_type_def ctx type_def in
-        ([CDEF_aux (CDEF_type tdef, def_annot)], ctx)
+        let tdef_opt, ctx = compile_type_def ctx type_def in
+        (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt), ctx)
     | DEF_let (LB_aux (LB_val (pat, exp), _)) ->
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
         let aexp = C.optimize_anf ctx (no_shadow ctx.letbind_ids (anf exp)) in
@@ -2733,11 +2766,12 @@ module Make (C : CONFIG) = struct
     let cdefs = List.filter (fun cdef -> not (is_ctype_def cdef)) cdefs in
 
     let ctdef_id = function
-      | CTD_abstract (id, _, _) | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) -> id
+      | CTD_abstract (id, _, _) | CTD_enum (id, _) | CTD_struct (id, _) | CTD_variant (id, _) | CTD_abbrev (id, _) -> id
     in
 
     let ctdef_ids = function
       | CTD_enum _ | CTD_abstract _ -> IdSet.empty
+      | CTD_abbrev (_, ctyp) -> ctyp_ids ctyp
       | CTD_struct (_, ctors) | CTD_variant (_, ctors) ->
           List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors
     in
@@ -2777,11 +2811,50 @@ module Make (C : CONFIG) = struct
     let toplevel_lets_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map toplevel_lets_of_def defs) in
     toplevel_lets_of_defs ast.defs |> IdSet.elements
 
+  class static_visitor statics =
+    object
+      inherit empty_jib_visitor
+
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
+      method! vinstr =
+        function
+        | I_aux (I_init (ctyp, Name (id, _), Init_static VL_undefined), (_, l)) ->
+            statics := (l, ctyp, id, None) :: !statics;
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
+        | I_aux (I_init (ctyp, Name (id, _), Init_static vl), (_, l)) ->
+            statics := (l, ctyp, id, Some vl) :: !statics;
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
+        | _ -> DoChildren
+    end
+
+  let lift_statics cdefs =
+    List.map
+      (fun cdef ->
+        let statics = ref [] in
+        let cdef = visit_cdef (new static_visitor statics) cdef in
+        List.rev_map
+          (fun (l, ctyp, id, vl_opt) ->
+            match vl_opt with
+            | None -> CDEF_aux (CDEF_register (id, ctyp, []), mk_def_annot l ())
+            | Some vl ->
+                CDEF_aux
+                  (CDEF_register (id, ctyp, [icopy l (CL_id (name id, ctyp)) (V_lit (vl, ctyp))]), mk_def_annot l ())
+          )
+          !statics
+        @ [cdef]
+      )
+      cdefs
+    |> List.concat
+
   let compile_ast ctx ast =
     let module G = Graph.Make (Callgraph.Node) in
     let g = Callgraph.graph_of_ast ast in
     let module NodeSet = Set.Make (Callgraph.Node) in
     let roots = Specialize.get_initial_calls () |> List.map (fun id -> Callgraph.Function id) |> NodeSet.of_list in
+    let roots = IdSet.fold (fun id roots -> NodeSet.add (Callgraph.Type id) roots) C.preserve_types roots in
     let roots = NodeSet.add (Callgraph.Type (mk_id "exception")) roots in
     let roots =
       Bindings.fold (fun typ_id _ roots -> NodeSet.add (Callgraph.Type typ_id) roots) (Env.get_enums ctx.tc_env) roots
@@ -2830,5 +2903,6 @@ module Make (C : CONFIG) = struct
     let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = make_calls_precise ctx cdefs in
     let cdefs = sort_ctype_defs false cdefs in
+    let cdefs = lift_statics cdefs in
     (cdefs, ctx)
 end

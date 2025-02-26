@@ -88,6 +88,7 @@ type ctx = {
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
@@ -166,6 +167,9 @@ module type CONFIG = sig
       control-flow like this is useful for the Sail->SV and Sail->SMT
       backends. *)
   val eager_control_flow : bool
+
+  (** Types to preserve in the Jib output *)
+  val preserve_types : IdSet.t
 end
 
 module IdGraph : sig
