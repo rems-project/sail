@@ -559,25 +559,29 @@ let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
+  let env = env_of_tannot annot in
+  let d_of_arg ctx arg =
+    let wrap, arg_monadic =
+      match arg with
+      | E_aux (arg', _) -> (
+          match arg' with
+          | E_typ (_, e) when effectful (effect_of e) || has_early_return e -> (parens, false)
+          | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
+              if effectful (effect_of arg) then ((fun x -> wrap_with_do true x), true) else (parens, false)
+          | _ -> ((fun x -> x), false)
+        )
+    in
+    wrap (doc_exp arg_monadic ctx arg)
+  in
+  let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
+    let field_monadic = effectful (effect_of e) in
+    doc_fexp field_monadic ctx fexp
+  in
   if need_cont ctx && not (has_early_return full_exp) then (
-    let d = parens (doc_exp false (remove_er ctx) full_exp) in
+    let d = d_of_arg (remove_er ctx) full_exp in
     wrap_with_pure as_monadic (parens (nest 2 (flow space [string "cont"; d])))
   )
   else (
-    let env = env_of_tannot annot in
-    let d_of_arg ctx arg =
-      let wrap, arg_monadic =
-        match arg with
-        | E_aux (E_let _, _) | E_aux (E_internal_plet _, _) | E_aux (E_if _, _) | E_aux (E_match _, _) ->
-            if effectful (effect_of arg) then ((fun x -> wrap_with_do true x), true) else (parens, false)
-        | _ -> ((fun x -> x), false)
-      in
-      wrap (doc_exp arg_monadic ctx arg)
-    in
-    let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
-      let field_monadic = effectful (effect_of e) in
-      doc_fexp field_monadic ctx fexp
-    in
     (* string (" /- " ^ string_of_exp_con full_exp ^ " -/ ") ^^ *)
     match e with
     | E_id id ->
@@ -757,8 +761,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             wrap_with_pure (as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
+    | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
+        let arg_pp = d_of_arg (remove_er ctx) arg in
+        let body = match ctx.early_ret with None -> arg_pp | _ -> parens (doc_id_ctor f ^/^ arg_pp) in
+        nest 2 (string "return " ^^ body)
     | E_app (f, args) -> (
-        let ctx = match f with Id_aux (Id "early_return", _) -> remove_er ctx | _ -> ctx in
         let _, f_typ = Env.get_val_spec f env in
         let implicits = get_fn_implicits f_typ in
         let arg_names = Bindings.find_opt f ctx.global.fun_args in
