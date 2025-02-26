@@ -31,6 +31,9 @@ type context = {
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
   early_ret : bool option;
+      (** None : There are no early returns in the context;
+          Some true : The context contains an early return and expects an ER type (i.e. no catch needed);
+          Some false : The context contains an early return, but we except a "pure" type (i.e. a catch may be needed) *)
 }
 
 let context_init env global =
