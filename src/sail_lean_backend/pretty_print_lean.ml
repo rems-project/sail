@@ -565,7 +565,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       match arg with
       | E_aux (arg', _) -> (
           match arg' with
-          | E_typ (_, e) when effectful (effect_of e) || has_early_return e -> (parens, false)
+          | E_typ (_, e) when effectful (effect_of e) -> ((fun x -> wrap_with_do true x), true)
+          | E_typ (_, e) when has_early_return e -> (parens, false)
           | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
               if effectful (effect_of arg) then ((fun x -> wrap_with_do true x), true) else (parens, false)
           | _ -> ((fun x -> x), false)
@@ -762,6 +763,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
     | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
+        let effects = effectful (effect_of arg) in
         let arg_pp = d_of_arg (remove_er ctx) arg in
         let body = match ctx.early_ret with None -> arg_pp | _ -> parens (doc_id_ctor f ^/^ arg_pp) in
         nest 2 (string "return " ^^ body)

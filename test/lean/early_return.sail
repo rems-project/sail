@@ -193,3 +193,13 @@ function ite_early_return_loop(x : bool) -> E = {
     } else r_B = A;
   r_B
 }
+
+function unit_type(x : E) -> unit = {
+  r_A = x;
+}
+
+function ite_early_return_seq(x : bool) -> E = {
+  r_A = r_C;
+  let y : E = if x then {unit_type(A); return r_A} else r_B;
+  r_B
+}

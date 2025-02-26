@@ -66,7 +66,7 @@ open E
 
 namespace Functions
 
-/-- Type quantifiers: k_ex2327# : Bool, k_ex2326# : Bool -/
+/-- Type quantifiers: k_ex2343# : Bool, k_ex2342# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -218,7 +218,8 @@ def foreach_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := do
           then return (early_return
                  (false : Bool))
           else (pure (cont (← writeReg r ((← readReg r) + 1))))))
-      (pure (cont ((← writeReg r ((← readReg r) * 2)))))))
+      (pure (cont (← do
+            writeReg r ((← readReg r) * 2))))))
   (pure (GT.gt (← readReg r) n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -307,7 +308,8 @@ def while_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := do
           then return (early_return
                  (false : Bool))
           else (pure (cont (← writeReg r ((← readReg r) + 1))))))
-      (pure (cont ((← writeReg r ((← readReg r) * 2)))))))
+      (pure (cont (← do
+            writeReg r ((← readReg r) * 2))))))
   (pure (GT.gt (← readReg r) n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -330,7 +332,9 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := Id.run do
 
 def match_early_return (x : E) : SailM E := do
   match x with
-  | A => return ((← readReg r_A))
+  | A =>
+    return (← do
+        readReg r_A)
   | B => writeReg r_B A
   | C => writeReg r_C A
   readReg r_B
@@ -342,7 +346,10 @@ def match_early_return_inloop (x : E) : SailM E := do
   (foreach_ME loop_i_lower loop_i_upper 1 ()
     (λ i _ => do
       match x with
-      | A => return (early_return ((← readReg r_A)))
+      | A =>
+        return (early_return
+          (← do
+            readReg r_A))
       | B => (pure (cont (← writeReg r_B A)))
       | C => (pure (cont (← writeReg r_C A)))))
   readReg r_B
@@ -355,7 +362,10 @@ def match_early_return_inloop_2 (x : E) : SailM E := do
     (λ i _ => do
       let y : E ← do
         match x with
-        | A => return (early_return ((← readReg r_A)))
+        | A =>
+          return (early_return
+            (← do
+              readReg r_A))
         | B => readReg r_B
         | C => readReg r_C
       (pure (cont ()))))
@@ -368,21 +378,25 @@ def match_early_return_loop (x : E) : SailM E := do
     let loop_i_upper := 10
     catchEarlyReturn
     (foreach_ME loop_i_lower loop_i_upper 1 ()
-      (λ i _ => do return (early_return ((← readReg r_A)))))
+      (λ i _ => do
+        return (early_return
+          (← do
+            readReg r_A))))
   | B => writeReg r_B A
   | C => writeReg r_C A
   readReg r_B
 
-/-- Type quantifiers: k_ex2639# : Bool -/
+/-- Type quantifiers: k_ex2655# : Bool -/
 def ite_early_return (x : Bool) : SailM E := do
   writeReg r_A (← readReg r_C)
   let y : E ← do
     if x
-    then return ((← readReg r_A))
+    then return (← do
+             readReg r_A)
     else readReg r_B
   readReg r_B
 
-/-- Type quantifiers: k_ex2641# : Bool -/
+/-- Type quantifiers: k_ex2657# : Bool -/
 def ite_early_return_inloop (x : Bool) : SailM E := do
   let loop_i_lower := 0
   let loop_i_upper := 10
@@ -393,20 +407,38 @@ def ite_early_return_inloop (x : Bool) : SailM E := do
       let y : E ← do
         if x
         then return (early_return
-               ((← readReg r_A)))
+               (← do
+                 readReg r_A))
         else readReg r_B
       (pure (cont ()))))
   readReg r_B
 
-/-- Type quantifiers: k_ex2645# : Bool -/
+/-- Type quantifiers: k_ex2661# : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := do
   if x
   then let loop_i_lower := 0
        let loop_i_upper := 10
        catchEarlyReturn
        (foreach_ME loop_i_lower loop_i_upper 1 ()
-         (λ i _ => do return (early_return ((← readReg r_A)))))
+         (λ i _ => do
+           return (early_return
+             (← do
+               readReg r_A))))
   else writeReg r_B A
+  readReg r_B
+
+def unit_type (x : E) : SailM Unit := do
+  writeReg r_A x
+
+/-- Type quantifiers: k_ex2665# : Bool -/
+def ite_early_return_seq (x : Bool) : SailM E := do
+  writeReg r_A (← readReg r_C)
+  let y : E ← do
+    if x
+    then return (← do
+             (unit_type A)
+             readReg r_A)
+    else readReg r_B
   readReg r_B
 
 def initialize_registers (_ : Unit) : SailM Unit := do
