@@ -114,3 +114,92 @@ function while_earlyreturnpure(n : nat) -> bool = {
   };
   res > n
 }
+
+function foreach_inner_earlyreturneffect(n : nat) -> bool = {
+  foreach (i from 0 to n) {
+    foreach (j from 0 to i) {
+      if i > 5 then return false;
+      r = r + 1;
+    }
+  };
+  r > n
+}
+
+function foreach_inner_earlyreturnpure(n : nat) -> bool = {
+  var res : nat = 0;
+  foreach (i from 0 to n) {
+    foreach (j from 0 to i) {
+      if i > 5 then return false;
+      res = res + 1;
+    };
+  };
+  res > n
+}
+
+function foreach_inner_earlyreturneffect_catch(n : nat) -> bool = {
+  foreach (i from 0 to n) {
+    foreach (j from 0 to i) {
+      if i > 5 then return false;
+      r = r + 1;
+    };
+    r = r * 2;
+  };
+  r > n
+}
+
+function foreach_inner_earlyreturnpure_catch(n : nat) -> bool = {
+  var res : nat = 0;
+  foreach (i from 0 to n) {
+    foreach (j from 0 to i) {
+      if i > 5 then return false;
+      res = res + 1;
+    };
+    res = res * 2;
+  };
+  res > n
+}
+
+
+function while_inner_earlyreturneffect(n : nat) -> bool = {
+  while (r < n) do {
+    while (r < n) do {
+      if n > 5 then return false;
+      r = r + 1;
+    }
+  };
+  r > n
+}
+
+function while_inner_earlyreturnpure(n : nat) -> bool = {
+  var res : nat = 0;
+  while (res < n) do {
+    while (res < n) do {
+      if n > 5 then return false;
+      res = res + 1;
+    };
+  };
+  res > n
+}
+
+function while_inner_earlyreturneffect_catch(n : nat) -> bool = {
+  while (r < n) do {
+    while (r < n) do {
+      if n > 5 then return false;
+      r = r + 1;
+    };
+    r = r * 2;
+  };
+  r > n
+}
+
+function while_inner_earlyreturnpure_catch(n : nat) -> bool = {
+  var res : nat = 0;
+  while (res < n) do {
+    while (res < n) do {
+      if n > 5 then return false;
+      res = res + 1;
+    };
+    res = res * 2;
+  };
+  res > n
+}

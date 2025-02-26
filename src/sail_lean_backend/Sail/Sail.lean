@@ -82,10 +82,10 @@ def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
 def valid_hex_bits (n : Nat) (str : String) : Bool := str.length = n ∧ str.all fun x =>
   x.toLower ∈ ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
-def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n := 
+def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv <<< sh
 
-def shift_bits_right (bv : BitVec n) (sh : BitVec m) : BitVec n := 
+def shift_bits_right (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv >>> sh
 
 def shiftl (bv : BitVec n) (m : Nat) : BitVec n :=
@@ -441,7 +441,9 @@ def foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSai
     else foreach_ME' to from' step vars body
 
 macro "catchEarlyReturn" m:term : doElem => `(doElem| match ← $m with | early_return x => return x | cont x => pure x)
+macro "catchEarlyReturnInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => pure x)
 macro "catchEarlyReturnPure" m:term : doElem => `(doElem| match ($m) with | early_return x => return x | cont x => x)
+macro "catchEarlyReturnPureInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => x)
 
 def while_ (cond : Vars -> Bool) (vars : Vars) (body : Vars -> Vars) : Vars := Id.run do
  let mut vars := vars

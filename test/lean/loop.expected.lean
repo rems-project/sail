@@ -52,7 +52,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex2319# : Bool, k_ex2318# : Bool -/
+/-- Type quantifiers: k_ex3379# : Bool, k_ex3378# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -189,7 +189,7 @@ def foreach_earlyreturnpure (n : Nat) : Bool := Id.run do
     let loop_i_upper := n
     catchEarlyReturnPure
     (foreach_E loop_i_lower loop_i_upper 1 res
-      (λ i res =>
+      (λ i res => Id.run do
         if (GT.gt i 5)
         then (early_return (false : Bool))
         else (cont ((res + i)))))
@@ -245,10 +245,140 @@ def while_earlyreturnpure (n : Nat) : Bool := Id.run do
   let res : Nat ← do
     catchEarlyReturnPure
     (while_E (λ res => (LT.lt res n)) res
-      (λ res =>
+      (λ res => Id.run do
         if (GT.gt res 5)
         then (early_return (false : Bool))
         else (cont ((res + 1)))))
+  (pure (GT.gt res n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def foreach_inner_earlyreturneffect (n : Nat) : SailM Bool := do
+  let loop_i_lower := 0
+  let loop_i_upper := n
+  catchEarlyReturn
+  (foreach_ME loop_i_lower loop_i_upper 1 ()
+    (λ i _ => do
+      let loop_j_lower := 0
+      let loop_j_upper := i
+      foreach_ME loop_j_lower loop_j_upper 1 ()
+        (λ j _ => do
+          if (GT.gt i 5)
+          then (pure (early_return (false : Bool)))
+          else (pure (cont ((← writeReg r ((← readReg r) + 1))))))))
+  (pure (GT.gt (← readReg r) n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def foreach_inner_earlyreturnpure (n : Nat) : Bool := Id.run do
+  let res : Nat := 0
+  let res : Nat ← do
+    let loop_i_lower := 0
+    let loop_i_upper := n
+    catchEarlyReturnPure
+    (foreach_E loop_i_lower loop_i_upper 1 res
+      (λ i res => Id.run do
+        let loop_j_lower := 0
+        let loop_j_upper := i
+        foreach_E loop_j_lower loop_j_upper 1 res
+          (λ j res => Id.run do
+            if (GT.gt i 5)
+            then (early_return (false : Bool))
+            else (cont ((res + 1))))))
+  (pure (GT.gt res n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def foreach_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := do
+  let loop_i_lower := 0
+  let loop_i_upper := n
+  catchEarlyReturn
+  (foreach_ME loop_i_lower loop_i_upper 1 ()
+    (λ i _ => do
+      let loop_j_lower := 0
+      let loop_j_upper := i
+      catchEarlyReturnInner
+      (foreach_ME loop_j_lower loop_j_upper 1 ()
+        (λ j _ => do
+          if (GT.gt i 5)
+          then (pure (early_return (false : Bool)))
+          else (pure (cont ((← writeReg r ((← readReg r) + 1)))))))
+      (pure (cont ((← writeReg r ((← readReg r) * 2)))))))
+  (pure (GT.gt (← readReg r) n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def foreach_inner_earlyreturnpure_catch (n : Nat) : Bool := Id.run do
+  let res : Nat := 0
+  let res : Nat ← do
+    let loop_i_lower := 0
+    let loop_i_upper := n
+    catchEarlyReturnPure
+    (foreach_E loop_i_lower loop_i_upper 1 res
+      (λ i res => Id.run do
+        let res : Nat ← do
+          let loop_j_lower := 0
+          let loop_j_upper := i
+          catchEarlyReturnPureInner
+          (foreach_E loop_j_lower loop_j_upper 1 res
+            (λ j res => Id.run do
+              if (GT.gt i 5)
+              then (early_return (false : Bool))
+              else (cont ((res + 1)))))
+        (cont ((res * 2)))))
+  (pure (GT.gt res n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def while_inner_earlyreturneffect (n : Nat) : SailM Bool := do
+  catchEarlyReturn
+  (while_ME (λ _ => do (pure (LT.lt (← readReg r) n))) ()
+    (λ _ => do
+      while_ME (λ _ => do (pure (LT.lt (← readReg r) n))) ()
+        (λ _ => do
+          if (GT.gt n 5)
+          then (pure (early_return (false : Bool)))
+          else (pure (cont ((← writeReg r ((← readReg r) + 1))))))))
+  (pure (GT.gt (← readReg r) n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def while_inner_earlyreturnpure (n : Nat) : Bool := Id.run do
+  let res : Nat := 0
+  let res : Nat ← do
+    catchEarlyReturnPure
+    (while_E (λ res => (LT.lt res n)) res
+      (λ res => Id.run do
+        while_E (λ res => (LT.lt res n)) res
+          (λ res => Id.run do
+            if (GT.gt n 5)
+            then (early_return (false : Bool))
+            else (cont ((res + 1))))))
+  (pure (GT.gt res n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def while_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := do
+  catchEarlyReturn
+  (while_ME (λ _ => do (pure (LT.lt (← readReg r) n))) ()
+    (λ _ => do
+      catchEarlyReturnInner
+      (while_ME (λ _ => do (pure (LT.lt (← readReg r) n))) ()
+        (λ _ => do
+          if (GT.gt n 5)
+          then (pure (early_return (false : Bool)))
+          else (pure (cont ((← writeReg r ((← readReg r) + 1)))))))
+      (pure (cont ((← writeReg r ((← readReg r) * 2)))))))
+  (pure (GT.gt (← readReg r) n))
+
+/-- Type quantifiers: n : Nat, 0 ≤ n -/
+def while_inner_earlyreturnpure_catch (n : Nat) : Bool := Id.run do
+  let res : Nat := 0
+  let res : Nat ← do
+    catchEarlyReturnPure
+    (while_E (λ res => (LT.lt res n)) res
+      (λ res => Id.run do
+        let res : Nat ← do
+          catchEarlyReturnPureInner
+          (while_E (λ res => (LT.lt res n)) res
+            (λ res => Id.run do
+              if (GT.gt n 5)
+              then (early_return (false : Bool))
+              else (cont ((res + 1)))))
+        (cont ((res * 2)))))
   (pure (GT.gt res n))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
