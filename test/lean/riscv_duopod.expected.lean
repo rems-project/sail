@@ -59,7 +59,9 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg PC
 instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 64) 32)) where
   default := .Reg Xs
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

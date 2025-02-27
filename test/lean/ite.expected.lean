@@ -36,7 +36,9 @@ instance : Inhabited (RegisterRef RegisterType Bool) where
   default := .Reg B
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg R
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

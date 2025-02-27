@@ -32,7 +32,9 @@ abbrev RegisterType : Register → Type
 
 instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
   default := .Reg dummy
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

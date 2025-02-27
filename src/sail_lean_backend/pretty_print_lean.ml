@@ -1155,11 +1155,12 @@ let doc_monad_abbrev defs (has_registers : bool) =
       | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
       | _ -> false
     in
-    if List.exists is_exc_typ_def defs then "exception" else "Unit"
+    if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"
   in
-  let exc = find_exc_typ defs in
-  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource " ^^ string exc in
-  separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
+  let excdef = find_exc_typ defs in
+  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource exception" in
+  let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline in
+  separate hardline (remove_empties [excdef; monad])
 
 let doc_instantiations ctx env =
   let params = Monad_params.find_monad_parameters env in

@@ -30,7 +30,9 @@ inductive E where | A | B | C
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
 
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

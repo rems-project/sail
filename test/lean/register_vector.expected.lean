@@ -96,7 +96,9 @@ abbrev RegisterType : Register → Type
 
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

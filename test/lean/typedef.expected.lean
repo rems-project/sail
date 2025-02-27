@@ -33,7 +33,9 @@ abbrev my_bits k_n := (BitVec k_n)
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
 
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

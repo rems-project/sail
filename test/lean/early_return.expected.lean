@@ -45,7 +45,9 @@ instance : Inhabited (RegisterRef RegisterType E) where
   default := .Reg r_A
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg r
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

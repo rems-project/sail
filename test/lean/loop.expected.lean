@@ -32,7 +32,9 @@ abbrev RegisterType : Register → Type
 
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg r
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

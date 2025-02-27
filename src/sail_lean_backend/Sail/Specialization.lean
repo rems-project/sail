@@ -3,6 +3,10 @@ import THE_MODULE_NAME.Defs
 
 namespace Sail
 
+def sailTryCatch (e : SailM α) (h : exception → SailM α) : SailM α := PreSail.sailTryCatch e h
+
+def sailThrow (e : exception) : SailM α := PreSail.sailThrow e
+
 abbrev undefined_bit (_ : Unit) : SailM (BitVec 1) := PreSail.undefined_bit ()
 
 abbrev undefined_bool (_ : Unit) : SailM Bool := PreSail.undefined_bool ()
