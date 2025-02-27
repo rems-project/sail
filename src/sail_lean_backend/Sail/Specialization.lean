@@ -76,4 +76,18 @@ abbrev while_ME (cond : Vars -> SailM Bool) (vars : Vars) (body : Vars -> SailM 
 
 end Loops
 
+abbrev SailME α := ExceptT α SailM
+
+def SailME.run (m : SailME α α) : SailM α := do
+  match (← ExceptT.run m) with
+    | .error e => pure e
+    | .ok e => pure e
+
+abbrev ExceptM α := ExceptT α Id
+
+def ExceptM.run (m : ExceptM α α) : α :=
+  match (ExceptT.run m) with
+    | .error e => e
+    | .ok e => e
+
 end Sail
