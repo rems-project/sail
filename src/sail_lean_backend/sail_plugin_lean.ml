@@ -223,13 +223,16 @@ let start_lean_output (out_name : string) default_sail_dir =
   Unix.mkdir lean_sail_dir 0o775;
   let _ =
     Unix.system
-      ("cp " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/BitVec.lean") ^ " " ^ Filename.quote lean_sail_dir)
+      ("cp "
+      ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/BitVec.lean")
+      ^ " " ^ Filename.quote lean_sail_dir
+      )
   in
   let _ =
     Unix.system
       ("cp " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/Sail.lean") ^ " " ^ Filename.quote lean_sail_dir)
   in
-  opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean")::!opt_lean_import_files;
+  opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
       let filepath = Filename.concat lean_src_dir (file_to_module filename) in
@@ -241,7 +244,7 @@ let start_lean_output (out_name : string) default_sail_dir =
   let types_file = open_out (Filename.concat lean_src_dir "Defs.lean") in
   output_string types_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string types_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
-  output_string types_file ("open PreSail\n\n");
+  output_string types_file "open PreSail\n\n";
   output_string types_file file_prelude;
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");

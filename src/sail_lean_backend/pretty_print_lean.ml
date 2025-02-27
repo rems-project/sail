@@ -1158,8 +1158,7 @@ let doc_monad_abbrev defs (has_registers : bool) =
     if List.exists is_exc_typ_def defs then "exception" else "Unit"
   in
   let exc = find_exc_typ defs in
-  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource " ^^ string exc
-  in
+  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource " ^^ string exc in
   separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
 
 let doc_instantiations ctx env =
@@ -1226,7 +1225,10 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let global = { effect_info; fun_args } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
-  let register_refs = if has_registers then doc_reg_info env global regs else string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n" in
+  let register_refs =
+    if has_registers then doc_reg_info env global regs
+    else string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n"
+  in
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
