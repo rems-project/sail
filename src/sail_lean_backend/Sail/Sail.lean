@@ -573,3 +573,8 @@ instance : HPow Nat Int Nat where
 
 instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat
+
+instance : HSub Nat Nat Int where
+  hSub m n := (m : Int) - (n : Int)
+
+infixl:65 " -i "   => HSub.hSub (γ := Int)

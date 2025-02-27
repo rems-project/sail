@@ -531,6 +531,7 @@ let op_of_id id =
   match id with
   | Some "_lean_add" -> `Binop "+"
   | Some "_lean_sub" -> `Binop "-"
+  | Some "_lean_subi" -> `Binop "-i"
   | Some "_lean_mul" -> `Binop "*"
   | Some "_lean_div" -> `Binop "/"
   | Some "_lean_app" -> `Binop "++"
