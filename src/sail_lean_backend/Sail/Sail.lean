@@ -547,4 +547,10 @@ instance : HPow Int Int Int where
 instance : HSub Nat Nat Int where
   hSub m n := (m : Int) - (n : Int)
 
-infixl:65 " -i "   => HSub.hSub (γ := Int)
+instance : HPow Nat Int Int where
+  hPow m z := (m : Int) ^ z
+
+instance : HSub Nat Int Int where
+  hSub m z := (m : Int) - z
+
+infixl:65 " -i " => HSub.hSub (γ := Int)
