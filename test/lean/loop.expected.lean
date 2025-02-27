@@ -1,6 +1,8 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
@@ -30,7 +32,9 @@ abbrev RegisterType : Register → Type
 
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg r
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX
@@ -38,6 +42,8 @@ XXXXXXXXX
 import Out.Sail.Sail
 import Out.Sail.BitVec
 import Out.Defs
+
+import Out.Specialization
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000

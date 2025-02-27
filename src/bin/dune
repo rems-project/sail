@@ -259,4 +259,7 @@
    src/sail_lean_backend/Sail/Sail.lean)
   (%{workspace_root}/src/sail_lean_backend/Sail/BitVec.lean
    as
-   src/sail_lean_backend/Sail/BitVec.lean)))
+   src/sail_lean_backend/Sail/BitVec.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/Specialization.lean
+   as
+   src/sail_lean_backend/Sail/Specialization.lean)))

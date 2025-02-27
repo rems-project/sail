@@ -244,7 +244,7 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
       parens (string "BitVec " ^^ doc_nexp ctx m)
   | Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp x, _)]) -> if provably_nneg ctx x then string "Nat" else string "Int"
   | Typ_app (Id_aux (Id "register", _), t_app) ->
-      parens (string "RegisterRef RegisterType " ^^ separate_map comma (doc_typ_app ctx) t_app)
+      parens (string "RegisterRef " ^^ separate_map comma (doc_typ_app ctx) t_app)
   | Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]) ->
       underscore (* TODO check if the type of implicit arguments can really be always inferred *)
   | Typ_app (Id_aux (Id "option", _), [A_aux (A_typ typ, _)]) -> parens (string "Option " ^^ doc_typ ctx typ)
@@ -859,7 +859,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
         ^^ hardline
         ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
-    | E_ref id -> string "Reg " ^^ doc_id_ctor id
+    | E_ref id -> string ".Reg " ^^ doc_id_ctor id
     | E_exit _ -> string "throw Error.Exit"
     | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
     | E_try (e, cases) ->
@@ -1155,14 +1155,12 @@ let doc_monad_abbrev defs (has_registers : bool) =
       | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
       | _ -> false
     in
-    if List.exists is_exc_typ_def defs then "exception" else "Unit"
+    if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"
   in
-  let exc = find_exc_typ defs in
-  let pp_register_type =
-    if has_registers then string "PreSailM RegisterType trivialChoiceSource " ^^ string exc
-    else string "PreSailM PEmpty.elim trivialChoiceSource " ^^ string exc
-  in
-  separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline
+  let excdef = find_exc_typ defs in
+  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource exception" in
+  let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline in
+  separate hardline (remove_empties [excdef; monad])
 
 let doc_instantiations ctx env =
   let params = Monad_params.find_monad_parameters env in
@@ -1228,7 +1226,10 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let global = { effect_info; fun_args } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
-  let register_refs = if has_registers then doc_reg_info env global regs else empty in
+  let register_refs =
+    if has_registers then doc_reg_info env global regs
+    else string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n"
+  in
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
