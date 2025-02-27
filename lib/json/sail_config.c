@@ -94,6 +94,34 @@ sail_config_json sail_config_get(size_t n, const char *key[])
   return (sail_config_json)json;
 }
 
+sail_config_json sail_config_lookup(const char *dotted_key)
+{
+  sail_config_json result;
+  cJSON *json = (cJSON *)sail_config;
+
+  size_t start = 0;
+  size_t len = strlen(dotted_key);
+
+  for (size_t i = 0; i <= len; i++) {
+    if (dotted_key[i] == '.' || dotted_key[i] == '\0') {
+      char *key = (char *)sail_malloc((i - start) + 1);
+      strncpy(key, dotted_key + start, i - start);
+      key[i - start] = '\0';
+      fprintf(stderr, "'%s'\n", key);
+      start = i + 1;
+
+      if (cJSON_IsObject(json)) {
+        json = cJSON_GetObjectItemCaseSensitive(json, key);
+      } else {
+        json = NULL;
+        break;
+      }
+    }
+  }
+
+  return (sail_config_json)json;
+}
+
 int64_t sail_config_list_length(const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;

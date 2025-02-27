@@ -72,6 +72,13 @@ void sail_config_cleanup(void);
 sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
 
 /*
+ * Get the JSON corresponding to some key. Rather than an array the
+ * key is a string with '.' characters separating the parts. Returns
+ * NULL if the key cannot be found.
+ */
+sail_config_json sail_config_lookup(const char *dotted_key);
+
+/*
  * For each Sail type, Sail will generate code that will destructure
  * the JSON values using the following function calls.
  *
