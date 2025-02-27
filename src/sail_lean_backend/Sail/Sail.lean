@@ -441,7 +441,37 @@ def foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSai
     else foreach_ME' to from' step vars body
 
 macro "catchEarlyReturn" m:term : doElem => `(doElem| match ← $m with | early_return x => return x | cont x => pure x)
+macro "catchEarlyReturnInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => pure x)
 macro "catchEarlyReturnPure" m:term : doElem => `(doElem| match ($m) with | early_return x => return x | cont x => x)
+macro "catchEarlyReturnPureInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => x)
+
+def while_ (cond : Vars -> Bool) (vars : Vars) (body : Vars -> Vars) : Vars := Id.run do
+ let mut vars := vars
+  while cond vars do
+    vars ← body vars
+  pure vars
+
+def while_M (cond : Vars -> PreSailM RegisterType c ue Bool) (vars : Vars) (body : Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
+  let mut vars := vars
+  while ← cond vars do
+    vars ← body vars
+  pure vars
+
+def while_E (cond : Vars -> Bool) (vars : Vars) (body : Vars -> ER T Vars) : ER T Vars := Id.run do
+ let mut vars := vars
+  while cond vars do
+    match body vars with
+     | early_return x => return early_return x
+     | cont x => vars := x
+  pure (cont vars)
+
+def while_ME (cond : Vars -> PreSailM RegisterType c ue Bool) (vars : Vars) (body : Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
+  let mut vars := vars
+  while ← cond vars do
+    match ← body vars with
+     | early_return x => return early_return x
+     | cont x => vars := x
+  pure (cont vars)
 
 end Loops
 
