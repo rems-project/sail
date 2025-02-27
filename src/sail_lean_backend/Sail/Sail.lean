@@ -227,8 +227,6 @@ end Loops
 
 section PreSailTypes
 
--- variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
-
 inductive Primitive where
   | bool
   | bit
@@ -502,19 +500,6 @@ def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM Registe
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
-def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c ue Unit) : IO UInt32 := do
-  let res := main () |>.run initialState
-  match res with
-  | .ok _ s => do
-    for m in s.sailOutput do
-      IO.print m
-    return 0
-  | .error e s => do
-    for m in s.sailOutput do
-      IO.print m
-    IO.eprintln s!"Error while running the sail program!: {e.print}"
-    return 1
-
 section Loops
 
 def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
@@ -565,6 +550,27 @@ end Loops
 end Regs
 
 end PreSail
+
+namespace Sail
+
+open PreSail
+
+variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
+
+def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Unit → PreSailM RegisterType c ue Unit) : IO UInt32 := do
+  let res := main () |>.run initialState
+  match res with
+  | .ok _ s => do
+    for m in s.sailOutput do
+      IO.print m
+    return 0
+  | .error e s => do
+    for m in s.sailOutput do
+      IO.print m
+    IO.eprintln s!"Error while running the sail program!: {e.print}"
+    return 1
+
+end Sail
 
 instance : CoeT Int x Nat where
   coe := x.toNat
