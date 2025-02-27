@@ -32,7 +32,6 @@ skip_selftests = {
     'exn_hello_world',
     'poly_union_rev',
     'foreach_none',
-    'all_even_vector_length',
     'outcome_impl',
     'lib_valid_hex_bits',
     'tuple_conversion',
@@ -45,7 +44,6 @@ skip_selftests = {
     'lib_hex_bits',
     'lib_hex_bits_signed',
     'varswap',
-    'try_return',
     'real',
     'inc_tests',
     'poly_outcome',
@@ -68,7 +66,6 @@ skip_selftests = {
     'pc_no_wildcard',
     'type_if_bits',
     'poly_union',
-    'dec_str_fixed',
     'nexp_simp_euclidian',
     'config_register_ones',
     'toplevel_tyvar',
@@ -128,9 +125,16 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 ] if runnable else [ ])
                 step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
-                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename, expected_status=1)
+                    step(f'lake exe run > expected 2> err_status',
+                         cwd=f'{basename}/out',
+                         name=filename,
+                         expected_status=1,
+                         stderr_file=f'{basename}/out/err_status')
                 elif runnable:
-                    step(f'timeout 90s lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
+                    step('timeout 90s lake exe run > expected 2> err_status',
+                         cwd=f'{basename}/out',
+                         name=filename,
+                         stderr_file=f'{basename}/out/err_status')
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
                     step('lake build', cwd=f'{basename}/out', name=filename)
