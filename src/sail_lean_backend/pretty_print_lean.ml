@@ -543,6 +543,10 @@ let op_of_id id =
   | Some "_lean_bvxor" -> `Binop "^^^"
   | Some "_lean_shiftl" -> `Binop "<<<"
   | Some "_lean_shiftr" -> `Binop ">>>"
+  | Some "_lean_lt" -> `Binop "<b"
+  | Some "_lean_ge" -> `Binop "≥b"
+  | Some "_lean_le" -> `Binop "≤b"
+  | Some "_lean_gt" -> `Binop ">b"
   | Some "_lean_pow2" -> `Unnop "2 ^"
   | Some "_lean_pow2i" -> `Unnop "2 ^i"
   | _ -> `NotOp

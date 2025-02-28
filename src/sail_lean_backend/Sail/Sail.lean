@@ -607,3 +607,9 @@ macro_rules | `($x +i $y)   => `(binop% Int.add $x $y)
 macro_rules | `($x -i $y)   => `(binop% Int.sub $x $y)
 macro_rules | `($x ^i $y)   => `(rightact% Int.zpow $x $y)
 macro_rules | `($x *i $y)   => `(binop% Int.mul $x $y)
+
+
+notation:50 x "≤b" y => decide (x ≤ y)
+notation:50 x "<b" y => decide (x < y)
+notation:50 x "≥b" y => decide (x ≥ y)
+notation:50 x ">b" y => decide (x > y)
