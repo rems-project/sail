@@ -64,18 +64,6 @@ abbrev print_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit :=
 
 abbrev print_endline_effect (str : String) : SailM Unit := PreSail.print_endline_effect str
 
-section Loops
-
-abbrev foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> SailM Vars) : SailM Vars := PreSail.foreach_M from' to step vars body
-
-abbrev foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> SailM (ER T Vars)) : SailM (ER T Vars) := PreSail.foreach_ME from' to step vars body
-
-abbrev while_M (cond : Vars -> SailM Bool) (vars : Vars) (body : Vars -> SailM Vars) : SailM Vars := PreSail.while_M cond vars body
-
-abbrev while_ME (cond : Vars -> SailM Bool) (vars : Vars) (body : Vars -> SailM (ER T Vars)) : SailM (ER T Vars) := PreSail.while_ME cond vars body
-
-end Loops
-
 abbrev SailME α := ExceptT α SailM
 
 def SailME.run (m : SailME α α) : SailM α := do
