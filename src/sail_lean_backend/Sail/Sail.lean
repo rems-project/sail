@@ -444,6 +444,12 @@ def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM Registe
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
+def sailTryCatchE (e : ExceptT β (PreSailM RegisterType c ue) α) (h : ue → ExceptT β (PreSailM RegisterType c ue) α) : ExceptT β (PreSailM RegisterType c ue) α :=
+  EStateM.tryCatch e fun e =>
+    match e with
+    | .User u => h u
+    | _ => EStateM.throw e
+
 end Regs
 
 end PreSail

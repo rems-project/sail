@@ -78,4 +78,6 @@ def ExceptM.run (m : ExceptM α α) : α :=
     | .error e => e
     | .ok e => e
 
+abbrev sailTryCatchE (e : SailME β α) (h : exception → SailME β α) : SailME β α := PreSail.sailTryCatchE e h
+
 end Sail

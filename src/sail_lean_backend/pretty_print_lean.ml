@@ -829,8 +829,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_try (e, cases) ->
       let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
       let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
+      let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
       nest 2
-        (string "sailTryCatch "
+        (try_catch
         ^^ parens (d_of_arg ~with_arrow:(not as_monadic) ctx e)
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
