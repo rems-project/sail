@@ -80,10 +80,10 @@ function neq_int (x, y) = not_bool(eq_int(x, y))
 val neq_bool : (bool, bool) -> bool
 function neq_bool (x, y) = not_bool(eq_bool(x, y))
 
-val lteq_int = pure {coq: "Z.leb", lean: "LE.le", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
-val gteq_int = pure {coq: "Z.geb", lean: "GE.ge",_:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
-val lt_int = pure {coq: "Z.ltb", lean: "LT.lt", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
-val gt_int = pure {coq: "Z.gtb", lean: "GT.gt", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
+val lteq_int = pure {coq: "Z.leb", lean: "_lean_le", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
+val gteq_int = pure {coq: "Z.geb", lean: "_lean_ge",_:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
+val lt_int = pure {coq: "Z.ltb", lean: "_lean_lt", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
+val gt_int = pure {coq: "Z.gtb", lean: "_lean_gt", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
 
 overload operator == = {eq_int, eq_bit, eq_bool, eq_unit}
 overload operator != = {neq_int, neq_bool}

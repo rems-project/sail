@@ -60,7 +60,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -70,28 +70,28 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
+  if (l ≥b n)
   then ((sail_ones n) <<< i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
+  if (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n + 1) m) -i 1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
+  else if (Bool.and (n >b 0) (m <b 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
@@ -130,7 +130,7 @@ def spc_backwards (x_0 : String) : Unit :=
 
 def spc_backwards_matches (s : String) : Bool :=
   let len := (String.length s)
-  (Bool.and (BEq.beq (String.leadingSpaces s) len) (GT.gt len 0))
+  (Bool.and (BEq.beq (String.leadingSpaces s) len) (len >b 0))
 
 def opt_spc_forwards (_ : Unit) : String :=
   ""
@@ -251,16 +251,16 @@ def extern_eq_int (_ : Unit) : Bool :=
   (BEq.beq 5 4)
 
 def extern_lteq_int (_ : Unit) : Bool :=
-  (LE.le 5 4)
+  (5 ≤b 4)
 
 def extern_gteq_int (_ : Unit) : Bool :=
-  (GE.ge 5 4)
+  (5 ≥b 4)
 
 def extern_lt_int (_ : Unit) : Bool :=
-  (LT.lt 5 4)
+  (5 <b 4)
 
 def extern_gt_int (_ : Unit) : Bool :=
-  (GT.gt 5 4)
+  (5 >b 4)
 
 def extern_eq_anything (_ : Unit) : Bool :=
   (BEq.beq true true)
