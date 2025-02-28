@@ -128,17 +128,25 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loop (m : Nat) (n : Nat) : Nat :=
+def foreach_loop (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res +i 1))
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let res := loop_vars
+    loop_vars := (res +i 1)
+  (pure loop_vars)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
-  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) +i 1))
+  let mut loop_vars := ()
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let () := loop_vars
+    loop_vars ← do writeReg r ((← readReg r) +i 1)
+  (pure loop_vars)
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -147,67 +155,90 @@ def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
   let res : Nat ← do
     let loop_i_lower := n
     let loop_i_upper := m
-    foreach_M loop_i_lower loop_i_upper 1 res
-      (λ i res => do
+    let mut loop_vars := res
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
+      let res := loop_vars
+      loop_vars ← do
         let res : Nat := (res +i 1)
         writeReg r ((← readReg r) +i res)
-        (pure res))
+        (pure res)
+    (pure loop_vars)
   (pure (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
+def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
   let mult : Nat := 1
-  let (mult, res) :=
+  let (mult, res) ← do
     let loop_i_lower := m
     let loop_i_upper := n
-    foreach_ loop_i_lower loop_i_upper 1 (mult, res)
-      (λ i (mult, res) =>
+    let mut loop_vars := (mult, res)
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
+      let (mult, res) := loop_vars
+      loop_vars :=
         let res : Nat := (res +i 1)
         let mult : Nat := (res *i mult)
-        (mult, res))
-  mult
+        (mult, res)
+    (pure loop_vars)
+  (pure mult)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreach_loopuseindex (m : Nat) (n : Nat) : Nat :=
+def foreach_loopuseindex (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res +i i))
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let res := loop_vars
+    loop_vars := (res +i i)
+  (pure loop_vars)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loop (m : Nat) (n : Nat) : Nat :=
+def while_loop (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
-  while_ (λ res => (res <b n)) res (λ res => ((res +i 1) : Nat))
+  let mut loop_vars := res
+  while (λ res => (res <b n)) loop_vars do
+    let res := loop_vars
+    loop_vars := ((res +i 1) : Nat)
+  (pure loop_vars)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def while_loopmon (m : Nat) (n : Nat) : SailM Nat := do
-  while_M (λ _ => do (pure ((← readReg r) <b n))) ()
-    (λ _ => do writeReg r ((← readReg r) +i 1))
+  let mut loop_vars := ()
+  while (← (λ _ => do (pure ((← readReg r) <b n))) loop_vars) do
+    let () := loop_vars
+    loop_vars ← do writeReg r ((← readReg r) +i 1)
+  (pure loop_vars)
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def while_loopboth (m : Nat) (n : Nat) : SailM Nat := do
   let res : Nat := 0
   let res : Nat ← do
-    while_M (λ res => do (pure (res <b n))) res
-      (λ res => do
+    let mut loop_vars := res
+    while (λ res => (res <b n)) loop_vars do
+      let res := loop_vars
+      loop_vars ← do
         let res : Nat := (res +i 1)
         writeReg r ((← readReg r) +i res)
-        (pure res))
+        (pure res)
+    (pure loop_vars)
   (pure (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def while_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
+def while_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
   let mult : Nat := 1
-  let (mult, res) :=
-    while_ (λ (mult, res) => (res <b n)) (mult, res)
-      (λ (mult, res) =>
+  let (mult, res) ← do
+    let mut loop_vars := (mult, res)
+    while (λ (mult, res) => (res <b n)) loop_vars do
+      let (mult, res) := loop_vars
+      loop_vars :=
         (let res : Nat := (res +i 1)
         let mult : Nat := (res *i mult)
-        (mult, res) : (Nat × Nat)))
-  mult
+        (mult, res) : (Nat × Nat))
+    (pure loop_vars)
+  (pure mult)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_nat ()))

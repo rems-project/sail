@@ -169,62 +169,6 @@ instance : HShiftLeft (BitVec w) Int (BitVec w) where
 instance : HShiftRight (BitVec w) Int (BitVec w) where
   hShiftRight b i := b <<< (- i)
 
-section Loops
-
-inductive ER (α β : Type)
- | early_return (r : α)
- | cont (x : β)
-export ER(early_return cont)
-
-def foreach_' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars := Id.run do
-  let mut vars := vars
-  let step := 1 + (step - 1)
-  let range := Std.Range.mk from' (to + 1) step (by omega)
-  for i in range do
-    vars := body i vars
-  pure vars
-
-def foreach_ (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> Vars) : Vars :=
-  if from' < to
-    then foreach_' from' to step vars body
-    else foreach_' to from' step vars body
-
-def foreach_E' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> ER T Vars) : ER T Vars := Id.run do
-  let mut vars := vars
-  let step := 1 + (step - 1)
-  let range := Std.Range.mk from' to step (by omega)
-  for i in range do
-    match body i vars with
-     | early_return x => return early_return x
-     | cont x => vars := x
-  pure (cont vars)
-
-def foreach_E (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> ER T Vars) : ER T Vars := Id.run do
-  if from' < to
-    then foreach_E' from' to step vars body
-    else foreach_E' to from' step vars body
-
-macro "catchEarlyReturn" m:term : doElem => `(doElem| match ← $m with | early_return x => return x | cont x => pure x)
-macro "catchEarlyReturnInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => pure x)
-macro "catchEarlyReturnPure" m:term : doElem => `(doElem| match ($m) with | early_return x => return x | cont x => x)
-macro "catchEarlyReturnPureInner" m:term : doElem => `(doElem| match ← $m with | early_return x => return early_return x | cont x => x)
-
-def while_ (cond : Vars -> Bool) (vars : Vars) (body : Vars -> Vars) : Vars := Id.run do
- let mut vars := vars
-  while cond vars do
-    vars ← body vars
-  pure vars
-
-def while_E (cond : Vars -> Bool) (vars : Vars) (body : Vars -> ER T Vars) : ER T Vars := Id.run do
- let mut vars := vars
-  while cond vars do
-    match body vars with
-     | early_return x => return early_return x
-     | cont x => vars := x
-  pure (cont vars)
-
-end Loops
-
 section PreSailTypes
 
 inductive Primitive where
@@ -500,52 +444,11 @@ def print_bits_effect {w : Nat} (str : String) (x : BitVec w) : PreSailM Registe
 def print_endline_effect (str : String) : PreSailM RegisterType c ue Unit :=
   print_effect s!"{str}\n"
 
-section Loops
-
-def foreach_M' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
-  let mut vars := vars
-  let step := 1 + (step - 1)
-  let range := Std.Range.mk from' (to + 1) step (by omega)
-  for i in range do
-    vars ← body i vars
-  pure vars
-
-def foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars :=
-  if from' < to
-    then foreach_M' from' to step vars body
-    else foreach_M' to from' step vars body
-
-def foreach_ME' (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
-  let mut vars := vars
-  let step := 1 + (step - 1)
-  let range := Std.Range.mk from' to step (by omega)
-  for i in range do
-    let b ← body i vars
-    match b with
-      | early_return v => return early_return v
-      | cont x => vars := x
-  pure (cont vars)
-
-def foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
-  if from' < to
-    then foreach_ME' from' to step vars body
-    else foreach_ME' to from' step vars body
-
-def while_M (cond : Vars -> PreSailM RegisterType c ue Bool) (vars : Vars) (body : Vars -> PreSailM RegisterType c ue Vars) : PreSailM RegisterType c ue Vars := do
-  let mut vars := vars
-  while ← cond vars do
-    vars ← body vars
-  pure vars
-
-def while_ME (cond : Vars -> PreSailM RegisterType c ue Bool) (vars : Vars) (body : Vars -> PreSailM RegisterType c ue (ER T Vars)) : PreSailM RegisterType c ue (ER T Vars) := do
-  let mut vars := vars
-  while ← cond vars do
-    match ← body vars with
-     | early_return x => return early_return x
-     | cont x => vars := x
-  pure (cont vars)
-
-end Loops
+def sailTryCatchE (e : ExceptT β (PreSailM RegisterType c ue) α) (h : ue → ExceptT β (PreSailM RegisterType c ue) α) : ExceptT β (PreSailM RegisterType c ue) α :=
+  EStateM.tryCatch e fun e =>
+    match e with
+    | .User u => h u
+    | _ => EStateM.throw e
 
 end Regs
 

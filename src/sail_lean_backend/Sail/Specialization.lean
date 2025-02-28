@@ -23,9 +23,9 @@ abbrev undefined_vector (n : Nat) (a : α) : SailM (Vector α n) := PreSail.unde
 
 abbrev internal_pick {α : Type} : List α → SailM α := PreSail.internal_pick
 
-abbrev writeReg (r : Register) (v : RegisterType r) : SailM PUnit := PreSail.writeReg r v
+abbrev writeReg (reg : Register) (v : RegisterType reg) : SailM PUnit := PreSail.writeReg reg v
 
-abbrev readReg (r : Register) : SailM (RegisterType r) := PreSail.readReg r
+abbrev readReg (reg : Register) : SailM (RegisterType reg) := PreSail.readReg reg
 
 abbrev RegisterRef := @PreSail.RegisterRef Register RegisterType
 
@@ -64,16 +64,20 @@ abbrev print_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit :=
 
 abbrev print_endline_effect (str : String) : SailM Unit := PreSail.print_endline_effect str
 
-section Loops
+abbrev SailME α := ExceptT α SailM
 
-abbrev foreach_M (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> SailM Vars) : SailM Vars := PreSail.foreach_M from' to step vars body
+def SailME.run (m : SailME α α) : SailM α := do
+  match (← ExceptT.run m) with
+    | .error e => pure e
+    | .ok e => pure e
 
-abbrev foreach_ME (from' to step : Nat) (vars : Vars) (body : Nat -> Vars -> SailM (ER T Vars)) : SailM (ER T Vars) := PreSail.foreach_ME from' to step vars body
+abbrev ExceptM α := ExceptT α Id
 
-abbrev while_M (cond : Vars -> SailM Bool) (vars : Vars) (body : Vars -> SailM Vars) : SailM Vars := PreSail.while_M cond vars body
+def ExceptM.run (m : ExceptM α α) : α :=
+  match (ExceptT.run m) with
+    | .error e => e
+    | .ok e => e
 
-abbrev while_ME (cond : Vars -> SailM Bool) (vars : Vars) (body : Vars -> SailM (ER T Vars)) : SailM (ER T Vars) := PreSail.while_ME cond vars body
-
-end Loops
+abbrev sailTryCatchE (e : SailME β α) (h : exception → SailME β α) : SailME β α := PreSail.sailTryCatchE e h
 
 end Sail
