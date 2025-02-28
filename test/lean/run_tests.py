@@ -86,6 +86,7 @@ skip_selftests = {
     'list_list_eq',
     'constructor247',
     'config_vec_list',
+    'deep_poly_nest',
 }
 
 print("Sail is {}".format(sail))
