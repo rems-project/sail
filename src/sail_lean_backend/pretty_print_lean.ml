@@ -530,9 +530,11 @@ let rec doc_implicit_args ?(docs = []) ns ims d_args =
 let op_of_id id =
   match id with
   | Some "_lean_add" -> `Binop "+"
+  | Some "_lean_addi" -> `Binop "+i"
   | Some "_lean_sub" -> `Binop "-"
   | Some "_lean_subi" -> `Binop "-i"
   | Some "_lean_mul" -> `Binop "*"
+  | Some "_lean_muli" -> `Binop "*i"
   | Some "_lean_div" -> `Binop "/"
   | Some "_lean_app" -> `Binop "++"
   | Some "_lean_bvand" -> `Binop "&&&"
@@ -541,6 +543,7 @@ let op_of_id id =
   | Some "_lean_shiftl" -> `Binop "<<<"
   | Some "_lean_shiftr" -> `Binop ">>>"
   | Some "_lean_pow2" -> `Unnop "2 ^"
+  | Some "_lean_pow2i" -> `Unnop "2 ^i"
   | _ -> `NotOp
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None

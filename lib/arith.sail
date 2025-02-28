@@ -51,10 +51,10 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_add", _: "add_int"} : forall 'n 'm.
+val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_add", _: "add_int"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
@@ -85,10 +85,10 @@ overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_mul", _: "mult_int"} : forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_mul", _: "mult_int"} : (int, int) -> int
+val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -111,7 +111,7 @@ $endif
 /*!
 We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
 */
-val pow2 = pure {lean : "_lean_pow2", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
+val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
 
 // ***** Integer shifts *****
 

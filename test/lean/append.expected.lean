@@ -90,14 +90,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m) -i 1)
+  then ((Int.tdiv (n +i 1) m) -i 1)
   else if (Bool.and (GT.gt n 0) (LT.lt m 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m * (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -130,7 +130,7 @@ def unif_subrange_bits (x : (BitVec 16)) : (BitVec (17 - 10 + 1)) :=
 
 /-- Type quantifiers: i : Nat, i ≥ 0 -/
 def unif_vector_subrange (i : Nat) (v : (BitVec (8 * i + 8))) : (BitVec 8) :=
-  (Sail.BitVec.extractLsb v ((8 * i) + 7) (8 * i))
+  (Sail.BitVec.extractLsb v ((8 *i i) +i 7) (8 *i i))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

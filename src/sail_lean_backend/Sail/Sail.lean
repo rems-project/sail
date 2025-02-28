@@ -164,10 +164,10 @@ instance : HShiftLeft (BitVec w) Int (BitVec w) where
   hShiftLeft b i :=
     match i with
     | .ofNat n => BitVec.shiftLeft b n
-    | .negSucc n => BitVec.ushiftRight b n
+    | .negSucc n => BitVec.ushiftRight b (n + 1)
 
 instance : HShiftRight (BitVec w) Int (BitVec w) where
-  hShiftRight b i := b <<< (-i)
+  hShiftRight b i := b <<< (- i)
 
 section Loops
 
@@ -596,19 +596,14 @@ instance : HOr (BitVec n) (BitVec m) (BitVec n) where
 instance : HXor (BitVec n) (BitVec m) (BitVec n) where
   hXor x y := x ^^^ y
 
-instance : HPow Nat Int Nat where
-  hPow x n := x ^ n.toNat
+def Int.zpow (m n : Int) : Int := m ^ n.toNat
 
-instance : HPow Int Int Int where
-  hPow x n := x ^ n.toNat
+infixl:65 " +i "   => Int.add
+infixl:65 " -i " => Int.sub
+infixr:80 " ^i "   => Int.pow
+infixl:70 " *i "   => Int.mul
 
-instance : HSub Nat Nat Int where
-  hSub m n := (m : Int) - (n : Int)
-
-instance : HPow Nat Int Int where
-  hPow m z := (m : Int) ^ z
-
-instance : HSub Nat Int Int where
-  hSub m z := (m : Int) - z
-
-infixl:65 " -i " => HSub.hSub (γ := Int)
+macro_rules | `($x +i $y)   => `(binop% Int.add $x $y)
+macro_rules | `($x -i $y)   => `(binop% Int.sub $x $y)
+macro_rules | `($x ^i $y)   => `(rightact% Int.zpow $x $y)
+macro_rules | `($x *i $y)   => `(binop% Int.mul $x $y)
