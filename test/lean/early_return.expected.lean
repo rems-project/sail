@@ -149,7 +149,7 @@ def foreach_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := n
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       if (i >b 5)
@@ -165,7 +165,7 @@ def foreach_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
     let loop_i_lower := 0
     let loop_i_upper := n
     let mut loop_vars := res
-    for i in [loop_i_lower:loop_i_upper:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
       let res := loop_vars
       loop_vars ← do
         if (i >b 5)
@@ -179,13 +179,13 @@ def foreach_inner_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := n
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       let loop_j_lower := 0
       let loop_j_upper := i
       let mut loop_vars_1 := ()
-      for j in [loop_j_lower:loop_j_upper:1] do
+      for j in [loop_j_lower:loop_j_upper + 1:1] do
         let () := loop_vars_1
         loop_vars_1 ← do
           if (i >b 5)
@@ -202,13 +202,13 @@ def foreach_inner_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
     let loop_i_lower := 0
     let loop_i_upper := n
     let mut loop_vars := res
-    for i in [loop_i_lower:loop_i_upper:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
       let res := loop_vars
       loop_vars ← do
         let loop_j_lower := 0
         let loop_j_upper := i
         let mut loop_vars_1 := res
-        for j in [loop_j_lower:loop_j_upper:1] do
+        for j in [loop_j_lower:loop_j_upper + 1:1] do
           let res := loop_vars_1
           loop_vars_1 ← do
             if (i >b 5)
@@ -223,13 +223,13 @@ def foreach_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := SailME.run d
   let loop_i_lower := 0
   let loop_i_upper := n
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       let loop_j_lower := 0
       let loop_j_upper := i
       let mut loop_vars_1 := ()
-      for j in [loop_j_lower:loop_j_upper:1] do
+      for j in [loop_j_lower:loop_j_upper + 1:1] do
         let () := loop_vars_1
         loop_vars_1 ← do
           if (i >b 5)
@@ -247,14 +247,14 @@ def foreach_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
     let loop_i_lower := 0
     let loop_i_upper := n
     let mut loop_vars := res
-    for i in [loop_i_lower:loop_i_upper:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
       let res := loop_vars
       loop_vars ← do
         let res : Nat ← do
           let loop_j_lower := 0
           let loop_j_upper := i
           let mut loop_vars_1 := res
-          for j in [loop_j_lower:loop_j_upper:1] do
+          for j in [loop_j_lower:loop_j_upper + 1:1] do
             let res := loop_vars_1
             loop_vars_1 ← do
               if (i >b 5)
@@ -379,7 +379,7 @@ def match_early_return_inloop (x : E) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       match x with
@@ -395,7 +395,7 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       let y : E ← do
@@ -415,7 +415,7 @@ def match_early_return_loop (x : E) : SailM E := SailME.run do
     let loop_i_lower := 0
     let loop_i_upper := 10
     let mut loop_vars := ()
-    for i in [loop_i_lower:loop_i_upper:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
       let () := loop_vars
       loop_vars ← do
         throw (← do
@@ -440,7 +440,7 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
     let () := loop_vars
     loop_vars ← do
       writeReg r_A (← readReg r_C)
@@ -459,7 +459,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
   then let loop_i_lower := 0
        let loop_i_upper := 10
        let mut loop_vars := ()
-       for i in [loop_i_lower:loop_i_upper:1] do
+       for i in [loop_i_lower:loop_i_upper + 1:1] do
          let () := loop_vars
          loop_vars ← do
            throw (← do
