@@ -876,3 +876,27 @@ let add_regstate_defs mwords ctx env ast =
   let defs, ctx = generate_regstate_defs ctx env ast in
   let reg_defs, env = Type_error.check_defs env defs in
   (ctx, env, append_ast_defs ast reg_defs)
+
+(* To suport register initialization without using the above, this
+   produces a new function that assigns registers their initializer.
+   It's intended to be a prover-backend counterpart to the function
+   that the model_init function that the C backend generates.
+
+   If the ast has been sorted, it will also respect register
+   initialisation order.  However, we probably want to ban
+   inter-register dependencies anyway... *)
+let add_register_init_function ctx env ast =
+  let init_exp = function
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (_typ, id, Some exp), _)), _) ->
+        let loc = gen_loc (exp_loc exp) in
+        Some (mk_exp ~loc (E_assign (mk_lexp ~loc (LE_id id), strip_exp exp)))
+    | _ -> None
+  in
+  let init_exps = List.filter_map init_exp ast.defs in
+  let uninit = mk_exp (E_app (mk_id "initialize_registers", [mk_exp (E_lit (mk_lit L_unit))])) in
+  let id = mk_id "sail_model_init" in
+  let funcl = mk_exp (E_block (init_exps @ [uninit])) |> mk_funcl id (mk_pat P_wild) in
+  let fundef = mk_fundef [funcl] in
+  let val_spec = mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [unit_typ] unit_typ), id, None)) in
+  let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
+  (append_ast_defs ast new_defs, ctx, env)
