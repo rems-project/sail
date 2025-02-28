@@ -90,14 +90,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (n <b 0) (m >b 0))
-  then ((Int.tdiv (n + 1) m) -i 1)
+  then ((Int.tdiv (n +i 1) m) -i 1)
   else if (Bool.and (n >b 0) (m <b 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m * (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -175,7 +175,7 @@ def sep_backwards_matches (arg_ : String) : SailM Bool := do
   | _ => throw Error.Exit
 
 def extern_add (_ : Unit) : Int :=
-  (5 + 4)
+  (5 +i 4)
 
 def extern_sub (_ : Unit) : Int :=
   (5 -i (-4))
@@ -187,7 +187,7 @@ def extern_negate (_ : Unit) : Int :=
   (Neg.neg 5)
 
 def extern_mult (_ : Unit) : Int :=
-  (5 * 4)
+  (5 *i 4)
 
 def extern__shl8 (_ : Unit) : Int :=
   (Int.shiftl 8 2)

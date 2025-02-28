@@ -98,14 +98,14 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (n <b 0) (m >b 0))
-  then ((Int.tdiv (n + 1) m) -i 1)
+  then ((Int.tdiv (n +i 1) m) -i 1)
   else if (Bool.and (n >b 0) (m <b 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m * (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -132,13 +132,13 @@ def foreach_loop (m : Nat) (n : Nat) : Nat :=
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + 1))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
-  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) + 1))
+  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) +i 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -149,10 +149,10 @@ def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
     let loop_i_upper := m
     foreach_M loop_i_lower loop_i_upper 1 res
       (λ i res => do
-        let res : Nat := (res + 1)
-        writeReg r ((← readReg r) + res)
+        let res : Nat := (res +i 1)
+        writeReg r ((← readReg r) +i res)
         (pure res))
-  (pure (res + 1))
+  (pure (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
@@ -163,8 +163,8 @@ def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
     let loop_i_upper := n
     foreach_ loop_i_lower loop_i_upper 1 (mult, res)
       (λ i (mult, res) =>
-        let res : Nat := (res + 1)
-        let mult : Nat := (res * mult)
+        let res : Nat := (res +i 1)
+        let mult : Nat := (res *i mult)
         (mult, res))
   mult
 
@@ -173,17 +173,17 @@ def foreach_loopuseindex (m : Nat) (n : Nat) : Nat :=
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + i))
+  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res +i i))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def while_loop (m : Nat) (n : Nat) : Nat :=
   let res : Nat := 0
-  while_ (λ res => (res <b n)) res (λ res => ((res + 1) : Nat))
+  while_ (λ res => (res <b n)) res (λ res => ((res +i 1) : Nat))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def while_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   while_M (λ _ => do (pure ((← readReg r) <b n))) ()
-    (λ _ => do writeReg r ((← readReg r) + 1))
+    (λ _ => do writeReg r ((← readReg r) +i 1))
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
@@ -192,10 +192,10 @@ def while_loopboth (m : Nat) (n : Nat) : SailM Nat := do
   let res : Nat ← do
     while_M (λ res => do (pure (res <b n))) res
       (λ res => do
-        let res : Nat := (res + 1)
-        writeReg r ((← readReg r) + res)
+        let res : Nat := (res +i 1)
+        writeReg r ((← readReg r) +i res)
         (pure res))
-  (pure (res + 1))
+  (pure (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def while_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
@@ -204,8 +204,8 @@ def while_loopmultiplevar (m : Nat) (n : Nat) : Nat :=
   let (mult, res) :=
     while_ (λ (mult, res) => (res <b n)) (mult, res)
       (λ (mult, res) =>
-        (let res : Nat := (res + 1)
-        let mult : Nat := (res * mult)
+        (let res : Nat := (res +i 1)
+        let mult : Nat := (res *i mult)
         (mult, res) : (Nat × Nat)))
   mult
 

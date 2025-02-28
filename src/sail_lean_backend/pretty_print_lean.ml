@@ -500,8 +500,9 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
 let wrap_with_left_arrow (needs_return : bool) (d : document) =
   if needs_return then parens (nest 2 (flow space [string "←"; d])) else d
 
-let wrap_with_do (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow hardline [string "← do"; d])) else d
+let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
+  let ar_do = if with_arrow then string "← do" else string "do" in
+  if needs_return then parens (nest 2 (flow hardline [ar_do; d])) else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
@@ -530,9 +531,11 @@ let rec doc_implicit_args ?(docs = []) ns ims d_args =
 let op_of_id id =
   match id with
   | Some "_lean_add" -> `Binop "+"
+  | Some "_lean_addi" -> `Binop "+i"
   | Some "_lean_sub" -> `Binop "-"
   | Some "_lean_subi" -> `Binop "-i"
   | Some "_lean_mul" -> `Binop "*"
+  | Some "_lean_muli" -> `Binop "*i"
   | Some "_lean_div" -> `Binop "/"
   | Some "_lean_app" -> `Binop "++"
   | Some "_lean_bvand" -> `Binop "&&&"
@@ -545,6 +548,7 @@ let op_of_id id =
   | Some "_lean_le" -> `Binop "≤b"
   | Some "_lean_gt" -> `Binop ">b"
   | Some "_lean_pow2" -> `Unnop "2 ^"
+  | Some "_lean_pow2i" -> `Unnop "2 ^i"
   | _ -> `NotOp
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
@@ -565,15 +569,15 @@ let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
-  let d_of_arg ctx arg =
+  let d_of_arg ?(with_arrow = true) ctx arg =
     let wrap, arg_monadic =
       match arg with
       | E_aux (arg', _) -> (
           match arg' with
-          | E_typ (_, e) when effectful (effect_of e) -> ((fun x -> wrap_with_do true x), true)
+          | E_typ (_, e) when effectful (effect_of e) -> ((fun x -> wrap_with_do with_arrow true x), true)
           | E_typ (_, e) when has_early_return e -> (parens, false)
           | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
-              if effectful (effect_of arg) then ((fun x -> wrap_with_do true x), true) else (parens, false)
+              if effectful (effect_of arg) then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
           | _ -> ((fun x -> x), false)
         )
     in
@@ -871,7 +875,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
         nest 2
           (string "sailTryCatch "
-          ^^ parens (doc_exp false ctx e)
+          ^^ parens (d_of_arg ~with_arrow:(not as_monadic) ctx e)
           ^^ space
           ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
           )
