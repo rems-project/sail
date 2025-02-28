@@ -27,9 +27,14 @@ else
   else
     REGSTATE='init_regstate'
   fi
+  if grep -q 'sail_model_init.*: unit :=' "_coqbuild_$1/$1.v"; then
+    RUN="main tt"
+  else
+    RUN="Prompt_monad.bind0 (sail_model_init tt) (main tt)"
+  fi
   cat <<EOF >> "$OUT"
 set (outerr := ltac:(
-let result := eval vm_compute in (liftState register_accessors (main tt) (init_state $REGSTATE) default_choice) in
+let result := eval vm_compute in (liftState register_accessors ($RUN) (init_state $REGSTATE) default_choice) in
 match result with
   | [(Value tt,?state,_)] => idtac "OK"; exact (state.(ss_output), "")
   | [(Ex (Failure ?s),?state,_)] => idtac "Fail:" s; exact (state.(ss_output), "Assertion failed: " ++ s)
