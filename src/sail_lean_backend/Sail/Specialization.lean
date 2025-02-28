@@ -23,9 +23,9 @@ abbrev undefined_vector (n : Nat) (a : α) : SailM (Vector α n) := PreSail.unde
 
 abbrev internal_pick {α : Type} : List α → SailM α := PreSail.internal_pick
 
-abbrev writeReg (r : Register) (v : RegisterType r) : SailM PUnit := PreSail.writeReg r v
+abbrev writeReg (reg : Register) (v : RegisterType reg) : SailM PUnit := PreSail.writeReg reg v
 
-abbrev readReg (r : Register) : SailM (RegisterType r) := PreSail.readReg r
+abbrev readReg (reg : Register) : SailM (RegisterType reg) := PreSail.readReg reg
 
 abbrev RegisterRef := @PreSail.RegisterRef Register RegisterType
 
