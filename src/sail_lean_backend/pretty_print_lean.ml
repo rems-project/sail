@@ -30,14 +30,10 @@ type context = {
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
-  early_ret : bool option;
-      (** None : There are no early returns in the context;
-          Some true : The context contains an early return and expects an ER type (i.e. no catch needed);
-          Some false : The context contains an early return, but we except a "pure" type (i.e. a catch may be needed) *)
 }
 
 let context_init env global =
-  { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty; early_ret = None }
+  { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
 let context_with_env ctx env = { ctx with env }
 
 let add_single_kid_id_rename ctx id kid =
@@ -548,12 +544,6 @@ let op_of_id id =
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
 
-let remove_er ctx = { ctx with early_ret = (match ctx.early_ret with None -> None | _ -> Some false) }
-
-let need_cont ctx = match ctx.early_ret with Some true -> true | _ -> false
-
-let add_early_ret ctx b = match b with true -> { ctx with early_ret = Some true } | false -> ctx
-
 let is_loop id = match string_of_id id with "while#" | "foreach#" -> true | _ -> false
 
 let has_loop (e : 'a exp) =
@@ -596,11 +586,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     let field_monadic = has_effect e in
     doc_fexp field_monadic ctx fexp
   in
-  if need_cont ctx && not (has_early_return full_exp) then (
-    let d = d_of_arg (remove_er ctx) full_exp in
-    wrap_with_pure as_monadic (parens (nest 2 (flow space [string "cont"; d])))
-  )
-  else (
     (* string (" /- " ^ string_of_exp_con full_exp ^ " -/ ") ^^ *)
     match e with
     | E_id id ->
@@ -667,36 +652,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
               body'
           | _ -> body
         in
-        (* let effects = has_effect body in
-           let early_return = has_early_return body in
-           let combinator, catch, lambda_end, as_monadic' =
-             match (as_monadic && effects, early_return, ctx.early_ret) with
-             | false, false, _ -> ("while_", empty, empty, false)
-             | false, true, Some true -> ("while_E", empty, string " Id.run do", false)
-             | false, true, None -> ("while_E", string "catchEarlyReturnPure", string " Id.run do", false)
-             | false, true, Some false -> ("while_E", string "catchEarlyReturnPureInner", string " Id.run do", false)
-             | true, false, _ -> ("while_M", empty, empty, true)
-             | true, true, Some true -> ("while_ME", empty, empty, true)
-             | true, true, None -> ("while_ME", string "catchEarlyReturn", empty, true)
-             | true, true, Some false -> ("while_ME", string "catchEarlyReturnInner", empty, true)
-           in
-           let varstuple_pp, base_lambda = make_loop_vars [] varstuple in
-           (* let body_ctxt = add_single_kid_id_rename ctx varstuple (mk_kid ("loop_" ^ string_of_id varstuple)) in *)
-           let body_ctxt = add_early_ret ctx early_return in
-           (* The body has the right type for deciding whether a proof is necessary *)
-           (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
-           (* let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor varstuple] vartuple in *)
-           let lambda_pp = if effects then base_lambda ^^ string " do" else base_lambda in
-           let body_lambda_pp = lambda_pp ^^ lambda_end in
-           (* TODO: this should probably be construct_dep_pairs, but we would need
-              to change it to use the updated context. *)
-           let body_pp = doc_exp as_monadic' body_ctxt body in
-           let cond_pp = doc_exp as_monadic' (remove_er ctx) cond in
-           let cond_pp = lambda lambda_pp cond_pp in
-           let loop_head = flow (break 1) [string combinator; cond_pp; varstuple_pp] in
-           let full_loop = (prefix 2 1) loop_head (lambda body_lambda_pp body_pp) in
-           let full_loop = if catch != empty then flow (break 1) [catch; parens full_loop] else full_loop in *)
-        (* wrap_with_pure (as_monadic && not (early_return || as_monadic')) ~with_parens:true full_loop *)
         let body_effects = has_effect body in
         let cond_effects = has_effect cond in
         let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
@@ -787,10 +742,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
     | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
-        let effects = has_effect arg in
-        let arg_pp = d_of_arg (remove_er ctx) arg in
-        let body = match ctx.early_ret with None -> arg_pp | _ -> parens (doc_id_ctor f ^/^ arg_pp) in
-        nest 2 (string "throw " ^^ arg_pp)
+        nest 2 (string "throw " ^^ d_of_arg ctx arg)
     | E_app (f, args) -> (
         let _, f_typ = Env.get_val_spec f env in
         let implicits = get_fn_implicits f_typ in
@@ -845,9 +797,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
         let pp_let_line =
           if has_effect lexp then
-            if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true (remove_er ctx) lexp
-            else pp_let_line_f [separate space [string "let"; id_typ; arrow]; doc_exp true (remove_er ctx) lexp]
-          else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false (remove_er ctx) lexp]
+            if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
+            else pp_let_line_f [separate space [string "let"; id_typ; arrow]; doc_exp true ctx lexp]
+          else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
         in
         pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
     | E_internal_return e -> doc_exp false ctx e (* ??? *)
@@ -868,7 +820,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           || as_monadic
         in
         let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
-        string (match_or_match_bv brs) ^^ d_of_arg (remove_er ctx) discr ^^ string " with" ^^ hardline ^^ cases
+        string (match_or_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
     | E_assign ((LE_aux (le_act, tannot) as le), e) ->
         wrap_with_left_arrow (not as_monadic)
           ( match le_act with
@@ -878,7 +830,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           )
     | E_if (i, t, e) ->
         let statements_monadic = as_monadic || has_effect t || has_effect e in
-        nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg (remove_er ctx) i))
+        nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg ctx i))
         ^^ hardline
         ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
         ^^ hardline
@@ -900,7 +852,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
     | _ ->
         failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
-  )
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e
 
@@ -981,7 +932,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
   let doc_ret_typ = doc_typ ctx ret_typ in
-  let is_monadic = has_effect exp in
+  let is_monadic = effectful (effect_of exp) in
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
   (* Add monad for stateful functions *)
