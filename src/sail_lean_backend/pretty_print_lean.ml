@@ -638,7 +638,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
               let exp_pp, match_pp = doc_loop_var varstuple in
               (exp_pp, separate space ((string "λ" :: extra_binders) @ [match_pp; string "=>"]))
         in
-        let lambda lambda_pp d = parens (prefix 2 1 (group lambda_pp) d) in
+        let lambda effects lambda_pp d =
+          let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
+          parens (prefix 2 1 (group lambda_pp) d)
+        in
         let cond, varstuple, body, measure =
           match args with
           | [cond; varstuple; body] -> (cond, varstuple, body, None)
@@ -664,36 +667,50 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
               body'
           | _ -> body
         in
-        let effects = has_effect body in
-        let early_return = has_early_return body in
-        let combinator, catch, lambda_end, as_monadic' =
-          match (as_monadic && effects, early_return, ctx.early_ret) with
-          | false, false, _ -> ("while_", empty, empty, false)
-          | false, true, Some true -> ("while_E", empty, string " Id.run do", false)
-          | false, true, None -> ("while_E", string "catchEarlyReturnPure", string " Id.run do", false)
-          | false, true, Some false -> ("while_E", string "catchEarlyReturnPureInner", string " Id.run do", false)
-          | true, false, _ -> ("while_M", empty, empty, true)
-          | true, true, Some true -> ("while_ME", empty, empty, true)
-          | true, true, None -> ("while_ME", string "catchEarlyReturn", empty, true)
-          | true, true, Some false -> ("while_ME", string "catchEarlyReturnInner", empty, true)
-        in
-        let varstuple_pp, base_lambda = make_loop_vars [] varstuple in
-        (* let body_ctxt = add_single_kid_id_rename ctx varstuple (mk_kid ("loop_" ^ string_of_id varstuple)) in *)
-        let body_ctxt = add_early_ret ctx early_return in
-        (* The body has the right type for deciding whether a proof is necessary *)
-        (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
-        (* let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor varstuple] vartuple in *)
-        let lambda_pp = if effects then base_lambda ^^ string " do" else base_lambda in
-        let body_lambda_pp = lambda_pp ^^ lambda_end in
-        (* TODO: this should probably be construct_dep_pairs, but we would need
-           to change it to use the updated context. *)
-        let body_pp = doc_exp as_monadic' body_ctxt body in
-        let cond_pp = doc_exp as_monadic' (remove_er ctx) cond in
-        let cond_pp = lambda lambda_pp cond_pp in
-        let loop_head = flow (break 1) [string combinator; cond_pp; varstuple_pp] in
-        let full_loop = (prefix 2 1) loop_head (lambda body_lambda_pp body_pp) in
-        let full_loop = if catch != empty then flow (break 1) [catch; parens full_loop] else full_loop in
-        wrap_with_pure (as_monadic && not (early_return || as_monadic')) ~with_parens:true full_loop
+        (* let effects = has_effect body in
+           let early_return = has_early_return body in
+           let combinator, catch, lambda_end, as_monadic' =
+             match (as_monadic && effects, early_return, ctx.early_ret) with
+             | false, false, _ -> ("while_", empty, empty, false)
+             | false, true, Some true -> ("while_E", empty, string " Id.run do", false)
+             | false, true, None -> ("while_E", string "catchEarlyReturnPure", string " Id.run do", false)
+             | false, true, Some false -> ("while_E", string "catchEarlyReturnPureInner", string " Id.run do", false)
+             | true, false, _ -> ("while_M", empty, empty, true)
+             | true, true, Some true -> ("while_ME", empty, empty, true)
+             | true, true, None -> ("while_ME", string "catchEarlyReturn", empty, true)
+             | true, true, Some false -> ("while_ME", string "catchEarlyReturnInner", empty, true)
+           in
+           let varstuple_pp, base_lambda = make_loop_vars [] varstuple in
+           (* let body_ctxt = add_single_kid_id_rename ctx varstuple (mk_kid ("loop_" ^ string_of_id varstuple)) in *)
+           let body_ctxt = add_early_ret ctx early_return in
+           (* The body has the right type for deciding whether a proof is necessary *)
+           (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
+           (* let vartuple_pp, body_lambda = make_loop_vars [doc_id_ctor varstuple] vartuple in *)
+           let lambda_pp = if effects then base_lambda ^^ string " do" else base_lambda in
+           let body_lambda_pp = lambda_pp ^^ lambda_end in
+           (* TODO: this should probably be construct_dep_pairs, but we would need
+              to change it to use the updated context. *)
+           let body_pp = doc_exp as_monadic' body_ctxt body in
+           let cond_pp = doc_exp as_monadic' (remove_er ctx) cond in
+           let cond_pp = lambda lambda_pp cond_pp in
+           let loop_head = flow (break 1) [string combinator; cond_pp; varstuple_pp] in
+           let full_loop = (prefix 2 1) loop_head (lambda body_lambda_pp body_pp) in
+           let full_loop = if catch != empty then flow (break 1) [catch; parens full_loop] else full_loop in *)
+        (* wrap_with_pure (as_monadic && not (early_return || as_monadic')) ~with_parens:true full_loop *)
+        let body_effects = has_effect body in
+        let cond_effects = has_effect cond in
+        let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
+        let body_pp = doc_exp body_effects ctx body in
+        let body_pp = lambda body_effects base_lambda body_pp in
+        let vars_dec_pp = string "let mut vars := " ^^ vartuple_pp in
+        let cond_pp = doc_exp cond_effects ctx cond in
+        let cond_pp = lambda cond_effects base_lambda cond_pp in
+        let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ string "vars") in
+        let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
+        let arrow = if body_effects then leftarrow else coloneq in
+        let loop_body = prefix 2 1 (string "vars " ^^ arrow) (body_pp ^/^ string "vars") in
+        let full_loop = prefix 2 1 loop_head loop_body in
+        separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic (string "vars")]
       end
     | E_app (Id_aux (Id "foreach#", _), args) -> begin
         let doc_loop_var (E_aux (e, (l, _)) as exp) =
@@ -748,37 +765,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
               | _ ->
                   raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body))
             in
-
-            (* let effects = has_effect body in
-               let early_return = has_early_return body in
-               let combinator, catch, lambda_end, body_as_monadic =
-                 match (as_monadic && effects, early_return, ctx.early_ret) with
-                 | false, false, _ -> ("foreach_", empty, empty, false)
-                 | false, true, Some true -> ("foreach_E", empty, string " Id.run do", false)
-                 | false, true, None -> ("foreach_E", string "catchEarlyReturnPure", string " Id.run do", false)
-                 | false, true, Some false -> ("foreach_E", string "catchEarlyReturnPureInner", string " Id.run do", false)
-                 | true, false, _ -> ("foreach_M", empty, empty, true)
-                 | true, true, Some true -> ("foreach_ME", empty, empty, true)
-                 | true, true, None -> ("foreach_ME", string "catchEarlyReturn", empty, true)
-                 | true, true, Some false -> ("foreach_ME", string "catchEarlyReturnInner", empty, true)
-               in
-               let body_ctxt = add_single_kid_id_rename ctx loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
-               let body_ctxt = add_early_ret ctx early_return in
-               let arg_ctx = remove_er ctx in
-               let from_exp_pp, to_exp_pp, step_exp_pp =
-                 (doc_exp false arg_ctx from_exp, doc_exp false arg_ctx to_exp, doc_exp false arg_ctx step_exp)
-               in
-               (* The body has the right type for deciding whether a proof is necessary *)
-               (* let vartuple_retyped = check_exp env (strip_exp vartuple) (typ_of body) in *)
-               let loopvar_pp = doc_id_ctor loopvar in
-               let vartuple_pp, body_lambda = make_loop_vars [loopvar_pp] vartuple in
-               let body_lambda = if effects then body_lambda ^^ string " do" else body_lambda ^^ lambda_end in
-               (* TODO: this should probably be construct_dep_pairs, but we would need
-                  to change it to use the updated context. *)
-               let body_pp = doc_exp body_as_monadic body_ctxt body in
-               let loop_head = flow (break 1) [string combinator; from_exp_pp; to_exp_pp; step_exp_pp; vartuple_pp] in
-               let full_loop = (prefix 2 1) loop_head (parens (prefix 2 1 (group body_lambda) body_pp)) in
-               let full_loop = if catch != empty then flow (break 1) [catch; parens full_loop] else full_loop in *)
             let from_exp_pp, to_exp_pp, step_exp_pp =
               (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
             in
@@ -798,7 +784,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             in
             let full_loop = prefix 2 1 loop_head loop_body in
             separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic (string "vars")]
-            (* wrap_with_pure (as_monadic && not (early_return || body_as_monadic)) ~with_parens:true full_loop *)
         | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
       end
     | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
