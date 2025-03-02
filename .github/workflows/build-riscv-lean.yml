@@ -56,6 +56,7 @@ jobs:
         cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
         # This patch is needed to work around https://github.com/rems-project/sail/issues/1003.
         patch -p1 < ../../sail/.github/workflows/build-riscv-lean/workaround-riscv.patch
+        patch -p1 < ../../sail/.github/workflows/sail-riscv-version.patch
         cmake --build build/ --target generated_lean_rv64d_lean
         cd ..
 

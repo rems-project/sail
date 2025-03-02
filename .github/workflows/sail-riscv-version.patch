@@ -1,0 +1,13 @@
+diff --git a/model/CMakeLists.txt b/model/CMakeLists.txt
+index 4de7ff6b..5f334522 100644
+--- a/model/CMakeLists.txt
++++ b/model/CMakeLists.txt
+@@ -429,7 +429,7 @@ foreach (xlen IN ITEMS 32 64)
+                         ${SAIL_BIN}
+                         --lean
+                         --memo-z3
+-                        --require-version 0.19
++                        --require-version 0.18
+                         --lean-output-dir ${CMAKE_CURRENT_BINARY_DIR}
+                         -o "Lean_${arch_uppercase}"
+                         ${sail_srcs}
