@@ -69,8 +69,12 @@ jobs:
         cp .github/workflows/build-riscv-lean/report.py sail-riscv/build/model/Lean_RV64D_LEAN/
         cd sail-riscv/build/model/Lean_RV64D_LEAN/
         (lake build | tee build_log.txt || true)
+        echo "Finished Lean Build"
         cp README.md.template README.md
         ./report.py >> README.md
+        ls
+        echo "CAT README"
+        cat README.md
         cd ../../../..
 
     - name: Test
