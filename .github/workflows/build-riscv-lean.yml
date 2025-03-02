@@ -92,8 +92,7 @@ jobs:
       with:
         path: "sail-riscv/build/model/Lean_RV64D_LEAN/README.md"
 
-    - name: Post PR Comment
-      uses: mshick/add-pr-comment@v2
+    - name: Create comment
+      uses: marocchino/sticky-pull-request-comment@v2
       with:
-        message: |
-          "Test"
+        path: sail-riscv/build/model/Lean_RV64D_LEAN/README.md
