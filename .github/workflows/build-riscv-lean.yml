@@ -97,4 +97,3 @@ jobs:
       with:
         message: |
           "Test"
-          "${ steps.read_file.outputs.contents }"
