@@ -50,9 +50,10 @@ jobs:
 
     - name: Build the `Sail RISCV Model with Lean`
       run: |
-        git clone https://github.com/RaitoBezarius/sail-riscv.git
+        # git clone https://github.com/riscv/sail-riscv.git
+        git clone https://github.com/ineol/sail-riscv.git
         cd sail-riscv
-        git checkout lean
+        git checkout lean-handwritten3
         eval $(opam config env)
         cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
         # This patch is needed to work around https://github.com/rems-project/sail/issues/1003.
