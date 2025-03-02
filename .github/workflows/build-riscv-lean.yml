@@ -77,15 +77,6 @@ jobs:
         cat README.md
         cd ../../../..
 
-    - name: Test
-      run: |
-        echo "OK"
-        ls 
-        ls sail-riscv
-        ls sail-riscv/build
-        ls sail-riscv/build/model
-        ls sail-riscv/build/model/Lean_RV64D_LEAN
-
     - name: Read file contents
       id: read_file
       uses: andstor/file-reader-action@v1
