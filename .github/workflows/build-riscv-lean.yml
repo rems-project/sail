@@ -79,7 +79,8 @@ jobs:
     - name: Build Model
       run: |
 
-      - uses: mshick/add-pr-comment@v2
-        with:
-          message-path: |
-            README.md
+    - name: Post PR Comment
+      uses: mshick/add-pr-comment@v2
+      with:
+        message-path: |
+          README.md
