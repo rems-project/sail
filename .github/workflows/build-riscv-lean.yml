@@ -59,6 +59,10 @@ jobs:
         cmake --build build/ --target generated_lean_rv64d_lean
         cd ..
 
+    - name: Test
+      run: |
+        echo "Test"
+
     - name: Build Model
       run: |
         wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh
