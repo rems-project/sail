@@ -81,4 +81,4 @@ jobs:
       uses: mshick/add-pr-comment@v2
       with:
         message-path: |
-          README.md
+          sail-riscv/build/model/Lean_RV64D_LEAN/README.md
