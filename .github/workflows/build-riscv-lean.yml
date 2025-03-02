@@ -80,6 +80,11 @@ jobs:
     - name: Test
       run: |
         echo "OK"
+        ls 
+        ls sail-riscv
+        ls sail-riscv/build
+        ls sail-riscv/build/model
+        ls sail-riscv/build/model/Lean_RV64D_LEAN
 
     - name: Post PR Comment
       uses: mshick/add-pr-comment@v2
