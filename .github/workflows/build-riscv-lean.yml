@@ -61,16 +61,15 @@ jobs:
 
     - name: Test
       run: |
-        echo "Test"
-
-    - name: Build Model
-      run: |
         wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh
         bash install_debian.sh ; rm -f install_debian.sh
         source ~/.profile
         cp .github/workflows/build-riscv-lean/README.md.template sail-riscv/build/model/Lean_RV64D_LEAN/
         cp .github/workflows/build-riscv-lean/report.py sail-riscv/build/model/Lean_RV64D_LEAN/
         cd sail-riscv/build/model/Lean_RV64D_LEAN/
+
+    - name: Build Model
+      run: |
         (lake build | tee build_log.txt || true)
         cp README.md.template README.md
         ./report.py >> README.md
