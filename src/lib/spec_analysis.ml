@@ -182,7 +182,7 @@ let nexp_subst_fns substs =
     let re e = E_aux (e, (l, s_tannot annot)) in
     match e with
     | E_block es -> re (E_block (List.map s_exp es))
-    | E_id _ | E_ref _ | E_lit _ | E_internal_value _ -> re e
+    | E_id _ | E_ref _ | E_lit _ | E_internal_value _ | E_config _ -> re e
     | E_sizeof ne -> begin
         let ne' = subst_kids_nexp substs ne in
         match ne' with Nexp_aux (Nexp_constant i, l) -> re (E_lit (L_aux (L_num i, l))) | _ -> re (E_sizeof ne')

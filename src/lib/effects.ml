@@ -392,7 +392,7 @@ let check_side_effects effect_info ast =
   List.iter
     (fun (DEF_aux (aux, _) as def) ->
       match aux with
-      | DEF_pragma ("non_exec", name, _) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
+      | DEF_pragma ("non_exec", Pragma_line (name, _)) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
       | DEF_let _ ->
           IdSet.iter
             (fun id ->

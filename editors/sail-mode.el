@@ -32,7 +32,7 @@
 
 (defconst sail-keywords
   '("val" "outcome" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
-    "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
+    "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect" "config"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "impure" "monadic" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to" "private"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"

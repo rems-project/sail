@@ -213,7 +213,7 @@ let set_syntax_deprecated l =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
+%token And As Assert Bitzero Bitone By Match Config Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
@@ -241,6 +241,7 @@ let set_syntax_deprecated l =
 %token <string> OpId
 
 %token <string * string> Pragma
+%token <string> StructuredPragma
 %token <string> Attribute
 
 %token <Parse_ast.fixity_token> Fixity
@@ -758,6 +759,8 @@ block:
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_typ ($3, $1)) $startpos $endpos }
+  | Config Id
+    { mk_exp (E_config $2) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit
@@ -988,6 +991,12 @@ typaram:
   | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
     { mk_typq $2 [] $startpos $endpos }
 
+abstract_instantiation:
+  | Eq; Config; key=separated_nonempty_list(Dot, Id)
+    { Some key }
+  |
+    { None }
+
 type_def:
   | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, $3, None, $5)) $startpos $endpos }
@@ -997,8 +1006,8 @@ type_def:
     { mk_td (TD_abbrev ($2, $3, Some $5, $7)) $startpos $endpos }
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, Some $4, $6)) $startpos $endpos }
-  | Typedef id Colon kind
-    { mk_td (TD_abstract ($2, $4)) $startpos $endpos }
+  | Typedef id Colon kind abstract_instantiation
+    { mk_td (TD_abstract ($2, $4, $5)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly
@@ -1347,10 +1356,12 @@ def_aux:
     { DEF_constraint $2 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
+  | pragma = StructuredPragma; kvs = separated_list(Comma, attribute_data_key_value); Rcurly
+    { DEF_pragma (pragma, Pragma_structured kvs) }
   | Pragma
     { let (pragma, arg) = $1 in
       let ltrim = pragma_left_spaces pragma $startpos arg in
-      DEF_pragma (pragma, String.trim arg, ltrim) }
+      DEF_pragma (pragma, Pragma_line (String.trim arg, ltrim)) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures

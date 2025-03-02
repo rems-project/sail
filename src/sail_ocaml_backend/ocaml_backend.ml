@@ -750,7 +750,13 @@ let ocaml_string_of_struct ctx struct_id typq fields =
 
 let ocaml_string_of_abbrev ctx id typq typ =
   let arg = gensym () in
-  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
+  separate space
+    [
+      string "let";
+      ocaml_string_of id;
+      parens (arg ^^ space ^^ colon ^^ space ^^ ocaml_typquant typq ^^ space ^^ zencode ctx id);
+      equals;
+    ]
   ^//^ ocaml_string_typ typ arg
 
 let ocaml_string_of_variant ctx id typq cases =

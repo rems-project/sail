@@ -550,6 +550,12 @@ let rename_variables globals graph root children =
     | V_tuple (members, ctyp) -> V_tuple (List.map fold_cval members, ctyp)
   in
 
+  let fold_init = function
+    | Init_cval cval -> Init_cval (fold_cval cval)
+    | Init_static vl -> Init_static vl
+    | Init_json_key parts -> Init_json_key parts
+  in
+
   let rec fold_clexp rmw = function
     | CL_id (id, ctyp) when rmw ->
         let i = top_stack id in
@@ -587,12 +593,12 @@ let rename_variables globals graph root children =
           counts := NameMap.add id i !counts;
           push_stack id i;
           I_decl (ctyp, ssa_name i id)
-      | I_init (ctyp, id, cval) ->
-          let cval = fold_cval cval in
+      | I_init (ctyp, id, init) ->
+          let init = fold_init init in
           let i = get_count id + 1 in
           counts := NameMap.add id i !counts;
           push_stack id i;
-          I_init (ctyp, ssa_name i id, cval)
+          I_init (ctyp, ssa_name i id, init)
       | instr -> instr
     in
     I_aux (aux, annot)

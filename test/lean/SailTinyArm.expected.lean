@@ -1,11 +1,15 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
+
 
 abbrev bits k_n := (BitVec k_n)
 
@@ -14,8 +18,9 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
+  deriving BEq
 
-open option
+
 
 abbrev MAIRType := (BitVec 64)
 
@@ -24,59 +29,60 @@ abbrev S1PIRType := (BitVec 64)
 abbrev S2PIRType := (BitVec 64)
 
 inductive SecurityState where | SS_NonSecure | SS_Root | SS_Realm | SS_Secure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open SecurityState
+
 
 abbrev PARTIDtype := (BitVec 16)
 
 abbrev PMGtype := (BitVec 8)
 
 inductive PARTIDspaceType where | PIdSpace_Secure | PIdSpace_Root | PIdSpace_Realm | PIdSpace_NonSecure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open PARTIDspaceType
+
 
 
 structure MPAMinfo where
   mpam_sp : PARTIDspaceType
   partid : PARTIDtype
   pmg : PMGtype
+  deriving BEq
 
 inductive AccessType where | AccessType_IFETCH | AccessType_GPR | AccessType_ASIMD | AccessType_SVE | AccessType_SME | AccessType_IC | AccessType_DC | AccessType_DCZero | AccessType_AT | AccessType_NV2 | AccessType_SPE | AccessType_GCS | AccessType_GPTW | AccessType_TTW
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open AccessType
+
 
 inductive VARange where | VARange_LOWER | VARange_UPPER
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open VARange
+
 
 inductive MemAtomicOp where | MemAtomicOp_GCSSS1 | MemAtomicOp_ADD | MemAtomicOp_BIC | MemAtomicOp_EOR | MemAtomicOp_ORR | MemAtomicOp_SMAX | MemAtomicOp_SMIN | MemAtomicOp_UMAX | MemAtomicOp_UMIN | MemAtomicOp_SWP | MemAtomicOp_CAS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open MemAtomicOp
+
 
 inductive CacheOp where | CacheOp_Clean | CacheOp_Invalidate | CacheOp_CleanInvalidate
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open CacheOp
+
 
 inductive CacheOpScope where | CacheOpScope_SetWay | CacheOpScope_PoU | CacheOpScope_PoC | CacheOpScope_PoE | CacheOpScope_PoP | CacheOpScope_PoDP | CacheOpScope_PoPA | CacheOpScope_ALLU | CacheOpScope_ALLUIS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open CacheOpScope
+
 
 inductive CacheType where | CacheType_Data | CacheType_Tag | CacheType_Data_Tag | CacheType_Instruction
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open CacheType
+
 
 inductive CachePASpace where | CPAS_NonSecure | CPAS_Any | CPAS_RealmNonSecure | CPAS_Realm | CPAS_Root | CPAS_SecureNonSecure | CPAS_Secure
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open CachePASpace
+
 
 
 structure AccessDescriptor where
@@ -113,32 +119,34 @@ structure AccessDescriptor where
   tagchecked : Bool
   tagaccess : Bool
   mpam : MPAMinfo
+  deriving BEq
 
 inductive MemType where | MemType_Normal | MemType_Device
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open MemType
+
 
 inductive DeviceType where | DeviceType_GRE | DeviceType_nGRE | DeviceType_nGnRE | DeviceType_nGnRnE
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open DeviceType
+
 
 
 structure MemAttrHints where
   attrs : (BitVec 2)
   hints : (BitVec 2)
   transient : Bool
+  deriving BEq
 
 inductive Shareability where | Shareability_NSH | Shareability_ISH | Shareability_OSH
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open Shareability
+
 
 inductive MemTagType where | MemTag_Untagged | MemTag_AllocationTagged | MemTag_CanonicallyTagged
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open MemTagType
+
 
 
 structure MemoryAttributes where
@@ -150,36 +158,39 @@ structure MemoryAttributes where
   tags : MemTagType
   notagaccess : Bool
   xs : (BitVec 1)
+  deriving BEq
 
 inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open PASpace
+
 
 
 structure FullAddress where
   paspace : PASpace
   address : (BitVec 56)
+  deriving BEq
 
 inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GPCF_Fail
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open GPCF
+
 
 
 structure GPCFRecord where
   gpf : GPCF
   level : Int
+  deriving BEq
 
 inductive Fault where | Fault_None | Fault_AccessFlag | Fault_Alignment | Fault_Background | Fault_Domain | Fault_Permission | Fault_Translation | Fault_AddressSize | Fault_SyncExternal | Fault_SyncExternalOnWalk | Fault_SyncParity | Fault_SyncParityOnWalk | Fault_GPCFOnWalk | Fault_GPCFOnOutput | Fault_AsyncParity | Fault_AsyncExternal | Fault_TagCheck | Fault_Debug | Fault_TLBConflict | Fault_BranchTarget | Fault_HWUpdateAccessFlag | Fault_Lockdown | Fault_Exclusive | Fault_ICacheMaint
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open Fault
+
 
 inductive ErrorState where | ErrorState_UC | ErrorState_UEU | ErrorState_UEO | ErrorState_UER | ErrorState_CE | ErrorState_Uncategorized | ErrorState_IMPDEF
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open ErrorState
+
 
 
 structure FaultRecord where
@@ -203,16 +214,17 @@ structure FaultRecord where
   domain : (BitVec 4)
   merrorstate : ErrorState
   debugmoe : (BitVec 4)
+  deriving BEq
 
 inductive MBReqDomain where | MBReqDomain_Nonshareable | MBReqDomain_InnerShareable | MBReqDomain_OuterShareable | MBReqDomain_FullSystem
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open MBReqDomain
+
 
 inductive MBReqTypes where | MBReqTypes_Reads | MBReqTypes_Writes | MBReqTypes_All
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open MBReqTypes
+
 
 
 structure CacheRecord where
@@ -234,16 +246,17 @@ structure CacheRecord where
   asid : (BitVec 16)
   security : SecurityState
   cpas : CachePASpace
+  deriving BEq
 
 inductive Regime where | Regime_EL3 | Regime_EL30 | Regime_EL2 | Regime_EL20 | Regime_EL10
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open Regime
+
 
 inductive TGx where | TGx_4KB | TGx_16KB | TGx_64KB
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open TGx
+
 
 
 structure S1TTWParams where
@@ -287,6 +300,7 @@ structure S1TTWParams where
   dc : (BitVec 1)
   sif : (BitVec 1)
   mair : MAIRType
+  deriving BEq
 
 
 structure S2TTWParams where
@@ -321,6 +335,7 @@ structure S2TTWParams where
   ee : (BitVec 1)
   ptw : (BitVec 1)
   vm : (BitVec 1)
+  deriving BEq
 
 
 structure TranslationInfo where
@@ -333,21 +348,22 @@ structure TranslationInfo where
   s1params : (Option S1TTWParams)
   s2params : (Option S2TTWParams)
   memattrs : MemoryAttributes
+  deriving BEq
 
 inductive TLBILevel where | TLBILevel_Any | TLBILevel_Last
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open TLBILevel
+
 
 inductive TLBIOp where | TLBIOp_DALL | TLBIOp_DASID | TLBIOp_DVA | TLBIOp_IALL | TLBIOp_IASID | TLBIOp_IVA | TLBIOp_ALL | TLBIOp_ASID | TLBIOp_IPAS2 | TLBIPOp_IPAS2 | TLBIOp_VAA | TLBIOp_VA | TLBIPOp_VAA | TLBIPOp_VA | TLBIOp_VMALL | TLBIOp_VMALLS12 | TLBIOp_RIPAS2 | TLBIPOp_RIPAS2 | TLBIOp_RVAA | TLBIOp_RVA | TLBIPOp_RVAA | TLBIPOp_RVA | TLBIOp_RPA | TLBIOp_PAALL
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open TLBIOp
+
 
 inductive TLBIMemAttr where | TLBI_AllAttr | TLBI_ExcludeXS
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, BEq
 
-open TLBIMemAttr
+
 
 
 structure TLBIRecord where
@@ -366,6 +382,7 @@ structure TLBIRecord where
   d128 : Bool
   ttl : (BitVec 4)
   tg : (BitVec 2)
+  deriving BEq
 
 
 inductive arm_acc_type where
@@ -380,19 +397,22 @@ inductive arm_acc_type where
   | SAcc_SPE (_ : Unit)
   | SAcc_GCS (_ : Unit)
   | SAcc_GPTW (_ : Unit)
+  deriving BEq
 
-open arm_acc_type
+
 
 
 structure TLBIInfo where
   rec' : TLBIRecord
   shareability : Shareability
+  deriving BEq
 
 
 structure DxB where
   domain : MBReqDomain
   types : MBReqTypes
   nXS : Bool
+  deriving BEq
 
 
 inductive Barrier where
@@ -402,8 +422,9 @@ inductive Barrier where
   | Barrier_SSBB (_ : Unit)
   | Barrier_PSSBB (_ : Unit)
   | Barrier_SB (_ : Unit)
+  deriving BEq
 
-open Barrier
+
 
 abbrev boolean := (BitVec 1)
 
@@ -420,8 +441,9 @@ inductive ast where
   | ExclusiveOr (_ : (reg_index × reg_index × reg_index))
   | DataMemoryBarrier (_ : Unit)
   | CompareAndBranch (_ : (reg_index × (BitVec 64)))
+  deriving BEq
 
-open ast
+
 
 inductive Register : Type where
   | R0
@@ -493,10 +515,11 @@ abbrev RegisterType : Register → Type
   | .R30 => (BitVec 64)
   | ._PC => (BitVec 64)
 
-open RegisterRef
 instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
   default := .Reg _PC
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 instance : Arch where
   va_size := 64
@@ -510,6 +533,53 @@ instance : Arch where
   arch_ak := arm_acc_type
   sys_reg_id := Unit
 
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open ast
+open arm_acc_type
+open VARange
+open TLBIOp
+open TLBIMemAttr
+open TLBILevel
+open TGx
+open Shareability
+open SecurityState
+open Register
+open Regime
+open PASpace
+open PARTIDspaceType
+open MemType
+open MemTagType
+open MemAtomicOp
+open MBReqTypes
+open MBReqDomain
+open GPCF
+open Fault
+open ErrorState
+open DeviceType
+open CacheType
+open CachePASpace
+open CacheOpScope
+open CacheOp
+open Barrier
+open AccessType
+
 namespace Functions
 
 /-- Type quantifiers: k_ex6347# : Bool, k_ex6346# : Bool -/
@@ -522,7 +592,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -532,34 +602,34 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
+  if (l ≥b n)
+  then ((sail_ones n) <<< i)
   else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft (HSub.hSub (HShiftLeft.hShiftLeft one l) one) i)
+       (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then (HSub.hSub (Int.tdiv (HAdd.hAdd n 1) m) 1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then (HSub.hSub (Int.tdiv (HSub.hSub n 1) m) 1)
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else if (Bool.and (n >b 0) (m <b 0))
+       then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (HSub.hSub n (HMul.hMul m (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -588,112 +658,112 @@ def Mk_MAIRType (v : (BitVec 64)) : (BitVec 64) :=
   v
 
 def _get_MAIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsbUnif v (HSub.hSub 64 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _update_MAIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (HSub.hSub 64 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _update_S1PIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (HSub.hSub 64 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _update_S2PIRType_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (HSub.hSub 64 1) 0 x)
+  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
-def _set_MAIRType_bits (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
+def _set_MAIRType_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_bits r v)
 
 def _get_S1PIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsbUnif v (HSub.hSub 64 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _get_S2PIRType_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsbUnif v (HSub.hSub 64 1) 0)
+  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
-def _set_S1PIRType_bits (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
+def _set_S1PIRType_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_bits r v)
 
-def _set_S2PIRType_bits (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
+def _set_S2PIRType_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_bits r v)
 
 def _get_MAIRType_Attr0 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 7 0)
+  (Sail.BitVec.extractLsb v 7 0)
 
 def _update_MAIRType_Attr0 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 7 0 x)
 
-def _set_MAIRType_Attr0 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr0 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr0 r v)
 
 def _get_MAIRType_Attr1 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 15 8)
+  (Sail.BitVec.extractLsb v 15 8)
 
 def _update_MAIRType_Attr1 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 15 8 x)
 
-def _set_MAIRType_Attr1 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr1 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr1 r v)
 
 def _get_MAIRType_Attr2 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 23 16)
+  (Sail.BitVec.extractLsb v 23 16)
 
 def _update_MAIRType_Attr2 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 23 16 x)
 
-def _set_MAIRType_Attr2 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr2 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr2 r v)
 
 def _get_MAIRType_Attr3 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 31 24)
+  (Sail.BitVec.extractLsb v 31 24)
 
 def _update_MAIRType_Attr3 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 31 24 x)
 
-def _set_MAIRType_Attr3 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr3 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr3 r v)
 
 def _get_MAIRType_Attr4 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 39 32)
+  (Sail.BitVec.extractLsb v 39 32)
 
 def _update_MAIRType_Attr4 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 39 32 x)
 
-def _set_MAIRType_Attr4 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr4 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr4 r v)
 
 def _get_MAIRType_Attr5 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 47 40)
+  (Sail.BitVec.extractLsb v 47 40)
 
 def _update_MAIRType_Attr5 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 47 40 x)
 
-def _set_MAIRType_Attr5 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr5 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr5 r v)
 
 def _get_MAIRType_Attr6 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 55 48)
+  (Sail.BitVec.extractLsb v 55 48)
 
 def _update_MAIRType_Attr6 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 55 48 x)
 
-def _set_MAIRType_Attr6 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr6 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr6 r v)
 
 def _get_MAIRType_Attr7 (v : (BitVec 64)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsbUnif v 63 56)
+  (Sail.BitVec.extractLsb v 63 56)
 
 def _update_MAIRType_Attr7 (v : (BitVec 64)) (x : (BitVec 8)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 63 56 x)
 
-def _set_MAIRType_Attr7 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
+def _set_MAIRType_Attr7 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 8)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_MAIRType_Attr7 r v)
 
@@ -704,7 +774,7 @@ def Mk_S1PIRType (v : (BitVec 64)) : (BitVec 64) :=
   v
 
 def _get_S1PIRType_Perm0 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 3 0)
+  (Sail.BitVec.extractLsb v 3 0)
 
 def _update_S1PIRType_Perm0 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 3 0 x)
@@ -712,19 +782,19 @@ def _update_S1PIRType_Perm0 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm0 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 3 0 x)
 
-def _set_S1PIRType_Perm0 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm0 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm0 r v)
 
 def _get_S2PIRType_Perm0 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 3 0)
+  (Sail.BitVec.extractLsb v 3 0)
 
-def _set_S2PIRType_Perm0 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm0 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm0 r v)
 
 def _get_S1PIRType_Perm1 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 7 4)
+  (Sail.BitVec.extractLsb v 7 4)
 
 def _update_S1PIRType_Perm1 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 7 4 x)
@@ -732,19 +802,19 @@ def _update_S1PIRType_Perm1 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm1 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 7 4 x)
 
-def _set_S1PIRType_Perm1 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm1 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm1 r v)
 
 def _get_S2PIRType_Perm1 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 7 4)
+  (Sail.BitVec.extractLsb v 7 4)
 
-def _set_S2PIRType_Perm1 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm1 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm1 r v)
 
 def _get_S1PIRType_Perm10 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 43 40)
+  (Sail.BitVec.extractLsb v 43 40)
 
 def _update_S1PIRType_Perm10 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 43 40 x)
@@ -752,19 +822,19 @@ def _update_S1PIRType_Perm10 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm10 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 43 40 x)
 
-def _set_S1PIRType_Perm10 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm10 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm10 r v)
 
 def _get_S2PIRType_Perm10 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 43 40)
+  (Sail.BitVec.extractLsb v 43 40)
 
-def _set_S2PIRType_Perm10 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm10 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm10 r v)
 
 def _get_S1PIRType_Perm11 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 47 44)
+  (Sail.BitVec.extractLsb v 47 44)
 
 def _update_S1PIRType_Perm11 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 47 44 x)
@@ -772,19 +842,19 @@ def _update_S1PIRType_Perm11 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm11 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 47 44 x)
 
-def _set_S1PIRType_Perm11 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm11 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm11 r v)
 
 def _get_S2PIRType_Perm11 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 47 44)
+  (Sail.BitVec.extractLsb v 47 44)
 
-def _set_S2PIRType_Perm11 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm11 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm11 r v)
 
 def _get_S1PIRType_Perm12 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 51 48)
+  (Sail.BitVec.extractLsb v 51 48)
 
 def _update_S1PIRType_Perm12 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 51 48 x)
@@ -792,19 +862,19 @@ def _update_S1PIRType_Perm12 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm12 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 51 48 x)
 
-def _set_S1PIRType_Perm12 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm12 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm12 r v)
 
 def _get_S2PIRType_Perm12 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 51 48)
+  (Sail.BitVec.extractLsb v 51 48)
 
-def _set_S2PIRType_Perm12 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm12 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm12 r v)
 
 def _get_S1PIRType_Perm13 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 55 52)
+  (Sail.BitVec.extractLsb v 55 52)
 
 def _update_S1PIRType_Perm13 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 55 52 x)
@@ -812,19 +882,19 @@ def _update_S1PIRType_Perm13 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm13 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 55 52 x)
 
-def _set_S1PIRType_Perm13 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm13 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm13 r v)
 
 def _get_S2PIRType_Perm13 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 55 52)
+  (Sail.BitVec.extractLsb v 55 52)
 
-def _set_S2PIRType_Perm13 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm13 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm13 r v)
 
 def _get_S1PIRType_Perm14 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 59 56)
+  (Sail.BitVec.extractLsb v 59 56)
 
 def _update_S1PIRType_Perm14 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 59 56 x)
@@ -832,19 +902,19 @@ def _update_S1PIRType_Perm14 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm14 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 59 56 x)
 
-def _set_S1PIRType_Perm14 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm14 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm14 r v)
 
 def _get_S2PIRType_Perm14 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 59 56)
+  (Sail.BitVec.extractLsb v 59 56)
 
-def _set_S2PIRType_Perm14 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm14 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm14 r v)
 
 def _get_S1PIRType_Perm15 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 63 60)
+  (Sail.BitVec.extractLsb v 63 60)
 
 def _update_S1PIRType_Perm15 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 63 60 x)
@@ -852,19 +922,19 @@ def _update_S1PIRType_Perm15 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm15 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 63 60 x)
 
-def _set_S1PIRType_Perm15 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm15 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm15 r v)
 
 def _get_S2PIRType_Perm15 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 63 60)
+  (Sail.BitVec.extractLsb v 63 60)
 
-def _set_S2PIRType_Perm15 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm15 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm15 r v)
 
 def _get_S1PIRType_Perm2 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 11 8)
+  (Sail.BitVec.extractLsb v 11 8)
 
 def _update_S1PIRType_Perm2 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 11 8 x)
@@ -872,19 +942,19 @@ def _update_S1PIRType_Perm2 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm2 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 11 8 x)
 
-def _set_S1PIRType_Perm2 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm2 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm2 r v)
 
 def _get_S2PIRType_Perm2 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 11 8)
+  (Sail.BitVec.extractLsb v 11 8)
 
-def _set_S2PIRType_Perm2 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm2 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm2 r v)
 
 def _get_S1PIRType_Perm3 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 15 12)
+  (Sail.BitVec.extractLsb v 15 12)
 
 def _update_S1PIRType_Perm3 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 15 12 x)
@@ -892,19 +962,19 @@ def _update_S1PIRType_Perm3 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm3 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 15 12 x)
 
-def _set_S1PIRType_Perm3 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm3 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm3 r v)
 
 def _get_S2PIRType_Perm3 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 15 12)
+  (Sail.BitVec.extractLsb v 15 12)
 
-def _set_S2PIRType_Perm3 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm3 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm3 r v)
 
 def _get_S1PIRType_Perm4 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 19 16)
+  (Sail.BitVec.extractLsb v 19 16)
 
 def _update_S1PIRType_Perm4 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 19 16 x)
@@ -912,19 +982,19 @@ def _update_S1PIRType_Perm4 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm4 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 19 16 x)
 
-def _set_S1PIRType_Perm4 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm4 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm4 r v)
 
 def _get_S2PIRType_Perm4 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 19 16)
+  (Sail.BitVec.extractLsb v 19 16)
 
-def _set_S2PIRType_Perm4 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm4 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm4 r v)
 
 def _get_S1PIRType_Perm5 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 23 20)
+  (Sail.BitVec.extractLsb v 23 20)
 
 def _update_S1PIRType_Perm5 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 23 20 x)
@@ -932,19 +1002,19 @@ def _update_S1PIRType_Perm5 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm5 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 23 20 x)
 
-def _set_S1PIRType_Perm5 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm5 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm5 r v)
 
 def _get_S2PIRType_Perm5 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 23 20)
+  (Sail.BitVec.extractLsb v 23 20)
 
-def _set_S2PIRType_Perm5 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm5 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm5 r v)
 
 def _get_S1PIRType_Perm6 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 27 24)
+  (Sail.BitVec.extractLsb v 27 24)
 
 def _update_S1PIRType_Perm6 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 27 24 x)
@@ -952,19 +1022,19 @@ def _update_S1PIRType_Perm6 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm6 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 27 24 x)
 
-def _set_S1PIRType_Perm6 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm6 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm6 r v)
 
 def _get_S2PIRType_Perm6 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 27 24)
+  (Sail.BitVec.extractLsb v 27 24)
 
-def _set_S2PIRType_Perm6 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm6 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm6 r v)
 
 def _get_S1PIRType_Perm7 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 31 28)
+  (Sail.BitVec.extractLsb v 31 28)
 
 def _update_S1PIRType_Perm7 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 31 28 x)
@@ -972,19 +1042,19 @@ def _update_S1PIRType_Perm7 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm7 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 31 28 x)
 
-def _set_S1PIRType_Perm7 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm7 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm7 r v)
 
 def _get_S2PIRType_Perm7 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 31 28)
+  (Sail.BitVec.extractLsb v 31 28)
 
-def _set_S2PIRType_Perm7 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm7 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm7 r v)
 
 def _get_S1PIRType_Perm8 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 35 32)
+  (Sail.BitVec.extractLsb v 35 32)
 
 def _update_S1PIRType_Perm8 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 35 32 x)
@@ -992,19 +1062,19 @@ def _update_S1PIRType_Perm8 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm8 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 35 32 x)
 
-def _set_S1PIRType_Perm8 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm8 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm8 r v)
 
 def _get_S2PIRType_Perm8 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 35 32)
+  (Sail.BitVec.extractLsb v 35 32)
 
-def _set_S2PIRType_Perm8 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm8 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm8 r v)
 
 def _get_S1PIRType_Perm9 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 39 36)
+  (Sail.BitVec.extractLsb v 39 36)
 
 def _update_S1PIRType_Perm9 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 39 36 x)
@@ -1012,14 +1082,14 @@ def _update_S1PIRType_Perm9 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
 def _update_S2PIRType_Perm9 (v : (BitVec 64)) (x : (BitVec 4)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 39 36 x)
 
-def _set_S1PIRType_Perm9 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S1PIRType_Perm9 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S1PIRType_Perm9 r v)
 
 def _get_S2PIRType_Perm9 (v : (BitVec 64)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsbUnif v 39 36)
+  (Sail.BitVec.extractLsb v 39 36)
 
-def _set_S2PIRType_Perm9 (r_ref : (RegisterRef RegisterType (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
+def _set_S2PIRType_Perm9 (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_S2PIRType_Perm9 r v)
 
@@ -1789,8 +1859,8 @@ def undefined_DxB (_ : Unit) : SailM DxB := do
           types := (← (undefined_MBReqTypes ()))
           nXS := (← (undefined_bool ())) })
 
-def GPRs : (Vector (RegisterRef RegisterType (BitVec 64)) 31) :=
-  #v[Reg R30, Reg R29, Reg R28, Reg R27, Reg R26, Reg R25, Reg R24, Reg R23, Reg R22, Reg R21, Reg R20, Reg R19, Reg R18, Reg R17, Reg R16, Reg R15, Reg R14, Reg R13, Reg R12, Reg R11, Reg R10, Reg R9, Reg R8, Reg R7, Reg R6, Reg R5, Reg R4, Reg R3, Reg R2, Reg R1, Reg R0]
+def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
+  #v[.Reg R0, .Reg R1, .Reg R2, .Reg R3, .Reg R4, .Reg R5, .Reg R6, .Reg R7, .Reg R8, .Reg R9, .Reg R10, .Reg R11, .Reg R12, .Reg R13, .Reg R14, .Reg R15, .Reg R16, .Reg R17, .Reg R18, .Reg R19, .Reg R20, .Reg R21, .Reg R22, .Reg R23, .Reg R24, .Reg R25, .Reg R26, .Reg R27, .Reg R28, .Reg R29, .Reg R30]
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
@@ -1839,12 +1909,11 @@ def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
   let t : reg_index := (BitVec.toNat Rt)
-  let offset : (BitVec 64) :=
-    (Sail.BitVec.signExtend (Sail.BitVec.append' imm19 (0b00 : (BitVec 2))) 64)
+  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64)
   (some (CompareAndBranch (t, offset)))
 
 def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
-  let req : Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1871,13 +1940,13 @@ def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   writeReg _PC (BitVec.addInt (← readReg _PC) 4)
   let base_addr ← do (rX n)
   let offset ← do (rX m)
-  let addr := (HAdd.hAdd base_addr offset)
+  let addr := (base_addr + offset)
   let _ := (wMem_Addr addr)
   let data ← do (rX t)
   (wMem addr data)
 
 def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
-  let req : Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1896,7 +1965,7 @@ def execute_LoadRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   writeReg _PC (BitVec.addInt (← readReg _PC) 4)
   let base_addr ← do (rX n)
   let offset ← do (rX m)
-  let addr := (HAdd.hAdd base_addr offset)
+  let addr := (base_addr + offset)
   let data ← do (rMem addr)
   (wX t data)
 
@@ -1905,7 +1974,7 @@ def execute_LoadRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
 def execute_ExclusiveOr (d : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   let operand1 ← do (rX n)
   let operand2 ← do (rX m)
-  (wX d (HXor.hXor operand1 operand2))
+  (wX d (operand1 ^^^ operand2))
 
 def dataMemoryBarrier (_ : Unit) : SailM Unit := do
   (sail_barrier
@@ -1922,7 +1991,7 @@ def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
   if (BEq.beq operand (0x0000000000000000 : (BitVec 64)))
   then let base ← do (rPC ())
-       let addr := (HAdd.hAdd base offset)
+       let addr := (base + offset)
        (wPC addr)
   else writeReg _PC (BitVec.addInt (← readReg _PC) 4)
 
@@ -1935,37 +2004,37 @@ def execute (merge_var : ast) : SailM Unit := do
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsbUnif v__0 31 24) (0xF8 : (BitVec 8)))
-       (Bool.and (BEq.beq (Sail.BitVec.extractLsbUnif v__0 21 21) (0b1 : (BitVec 1)))
-         (BEq.beq (Sail.BitVec.extractLsbUnif v__0 11 10) (0b10 : (BitVec 2)))))
+  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
+       (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
+         (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
   then let S := (BitVec.access v__0 12)
-       let option_v : (BitVec 3) := (Sail.BitVec.extractLsbUnif v__0 15 13)
-       let opc : (BitVec 2) := (Sail.BitVec.extractLsbUnif v__0 23 22)
-       let Rt : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 4 0)
-       let Rn : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 9 5)
-       let Rm : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 20 16)
+       let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
+       let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
+       let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
+       let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+       let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
        (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
-  else if (BEq.beq (Sail.BitVec.extractLsbUnif v__0 30 24) (0b1001010 : (BitVec 7)))
+  else if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
        then let sf := (BitVec.access v__0 31)
             let N := (BitVec.access v__0 21)
-            let shift : (BitVec 2) := (Sail.BitVec.extractLsbUnif v__0 23 22)
-            let imm6 : (BitVec 6) := (Sail.BitVec.extractLsbUnif v__0 15 10)
-            let Rn : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 9 5)
-            let Rm : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 20 16)
-            let Rd : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 4 0)
+            let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
+            let imm6 : (BitVec 6) := (Sail.BitVec.extractLsb v__0 15 10)
+            let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+            let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+            let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
             (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
-       else if (Bool.and (BEq.beq (Sail.BitVec.extractLsbUnif v__0 31 12) (0xD5033 : (BitVec 20)))
-                 (BEq.beq (Sail.BitVec.extractLsbUnif v__0 7 0) (0xBF : (BitVec 8))))
-            then let CRm : (BitVec 4) := (Sail.BitVec.extractLsbUnif v__0 11 8)
+       else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
+                 (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
+            then let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
                  (decodeDataMemoryBarrier CRm)
-            else if (BEq.beq (Sail.BitVec.extractLsbUnif v__0 31 24) (0xB4 : (BitVec 8)))
-                 then let imm19 : (BitVec 19) := (Sail.BitVec.extractLsbUnif v__0 23 5)
-                      let Rt : (BitVec 5) := (Sail.BitVec.extractLsbUnif v__0 4 0)
+            else if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
+                 then let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
+                      let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
                       (decodeCompareAndBranch imm19 Rt)
                  else none
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
-  let req : Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type :=
+  let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_ifetch ())
       va := (some addr)
       pa := (Sail.BitVec.truncate addr 56)
@@ -2028,19 +2097,19 @@ def sail_synchronize_registers (_ : Unit) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type -/
-def sail_mark_register (x_0 : (RegisterRef RegisterType k_a)) (x_1 : String) : Unit :=
+def sail_mark_register (x_0 : (RegisterRef k_a)) (x_1 : String) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
-def sail_mark_register_pair (x_0 : (RegisterRef RegisterType k_a)) (x_1 : (RegisterRef RegisterType k_b)) (x_2 : String) : Unit :=
+def sail_mark_register_pair (x_0 : (RegisterRef k_a)) (x_1 : (RegisterRef k_b)) (x_2 : String) : Unit :=
   ()
 
 /-- Type quantifiers: k_a : Type -/
-def sail_ignore_write_to (reg : (RegisterRef RegisterType k_a)) : Unit :=
+def sail_ignore_write_to (reg : (RegisterRef k_a)) : Unit :=
   (sail_mark_register reg "ignore_write")
 
 /-- Type quantifiers: k_a : Type -/
-def sail_pick_dependency (reg : (RegisterRef RegisterType k_a)) : Unit :=
+def sail_pick_dependency (reg : (RegisterRef k_a)) : Unit :=
   (sail_mark_register reg "pick")
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
@@ -2085,7 +2154,7 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
     match eak.variety with
@@ -2095,7 +2164,7 @@ def mem_read_request_is_exclusive (request : Mem_read_request k_n k_vasize k_pa 
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_read_request_is_ifetch (request : Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_read_request_is_ifetch (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_ifetch () => true
   | _ => false
@@ -2106,7 +2175,7 @@ def __monomorphize_writes : Bool := false
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
   : Type, k_n > 0 ∧ k_vasize > 0 -/
-def mem_write_request_is_exclusive (request : Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak) : Bool :=
+def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
     match eak.variety with
@@ -2152,6 +2221,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R0 (← (undefined_bitvector 64))
 
 end Functions
-
 open Functions
 

@@ -23,7 +23,6 @@ sail = get_sail()
 # Not all self-tests are supported.
 skip_selftests = {
     'list_rec_functions2',
-    'eq_struct',
     'either_rvbug',
     'bv_literal',
     'issue362',
@@ -32,39 +31,26 @@ skip_selftests = {
     'large_bitvector',
     'exn_hello_world',
     'poly_union_rev',
-    'match_bind',
-    'rev_bits_in_byte',
     'foreach_none',
-    'all_even_vector_length',
     'outcome_impl',
     'lib_valid_hex_bits',
     'tuple_conversion',
-    'pow2',
     'primop',
     'poly_pair',
     'assign_rename_bug',
-    'warl',
     'config',
-    'spc_mappings_small',
     'cheri128_hsb',
-    'instruction',
-    'gvector',
-    'small_slice',
     'union_variant_names',
     'lib_hex_bits',
     'lib_hex_bits_signed',
-    'config_bit',
     'varswap',
-    'try_return',
     'real',
     'inc_tests',
     'poly_outcome',
     'string_of_bits',
-    'nexp_synonym',
     'return_leak',
     'custom_flow',
     'pointer_assign',
-    'two_mapping',
     'ctz',
     'spc_mappings',
     'concurrency_interface',
@@ -74,48 +60,33 @@ skip_selftests = {
     'list_torture',
     'option_nest',
     'string_literal_type',
-    'hex_str_negative',
-    'xlen32',
-    'issue232_2',
     'cheri_capreg',
     'loop_exception',
     'issue429',
     'pc_no_wildcard',
     'type_if_bits',
     'poly_union',
-    'dec_str_fixed',
     'nexp_simp_euclidian',
     'config_register_ones',
     'toplevel_tyvar',
-    'ediv',
     'ediv_from_tdiv',
-    'int_struct',
-    'int64_vector_literal',
     'concurrency_interface_write',
     'read_write_ram',
-    'enum_vector',
     'issue136',
-    'reg_32_64',
-    'issue232',
-    'issue243_fixed',
-    'int_struct_constrained',
-    'get_slice_int',
     'fail_exception',
-    'zeros_mapping',
     'natural_sort_reg',
     'option_option',
     'anf_as_pattern',
-    'implicits',
-    'simple_bitmanip',
     'poly_mapping',
-    'gvectorlit',
-    'split',
     'new_bitfields',
     'real_prop',
     'vector_init',
     'partial_mapping',
     'lib_dec_bits',
-    'list_list_eq'
+    'list_list_eq',
+    'constructor247',
+    'config_vec_list',
+    'deep_poly_nest',
 }
 
 print("Sail is {}".format(sail))
@@ -155,19 +126,30 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 ] if runnable else [ ])
                 step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
-                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename, expected_status=1)
+                    step(f'lake exe run > expected 2> err_status',
+                         cwd=f'{basename}/out',
+                         name=filename,
+                         expected_status=1,
+                         stderr_file=f'{basename}/out/err_status')
                 elif runnable:
-                    step(f'lake exe run > expected 2> err_status', cwd=f'{basename}/out', name=filename)
+                    step('timeout 90s lake exe run > expected 2> err_status',
+                         cwd=f'{basename}/out',
+                         name=filename,
+                         stderr_file=f'{basename}/out/err_status')
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
                     step('lake build', cwd=f'{basename}/out', name=filename)
 
                 if not runnable:
-                    status = step_with_status(f'diff {basename}/out/Out.lean {basename}.expected.lean', name=filename)
+                    output = f"{basename}/output"
+                    step(f'cat {basename}/out/Out/Defs.lean > {output}')
+                    step(f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}')
+                    step(f'cat {basename}/out/Out.lean >> {output}')
+                    status = step_with_status(f'diff {output} {basename}.expected.lean', name=filename)
                     if status != 0:
                         if update_expected:
                             print(f'Overriding file {basename}.expected.lean')
-                            step(f'cp {basename}/out/Out.lean {basename}.expected.lean')
+                            step(f'cp {output} {basename}.expected.lean')
                         else:
                             sys.exit(1)
                 else:

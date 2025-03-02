@@ -1048,7 +1048,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         let re e = E_aux (e, annot) in
         match e with
         | E_block es -> re (E_block (List.map map_exp es))
-        | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ -> ea
+        | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ | E_config _ -> ea
         | E_typ (t, e') -> re (E_typ (t, map_exp e'))
         | E_app (id, es) ->
             let es' = List.map map_exp es in
@@ -2257,6 +2257,7 @@ module Analysis = struct
             )
         end
       | E_lit _ -> (dempty, assigns, empty)
+      | E_config _ -> (dempty, assigns, empty)
       | E_typ (_, e) -> analyse_sub env assigns e
       | E_app (id, args) when string_of_id id = "bitvector_length" -> begin
           match destruct_atom_nexp (env_of_annot (l, annot)) (typ_of_annot (l, annot)) with
@@ -4664,7 +4665,7 @@ module ToplevelNexpRewrites = struct
       | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
-      | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
+      | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
       | TD_record (id, typq, typ_ids, flag) ->
           TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)

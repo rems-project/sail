@@ -55,6 +55,38 @@ let fp16_neg_normal_add_5_op_0 = 0xc901
 let fp16_neg_normal_add_5_op_1 = 0xc9f1
 let fp16_neg_normal_add_5_sum  = 0xcd79
 
+let fp16_pos_normal_add_6_op_0     = 0x04f0
+let fp16_pos_normal_add_6_op_1     = 0x0401
+let fp16_pos_normal_add_6_sum_rne  = 0x0878
+let fp16_pos_normal_add_6_sum_rna  = 0x0879
+let fp16_pos_normal_add_6_sum_rdn  = 0x0878
+let fp16_pos_normal_add_6_sum_rup  = 0x0879
+let fp16_pos_normal_add_6_sum_rtz  = 0x0878
+
+let fp16_neg_normal_add_7_op_0     = 0x88ff
+let fp16_neg_normal_add_7_op_1     = 0x88fe
+let fp16_neg_normal_add_7_sum_rne  = 0x8cfe
+let fp16_neg_normal_add_7_sum_rna  = 0x8cff
+let fp16_neg_normal_add_7_sum_rdn  = 0x8cff
+let fp16_neg_normal_add_7_sum_rup  = 0x8cfe
+let fp16_neg_normal_add_7_sum_rtz  = 0x8cfe
+
+let fp16_pos_normal_add_8_op_0     = 0x070e
+let fp16_pos_normal_add_8_op_1     = 0x0701
+let fp16_pos_normal_add_8_sum_rne  = 0x0b08
+let fp16_pos_normal_add_8_sum_rna  = 0x0b08
+let fp16_pos_normal_add_8_sum_rdn  = 0x0b07
+let fp16_pos_normal_add_8_sum_rup  = 0x0b08
+let fp16_pos_normal_add_8_sum_rtz  = 0x0b07
+
+let fp16_neg_normal_add_9_op_0     = 0x8400
+let fp16_neg_normal_add_9_op_1     = 0x8401
+let fp16_neg_normal_add_9_sum_rne  = 0x8800
+let fp16_neg_normal_add_9_sum_rna  = 0x8801
+let fp16_neg_normal_add_9_sum_rdn  = 0x8801
+let fp16_neg_normal_add_9_sum_rup  = 0x8800
+let fp16_neg_normal_add_9_sum_rtz  = 0x8800
+
 let fp16_pos_denormal_add_0_op_0 = 0x00ff
 let fp16_pos_denormal_add_0_op_1 = 0x0021
 let fp16_pos_denormal_add_0_sum  = 0x0120
@@ -115,6 +147,38 @@ let fp32_neg_normal_add_4_sum  = 0x89990d1f
 let fp32_neg_normal_add_5_op_0 = 0xf7a70102
 let fp32_neg_normal_add_5_op_1 = 0xf7affff0
 let fp32_neg_normal_add_5_sum  = 0xf82b8079
+
+let fp32_pos_normal_add_6_op_0     = 0x047239f0
+let fp32_pos_normal_add_6_op_1     = 0x04723021
+let fp32_pos_normal_add_6_sum_rne  = 0x04f23508
+let fp32_pos_normal_add_6_sum_rna  = 0x04f23509
+let fp32_pos_normal_add_6_sum_rdn  = 0x04f23508
+let fp32_pos_normal_add_6_sum_rup  = 0x04f23509
+let fp32_pos_normal_add_6_sum_rtz  = 0x04f23508
+
+let fp32_neg_normal_add_7_op_0     = 0xccf001ff
+let fp32_neg_normal_add_7_op_1     = 0xccfffffe
+let fp32_neg_normal_add_7_sum_rne  = 0xcd7800fe
+let fp32_neg_normal_add_7_sum_rna  = 0xcd7800ff
+let fp32_neg_normal_add_7_sum_rdn  = 0xcd7800ff
+let fp32_neg_normal_add_7_sum_rup  = 0xcd7800fe
+let fp32_neg_normal_add_7_sum_rtz  = 0xcd7800fe
+
+let fp32_pos_normal_add_8_op_0     = 0x0700000e
+let fp32_pos_normal_add_8_op_1     = 0x07000001
+let fp32_pos_normal_add_8_sum_rne  = 0x07800008
+let fp32_pos_normal_add_8_sum_rna  = 0x07800008
+let fp32_pos_normal_add_8_sum_rdn  = 0x07800007
+let fp32_pos_normal_add_8_sum_rup  = 0x07800008
+let fp32_pos_normal_add_8_sum_rtz  = 0x07800007
+
+let fp32_neg_normal_add_9_op_0     = 0xaeffff00
+let fp32_neg_normal_add_9_op_1     = 0xaeff0e01
+let fp32_neg_normal_add_9_sum_rne  = 0xaf7f8680
+let fp32_neg_normal_add_9_sum_rna  = 0xaf7f8681
+let fp32_neg_normal_add_9_sum_rdn  = 0xaf7f8681
+let fp32_neg_normal_add_9_sum_rup  = 0xaf7f8680
+let fp32_neg_normal_add_9_sum_rtz  = 0xaf7f8680
 
 let fp32_pos_denormal_add_0_op_0 = 0x000fffff
 let fp32_pos_denormal_add_0_op_1 = 0x00000021
@@ -177,6 +241,38 @@ let fp64_neg_normal_add_5_op_0 = 0x8f00abcddeadbeaf
 let fp64_neg_normal_add_5_op_1 = 0x8f00000000000001
 let fp64_neg_normal_add_5_sum  = 0x8f1055e6ef56df58
 
+let fp64_pos_normal_add_6_op_0     = 0x07cf0000000ede00
+let fp64_pos_normal_add_6_op_1     = 0x07cf0002ffe93201
+let fp64_pos_normal_add_6_sum_rne  = 0x07df00017ffc0800
+let fp64_pos_normal_add_6_sum_rna  = 0x07df00017ffc0801
+let fp64_pos_normal_add_6_sum_rdn  = 0x07df00017ffc0800
+let fp64_pos_normal_add_6_sum_rup  = 0x07df00017ffc0801
+let fp64_pos_normal_add_6_sum_rtz  = 0x07df00017ffc0800
+
+let fp64_neg_normal_add_7_op_0     = 0xccffffffffe001ff
+let fp64_neg_normal_add_7_op_1     = 0xccfffff0ee1223fe
+let fp64_neg_normal_add_7_sum_rne  = 0xcd0ffff876f912fe
+let fp64_neg_normal_add_7_sum_rna  = 0xcd0ffff876f912ff
+let fp64_neg_normal_add_7_sum_rdn  = 0xcd0ffff876f912ff
+let fp64_neg_normal_add_7_sum_rup  = 0xcd0ffff876f912fe
+let fp64_neg_normal_add_7_sum_rtz  = 0xcd0ffff876f912fe
+
+let fp64_pos_normal_add_8_op_0     = 0x077222229820320e
+let fp64_pos_normal_add_8_op_1     = 0x0772ffffff000001
+let fp64_pos_normal_add_8_sum_rne  = 0x078291114b901908
+let fp64_pos_normal_add_8_sum_rna  = 0x078291114b901908
+let fp64_pos_normal_add_8_sum_rdn  = 0x078291114b901907
+let fp64_pos_normal_add_8_sum_rup  = 0x078291114b901908
+let fp64_pos_normal_add_8_sum_rtz  = 0x078291114b901907
+
+let fp64_neg_normal_add_9_op_0     = 0xaeee902323ffff00
+let fp64_neg_normal_add_9_op_1     = 0xaeee839202ff0e01
+let fp64_neg_normal_add_9_sum_rne  = 0xaefe89da937f8680
+let fp64_neg_normal_add_9_sum_rna  = 0xaefe89da937f8681
+let fp64_neg_normal_add_9_sum_rdn  = 0xaefe89da937f8681
+let fp64_neg_normal_add_9_sum_rup  = 0xaefe89da937f8680
+let fp64_neg_normal_add_9_sum_rtz  = 0xaefe89da937f8680
+
 let fp64_pos_denormal_add_0_op_0 = 0x0000ffffffffffff
 let fp64_pos_denormal_add_0_op_1 = 0x0000000000000041
 let fp64_pos_denormal_add_0_sum  = 0x0001000000000040
@@ -237,6 +333,38 @@ let fp128_neg_normal_add_4_sum  = 0xf0211f28182028290100181024d25979
 let fp128_neg_normal_add_5_op_0 = 0x8f00abfffffffffffffffffffffffffe
 let fp128_neg_normal_add_5_op_1 = 0x8f00abc0000000000000000000000000
 let fp128_neg_normal_add_5_sum  = 0x8f01abdfffffffffffffffffffffffff
+
+let fp128_pos_normal_add_6_op_0     = 0x07cf030392039210e3020000000ede00
+let fp128_pos_normal_add_6_op_1     = 0x07cffeeeeaaaaaaaaa332002ffe93201
+let fp128_pos_normal_add_6_sum_rne  = 0x07d080f93e571e5dc69a90017ffc0800
+let fp128_pos_normal_add_6_sum_rna  = 0x07d080f93e571e5dc69a90017ffc0801
+let fp128_pos_normal_add_6_sum_rdn  = 0x07d080f93e571e5dc69a90017ffc0800
+let fp128_pos_normal_add_6_sum_rup  = 0x07d080f93e571e5dc69a90017ffc0801
+let fp128_pos_normal_add_6_sum_rtz  = 0x07d080f93e571e5dc69a90017ffc0800
+
+let fp128_neg_normal_add_7_op_0     = 0xccffffffeeeeeeeee0000212ffe001ff
+let fp128_neg_normal_add_7_op_1     = 0xccfffff0aabbccde23853233ee1223fe
+let fp128_neg_normal_add_7_sum_rne  = 0xcd00fff84cd55de681c29a2376f912fe
+let fp128_neg_normal_add_7_sum_rna  = 0xcd00fff84cd55de681c29a2376f912ff
+let fp128_neg_normal_add_7_sum_rdn  = 0xcd00fff84cd55de681c29a2376f912ff
+let fp128_neg_normal_add_7_sum_rup  = 0xcd00fff84cd55de681c29a2376f912fe
+let fp128_neg_normal_add_7_sum_rtz  = 0xcd00fff84cd55de681c29a2376f912fe
+
+let fp128_pos_normal_add_8_op_0     = 0x07722227626482dbce79de229820320e
+let fp128_pos_normal_add_8_op_1     = 0x0772fffdddddddbbbccccaafff000001
+let fp128_pos_normal_add_8_sum_rne  = 0x07739112a021304bc5a354694b901908
+let fp128_pos_normal_add_8_sum_rna  = 0x07739112a021304bc5a354694b901908
+let fp128_pos_normal_add_8_sum_rdn  = 0x07739112a021304bc5a354694b901907
+let fp128_pos_normal_add_8_sum_rup  = 0x07739112a021304bc5a354694b901908
+let fp128_pos_normal_add_8_sum_rtz  = 0x07739112a021304bc5a354694b901907
+
+let fp128_neg_normal_add_9_op_0     = 0xaeeff983dbcdd2993221902323ffff00
+let fp128_neg_normal_add_9_op_1     = 0xaeef839202ff9928940929dbc3390e01
+let fp128_neg_normal_add_9_sum_rne  = 0xaef0be8aef66b5e0e3155cff739c8680
+let fp128_neg_normal_add_9_sum_rna  = 0xaef0be8aef66b5e0e3155cff739c8681
+let fp128_neg_normal_add_9_sum_rdn  = 0xaef0be8aef66b5e0e3155cff739c8681
+let fp128_neg_normal_add_9_sum_rup  = 0xaef0be8aef66b5e0e3155cff739c8680
+let fp128_neg_normal_add_9_sum_rtz  = 0xaef0be8aef66b5e0e3155cff739c8680
 
 let fp128_pos_denormal_add_0_op_0 = 0x00000fffffffffffffffffffffffffff
 let fp128_pos_denormal_add_0_op_1 = 0x00000000000000000000000000000091

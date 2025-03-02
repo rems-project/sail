@@ -72,6 +72,73 @@ function float_propagate_nan (op_0, op_1) = {
   ((op | mask), flags)
 }
 
+val      float_rounding_increment : forall 'n, 'n in {16, 32, 64, 128}.
+  (bits(1), bits('n), fp_rounding_modes) -> bits('n)
+function float_rounding_increment (sign, op, rounding_mode) = {
+  let bitsize = length (op);
+  let fp = float_decompose (op);
+  let is_rne = rounding_mode == fp_rounding_rne;
+  let is_rna = rounding_mode == fp_rounding_rna;
+  let not_rne_and_rna = not (is_rne) & not (is_rna);
+  let rounding_inf = if sign == [bitone] then fp_rounding_rdn else fp_rounding_rup;
+
+  let one = sail_zero_extend ([bitone], bitsize);
+
+  if not_rne_and_rna & rounding_mode == rounding_inf then
+    sub_bits (sail_shiftleft (one, length (fp.exp) - 1), one)
+  else if not_rne_and_rna & rounding_mode != rounding_inf then
+    sail_zeros ('n)
+  else
+    sail_shiftleft (one, length (fp.exp) - 2)
+}
+
+val      float_compose_after_round : forall 'n, 'n in {16, 32, 64, 128}.
+  (bits(1), bits('n), bits('n), bits('n), fp_rounding_modes) -> (bits('n), fp_exception_flags)
+function float_compose_after_round (sign, exp, mantissa, increment, rounding_mode) = {
+  let bitsize = length (mantissa);
+  let fp = float_decompose (mantissa);
+  let one = sail_zero_extend ([bitone], bitsize);
+  let zero = sail_zero_extend ([bitzero], bitsize);
+
+  let round_mask = sub_bits (sail_shiftleft (one, length (fp.exp) - 1), one);
+  let round_bits = mantissa & round_mask;
+  let eflag = if is_all_zeros (round_bits) then fp_eflag_none else fp_eflag_inexact;
+
+  let rne_mask = if rounding_mode == fp_rounding_rne then one else zero;
+  let cst_mask = sail_shiftleft (one, length (fp.exp) - 2);
+  let xor_mask = xor_vec (round_bits, cst_mask);
+  let not_mask = if is_all_zeros (xor_mask) then one else zero;
+  let and_mask = and_vec (not_mask, rne_mask);
+  let mantissa_mask = not_vec (and_mask);
+
+  let offset = length (fp.exp) - 1;
+  let mantissa_round = sail_shiftright (mantissa + increment, offset);
+  let mantissa_new = and_vec (mantissa_round, mantissa_mask);
+  let exp_new = if is_all_zeros (mantissa_new) then sail_zeros ('n) else exp;
+  let exp_shift = sail_shiftleft (exp_new, length (fp.mantissa));
+
+  let exp_and_mantissa = truncate (exp_shift + mantissa_new, bitsize - 1);
+
+  (sign @ exp_and_mantissa, eflag);
+}
+
+val      float_round_and_compose : forall 'n, 'n in {16, 32, 64, 128}.
+  (bits(1), bits('n), bits('n), fp_rounding_modes) -> (bits('n), fp_exception_flags)
+function float_round_and_compose (sign, exp, mantissa, rounding_mode) = {
+  let fp = float_decompose (mantissa);
+  let bitsize = length (mantissa);
+  let one = sail_zero_extend ([bitone], bitsize);
+  let three = sail_zero_extend ([bitone, bitone], bitsize);
+  let increment = float_rounding_increment (sign, mantissa, rounding_mode);
+
+  let exp_limit = sub_bits (sail_shiftleft (one, length (fp.exp)), three);
+  let exp_reach_limit = not (unsigned (exp) < unsigned (exp_limit));
+
+  if exp_reach_limit then assert (false, "Not implemented yet.");
+
+  float_compose_after_round (sign, exp, mantissa, increment, rounding_mode);
+}
+
 val      float_add_same_exp_internal : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
 function float_add_same_exp_internal (op_0, op_1) = {
@@ -83,20 +150,25 @@ function float_add_same_exp_internal (op_0, op_1) = {
   let mantissa_1 = sail_zero_extend (fp_1.mantissa, bitsize);
   let mantissa_sum = mantissa_0 + mantissa_1;
 
+  let sign = fp_0.sign;
   let no_round = is_lowest_zero (mantissa_sum) & not (float_has_max_exp (op_0));
 
   if no_round then {
     let mantissa_shift = sail_shiftright (mantissa_sum, 1);
     let mantissa_bitsize = length (fp_0.mantissa);
 
-    let sign = fp_0.sign;
     let exp = fp_0.exp + sail_zero_extend ([bitone], length (fp_0.exp));
     let mantissa = truncate (mantissa_shift, mantissa_bitsize);
 
     (sign @ exp @ mantissa, fp_eflag_none);
   } else {
-    assert (false, "Not implemented yet.");
-    (sail_zeros ('n), fp_eflag_none);
+    let exp = sail_zero_extend (fp_0.exp, bitsize);
+    let shift_bitsize = length (fp_0.mantissa) + 1;
+    let one = sail_zero_extend ([bitone], bitsize);
+    let mantissa_offset = mantissa_sum + sail_shiftleft (one, shift_bitsize);
+    let mantissa = sail_shiftleft (mantissa_offset, length (fp_0.exp) - 2);
+
+    return float_round_and_compose (sign, exp, mantissa, fp_rounding_global);
   }
 }
 

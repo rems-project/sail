@@ -77,15 +77,18 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
+  abstracts : ctyp Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
   locals : (mut * ctyp) Bindings.t;
+  registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
@@ -164,6 +167,9 @@ module type CONFIG = sig
       control-flow like this is useful for the Sail->SV and Sail->SMT
       backends. *)
   val eager_control_flow : bool
+
+  (** Types to preserve in the Jib output *)
+  val preserve_types : IdSet.t
 end
 
 module IdGraph : sig
@@ -181,8 +187,3 @@ module Make (C : CONFIG) : sig
 
   val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end
-
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info

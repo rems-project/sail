@@ -126,6 +126,7 @@ val allow_user_undefined : id -> t -> t
 val add_abstract_typ : id -> kind -> t -> t
 val is_abstract_typ : id -> t -> bool
 val get_abstract_typs : t -> kind Bindings.t
+val remove_abstract_typ : id -> t -> t
 
 val is_variant : id -> t -> bool
 val add_variant : id -> typquant * type_union list -> t -> t
@@ -212,6 +213,7 @@ val add_enum_clause : id -> id -> t -> t
 val get_enum_opt : id -> t -> id list option
 val get_enum : id -> t -> id list
 val get_enums : t -> IdSet.t Bindings.t
+val is_enum : id -> t -> bool
 
 val lookup_id : id -> t -> typ lvar
 

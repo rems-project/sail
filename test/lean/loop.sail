@@ -3,25 +3,25 @@ default Order dec
 $include <prelude.sail>
 $include <arith.sail>
 
-register r : int
+register r : nat
 
-function foreachloop(m : nat, n : nat) -> int = {
-  var res : int = 0;
+function foreach_loop(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
   foreach (i from m to n) {
     res = res + 1;
   };
   res
 }
 
-function foreachloopmon(m : nat, n : nat) -> int = {
+function foreach_loopmon(m : nat, n : nat) -> nat = {
   foreach (i from n to m) {
     r = r + 1;
   };
   r
 }
 
-function foreachloopboth(m : nat, n : nat) -> int = {
-  var res : int = 0;
+function foreach_loopboth(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
   foreach (i from n to m) {
     res = res + 1;
     r = r + res;
@@ -29,9 +29,9 @@ function foreachloopboth(m : nat, n : nat) -> int = {
   res + 1
 }
 
-function foreachloopmultiplevar(m : nat, n : nat) -> int = {
-  var res : int = 0;
-  var mult : int = 1;
+function foreach_loopmultiplevar(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
+  var mult : nat = 1;
   foreach (i from m to n) {
     res = res + 1;
     mult = res * mult;
@@ -39,7 +39,7 @@ function foreachloopmultiplevar(m : nat, n : nat) -> int = {
   mult
 }
 
-function foreachloopuseindex(m : nat, n : nat) -> nat = {
+function foreach_loopuseindex(m : nat, n : nat) -> nat = {
   var res : nat = 0;
   foreach (i from m to n) {
     res = res + i;
@@ -47,19 +47,36 @@ function foreachloopuseindex(m : nat, n : nat) -> nat = {
   res
 }
 
-function earlyreturneffect(n : nat) -> bool = {
-  foreach (i from 0 to n) {
-    if i > 5 then return false;
-    r = r + 1;
+function while_loop(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
+  while (res < n) do {
+    res = res + 1;
   };
-  r > n
+  res
 }
 
-function earlyreturnpure(n : nat) -> bool = {
-  var res : nat = 0;
-  foreach (i from 0 to n) {
-    if i > 5 then return false;
-    res = res + i;
+function while_loopmon(m : nat, n : nat) -> nat = {
+  while (r < n) do {
+    r = r + 1;
   };
-  res > n
+  r
+}
+
+function while_loopboth(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
+  while (res < n) do {
+    res = res + 1;
+    r = r + res;
+  };
+  res + 1
+}
+
+function while_loopmultiplevar(m : nat, n : nat) -> nat = {
+  var res : nat = 0;
+  var mult : nat = 1;
+  while (res < n) do {
+    res = res + 1;
+    mult = res * mult;
+  };
+  mult
 }

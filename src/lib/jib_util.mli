@@ -58,9 +58,11 @@ open Jib
 val symbol_generator : string -> (unit -> id) * (unit -> unit)
 
 val idecl : l -> ctyp -> name -> instr
+val istatic : l -> ctyp -> Value2.vl -> name * instr
 val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
-val iif : l -> cval -> instr list -> instr list -> ctyp -> instr
+val ijson_key : l -> name -> string list -> instr
+val iif : l -> cval -> instr list -> instr list -> instr
 val ifuncall : l -> clexp -> id * ctyp list -> cval list -> instr
 val ifuncall_multi : l -> clexp list -> id * ctyp list -> cval list -> instr
 val iextern : l -> clexp -> id * ctyp list -> cval list -> instr
@@ -77,6 +79,7 @@ val ilabel : ?loc:l -> string -> instr
 val igoto : ?loc:l -> string -> instr
 val iundefined : ?loc:l -> ctyp -> instr
 val imatch_failure : l -> instr
+val ibad_config : l -> instr
 val iexit : l -> instr
 val iraw : ?loc:l -> string -> instr
 val ijump : l -> cval -> string -> instr

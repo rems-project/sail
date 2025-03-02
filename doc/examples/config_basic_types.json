@@ -1,0 +1,11 @@
+{
+    "some" : {
+        "string_value" : "A string value",
+        "bool_value" : true,
+        "int_value" : 48527836473615487354835566752135643523565426,
+        "bits_value" : {
+            "one" : [true, false, false, true],
+            "two" : { "len" : 32, "value" : "0xFF" }
+        }
+    }
+}

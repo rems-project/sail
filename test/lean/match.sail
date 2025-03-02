@@ -54,3 +54,11 @@ function match_let (x : E, y : int) -> int = {
     C => 23
   }
 }
+
+function match_read(x : E) -> unit = {
+  r_A = match x {
+    A => r_A,
+    B => r_B,
+    C => r_C,
+  }
+}

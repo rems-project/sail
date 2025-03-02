@@ -236,6 +236,7 @@ and exp_aux =
   | E_sizeof of atyp
   | E_constraint of atyp
   | E_exit of exp
+  | E_config of string
   | E_throw of exp
   | E_try of exp * pexp list
   | E_return of exp
@@ -384,7 +385,7 @@ type type_def_aux =
   | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
   | TD_variant of id * typquant * type_union list (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
-  | TD_abstract of id * kind
+  | TD_abstract of id * kind * string list option
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type val_spec_aux = (* Value type specification *)
@@ -424,6 +425,9 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = prec * Big_int.num * string
 
+type pragma = (* pragma contents *)
+  | Pragma_line of string * int | Pragma_structured of (string * attribute_data) list
+
 type def_aux =
   (* Top-level definition *)
   | DEF_type of type_def (* type definition *)
@@ -442,7 +446,7 @@ type def_aux =
   | DEF_measure of id * pat * exp (* separate termination measure declaration *)
   | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
   | DEF_register of dec_spec (* register declaration *)
-  | DEF_pragma of string * string * int
+  | DEF_pragma of string * pragma
   | DEF_private of def
   | DEF_attribute of string * attribute_data option * def
   | DEF_doc of string * def

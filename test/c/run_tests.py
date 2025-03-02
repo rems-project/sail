@@ -13,7 +13,7 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
-targets = get_targets(['c', 'interpreter', 'ocaml'])
+targets = get_targets(['c', 'cpp', 'interpreter', 'ocaml'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
@@ -38,14 +38,20 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
+                if basename.startswith('config'):
+                    sail_opts += ' --c-include sail_config.h'
+                    c_opts += ' \'{}\'/lib/json/*.c -I \'{}\'/lib/json'.format(sail_dir, sail_dir)
                 step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
-                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
+                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename),
+                     expected_status = 1 if basename.startswith('fail') else 0,
+                     stderr_file='{}.err_result'.format(basename))
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
                     step('diff {}.err_result {}.err_expect'.format(basename, basename))
                 if valgrind and not basename.startswith('fail'):
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename),
+                         expected_status = 1 if basename.startswith('fail') else 0)
                 step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
@@ -152,11 +158,8 @@ def test_coq(name):
     results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
-    results.expect_failure("config.sail","bug: configuration register initialisation missing")
-    results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
-    results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
-    results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
+    results.expect_failure("config_vec_list.sail", "existential type not supported by Coq backend yet")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -191,14 +194,18 @@ def test_coq(name):
 xml = '<testsuites>\n'
 
 if 'c' in targets:
+    xml += test_c('unoptimized C', '', '--c-no-mangle', False)
     xml += test_c('unoptimized C', '', '', False)
     xml += test_c('unoptimized C', '', '--c-generate-header', False)
-    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
     xml += test_c('optimized C', '-O2', '-O', True)
-    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
     xml += test_c('constant folding', '', '-Oconstant_fold', False)
     #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
     xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+    xml += test_c('address sanitised', '-O2 -fsanitize=address -g', '-O', False)
+
+if 'cpp' in targets:
+    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
+    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
 
 if 'interpreter' in targets:
     xml += test_interpreter('interpreter')

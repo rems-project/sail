@@ -757,13 +757,8 @@ module Well_formedness = struct
 end
 
 let mk_synonym typq typ_arg =
-  let kopts, ncs = quant_split typq in
+  let kopts, _ = quant_split typq in
   let kopts = List.map (fun kopt -> (kopt, fresh_existential (kopt_loc kopt) (unaux_kind (kopt_kind kopt)))) kopts in
-  let ncs =
-    List.map
-      (fun nc -> List.fold_left (fun nc (kopt, fresh) -> constraint_subst (kopt_kid kopt) (arg_kopt fresh) nc) nc kopts)
-      ncs
-  in
   let typ_arg =
     List.fold_left (fun typ_arg (kopt, fresh) -> typ_arg_subst (kopt_kid kopt) (arg_kopt fresh) typ_arg) typ_arg kopts
   in
@@ -771,17 +766,15 @@ let mk_synonym typq typ_arg =
   let rec subst_args env l kopts args =
     match (kopts, args) with
     | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_int_kopt kopt ->
-        let typ_arg, ncs = subst_args env l kopts args in
-        ( typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
-          List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs
-        )
+        let typ_arg = subst_args env l kopts args in
+        typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg
     | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
-        let typ_arg, ncs = subst_args env l kopts args in
-        (typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg, ncs)
+        let typ_arg = subst_args env l kopts args in
+        typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg
     | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
-        let typ_arg, ncs = subst_args env l kopts args in
-        (typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs)
-    | [], [] -> (typ_arg, ncs)
+        let typ_arg = subst_args env l kopts args in
+        typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg
+    | [], [] -> typ_arg
     | kopts, args ->
         typ_error l
           ("Synonym applied to bad arguments "
@@ -789,16 +782,7 @@ let mk_synonym typq typ_arg =
           ^ Util.string_of_list ", " string_of_typ_arg args
           )
   in
-  fun l env args ->
-    let typ_arg, ncs = subst_args env l kopts args in
-    if match env.prove with Some prover -> List.for_all (prover env) ncs | None -> false then typ_arg
-    else
-      typ_error l
-        ("Could not prove constraints "
-        ^ string_of_list ", " string_of_n_constraint ncs
-        ^ " in type synonym " ^ string_of_typ_arg typ_arg ^ " with "
-        ^ Util.string_of_list ", " string_of_n_constraint (get_constraints env)
-        )
+  fun l env args -> subst_args env l kopts args
 
 let get_typ_synonym id env =
   match Option.map (get_item (id_loc id) env) (Bindings.find_opt id env.global.synonyms) with
@@ -819,6 +803,9 @@ let add_abstract_typ id kind env =
       )
       env
   )
+
+let remove_abstract_typ id env =
+  update_global (fun global -> { global with abstract_typs = Bindings.remove id global.abstract_typs }) env
 
 let get_abstract_typs env = filter_items env env.global.abstract_typs
 
@@ -1333,6 +1320,8 @@ let get_enum id env =
   | None -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
 let get_enums env = filter_items_with snd env env.global.enums
+
+let is_enum id env = Bindings.mem id env.global.enums
 
 let add_scattered_id id attrs env =
   let updater = function None -> Some (Ok attrs) | previous -> previous in

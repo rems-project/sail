@@ -24,7 +24,7 @@ let rec visit_ctyp vis outer_ctyp =
   let aux vis no_change =
     match no_change with
     | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_unit | CT_bool | CT_bit | CT_string
-    | CT_real | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ ->
+    | CT_real | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ | CT_json | CT_json_key ->
         no_change
     | CT_tup ctyps ->
         let ctyps' = visit_ctyps vis ctyps in
@@ -62,25 +62,6 @@ and visit_binding vis ((id, ctyp) as binding) =
   let id' = visit_id vis id in
   let ctyp' = visit_ctyp vis ctyp in
   if id == id' && ctyp == ctyp' then binding else (id', ctyp')
-
-let visit_ctype_def vis no_change =
-  match no_change with
-  | CTD_enum (id, members) ->
-      let id' = visit_id vis id in
-      let members' = map_no_copy (visit_id vis) members in
-      if id == id' && members == members' then no_change else CTD_enum (id', members')
-  | CTD_struct (id, fields) ->
-      let id' = visit_id vis id in
-      let fields' = map_no_copy (visit_binding vis) fields in
-      if id == id' && fields == fields' then no_change else CTD_struct (id', fields')
-  | CTD_variant (id, ctors) ->
-      let id' = visit_id vis id in
-      let ctors' = map_no_copy (visit_binding vis) ctors in
-      if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
-  | CTD_abstract (id, ctyp) ->
-      let id' = visit_id vis id in
-      let ctyp' = visit_ctyp vis ctyp in
-      if id == id' && ctyp == ctyp' then no_change else CTD_abstract (id', ctyp')
 
 let rec visit_clexp vis outer_clexp =
   let aux vis no_change =
@@ -174,6 +155,13 @@ and visit_field vis ((id, cval) as field) =
 
 and visit_cvals vis cvals = map_no_copy (visit_cval vis) cvals
 
+let visit_init vis no_change =
+  match no_change with
+  | Init_cval cval ->
+      let cval' = visit_cval vis cval in
+      if cval == cval' then no_change else Init_cval cval'
+  | Init_static _ | Init_json_key _ -> no_change
+
 let rec visit_instr vis outer_instr =
   let aux vis no_change =
     match no_change with
@@ -181,11 +169,11 @@ let rec visit_instr vis outer_instr =
         let ctyp' = visit_ctyp vis ctyp in
         let name' = visit_name vis name in
         if ctyp == ctyp' && name == name' then no_change else I_aux (I_decl (ctyp', name'), aux)
-    | I_aux (I_init (ctyp, name, cval), aux) ->
+    | I_aux (I_init (ctyp, name, init), aux) ->
         let ctyp' = visit_ctyp vis ctyp in
         let name' = visit_name vis name in
-        let cval' = visit_cval vis cval in
-        if ctyp == ctyp' && name == name' && cval == cval' then no_change else I_aux (I_init (ctyp', name', cval'), aux)
+        let init' = visit_init vis init in
+        if ctyp == ctyp' && name == name' && init == init' then no_change else I_aux (I_init (ctyp', name', init'), aux)
     | I_aux (I_jump (cval, label), aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_jump (cval', label), aux)
@@ -218,13 +206,12 @@ let rec visit_instr vis outer_instr =
     | I_aux (I_return cval, aux) ->
         let cval' = visit_cval vis cval in
         if cval == cval' then no_change else I_aux (I_return cval', aux)
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) ->
         let cval' = visit_cval vis cval in
         let then_instrs' = visit_instrs vis then_instrs in
         let else_instrs' = visit_instrs vis else_instrs in
-        let ctyp' = visit_ctyp vis ctyp in
-        if cval == cval' && then_instrs == then_instrs' && else_instrs == else_instrs' && ctyp == ctyp' then no_change
-        else I_aux (I_if (cval', then_instrs', else_instrs', ctyp'), aux)
+        if cval == cval' && then_instrs == then_instrs' && else_instrs == else_instrs' then no_change
+        else I_aux (I_if (cval', then_instrs', else_instrs'), aux)
     | I_aux (I_block instrs, aux) ->
         let instrs' = visit_instrs vis instrs in
         if instrs == instrs' then no_change else I_aux (I_block instrs', aux)
@@ -257,6 +244,36 @@ and visit_instrs vis outer_instrs =
     | [] -> []
   in
   do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
+
+and visit_ctype_def vis no_change =
+  match no_change with
+  | CTD_enum (id, members) ->
+      let id' = visit_id vis id in
+      let members' = map_no_copy (visit_id vis) members in
+      if id == id' && members == members' then no_change else CTD_enum (id', members')
+  | CTD_struct (id, fields) ->
+      let id' = visit_id vis id in
+      let fields' = map_no_copy (visit_binding vis) fields in
+      if id == id' && fields == fields' then no_change else CTD_struct (id', fields')
+  | CTD_variant (id, ctors) ->
+      let id' = visit_id vis id in
+      let ctors' = map_no_copy (visit_binding vis) ctors in
+      if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
+  | CTD_abbrev (id, ctyp) ->
+      let id' = visit_id vis id in
+      let ctyp' = visit_ctyp vis ctyp in
+      if id == id' && ctyp == ctyp' then no_change else CTD_abbrev (id', ctyp')
+  | CTD_abstract (id, ctyp, init) ->
+      let id' = visit_id vis id in
+      let ctyp' = visit_ctyp vis ctyp in
+      let init' =
+        match init with
+        | CTDI_none -> init
+        | CTDI_instrs instrs ->
+            let instrs' = map_no_copy (visit_instr vis) instrs in
+            if instrs == instrs' then init else CTDI_instrs instrs'
+      in
+      if id == id' && ctyp == ctyp' && init == init' then no_change else CTD_abstract (id', ctyp', init')
 
 let visit_cdef vis outer_cdef =
   let aux vis (CDEF_aux (aux, def_annot) as no_change) =

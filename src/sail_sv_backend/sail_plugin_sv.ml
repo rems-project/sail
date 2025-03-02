@@ -356,6 +356,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let use_real = false
   let use_void = false
   let eager_control_flow = true
+  let preserve_types = IdSet.empty
 end
 
 let register_types cdefs =
@@ -368,7 +369,6 @@ let jib_of_ast make_call_precise env ast effect_info =
   let module Jibc = Make (Verilog_config (struct
     let make_call_precise = make_call_precise
   end)) in
-  let env, effect_info = add_special_functions env effect_info in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
 

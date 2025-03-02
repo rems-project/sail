@@ -356,7 +356,7 @@ let const_props target ast =
             ),
             assigns
           )
-      | E_lit _ | E_sizeof _ | E_constraint _ -> (exp, assigns)
+      | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ -> (exp, assigns)
       | E_typ (t, e') ->
           let e'', assigns = const_prop_exp substs assigns e' in
           if is_value e'' then (reduce_cast t e'' l annot, assigns) else re (E_typ (t, e'')) assigns

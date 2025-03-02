@@ -59,7 +59,7 @@ type config = {
 
 (** Read the config struct from a json object. Raises err_general if
    the json is not an object, and warns about any invalid keys. *)
-val config_from_json : Yojson.Basic.t -> config
+val config_from_json : Yojson.Safe.t -> config
 
 val default_config : config
 

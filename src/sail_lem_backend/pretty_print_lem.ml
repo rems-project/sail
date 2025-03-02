@@ -1149,6 +1149,9 @@ let doc_exp_lem, doc_let_lem =
     | E_constraint _ -> string "true"
     | E_internal_assume (nc, e1) ->
         string "(* " ^^ string (string_of_n_constraint nc) ^^ string " *)" ^/^ wrap_parens (expN e1)
+    | E_config _ ->
+        raise
+          (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Lem generation")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
@@ -1753,16 +1756,16 @@ let find_exc_typ defs =
 let group_defs_by_file top_filename defs =
   let rec group current_filename current_defs groups defs =
     let is_file_start = function
-      | DEF_aux (DEF_pragma ("file_start", f, _), a) ->
+      | DEF_aux (DEF_pragma ("file_start", Pragma_line (f, _)), a) ->
           (* Ignore file markers from generated blocks and spliced files;
              we want to preserve the original input file structure *)
           f <> "" && get_def_attribute "spliced" a = None
       | _ -> false
     in
     match (defs, current_filename) with
-    | (DEF_aux (DEF_pragma ("file_start", f, _), _) as d) :: defs, None when is_file_start d ->
+    | (DEF_aux (DEF_pragma ("file_start", Pragma_line (f, _)), _) as d) :: defs, None when is_file_start d ->
         group (Some f) current_defs groups defs
-    | DEF_aux (DEF_pragma ("file_end", f, _), _) :: defs, Some f' when f' = f ->
+    | DEF_aux (DEF_pragma ("file_end", Pragma_line (f, _)), _) :: defs, Some f' when f' = f ->
         if current_defs = [] then group None [] groups defs
         else group None [] (groups @ [(f', List.rev current_defs)]) defs
     | d :: defs, _ -> group current_filename (d :: current_defs) groups defs

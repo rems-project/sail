@@ -1225,6 +1225,14 @@ and to_ast_fpat ctx (P.FP_aux (aux, l)) =
   | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
   | FP_wild -> Reporting.unreachable l __POS__ "Unexpected field wildcard"
 
+let rec is_config (P.E_aux (aux, _)) =
+  match aux with
+  | P.E_field (exp, field) -> begin
+      match is_config exp with None -> None | Some key -> Some (string_of_parse_id field :: key)
+    end
+  | P.E_config root -> Some [root]
+  | _ -> None
+
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
 
@@ -1303,7 +1311,11 @@ and to_ast_exp ctx exp =
             | Some fexps -> E_struct_update (to_ast_exp ctx exp, fexps)
             | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
           )
-        | P.E_field (exp, id) -> E_field (to_ast_exp ctx exp, to_ast_id ctx id)
+        | P.E_field (exp, field) -> (
+            match is_config exp with
+            | None -> E_field (to_ast_exp ctx exp, to_ast_id ctx field)
+            | Some key -> E_config (List.rev (string_of_parse_id field :: key))
+          )
         | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
         | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
         | P.E_let (leb, exp) -> E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp)
@@ -1313,6 +1325,7 @@ and to_ast_exp ctx exp =
         | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
         | P.E_exit exp -> E_exit (to_ast_exp ctx exp)
         | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
+        | P.E_config key -> E_config [key]
         | P.E_return exp -> E_return (to_ast_exp ctx exp)
         | P.E_assert (cond, msg) -> E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg)
         | P.E_internal_plet (pat, exp1, exp2) ->
@@ -1616,6 +1629,24 @@ let to_ast_record ctx id typq fields =
   let fields = List.map (fun (atyp, id) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) fields in
   (id, typq, fields, add_constructor id typq K_type ctx)
 
+let check_duplicate_enum_ids ids =
+  let _ =
+    List.fold_left
+      (fun seen id ->
+        let l = id_loc id in
+        match Bindings.find_opt id seen with
+        | Some previous ->
+            raise
+              (Reporting.err_general
+                 (Hint ("previous occurence here", previous, l))
+                 (Printf.sprintf "Enumeration member %s occurs twice in enum declaration" (string_of_id id))
+              )
+        | None -> Bindings.add id (id_loc id) seen
+      )
+      Bindings.empty ids
+  in
+  ()
+
 let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind_opt, atyp) ->
@@ -1668,28 +1699,29 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
         @ generated_records,
         add_constructor id typq K_type ctx
       )
-  | P.TD_enum (id, fns, enums) ->
+  | P.TD_enum (id, fns, members) ->
       let id = to_ast_reserved_type_id ctx id in
       let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
-      let fns = generate_enum_functions l ctx id fns enums in
-      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
+      let fns = generate_enum_functions l ctx id fns members in
+      let members = List.map (fun e -> to_ast_id ctx (fst e)) members in
+      check_duplicate_enum_ids members;
+      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
-  | P.TD_abstract (id, kind) ->
+  | P.TD_abstract (id, kind, instantiation) -> (
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let id = to_ast_reserved_type_id ctx id in
-      begin
-        match to_ast_kind kind with
-        | Some kind ->
-            ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
-              {
-                ctx with
-                type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
-              }
-            )
-        | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
-      end
+      let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
+      match to_ast_kind kind with
+      | Some kind ->
+          ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
+            {
+              ctx with
+              type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+            }
+          )
+      | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
+    )
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
@@ -1989,30 +2021,32 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let nc = to_ast_constraint ctx nc in
       ([DEF_aux (DEF_constraint nc, annot)], ctx)
-  | P.DEF_pragma (pragma, arg, ltrim) ->
+  | P.DEF_pragma (pragma, P.Pragma_line (arg, ltrim)) ->
       let l = pragma_arg_loc pragma ltrim l in
       begin
         match pragma with
         | "sail_internal" -> begin
             match Reporting.loc_file l with
             | Some file ->
-                ( [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)],
+                ( [DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)],
                   { ctx with internal_files = StringSet.add file ctx.internal_files }
                 )
-            | None -> ([DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx)
+            | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
           end
         | "target_set" ->
             let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
             begin
               match args with
               | set :: targets ->
-                  ( [DEF_aux (DEF_pragma ("target_set", arg, l), annot)],
+                  ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
                     { ctx with target_sets = StringMap.add set targets ctx.target_sets }
                   )
               | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
             end
-        | _ -> ([DEF_aux (DEF_pragma (pragma, arg, l), annot)], ctx)
+        | _ -> ([DEF_aux (DEF_pragma (pragma, Pragma_line (arg, l)), annot)], ctx)
       end
+  | P.DEF_pragma (pragma, P.Pragma_structured data) ->
+      ([DEF_aux (DEF_pragma (pragma, Pragma_structured data), annot)], ctx)
   | P.DEF_internal_mutrec _ ->
       (* Should never occur because of remove_mutrec *)
       raise (Reporting.err_unreachable l __POS__ "Internal mutual block found when processing scattered defs")
@@ -2044,9 +2078,9 @@ let to_ast ctx (P.Defs files) =
     (List.rev defs, ctx)
   in
   let wrap_file file defs =
-    [mk_def (DEF_pragma ("file_start", file, P.Unknown)) ()]
+    [mk_def (DEF_pragma ("file_start", Pragma_line (file, P.Unknown))) ()]
     @ defs
-    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown)) ()]
+    @ [mk_def (DEF_pragma ("file_end", Pragma_line (file, P.Unknown))) ()]
   in
   let defs, ctx =
     List.fold_left

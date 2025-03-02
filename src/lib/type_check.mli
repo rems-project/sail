@@ -121,6 +121,12 @@ module Env : sig
 
   val add_scattered_variant : id -> typquant -> t -> t
 
+  val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
+
+  val is_abstract_typ : id -> t -> bool
+
+  val remove_abstract_typ : id -> t -> t
+
   (** Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
      instead *)
@@ -151,7 +157,11 @@ module Env : sig
 
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
+  val is_variant : id -> t -> bool
+
   val is_record : id -> t -> bool
+
+  val is_enum : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
@@ -449,6 +459,10 @@ val vector_start_index : Env.t -> typ -> nexp
 val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
+
+val instantiate_record : env -> id -> typ_arg list -> (typ * id) list
+
+val instantiate_variant : env -> id -> typ_arg list -> (id * typ) list
 
 (** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
    that substituting those bindings using every type variable in goals

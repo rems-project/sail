@@ -89,11 +89,11 @@ let highlights ~filename ~contents =
     | And | As | Assert | By | Match | Clause | Dec | Op | Default | Effect | End | Enum | Else | Exit | Cast | Forall
     | Foreach | Function_ | Mapping | Overload | Throw | Try | Catch | If_ | In | Inc | Var | Ref | Pure | Impure
     | Monadic | Register | Return | Scattered | Sizeof | Constraint | Constant | Struct | Then | Typedef | Union
-    | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual
+    | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual | Config
     | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield ->
         mark Highlight.Keyword;
         go ()
-    | Pragma _ | Attribute _ | Fixity _ ->
+    | StructuredPragma _ | Pragma _ | Attribute _ | Fixity _ ->
         mark Highlight.Pragma;
         go ()
     | InternalPLet | InternalReturn | InternalAssume ->

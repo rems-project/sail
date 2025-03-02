@@ -535,6 +535,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_id id -> doc_id id
     | E_ref id -> string "ref" ^^ space ^^ doc_id id
     | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
+    | E_config key -> string "config" ^^ space ^^ separate_map dot string key
     | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
     | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
     (* Format a function with a unit argument as f() rather than f(()) *)
@@ -720,7 +721,12 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_type_def (TD_aux (td, _)) =
     match td with
-    | TD_abstract (id, kind) -> begin doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) end
+    | TD_abstract (id, kind, instantiation) ->
+        let doc_inst = function
+          | TDC_key key -> space ^^ separate space [equals; string "config"; separate_map dot string key]
+          | TDC_none -> empty
+        in
+        doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) ^^ doc_inst instantiation
     | TD_abbrev (id, typq, typ_arg) -> begin
         match doc_typquant typq with
         | Some qdoc ->
@@ -829,7 +835,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | SD_enumcl (id, member) -> separate space [string "enum clause"; doc_id id; equals; doc_id member]
 
   let doc_filter = function
-    | DEF_aux ((DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _)), _) -> false
+    | DEF_aux ((DEF_pragma ("file_start", _) | DEF_pragma ("file_end", _)), _) -> false
     | _ -> true
 
   let rec doc_def_no_hardline (DEF_aux (aux, def_annot)) =
@@ -868,7 +874,10 @@ module Printer (Config : PRINT_CONFIG) = struct
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^ space ^^ equals ^/^ doc_exp exp
     | DEF_loop_measures (id, measures) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_loop_measures measures
-    | DEF_pragma (pragma, arg, _) -> string ("$" ^ pragma ^ " " ^ arg)
+    | DEF_pragma (pragma, Pragma_line (arg, _)) -> string ("$" ^ pragma ^ " " ^ arg)
+    | DEF_pragma (pragma, Pragma_structured data) ->
+        let open Parse_ast.Attribute_data in
+        string ("$" ^ pragma) ^^ space ^^ string (string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown)))
     | DEF_fixity (prec, n, id) ->
         fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
         separate space [doc_prec prec; doc_int n; doc_id id]
@@ -924,12 +933,12 @@ let reformat ~into_directory:dir { defs; _ } =
   in
 
   let format_def = function
-    | DEF_aux (DEF_pragma ("file_start", path, _), _) -> push (Some (adjust_path path))
-    | DEF_aux (DEF_pragma ("file_end", _, _), _) -> pop ()
-    | DEF_aux (DEF_pragma ("include_start", path, _), _) ->
+    | DEF_aux (DEF_pragma ("file_start", Pragma_line (path, _)), _) -> push (Some (adjust_path path))
+    | DEF_aux (DEF_pragma ("file_end", _), _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_start", Pragma_line (path, _)), _) ->
         output_include path;
         if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_aux (DEF_pragma ("include_end", _, _), _) -> pop ()
+    | DEF_aux (DEF_pragma ("include_end", _), _) -> pop ()
     | def -> output_def def
   in
 

@@ -60,10 +60,10 @@ module State : sig
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
     default_sail_dir : string;
-    config : Yojson.Basic.t option;
+    config : Yojson.Safe.t option;
   }
 
-  val initial_istate : Yojson.Basic.t option -> string -> istate
+  val initial_istate : Yojson.Safe.t option -> string -> istate
 end
 
 val arg : string -> string

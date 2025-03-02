@@ -1359,6 +1359,20 @@ let complex_autocast ctxt env ?existentials top1 top2 =
   in
   aux_typ env env top1 top2
 
+(* Record whether we need to add an autocast for moving between
+   different representations of a bitvector size, and if so whether we
+   need to be explicit about where the size is in the type by filling in
+   autocast's T parameter.
+
+   Unfortunately we current need to do this a little in the "simple"
+   case too because Sail's typechecker sometimes normalises type
+   aliases before we see them (e.g., when constructing structs), but
+   Coq will see the original type and needs the hint that there's a
+   bitvector type it can use.  See the bits_alias_cast.sail test for
+   example.
+
+   TODO: get better type information...
+*)
 type auto_t = Simple | Complex of string | No
 
 let string_of_auto_t = function No -> "no" | Simple -> "simple" | Complex s -> "complex(" ^ s ^ ")"
@@ -1400,7 +1414,7 @@ let doc_exp, doc_let =
       in
       match autocast with
       | No -> pp
-      | Simple -> wrap_parens (string "autocast" ^/^ pp)
+      | Simple -> wrap_parens (string "autocast (T := mword) " ^/^ pp)
       | Complex s -> wrap_parens (string ("autocast (T := fun _sz => " ^ s ^ "%type)") ^/^ pp)
     in
     let liftR doc =
@@ -1928,7 +1942,7 @@ let doc_exp, doc_let =
               let epp =
                 match autocast with
                 | No -> epp
-                | Simple -> string autocast_id ^^ space ^^ parens epp
+                | Simple -> string autocast_id ^^ space ^^ string "(T := mword)" ^^ space ^^ parens epp
                 | Complex s -> string (autocast_id ^ " (T := fun _sz => " ^ s ^ "%type)") ^^ space ^^ parens epp
               in
               liftR (if aexp_needed then parens (align epp) else epp)
@@ -2007,7 +2021,7 @@ let doc_exp, doc_let =
         let epp =
           match autocast_out with
           | No -> epp
-          | Simple -> string autocast_name ^^ space ^^ parens epp
+          | Simple -> string autocast_name ^^ space ^^ string "(T := mword)" ^^ space ^^ parens epp
           | Complex s -> string (autocast_name ^ " (T := fun _sz => " ^ s ^ "%type)") ^^ space ^^ parens epp
         in
         if aexp_needed then parens epp else epp
@@ -2232,6 +2246,9 @@ let doc_exp, doc_let =
     | E_constraint nc -> wrap_parens (doc_nc_exp ctxt (env_of full_exp) nc)
     | E_internal_assume (nc, e1) ->
         string "(* " ^^ doc_nc_exp ctxt (env_of full_exp) nc ^^ string " *)" ^/^ wrap_parens (expN e1)
+    | E_config _ ->
+        raise
+          (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Coq generation")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   (* TODO: no dep pairs now, what should this be? *)

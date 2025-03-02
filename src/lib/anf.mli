@@ -78,6 +78,8 @@ open Ast_util
 open Jib
 open Type_check
 
+type function_id = Sail_function of id | Pure_extern of id | Extern of id
+
 (** Each ANF expression has an annotation which contains the location of
     the original Sail expression, it's typing environment, and the
     uannot type containing any attributes attached to the original
@@ -88,7 +90,7 @@ type 'a aexp = AE_aux of 'a aexp_aux * anf_annot
 
 and 'a aexp_aux =
   | AE_val of 'a aval
-  | AE_app of id * 'a aval list * 'a
+  | AE_app of function_id * 'a aval list * 'a
   | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
@@ -155,7 +157,7 @@ val aexp_typ : typ aexp -> typ
 val map_aval : (anf_annot -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
 (** Map over all function calls in an ANF expression *)
-val map_functions : (anf_annot -> id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+val map_functions : (anf_annot -> function_id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
 (** This function 'folds' an [aexp] applying the provided function to
     all leaf subexpressions, then applying the function to their

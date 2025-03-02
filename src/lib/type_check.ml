@@ -2049,6 +2049,28 @@ let rec reroll_cons ~at:l elems annots last_tail =
   | [], [] -> last_tail
   | _, _ -> Reporting.unreachable l __POS__ "Could not recreate cons list due to element and annotation length mismatch"
 
+let instantiate_record env id args =
+  let typq, fields = Env.get_record id env in
+  let kopts, _ = quant_split typq in
+  let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+  List.map
+    (fun (field_typ, id) ->
+      let field_typ = subst_unifiers unifiers field_typ in
+      (field_typ, id)
+    )
+    fields
+
+let instantiate_variant env id args =
+  let typq, tus = Env.get_variant id env in
+  let kopts, _ = quant_split typq in
+  let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+  List.map
+    (fun (Tu_aux (Tu_ty_id (typ, id), _)) ->
+      let typ = subst_unifiers unifiers typ in
+      (id, typ)
+    )
+    tus
+
 type ('a, 'b) pattern_functions = {
   infer : Env.t -> 'a -> 'b * Env.t * uannot exp list;
   bind : Env.t -> 'a -> typ -> 'b * Env.t * uannot exp list;
@@ -2284,6 +2306,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | None -> typ_error l "Cannot use return outside a function"
       in
       annot_exp (E_return checked_exp) typ
+  | E_config key, _ -> annot_exp (E_config key) typ
   | E_tuple exps, Typ_tuple typs when List.length exps = List.length typs ->
       let checked_exps = List.map2 (fun exp typ -> crule check_exp env exp typ) exps typs in
       annot_exp (E_tuple checked_exps) typ
@@ -4831,7 +4854,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
         | _ -> ()
       end;
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
-  | TD_abstract (id, kind) -> begin
+  | TD_abstract (id, kind, _) -> begin
       match unaux_kind kind with
       | K_int | K_bool ->
           ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind env)
@@ -5246,19 +5269,19 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
         ],
         env
       )
-  | DEF_pragma ("project#", arg, l) ->
+  | DEF_pragma ("project#", Pragma_line (arg, l)) ->
       let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
       let proj_defs = Initial_check.parse_project ?inline:start_p ~contents:arg () in
       let proj = Project.initialize_project_structure ~variables:(ref Util.StringMap.empty) proj_defs in
       typ_print (lazy "set modules");
       ([], Env.set_modules proj env)
-  | DEF_pragma ("start_module#", arg, l) ->
+  | DEF_pragma ("start_module#", Pragma_line (arg, l)) ->
       let mod_id = Env.get_module_id ~at:l env arg in
       typ_print (lazy (Printf.sprintf "module start %d '%s'" (Project.ModId.to_int mod_id) arg));
-      ([DEF_aux (DEF_pragma ("started_module#", arg, l), def_annot)], Env.start_module ~at:l mod_id env)
-  | DEF_pragma ("end_module#", arg, l) ->
-      ([DEF_aux (DEF_pragma ("ended_module#", arg, l), def_annot)], Env.end_module env)
-  | DEF_pragma (pragma, arg, l) -> ([DEF_aux (DEF_pragma (pragma, arg, l), def_annot)], env)
+      ([DEF_aux (DEF_pragma ("started_module#", Pragma_line (arg, l)), def_annot)], Env.start_module ~at:l mod_id env)
+  | DEF_pragma ("end_module#", Pragma_line (arg, l)) ->
+      ([DEF_aux (DEF_pragma ("ended_module#", Pragma_line (arg, l)), def_annot)], Env.end_module env)
+  | DEF_pragma (pragma, cmd) -> ([DEF_aux (DEF_pragma (pragma, cmd), def_annot)], env)
   | DEF_scattered sdef -> check_scattered env def_annot sdef
   | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
   | DEF_loop_measures (id, measures) ->

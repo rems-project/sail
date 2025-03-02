@@ -1,0 +1,6 @@
+{
+    "c1" : { "len" : 64, value : "0x0000_0000_0000_0000" },
+    "c2" : [true, false, true],
+    "c3" : [false],
+    "c4" : { "len" : 32, value : "1" }
+}
