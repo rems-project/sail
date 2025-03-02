@@ -86,4 +86,5 @@ jobs:
     - name: Create comment
       uses: marocchino/sticky-pull-request-comment@v2
       with:
+        number: ${{ steps.finder.outputs.pr }}
         path: sail-riscv/build/model/Lean_RV64D_LEAN/README.md
