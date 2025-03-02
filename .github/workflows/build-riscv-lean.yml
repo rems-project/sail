@@ -76,9 +76,6 @@ jobs:
       run: |
         echo "OK"
 
-    - name: Build Model
-      run: |
-
     - name: Post PR Comment
       uses: mshick/add-pr-comment@v2
       with:
