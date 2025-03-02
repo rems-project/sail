@@ -90,10 +90,11 @@ jobs:
       id: read_file
       uses: andstor/file-reader-action@v1
       with:
-        path: "sail-riscv/build/model/Lean_RV64D_LEAN"
+        path: "sail-riscv/build/model/Lean_RV64D_LEAN/README.md"
 
     - name: Post PR Comment
       uses: mshick/add-pr-comment@v2
       with:
         message: |
           "Test"
+          "${ steps.read_file.outputs.contents }"
