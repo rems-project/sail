@@ -67,6 +67,10 @@ jobs:
         cp .github/workflows/build-riscv-lean/README.md.template sail-riscv/build/model/Lean_RV64D_LEAN/
         cp .github/workflows/build-riscv-lean/report.py sail-riscv/build/model/Lean_RV64D_LEAN/
         cd sail-riscv/build/model/Lean_RV64D_LEAN/
+        (lake build | tee build_log.txt || true)
+        cp README.md.template README.md
+        ./report.py >> README.md
+        cd ../../../..
 
     - name: Test
       run: |
@@ -74,10 +78,6 @@ jobs:
 
     - name: Build Model
       run: |
-        (lake build | tee build_log.txt || true)
-        cp README.md.template README.md
-        ./report.py >> README.md
-        cd ../../../..
 
       - uses: mshick/add-pr-comment@v2
         with:
