@@ -68,6 +68,10 @@ jobs:
         cp .github/workflows/build-riscv-lean/report.py sail-riscv/build/model/Lean_RV64D_LEAN/
         cd sail-riscv/build/model/Lean_RV64D_LEAN/
 
+    - name: Test
+      run: |
+        echo "OK"
+
     - name: Build Model
       run: |
         (lake build | tee build_log.txt || true)
