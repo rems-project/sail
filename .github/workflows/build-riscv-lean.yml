@@ -86,8 +86,14 @@ jobs:
         ls sail-riscv/build/model
         ls sail-riscv/build/model/Lean_RV64D_LEAN
 
+    - name: Read file contents
+      id: read_file
+      uses: andstor/file-reader-action@v1
+      with:
+        path: "sail-riscv/build/model/Lean_RV64D_LEAN"
+
     - name: Post PR Comment
       uses: mshick/add-pr-comment@v2
       with:
-        message-path: |
-          sail-riscv/build/model/Lean_RV64D_LEAN/README.md
+        message: |
+          "Test"
