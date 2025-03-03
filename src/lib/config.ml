@@ -690,14 +690,21 @@ let rec sail_exp_from_json ~at:l env typ =
     )
   | _ -> assert false
 
-let rewrite_exp global_env env_update types json (aux, annot) =
+let rewrite_exp tgt global_env env_update types json (aux, annot) =
   match aux with
   | E_config parts -> (
       let env = env_of_annot annot in
       let typ = typ_of_annot annot in
       ConfigTypes.insert parts { loc = fst annot; env; typ } types;
       match find_json ~at:(fst annot) parts json with
-      | None -> E_aux (aux, annot)
+      | None ->
+          if Target.supports_runtime_config tgt then E_aux (aux, annot)
+          else
+            Printf.sprintf
+              "Runtime configuration is not supported when generating code for target '%s'\n\
+               An explicit configuration should be provided with the --config option." (Target.name tgt)
+            |> Reporting.err_general (fst annot)
+            |> raise
       | Some json -> (
           try
             let exp = sail_exp_from_json ~at:(fst annot) global_env typ json in
@@ -717,14 +724,14 @@ let rec abstract_schema config_ids types = function
   | def :: defs -> abstract_schema config_ids types defs
   | [] -> ()
 
-let rewrite_ast global_env instantiation json ast =
+let rewrite_ast tgt global_env instantiation json ast =
   let open Frontend in
   let types = ConfigTypes.create () in
   Bindings.iter
     (fun id (kind_aux, json_key) -> ConfigTypes.insert_abstract json_key id kind_aux types)
     instantiation.config_ids;
   abstract_schema instantiation.config_ids types ast.defs;
-  let alg = { id_exp_alg with e_aux = rewrite_exp global_env instantiation.env_update types json } in
+  let alg = { id_exp_alg with e_aux = rewrite_exp tgt global_env instantiation.env_update types json } in
   let ast = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
   let schema = ConfigTypes.to_schema types in
   (schema, ast)
