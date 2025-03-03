@@ -484,6 +484,15 @@ instance : CoeT (BitVec n) x (BitVec m) where
 instance: CoeT (Vector (BitVec n₁) m) x (Vector (BitVec n₂) m) where
   coe := x.map fun (bv : BitVec n₁) => bv.setWidth n₂
 
+instance {α α' β : Type u} (x : α × β) [CoeT α x.1 α'] : CoeT (α × β) x (α' × β) where
+  coe := (x.1, x.2)
+
+instance {α α' β : Type u} (x : β × α) [CoeT α x.2 α'] : CoeT (β × α) x (β × α') where
+  coe := (x.1, x.2)
+
+instance {α α' β β' : Type u} (x : α × β) [CoeT α x.1 α'] [CoeT β x.2 β'] : CoeT (α × β) x (α' × β') where
+  coe := (x.1, x.2)
+
 instance : HAdd (BitVec n) (BitVec m) (BitVec n) where
   hAdd x y := x + y
 

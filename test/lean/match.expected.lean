@@ -68,7 +68,7 @@ open E
 
 namespace Functions
 
-/-- Type quantifiers: k_ex797# : Bool, k_ex796# : Bool -/
+/-- Type quantifiers: k_ex804# : Bool, k_ex803# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -184,6 +184,21 @@ def match_read (x : E) : SailM Unit := do
     | A => readReg r_A
     | B => readReg r_B
     | C => readReg r_C)
+
+def const16 (_ : Unit) : ((BitVec 16) × Bool) :=
+  ((0xFFFF : (BitVec 16)), true)
+
+def const32 (_ : Unit) : ((BitVec 32) × Bool) :=
+  ((0xEEEEEEEE : (BitVec 32)), false)
+
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
+def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
+  let (foo, _) : ((BitVec k_n) × Bool) :=
+    match (Sail.BitVec.length x) with
+    | 16 => (const16 ())
+    | 32 => (const32 ())
+    | n => ((BitVec.zero n), false)
+  (foo ++ foo)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))

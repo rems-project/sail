@@ -31,10 +31,20 @@ type context = {
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
   loop_level : int;
+  in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
+  in_except_monad : bool;  (** Indicates whether we are in an expression of `ExceptM _ _` *)
 }
 
 let context_init env global =
-  { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty; loop_level = 0 }
+  {
+    global;
+    env;
+    kid_id_renames = KBindings.empty;
+    kid_id_renames_rev = Bindings.empty;
+    loop_level = 0;
+    in_sail_monad = false;
+    in_except_monad = false;
+  }
 let context_with_env ctx env = { ctx with env }
 
 let add_single_kid_id_rename ctx id kid =
@@ -440,7 +450,7 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   match p with
   | P_wild -> underscore
   | P_lit lit when in_vector -> doc_vec_lit lit
@@ -449,7 +459,9 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
       doc_pat p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) -> doc_pat p
+  | P_typ (ptyp, p) ->
+      let wrap x = if in_match then parens x else x in
+      wrap (doc_pat p)
   | P_id id -> fixup_match_id id |> doc_id_ctor
   | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
   | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
@@ -465,6 +477,9 @@ let rec doc_pat ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
   | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
+
+let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
+  match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -595,10 +610,18 @@ let name_loop_vars ctx =
   let ctx = { ctx with loop_level = ll + 1 } in
   match ll with 0 -> (string "loop_vars", ctx) | _ -> (string "loop_vars_" ^^ string (string_of_int ll), ctx)
 
+let prepend_monad ctx exp doc =
+  match (ctx.in_sail_monad, ctx.in_except_monad) with
+  | true, true -> [string "SailME"; string "_"; doc]
+  | true, false -> [string "SailM"; doc]
+  | false, true -> [string "ExceptM"; string "_"; doc]
+  | false, false -> [string "Id"; doc]
+
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) ->
-      group (nest 2 (string "| " ^^ doc_pat pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
+      group
+        (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
@@ -775,19 +798,47 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
   | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
-      let arrow = match e with E_let _ when not has_loop -> leftarrow | _ -> leftarrowdo in
-      let id_typ =
-        match pat_is_plain_binder env lpat with
-        | Some (_, Some typ) -> doc_pat lpat ^^ space ^^ colon ^^ space ^^ doc_typ ctx typ
-        | _ -> doc_pat lpat
-      in
+      let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
+      let id_typ = doc_pat lpat in
+      let typ_ascription = doc_pat_typ_ascription ctx lpat in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
         if has_effect lexp then
           if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
-          else pp_let_line_f [separate space [string "let"; id_typ; arrow]; doc_exp true ctx lexp]
-        else pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
+          else (
+            match (is_arrow_do, typ_ascription) with
+            | true, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
+            | false, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrow]; doc_exp true ctx lexp]
+            | true, Some asc ->
+                pp_let_line_f
+                  ([
+                     separate space [string "let"; id_typ; leftarrow; string "(("; string "do"];
+                     doc_exp true ctx lexp;
+                     string ")";
+                     colon;
+                   ]
+                  @ prepend_monad ctx lexp asc
+                  @ [string ")"]
+                  )
+            | false, Some asc ->
+                pp_let_line_f
+                  ([
+                     separate space [string "let"; id_typ; leftarrow; string "(("];
+                     doc_exp true ctx lexp;
+                     string ")";
+                     colon;
+                   ]
+                  @ prepend_monad ctx lexp asc
+                  @ [string ")"]
+                  )
+          )
+        else (
+          match typ_ascription with
+          | Some asc ->
+              pp_let_line_f [separate space [string "let"; id_typ; colon; asc; coloneq]; doc_exp false ctx lexp]
+          | None -> pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
+        )
       in
       pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
@@ -935,6 +986,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     | false, true, _ -> [string "ExceptM.run"; string "do"]
     | _ -> []
   in
+  let ctx = { ctx with in_sail_monad = is_monadic; in_except_monad = early_return } in
   let decl_val = decl_val @ dec_val_end in
   let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
   ( typ_quant_comment,

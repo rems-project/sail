@@ -206,8 +206,8 @@ def num_of_iop (arg_ : iop) : Int :=
   | RISCV_ANDI => 5
 
 def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : SailM Unit := do
-  let addr : xlenbits ← do (pure ((← (rX rs1)) + (EXTS (m := 64) imm)))
-  let result : xlenbits ← do (read_mem addr 8)
+  let addr ← (( do (pure ((← (rX rs1)) + (EXTS (m := 64) imm))) ) : SailM xlenbits )
+  let result ← (( do (read_mem addr 8) ) : SailM xlenbits )
   (wX rd result)
 
 def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (arg3 : iop) : SailM Unit := do
