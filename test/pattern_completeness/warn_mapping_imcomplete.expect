@@ -1,0 +1,43 @@
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_mapping_imcomplete.sail[0m:10.0-7:
+10[96m |[0mmapping imcomplete_oneside : bool <-> bool2 = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following expression is unmatched: [93mstruct { field = true }[0m
+
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_mapping_imcomplete.sail[0m:15.0-7:
+15[96m |[0mmapping imcomplete_both_side : bool <-> bool2 = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following expression is unmatched: [93mfalse[0m
+
+[93mWarning[0m: Unreachable pattern match type at [96mwarn_mapping_imcomplete.sail[0m:20.0-7:
+20[96m |[0mmapping forwords_unreachable : bool <-> int = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following type is unreachable: [93mint[0m
+
+[93mWarning[0m: Unreachable pattern match type at [96mwarn_mapping_imcomplete.sail[0m:24.0-7:
+24[96m |[0mmapping backwords_unreachable : bool <-> int = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following type is unreachable: [93mbool[0m
+
+[93mWarning[0m: Unreachable pattern match type at [96mwarn_mapping_imcomplete.sail[0m:28.0-7:
+28[96m |[0mmapping multi_warning : bool <-> int = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following type is unreachable: [93mbool[0m
+
+[93mWarning[0m: Incomplete pattern match statement at [96mwarn_mapping_imcomplete.sail[0m:28.0-7:
+28[96m |[0mmapping multi_warning : bool <-> int = {
+  [91m |[0m[91m^-----^[0m
+  [91m |[0m 
+The following expression is unmatched: [93m3[0m
+
+[93mWarning[0m: Unreachable pattern match type at Code generated nearby:
+[96mwarn_mapping_imcomplete.sail[0m:38.0-79:
+38[96m |[0mmapping clause encdec = true if enabled <-> struct { field = false } if enabled
+  [91m |[0m[91m^-----------------------------------------------------------------------------^[0m
+  [91m |[0m 
+The following type is unreachable: [93mbool[0m
+
