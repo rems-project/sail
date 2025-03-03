@@ -94,8 +94,9 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (l ≥b n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (((one <<< l) - one) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -113,9 +114,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
-  else if (Bool.and (n >b 0) (m <b 0))
-       then ((Int.tdiv (n -i 1) m) -i 1)
-       else (Int.tdiv n m)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -430,8 +432,9 @@ def ite_early_return (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
     if x
-    then throw (← do
-             readReg r_A)
+    then
+      throw (← do
+          readReg r_A)
     else readReg r_B ) : SailME _ E )
   readReg r_B
 
@@ -446,8 +449,9 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
       writeReg r_A (← readReg r_C)
       let y ← (( do
         if x
-        then throw (← do
-                 readReg r_A)
+        then
+          throw (← do
+              readReg r_A)
         else readReg r_B ) : SailME _ E )
       (pure ())
   (pure loop_vars)
@@ -456,15 +460,16 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
 /-- Type quantifiers: k_ex2661# : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
   if x
-  then let loop_i_lower := 0
-       let loop_i_upper := 10
-       let mut loop_vars := ()
-       for i in [loop_i_lower:loop_i_upper + 1:1] do
-         let () := loop_vars
-         loop_vars ← do
-           throw (← do
-               readReg r_A)
-       (pure loop_vars)
+  then
+    let loop_i_lower := 0
+    let loop_i_upper := 10
+    let mut loop_vars := ()
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
+      let () := loop_vars
+      loop_vars ← do
+        throw (← do
+            readReg r_A)
+    (pure loop_vars)
   else writeReg r_B A
   readReg r_B
 
@@ -476,9 +481,10 @@ def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
     if x
-    then throw (← do
-             (unit_type A)
-             readReg r_A)
+    then
+      throw (← do
+          (unit_type A)
+          readReg r_A)
     else readReg r_B ) : SailME _ E )
   readReg r_B
 

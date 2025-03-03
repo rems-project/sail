@@ -80,8 +80,9 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (l ≥b n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (((one <<< l) - one) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -99,9 +100,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
-  else if (Bool.and (n >b 0) (m <b 0))
-       then ((Int.tdiv (n -i 1) m) -i 1)
-       else (Int.tdiv n m)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -175,10 +177,11 @@ def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) 
   let (notn, str) := tuple_0
   if (BEq.beq str "-")
   then (BitVec.zero notn)
-  else let parsed := (BitVec.zero notn)
-       if (BEq.beq (BitVec.access parsed (notn -i 1)) 0#1)
-       then parsed
-       else (BitVec.zero notn)
+  else
+    let parsed := (BitVec.zero notn)
+    if (BEq.beq (BitVec.access parsed (notn -i 1)) 0#1)
+    then parsed
+    else (BitVec.zero notn)
 
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards_matches (tuple_0 : (Nat × String)) : Bool :=

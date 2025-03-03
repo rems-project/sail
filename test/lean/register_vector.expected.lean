@@ -144,8 +144,9 @@ def sail_ones (n : Nat) : (BitVec n) :=
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if (l ≥b n)
   then ((sail_ones n) <<< i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (((one <<< l) - one) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -163,9 +164,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
-  else if (Bool.and (n >b 0) (m <b 0))
-       then ((Int.tdiv (n -i 1) m) -i 1)
-       else (Int.tdiv n m)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -216,9 +218,10 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
 def monad_test (r : Nat) : SailM (BitVec 1) := do
   if (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
   then (pure 1#1)
-  else if (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
-       then (pure 1#1)
-       else (pure 0#1)
+  else
+    if (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
+    then (pure 1#1)
+    else (pure 0#1)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))
