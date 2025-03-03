@@ -167,7 +167,7 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('\'{}\' -coq -coq-lib-style stdpp -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -coq -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))
@@ -175,7 +175,6 @@ def test_coq(name):
                 step('./mk_coq_main.sh {} {}'.format(basename, basename.capitalize()))
                 os.chdir('_coqbuild_{}'.format(basename))
 
-                # TODO: find bbv properly
                 step('coqc {}_types.v'.format(basename))
                 step('coqc {}.v'.format(basename))
                 step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename), expected_status = 1 if basename.startswith('fail') else 0)
