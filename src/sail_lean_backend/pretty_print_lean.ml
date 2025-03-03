@@ -871,9 +871,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let statements_monadic = as_monadic || has_effect t || has_effect e in
       nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg ctx i))
       ^^ hardline
-      ^^ nest 2 (string "then" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx t))
+      ^^ prefix 2 1 (string "then") (doc_exp statements_monadic ctx t)
       ^^ hardline
-      ^^ nest 2 (string "else" ^^ space ^^ nest 3 (doc_exp statements_monadic ctx e))
+      ^^ prefix 2 1 (string "else") (doc_exp statements_monadic ctx e)
   | E_ref id -> string ".Reg " ^^ doc_id_ctor id
   | E_exit _ -> string "throw Error.Exit"
   | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
