@@ -245,6 +245,9 @@ def while_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_nat ()))
 
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
+
 end Functions
 open Functions
 

@@ -252,6 +252,9 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg nextPC (← (undefined_bitvector 64))
   writeReg Xs (← (undefined_vector 32 (← (undefined_bitvector 64))))
 
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
+
 end Functions
 open Functions
 

@@ -200,6 +200,9 @@ def _set_cr_type_LT (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 1)) : SailM 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_cr_type ()))
 
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
+
 end Functions
 open Functions
 

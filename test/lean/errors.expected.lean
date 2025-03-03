@@ -143,6 +143,9 @@ def test_assert (b : Bool) : SailM (BitVec 1) := do
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg dummy (← (undefined_bit ()))
 
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
+
 end Functions
 open Functions
 

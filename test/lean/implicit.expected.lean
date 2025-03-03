@@ -139,6 +139,9 @@ def slice_mask2 {n : _} (i : (BitVec n)) (l : (BitVec n)) (b : Bool) : (BitVec n
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
+
 end Functions
 open Functions
 

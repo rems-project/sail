@@ -159,6 +159,9 @@ def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg NAT (← (undefined_nat ()))
   writeReg BIT (← (undefined_bit ()))
 
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
+
 end Functions
 open Functions
 

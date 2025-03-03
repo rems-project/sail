@@ -144,6 +144,7 @@ let lean_rewrites =
     (* ("prover_regstate", [Bool_arg false]); *)
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
+    ("add_register_init_function", []);
     ("const_prop_mutrec", [String_arg "coq"]);
     ("exp_lift_assign", []);
     ("early_return", []);

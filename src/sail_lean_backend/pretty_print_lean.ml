@@ -1206,7 +1206,7 @@ let doc_instantiations ctx env =
       ^^ hardline
 
 let main_function_stub has_registers =
-  let main_call = if has_registers then "(initialize_registers >=> sail_main)" else "sail_main" in
+  let main_call = if has_registers then "(sail_model_init >=> sail_main)" else "sail_main" in
   nest 2
     (separate hardline
        [
