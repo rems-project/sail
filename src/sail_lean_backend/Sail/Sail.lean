@@ -154,8 +154,6 @@ def String.leadingSpaces (s : String) : Nat :=
 def Vector.length (_v : Vector α n) : Nat :=
   n
 
-def vectorAccess [Inhabited α] (v : Vector α m) (n : Nat) : α := v[n]!
-
 def vectorInit {n : Nat} (a : α) : Vector α n := Vector.mkVector n a
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
@@ -507,6 +505,10 @@ instance : HOr (BitVec n) (BitVec m) (BitVec n) where
 
 instance : HXor (BitVec n) (BitVec m) (BitVec n) where
   hXor x y := x ^^^ y
+
+instance [GetElem? coll Nat elem valid] : GetElem? coll Int elem (λ c i ↦ valid c i.toNat) where
+  getElem c i h := c[i.toNat]'h
+  getElem? c i := c[i.toNat]?
 
 instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat

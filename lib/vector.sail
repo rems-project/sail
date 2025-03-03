@@ -197,7 +197,7 @@ val plain_vector_access = pure {
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
-  lean: "vectorAccess",
+  lean: "GetElem?.getElem!",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m)) -> 'a
 

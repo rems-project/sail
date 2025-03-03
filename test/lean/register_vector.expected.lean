@@ -197,13 +197,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
   if (bne n 31)
-  then writeRegRef (vectorAccess GPRs n) value
+  then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
   if (bne n 31)
-  then (reg_deref (vectorAccess GPRs n))
+  then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
 def rPC (_ : Unit) : SailM (BitVec 64) := do
