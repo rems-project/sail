@@ -92,6 +92,10 @@ skip_selftests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
+timeout = "timeout"
+if os.uname().sysname == "Darwin":
+    timeout = "gtimeout"
+
 def test_lean(subdir: str, skip_list = None, runnable: bool = False):
     """
     Run all Sail files available in the `subdir`.
@@ -132,7 +136,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                          expected_status=1,
                          stderr_file=f'{basename}/out/err_status')
                 elif runnable:
-                    step('timeout 90s lake exe run > expected 2> err_status',
+                    step(f'{timeout} 90s lake exe run > expected 2> err_status',
                          cwd=f'{basename}/out',
                          name=filename,
                          stderr_file=f'{basename}/out/err_status')
