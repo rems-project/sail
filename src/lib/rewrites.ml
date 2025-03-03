@@ -4693,6 +4693,7 @@ let all_rewriters =
             )
         )
     );
+    ("add_register_init_function", base_rewriter State.add_register_init_function);
     ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
     ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
@@ -4760,7 +4761,13 @@ let rewrite ctx effect_info env rewriters ast =
          (1, (ctx, ast, effect_info, env))
          rewriters
       )
-  with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
+  with
+  | Type_error.Type_error (l, err) ->
+      Printexc.print_backtrace stderr;
+      raise (Type_error.to_reporting_exn l err)
+  | e ->
+      Printexc.print_backtrace stderr;
+      raise e
 
 let () =
   let open Interactive in

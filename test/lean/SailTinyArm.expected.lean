@@ -592,7 +592,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -602,34 +602,34 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
+  if (l ≥b n)
   then ((sail_ones n) <<< i)
-  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
+  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m) -i 1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else if (Bool.and (n >b 0) (m <b 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m * (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -1881,9 +1881,9 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
   writeReg _PC pc
 
 def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (BitVec 3)) (S : (BitVec 1)) (Rn : (BitVec 5)) (Rt : (BitVec 5)) : (Option ast) :=
-  let t := ( (BitVec.toNat Rt) : reg_index )
-  let n := ( (BitVec.toNat Rn) : reg_index )
-  let m := ( (BitVec.toNat Rm) : reg_index )
+  let t : reg_index := (BitVec.toNat Rt)
+  let n : reg_index := (BitVec.toNat Rn)
+  let m : reg_index := (BitVec.toNat Rm)
   if (Bool.or (bne option_v (0b011 : (BitVec 3))) (BEq.beq S 1#1))
   then none
   else if (BEq.beq opc (0b00 : (BitVec 2)))
@@ -1893,9 +1893,9 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
             else none
 
 def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (Rm : (BitVec 5)) (imm6 : (BitVec 6)) (Rn : (BitVec 5)) (Rd : (BitVec 5)) : (Option ast) :=
-  let d := ( (BitVec.toNat Rd) : reg_index )
-  let n := ( (BitVec.toNat Rn) : reg_index )
-  let m := ( (BitVec.toNat Rm) : reg_index )
+  let d : reg_index := (BitVec.toNat Rd)
+  let n : reg_index := (BitVec.toNat Rn)
+  let m : reg_index := (BitVec.toNat Rm)
   if (Bool.and (BEq.beq sf 0#1) (BEq.beq (BitVec.access imm6 5) 1#1))
   then none
   else if (bne imm6 (0b000000 : (BitVec 6)))
@@ -1908,12 +1908,12 @@ def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
   else (some (DataMemoryBarrier ()))
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
-  let t := ( (BitVec.toNat Rt) : reg_index )
-  let offset := ( (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64) : (BitVec 64) )
+  let t : reg_index := (BitVec.toNat Rt)
+  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64)
   (some (CompareAndBranch (t, offset)))
 
 def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
-  let req := (
+  let req : (Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1922,7 +1922,7 @@ def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
       translation := none
       size := 8
       value := (some value)
-      tag := none } : (Mem_write_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) )
+      tag := none }
   match (← (sail_mem_write req)) with
   | .Ok _ => (pure ())
   | .Err _ => throw Error.Exit
@@ -1941,12 +1941,12 @@ def execute_StoreRegister (t : Nat) (n : Nat) (m : Nat) : SailM Unit := do
   let base_addr ← do (rX n)
   let offset ← do (rX m)
   let addr := (base_addr + offset)
-  let _ := ( (wMem_Addr addr) : Unit )
+  let _ : Unit := (wMem_Addr addr)
   let data ← do (rX t)
   (wMem addr data)
 
 def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
-  let req := (
+  let req : (Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_explicit
         { variety := AV_plain
           strength := AS_normal })
@@ -1954,7 +1954,7 @@ def rMem (addr : (BitVec 64)) : SailM (BitVec 64) := do
       pa := (Sail.BitVec.truncate addr 56)
       translation := none
       size := 8
-      tag := false } : (Mem_read_request 8 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) )
+      tag := false }
   match (← (sail_mem_read req)) with
   | .Ok (value, _) => (pure value)
   | .Err _ => throw Error.Exit
@@ -2008,39 +2008,39 @@ def decode (v__0 : (BitVec 32)) : (Option ast) :=
        (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
          (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
   then let S := (BitVec.access v__0 12)
-       let option_v := ( (Sail.BitVec.extractLsb v__0 15 13) : (BitVec 3) )
-       let opc := ( (Sail.BitVec.extractLsb v__0 23 22) : (BitVec 2) )
-       let Rt := ( (Sail.BitVec.extractLsb v__0 4 0) : (BitVec 5) )
-       let Rn := ( (Sail.BitVec.extractLsb v__0 9 5) : (BitVec 5) )
-       let Rm := ( (Sail.BitVec.extractLsb v__0 20 16) : (BitVec 5) )
+       let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
+       let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
+       let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
+       let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+       let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
        (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
   else if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
        then let sf := (BitVec.access v__0 31)
             let N := (BitVec.access v__0 21)
-            let shift := ( (Sail.BitVec.extractLsb v__0 23 22) : (BitVec 2) )
-            let imm6 := ( (Sail.BitVec.extractLsb v__0 15 10) : (BitVec 6) )
-            let Rn := ( (Sail.BitVec.extractLsb v__0 9 5) : (BitVec 5) )
-            let Rm := ( (Sail.BitVec.extractLsb v__0 20 16) : (BitVec 5) )
-            let Rd := ( (Sail.BitVec.extractLsb v__0 4 0) : (BitVec 5) )
+            let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
+            let imm6 : (BitVec 6) := (Sail.BitVec.extractLsb v__0 15 10)
+            let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
+            let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+            let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
             (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
        else if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
                  (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
-            then let CRm := ( (Sail.BitVec.extractLsb v__0 11 8) : (BitVec 4) )
+            then let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
                  (decodeDataMemoryBarrier CRm)
             else if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
-                 then let imm19 := ( (Sail.BitVec.extractLsb v__0 23 5) : (BitVec 19) )
-                      let Rt := ( (Sail.BitVec.extractLsb v__0 4 0) : (BitVec 5) )
+                 then let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
+                      let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
                       (decodeCompareAndBranch imm19 Rt)
                  else none
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
-  let req := (
+  let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
     { access_kind := (AK_ifetch ())
       va := (some addr)
       pa := (Sail.BitVec.truncate addr 56)
       translation := none
       size := 4
-      tag := false } : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) )
+      tag := false }
   match (← (sail_mem_read req)) with
   | .Ok (value, _) => (pure value)
   | .Err _ => throw Error.Exit

@@ -158,11 +158,8 @@ def test_coq(name):
     results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
-    results.expect_failure("config.sail","bug: configuration register initialisation missing")
-    results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
-    results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
-    results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
+    results.expect_failure("config_vec_list.sail", "existential type not supported by Coq backend yet")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:

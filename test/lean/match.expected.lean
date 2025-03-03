@@ -78,7 +78,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -88,34 +88,34 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
+  if (l ≥b n)
   then ((sail_ones n) <<< i)
-  else let one := ( (sail_mask n (0b1 : (BitVec 1))) : (BitVec n) )
+  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
        (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m) -i 1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else if (Bool.and (n >b 0) (m <b 0))
        then ((Int.tdiv (n -i 1) m) -i 1)
        else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m * (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -154,13 +154,13 @@ def match_option (x : (Option (BitVec 1))) : (BitVec 1) :=
 /-- Type quantifiers: y : Int, x : Int -/
 def match_pair_pat (x : Int) (y : Int) : Int :=
   match (x, y) with
-  | (a, b) => (a + b)
+  | (a, b) => (a +i b)
 
 /-- Type quantifiers: arg1 : Int, arg0 : Int -/
 def match_pair (arg0 : Int) (arg1 : Int) : Int :=
   let x := (arg0, arg1)
   match x with
-  | (a, b) => (a + b)
+  | (a, b) => (a +i b)
 
 def match_reg (x : E) : SailM E := do
   match x with
@@ -172,9 +172,9 @@ def match_reg (x : E) : SailM E := do
 def match_let (x : E) (y : Int) : SailM Int := do
   match x with
   | A =>
-    let x := (y + y)
-    let z ← do (pure ((y + y) + (← (undefined_int ()))))
-    (pure (z + x))
+    let x := (y +i y)
+    let z ← do (pure ((y +i y) +i (← (undefined_int ()))))
+    (pure (z +i x))
   | B => (pure 42)
   | C => (pure 23)
 
@@ -193,11 +193,11 @@ def const32 (_ : Unit) : ((BitVec 32) × Bool) :=
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
 def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
-  let (foo, _) := (
+  let (foo, _) : ((BitVec k_n) × Bool) :=
     match (Sail.BitVec.length x) with
     | 16 => (const16 ())
     | 32 => (const32 ())
-    | n => ((BitVec.zero n), false) : ((BitVec k_n) × Bool) )
+    | n => ((BitVec.zero n), false)
   (foo ++ foo)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
