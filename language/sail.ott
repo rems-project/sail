@@ -93,7 +93,7 @@ type extern = { pure : bool; bindings : (string * string) list } option
 type visibility = Public | Private of  l
 
 type 'a def_annot = {
-    doc_comment : string option;
+    doc_comment : (l * string) option;
     attrs : (l * string * config) list;
     visibility : visibility;
     loc : l;
@@ -129,7 +129,7 @@ type extern = <| pure : bool; bindings : list (string * string) |>
 type visibility = Public | Private of l
 
 type def_annot 'a = <|
-    doc_comment : maybe string;
+    doc_comment : maybe (l * string);
     attrs : list (l * string * maybe attribute_data);
     visibility : visibility;
     loc : l;

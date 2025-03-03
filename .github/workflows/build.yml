@@ -9,11 +9,11 @@ jobs:
   build:
     strategy:
       matrix:
-        version: [4.08.1, 5.2.1]
+        version: [4.14.2, 5.2.1]
         os: [ubuntu-latest, macos-latest]
         exclude:
         - os: macos-latest
-          version: 4.08.1
+          version: 4.14.2
 
     runs-on: ${{ matrix.os }}
 

@@ -12,8 +12,8 @@
   (native plugin)
   (byte plugin))
  (link_flags -linkall)
- (libraries libsail omd)
- (embed_in_plugin_libraries omd))
+ (libraries libsail cmarkit)
+ (embed_in_plugin_libraries cmarkit))
 
 (install
  (section

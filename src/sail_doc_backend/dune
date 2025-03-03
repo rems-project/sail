@@ -4,8 +4,8 @@
   (native plugin)
   (byte plugin))
  (link_flags -linkall)
- (libraries libsail omd yojson base64)
- (embed_in_plugin_libraries omd base64))
+ (libraries libsail cmarkit yojson base64)
+ (embed_in_plugin_libraries cmarkit base64))
 
 (install
  (section

@@ -241,62 +241,157 @@ let replace_this str =
       |> Str.global_replace (Str.regexp_string "THIS") (inline_code (string_of_id id))
   | None -> str
 
-let latex_of_markdown str =
-  let open Omd in
+let latex_of_markdown l str =
+  let open Cmarkit in
   let open Printf in
-  let rec format_elem = function
-    | Paragraph elems ->
-        let prepend =
-          if state.noindent then (
-            state.noindent <- false;
-            "\\noindent "
-          )
-          else ""
+  let sail_link = Cmarkit.Meta.key () in
+
+  let comment_loc l offset =
+    let open Lexing in
+    match Reporting.simp_loc l with
+    | Some (s, _) ->
+        let s = Reporting.Position.advance_position ~trim:false "/*!" s in
+        let start_line, start_bol = Textloc.first_line offset in
+        let start_cnum = Textloc.first_byte offset in
+        let start_bol_offset = if start_line <> 1 then s.pos_cnum - s.pos_bol else 0 in
+        let end_line, end_bol = Textloc.last_line offset in
+        let end_cnum = Textloc.last_byte offset in
+        let end_bol_offset = if end_line <> 1 then s.pos_cnum - s.pos_bol else 0 in
+        print_endline (Printf.sprintf "%d %d %d" start_line start_bol start_cnum);
+        let sc =
+          {
+            s with
+            pos_lnum = s.pos_lnum + start_line - 1;
+            pos_bol = s.pos_bol + start_bol + start_bol_offset;
+            pos_cnum = s.pos_cnum + start_cnum;
+          }
         in
-        prepend ^ format elems ^ "\n\n"
-    | Text str -> text_code str
-    | Emph elems -> sprintf "\\emph{%s}" (format elems)
-    | Bold elems -> sprintf "\\textbf{%s}" (format elems)
-    | Ref (r, "THIS", alt, _) -> begin
-        match state.this with
-        | Some id -> sprintf "\\hyperref[%s]{%s}" (refcode_id id) (replace_this alt)
-        | None -> failwith "Cannot create link to THIS"
-      end
-    | Ref (r, name, alt, _) ->
-        (* special case for [id] (format as code) *)
-        let format_fn = if name = alt then inline_code else replace_this in
-        (* Do not attempt to escape link destinations wrapped in <> *)
-        if Str.string_match (Str.regexp "<.+>") name 0 then
-          sprintf "\\hyperref[%s]{%s}" (String.sub name 1 (String.length name - 2)) (format_fn alt)
-        else begin
-          match r#get_ref name with
-          | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
-          | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
-        end
-    | Url (href, text, "") -> sprintf "\\href{%s}{%s}" href (format text)
-    | Url (href, text, reference) -> sprintf "%s\\footnote{%s~\\url{%s}}" (format text) reference href
-    | Code (_, code) -> sprintf "\\lstinline`%s`" code
-    | Code_block (lang, code) ->
-        let lang = if lang = "" then "sail" else lang in
+        let ec =
+          {
+            s with
+            pos_lnum = s.pos_lnum + end_line - 1;
+            pos_bol = s.pos_bol + end_bol + end_bol_offset;
+            pos_cnum = s.pos_cnum + end_cnum + 1;
+          }
+        in
+        Parse_ast.Range (sc, ec)
+    | None -> Parse_ast.Unknown
+  in
+
+  let rec format_block buf defs = function
+    | Block.Blocks (blocks, _) -> List.iter (format_block buf defs) blocks
+    | Block.Paragraph (para, _) ->
+        if state.noindent then (
+          state.noindent <- false;
+          Buffer.add_string buf "\\noindent "
+        );
+        format_inline buf defs (Block.Paragraph.inline para);
+        Buffer.add_string buf "\n"
+    | Block.Blank_line _ -> Buffer.add_string buf "\n"
+    | Block.Code_block (cb, _) ->
+        let code = Block.Code_block.code cb |> List.map Block_line.to_string |> String.concat "\n" in
+        let lang = match Block.Code_block.info_string cb with None -> "sail" | Some (lang, _) -> lang in
         let uid = Digest.string str |> Digest.to_hex in
         let chan = open_out (Filename.concat !opt_directory (sprintf "block%s.%s" uid lang)) in
         output_string chan code;
         close_out chan;
-        sprintf "\\lstinputlisting[language=%s]{%s/block%s.%s}" lang !opt_directory uid lang
-    | Ul list | Ulp list ->
-        "\\begin{itemize}\n\\item " ^ Util.string_of_list "\n\\item " format list ^ "\n\\end{itemize}\n"
-    | Ol list | Olp list ->
-        "\\begin{enumerate}\n\\item " ^ Util.string_of_list "\n\\item " format list ^ "\n\\end{enumerate}\n"
-    | H1 header -> "\\section*{" ^ format header ^ "}\n"
-    | H2 header -> "\\subsection*{" ^ format header ^ "}\n"
-    | H3 header -> "\\subsubsection*{" ^ format header ^ "}\n"
-    | H4 header -> "\\paragraph*{" ^ format header ^ "}\n"
-    | Br -> "\n"
-    | NL -> "\n"
-    | elem -> failwith ("Can't convert to latex: " ^ Omd_backend.sexpr_of_md [elem])
-  and format elems = String.concat "" (List.map format_elem elems) in
+        ksprintf (Buffer.add_string buf) "\\lstinputlisting[language=%s]{%s/block%s.%s}" lang !opt_directory uid lang
+    | Block.Heading (h, _) ->
+        let l = Block.Heading.level h in
+        (match l with 1 -> "\\section*{" | 2 -> "\\subsection*{" | 3 -> "\\subsubsection*{" | _ -> "\\paragraph*{")
+        |> Buffer.add_string buf;
+        format_inline buf defs (Block.Heading.inline h);
+        Buffer.add_string buf "\\n"
+    | Block.Block_quote (bq, _) ->
+        Buffer.add_string buf "\\begin{quote}\n";
+        format_block buf defs (Block.Block_quote.block bq);
+        Buffer.add_string buf "\\end{quote}\n"
+    | Block.List (list, _) ->
+        let list_type = match Block.List'.type' list with `Unordered _ -> "itemize" | `Ordered _ -> "enumerate" in
+        ksprintf (Buffer.add_string buf) "\\begin{%s}\n" list_type;
+        List.iter
+          (fun (item, _) ->
+            Buffer.add_string buf "\\item ";
+            format_block buf defs (Block.List_item.block item)
+          )
+          (Block.List'.items list);
+        ksprintf (Buffer.add_string buf) "\\end{%s}\n" list_type
+    | Block.Link_reference_definition _ -> ()
+    | b ->
+        let offset = Block.meta b |> Meta.textloc in
+        let l = comment_loc l offset in
+        raise (Reporting.err_general l "Cannot convert markdown block to Latex")
+  and format_inline buf defs = function
+    | Inline.Text (str, _) -> Buffer.add_string buf str
+    | Inline.Break _ -> Buffer.add_char buf '\n'
+    | Inline.Code_span (c, _) -> ksprintf (Buffer.add_string buf) "\\lstinline`%s`" (Inline.Code_span.code c)
+    | Inline.Emphasis (emph, _) ->
+        Buffer.add_string buf "\\emph{";
+        format_inline buf defs (Inline.Emphasis.inline emph);
+        Buffer.add_string buf "}"
+    | Inline.Strong_emphasis (emph, _) ->
+        Buffer.add_string buf "\\textbf{";
+        format_inline buf defs (Inline.Emphasis.inline emph);
+        Buffer.add_string buf "}"
+    | Inline.Inlines (inlines, _) -> List.iter (format_inline buf defs) inlines
+    | Inline.Link (link, meta) -> (
+        let text = Inline.Link.text link in
+        let rendered =
+          let buf = Buffer.create 64 in
+          format_inline buf defs text;
+          Buffer.contents buf
+        in
+        match Inline.Link.reference link with
+        | `Inline (ld, _) -> (
+            let has_label = Option.is_some (Link_definition.label ld) in
+            match Link_definition.dest ld with
+            | Some (dest, _) ->
+                if has_label then ksprintf (Buffer.add_string buf) "\\href{%s}{%s}" dest rendered
+                else ksprintf (Buffer.add_string buf) "\\href{%s}{\\url{%s}}" dest dest
+            | None ->
+                let offset = Meta.textloc meta in
+                let l = comment_loc l offset in
+                raise (Reporting.err_general l "Markdown link with no destination")
+          )
+        | `Ref (_, _, referenced) ->
+            let to_sail = Option.is_some (Meta.find sail_link (Label.meta referenced)) in
+            let name = Label.text_to_string referenced in
+            if to_sail then
+              ksprintf (Buffer.add_string buf) "\\hyperref[%s]{%s}" (refcode_string name) (inline_code rendered)
+            else (
+              match Inline.Link.reference_definition defs link with
+              | Some (Link_definition.Def (ld, _)) ->
+                  let dest = Link_definition.dest ld |> Option.map fst |> Option.value ~default:"" in
+                  ksprintf (Buffer.add_string buf) "\\href{%s}{%s}" dest rendered
+              | _ -> ()
+            )
+      )
+    | Inline.Autolink (link, _) ->
+        let str, _ = Inline.Autolink.link link in
+        Buffer.add_string buf str
+    | i ->
+        let offset = Inline.meta i |> Meta.textloc in
+        let l = comment_loc l offset in
+        raise (Reporting.err_general l "Cannot convert inline markdown element to Latex")
+  and format doc =
+    let buf = Buffer.create 1024 in
+    let defs = Doc.defs doc in
+    format_block buf defs (Doc.block doc);
+    Buffer.contents buf
+  in
 
-  replace_this (format (of_string str))
+  let make_sail_link label =
+    let meta = Cmarkit.Meta.tag sail_link (Cmarkit.Label.meta label) in
+    Cmarkit.Label.with_meta meta label
+  in
+
+  let with_sail_links = function
+    | `Def _ as ctx -> Cmarkit.Label.default_resolver ctx
+    | `Ref (_, _, (Some _ as def)) -> def
+    | `Ref (_, ref, None) -> Some (make_sail_link ref)
+  in
+
+  replace_this (format (Doc.of_string ~resolver:with_sail_links ~strict:true ~locs:true str))
 
 let add_links str =
   let r = Str.regexp {|\([a-zA-Z0-9_]+\)\([ ]*\)(|} in
@@ -393,7 +488,7 @@ let latex_command ~docstring cat id no_loc l =
   end
 
 let latex_docstring (def_annot : 'a Ast.def_annot) =
-  match def_annot.doc_comment with Some contents -> string (latex_of_markdown contents) | None -> empty
+  match def_annot.doc_comment with Some (l, contents) -> string (latex_of_markdown l contents) | None -> empty
 
 let latex_funcls def =
   let module StringMap = Map.Make (String) in
@@ -445,7 +540,7 @@ let process_pragma l command =
   | "newcommand" ->
       let n = try String.index arg ' ' with Not_found -> failwith "No command given" in
       let name = Str.string_before arg n in
-      let body = String.trim (latex_of_markdown (Str.string_after arg n)) in
+      let body = String.trim (latex_of_markdown l (Str.string_after arg n)) in
       Some (ksprintf string "\\newcommand{\\%s}{%s}" name body)
   | _ ->
       Reporting.warn "Bad latex pragma at" l "";

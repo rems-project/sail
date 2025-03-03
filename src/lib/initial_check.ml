@@ -1065,7 +1065,7 @@ module ConvertType = struct
     | P.Tu_aux (P.Tu_doc (doc_comment, tu), l) -> begin
         match doc with
         | Some _ -> raise (Reporting.err_general l "Union constructor has multiple documentation comments")
-        | None -> to_ast_type_union kenv (Some doc_comment) attrs vis ctx tu
+        | None -> to_ast_type_union kenv (Some (l, doc_comment)) attrs vis ctx tu
       end
     | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union kenv doc (attrs @ [(l, attr, arg)]) vis ctx tu
     | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
@@ -1775,7 +1775,7 @@ let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl
   | P.FCL_doc (doc_comment, fcl) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
-      | None -> to_ast_funcl (Some doc_comment) attrs ctx fcl
+      | None -> to_ast_funcl (Some (l, doc_comment)) attrs ctx fcl
     end
   | P.FCL_funcl (id, pexp) ->
       let id = to_ast_id ctx id in
@@ -1845,7 +1845,7 @@ let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
   | P.MCL_doc (doc_comment, mcl) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
-      | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
+      | None -> to_ast_mapcl (Some (l, doc_comment)) attrs ctx mcl
     end
   | P.MCL_bidir (mpexp1, mpexp2) ->
       MCL_aux
@@ -1967,7 +1967,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
   | P.DEF_doc (doc_comment, def) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")
-      | None -> to_ast_def (Some doc_comment) attrs vis ctx def
+      | None -> to_ast_def (Some (l, doc_comment)) attrs vis ctx def
     end
   | P.DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx)
   | P.DEF_fixity (prec, n, op) ->
