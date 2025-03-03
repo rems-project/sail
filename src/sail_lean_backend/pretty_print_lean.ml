@@ -31,10 +31,20 @@ type context = {
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
   loop_level : int;
+  in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
+  in_except_monad : bool;  (** Indicates whether we are in an expression of `ExceptM _ _` *)
 }
 
 let context_init env global =
-  { global; env; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty; loop_level = 0 }
+  {
+    global;
+    env;
+    kid_id_renames = KBindings.empty;
+    kid_id_renames_rev = Bindings.empty;
+    loop_level = 0;
+    in_sail_monad = false;
+    in_except_monad = false;
+  }
 let context_with_env ctx env = { ctx with env }
 
 let add_single_kid_id_rename ctx id kid =
@@ -600,16 +610,12 @@ let name_loop_vars ctx =
   let ctx = { ctx with loop_level = ll + 1 } in
   match ll with 0 -> (string "loop_vars", ctx) | _ -> (string "loop_vars_" ^^ string (string_of_int ll), ctx)
 
-let prepend_monad exp doc =
-  let is_monadic = effectful (effect_of exp) in
-  let early_return = has_early_return exp in
-  let has_loop = has_loop exp in
-  match (is_monadic, early_return, has_loop) with
-  | true, true, _ -> [string "SailME"; string "_"; doc]
-  | true, _, _ -> [string "SailM"; doc]
-  | false, false, true -> [string "Id"; doc]
-  | false, true, _ -> [string "ExceptM"; string "_"; doc]
-  | _ -> [doc]
+let prepend_monad ctx exp doc =
+  match (ctx.in_sail_monad, ctx.in_except_monad) with
+  | true, true -> [string "SailME"; string "_"; doc]
+  | true, false -> [string "SailM"; doc]
+  | false, true -> [string "ExceptM"; string "_"; doc]
+  | false, false -> [string "Id"; doc]
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
@@ -812,7 +818,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                      string ")";
                      colon;
                    ]
-                  @ prepend_monad lexp asc
+                  @ prepend_monad ctx lexp asc
                   @ [string ")"]
                   )
             | false, Some asc ->
@@ -823,7 +829,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                      string ")";
                      colon;
                    ]
-                  @ prepend_monad lexp asc
+                  @ prepend_monad ctx lexp asc
                   @ [string ")"]
                   )
           )
@@ -980,6 +986,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     | false, true, _ -> [string "ExceptM.run"; string "do"]
     | _ -> []
   in
+  let ctx = { ctx with in_sail_monad = is_monadic; in_except_monad = early_return } in
   let decl_val = decl_val @ dec_val_end in
   let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
   ( typ_quant_comment,
