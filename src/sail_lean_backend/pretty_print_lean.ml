@@ -603,10 +603,10 @@ let prepend_monad exp doc =
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
   match (is_monadic, early_return, has_loop) with
-  | true, true, _ -> [string "SailME E"; doc]
+  | true, true, _ -> [string "SailME"; string "_"; doc]
   | true, _, _ -> [string "SailM"; doc]
   | false, false, true -> [string "Id"; doc]
-  | false, true, _ -> [string "ExceptM"; string "Bool"; doc]
+  | false, true, _ -> [string "ExceptM"; string "_"; doc]
   | _ -> [doc]
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
@@ -788,25 +788,50 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
   | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
-    let has_loop = has_loop lexp in
-    let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
-    let id_typ = doc_pat lpat in
-    let typ_ascription = doc_pat_typ_ascription ctx lpat in
-    let ctx = update_ctx_pat ctx lpat in
-    let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
-    let pp_let_line =
-      if has_effect lexp then
-        if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
-        else match is_arrow_do, typ_ascription with
-        | true, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
-        | false, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrow]; doc_exp true ctx lexp]
-        | true, Some asc -> pp_let_line_f ([separate space [string "let"; id_typ; leftarrow; string "(("; string "do"]; doc_exp true ctx lexp; string ")"; colon] @ prepend_monad lexp asc @[string ")"])
-        | false, Some asc -> pp_let_line_f ([separate space [string "let"; id_typ; leftarrow; string "(("]; doc_exp true ctx lexp; string ")"; colon] @ prepend_monad lexp asc @[string ")"])
-      else match typ_ascription with
-      | Some asc -> pp_let_line_f [separate space [string "let"; id_typ; colon; asc; coloneq]; doc_exp false ctx lexp]
-      | None -> pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
-    in
-    pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
+      let has_loop = has_loop lexp in
+      let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
+      let id_typ = doc_pat lpat in
+      let typ_ascription = doc_pat_typ_ascription ctx lpat in
+      let ctx = update_ctx_pat ctx lpat in
+      let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
+      let pp_let_line =
+        if has_effect lexp then
+          if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
+          else (
+            match (is_arrow_do, typ_ascription) with
+            | true, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
+            | false, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrow]; doc_exp true ctx lexp]
+            | true, Some asc ->
+                pp_let_line_f
+                  ([
+                     separate space [string "let"; id_typ; leftarrow; string "(("; string "do"];
+                     doc_exp true ctx lexp;
+                     string ")";
+                     colon;
+                   ]
+                  @ prepend_monad lexp asc
+                  @ [string ")"]
+                  )
+            | false, Some asc ->
+                pp_let_line_f
+                  ([
+                     separate space [string "let"; id_typ; leftarrow; string "(("];
+                     doc_exp true ctx lexp;
+                     string ")";
+                     colon;
+                   ]
+                  @ prepend_monad lexp asc
+                  @ [string ")"]
+                  )
+          )
+        else (
+          match typ_ascription with
+          | Some asc ->
+              pp_let_line_f [separate space [string "let"; id_typ; colon; asc; coloneq]; doc_exp false ctx lexp]
+          | None -> pp_let_line_f [separate space [string "let"; id_typ; coloneq]; doc_exp false ctx lexp]
+        )
+      in
+      pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
   | E_struct fexps ->
       let args = List.map d_of_field fexps in

@@ -171,7 +171,7 @@ def foreach_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
         if (i >b 5)
         then throw (false : Bool)
         else (pure (res +i i))
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -215,7 +215,7 @@ def foreach_inner_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
             then throw (false : Bool)
             else (pure (res +i 1))
         (pure loop_vars_1)
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -260,9 +260,9 @@ def foreach_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
               if (i >b 5)
               then throw (false : Bool)
               else (pure (res +i 1))
-          (pure loop_vars_1) ) : ExceptM Bool Nat )
+          (pure loop_vars_1) ) : ExceptM _ Nat )
         (pure (res *i 2))
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -288,7 +288,7 @@ def while_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
         if (res >b 5)
         then throw (false : Bool)
         else (pure (res +i 1))
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -324,7 +324,7 @@ def while_inner_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
             then throw (false : Bool)
             else (pure (res +i 1))
         (pure loop_vars_1)
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -361,9 +361,9 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
               if (n >b 5)
               then throw (false : Bool)
               else (pure (res +i 1))
-          (pure loop_vars_1) ) : ExceptM Bool Nat )
+          (pure loop_vars_1) ) : ExceptM _ Nat )
         (pure (res *i 2))
-    (pure loop_vars) ) : ExceptM Bool Nat )
+    (pure loop_vars) ) : ExceptM _ Nat )
   (pure (res >b n))
 
 def match_early_return (x : E) : SailM E := SailME.run do
@@ -404,7 +404,7 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
           throw (← do
               readReg r_A)
         | B => readReg r_B
-        | C => readReg r_C ) : SailME E E )
+        | C => readReg r_C ) : SailME _ E )
       (pure ())
   (pure loop_vars)
   readReg r_B
@@ -432,7 +432,7 @@ def ite_early_return (x : Bool) : SailM E := SailME.run do
     if x
     then throw (← do
              readReg r_A)
-    else readReg r_B ) : SailME E E )
+    else readReg r_B ) : SailME _ E )
   readReg r_B
 
 /-- Type quantifiers: k_ex2657# : Bool -/
@@ -448,7 +448,7 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
         if x
         then throw (← do
                  readReg r_A)
-        else readReg r_B ) : SailME E E )
+        else readReg r_B ) : SailME _ E )
       (pure ())
   (pure loop_vars)
   readReg r_B
@@ -479,7 +479,7 @@ def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
     then throw (← do
              (unit_type A)
              readReg r_A)
-    else readReg r_B ) : SailME E E )
+    else readReg r_B ) : SailME _ E )
   readReg r_B
 
 def initialize_registers (_ : Unit) : SailM Unit := do
