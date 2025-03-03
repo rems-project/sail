@@ -424,7 +424,8 @@ let rec options =
       ("--help", Arg.Unit (fun () -> help !options), " display this list of options");
     ]
 
-let register_default_target () = Target.register ~name:"default" ~supports_abstract_types:true Target.empty_action
+let register_default_target () =
+  Target.register ~name:"default" ~supports_abstract_types:true ~supports_runtime_config:true Target.empty_action
 
 let file_to_string filename =
   let chan = open_in filename in
@@ -518,7 +519,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   in
   let config_json = get_model_config () in
   let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
-  let schema, ast = Config.rewrite_ast env instantiation config_json ast in
+  let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
   let ast, env = Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in

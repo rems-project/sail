@@ -77,6 +77,10 @@ val asserts_termination : target -> bool
     provide a concrete instantiation for Sail. *)
 val supports_abstract_types : target -> bool
 
+(** If a target does not support runtime configuration, then the
+    configuration must be provided statically at build time. *)
+val supports_runtime_config : target -> bool
+
 (** {2 Target registration} *)
 
 (** Used for plugins to register custom Sail targets/backends.

@@ -79,4 +79,5 @@ open Type_check
 
     The function will return that JSON schema alongside the re-written
     AST. *)
-val rewrite_ast : env -> Frontend.abstract_instantiation -> Yojson.Safe.t -> typed_ast -> Yojson.Safe.t * typed_ast
+val rewrite_ast :
+  Target.target -> env -> Frontend.abstract_instantiation -> Yojson.Safe.t -> typed_ast -> Yojson.Safe.t * typed_ast
