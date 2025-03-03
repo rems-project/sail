@@ -185,13 +185,7 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
   let generated_line = generated_line filename in
   let types_module = filename ^ "_types" in
   let concurrency_monad_params = Monad_params.find_monad_parameters env in
-  let library_style =
-    let open Pretty_print_coq in
-    match (concurrency_monad_params, !opt_coq_lib_style) with
-    | None, None -> BBV
-    | Some _, None -> Stdpp
-    | _, Some style -> style
-  in
+  let library_style = Option.value ~default:Pretty_print_coq.Stdpp !opt_coq_lib_style in
   let base_imports_lib = match library_style with BBV -> "Sail." | Stdpp -> "SailStdpp." in
   let base_imports_default =
     List.map (( ^ ) base_imports_lib)
