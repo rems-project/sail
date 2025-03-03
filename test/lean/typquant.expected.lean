@@ -58,7 +58,7 @@ open option
 
 namespace Functions
 
-/-- Type quantifiers: k_ex737# : Bool, k_ex736# : Bool -/
+/-- Type quantifiers: k_ex761# : Bool, k_ex760# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -188,6 +188,12 @@ def hex_bits_signed2_backwards_matches (tuple_0 : (Nat × String)) : Bool :=
 def test_constr (app_0 : virtaddr) : (BitVec 32) :=
   let .virtaddr addr := app_0
   addr
+
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def termination (n : Nat) : Int :=
+  if (BEq.beq n 0)
+  then 0
+  else (1 +i (termination (n -i 1)))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
