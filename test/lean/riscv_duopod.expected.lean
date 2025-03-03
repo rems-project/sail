@@ -174,7 +174,7 @@ def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
   let b__0 := r
   if (BEq.beq b__0 (0b00000 : (BitVec 5)))
   then (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
-  else (pure (vectorAccess (← readReg Xs) (BitVec.toNat r)))
+  else (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
   if (bne r (0b00000 : (BitVec 5)))
