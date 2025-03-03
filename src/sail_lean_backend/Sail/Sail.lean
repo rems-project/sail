@@ -508,20 +508,17 @@ instance : HOr (BitVec n) (BitVec m) (BitVec n) where
 instance : HXor (BitVec n) (BitVec m) (BitVec n) where
   hXor x y := x ^^^ y
 
-def Int.zpow (m n : Int) : Int := m ^ n.toNat
+instance : HPow Int Int Int where
+  hPow x n := x ^ n.toNat
 
-infixl:65 " +i "   => Int.add
-infixl:65 " -i " => Int.sub
-infixr:80 " ^i "   => Int.pow
-infixl:70 " *i "   => Int.mul
-
-macro_rules | `($x +i $y)   => `(binop% Int.add $x $y)
-macro_rules | `($x -i $y)   => `(binop% Int.sub $x $y)
-macro_rules | `($x ^i $y)   => `(rightact% Int.zpow $x $y)
-macro_rules | `($x *i $y)   => `(binop% Int.mul $x $y)
-
+infixl:65 " +i "   => fun (x y : Int) => x + y
+infixl:65 " -i "   => fun (x y : Int) => x - y
+infixl:65 " ^i "   => fun (x y : Int) => x ^ y
+infixl:65 " *i "   => fun (x y : Int) => x * y
 
 notation:50 x "≤b" y => decide (x ≤ y)
 notation:50 x "<b" y => decide (x < y)
 notation:50 x "≥b" y => decide (x ≥ y)
 notation:50 x ">b" y => decide (x > y)
+
+macro_rules | `(tactic| decreasing_trivial) => `(tactic| simp_all <;> omega)
