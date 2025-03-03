@@ -136,6 +136,9 @@ def baz (_ : Unit) : SailM (BitVec 16) := do
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
+
 end Functions
 open Functions
 

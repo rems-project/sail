@@ -137,6 +137,9 @@ def unif_vector_subrange (i : Nat) (v : (BitVec (8 * i + 8))) : (BitVec 8) :=
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
+
 end Functions
 open Functions
 

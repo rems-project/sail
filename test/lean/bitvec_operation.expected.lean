@@ -187,6 +187,9 @@ def vector_literal (x : Int) (y : Int) : (Vector Int 2) :=
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
+
 end Functions
 open Functions
 
