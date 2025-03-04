@@ -1167,7 +1167,7 @@ let check_duplicate_fields ~error ~field_id fields =
       match IdSet.find_opt id seen with
       | Some seen_id ->
           raise
-            (Reporting.err_general (Hint ("Previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
+            (Reporting.err_general (Hint ("previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
       | None -> IdSet.add id seen
     )
     IdSet.empty fields
@@ -1215,7 +1215,9 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
               | [] -> FP_no_wild
             in
             let fpats = List.map (to_ast_fpat ctx) fpats in
-            check_duplicate_fields ~error:(fun f -> "Duplicate field " ^ f ^ " in struct pattern") ~field_id:fst fpats;
+            check_duplicate_fields
+              ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct pattern" f)
+              ~field_id:fst fpats;
             P_struct (fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
@@ -1308,7 +1310,12 @@ and to_ast_exp ctx exp =
           )
         | P.E_struct_update (exp, fexps) -> (
             match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct_update (to_ast_exp ctx exp, fexps)
+            | Some fexps ->
+                check_duplicate_fields
+                  ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct update" f)
+                  ~field_id:(fun (FE_aux (FE_fexp (id, _), _)) -> id)
+                  fexps;
+                E_struct_update (to_ast_exp ctx exp, fexps)
             | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
           )
         | P.E_field (exp, field) -> (
@@ -1639,7 +1646,7 @@ let check_duplicate_enum_ids ids =
             raise
               (Reporting.err_general
                  (Hint ("previous occurence here", previous, l))
-                 (Printf.sprintf "Enumeration member %s occurs twice in enum declaration" (string_of_id id))
+                 (Printf.sprintf "Enumeration member '%s' occurs twice in enum declaration" (string_of_id id))
               )
         | None -> Bindings.add id (id_loc id) seen
       )
