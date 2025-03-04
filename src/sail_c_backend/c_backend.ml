@@ -2245,6 +2245,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     let ctx = initial_ctx env effect_info in
     Jibc.compile_ast ctx ast
 
+  let rec c_ast_registers ~early = function
+    | CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot) :: ast
+      when early = Option.is_some (get_def_attribute "early_init" def_annot) ->
+        (id, ctyp, instrs) :: c_ast_registers ~early ast
+    | _ :: ast -> c_ast_registers ~early ast
+    | [] -> []
+
   let compile_ast env effect_info basename ast =
     try
       let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2309,7 +2316,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
       let finish cdefs = List.map sgen_finish (List.filter is_cdef_finish cdefs) in
 
-      let regs = c_ast_registers cdefs in
+      let early_regs = c_ast_registers ~early:true cdefs in
+      let regs = c_ast_registers ~early:false cdefs in
 
       let register_init_clear (id, ctyp, instrs) =
         if is_stack_ctyp ctyp then (List.map (sgen_instr (mk_id "reg") ctx) instrs, [])
@@ -2326,7 +2334,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         separate hardline
           (List.map string
              ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
-             @ fst exn_boilerplate @ startup cdefs @ letbind_initializers
+             @ fst exn_boilerplate
+             @ List.concat (List.map (fun r -> fst (register_init_clear r)) early_regs)
+             @ startup cdefs @ letbind_initializers
              @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
              @ ( if regs = [] then []
                  else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))]
@@ -2344,8 +2354,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         separate hardline
           (List.map string
              ([Printf.sprintf "%svoid model_fini(void)" (static ()); "{"]
-             @ letbind_finalizers
              @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
+             @ letbind_finalizers
+             @ List.concat (List.map (fun r -> snd (register_init_clear r)) early_regs)
              @ finish cdefs @ ["  cleanup_rts();"] @ snd exn_boilerplate @ ["}"]
              )
           )

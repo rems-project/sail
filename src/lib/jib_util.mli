@@ -226,5 +226,3 @@ val cdef_map_cval : (cval -> cval) -> cdef -> cdef
 
 (** Map over each instruction in a cdef using concatmap_instr *)
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
-
-val c_ast_registers : cdef list -> (id * ctyp * instr list) list

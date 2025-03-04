@@ -1134,11 +1134,6 @@ let cdef_ctyps (CDEF_aux (aux, _)) =
       |> CTSet.union (instrs_ctyps instrs)
   | CDEF_pragma (_, _) -> CTSet.empty
 
-let rec c_ast_registers = function
-  | CDEF_aux (CDEF_register (id, ctyp, instrs), _) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
-  | _ :: ast -> c_ast_registers ast
-  | [] -> []
-
 let instr_split_at f =
   let rec instr_split_at' f before = function
     | [] -> (List.rev before, [])
