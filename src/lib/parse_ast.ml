@@ -364,6 +364,7 @@ and mapcl_aux =
   | MCL_forwards_deprecated of mpexp * exp
   | MCL_forwards of pexp
   | MCL_backwards of pexp
+  | MCL_when of mapcl * exp
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)

@@ -1846,14 +1846,39 @@ let pexp_of_mpexp (MPat_aux (aux, annot)) exp =
   | MPat_pat mpat -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
   | MPat_when (mpat, guard) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
 
-let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
-  match mapcl with
+let apply_when_guard guard (MCL_aux (mcl, annot)) =
+  match mcl with
+  | MCL_bidir (MPat_aux (MPat_pat mpat1, pexp_annot1), MPat_aux (MPat_pat mpat2, pexp_annot2)) ->
+      MCL_aux
+        ( MCL_bidir (MPat_aux (MPat_when (mpat1, guard), pexp_annot1), MPat_aux (MPat_when (mpat2, guard), pexp_annot2)),
+          annot
+        )
+  | MCL_forwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_forwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_backwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_backwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_bidir (MPat_aux (MPat_when (_, if_guard), _), _)
+  | MCL_bidir (_, MPat_aux (MPat_when (_, if_guard), _))
+  | MCL_forwards (Pat_aux (Pat_when (_, if_guard, _), _))
+  | MCL_backwards (Pat_aux (Pat_when (_, if_guard, _), _)) ->
+      raise
+        (Reporting.err_general
+           (Hint ("'if' clause here", exp_loc if_guard, exp_loc guard))
+           "Mapping clause has both a 'when' guard and an 'if' clause"
+        )
+
+let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mcl, l)) =
+  match mcl with
   | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
-  | P.MCL_doc (doc_comment, mcl) -> begin
+  | P.MCL_doc (doc_comment, mcl) -> (
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
       | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
-    end
+    )
+  | P.MCL_when (mcl, guard) ->
+      let mcl = to_ast_mapcl doc attrs ctx mcl in
+      let guard = to_ast_exp ctx guard in
+      apply_when_guard guard mcl
   | P.MCL_bidir (mpexp1, mpexp2) ->
       MCL_aux
         (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l (), empty_uannot))
