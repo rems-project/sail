@@ -214,7 +214,7 @@ let set_syntax_deprecated l =
 /*Terminals with no content*/
 
 %token And As Assert Bitzero Bitone By Match Config Clause Dec Default Effect End Op
-%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast
+%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast When
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
@@ -1175,6 +1175,12 @@ mapcl:
     { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; mcl = mapcl
     { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
+  | mcl = mapcl0
+    { mcl }
+  | mcl = mapcl0; When; guard=exp
+    { MCL_aux (MCL_when (mcl, guard), loc $startpos(mcl) $endpos(guard)) }
+
+mapcl0:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
   | mpexp EqGt exp

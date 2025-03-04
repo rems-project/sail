@@ -110,6 +110,7 @@ let kw_table =
      ("union",                   (fun _ -> Union));
      ("newtype",                 (fun _ -> Newtype));
      ("with",                    (fun _ -> With));
+     ("when",                    (fun _ -> When));
      ("val",                     (fun _ -> Val));
      ("outcome",                 (fun _ -> Outcome));
      ("instantiation",           (fun _ -> Instantiation));
