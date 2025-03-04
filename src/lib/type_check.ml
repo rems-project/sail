@@ -3842,12 +3842,14 @@ and infer_vector_update l env v n exp =
                 mk_exp ~loc:l (E_app (Id_aux (update_name, field_id_loc), [v; exp]))
             | _ -> typ_error l "Vector update could not be interpreted as a bitfield update"
           )
-          v updates
+          v (List.rev updates)
       in
       infer_exp env update_exp
   | _ ->
       let update_exp =
-        List.fold_left (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp]))) v updates
+        List.fold_left
+          (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp])))
+          v (List.rev updates)
       in
       infer_exp env update_exp
 

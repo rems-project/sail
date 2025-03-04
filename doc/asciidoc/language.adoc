@@ -1082,6 +1082,9 @@ using the field names rather than numeric indices:
 
 sail::bitfield_update_example[from=bitf,type=function]
 
+In the case of overlapping fields, the vector update notion will
+update the fields in order from left to right.
+
 Older versions of Sail did not guarantee the underlying representation
 of the bitfield (because it tried to do clever things to optimise
 them). This meant that bitfields had to be accessed using getter and
