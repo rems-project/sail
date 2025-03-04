@@ -2837,11 +2837,10 @@ module Make (C : CONFIG) = struct
         let cdef = visit_cdef (new static_visitor statics) cdef in
         List.rev_map
           (fun (l, ctyp, id, vl_opt) ->
+            let annot = mk_def_annot l () |> add_def_attribute l "early_init" None in
             match vl_opt with
-            | None -> CDEF_aux (CDEF_register (id, ctyp, []), mk_def_annot l ())
-            | Some vl ->
-                CDEF_aux
-                  (CDEF_register (id, ctyp, [icopy l (CL_id (name id, ctyp)) (V_lit (vl, ctyp))]), mk_def_annot l ())
+            | None -> CDEF_aux (CDEF_register (id, ctyp, []), annot)
+            | Some vl -> CDEF_aux (CDEF_register (id, ctyp, [icopy l (CL_id (name id, ctyp)) (V_lit (vl, ctyp))]), annot)
           )
           !statics
         @ [cdef]
