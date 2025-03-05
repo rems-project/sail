@@ -358,13 +358,22 @@ val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 (** Use the pattern completeness checker to check completeness of a
    list of function clauses. This takes care of setting up the
    environment in the correct way. The type passed is the type of the
-   function (Typ_fn), and the environment should be that attached to
-   either the SD_funcl clause or the FD_function clause. Note that
-   this is only exposed so that it can be used during descattering to
-   check completeness of scattered functions, and should not be called
-   otherwise. *)
+   function ([Typ_fn]), and the environment should be that attached to
+   either the [SD_funcl] clause or the [FD_function] clause.
+
+   If the optional [global_env] option is used, then information about
+   other types will be taken from the global environment - for example
+   this can be used to provide a view of all the enumeration clauses
+   of a scattered enum, whereas the function local environment would
+   contain only those imported before the final clause. Furthermore,
+   all type definitions will be considered as closed. *)
 val check_funcls_complete :
-  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * ('a def_annot -> 'a def_annot)
+  ?global_env:Env.t ->
+  Parse_ast.l ->
+  Env.t ->
+  tannot funcl list ->
+  typ ->
+  tannot funcl list * ('a def_annot -> 'a def_annot)
 
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
