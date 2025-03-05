@@ -450,7 +450,8 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+  let opt_parens doc = if need_parens then parens doc else doc in
   match p with
   | P_wild -> underscore
   | P_lit lit when in_vector -> doc_vec_lit lit
@@ -469,7 +470,12 @@ let rec doc_pat ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) 
   | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
-      string "." ^^ doc_id_ctor (fixup_match_id cons) ^^ space ^^ separate_map (string ", ") doc_pat pats
+      opt_parens
+        (string "."
+        ^^ doc_id_ctor (fixup_match_id cons)
+        ^^ space
+        ^^ separate_map (string ", ") (doc_pat ~need_parens:true) pats
+        )
   | P_var (p, _) -> doc_pat p
   | P_as (pat, id) -> doc_pat pat
   | P_struct (pats, _) ->
