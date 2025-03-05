@@ -1205,8 +1205,13 @@ let doc_instantiations ctx env =
         )
       ^^ hardline
 
-let main_function_stub has_registers =
-  let main_call = if has_registers then "(sail_model_init >=> sail_main)" else "sail_main" in
+let main_function_stub effect_info has_registers =
+  let open Effects in
+  let main_function =
+    if Option.fold ~none:false ~some:effectful (Bindings.find_opt (mk_id "main") effect_info.functions) then "sail_main"
+    else "(λ() ↦ (pure (sail_main ()) : SailM Unit))"
+  in
+  let main_call = if has_registers then Printf.sprintf "(sail_model_init >=> %s)" main_function else main_function in
   nest 2
     (separate hardline
        [
@@ -1254,7 +1259,9 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let instantiations = doc_instantiations ctx env in
   let types, fundefs = doc_defs ctx defs in
   let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n" in
-  let main_function = if !the_main_function_has_been_seen then main_function_stub has_registers else empty in
+  let main_function =
+    if !the_main_function_has_been_seen then main_function_stub effect_info has_registers else empty
+  in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
   print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
   print funcs_file (opens ^^ hardline ^^ fundefs ^^ string "open Functions\n\n" ^^ main_function);
