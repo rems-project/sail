@@ -4579,9 +4579,15 @@ let check_termination_measure_decl env def_annot (id, pat, exp) =
   let tpat, texp = check_termination_measure env arg_typs pat exp in
   DEF_aux (DEF_measure (id, tpat, texp), def_annot)
 
-let check_funcls_complete l env funcls typ =
+let check_funcls_complete ?global_env l env funcls typ =
   let typ_arg, _, env = bind_funcl_arg_typ l env typ in
-  let ctx = pattern_completeness_ctx env in
+  let ctx =
+    match global_env with
+    | None -> pattern_completeness_ctx env
+    | Some genv ->
+        let ctx = pattern_completeness_ctx genv in
+        { ctx with constraints = Env.get_constraints env; is_open = (fun _ -> false) }
+  in
   match PC.is_complete_funcls_wildcarded ~keyword:"function" l ctx funcls typ_arg with
   | Some funcls -> (funcls, add_def_attribute (gen_loc l) "complete" None)
   | None -> (funcls, add_def_attribute (gen_loc l) "incomplete" None)
