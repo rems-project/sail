@@ -74,14 +74,26 @@ def charToHex (c : Char) : BitVec 4 :=
   | 'a' => 10 | 'b' => 11 | 'c' => 12 | 'd' => 13
   | 'e' => 14 | 'f' => 15 | _ => 0
 
-def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
-  if h : n < 4 then BitVec.zero n else
-    let bv := parse_hex_bits (n-4) (str.drop 1)
-    let c := str.get! ⟨0⟩ |> charToHex
-    BitVec.append c bv |>.cast (by omega)
+def round4 (n : Nat) := ((n - 1) / 4) * 4 + 4
 
-def valid_hex_bits (n : Nat) (str : String) : Bool := str.length = n ∧ str.all fun x =>
-  x.toLower ∈ ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+def parse_hex_bits_digits (n : Nat) (str : String) : BitVec n :=
+  let len := str.length
+  if h : n < 4 || len = 0 then BitVec.zero n else
+    let bv := parse_hex_bits_digits (n-4) (str.take (len-1))
+    let c := str.get! ⟨len-1⟩ |> charToHex
+    BitVec.append bv c |>.cast (by simp_all)
+decreasing_by simp_all <;> omega
+
+def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
+  let bv := parse_hex_bits_digits (round4 n) (str.drop 2)
+  bv.setWidth n
+
+def valid_hex_bits (n : Nat) (str : String) : Bool :=
+  if str.length < 2 then false else
+  let str := str.drop 2
+  str.all fun x => x.toLower ∈
+    ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'] &&
+  2 ^ n > (parse_hex_bits_digits (round4 n) str).toNat
 
 def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv <<< sh
