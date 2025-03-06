@@ -87,7 +87,6 @@ type ctx = {
   registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
-  unit_test_ids : IdSet.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;

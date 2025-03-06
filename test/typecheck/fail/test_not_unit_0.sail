@@ -1,5 +1,7 @@
 default Order dec
 
+$include <prelude.sail>
+
 $[test]
 function test_good() -> unit = {
   print_endline("test_good");
