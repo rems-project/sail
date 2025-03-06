@@ -7,6 +7,8 @@ def sailTryCatch (e : SailM α) (h : exception → SailM α) : SailM α := PreSa
 
 def sailThrow (e : exception) : SailM α := PreSail.sailThrow e
 
+abbrev undefined_unit (_ : Unit) : SailM Unit := PreSail.undefined_unit ()
+
 abbrev undefined_bit (_ : Unit) : SailM (BitVec 1) := PreSail.undefined_bit ()
 
 abbrev undefined_bool (_ : Unit) : SailM Bool := PreSail.undefined_bool ()
