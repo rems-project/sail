@@ -1249,7 +1249,7 @@ let can_be_undefined ~at:l env typ =
     | Typ_fn _ | Typ_bidir _ | Typ_exist _ | Typ_var _ -> false
     | Typ_id (Id_aux (Id name, _) as id) ->
         name = "bool" || name = "bit" || name = "nat" || name = "int" || name = "real" || name = "string"
-        || Env.is_bitfield id env || Env.is_user_undefined id env
+        || name = "unit" || Env.is_bitfield id env || Env.is_user_undefined id env
     | Typ_id _ -> false
     | Typ_app ((Id_aux (Id name, _) as id), args) ->
         (name = "bitvector" || name = "vector" || name = "range" || Env.is_user_undefined id env)

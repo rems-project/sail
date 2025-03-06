@@ -325,6 +325,8 @@ def choose (p : Primitive) : PreSailM RegisterType c ue p.reflect :=
   modifyGet
     (fun σ => (c.choose _ σ.choiceState, { σ with choiceState := c.nextState p σ.choiceState }))
 
+def undefined_unit (_ : Unit) : PreSailM RegisterType c ue Unit := pure ()
+
 def undefined_bit (_ : Unit) : PreSailM RegisterType c ue (BitVec 1) :=
   choose .bit
 
