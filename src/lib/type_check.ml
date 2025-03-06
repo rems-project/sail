@@ -4594,6 +4594,15 @@ let check_funcls_complete ?global_env l env funcls typ =
 
 let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
 
+let check_test_attribute def_annot typ =
+  if Option.is_some (get_def_attribute "test" def_annot) then (
+    match typ with
+    | Typ_aux (Typ_fn ([arg], ret), _) when is_unit_typ arg && is_unit_typ ret -> ()
+    | _ ->
+        Reporting.err_general def_annot.loc "Functions with the $[test] attribute must have type 'unit -> unit'"
+        |> raise
+  )
+
 let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
   let id =
     match
@@ -4657,20 +4666,21 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
         let err_l = Option.fold ~none:l ~some:(fun val_l -> Hint ("val here", val_l, l)) have_val_spec in
         typ_error err_l "function does not have a function type"
   in
-  begin
-    match have_val_spec with
-    | Some vs_l -> check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt
-    | None -> ()
-  end;
-  (* Check $[test] functions have type unit -> unit. *)
-  (* TODO: Does the annotation go on the type declaration or the function definition? *)
-  begin
-    if Option.is_some (get_def_attribute "test" def_annot) then (
-      match (vtyp_args, vtyp_ret) with
-      | [arg], ret when is_unit_typ arg && is_unit_typ ret -> ()
-      | _ -> typ_error l "$[test] functions must have type: unit -> unit"
+
+  (* If we have a val_spec, check that any annotations on the function are consistent *)
+  ( match have_val_spec with
+  | Some vs_l -> (
+      check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt;
+      match get_def_attribute "test" def_annot with
+      | Some (l, _) ->
+          "Function with separate val prototype has a $[test] attribute, it should be attached there instead."
+          |> Reporting.err_general (Hint ("val declaration here", vs_l, l))
+          |> raise
+      | None -> ()
     )
-  end;
+  | None -> check_test_attribute def_annot typ
+  );
+
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let funcl_env =
     if Option.is_some have_val_spec then Env.add_typquant l quant env
@@ -4703,7 +4713,7 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
          then (funcls, fun attrs -> attrs)
          else check_funcls_complete l funcl_env funcls typ
        in
-       let def_annot = fix_body_visibility (update_attr def_annot) in
+       let def_annot = fix_body_visibility (update_attr def_annot) |> remove_def_attribute "test" in
        DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
       )
   in
@@ -4777,6 +4787,7 @@ let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
         (* !opt_expand_valspec controls whether the actual valspec in
            the AST is expanded, the val_spec type stored in the
            environment is always expanded and uses typq' and typ' *)
+        check_test_attribute def_annot typ;
         let typq, typ = if !opt_expand_valspec then (typq', typ') else (typq, typ) in
         let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts) in
         (vs, id, typq', typ', env)

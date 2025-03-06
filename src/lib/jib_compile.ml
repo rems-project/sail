@@ -131,7 +131,6 @@ type ctx = {
   registers : ctyp Bindings.t;
   letbinds : int list;
   letbind_ids : IdSet.t;
-  unit_test_ids : IdSet.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;
@@ -182,7 +181,6 @@ let initial_ctx ?for_target env effect_info =
     registers = Bindings.empty;
     letbinds = [];
     letbind_ids = IdSet.empty;
-    unit_test_ids = IdSet.empty;
     no_raw = false;
     no_static = false;
     coverage_override = true;
@@ -2806,14 +2804,15 @@ module Make (C : CONFIG) = struct
     (if reverse then List.rev ctype_defs else ctype_defs) @ cdefs
 
   let unit_tests_of_ast ast =
-    let unit_tests_of_def = function
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), def_annot)
-        when Option.is_some (get_def_attribute "test" def_annot) ->
-          IdSet.singleton id
-      | _ -> IdSet.empty
-    in
-    let unit_tests_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map unit_tests_of_def defs) in
-    unit_tests_of_defs ast.defs |> IdSet.elements
+    List.fold_left
+      (fun ids -> function
+        | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), def_annot)
+          when Option.is_some (get_def_attribute "test" def_annot) ->
+            IdSet.add id ids
+        | _ -> ids
+      )
+      IdSet.empty ast.defs
+    |> IdSet.elements
 
   let toplevel_lets_of_ast ast =
     let toplevel_lets_of_def = function
@@ -2864,10 +2863,10 @@ module Make (C : CONFIG) = struct
     let module G = Graph.Make (Callgraph.Node) in
     let g = Callgraph.graph_of_ast ast in
     let module NodeSet = Set.Make (Callgraph.Node) in
-    (* Get the list of unit tests (functions with $[test]). We can't do this in
-       compile_def because they would have already been dead-code elimintate by then. *)
+    (* Get the list of unit tests (valspecs with $[test]), so we can
+       add them to the list of roots to avoid pruning them as
+       dead-code. *)
     let unit_tests = unit_tests_of_ast ast in
-    let ctx = { ctx with unit_test_ids = unit_tests |> IdSet.of_list } in
 
     let roots =
       Specialize.get_initial_calls () @ unit_tests |> List.map (fun id -> Callgraph.Function id) |> NodeSet.of_list

@@ -2252,6 +2252,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | _ :: ast -> c_ast_registers ~early ast
     | [] -> []
 
+  let get_unit_tests cdefs =
+    List.fold_left
+      (fun ids -> function
+        | CDEF_aux (CDEF_val (id, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
+            IdSet.add id ids
+        | _ -> ids
+      )
+      IdSet.empty cdefs
+    |> IdSet.elements
+
   let compile_ast env effect_info basename ast =
     try
       let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2378,7 +2388,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
-      let model_default_main =
+      let model_main =
         [
           Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
           "{";
@@ -2393,27 +2403,25 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
+      let unit_tests = get_unit_tests cdefs in
+
       (* TODO: Formatting here isn't quite right. What are the arguments to jump? *)
       let unit_test_functions =
-        string "unit (*const SAIL_TESTS[])(unit) = {"
-        ^^ hardline
-        ^^ jump 2 2
-             (IdSet.fold (fun id acc -> codegen_function_id id ^^ string "," ^^ hardline ^^ acc) ctx.unit_test_ids empty
-             ^^ string "0" ^^ hardline
-             )
-        ^^ string "};"
+        ["unit (*const SAIL_TESTS[])(unit) = {"]
+        @ Util.map_last
+            (fun is_last id -> sprintf "  %s%s" (sgen_function_id id) (if is_last then "" else ","))
+            unit_tests
+        @ ["};"]
+        |> separate_map hardline string
       in
 
       let unit_test_names =
-        string "const char* const SAIL_TEST_NAMES[] = {"
-        ^^ hardline
-        ^^ jump 2 2
-             (IdSet.fold
-                (fun id acc -> string ("\"" ^ String.escaped (string_of_id id) ^ "\"") ^^ string "," ^^ hardline ^^ acc)
-                ctx.unit_test_ids empty
-             ^^ string "0" ^^ hardline
-             )
-        ^^ string "};"
+        ["const char* const SAIL_TEST_NAMES[] = {"]
+        @ Util.map_last
+            (fun is_last id -> sprintf "  \"%s\"%s" (String.escaped (string_of_id id)) (if is_last then "" else ","))
+            unit_tests
+        @ ["};"]
+        |> separate_map hardline string
       in
 
       (* A simple function to run the unit tests. It isn't called from anywhere
@@ -2435,7 +2443,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
-      let model_main =
+      let actual_main =
         let extra_pre =
           List.filter_map
             (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
@@ -2478,10 +2486,10 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           ^^ (if Config.generate_header then hardline ^^ Printf.ksprintf string "#include \"%s.h\"" basename else empty)
           ^^ hlhl ^^ docs ^^ hlhl
           ^^ ( if not Config.no_rts then
-                 model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
+                 model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_main ^^ hlhl
                else empty
              )
-          ^^ model_main ^^ hlhl ^^ unit_test_functions ^^ hlhl ^^ unit_test_names ^^ hlhl ^^ model_test ^^ hardline
+          ^^ actual_main ^^ hlhl ^^ unit_test_functions ^^ hlhl ^^ unit_test_names ^^ hlhl ^^ model_test ^^ hardline
           ^^ end_extern_cpp ^^ hardline
           )
       )
