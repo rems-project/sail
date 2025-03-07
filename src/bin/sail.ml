@@ -259,7 +259,6 @@ let rec options =
         Arg.String (fun file -> opt_output_schema_file := Some file),
         "<file> output configuration schema"
       );
-      ("-abstract_types", Arg.Set Initial_check.opt_abstract_types, " (experimental) allow abstract types");
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
         Arg.String (fun suffix -> opt_format_backup := Some suffix),

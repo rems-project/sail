@@ -2,8 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-$option --abstract-types
-
 $iftarget c
 $c_in_main sail_config_set_file("config_abstract_bool.json");
 $c_in_main sail_set_abstract_have_ext();

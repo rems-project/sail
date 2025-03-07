@@ -1,6 +1,5 @@
 default Order dec
 
-$option --abstract-types
 $option --config ../typecheck/pass/abstract_config.json
 
 type xlen : Int = config arch.xlen

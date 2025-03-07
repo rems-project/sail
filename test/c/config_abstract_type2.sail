@@ -1,8 +1,6 @@
 default Order dec
 $include <prelude.sail>
 
-$option --abstract-types
-
 type xlen : Int = config arch.xlen
 
 constraint xlen >= 0

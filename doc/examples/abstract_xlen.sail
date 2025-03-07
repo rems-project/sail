@@ -1,8 +1,6 @@
 default Order dec
 $include <prelude.sail>
 
-$option --abstract-types
-
 $span start XLEN
 type xlen : Int
 
