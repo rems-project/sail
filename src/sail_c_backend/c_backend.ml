@@ -2309,7 +2309,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let preamble in_header =
         separate hardline
-          ((if Config.no_lib then [] else [string "#include \"sail.h\""])
+          ((if Config.no_lib then [] else [string "#include \"sail.h\""; string "#include \"sail_config.h\""])
           @ (if Config.no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
           @ coverage_include
           @ ( if in_header then List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.header_includes

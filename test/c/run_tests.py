@@ -38,9 +38,6 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                if basename.startswith('config'):
-                    sail_opts += ' --c-include sail_config.h'
-                    c_opts += ' \'{}\'/lib/json/*.c -I \'{}\'/lib/json'.format(sail_dir, sail_dir)
                 step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename),
