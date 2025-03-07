@@ -3500,9 +3500,12 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Nexp_aux (Nexp_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
       | _ -> crule check_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp)) (atom_typ nexp)
     end
-  | E_constraint nc ->
+  | E_constraint nc -> begin
       Env.wf_constraint ~at:l env nc;
-      crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
+      match nc with
+      | NC_aux (NC_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_constraint nc) (atom_bool_typ nc)
+      | _ -> crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
+    end
   | E_field (exp, field) -> begin
       let inferred_exp = irule infer_exp env exp in
       match Env.expand_synonyms env (typ_of inferred_exp) with

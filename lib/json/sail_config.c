@@ -87,7 +87,12 @@ sail_config_json sail_config_get(size_t n, const char *key[])
     if (cJSON_IsObject(json)) {
       json = cJSON_GetObjectItemCaseSensitive(json, key[i]);
     } else {
-      sail_assert(false, "Failed to access config item");
+      fprintf(stderr, "Failed to access configuration item: '");
+      for (int j = 0; j < n; j++) {
+        fprintf(stderr, ".%s", key[i]);
+      }
+      fprintf(stderr, "'\n");
+      exit(EXIT_FAILURE);
     }
   }
 

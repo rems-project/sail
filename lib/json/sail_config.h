@@ -67,7 +67,7 @@ void sail_config_set_file(const char *path);
 void sail_config_cleanup(void);
 
 /*
- * Get the JSON corresponding to some key
+ * Get the JSON corresponding to some key.
  */
 sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
 
