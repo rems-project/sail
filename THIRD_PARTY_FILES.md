@@ -16,10 +16,10 @@ https://github.com/asciidoctor/asciidoctor
 
 The following files are from cJSON https://github.com/DaveGamble/cJSON
 
-| License      | Files                   | Source |
-| ------------ | ----------------------- | ------ |
-| MIT          | lib/json/cJSON.c       | cJSON  |
-| MIT          | lib/json/cJSON.h       | cJSON  |
+| License      | Files             | Source |
+| ------------ | ----------------- | ------ |
+| MIT          | lib/cJSON.c       | cJSON  |
+| MIT          | lib/cJSON.h       | cJSON  |
 
 CIL
 ===
