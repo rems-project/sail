@@ -2845,94 +2845,149 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
           let eq_pp =
             if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
               let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
-              let class_pp, proof_start, countable_pp =
-                match global.library_style with
-                | BBV ->
-                    ( string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)",
-                      string "refine (Decidable_eq_from_dec (fun x y => _)).",
-                      empty
-                    )
-                | Stdpp ->
-                    let countable_reqs =
-                      List.filter_map
-                        (function
-                          | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
-                              Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
-                          | _ -> None
+              match global.library_style with
+              | BBV ->
+                  string "#[export]" ^^ hardline
+                  ^^ group
+                       (nest 2
+                          (flow (break 1)
+                             (((string "Instance Decidable_eq_" ^^ id_pp) :: q_pps)
+                             @ eq_req_pps
+                             @ [
+                                 colon;
+                                 string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)" ^^ string ".";
+                               ]
+                             )
                           )
-                        (quant_items typq)
-                    in
-                    let type_for_class = if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp in
-                    let encode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
-                      separate space
-                        [
-                          doc_id_ctor bare_ctxt id;
-                          string "x'";
-                          string "=>";
-                          string ("encode (" ^ string_of_int i ^ ", encode x')");
-                        ]
-                    in
-                    let decode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
-                      separate space
-                        [
-                          string ("Some (" ^ string_of_int i ^ ", x') =>");
-                          doc_id_ctor bare_ctxt id;
-                          string "<$> decode x'";
-                        ]
-                    in
-                    ( string "EqDecision " ^^ type_for_class,
-                      string "unfold EqDecision, Decision.",
-                      separate hardline
-                        [
-                          empty;
-                          string "#[export]";
-                          group
-                            (nest 2
-                               (flow (break 1)
-                                  ([string "Instance Countable_" ^^ id_pp]
-                                  @ q_pps @ countable_reqs
-                                  @ [colon; string "Countable"; type_for_class ^^ string "."]
-                                  )
-                               )
-                            );
-                          string "refine {|";
-                          group
-                            (nest 2
-                               (string "  encode x := match x with"
-                               ^^ ifflat space (break 1 ^^ string "| ")
-                               ^^ separate (break 1 ^^ string "| ") (List.mapi encode_arm ar)
-                               ^/^ string "end;"
-                               )
-                            );
-                          group
-                            (nest 2
-                               (string "  decode x := match decode x with"
-                               ^^ ifflat space (break 1 ^^ string "| ")
-                               ^^ separate (break 1 ^^ string "| ") (List.mapi decode_arm ar)
-                               ^/^ string "| _ => None" ^/^ string "end"
-                               )
-                            );
-                          string "|}.";
-                          string "abstract (intros ["
-                          ^^ separate_map (string "|") (fun _ -> string "x") ar
-                          ^^ string "]; rewrite !decode_encode; reflexivity).";
-                          string "Defined.";
-                        ]
-                    )
-              in
-              string "#[export]" ^^ hardline
-              ^^ group
-                   (nest 2
-                      (flow (break 1)
-                         (((string "Instance Decidable_eq_" ^^ id_pp) :: q_pps)
-                         @ eq_req_pps
-                         @ [colon; class_pp ^^ string "."]
-                         )
-                      )
-                   )
-              ^^ hardline ^^ proof_start ^^ hardline
-              ^^ string "decide equality; refine (generic_dec _ _)."
-              ^^ hardline ^^ string "Defined." ^^ countable_pp ^^ hardline
+                       )
+                  ^^ hardline
+                  ^^ string "refine (Decidable_eq_from_dec (fun x y => _))."
+                  ^^ hardline
+                  ^^ string "decide equality; refine (generic_dec _ _)."
+                  ^^ hardline ^^ string "Defined." ^^ hardline
+              | Stdpp ->
+                  let countable_reqs =
+                    List.filter_map
+                      (function
+                        | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                            Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
+                        | _ -> None
+                        )
+                      (quant_items typq)
+                  in
+                  let type_for_class = if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp in
+                  let encode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
+                    separate space
+                      [
+                        doc_id_ctor bare_ctxt id;
+                        string "x'";
+                        string "=>";
+                        string ("encode (" ^ string_of_int i ^ ", encode x')");
+                      ]
+                  in
+                  let decode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
+                    separate space
+                      [
+                        string ("Some (" ^ string_of_int i ^ ", x') =>");
+                        doc_id_ctor bare_ctxt id;
+                        string "<$> decode x'";
+                      ]
+                  in
+                  let encode_id_pp = string "sail_" ^^ id_pp ^^ string "_encode" in
+                  let decode_id_pp = string "sail_" ^^ id_pp ^^ string "_decode" in
+                  let decode_encode_pp = string "sail_" ^^ id_pp ^^ string "_decode_encode" in
+                  let class_pp = string "EqDecision " ^^ type_for_class in
+                  separate hardline
+                    [
+                      empty;
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              ([string "Definition"; encode_id_pp]
+                              @ q_pps @ countable_reqs
+                              @ [
+                                  parens (string "x : " ^^ type_for_class);
+                                  string ":= match x with";
+                                  ifflat empty (string "| ")
+                                  ^^ separate (break 1 ^^ string "| ") (List.mapi encode_arm ar);
+                                  string "end.";
+                                ]
+                              )
+                           )
+                        );
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              ([string "Definition"; decode_id_pp]
+                              @ q_pps @ countable_reqs
+                              @ [
+                                  string "x";
+                                  string ": option " ^^ type_for_class;
+                                  string ":= match decode x with";
+                                  ifflat empty (string "| ")
+                                  ^^ separate (break 1 ^^ string "| ") (List.mapi decode_arm ar)
+                                  ^/^ string "| _ => None";
+                                  string "end.";
+                                ]
+                              )
+                           )
+                        );
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              ([string "Lemma"; decode_encode_pp]
+                              @ q_pps @ countable_reqs
+                              @ [
+                                  colon;
+                                  string "forall " ^^ parens (string "x : " ^^ type_for_class) ^^ string ",";
+                                  decode_id_pp;
+                                  parens (encode_id_pp ^^ string " x");
+                                  string " = Some x.";
+                                ]
+                              )
+                           )
+                        );
+                      string "Proof.";
+                      string "  unfold " ^^ decode_id_pp ^^ string ", " ^^ encode_id_pp ^^ string ";";
+                      string "  intros ["
+                      ^^ separate_map (string "|") (fun _ -> string "x") ar
+                      ^^ string "]; rewrite !decode_encode; reflexivity.";
+                      string "Qed.";
+                      empty;
+                      string "#[export]";
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              (((string "Instance Decidable_eq_" ^^ id_pp) :: q_pps)
+                              @ countable_reqs
+                              @ [
+                                  colon;
+                                  class_pp ^^ string " :=";
+                                  string "decode_encode_eq_dec";
+                                  encode_id_pp;
+                                  decode_id_pp;
+                                  decode_encode_pp;
+                                  string ".";
+                                ]
+                              )
+                           )
+                        );
+                      empty;
+                      string "#[export]";
+                      group
+                        (nest 2
+                           (flow (break 1)
+                              ([string "Instance Countable_" ^^ id_pp]
+                              @ q_pps @ countable_reqs
+                              @ [colon; string "Countable"; type_for_class ^^ string " := {|"]
+                              )
+                           )
+                        );
+                      string "  encode := " ^^ encode_id_pp ^^ string ";";
+                      string "  decode := " ^^ decode_id_pp ^^ string ";";
+                      string "  decode_encode := " ^^ decode_encode_pp;
+                      string "|}.";
+                    ]
             )
             else empty
           in
@@ -4191,7 +4246,7 @@ end = struct
             ( string "EqDecision T",
               separate hardline
                 [
-                  string "#[export] Instance Countable_register_values {T : Type} `(r : register T) : Countable T.";
+                  string "#[export] Instance Countable_register_values {T : Type} `(r : register T) : Countable T | 100.";
                   string "refine {|";
                   string "  encode := match r in register T return T -> _ with";
                   separate_map hardline
@@ -4221,7 +4276,7 @@ end = struct
         [
           string "#[export] Hint Extern 1 (register _) => assumption : typeclass_instances.";
           string "#[export] Instance Decidable_eq_register_values {T : Type} `(r : register T) : "
-          ^^ class_pp ^^ string " :=";
+          ^^ class_pp ^^ string " | 100 :=";
           string "match r with";
           separate_map hardline
             (fun (typ_id, _typ) ->
@@ -4230,7 +4285,7 @@ end = struct
             )
             type_map;
           string "end.";
-          string "#[export] Instance Inhabited_register_values {T : Type} `(r : register T) : Inhabited T :=";
+          string "#[export] Instance Inhabited_register_values {T : Type} `(r : register T) : Inhabited T | 100 :=";
           string "  match r with";
           separate_map hardline
             (fun (typ_id, _typ) ->
