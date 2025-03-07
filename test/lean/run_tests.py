@@ -45,7 +45,6 @@ skip_selftests = {
     'spc_mappings',
     'concurrency_interface',
     'for_shadow',
-    'list_torture',
     'string_literal_type',
     'cheri_capreg',
     'loop_exception',

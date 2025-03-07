@@ -505,6 +505,9 @@ instance {α α' β : Type u} (x : β × α) [CoeT α x.2 α'] : CoeT (β × α)
 instance {α α' β β' : Type u} (x : α × β) [CoeT α x.1 α'] [CoeT β x.2 β'] : CoeT (α × β) x (α' × β') where
   coe := (x.1, x.2)
 
+instance {α α' : Type u} [∀ x, CoeT α x α'] (xs : List α) : CoeT (List α) xs (List α') where
+  coe := List.map (α := α) (β := α') (fun x => x) xs
+
 instance : HAdd (BitVec n) (BitVec m) (BitVec n) where
   hAdd x y := x + y
 
