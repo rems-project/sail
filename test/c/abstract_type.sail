@@ -1,8 +1,6 @@
 default Order dec
 $include <prelude.sail>
 
-$option --abstract-types
-
 type xlen : Int
 
 constraint xlen in {32, 64}

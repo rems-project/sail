@@ -26,7 +26,7 @@ def test():
             tests[dir] = os.fork()
             if tests[dir] == 0:
                 os.chdir(dir)
-                step('./test.sh')
+                step('./test.sh', name=dir)
                 print_ok(dir)
                 sys.exit()
         results.collect(tests)

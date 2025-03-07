@@ -2655,6 +2655,14 @@ pre.rouge .gs {
 <li><a href="#_preludes_and_default_environment">Preludes and default environment</a></li>
 </ul>
 </li>
+<li><a href="#_model_configuration">Model Configuration</a>
+<ul class="sectlevel2">
+<li><a href="#_json_representation_of_sail_types">JSON representation of Sail types</a></li>
+<li><a href="#_runtime_configuration_with_sail_to_c">Runtime Configuration with Sail to C</a></li>
+<li><a href="#_configurable_abstract_types">Configurable abstract types</a></li>
+<li><a href="#_validating_configurations_with_json_schema">Validating Configurations with JSON Schema</a></li>
+</ul>
+</li>
 <li><a href="#_modular_sail_specifications">Modular Sail Specifications</a>
 <ul class="sectlevel2">
 <li><a href="#_modules">Modules</a></li>
@@ -3552,8 +3560,8 @@ such as C and C++, and more similar to languages like OCaml and Rust,
 everything in Sail is an <em>expression</em> which evaluates to a value. A
 block in Sail is simply a sequence of expressions surrounded by curly
 braces <code>{</code> and <code>}</code>, and separated by semicolons. The value returned by
-a block is the value returned by the last expressions, and likewise
-the type of a block is determined by it&#8217;s final expressions, so
+a block is the value returned by the last expression, and likewise
+the type of a block is determined by its final expression, so
 <code>{&#160;A;&#160;B;&#160;C&#160;}</code>, will evaluate to the value of <code>C</code>
 after evaluating <code>A</code> and <code>B</code> in order. The expressions other than the
 final expression in the block must have type <code>unit</code>, which is
@@ -3829,7 +3837,7 @@ order for decreasing vectors decreases, and the indexing order for
 increasing vectors increases.</p>
 </div>
 <div class="paragraph">
-<p>A vector <code>v</code> can have an index index using
+<p>A vector <code>v</code> can have an index <code>index</code> using
 <code>[v&#160;with&#160;index&#160;=&#160;expression]</code>. Similarly, a
 sub-range of v can be updated using
 <code>[v&#160;with&#160;n&#160;..&#160;m&#160;=&#160;expression]</code> where the
@@ -4496,19 +4504,6 @@ to avoid us having to think about this particular detail.</p>
 </div>
 <div class="sect2">
 <h3 id="_abstract_types">Abstract types</h3>
-<div class="admonitionblock note">
-<table>
-<tr>
-<td class="icon">
-<div class="title">Note</div>
-</td>
-<td class="content">
-This feature is currently experimental and is enabled with the
-<code>--abstract-types</code> flag.
-</td>
-</tr>
-</table>
-</div>
 <div class="paragraph">
 <p>Consider the following problem: We want to specify an architecture
 like RISC-V, which permits both 32-bit and a 64-bit implementations,
@@ -4565,7 +4560,11 @@ concrete value for it during type-checking. This would look like:</p>
 ../examples/abstract_error.sail:4.9-20:
 4 |    X1 = 0xFFFF_FFFF
   |         ^---------^
-  | Failed to prove constraint: 32 == xlen</code></pre>
+  | Failed to prove constraint: 32 == xlen
+  | 
+  | constraint from ../examples/abstract_xlen.sail:10.19-23:
+  | 10 |register X1 : bits(xlen)
+  |    |                   ^--^ This type argument</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -4579,7 +4578,7 @@ so if the above file is called <code>xlen.sail</code>, we could do:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="rouge highlight"><code data-lang="sh">sail xlen.sail <span class="nt">--lem</span> <span class="nt">--abstract-types</span> <span class="nt">--instantiate</span> <span class="nv">xlen</span><span class="o">=</span>32</code></pre>
+<pre class="rouge highlight"><code data-lang="sh">sail xlen.sail <span class="nt">--lem</span> <span class="nt">--instantiate</span> <span class="nv">xlen</span><span class="o">=</span>32</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -5031,7 +5030,7 @@ used to bind type variables. For example:</p>
 
 </span><span class="k">register</span><span class="w"> </span><span class="n">R</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w">
 
-</span><span class="k">val</span><span class="w"> </span><span class="nf">example</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">unit</span><span class="w">
+</span><span class="k">val</span><span class="w"> </span><span class="nf">example</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">unit</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">unit</span><span class="w">
 
 </span><span class="k">function</span><span class="w"> </span><span class="nf">example</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
   </span><span class="k">let</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">int</span><span class="p">(</span><span class="nv">'n</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">get_current_xlen</span><span class="p">()</span><span class="w">
@@ -5045,7 +5044,7 @@ used to bind type variables. For example:</p>
 </div>
 <div class="paragraph">
 <p>You can think of the <code>as int('n)</code> as matching on the return type of
-the <code>get_current_xlen</code> rather than the value, and binding it&#8217;s length
+the <code>get_current_xlen</code> rather than the value, and binding its length
 to a new type variable <code>'n</code>, which we can subsequently use in types
 later in our function. Note that even though we only know if xlen will
 be 32 or 64 at runtime after the call to get_current_xlen, Sail is
@@ -5337,6 +5336,10 @@ using the field names rather than numeric indices:</p>
 </div>
 </div>
 <div class="paragraph">
+<p>In the case of overlapping fields, the vector update notion will
+update the fields in order from left to right.</p>
+</div>
+<div class="paragraph">
 <p>Older versions of Sail did not guarantee the underlying representation
 of the bitfield (because it tried to do clever things to optimise
 them). This meant that bitfields had to be accessed using getter and
@@ -5414,6 +5417,49 @@ the <code>&lt;=_u</code> operator can be defined as:</p>
 </span><span class="k">function</span><span class="w"> </span><span class="nf">operator</span><span class="w"> </span><span class="o">&lt;=_u</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">unsigned</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">unsigned</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code></pre>
 </div>
 </div>
+<div class="paragraph">
+<p>By default, Sail defines the basic arithmetic operators <code>*</code>, <code>\</code>, <code>%</code>,
+<code>+</code>, and <code>-</code>, for integer multiplication, division, modulus, addition,
+and subtraction respectively. The Sail library also overloads addition
+and subtraction for bitvectors, performing two&#8217;s complement arithmetic
+over bitvectors with matching sizes. Adding a bitvector and an integer
+is also allowed, i.e. <code>0x01 + N</code>. For small bitvectors and large
+integers this is equivalent to adding 1 to the bitvector <code>N</code> times,
+wrapping each time the value overflows, for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="mh">0xFF</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="p">(</span><span class="mh">0xFF</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">0x01</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">0x01</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mh">0x01</span><span class="w">
+</span><span class="c">// Wrapping multiple times:</span><span class="w">
+</span><span class="mb">0b0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="p">((</span><span class="mb">0b0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">((</span><span class="mb">0b1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mb">0b1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mb">0b1</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The comparison operators <code>&lt;</code>, <code>&#8656;</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>!=</code>, and <code>==</code> all
+compare integers. We don&#8217;t define bitvector comparisons by default, as
+bitvectors can be compared as either signed or unsigned. Individual
+ISA specifications may choose to overload these operators or define
+their own as needed.</p>
+</div>
+<div class="paragraph">
+<p>The boolean operators <code>&amp;</code> (logical and) and <code>|</code> (logical or) compare
+boolean values. Note that when applied to booleans they have
+short-circuiting semantics. The standard library overloads these
+operators for bitwise operations on bitvectors of the same length.</p>
+</div>
+<div class="paragraph">
+<p>The exponentiation operator <code>^</code> is slightly special. The Sail parser
+recognises the special case <code>2 ^ x</code> directly and maps that to a
+special <code>pow2(x)</code> function. This is because <code>2 ^ x</code> is the only form
+of exponentiation we permit in numeric types. The <code>^</code> operator can
+otherwise be overloaded by ISA specs as a normal operator.</p>
+</div>
+<div class="paragraph">
+<p>The <code>@</code> operators is used to concatenate bitvectors and generic
+vectors. As demonstrated in the pattern matching section <a href="#_pattern_matching">Pattern matching</a>,
+it can also be used to destructure them. Similarly, the
+cons operator <code>::</code> is used to construct lists (see section <a href="#_the_list_type">The list type</a>).</p>
+</div>
 <div class="sect3">
 <h4 id="_built_in_precedences">Built-in precedences</h4>
 <div class="paragraph">
@@ -5465,9 +5511,15 @@ summarised in the following table.</p>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"></td>
+<td class="tableblock halign-left valign-top"></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>::, @</code></p></td>
+</tr>
+<tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
 <td class="tableblock halign-left valign-top"></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>&lt;, &#8656;, &gt;, &gt;=, !=, =, ==</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>&lt;, &#8656;, &gt;, &gt;=, !=, ==</code></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
@@ -5905,6 +5957,388 @@ have:</p>
 the actual Sail functions are named appropriately for each vendor&#8217;s
 pseudocode. As such each ISA spec written in Sail tends to have its
 own prelude.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_model_configuration">Model Configuration</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Sail includes a configuration system that allows building
+specifications that can be configured at either runtime (if supported
+by the Sail backend in use) or statically at build-time using a set of
+options.</p>
+</div>
+<div class="paragraph">
+<p>From the perspective of the specification author, one uses the
+<code>config</code> construct to include a value in the specification, for
+example:</p>
+</div>
+<div id="conf-example1" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">let</span><span class="w"> </span><span class="n">some_value</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">string</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">foo</span><span class="o">.</span><span class="n">bar</span><span class="p">;</span><span class="w">
+</span><span class="n">print_endline</span><span class="p">(</span><span class="n">some_value</span><span class="p">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The configuration is some key-value store with dot-separated
+hierachical keys, so we access the value stored at <code>foo.bar</code> key as
+some string value. In practice, we use JSON to represent these
+configurations. In this example, the JSON might look something like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+    </span><span class="nl">"foo"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"bar"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"Hello, World!"</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Which when used will cause the specification to print <code>"Hello,
+World!"</code>. If we want to statically apply this configuration (and
+convert the Sail source to OCaml), we could run the following,
+assuming the configration file is called <code>file.json</code> and the Sail file
+containing the above code is <code>file.sail</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="console"><span class="gp">$</span><span class="w"> </span>sail <span class="nt">--ocaml</span> <span class="nt">--config</span> file.json file.sail</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_json_representation_of_sail_types">JSON representation of Sail types</h3>
+<div class="paragraph">
+<p>The following example demonstrates how basic Sail types are
+represented in the JSON configuration file. We can load integers,
+booleans, and strings, all of which correspond directly to the
+equivalent JSON type. Integers are allowed to be arbitrary precision,
+as they are in Sail.</p>
+</div>
+<div id="confbasic-example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">some_string</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">string</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">string_value</span><span class="p">;</span><span class="w">
+  </span><span class="n">print_endline</span><span class="p">(</span><span class="n">some_string</span><span class="p">);</span><span class="w">
+
+  </span><span class="c">// Booleans are represented as JSON booleans</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">some_bool</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">bool_value</span><span class="p">;</span><span class="w">
+  </span><span class="k">if</span><span class="w"> </span><span class="n">some_bool</span><span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">print_endline</span><span class="p">(</span><span class="s">"some_bool is true"</span><span class="p">)</span><span class="w">
+  </span><span class="p">};</span><span class="w">
+
+  </span><span class="c">// Integers are represented as JSON integers</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">some_int</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">int_value</span><span class="p">;</span><span class="w">
+  </span><span class="n">print_int</span><span class="p">(</span><span class="s">"some_int = "</span><span class="p">,</span><span class="w"> </span><span class="n">some_int</span><span class="p">);</span><span class="w">
+
+  </span><span class="c">// Bitvectors have a few allowed representations:</span><span class="w">
+  </span><span class="c">// We can use a JSON list of booleans</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">some_bits1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">bits_value</span><span class="o">.</span><span class="n">one</span><span class="p">;</span><span class="w">
+  </span><span class="n">print_bits</span><span class="p">(</span><span class="s">"some_bits1 = "</span><span class="p">,</span><span class="w"> </span><span class="n">some_bits1</span><span class="p">);</span><span class="w">
+
+  </span><span class="c">// That would be unwieldy for larger bitvectors, so we can</span><span class="w">
+  </span><span class="c">// parse a bitvector from a string with an explicit length.</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">some_bits2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">bits_value</span><span class="o">.</span><span class="n">two</span><span class="p">;</span><span class="w">
+  </span><span class="n">print_bits</span><span class="p">(</span><span class="s">"some_bits2 = "</span><span class="p">,</span><span class="w"> </span><span class="n">some_bits2</span><span class="p">);</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The following JSON can be used to instantiate the above Sail source:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+    </span><span class="nl">"some"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"string_value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"A string value"</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"bool_value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"int_value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">48527836473615487354835566752135643523565426</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"bits_value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+            </span><span class="nl">"one"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="kc">true</span><span class="p">],</span><span class="w">
+            </span><span class="nl">"two"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"len"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="nl">"value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"0xFF"</span><span class="w"> </span><span class="p">}</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note the two permissible representations for bitvectors. First, we can
+represent them as a list of JSON booleans. This representation has the
+advantage of being simple and unambiguous regarding the length of the
+bitvector, but is verbose. Second, we can use a string containing the
+bitvector value formatted as a Sail bitvector literal (so <code>_</code>
+can be used as a separator) with an explicit integer length. If the
+value is shorter than the desired width it will be zero-extended. If
+it is larger then any high bits above the stated width will be ignored
+(care should be taken to avoid this). In addition to <code>0b</code> and <code>0x</code>
+prefixed literals, a decimal value can also be used (also supporting
+<code>_</code> separators), for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w"> </span><span class="nl">"len"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="nl">"value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"1_000_000"</span><span class="w"> </span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>There are some cases where a specification might need many
+configuration options. Consider the case of RISC-V PMP registers,
+where there are up to 64 such registers, and each one might be
+configured differently. To support this, we allow reading sequences of
+JSON values into Sail vectors and lists. For example:</p>
+</div>
+<div id="confvec-example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">some_vector</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">vector</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">json_list</span><span class="p">;</span><span class="w">
+
+  </span><span class="c">// We can also read the configuration value into a Sail list</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">some_list</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">list</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">json_list</span><span class="p">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>with the configuration file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+    </span><span class="nl">"some"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"json_list"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>More complex user defined types can also be read from the
+configuration file. For example, one can read a struct value:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">struct</span><span class="w"> </span><span class="n">my_struct</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">field1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w">
+  </span><span class="n">field2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">string</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="k">function</span><span class="w"> </span><span class="nf">example1</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">my_struct</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">json_struct</span><span class="p">;</span><span class="w">
+  </span><span class="n">print_endline</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">field2</span><span class="p">);</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or a union value:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">union</span><span class="w"> </span><span class="n">my_union</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">Constructor1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w">
+  </span><span class="n">Constructor2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">string</span><span class="p">,</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="k">function</span><span class="w"> </span><span class="nf">example2</span><span class="p">()</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="k">let</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">my_union</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">json_union</span><span class="p">;</span><span class="w">
+  </span><span class="k">match</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="n">Constructor1</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">print_int</span><span class="p">(</span><span class="s">"Got integer "</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">),</span><span class="w">
+    </span><span class="n">Constructor2</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="n">print_endline</span><span class="p">(</span><span class="n">message</span><span class="p">),</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>from the configuration file:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+    </span><span class="nl">"some"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"json_struct"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+            </span><span class="nl">"field1"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">3287589457</span><span class="p">,</span><span class="w">
+            </span><span class="nl">"field2"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"A string value"</span><span class="w">
+        </span><span class="p">},</span><span class="w">
+        </span><span class="nl">"json_union"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+            </span><span class="nl">"Constructor2"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"Another string value"</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A Sail struct is represented as a JSON object with keys and values for
+each field in the struct. There must be a key in the JSON object for
+every field. A Sail union is represented as a JSON object with exactly
+one key/value pair. The key must be the name of a constructor in the
+union, and the value is parsed as the type of the constructor
+argument.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_runtime_configuration_with_sail_to_c">Runtime Configuration with Sail to C</h3>
+<div class="paragraph">
+<p>The runtime configuration functions are included in the
+<code>sail_config.h</code> header in the <code>lib/json</code> subdirectory of the Sail
+distribution. The <code>sail_config_set_file</code> function loads a
+configuration, and should be called before running any code in a
+configurable model. The loaded configuration data can be freed by
+using the <code>sail_config_cleanup</code> function.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="c"><span class="kt">void</span> <span class="nf">sail_config_set_file</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+
+<span class="kt">void</span> <span class="nf">sail_config_cleanup</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configurable_abstract_types">Configurable abstract types</h3>
+<div class="paragraph">
+<p>The <a href="#_abstract_types">Abstract types</a> section we described how to write a type like
+<code>xlen</code> below without providing a concrete value, in such a way that
+the specification is parametric over the choice of <code>xlen</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In practice, we likely want to configure this type to have some
+specific value at runtime. This can be done by associating a
+configuration option with the abstract type as</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">type</span><span class="w"> </span><span class="n">xlen</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">arch</span><span class="o">.</span><span class="n">xlen</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>which could be instantiated using the following configuration JSON</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w"> </span><span class="nl">"arch"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"xlen"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can then create (configurable) bitvector values of length <code>xlen</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">let</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="n">xlen</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">bitvector_value</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In the configuration file, we specify these by using the string
+<code>"xlen"</code> as the length:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w"> </span><span class="nl">"some"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"bitvector_value"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"len"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="s2">"xlen"</span><span class="p">,</span><span class="w"> </span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0xFFFF_FFFF"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_validating_configurations_with_json_schema">Validating Configurations with JSON Schema</h3>
+<div class="paragraph">
+<p>Above, we discussed how JSON values are mapped onto Sail types, but
+some questions remain:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>What happens if the configuration we pass at runtime contains impossible values?</p>
+</li>
+<li>
+<p>Are all Sail types representable in the JSON configuration?</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Note that what we are defining here will necessarily be a weaker
+notion (i.e. more permissive in the configurations that are possible)
+than one might consider as the valid configuration space for an ISA
+definition, as it cannot capture all possible dependencies between different
+configuration options.</p>
+</div>
+<div class="paragraph">
+<p>What we want to do is capture is some basic notion of <em>safety</em>, i.e.
+what values can we pass into the model at runtime that won&#8217;t break
+Sail&#8217;s typing rules. For example, we might have:</p>
+</div>
+<div id="confschema-example" class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">let</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="mi">64</span><span class="p">}</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">some</span><span class="o">.</span><span class="n">integer</span><span class="p">;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then, using the configuration</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+    </span><span class="nl">"some"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"integer"</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="mi">72</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>we would potentially have some serious problems. Sail could optimize
+the source using the type annotation that <code>n</code> is only 32 or 64, so
+when we pass 72 at runtime, type-safety would be violated and the
+model could potentially fail or even exhibit undefined-behaviour when
+compiled to C! Naturally, we want a way to prevent this from occuring.</p>
+</div>
+<div class="paragraph">
+<p>To do this we create a <a href="https://json-schema.org">JSON schema</a> from the
+way in which the Sail source interacts with the model. JSON schema is
+an open standard with a wide variety of validators and tooling written
+in multiple languages.</p>
+</div>
+<div class="paragraph">
+<p>For the above simple example, the following schema will be generated
+by Sail when using the <code>--output-schema</code> option:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="json"><span class="p">{</span><span class="w">
+  </span><span class="nl">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://json-schema.org/draft/2020-12/schema"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"some"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"integer"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+          </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"../examples/config_schema.sail:8.21-8.40"</span><span class="p">,</span><span class="w">
+          </span><span class="nl">"anyOf"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+            </span><span class="p">{</span><span class="w"> </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nl">"const"</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="w"> </span><span class="p">},</span><span class="w">
+            </span><span class="p">{</span><span class="w"> </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w"> </span><span class="nl">"const"</span><span class="p">:</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="p">}</span><span class="w">
+          </span><span class="p">]</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+      </span><span class="p">},</span><span class="w">
+      </span><span class="nl">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">"integer"</span><span class="w"> </span><span class="p">]</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">"some"</span><span class="w"> </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now if we attempt to validate the above schema using the JSON
+containing 72 as the value for the integer, we will get an error</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>schema sail_schema/config_schema.json: ok
+
+instance sail_config/config_schema.json: failed
+- at '/some/integer': anyOf failed
+  - at '/some/integer': value must be 32
+  - at '/some/integer': value must be 64</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In general, whenever we have <code>config key : T</code> in the Sail source, we
+require that the type <code>T</code> can be converted into a JSON schema, and
+raise an error if this is not possible.</p>
 </div>
 </div>
 </div>
@@ -6392,6 +6826,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </span><span class="o">&lt;</span><span class="n">letbind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_exp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">atomic_typ</span><span class="o">&gt;</span><span class="w">
+               </span><span class="o">|</span><span class="w"> </span><span class="n">Config</span><span class="w"> </span><span class="n">ID</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">lit</span><span class="o">&gt;</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">()</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">)</span><span class="w">
@@ -6446,8 +6881,8 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
                    </span><span class="o">|</span><span class="w"> </span><span class="nb">false</span><span class="w">
                    </span><span class="o">|</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="p">[</span><span class="o">&lt;</span><span class="n">attribute_data</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">attribute_data</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="p">]</span><span class="w"> </span><span class="p">]</span><span class="w">
 
-</span><span class="o">&lt;</span><span class="n">attribute</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="p">]</span><span class="w">
-              </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE]</span><span class="w"> </span><span class="o">&lt;</span><span class="n">attribute_data</span><span class="o">&gt;</span><span class="w"> </span><span class="p">]</span><span class="w">
+</span><span class="o">&lt;</span><span class="n">attribute</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="cp">$[ATTRIBUTE ]</span><span class="w">
+              </span><span class="o">|</span><span class="w"> </span><span class="cp">$[ATTRIBUTE &lt;attribute_data&gt; ]</span><span class="w">
 
 
 </span><span class="o">&lt;</span><span class="n">funcl_annotation</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="n">Private</span><span class="w">
@@ -6497,7 +6932,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typaram</span><span class="o">&gt;</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
-             </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w">
+             </span><span class="o">|</span><span class="w"> </span><span class="k">type</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">kind</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[=</span><span class="w"> </span><span class="n">Config</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="p">(</span><span class="o">.</span><span class="w"> </span><span class="n">ID</span><span class="p">)</span><span class="o">*</span><span class="p">]</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typaram</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">&lt;</span><span class="n">struct_fields</span><span class="o">&gt;</span><span class="w"> </span><span class="p">}</span><span class="w">
              </span><span class="o">|</span><span class="w"> </span><span class="k">enum</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
@@ -6561,10 +6996,13 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
           </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpat</span><span class="o">&gt;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">attribute</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="k">forwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
-          </span><span class="o">|</span><span class="w"> </span><span class="k">backwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
+          </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl0</span><span class="o">&gt;</span><span class="w">
+          </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl0</span><span class="o">&gt;</span><span class="w"> </span><span class="n">When</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
+
+</span><span class="o">&lt;</span><span class="n">mapcl0</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;-&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w">
+           </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mpexp</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
+           </span><span class="o">|</span><span class="w"> </span><span class="k">forwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
+           </span><span class="o">|</span><span class="w"> </span><span class="k">backwards</span><span class="w"> </span><span class="o">&lt;</span><span class="n">case</span><span class="o">&gt;</span><span class="w">
 
 </span><span class="o">&lt;</span><span class="n">mapcl_list</span><span class="o">&gt;</span><span class="w"> </span><span class="p">::=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[,]</span><span class="w">
                </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl</span><span class="o">&gt;</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">mapcl_list</span><span class="o">&gt;</span><span class="w">
@@ -6633,6 +7071,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
             </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">scattered_def</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="o">&lt;</span><span class="n">default_def</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="nb">constraint</span><span class="w"> </span><span class="o">&lt;</span><span class="n">typ</span><span class="o">&gt;</span><span class="w">
+            </span><span class="o">|</span><span class="w"> </span><span class="n">structured</span><span class="cp">$LINE_DIRECTIVE [&lt;attribute_data_key_value&gt; (, &lt;attribute_data_key_value&gt;)*] }</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="cp">$LINE_DIRECTIVE</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">pat</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">&lt;</span><span class="n">exp</span><span class="o">&gt;</span><span class="w">
             </span><span class="o">|</span><span class="w"> </span><span class="kr">termination_measure</span><span class="w"> </span><span class="o">&lt;</span><span class="n">id</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="w"> </span><span class="p">(,</span><span class="w"> </span><span class="o">&lt;</span><span class="n">loop_measure</span><span class="o">&gt;</span><span class="p">)</span><span class="o">*</span><span class="w">
@@ -6704,7 +7143,7 @@ arbitrary sequence of characters that does not contain <code>]</code>.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2024-10-07 08:15:30 +0100
+Last updated 2025-03-06 17:50:57 UTC
 </div>
 </div>
 </body>

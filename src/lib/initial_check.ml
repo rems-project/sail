@@ -56,10 +56,7 @@ module P = Parse_ast
 (* See mli file for details on what these flags do *)
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
-let opt_abstract_types = ref false
 let opt_strict_bitvector = ref false
-
-let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -1716,7 +1713,6 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
   | P.TD_abstract (id, kind, instantiation) -> (
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let id = to_ast_reserved_type_id ctx id in
       let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
       match to_ast_kind kind with
@@ -2050,7 +2046,6 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let d = to_ast_dec ctx dec in
       ([DEF_aux (DEF_register d, annot)], ctx)
   | P.DEF_constraint nc ->
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let nc = to_ast_constraint ctx nc in
       ([DEF_aux (DEF_constraint nc, annot)], ctx)
   | P.DEF_pragma (pragma, P.Pragma_line (arg, ltrim)) ->
