@@ -5,7 +5,10 @@ $include <vector_dec.sail>
 
 $option --sv-int-size 256
 
-val "zeros" : forall 'n. int('n) -> bits('n)
+val zeros = pure {
+  lean: "BitVec.zero",
+  _: "zeros" }: forall 'n, 'n >= 0. int('n) -> bits('n)
+
 
 val main : unit -> unit
 

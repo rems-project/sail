@@ -3,7 +3,7 @@ default Order dec
 $[sv_module { stdout = true }]
 val print_endline = "print_endline" : string -> unit
 
-val eq_int = { lem: "eq", coq: "Z.eqb", _: "eq_int" } : (int, int) -> bool
+val eq_int = { lem: "eq", coq: "Z.eqb", lean: "BEq.beq", _: "eq_int" } : (int, int) -> bool
 
 union test('a : Type, 'b : Type) = {
   Ctor1 : ('a, 'b),
