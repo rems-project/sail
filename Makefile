@@ -21,6 +21,7 @@ tarball: sail libsail_coverage
 ifdef TARBALL_EXTRA_BIN
 	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
 endif
+	cp lib/coverage/libsail_coverage.a _build/tarball/sail/share/sail/lib/coverage/
 	tar czvf _build/sail.tar.gz -C _build/tarball sail
 
 coverage:
