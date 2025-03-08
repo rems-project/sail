@@ -23,7 +23,6 @@ sail = get_sail()
 # Not all self-tests are supported.
 skip_selftests = {
     'list_rec_functions2',
-    'bv_literal',
     'pow2_var',
     'large_bitvector',
     'exn_hello_world',
