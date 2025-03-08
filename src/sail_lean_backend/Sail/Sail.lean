@@ -60,7 +60,7 @@ def toFormatted {w : Nat} (x : BitVec w) : String :=
     s!"0b{BitVec.toBin x}"
 
 def join1 (xs : List (BitVec 1)) : BitVec xs.length :=
-  (BitVec.ofBoolListLE (xs.map fun x => x[0])).cast (by simp)
+  (BitVec.ofBoolListBE (xs.map fun x => x[0])).cast (by simp)
 
 instance : Coe (BitVec (1 * n)) (BitVec n) where
   coe x := x.cast (by simp)
