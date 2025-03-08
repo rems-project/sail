@@ -14,11 +14,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: linux-amd64
+            os: ubuntu-latest
             container: rockylinux:8
             ocaml_version: 5.2.1
             opam_cache_key: rocky8-5.2.1
-          - os: macos-latest
+          - name: mac-arm64
+            os: macos-latest
             container: ""
             ocaml_version: 5.2.1
             opam_cache_key: macos-latest-5.2.1
@@ -131,5 +133,5 @@ jobs:
     - name: Upload tarball
       uses: actions/upload-artifact@v4
       with:
-        name: sail
+        name: sail-${{ matrix.name }}
         path: _build/sail.tar.gz
