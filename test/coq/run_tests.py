@@ -25,7 +25,6 @@ def test(name, dir, lib):
     banner('Testing Coq backend on {} with {}'.format(name, lib))
     results = Results('{} on {}'.format(name, lib))
     results.expect_failure('bind_typ_var.sail', 'unsupported existential quantification of a vector length')
-    results.expect_failure('execute_decode_hard.sail', 'Complex existential type - probably going to need this for ARM instruction ASTs')
     results.expect_failure('exist1.sail', 'Needs an existential witness')
     results.expect_failure('while_MM.sail', 'Non-terminating loops - I\'ve written terminating versions of these')
     results.expect_failure('while_MP.sail', 'Non-terminating loops - I\'ve written terminating versions of these')
