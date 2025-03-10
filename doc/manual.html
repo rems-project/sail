@@ -2606,12 +2606,12 @@ pre.rouge .gs {
 <ul class="sectlevel2">
 <li><a href="#_functions">Functions</a></li>
 <li><a href="#_blocks">Blocks</a></li>
-<li><a href="#_the_unit_type">The unit type</a></li>
+<li><a href="#_the_unit_type">The <code>unit</code> type</a></li>
 <li><a href="#_numeric_types_and_bits">Numeric types and bits</a></li>
 <li><a href="#_bitvector_literals">Bitvector literals</a></li>
 <li><a href="#_vectors">Vectors</a></li>
 <li><a href="#_accessing_and_updating_vectors">Accessing and updating vectors</a></li>
-<li><a href="#_the_list_type">The list type</a></li>
+<li><a href="#_the_list_type">The <code>list</code> type</a></li>
 <li><a href="#_tuples">Tuples</a></li>
 <li><a href="#_strings">Strings</a></li>
 <li><a href="#_user_defined_types">User-defined types</a>
@@ -2619,6 +2619,7 @@ pre.rouge .gs {
 <li><a href="#_structs">Structs</a></li>
 <li><a href="#_enums">Enums</a></li>
 <li><a href="#_unions">Unions</a></li>
+<li><a href="#_newtype"><code>newtype</code></a></li>
 </ul>
 </li>
 <li><a href="#_type_synonyms">Type synonyms</a></li>
@@ -3597,7 +3598,7 @@ not change the semantics of the block and is purely optional.
 </div>
 </div>
 <div class="sect2">
-<h3 id="_the_unit_type">The unit type</h3>
+<h3 id="_the_unit_type">The <code>unit</code> type</h3>
 <div class="paragraph">
 <p>The simplest type in Sail is the <em>unit type</em> <code>unit</code>. It is a type with
 a single member <code>()</code>. Rather than have functions that takes zero
@@ -3846,7 +3847,7 @@ decreasing vectors.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_the_list_type">The list type</h3>
+<h3 id="_the_list_type">The <code>list</code> type</h3>
 <div class="paragraph">
 <p>In addition to vectors, Sail also has <code>list</code> as a built-in type. For
 example:</p>
@@ -4355,6 +4356,42 @@ previously.</p>
     </span><span class="n">Right</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nv">'b</span><span class="p">,</span><span class="w">
 </span><span class="p">}</span></code></pre>
 </div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_newtype"><code>newtype</code></h4>
+<div class="paragraph">
+<p>There is a slight variation of the <code>union</code> keyword, which allows
+constructing a union with just a single constructor:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">newtype</span><span class="w"> </span><span class="n">register_index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Mk_index</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>this is semantically equivalent to</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="sail"><span class="k">union</span><span class="w"> </span><span class="n">register_index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="n">Mk_index</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kt">bits</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w">
+</span><span class="p">}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The main difference from is that for certain Sail targets (including
+C, SMT, and SystemVerilog) <code>register_index</code> will be compiled as if it
+were <code>bits(5)</code> directly.</p>
+</div>
+<div class="paragraph">
+<p>The purpose of the <code>newtype</code> construct is to create an alias for an
+existing type which is distinct from the perspective of the type
+system&#8201;&#8212;&#8201;We cannot accidentally pass any <code>bits(5)</code> where a
+<code>register_index</code> index is required, as register indices must have been
+explicitly constructed using <code>Mk_index</code>. This means that using
+<code>newtypes</code> can increase type-safety and therefore prevent errors,
+unlike regular type synonyms which we discuss below.</p>
 </div>
 </div>
 </div>
@@ -5458,7 +5495,7 @@ otherwise be overloaded by ISA specs as a normal operator.</p>
 <p>The <code>@</code> operators is used to concatenate bitvectors and generic
 vectors. As demonstrated in the pattern matching section <a href="#_pattern_matching">Pattern matching</a>,
 it can also be used to destructure them. Similarly, the
-cons operator <code>::</code> is used to construct lists (see section <a href="#_the_list_type">The list type</a>).</p>
+cons operator <code>::</code> is used to construct lists (see section <a href="#The list type">[The list type]</a>).</p>
 </div>
 <div class="sect3">
 <h4 id="_built_in_precedences">Built-in precedences</h4>
@@ -5815,14 +5852,14 @@ language-level exceptions end up being quite a nice tool for
 implementing processor exceptions in ISA specifications.</p>
 </div>
 <div class="paragraph">
-<p>For exceptions we have two language features: <code>throw</code> statements
-and <code>try</code>--<code>catch</code> blocks. The throw keyword takes a value of
-type <code>exception</code> as an argument, which can be any user defined type
-with that name. There is no built-in exception type, so to use
-exceptions one must be set up on a per-project basis. Usually the
-exception type will be a union, often a scattered union, which allows
-for the exceptions to be declared throughout the specification as they
-would be in OCaml, for example:</p>
+<p>For exceptions we have two language features: <code>throw</code> statements and
+<code>try</code>--<code>catch</code> blocks. The throw keyword takes a value of type
+<code>exception</code> as an argument, which can be any user defined type with
+that name. There is no built-in exception type, so to use exceptions
+one must be set up on a per-project basis. The exception type must be
+a union (except it cannot be declared via <code>newtype</code>), and is usually a
+scattered union to allow exceptions to be declared throughout the
+specification as they would be in OCaml, for example:</p>
 </div>
 <div class="listingblock">
 <div class="content">
