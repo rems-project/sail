@@ -3254,7 +3254,7 @@ let mk_kid_renames avoid_target_names ids_to_avoid kids =
 
 let merge_kids_atoms pats =
   let try_eliminate (acc, gone, map, seen) (pat, typ) =
-    let tryon maybe_id env typ =
+    let tryon maybe_id env typ extra_kid =
       let merge kid l =
         if KidSet.mem kid seen then (
           let () =
@@ -3273,7 +3273,8 @@ let merge_kids_atoms pats =
                 let id = id_of_kid kid in
                 (P_aux (P_id id, match pat with P_aux (_, ann) -> ann), id)
           in
-          ((pat, typ) :: acc, KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen)
+          let map = List.fold_left (fun map kid -> KBindings.add kid (Some id) map) map (kid :: extra_kid) in
+          ((pat, typ) :: acc, KidSet.add kid gone, map, KidSet.add kid seen)
         )
       in
       match Type_check.destruct_atom_nexp env typ with
@@ -3286,8 +3287,18 @@ let merge_kids_atoms pats =
     in
     match (pat, typ) with
     | P_aux (P_id id, ann), typ | P_aux (P_typ (_, P_aux (P_id id, ann)), _), typ ->
-        tryon (Some id) (env_of_annot ann) typ
-    | P_aux (P_wild, ann), typ -> tryon None (env_of_annot ann) typ
+        tryon (Some id) (env_of_annot ann) typ []
+    (* If there's also another kid binding in the pattern, merge it too *)
+    | P_aux (P_var (P_aux (P_id id, ann), TP_aux (TP_app (tp_id, [TP_aux (TP_var kid, _)]), _)), _), typ
+    | ( P_aux
+          (P_var (P_aux (P_typ (_, P_aux (P_id id, ann)), _), TP_aux (TP_app (tp_id, [TP_aux (TP_var kid, _)]), _)), _),
+        typ )
+      when Id.compare tp_id (mk_id "atom") == 0 || Id.compare tp_id (mk_id "atom_bool") == 0 ->
+        tryon (Some id) (env_of_annot ann) typ [kid]
+    | P_aux (P_wild, ann), typ -> tryon None (env_of_annot ann) typ []
+    | P_aux (P_var (P_aux (P_wild, ann), TP_aux (TP_app (tp_id, [TP_aux (TP_var kid, _)]), _)), _), typ
+      when Id.compare tp_id (mk_id "atom") == 0 || Id.compare tp_id (mk_id "atom_bool") == 0 ->
+        tryon None (env_of_annot ann) typ [kid]
     | _ -> ((pat, typ) :: acc, gone, map, KidSet.union seen (tyvars_of_typ typ))
   in
   let r_pats, gone, map, _ = List.fold_left try_eliminate ([], KidSet.empty, KBindings.empty, KidSet.empty) pats in
