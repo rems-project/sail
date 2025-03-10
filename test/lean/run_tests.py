@@ -62,6 +62,7 @@ skip_selftests = {
     'config_vec_list',
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
+    'newtype',
 }
 
 print("Sail is {}".format(sail))

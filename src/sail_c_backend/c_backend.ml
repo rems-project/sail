@@ -275,7 +275,7 @@ end) : CONFIG = struct
         let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
         CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
     | Typ_id id when Bindings.mem id ctx.variants ->
-        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings)
+        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings) |> transparent_newtype ctx
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
         let typ_params, ctors = Bindings.find id ctx.variants in
         let quants =
@@ -288,7 +288,7 @@ end) : CONFIG = struct
             ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
         in
         let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings)
+        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings) |> transparent_newtype ctx
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
     | Typ_exist _ -> begin
@@ -1299,12 +1299,29 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ^^ space
         ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
     | I_if (cval, then_instrs, else_instrs) ->
-        string "  if" ^^ space
-        ^^ parens (string (sgen_cval cval))
-        ^^ space
-        ^^ surround 2 0 lbrace (sq_separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
-        ^^ space ^^ string "else" ^^ space
-        ^^ surround 2 0 lbrace (sq_separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
+        let rec codegen_if cval then_instrs else_instrs =
+          match else_instrs with
+          | [I_aux (I_if (else_i, else_t, else_e), _)] ->
+              string "if" ^^ space
+              ^^ parens (string (sgen_cval cval))
+              ^^ space
+              ^^ surround 2 0 lbrace
+                   (sq_separate_map hardline (codegen_instr fid ctx) then_instrs)
+                   (twice space ^^ rbrace)
+              ^^ space ^^ string "else" ^^ space ^^ codegen_if else_i else_t else_e
+          | _ ->
+              string "if" ^^ space
+              ^^ parens (string (sgen_cval cval))
+              ^^ space
+              ^^ surround 2 0 lbrace
+                   (sq_separate_map hardline (codegen_instr fid ctx) then_instrs)
+                   (twice space ^^ rbrace)
+              ^^ space ^^ string "else" ^^ space
+              ^^ surround 2 0 lbrace
+                   (sq_separate_map hardline (codegen_instr fid ctx) else_instrs)
+                   (twice space ^^ rbrace)
+        in
+        twice space ^^ codegen_if cval then_instrs else_instrs
     | I_block instrs ->
         string "  {" ^^ jump 2 2 (sq_separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline ^^ string "  }"
     | I_try_block instrs ->
@@ -2270,6 +2287,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let recursive_functions = get_recursive_functions cdefs in
       let cdefs = optimize ~have_rts:(not Config.no_rts) recursive_functions cdefs in
+
+      (* clang has a default limit of 256 nested braces, so we make
+         sure we don't generated definitions with deep nesting by
+         flattening all definitions with a nesting depth greater than
+         some value < 256 (100 seems reasonable). *)
+      let cdefs = List.map (Jib_optimize.flatten_cdef ~max_depth:100) cdefs in
 
       let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 

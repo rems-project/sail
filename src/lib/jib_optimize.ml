@@ -107,7 +107,30 @@ let flatten_cdef_aux = function
       CDEF_let (n, bindings, flatten_instrs instrs)
   | cdef -> cdef
 
-let flatten_cdef (CDEF_aux (aux, def_annot)) = CDEF_aux (flatten_cdef_aux aux, def_annot)
+let rec instr_nesting_depth (I_aux (aux, _)) =
+  match aux with
+  | I_if (_, then_instrs, else_instrs) -> max (instrs_nesting_depth then_instrs) (instrs_nesting_depth else_instrs) + 1
+  | I_block instrs | I_try_block instrs -> instrs_nesting_depth instrs + 1
+  | _ -> 0
+
+and instrs_nesting_depth is = List.fold_left (fun depth i -> max depth (instr_nesting_depth i)) 0 is
+
+let cdef_nesting_depth (CDEF_aux (aux, _)) =
+  match aux with
+  | CDEF_register (_, _, instrs)
+  | CDEF_let (_, _, instrs)
+  | CDEF_startup (_, instrs)
+  | CDEF_finish (_, instrs)
+  | CDEF_fundef (_, _, _, instrs) ->
+      instrs_nesting_depth instrs
+  | CDEF_type _ | CDEF_pragma _ | CDEF_val _ -> 0
+
+let flatten_cdef ?max_depth (CDEF_aux (aux, def_annot) as cdef) =
+  match max_depth with
+  | None -> CDEF_aux (flatten_cdef_aux aux, def_annot)
+  | Some n ->
+      let depth = cdef_nesting_depth cdef in
+      if depth > n then CDEF_aux (flatten_cdef_aux aux, def_annot) else cdef
 
 let unique_per_function_ids cdefs =
   let unique_id i = function

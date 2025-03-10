@@ -57,7 +57,9 @@ module Big_int = Nat_big_num
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
 
-type function_id = Sail_function of id | Pure_extern of id | Extern of id
+type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of id | Extern of id
+
+type constructor_id = Constructor of id | Newtype_wrapper of id
 
 type anf_annot = { loc : l; env : Env.t; uannot : uannot }
 
@@ -90,7 +92,7 @@ and 'a apat_aux =
   | AP_tuple of 'a apat list
   | AP_id of id * 'a
   | AP_global of id * 'a
-  | AP_app of id * 'a apat * 'a
+  | AP_app of constructor_id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
   | AP_struct of (id * 'a apat) list * 'a
@@ -119,7 +121,7 @@ let rec apat_bindings (AP_aux (apat_aux, _)) =
   | AP_tuple apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
   | AP_id (id, _) -> IdSet.singleton id
   | AP_global (id, _) -> IdSet.empty
-  | AP_app (id, apat, _) -> apat_bindings apat
+  | AP_app (_, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
   | AP_nil _ -> IdSet.empty
@@ -142,7 +144,7 @@ let rec apat_types (AP_aux (apat_aux, { env; _ })) =
   | AP_id (id, typ) when not (is_enum_member id env) -> Bindings.singleton id typ
   | AP_id _ -> Bindings.empty
   | AP_global (id, _) -> Bindings.empty
-  | AP_app (id, apat, _) -> apat_types apat
+  | AP_app (_, apat, _) -> apat_types apat
   | AP_cons (apat1, apat2) -> (Bindings.merge merge) (apat_types apat1) (apat_types apat2)
   | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
   | AP_nil _ -> Bindings.empty
@@ -462,8 +464,13 @@ let pp_id id = string (string_of_id id)
 
 let pp_function_id = function
   | Sail_function id -> pp_id id
+  | Newtype_wrapper id -> string "newtype" ^^ space ^^ pp_id id
   | Pure_extern id -> string "pure_extern" ^^ space ^^ pp_id id
   | Extern id -> string "extern" ^^ space ^^ pp_id id
+
+let pp_constructor_id = function
+  | Constructor id -> pp_id id
+  | Newtype_wrapper id -> string "newtype" ^^ space ^^ pp_id id
 
 let rec pp_alexp = function
   | AL_id (id, typ) -> pp_annot typ (pp_id id)
@@ -546,7 +553,7 @@ and pp_apat (AP_aux (apat_aux, annot)) =
   | AP_id (id, typ) -> pp_annot typ (pp_id id)
   | AP_global (id, _) -> pp_id id
   | AP_tuple apats -> parens (separate_map (comma ^^ space) pp_apat apats)
-  | AP_app (id, apat, typ) -> pp_annot typ (pp_id id ^^ parens (pp_apat apat))
+  | AP_app (ctor, apat, typ) -> pp_annot typ (pp_constructor_id ctor ^^ parens (pp_apat apat))
   | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
   | AP_as (apat, id, _) -> pp_apat apat ^^ string " as " ^^ pp_id id
@@ -609,9 +616,16 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
   | P_id id -> mk_apat (AP_id (id, typ_of_pat pat))
   | P_wild -> mk_apat (AP_wild (typ_of_pat pat))
   | P_tuple pats -> mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global pat) pats))
-  | P_app (id, [subpat]) -> mk_apat (AP_app (id, anf_pat ~global subpat, typ_of_pat pat))
+  | P_app (id, [subpat]) -> (
+      let env = env_of_tannot tannot in
+      match Env.union_constructor_info id env with
+      | Some (_, _, union_id, _) when Env.is_newtype union_id env ->
+          mk_apat (AP_app (Newtype_wrapper id, anf_pat ~global subpat, typ_of_pat pat))
+      | _ -> mk_apat (AP_app (Constructor id, anf_pat ~global subpat, typ_of_pat pat))
+    )
   | P_app (id, pats) ->
-      mk_apat (AP_app (id, mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global pat) pats)), typ_of_pat pat))
+      mk_apat
+        (AP_app (Constructor id, mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global pat) pats)), typ_of_pat pat))
   | P_typ (_, pat) -> anf_pat ~global pat
   | P_var (pat, _) -> anf_pat ~global pat
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global hd_pat, anf_pat ~global tl_pat))
@@ -745,11 +759,16 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aexp2 = anf exp2 in
       let aval1, wrap = to_aval aexp1 in
       wrap (mk_aexp (AE_short_circuit (SC_or, aval1, aexp2)))
-  | E_app (id, exps) ->
+  | E_app (id, exps) -> (
+      let env = env_of_tannot tannot in
       let aexps = List.map anf exps in
       let avals = List.map to_aval aexps in
       let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
-      wrap (mk_aexp (AE_app (Sail_function id, List.map fst avals, typ_of exp)))
+      match Env.union_constructor_info id env with
+      | Some (_, _, union_id, _) when Env.is_newtype union_id env ->
+          wrap (mk_aexp (AE_app (Newtype_wrapper id, List.map fst avals, typ_of exp)))
+      | _ -> wrap (mk_aexp (AE_app (Sail_function id, List.map fst avals, typ_of exp)))
+    )
   | E_throw exn_exp ->
       let aexp = anf exn_exp in
       let aval, wrap = to_aval aexp in

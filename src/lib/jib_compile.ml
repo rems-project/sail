@@ -187,6 +187,10 @@ let initial_ctx ?for_target env effect_info =
     def_annot = None;
   }
 
+let transparent_newtype ctx = function
+  | CT_variant (id, [(_, ctyp)]) when Env.is_newtype id ctx.tc_env -> ctyp
+  | ctyp -> ctyp
+
 let update_coverage_override' ctx = function
   | Some (_, Some (AD_aux (AD_string "on", _))) -> { ctx with coverage_override = true }
   | Some (_, Some (AD_aux (AD_string "off", _))) -> { ctx with coverage_override = false }
@@ -1045,7 +1049,8 @@ module Make (C : CONFIG) = struct
             (pre, instrs, cleanup, ctx)
         | _ -> Reporting.unreachable l __POS__ ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
       end
-    | AP_app (ctor, apat, variant_typ) -> begin
+    | AP_app (Newtype_wrapper _, apat, _) -> compile_match ctx apat cval on_failure
+    | AP_app (Constructor ctor, apat, variant_typ) -> begin
         match ctyp with
         | CT_variant (var_id, ctors) ->
             let pat_ctyp = apat_ctyp ctx apat in
@@ -1155,6 +1160,13 @@ module Make (C : CONFIG) = struct
           else compile_funcall l ctx id vs
         )
         else compile_funcall l ctx id vs
+    | AE_app (Newtype_wrapper id, args, _) -> (
+        match args with
+        | [arg] ->
+            let setup, cval, cleanup = compile_aval l ctx arg in
+            (setup, (fun clexp -> icopy l clexp cval), cleanup)
+        | _ -> Reporting.unreachable l __POS__ "Found newtype wrapper with > 1 argument during Jib generation"
+      )
     | AE_app (Pure_extern id, args, _) -> compile_extern l ctx id args
     | AE_app (Extern id, args, typ) ->
         if string_of_id id = "sail_config_get" then compile_config l ctx args typ else compile_extern l ctx id args

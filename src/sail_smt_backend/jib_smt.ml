@@ -1120,7 +1120,7 @@ end) : Jib_compile.CONFIG = struct
         let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
         CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
     | Typ_id id when Bindings.mem id ctx.variants ->
-        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings)
+        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings) |> transparent_newtype ctx
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
         let typ_params, ctors = Bindings.find id ctx.variants in
         let quants =
@@ -1133,7 +1133,7 @@ end) : Jib_compile.CONFIG = struct
             ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
         in
         let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings)
+        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings) |> transparent_newtype ctx
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
     | Typ_exist _ -> begin

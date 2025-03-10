@@ -129,7 +129,7 @@ val get_abstract_typs : t -> kind Bindings.t
 val remove_abstract_typ : id -> t -> t
 
 val is_variant : id -> t -> bool
-val add_variant : id -> typquant * type_union list -> t -> t
+val add_variant : ?is_newtype:bool -> id -> typquant * type_union list -> t -> t
 val add_scattered_variant : id -> typquant -> t -> t
 val add_variant_clause : id -> type_union -> t -> t
 val get_variant : id -> t -> typquant * type_union list
@@ -141,6 +141,7 @@ val is_union_constructor : id -> t -> bool
 val is_singleton_union_constructor : id -> t -> bool
 val add_union_id : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val get_union_id : id -> t -> typquant * typ
+val is_newtype : id -> t -> bool
 
 val is_mapping : id -> t -> bool
 
