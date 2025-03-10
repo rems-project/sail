@@ -145,7 +145,7 @@ open Elab
 open Term
 
 def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : TermElabM Unit := do
-    for (len, i) in lens.zipWithIndex do
+    for (len, i) in lens.zipIdx do
       let mut patLen := none
       for ps in pss do
         unless ps.size == lens.size do

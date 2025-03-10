@@ -52,10 +52,6 @@ open Ast_util
 
 (** {2 Options} *)
 
-(** Enable abstract types in the AST. If unset, will report an error
-    if they are encountered. *)
-val opt_abstract_types : bool ref
-
 (** If enabled, bitvector types are only well-formed if their
     arguments are natural numbers. *)
 val opt_strict_bitvector : bool ref

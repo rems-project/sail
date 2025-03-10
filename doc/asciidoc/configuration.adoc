@@ -1,0 +1,237 @@
+:conf: sail_doc/config.json
+
+Sail includes a configuration system that allows building
+specifications that can be configured at either runtime (if supported
+by the Sail backend in use) or statically at build-time using a set of
+options.
+
+From the perspective of the specification author, one uses the
+`config` construct to include a value in the specification, for
+example:
+
+sail::example1[from=conf,part=body,dedent]
+
+The configuration is some key-value store with dot-separated
+hierachical keys, so we access the value stored at `foo.bar` key as
+some string value. In practice, we use JSON to represent these
+configurations. In this example, the JSON might look something like:
+
+[source,json]
+----
+include::sail_config/config.json[]
+----
+
+Which when used will cause the specification to print `"Hello,
+World!"`. If we want to statically apply this configuration (and
+convert the Sail source to OCaml), we could run the following,
+assuming the configration file is called `file.json` and the Sail file
+containing the above code is `file.sail`.
+
+[source,console]
+----
+$ sail --ocaml --config file.json file.sail
+----
+
+=== JSON representation of Sail types
+
+The following example demonstrates how basic Sail types are
+represented in the JSON configuration file. We can load integers,
+booleans, and strings, all of which correspond directly to the
+equivalent JSON type. Integers are allowed to be arbitrary precision,
+as they are in Sail.
+
+:confbasic: sail_doc/config_basic_types.json
+
+sail::example[from=confbasic,part=body,dedent]
+
+The following JSON can be used to instantiate the above Sail source:
+
+[source,json]
+----
+include::sail_config/config_basic_types.json[]
+----
+
+Note the two permissible representations for bitvectors. First, we can
+represent them as a list of JSON booleans. This representation has the
+advantage of being simple and unambiguous regarding the length of the
+bitvector, but is verbose. Second, we can use a string containing the
+bitvector value formatted as a Sail bitvector literal (so `pass:[_]`
+can be used as a separator) with an explicit integer length. If the
+value is shorter than the desired width it will be zero-extended. If
+it is larger then any high bits above the stated width will be ignored
+(care should be taken to avoid this). In addition to `0b` and `0x`
+prefixed literals, a decimal value can also be used (also supporting
+`pass:[_]` separators), for example:
+
+[source,json]
+----
+{ "len" : 32, "value" : "1_000_000" }
+----
+
+:confvec: sail_doc/config_vector.json
+
+There are some cases where a specification might need many
+configuration options. Consider the case of RISC-V PMP registers,
+where there are up to 64 such registers, and each one might be
+configured differently. To support this, we allow reading sequences of
+JSON values into Sail vectors and lists. For example:
+
+sail::example[from=confvec,part=body,dedent]
+
+with the configuration file:
+
+[source,json]
+----
+include::sail_config/config_vector.json[]
+----
+
+:confuser: sail_doc/config_user_types.json
+
+More complex user defined types can also be read from the
+configuration file. For example, one can read a struct value:
+
+[source,sail]
+----
+include::sail:my_struct[from=confuser,type=type]
+
+include::sail:example1[from=confuser]
+----
+
+or a union value:
+
+[source,sail]
+----
+include::sail:my_union[from=confuser,type=type]
+
+include::sail:example2[from=confuser]
+----
+
+from the configuration file:
+
+[source,json]
+----
+include::sail_config/config_user_types.json[]
+----
+
+A Sail struct is represented as a JSON object with keys and values for
+each field in the struct. There must be a key in the JSON object for
+every field. A Sail union is represented as a JSON object with exactly
+one key/value pair. The key must be the name of a constructor in the
+union, and the value is parsed as the type of the constructor
+argument.
+
+=== Runtime Configuration with Sail to C
+
+The runtime configuration functions are included in the
+`sail_config.h` header in the `lib/json` subdirectory of the Sail
+distribution. The `sail_config_set_file` function loads a
+configuration, and should be called before running any code in a
+configurable model. The loaded configuration data can be freed by
+using the `sail_config_cleanup` function.
+
+[source,c]
+----
+void sail_config_set_file(const char *path);
+
+void sail_config_cleanup(void);
+----
+
+=== Configurable abstract types
+
+The <<Abstract types>> section we described how to write a type like
+`xlen` below without providing a concrete value, in such a way that
+the specification is parametric over the choice of `xlen`.
+
+[source,sail]
+----
+type xlen : Int
+----
+
+In practice, we likely want to configure this type to have some
+specific value at runtime. This can be done by associating a
+configuration option with the abstract type as
+
+[source,sail]
+----
+type xlen : Int = config arch.xlen
+----
+
+which could be instantiated using the following configuration JSON
+
+[source,json]
+----
+{ "arch" : { "xlen" : 32 } }
+----
+
+We can then create (configurable) bitvector values of length `xlen`:
+[source,sail]
+----
+let x : bits(xlen) = config some.bitvector_value
+----
+
+In the configuration file, we specify these by using the string
+`"xlen"` as the length:
+
+[source,json]
+----
+{ "some" : { "bitvector_value" : { "len" : "xlen", "value": "0xFFFF_FFFF" } } }
+----
+
+=== Validating Configurations with JSON Schema
+
+:confschema: sail_doc/config_schema.json
+
+Above, we discussed how JSON values are mapped onto Sail types, but
+some questions remain:
+
+* What happens if the configuration we pass at runtime contains impossible values?
+* Are all Sail types representable in the JSON configuration?
+
+Note that what we are defining here will necessarily be a weaker
+notion (i.e. more permissive in the configurations that are possible)
+than one might consider as the valid configuration space for an ISA
+definition, as it cannot capture all possible dependencies between different
+configuration options.
+
+What we want to do is capture is some basic notion of _safety_, i.e.
+what values can we pass into the model at runtime that won't break
+Sail's typing rules. For example, we might have:
+
+sail::example[from=confschema,part=body,dedent]
+
+Then, using the configuration
+
+[source,json]
+----
+include::sail_config/config_schema.json[]
+----
+
+we would potentially have some serious problems. Sail could optimize
+the source using the type annotation that `n` is only 32 or 64, so
+when we pass 72 at runtime, type-safety would be violated and the
+model could potentially fail or even exhibit undefined-behaviour when
+compiled to C! Naturally, we want a way to prevent this from occuring.
+
+To do this we create a https://json-schema.org[JSON schema] from the
+way in which the Sail source interacts with the model. JSON schema is
+an open standard with a wide variety of validators and tooling written
+in multiple languages.
+
+For the above simple example, the following schema will be generated
+by Sail when using the `--output-schema` option:
+
+[source,json]
+----
+include::sail_schema/config_schema.json[]
+----
+
+Now if we attempt to validate the above schema using the JSON
+containing 72 as the value for the integer, we will get an error
+
+----
+include::sail_schema/config_schema.output[]
+----
+
+In general, whenever we have `config key : T` in the Sail source, we
+require that the type `T` can be converted into a JSON schema, and
+raise an error if this is not possible.

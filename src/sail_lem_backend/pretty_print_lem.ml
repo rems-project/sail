@@ -862,11 +862,17 @@ let doc_exp_lem, doc_let_lem =
                       separate space [string "fun"; doc_id_lem loopvar; string "unit_var"; arrow]
                   | _ -> separate space [string "fun"; doc_id_lem loopvar; expY vartuple; arrow]
                 in
-                parens
-                  ((prefix 2 1)
-                     ((separate space) [string combinator; indices_pp; expY vartuple])
-                     (parens (prefix 2 1 (group body_lambda) (expN body)))
-                  )
+                let body_ctxt = { ctxt with monadic = effectful (effect_of body) } in
+                let loop_pp =
+                  parens
+                    ((prefix 2 1)
+                       ((separate space) [string combinator; indices_pp; expY vartuple])
+                       (parens (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body)))
+                    )
+                in
+                if ctxt.monadic && (not body_ctxt.monadic) && has_early_return body then
+                  parens (string "pure_early_return_embed" ^/^ loop_pp)
+                else loop_pp
             | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
           end
         | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
@@ -1149,6 +1155,9 @@ let doc_exp_lem, doc_let_lem =
     | E_constraint _ -> string "true"
     | E_internal_assume (nc, e1) ->
         string "(* " ^^ string (string_of_n_constraint nc) ^^ string " *)" ^/^ wrap_parens (expN e1)
+    | E_config _ ->
+        raise
+          (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Lem generation")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
@@ -1273,13 +1282,6 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
          else separate_map hardline doc_field fs *)
   | TD_variant (id, typq, ar, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
       | Id_aux (Id "option", _) -> empty
       | _ ->
           let env = Env.add_typquant l typq env in
@@ -1384,14 +1386,6 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
     )
   | TD_enum (id, enums, _) -> (
       match id with
-      | Id_aux (Id "read_kind", _) -> empty
-      | Id_aux (Id "write_kind", _) -> empty
-      | Id_aux (Id "a64_barrier_domain", _) -> empty
-      | Id_aux (Id "a64_barrier_type", _) -> empty
-      | Id_aux (Id "barrier_kind", _) -> empty
-      | Id_aux (Id "trans_kind", _) -> empty
-      | Id_aux (Id "instruction_kind", _) -> empty
-      | Id_aux (Id "cache_op_kind", _) -> empty
       | Id_aux (Id "regfp", _) -> empty
       | Id_aux (Id "niafp", _) -> empty
       | Id_aux (Id "diafp", _) -> empty

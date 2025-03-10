@@ -47,7 +47,18 @@
 
 open Libsail
 
-let c_used_words = ["main"; "have_exception"; "current_exception"; "throw_location"] |> Util.StringSet.of_list
+let c_used_words =
+  [
+    "main";
+    "have_exception";
+    "current_exception";
+    "throw_location";
+    "model_main";
+    "model_init";
+    "model_fini";
+    "model_pre_exit";
+  ]
+  |> Util.StringSet.of_list
 
 let c_reserved_words =
   [

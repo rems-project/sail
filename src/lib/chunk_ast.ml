@@ -775,6 +775,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   match aux with
   | E_id id -> Queue.add (Atom (string_of_id id)) chunks
   | E_ref id -> Queue.add (Atom ("ref " ^ string_of_id id)) chunks
+  | E_config s -> Queue.add (Atom ("config " ^ s)) chunks
   | E_lit lit -> Queue.add (chunk_of_lit lit) chunks
   | E_attribute (attr, arg, exp) ->
       Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;

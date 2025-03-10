@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/config_non_bit.sail[0m:10.20-28:
+10[96m |[0m  let _ : bits(5) = config k
+  [91m |[0m                    [91m^------^[0m
+  [91m |[0m Failed to interpret "not a bit" as a bit

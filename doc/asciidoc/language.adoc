@@ -593,9 +593,6 @@ to avoid us having to think about this particular detail.
 === Abstract types
 :abstract-ty: sail_doc/abstract_xlen.json
 
-NOTE: This feature is currently experimental and is enabled with the
-`--abstract-types` flag.
-
 Consider the following problem: We want to specify an architecture
 like RISC-V, which permits both 32-bit and a 64-bit implementations,
 with the two implementations being mostly the same other than the base
@@ -642,7 +639,7 @@ generating definitions. We do this using the `--instantiate` option,
 so if the above file is called `xlen.sail`, we could do:
 [source,sh]
 ----
-sail xlen.sail --lem --abstract-types --instantiate xlen=32
+sail xlen.sail --lem --instantiate xlen=32
 ----
 To create lem definitions for the `xlen = 32` case.
 
@@ -1081,6 +1078,9 @@ Similarly, bitfields can be updated much like regular vectors just
 using the field names rather than numeric indices:
 
 sail::bitfield_update_example[from=bitf,type=function]
+
+In the case of overlapping fields, the vector update notion will
+update the fields in order from left to right.
 
 Older versions of Sail did not guarantee the underlying representation
 of the bitfield (because it tried to do clever things to optimise

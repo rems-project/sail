@@ -2,7 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-$option --abstract-types
 $option --instantiate b=true
 
 type b : Bool

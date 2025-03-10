@@ -1249,7 +1249,7 @@ let can_be_undefined ~at:l env typ =
     | Typ_fn _ | Typ_bidir _ | Typ_exist _ | Typ_var _ -> false
     | Typ_id (Id_aux (Id name, _) as id) ->
         name = "bool" || name = "bit" || name = "nat" || name = "int" || name = "real" || name = "string"
-        || Env.is_bitfield id env || Env.is_user_undefined id env
+        || name = "unit" || Env.is_bitfield id env || Env.is_user_undefined id env
     | Typ_id _ -> false
     | Typ_app ((Id_aux (Id name, _) as id), args) ->
         (name = "bitvector" || name = "vector" || name = "range" || Env.is_user_undefined id env)
@@ -2049,6 +2049,28 @@ let rec reroll_cons ~at:l elems annots last_tail =
   | [], [] -> last_tail
   | _, _ -> Reporting.unreachable l __POS__ "Could not recreate cons list due to element and annotation length mismatch"
 
+let instantiate_record env id args =
+  let typq, fields = Env.get_record id env in
+  let kopts, _ = quant_split typq in
+  let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+  List.map
+    (fun (field_typ, id) ->
+      let field_typ = subst_unifiers unifiers field_typ in
+      (field_typ, id)
+    )
+    fields
+
+let instantiate_variant env id args =
+  let typq, tus = Env.get_variant id env in
+  let kopts, _ = quant_split typq in
+  let unifiers = List.fold_left2 (fun kb kopt arg -> KBindings.add (kopt_kid kopt) arg kb) KBindings.empty kopts args in
+  List.map
+    (fun (Tu_aux (Tu_ty_id (typ, id), _)) ->
+      let typ = subst_unifiers unifiers typ in
+      (id, typ)
+    )
+    tus
+
 type ('a, 'b) pattern_functions = {
   infer : Env.t -> 'a -> 'b * Env.t * uannot exp list;
   bind : Env.t -> 'a -> typ -> 'b * Env.t * uannot exp list;
@@ -2284,6 +2306,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | None -> typ_error l "Cannot use return outside a function"
       in
       annot_exp (E_return checked_exp) typ
+  | E_config key, _ -> annot_exp (E_config key) typ
   | E_tuple exps, Typ_tuple typs when List.length exps = List.length typs ->
       let checked_exps = List.map2 (fun exp typ -> crule check_exp env exp typ) exps typs in
       annot_exp (E_tuple checked_exps) typ
@@ -3477,9 +3500,12 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Nexp_aux (Nexp_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
       | _ -> crule check_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp)) (atom_typ nexp)
     end
-  | E_constraint nc ->
+  | E_constraint nc -> begin
       Env.wf_constraint ~at:l env nc;
-      crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
+      match nc with
+      | NC_aux (NC_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_constraint nc) (atom_bool_typ nc)
+      | _ -> crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
+    end
   | E_field (exp, field) -> begin
       let inferred_exp = irule infer_exp env exp in
       match Env.expand_synonyms env (typ_of inferred_exp) with
@@ -3819,12 +3845,14 @@ and infer_vector_update l env v n exp =
                 mk_exp ~loc:l (E_app (Id_aux (update_name, field_id_loc), [v; exp]))
             | _ -> typ_error l "Vector update could not be interpreted as a bitfield update"
           )
-          v updates
+          v (List.rev updates)
       in
       infer_exp env update_exp
   | _ ->
       let update_exp =
-        List.fold_left (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp]))) v updates
+        List.fold_left
+          (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp])))
+          v (List.rev updates)
       in
       infer_exp env update_exp
 
@@ -4554,14 +4582,29 @@ let check_termination_measure_decl env def_annot (id, pat, exp) =
   let tpat, texp = check_termination_measure env arg_typs pat exp in
   DEF_aux (DEF_measure (id, tpat, texp), def_annot)
 
-let check_funcls_complete l env funcls typ =
+let check_funcls_complete ?global_env l env funcls typ =
   let typ_arg, _, env = bind_funcl_arg_typ l env typ in
-  let ctx = pattern_completeness_ctx env in
+  let ctx =
+    match global_env with
+    | None -> pattern_completeness_ctx env
+    | Some genv ->
+        let ctx = pattern_completeness_ctx genv in
+        { ctx with constraints = Env.get_constraints env; is_open = (fun _ -> false) }
+  in
   match PC.is_complete_funcls_wildcarded ~keyword:"function" l ctx funcls typ_arg with
   | Some funcls -> (funcls, add_def_attribute (gen_loc l) "complete" None)
   | None -> (funcls, add_def_attribute (gen_loc l) "incomplete" None)
 
 let empty_tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)
+
+let check_test_attribute def_annot typ =
+  if Option.is_some (get_def_attribute "test" def_annot) then (
+    match typ with
+    | Typ_aux (Typ_fn ([arg], ret), _) when is_unit_typ arg && is_unit_typ ret -> ()
+    | _ ->
+        Reporting.err_general def_annot.loc "Functions with the $[test] attribute must have type 'unit -> unit'"
+        |> raise
+  )
 
 let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, funcls), (l, _))) =
   let id =
@@ -4626,11 +4669,21 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
         let err_l = Option.fold ~none:l ~some:(fun val_l -> Hint ("val here", val_l, l)) have_val_spec in
         typ_error err_l "function does not have a function type"
   in
-  begin
-    match have_val_spec with
-    | Some vs_l -> check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt
-    | None -> ()
-  end;
+
+  (* If we have a val_spec, check that any annotations on the function are consistent *)
+  ( match have_val_spec with
+  | Some vs_l -> (
+      check_tannot_opt ~def_type:"function" vs_l env vtyp_ret tannot_opt;
+      match get_def_attribute "test" def_annot with
+      | Some (l, _) ->
+          "Function with separate val prototype has a $[test] attribute, it should be attached there instead."
+          |> Reporting.err_general (Hint ("val declaration here", vs_l, l))
+          |> raise
+      | None -> ()
+    )
+  | None -> check_test_attribute def_annot typ
+  );
+
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let funcl_env =
     if Option.is_some have_val_spec then Env.add_typquant l quant env
@@ -4663,7 +4716,7 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
          then (funcls, fun attrs -> attrs)
          else check_funcls_complete l funcl_env funcls typ
        in
-       let def_annot = fix_body_visibility (update_attr def_annot) in
+       let def_annot = fix_body_visibility (update_attr def_annot) |> remove_def_attribute "test" in
        DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
       )
   in
@@ -4737,6 +4790,7 @@ let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
         (* !opt_expand_valspec controls whether the actual valspec in
            the AST is expanded, the val_spec type stored in the
            environment is always expanded and uses typq' and typ' *)
+        check_test_attribute def_annot typ;
         let typq, typ = if !opt_expand_valspec then (typq', typ') else (typq, typ) in
         let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts) in
         (vs, id, typq', typ', env)
@@ -4831,7 +4885,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
         | _ -> ()
       end;
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
-  | TD_abstract (id, kind) -> begin
+  | TD_abstract (id, kind, _) -> begin
       match unaux_kind kind with
       | K_int | K_bool ->
           ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind env)

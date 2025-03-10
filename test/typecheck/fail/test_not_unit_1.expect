@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/test_not_unit_1.sail[0m:4.0-39:
+4[96m |[0mfunction test_bad(x : int) -> unit = ()
+ [91m |[0m[91m^-------------------------------------^[0m
+ [91m |[0m Functions with the $[test] attribute must have type 'unit -> unit'

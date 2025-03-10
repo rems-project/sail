@@ -8,9 +8,9 @@ $include <exception_basic.sail>
 
 $option --sv-specialize 1
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod", coq: "ZEuclid.modulo", _ : "tmod_int"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
+val modulus = {ocaml: "modulus", lem: "hardware_mod", coq: "ZEuclid.modulo", _ : "tmod_int", lean: "Int.tmod"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
-val min = {ocaml: "min_int", lem: "min", coq: "min_atom", _:"min_int"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c == 'a | 'c == 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
+val min = {ocaml: "min_int", lem: "min", coq: "min_atom", _:"min_int", lean: "Min.min"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c == 'a | 'c == 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
 infix 1 >>
 infix 1 <<

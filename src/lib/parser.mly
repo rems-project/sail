@@ -213,8 +213,8 @@ let set_syntax_deprecated l =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
-%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast
+%token And As Assert Bitzero Bitone By Match Config Clause Dec Default Effect End Op
+%token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ INT NAT ORDER BOOL Cast When
 %token Pure Impure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
@@ -759,6 +759,8 @@ block:
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_typ ($3, $1)) $startpos $endpos }
+  | Config Id
+    { mk_exp (E_config $2) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit
@@ -989,6 +991,12 @@ typaram:
   | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
     { mk_typq $2 [] $startpos $endpos }
 
+abstract_instantiation:
+  | Eq; Config; key=separated_nonempty_list(Dot, Id)
+    { Some key }
+  |
+    { None }
+
 type_def:
   | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, $3, None, $5)) $startpos $endpos }
@@ -998,8 +1006,8 @@ type_def:
     { mk_td (TD_abbrev ($2, $3, Some $5, $7)) $startpos $endpos }
   | Typedef id Colon kind Eq typ
     { mk_td (TD_abbrev ($2, mk_typqn, Some $4, $6)) $startpos $endpos }
-  | Typedef id Colon kind
-    { mk_td (TD_abstract ($2, $4)) $startpos $endpos }
+  | Typedef id Colon kind abstract_instantiation
+    { mk_td (TD_abstract ($2, $4, $5)) $startpos $endpos }
   | Struct id Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
   | Struct id typaram Eq Lcurly struct_fields Rcurly
@@ -1167,6 +1175,12 @@ mapcl:
     { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
   | doc = Doc; mcl = mapcl
     { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
+  | mcl = mapcl0
+    { mcl }
+  | mcl = mapcl0; When; guard=exp
+    { MCL_aux (MCL_when (mcl, guard), loc $startpos(mcl) $endpos(guard)) }
+
+mapcl0:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
   | mpexp EqGt exp

@@ -372,7 +372,7 @@ let int_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be an integer, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
@@ -381,7 +381,7 @@ let bool_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be a boolean, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
@@ -391,14 +391,14 @@ let float_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be a number, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
 let get_option ~key:k ~keys:ks ~read ~default:d =
   List.assoc_opt k ks |> (fun opt -> Option.bind opt (read k)) |> Option.value ~default:d
 
-let config_from_json (json : Yojson.Basic.t) =
+let config_from_json (json : Yojson.Safe.t) =
   match json with
   | `Assoc keys ->
       begin

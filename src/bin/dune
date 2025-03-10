@@ -193,6 +193,10 @@
   (%{workspace_root}/lib/sail.c as lib/sail.c)
   (%{workspace_root}/lib/sail.h as lib/sail.h)
   (%{workspace_root}/lib/sail.tex as lib/sail.tex)
+  (%{workspace_root}/lib/json/cJSON.c as lib/json/cJSON.c)
+  (%{workspace_root}/lib/json/cJSON.h as lib/json/cJSON.h)
+  (%{workspace_root}/lib/json/sail_config.c as lib/json/sail_config.c)
+  (%{workspace_root}/lib/json/sail_config.h as lib/json/sail_config.h)
   (%{workspace_root}/lib/sail_coverage.h as lib/sail_coverage.h)
   (%{workspace_root}/lib/sail_failure.c as lib/sail_failure.c)
   (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)
@@ -206,6 +210,12 @@
   (%{workspace_root}/src/gen_lib/sail2_concurrency_interface.lem
    as
    src/gen_lib/sail2_concurrency_interface.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_mwords.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_mwords.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_bitlists.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_bitlists.lem)
   (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem
    as
    src/gen_lib/sail2_deep_shallow_convert.lem)
@@ -256,4 +266,7 @@
    src/sail_lean_backend/Sail/Sail.lean)
   (%{workspace_root}/src/sail_lean_backend/Sail/BitVec.lean
    as
-   src/sail_lean_backend/Sail/BitVec.lean)))
+   src/sail_lean_backend/Sail/BitVec.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/Specialization.lean
+   as
+   src/sail_lean_backend/Sail/Specialization.lean)))

@@ -112,6 +112,9 @@ let rec is_stack_ctyp ctyp =
   | CT_poly _ -> true
   | CT_float _ -> true
   | CT_rounding_mode -> true
+  (* Is a reference to some immutable JSON data *)
+  | CT_json -> true
+  | CT_json_key -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
   | CT_memory_writes -> false
 
@@ -200,6 +203,7 @@ let c_return exp = string "return" ^^ space ^^ exp ^^ semi
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
+  val preserve_types : IdSet.t
 end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
@@ -423,7 +427,7 @@ end) : CONFIG = struct
     AE_aux (aexp, annot)
 
   let analyze_primop' ctx id args typ =
-    let no_change = AE_app (id, args, typ) in
+    let no_change = AE_app (Sail_function id, args, typ) in
     let args = List.map (c_aval ctx) args in
     let extern = if ctx_is_extern id ctx then ctx_get_extern id ctx else failwith "Not extern" in
 
@@ -525,7 +529,10 @@ end) : CONFIG = struct
 
   let analyze_primop ctx id args typ =
     let no_change = AE_app (id, args, typ) in
-    if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+    match id with
+    | Sail_function id ->
+        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+    | _ -> no_change
 
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
@@ -539,6 +546,7 @@ end) : CONFIG = struct
   let track_throw = true
   let use_void = false
   let eager_control_flow = false
+  let preserve_types = Opts.preserve_types
 end
 
 (** Functions that have heap-allocated return types are implemented by
@@ -563,8 +571,8 @@ let fix_early_heap_return ret instrs =
     | before, I_aux (I_block instrs, _) :: after -> before @ [iblock (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_try_block instrs, (_, l)) :: after ->
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
-        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
+    | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
+        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs)] @ rewrite_return after
     | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
         before
         @ [I_aux (I_funcall (CR_one (CL_addr (CL_id (ret, CT_ref ctyp))), extern, fid, args), aux)]
@@ -589,8 +597,8 @@ let fix_early_stack_return ret ret_ctyp instrs =
     | before, I_aux (I_block instrs, _) :: after -> before @ [iblock (rewrite_return instrs)] @ rewrite_return after
     | before, I_aux (I_try_block instrs, (_, l)) :: after ->
         before @ [itry_block l (rewrite_return instrs)] @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
-        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp] @ rewrite_return after
+    | before, I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: after ->
+        before @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs)] @ rewrite_return after
     | before, I_aux (I_funcall (CR_one (CL_id (Return _, ctyp)), extern, fid, args), aux) :: after ->
         before @ [I_aux (I_funcall (CR_one (CL_id (ret, ctyp)), extern, fid, args), aux)] @ rewrite_return after
     | before, I_aux (I_copy (CL_id (Return _, ctyp), cval), aux) :: after ->
@@ -669,7 +677,7 @@ let hoist_allocations recursive_functions = function
             cleanups := iclear ctyp hid :: !cleanups;
             let instrs = instrs_rename decl_id hid instrs in
             I_aux (I_reset (ctyp, hid), annot) :: hoist instrs
-        | I_aux (I_init (ctyp, decl_id, cval), annot) :: instrs when hoist_ctyp ctyp ->
+        | I_aux (I_init (ctyp, decl_id, Init_cval cval), annot) :: instrs when hoist_ctyp ctyp ->
             let hid = hoist_id () in
             decls := idecl (snd annot) ctyp hid :: !decls;
             cleanups := iclear ctyp hid :: !cleanups;
@@ -678,8 +686,8 @@ let hoist_allocations recursive_functions = function
         | I_aux (I_clear (ctyp, _), _) :: instrs when hoist_ctyp ctyp -> hoist instrs
         | I_aux (I_block block, annot) :: instrs -> I_aux (I_block (hoist block), annot) :: hoist instrs
         | I_aux (I_try_block block, annot) :: instrs -> I_aux (I_try_block (hoist block), annot) :: hoist instrs
-        | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), annot) :: instrs ->
-            I_aux (I_if (cval, hoist then_instrs, hoist else_instrs, ctyp), annot) :: hoist instrs
+        | I_aux (I_if (cval, then_instrs, else_instrs), annot) :: instrs ->
+            I_aux (I_if (cval, hoist then_instrs, hoist else_instrs), annot) :: hoist instrs
         | instr :: instrs -> instr :: hoist instrs
         | [] -> []
       in
@@ -752,8 +760,8 @@ let remove_alias =
       end
     | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (opt block), aux) :: opt instrs
     | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (opt block), aux) :: opt instrs
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-        I_aux (I_if (cval, opt then_instrs, opt else_instrs, ctyp), aux) :: opt instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) :: instrs ->
+        I_aux (I_if (cval, opt then_instrs, opt else_instrs), aux) :: opt instrs
     | instr :: instrs -> instr :: opt instrs
     | [] -> []
   in
@@ -877,6 +885,7 @@ module type CODEGEN_CONFIG = sig
   val reserved_words : Util.StringSet.t
   val overrides : string Name_generator.Overrides.t
   val branch_coverage : out_channel option
+  val preserve_types : IdSet.t
 end
 
 module Codegen (Config : CODEGEN_CONFIG) = struct
@@ -958,6 +967,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_fvector (_, typ) -> sgen_ctyp (CT_vector typ)
     | CT_string -> "sail_string"
     | CT_real -> "real"
+    | CT_json -> "sail_config_json"
+    | CT_json_key -> "sail_config_key"
     | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
     | CT_float n -> "float" ^ string_of_int n ^ "_t"
     | CT_rounding_mode -> "uint_fast8_t"
@@ -983,6 +994,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_fvector (_, typ) -> sgen_ctyp_name (CT_vector typ)
     | CT_string -> "sail_string"
     | CT_real -> "real"
+    | CT_json -> "sail_config_json"
+    | CT_json_key -> "sail_config_key"
     | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
     | CT_float n -> "float" ^ string_of_int n
     | CT_rounding_mode -> "rounding_mode"
@@ -1151,6 +1164,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       end
     | Get_abstract, [v] -> sgen_cval v
     | Ite, [i; t; e] -> sprintf "(%s ? %s : %s)" (sgen_cval i) (sgen_cval t) (sgen_cval e)
+    | String_eq, [s1; s2] -> sprintf "(strcmp(%s, %s) == 0)" (sgen_cval s1) (sgen_cval s2)
     | _, _ -> failwith "Could not generate cval primop"
 
   let sgen_cval_param cval =
@@ -1274,17 +1288,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ^^ sail_create ~prefix:"  " ~suffix:";" (sgen_ctyp_name ctyp) "&%s" (sgen_name id)
     | I_copy (clexp, cval) -> codegen_conversion l clexp cval
     | I_jump (cval, label) -> ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label
-    | I_if (cval, [], else_instrs, ctyp) -> codegen_instr fid ctx (iif l (V_call (Bnot, [cval])) else_instrs [] ctyp)
-    | I_if (cval, [then_instr], [], _) ->
+    | I_if (cval, [], else_instrs) -> codegen_instr fid ctx (iif l (V_call (Bnot, [cval])) else_instrs [])
+    | I_if (cval, [then_instr], []) ->
         ksprintf string "  if (%s)" (sgen_cval cval)
         ^^ space
         ^^ surround 2 0 lbrace (codegen_instr fid ctx then_instr) (twice space ^^ rbrace)
-    | I_if (cval, then_instrs, [], _) ->
+    | I_if (cval, then_instrs, []) ->
         string "  if" ^^ space
         ^^ parens (string (sgen_cval cval))
         ^^ space
         ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
-    | I_if (cval, then_instrs, else_instrs, _) ->
+    | I_if (cval, then_instrs, else_instrs) ->
         string "  if" ^^ space
         ^^ parens (string (sgen_cval cval))
         ^^ space
@@ -1315,9 +1329,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           match (fname, ctyp) with
           | "internal_pick", _ -> sprintf "pick_%s" (sgen_ctyp_name ctyp)
           | "sail_cons", _ -> begin
-              match snd f with
-              | [ctyp] -> Util.zencode_string ("cons#" ^ string_of_ctyp ctyp)
-              | _ -> c_error "cons without specified type"
+              match Option.map cval_ctyp (List.nth_opt args 0) with
+              | Some ctyp -> Util.zencode_string ("cons#" ^ string_of_ctyp (ctyp_suprema ctyp))
+              | None -> c_error "cons without specified type"
             end
           | "eq_anything", _ -> begin
               match args with
@@ -1375,8 +1389,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         else string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp l x) c_args)
     | I_clear (ctyp, _) when is_stack_ctyp ctyp -> empty
     | I_clear (ctyp, id) -> sail_kill ~prefix:"  " ~suffix:";" (sgen_ctyp_name ctyp) "&%s" (sgen_name id)
-    | I_init (ctyp, id, cval) ->
-        codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
+    | I_init (ctyp, id, init) -> (
+        match init with
+        | Init_cval cval ->
+            codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
+        | Init_static VL_undefined -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+        | Init_static vl -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
+        | Init_json_key parts ->
+            ksprintf string "  sail_config_key %s = {%s};" (sgen_name id)
+              (Util.string_of_list ", " (fun part -> "\"" ^ part ^ "\"") parts)
+      )
     | I_reinit (ctyp, id, cval) ->
         codegen_instr fid ctx (ireset l ctyp id) ^^ hardline ^^ codegen_conversion l (CL_id (id, ctyp)) cval
     | I_reset (ctyp, id) when is_stack_ctyp ctyp -> string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_name id))
@@ -1440,23 +1462,30 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | I_end _ -> assert false
     | I_exit _ -> string ("  sail_match_failure(\"" ^ String.escaped (string_of_id fid) ^ "\");")
 
-  let codegen_type_def =
+  let codegen_type_def ctx =
     let open Printf in
     function
-    | CTD_abstract (id, ctyp) ->
-        [
-          Header (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id));
-          HeaderOnly (ksprintf string "void sail_set_abstract_%s(%s value);" (string_of_id id) (sgen_ctyp ctyp));
-          Impl
-            (c_function ~return:"void"
-               (ksprintf string "sail_set_abstract_%s(%s value)" (string_of_id id) (sgen_ctyp ctyp))
-               [
-                 ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = value" (sgen_id id)
-                   else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, value" (sgen_id id)
-                 );
-               ]
-            );
-        ]
+    | CTD_abstract (id, ctyp, inst) ->
+        let setter_prototype, setter =
+          match inst with
+          | CTDI_none ->
+              ( ksprintf string "void sail_set_abstract_%s(%s v);" (string_of_id id) (sgen_ctyp ctyp),
+                c_function ~return:"void"
+                  (ksprintf string "sail_set_abstract_%s(%s v)" (string_of_id id) (sgen_ctyp ctyp))
+                  [
+                    ( if is_stack_ctyp ctyp then ksprintf c_stmt "%s = v" (sgen_id id)
+                      else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v" (sgen_id id)
+                    );
+                  ]
+              )
+          | CTDI_instrs init ->
+              ( ksprintf string "void sail_set_abstract_%s(void);" (string_of_id id),
+                c_function ~return:"void"
+                  (ksprintf string "sail_set_abstract_%s(void)" (string_of_id id))
+                  [separate_map hardline (codegen_instr (mk_id "set_abstract") ctx) init]
+              )
+        in
+        [HeaderOnly setter_prototype; Impl (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id)); Impl setter]
     | CTD_enum (id, (first_id :: _ as ids)) ->
         let enum_name = sgen_id id in
         let enum_eq =
@@ -1479,6 +1508,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           Impl enum_undefined;
         ]
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
+    | CTD_abbrev (id, ctyp) ->
+        [
+          Header
+            (ksprintf string "// type abbreviation %s" (string_of_id id)
+            ^^ hardline
+            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); codegen_id id]
+            ^^ semi
+            );
+        ]
     | CTD_struct (id, ctors) ->
         let struct_name = sgen_id id in
         let struct_ctyp = CT_struct (id, ctors) in
@@ -1681,7 +1719,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
    been translated to C. **)
   let generated = ref IdSet.empty
 
-  let codegen_tup ctyps =
+  let codegen_tup ctx ctyps =
     let id = mk_id ("tuple_" ^ string_of_ctyp (CT_tup ctyps)) in
     if IdSet.mem id !generated then []
     else begin
@@ -1691,7 +1729,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           (0, Bindings.empty) ctyps
       in
       generated := IdSet.add id !generated;
-      codegen_type_def (CTD_struct (id, Bindings.bindings fields))
+      codegen_type_def ctx (CTD_struct (id, Bindings.bindings fields))
     end
 
   let codegen_list ctyp =
@@ -2081,7 +2119,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             ^^ hardline ^^ string "}"
             );
         ]
-    | CDEF_type ctype_def -> codegen_type_def ctype_def
+    | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
     | CDEF_startup (id, instrs) ->
         let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
         separate_map hardline codegen_decl instrs
@@ -2134,12 +2172,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
     | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
     | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
-    | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key
+      ->
         []
 
-  let codegen_ctg = function
+  let codegen_ctg ctx = function
     | CTG_vector ctyp -> codegen_vector ctyp
-    | CTG_tup ctyps -> codegen_tup ctyps
+    | CTG_tup ctyps -> codegen_tup ctx ctyps
     | CTG_list ctyp -> codegen_list ctyp
 
   (** When we generate code for a definition, we need to first generate
@@ -2156,7 +2195,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     )
     else (
       let deps = List.concat (List.map ctyp_dependencies ctyps) in
-      List.concat (List.map codegen_ctg deps) @ codegen_def' ctx def
+      List.concat (List.map (codegen_ctg ctx) deps) @ codegen_def' ctx def
     )
 
   let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
@@ -2201,10 +2240,27 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let jib_of_ast env effect_info ast =
     let module Jibc = Make (C_config (struct
       let branch_coverage = Config.branch_coverage
+      let preserve_types = Config.preserve_types
     end)) in
-    let env, effect_info = add_special_functions env effect_info in
     let ctx = initial_ctx env effect_info in
     Jibc.compile_ast ctx ast
+
+  let rec c_ast_registers ~early = function
+    | CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot) :: ast
+      when early = Option.is_some (get_def_attribute "early_init" def_annot) ->
+        (id, ctyp, instrs) :: c_ast_registers ~early ast
+    | _ :: ast -> c_ast_registers ~early ast
+    | [] -> []
+
+  let get_unit_tests cdefs =
+    List.fold_left
+      (fun ids -> function
+        | CDEF_aux (CDEF_val (id, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
+            IdSet.add id ids
+        | _ -> ids
+      )
+      IdSet.empty cdefs
+    |> IdSet.elements
 
   let compile_ast env effect_info basename ast =
     try
@@ -2270,7 +2326,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
       let finish cdefs = List.map sgen_finish (List.filter is_cdef_finish cdefs) in
 
-      let regs = c_ast_registers cdefs in
+      let early_regs = c_ast_registers ~early:true cdefs in
+      let regs = c_ast_registers ~early:false cdefs in
 
       let register_init_clear (id, ctyp, instrs) =
         if is_stack_ctyp ctyp then (List.map (sgen_instr (mk_id "reg") ctx) instrs, [])
@@ -2287,7 +2344,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         separate hardline
           (List.map string
              ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
-             @ fst exn_boilerplate @ startup cdefs @ letbind_initializers
+             @ fst exn_boilerplate
+             @ List.concat (List.map (fun r -> fst (register_init_clear r)) early_regs)
+             @ startup cdefs @ letbind_initializers
              @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
              @ ( if regs = [] then []
                  else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))]
@@ -2305,8 +2364,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         separate hardline
           (List.map string
              ([Printf.sprintf "%svoid model_fini(void)" (static ()); "{"]
-             @ letbind_finalizers
              @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
+             @ letbind_finalizers
+             @ List.concat (List.map (fun r -> snd (register_init_clear r)) early_regs)
              @ finish cdefs @ ["  cleanup_rts();"] @ snd exn_boilerplate @ ["}"]
              )
           )
@@ -2328,7 +2388,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
-      let model_default_main =
+      let model_main =
         [
           Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
           "{";
@@ -2343,25 +2403,78 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> List.map string |> separate hardline
       in
 
-      let model_main =
-        let extra =
+      let unit_tests = get_unit_tests cdefs in
+
+      let unit_test_functions =
+        ["unit (*const SAIL_TESTS[])(unit) = {"]
+        @ List.map (fun id -> sprintf "  %s," (sgen_function_id id)) unit_tests
+        @ ["  NULL"; "};"]
+        |> separate_map hardline string
+      in
+
+      let unit_test_names =
+        ["const char* const SAIL_TEST_NAMES[] = {"]
+        @ Util.map_last
+            (fun is_last id -> sprintf "  \"%s\"%s" (String.escaped (string_of_id id)) (if is_last then "" else ","))
+            unit_tests
+        @ ["};"]
+        |> separate_map hardline string
+      in
+
+      (* A simple function to run the unit tests. It isn't called from anywhere
+         by default and you don't need to use it - you can use SAIL_TESTS directly
+         in your own custom test runner. *)
+      let model_test =
+        [
+          Printf.sprintf "%svoid model_test(void)" (static ());
+          "{";
+          "  for (size_t i = 0; SAIL_TESTS[i] != NULL; ++i) {";
+          "    model_init();";
+          "    printf(\"Testing %s\\n\", SAIL_TEST_NAMES[i]);";
+          "    SAIL_TESTS[i](UNIT);";
+          "    printf(\"Pass\\n\");";
+          "    model_fini();";
+          "  }";
+          "}";
+        ]
+        |> List.map string |> separate hardline
+      in
+
+      let actual_main =
+        let extra_pre =
           List.filter_map
             (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            cdefs
+        in
+        let extra_post =
+          List.filter_map
+            (function CDEF_aux (CDEF_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         separate hardline
           ( if Config.no_main then []
             else
               List.map string
-                (["int main(int argc, char *argv[])"; "{"] @ extra @ ["  return model_main(argc, argv);"; "}"])
+                (["int main(int argc, char *argv[])"; "{"; "  int retcode;"]
+                @ extra_pre @ ["  retcode = model_main(argc, argv);"] @ extra_post @ ["  return retcode;"; "}"]
+                )
           )
       in
       let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
       let hlhl = twice hardline in
 
+      let include_guard contents =
+        let symbol = sprintf "SAIL_MODEL_HEADER_%s" (String.uppercase_ascii basename) in
+        ksprintf string "#ifndef %s" symbol ^^ hardline ^^ ksprintf string "#define %s" symbol ^^ hlhl ^^ contents
+        ^^ hardline ^^ string "#endif" ^^ hardline
+      in
+
       let header =
         Option.map
-          (fun header -> preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline |> Document.to_string)
+          (fun header ->
+            preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline
+            |> include_guard |> Document.to_string
+          )
           header_doc_opt
       in
       ( header,
@@ -2370,10 +2483,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           ^^ (if Config.generate_header then hardline ^^ Printf.ksprintf string "#include \"%s.h\"" basename else empty)
           ^^ hlhl ^^ docs ^^ hlhl
           ^^ ( if not Config.no_rts then
-                 model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_default_main ^^ hlhl
+                 model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_main ^^ hlhl
                else empty
              )
-          ^^ model_main ^^ hardline ^^ end_extern_cpp ^^ hardline
+          ^^ unit_test_functions ^^ hlhl ^^ unit_test_names ^^ hlhl ^^ model_test ^^ hlhl ^^ actual_main ^^ hardline
+          ^^ end_extern_cpp ^^ hardline
           )
       )
     with Type_error.Type_error (l, err) ->

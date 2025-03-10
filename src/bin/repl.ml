@@ -71,7 +71,7 @@ type istate = {
   display_options : display_options;
   state : Interpreter.lstate * Interpreter.gstate;
   default_sail_dir : string;
-  config : Yojson.Basic.t option;
+  config : Yojson.Safe.t option;
 }
 
 let shrink_istate istate : Interactive.State.istate =
@@ -623,7 +623,9 @@ let handle_input' istate input =
               let ast, env = Type_check.check istate.env ast in
               { istate with ast = append_ast istate.ast ast; env; ctx }
           | ":instantiate" ->
-              let ast = Frontend.instantiate_abstract_types None !Sail_options.opt_instantiations istate.ast in
+              let ast, _ =
+                Frontend.instantiate_abstract_types None (`Assoc []) !Sail_options.opt_instantiations istate.ast
+              in
               let ast, env = Type_check.check istate.env (Type_check.strip_ast ast) in
               { istate with ast = append_ast istate.ast ast; env }
           | ":rewrite" ->

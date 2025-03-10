@@ -535,6 +535,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_id id -> doc_id id
     | E_ref id -> string "ref" ^^ space ^^ doc_id id
     | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
+    | E_config key -> string "config" ^^ space ^^ separate_map dot string key
     | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
     | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
     (* Format a function with a unit argument as f() rather than f(()) *)
@@ -720,7 +721,12 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_type_def (TD_aux (td, _)) =
     match td with
-    | TD_abstract (id, kind) -> begin doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) end
+    | TD_abstract (id, kind, instantiation) ->
+        let doc_inst = function
+          | TDC_key key -> space ^^ separate space [equals; string "config"; separate_map dot string key]
+          | TDC_none -> empty
+        in
+        doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) ^^ doc_inst instantiation
     | TD_abbrev (id, typq, typ_arg) -> begin
         match doc_typquant typq with
         | Some qdoc ->

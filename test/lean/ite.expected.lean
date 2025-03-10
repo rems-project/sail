@@ -1,11 +1,15 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
+
 
 abbrev bits k_n := (BitVec k_n)
 
@@ -16,7 +20,7 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 inductive Register : Type where
   | B
@@ -28,12 +32,33 @@ abbrev RegisterType : Register → Type
   | .B => Bool
   | .R => Nat
 
-open RegisterRef
 instance : Inhabited (RegisterRef RegisterType Bool) where
   default := .Reg B
 instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg R
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open Register
 
 namespace Functions
 
@@ -47,7 +72,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -57,42 +82,36 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
+  if (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m)
-         -
-         1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m)
-              -
-              1)
-       else (Int.tdiv n m)
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n
-    -
-    (m
-      *
-      (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -118,9 +137,10 @@ def concat_str_dec (str : String) (x : Int) : String :=
 def elif (n : Nat) : (BitVec 1) :=
   if (BEq.beq n 0)
   then 1#1
-  else if (BEq.beq n 1)
-       then 1#1
-       else 0#1
+  else
+    if (BEq.beq n 1)
+    then 1#1
+    else 0#1
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_in_out (n : Nat) : SailM Nat := do
@@ -133,15 +153,18 @@ def monadic_in_out (n : Nat) : SailM Nat := do
 def monadic_lines (n : Nat) : SailM Unit := do
   let b := (BEq.beq n 0)
   if b
-  then writeReg R n
-       writeReg B b
+  then
+    writeReg R n
+    writeReg B b
   else writeReg B b
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_nat ()))
   writeReg B (← (undefined_bool ()))
 
-end Functions
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
 
+end Functions
 open Functions
 

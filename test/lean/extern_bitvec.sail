@@ -14,3 +14,11 @@ function extern_replicate_bits() -> bitvector(64) = {
   return replicate_bits(0x1234, 4)
 }
 
+function extern_slice(x : bitvector(16)) -> bitvector(4) = {
+  return slice(x, 2, 4)
+}
+
+function extern_vector_length(x : vector(3, int)) -> int = {
+  return length(x)
+}
+

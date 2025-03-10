@@ -327,6 +327,10 @@ typschm :: 'TypSchm_' ::=
 
 grammar
 
+opt_abstract_config :: 'TDC_' ::=
+  | = config string1 . ... . string2 :: :: key
+  |                                  :: :: none
+
 type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
   {{ lem TD_aux of type_def_aux * annot 'a }}
@@ -342,7 +346,7 @@ type_def_aux  :: 'TD_' ::=
     {{ com tagged union type definition}} {{ texlong }}
   | typedef id = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
-  | typedef id : kind :: :: abstract
+  | typedef id : kind opt_abstract_config :: :: abstract
     {{ com abstract type }}
   | bitfield id : typ = { id1 : index_range1 , ... , idn : index_rangen } :: :: bitfield
     {{ com register mutable bitfield type definition }} {{ texlong }}
@@ -460,8 +464,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
-  | while ::   :: while
-  | until ::  :: until
+  | while :: :: while
+  | until :: :: until
 
 internal_loop_measure :: 'Measure_' ::=
   {{ com internal syntax for an optional termination measure for a loop }}
@@ -521,8 +525,10 @@ exp :: 'E_' ::=
     {{ com the value of $[[nexp]]$ at run time }}
 
   | return exp                                        :: :: return {{ com  return $[[exp]]$ from current function }}
-  | exit exp                                          :: :: exit
-    {{ com halt all current execution }}
+  | exit exp                                          :: :: exit {{ com halt all current execution }}
+
+  | config string1 . ... . stringn                    :: :: config {{ com model configuration value }}
+
   | ref id                                            :: :: ref
   | throw exp                                         :: :: throw
   | try exp catch { pexp1 , ... , pexpn }             :: :: try

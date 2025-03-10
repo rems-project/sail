@@ -1,0 +1,11 @@
+{
+    "some" : {
+        "json_struct" : {
+            "field1" : 3287589457,
+            "field2" : "A string value"
+        },
+        "json_union" : {
+            "Constructor2" : "Another string value"
+        }
+    }
+}

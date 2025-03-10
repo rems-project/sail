@@ -121,6 +121,12 @@ module Env : sig
 
   val add_scattered_variant : id -> typquant -> t -> t
 
+  val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
+
+  val is_abstract_typ : id -> t -> bool
+
+  val remove_abstract_typ : id -> t -> t
+
   (** Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
      instead *)
@@ -151,7 +157,11 @@ module Env : sig
 
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
+  val is_variant : id -> t -> bool
+
   val is_record : id -> t -> bool
+
+  val is_enum : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
@@ -348,13 +358,22 @@ val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 (** Use the pattern completeness checker to check completeness of a
    list of function clauses. This takes care of setting up the
    environment in the correct way. The type passed is the type of the
-   function (Typ_fn), and the environment should be that attached to
-   either the SD_funcl clause or the FD_function clause. Note that
-   this is only exposed so that it can be used during descattering to
-   check completeness of scattered functions, and should not be called
-   otherwise. *)
+   function ([Typ_fn]), and the environment should be that attached to
+   either the [SD_funcl] clause or the [FD_function] clause.
+
+   If the optional [global_env] option is used, then information about
+   other types will be taken from the global environment - for example
+   this can be used to provide a view of all the enumeration clauses
+   of a scattered enum, whereas the function local environment would
+   contain only those imported before the final clause. Furthermore,
+   all type definitions will be considered as closed. *)
 val check_funcls_complete :
-  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * ('a def_annot -> 'a def_annot)
+  ?global_env:Env.t ->
+  Parse_ast.l ->
+  Env.t ->
+  tannot funcl list ->
+  typ ->
+  tannot funcl list * ('a def_annot -> 'a def_annot)
 
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
@@ -449,6 +468,10 @@ val vector_start_index : Env.t -> typ -> nexp
 val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
+
+val instantiate_record : env -> id -> typ_arg list -> (typ * id) list
+
+val instantiate_variant : env -> id -> typ_arg list -> (id * typ) list
 
 (** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
    that substituting those bindings using every type variable in goals

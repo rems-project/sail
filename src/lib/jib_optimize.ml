@@ -84,7 +84,7 @@ let rec flatten_instrs = function
       let fid = flat_id () in
       I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
   | I_aux ((I_block block | I_try_block block), _) :: instrs -> flatten_instrs block @ flatten_instrs instrs
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
+  | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
       let then_label = label "then_" in
       let endif_label = label "endif_" in
       [ijump l cval then_label]
@@ -122,8 +122,8 @@ let unique_per_function_ids cdefs =
     | I_aux (I_block instrs, aux) :: rest -> I_aux (I_block (unique_instrs i instrs), aux) :: unique_instrs i rest
     | I_aux (I_try_block instrs, aux) :: rest ->
         I_aux (I_try_block (unique_instrs i instrs), aux) :: unique_instrs i rest
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: rest ->
-        I_aux (I_if (cval, unique_instrs i then_instrs, unique_instrs i else_instrs, ctyp), aux) :: unique_instrs i rest
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) :: rest ->
+        I_aux (I_if (cval, unique_instrs i then_instrs, unique_instrs i else_instrs), aux) :: unique_instrs i rest
     | instr :: instrs -> instr :: unique_instrs i instrs
     | [] -> []
   in
@@ -240,10 +240,13 @@ end
 
 let remove_functions_to_references = Jib_visitor.visit_instrs (new Remove_functions_to_references.visitor)
 
+let init_subst id subst init =
+  match init with Init_cval cval -> Init_cval (cval_subst id subst cval) | Init_static _ | Init_json_key _ -> init
+
 let rec instrs_subst id subst = function
   | I_aux (I_decl (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
-  | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
-      I_aux (I_init (ctyp, id', cval_subst id subst cval), aux) :: rest
+  | I_aux (I_init (ctyp, id', init), aux) :: rest when Name.compare id id' = 0 ->
+      I_aux (I_init (ctyp, id', init_subst id subst init), aux) :: rest
   | I_aux (I_reset (_, id'), _) :: _ as instrs when Name.compare id id' = 0 -> instrs
   | I_aux (I_reinit (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
       I_aux (I_reinit (ctyp, id', cval_subst id subst cval), aux) :: rest
@@ -252,7 +255,7 @@ let rec instrs_subst id subst = function
       let instr =
         match instr with
         | I_decl (ctyp, id') -> I_decl (ctyp, id')
-        | I_init (ctyp, id', cval) -> I_init (ctyp, id', cval_subst id subst cval)
+        | I_init (ctyp, id', init) -> I_init (ctyp, id', init_subst id subst init)
         | I_jump (cval, label) -> I_jump (cval_subst id subst cval, label)
         | I_goto label -> I_goto label
         | I_label label -> I_label label
@@ -262,8 +265,8 @@ let rec instrs_subst id subst = function
         | I_undefined ctyp -> I_undefined ctyp
         | I_exit cause -> I_exit cause
         | I_end id' -> I_end id'
-        | I_if (cval, then_instrs, else_instrs, ctyp) ->
-            I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs, ctyp)
+        | I_if (cval, then_instrs, else_instrs) ->
+            I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs)
         | I_block instrs -> I_block (instrs_subst id subst instrs)
         | I_try_block instrs -> I_try_block (instrs_subst id subst instrs)
         | I_throw cval -> I_throw (cval_subst id subst cval)
@@ -333,12 +336,11 @@ let inline cdefs should_inline instrs =
   let fix_substs =
     let f = cval_map_id (ssa_name (-1)) in
     function
-    | I_aux (I_init (ctyp, id, cval), aux) -> I_aux (I_init (ctyp, id, f cval), aux)
+    | I_aux (I_init (ctyp, id, Init_cval cval), aux) -> I_aux (I_init (ctyp, id, Init_cval (f cval)), aux)
     | I_aux (I_jump (cval, label), aux) -> I_aux (I_jump (f cval, label), aux)
     | I_aux (I_funcall (clexp, extern, function_id, args), aux) ->
         I_aux (I_funcall (clexp, extern, function_id, List.map f args), aux)
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
-        I_aux (I_if (f cval, then_instrs, else_instrs, ctyp), aux)
+    | I_aux (I_if (cval, then_instrs, else_instrs), aux) -> I_aux (I_if (f cval, then_instrs, else_instrs), aux)
     | I_aux (I_copy (clexp, cval), aux) -> I_aux (I_copy (clexp, f cval), aux)
     | I_aux (I_return cval, aux) -> I_aux (I_return (f cval), aux)
     | I_aux (I_throw cval, aux) -> I_aux (I_throw (f cval), aux)
@@ -470,7 +472,8 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key
+      ->
         CTSet.empty
   in
   let rec tuple_depth = function
@@ -479,7 +482,7 @@ let remove_tuples cdefs ctx =
         List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
     | CT_list ctyp | CT_vector ctyp | CT_fvector (_, ctyp) | CT_ref ctyp -> tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool | CT_real | CT_bit
-    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes ->
+    | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ->
         0
   in
   let rec fix_tuples = function
@@ -494,7 +497,8 @@ let remove_tuples cdefs ctx =
     | CT_fvector (n, ctyp) -> CT_fvector (n, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | ( CT_lint | CT_fint _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_float _ | CT_unit | CT_bool
-      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes ) as ctyp ->
+      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_rounding_mode | CT_memory_writes | CT_json
+      | CT_json_key ) as ctyp ->
         ctyp
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
@@ -542,16 +546,21 @@ let remove_tuples cdefs ctx =
     | CR_one clexp -> CR_one (fix_clexp clexp)
     | CR_multi clexps -> CR_multi (List.map fix_clexp clexps)
   in
+  let fix_init = function
+    | Init_cval cval -> Init_cval (fix_cval cval)
+    | Init_static vl -> Init_static vl
+    | Init_json_key parts -> Init_json_key parts
+  in
   let rec fix_instr_aux = function
     | I_funcall (creturn, extern, id, args) -> I_funcall (fix_creturn creturn, extern, id, List.map fix_cval args)
     | I_copy (clexp, cval) -> I_copy (fix_clexp clexp, fix_cval cval)
-    | I_init (ctyp, id, cval) -> I_init (ctyp, id, fix_cval cval)
+    | I_init (ctyp, id, init) -> I_init (ctyp, id, fix_init init)
     | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, fix_cval cval)
     | I_jump (cval, label) -> I_jump (fix_cval cval, label)
     | I_throw cval -> I_throw (fix_cval cval)
     | I_return cval -> I_return (fix_cval cval)
-    | I_if (cval, then_instrs, else_instrs, ctyp) ->
-        I_if (fix_cval cval, List.map fix_instr then_instrs, List.map fix_instr else_instrs, ctyp)
+    | I_if (cval, then_instrs, else_instrs) ->
+        I_if (fix_cval cval, List.map fix_instr then_instrs, List.map fix_instr else_instrs)
     | I_block instrs -> I_block (List.map fix_instr instrs)
     | I_try_block instrs -> I_try_block (List.map fix_instr instrs)
     | ( I_goto _ | I_label _ | I_decl _ | I_clear _ | I_end _ | I_comment _ | I_reset _ | I_undefined _ | I_exit _
@@ -662,7 +671,7 @@ let structure_control_flow_block instrs =
   let iguard l guarded = function
     | [] -> []
     | instrs -> (
-        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs [] CT_unit]
+        match guard_condition guarded with None -> instrs | Some cond -> [iif l cond instrs []]
       )
   in
 
@@ -689,8 +698,7 @@ let structure_control_flow_block instrs =
             [
               iif l cond
                 [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool false, CT_bool))]
-                CT_unit;
+                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool false, CT_bool))];
             ]
         in
         let guarded = NameSet.add v guarded in

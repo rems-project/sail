@@ -29,7 +29,7 @@ printf "\n==========================================\n"
 printf "OCaml tests\n"
 printf "==========================================\n"
 
-./ocaml/run_tests.sh || returncode=1
+./ocaml/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Lem tests\n"

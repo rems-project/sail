@@ -8,6 +8,8 @@ session "Sail" = "LEM" +
     Sail2_state_lemmas
     Sail2_operators_mwords_lemmas
     Sail2_operators_bitlists
+    Sail2_concurrency_interface_mwords
+    Sail2_concurrency_interface_bitlists
     Sail2_concurrency_interface_lemmas
     Sail2_monadic_combinators_lemmas
     Sail2_string

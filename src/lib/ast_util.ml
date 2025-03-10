@@ -844,6 +844,7 @@ and map_exp_annot_aux f = function
   | E_id id -> E_id id
   | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
+  | E_config key -> E_config key
   | E_typ (typ, exp) -> E_typ (typ, map_exp_annot f exp)
   | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
   | E_app_infix (x, op, y) -> E_app_infix (map_exp_annot f x, op, map_exp_annot f y)
@@ -1285,6 +1286,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
+  | E_config key -> "config " ^ string_of_list "." (fun s -> s) key
   | E_struct_update (exp, fexps) ->
       "struct { " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_struct fexps -> "struct { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
@@ -1422,7 +1424,7 @@ let id_of_type_def_aux = function
   | TD_record (id, _, _, _)
   | TD_variant (id, _, _, _)
   | TD_enum (id, _, _)
-  | TD_abstract (id, _)
+  | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
 
@@ -1625,6 +1627,39 @@ and kopts_of_typ_arg (A_aux (ta, _)) =
 let kopts_of_quant_item (QI_aux (qi, _)) =
   match qi with QI_id kopt -> KOptSet.singleton kopt | QI_constraint nc -> kopts_of_constraint nc
 
+let rec ids_of_nexp (Nexp_aux (nexp, _)) =
+  match nexp with
+  | Nexp_id id -> IdSet.singleton id
+  | Nexp_var _ | Nexp_constant _ -> IdSet.empty
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> IdSet.union (ids_of_nexp n1) (ids_of_nexp n2)
+  | Nexp_exp n | Nexp_neg n -> ids_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left IdSet.union IdSet.empty (List.map ids_of_nexp nexps)
+  | Nexp_if (i, t, e) -> IdSet.union (ids_of_constraint i) (IdSet.union (ids_of_nexp t) (ids_of_nexp e))
+
+and ids_of_constraint (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> IdSet.union (ids_of_typ_arg arg1) (ids_of_typ_arg arg2)
+  | NC_ge (nexp1, nexp2) | NC_gt (nexp1, nexp2) | NC_le (nexp1, nexp2) | NC_lt (nexp1, nexp2) ->
+      IdSet.union (ids_of_nexp nexp1) (ids_of_nexp nexp2)
+  | NC_set (nexp, _) -> ids_of_nexp nexp
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (ids_of_constraint nc1) (ids_of_constraint nc2)
+  | NC_app (_, args) -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ_arg t)) IdSet.empty args
+  | NC_id id -> IdSet.singleton id
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
+
+and ids_of_typ (Typ_aux (t, _)) =
+  match t with
+  | Typ_internal_unknown | Typ_var _ -> IdSet.empty
+  | Typ_id id -> IdSet.singleton id
+  | Typ_fn (ts, t) -> List.fold_left IdSet.union (ids_of_typ t) (List.map ids_of_typ ts)
+  | Typ_bidir (t1, t2) -> IdSet.union (ids_of_typ t1) (ids_of_typ t2)
+  | Typ_tuple ts -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ t)) IdSet.empty ts
+  | Typ_app (_, tas) -> List.fold_left (fun s ta -> IdSet.union s (ids_of_typ_arg ta)) IdSet.empty tas
+  | Typ_exist (kids, nc, t) -> IdSet.union (ids_of_constraint nc) (ids_of_typ t)
+
+and ids_of_typ_arg (A_aux (ta, _)) =
+  match ta with A_nexp nexp -> ids_of_nexp nexp | A_typ typ -> ids_of_typ typ | A_bool nc -> ids_of_constraint nc
+
 let rec tyvars_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with
   | Nexp_id _ | Nexp_constant _ -> KidSet.empty
@@ -1755,6 +1790,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_block exps -> E_block (List.map (subst id value) exps)
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp value else E_id id'
     | E_lit lit -> E_lit lit
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
     | E_app_infix (exp1, op, exp2) -> E_app_infix (subst id value exp1, op, subst id value exp2)
@@ -1993,6 +2029,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_block exps -> E_block (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)
     | E_lit lit -> E_lit (locate_lit f lit)
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (locate_typ f typ, locate f exp)
     | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)
     | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)

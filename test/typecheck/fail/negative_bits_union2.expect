@@ -1,5 +1,17 @@
 [93mType error[0m:
-[96mfail/negative_bits_union2.sail[0m:8.10-22:
-8[96m |[0m    Bar : bits('n - 2),
- [91m |[0m          [91m^----------^[0m
- [91m |[0m Could not prove constraints ('n - 2) >= 0 in type synonym bitvector(('n - 2)) with 
+[96mfail/negative_bits_union2.sail[0m:7.0-10.1:
+7 [96m |[0munion Foo('n: Int) = {
+  [91m |[0m[91m^---------------------[0m
+10[96m |[0m}
+  [91m |[0m[91m^[0m
+  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mfail/negative_bits_union2.sail[0m:8.10-22:
+  [91m |[0m 8[96m |[0m    Bar : bits('n - 2),
+  [91m |[0m  [91m |[0m          [91m^----------^[0m
+  [91m |[0m  [91m |[0m Well-formedness check failed for type
+  [91m |[0m  [91m |[0m 
+  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/negative_bits_union2.sail[0m:8.10-14:
+  [91m |[0m  [91m |[0m 8[96m |[0m    Bar : bits('n - 2),
+  [91m |[0m  [91m |[0m  [91m |[0m          [91m^--^[0m
+  [91m |[0m  [91m |[0m  [91m |[0m Could not prove ('n - 2) >= 0 for type constructor bits

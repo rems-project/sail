@@ -67,3 +67,13 @@ function hex_bits_signed2_backwards_matches(n, str) = true
  newtype virtaddr = virtaddr : bits(32)
 
 function test_constr (virtaddr(addr) : virtaddr) -> bits(32) = addr
+
+val termination : forall 'n, 'n >= 0. int('n) -> int
+
+function termination(n) = {
+  if n == 0 then {
+    0
+  } else {
+    1 + termination(n - 1)
+  }
+}

@@ -1,11 +1,15 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
+
 
 
 structure rectangle where
@@ -24,7 +28,7 @@ inductive shape where
   | Circle (_ : circle)
   deriving BEq
 
-open shape
+
 
 /-- Type quantifiers: k_a : Type -/
 
@@ -33,9 +37,34 @@ inductive my_option (k_a : Type) where
   | MyNone (_ : Unit)
   deriving BEq
 
-open my_option
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
+
+abbrev Register := PEmpty
+abbrev RegisterType : Register -> Type := PEmpty.elim
+
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open shape
+open my_option
 
 namespace Functions
 
@@ -59,7 +88,9 @@ def use_is_none (opt : (my_option k_a)) : Bool :=
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
-end Functions
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
 
+end Functions
 open Functions
 

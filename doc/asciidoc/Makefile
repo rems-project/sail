@@ -18,6 +18,18 @@ SAIL_DOCS += sail_doc/bitvector_and_generic.json
 SAIL_DOCS += sail_doc/struct.json
 SAIL_DOCS += sail_doc/enum.json
 SAIL_DOCS += sail_doc/union.json
+SAIL_DOCS += sail_doc/config.json
+SAIL_DOCS += sail_doc/config_basic_types.json
+SAIL_DOCS += sail_doc/config_vector.json
+SAIL_DOCS += sail_doc/config_user_types.json
+SAIL_DOCS += sail_doc/config_schema.json
+SAIL_DOCS += sail_config/config.json
+SAIL_DOCS += sail_config/config_basic_types.json
+SAIL_DOCS += sail_config/config_vector.json
+SAIL_DOCS += sail_config/config_user_types.json
+SAIL_DOCS += sail_config/config_schema.json
+SAIL_DOCS += sail_schema/config_schema.json
+SAIL_DOCS += sail_schema/config_schema.output
 SAIL_DOCS += sail_doc/type_syn.json
 SAIL_DOCS += sail_doc/type_syn_xlen.json
 SAIL_DOCS += sail_doc/abstract_xlen.json
@@ -36,7 +48,19 @@ all: manual.html manual.pdf
 
 sail_doc/%.json: ../examples/%.sail
 	mkdir -p sail_doc
-	sail --no-color -doc --doc-file $< --doc-embed plain --doc-bundle $(notdir $@) $< 2> $(basename $@).warning
+	sail --no-color --doc --doc-file $< --doc-embed plain --doc-bundle $(notdir $@) $< 2> $(basename $@).warning
+
+sail_config/%.json: ../examples/%.json
+	mkdir -p sail_config
+	cp $< $@
+	-sail $(basename $<).sail --config $< 2> $(basename $@).error
+
+sail_schema/%.json: ../examples/%.sail
+	mkdir -p sail_schema
+	sail --no-color $< --output-schema $@
+
+sail_schema/%.output: sail_schema/%.json sail_config/%.json
+	-boon $(word 1,$^) $(word 2,$^) | sed '/jsonschema validation failed/d' > $@
 
 sail_doc/%.error: ../examples/%.sail
 	mkdir -p sail_doc

@@ -1,13 +1,40 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
+
+abbrev Register := PEmpty
+abbrev RegisterType : Register -> Type := PEmpty.elim
+
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
 
 namespace Functions
 
@@ -30,7 +57,9 @@ def tuple2 (_ : Unit) : SailM (Int × Int) := do
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
-end Functions
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
 
+end Functions
 open Functions
 

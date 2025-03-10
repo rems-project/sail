@@ -17,6 +17,7 @@ parser.add_argument("--compact", help="Compact output.", action='store_true')
 parser.add_argument("--targets", help="Targets to use (where supported).", action='append')
 parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
 parser.add_argument("--run-skips", help="Run tests that would otherwise be skipped", action="store_true")
+parser.add_argument("--test", help="Run only specified test.", action='append')
 args = parser.parse_args()
 
 def is_compact():
@@ -89,7 +90,8 @@ def chunks(filenames, cores):
     ys = []
     chunk = []
     for filename in filenames:
-        if re.match(r'.+\.sail$', filename):
+        basename = os.path.splitext(os.path.basename(filename))[0]
+        if re.match(r'.+\.sail$', filename) and (not args.test or basename in args.test):
             chunk.append(filename)
         if len(chunk) >= cores:
             ys.append(list(chunk))
@@ -121,7 +123,7 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step_with_status(string, expected_status=0, cwd=None, name=""):
+def step_with_status(string, expected_status=0, cwd=None, name='', stderr_file=''):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
@@ -135,10 +137,18 @@ def step_with_status(string, expected_status=0, cwd=None, name=""):
             print(out.decode('utf-8'))
             print('{}stderr{}:'.format(color.NOTICE, color.END))
             print(err.decode('utf-8'))
+            if stderr_file != '':
+                try:
+                    with open(stderr_file, 'r') as file:
+                        content = file.read()
+                        print('{}stderr file{}:'.format(color.NOTICE, color.END))
+                        print(content)
+                except FileNotFoundError:
+                    print('File {} not found'.format(stderr_file))
     return status
 
-def step(string, expected_status=0, cwd=None, name=""):
-    if step_with_status(string, expected_status=expected_status, cwd=cwd, name=name) != expected_status:
+def step(string, expected_status=0, cwd=None, name='', stderr_file=''):
+    if step_with_status(string, expected_status=expected_status, cwd=cwd, name=name, stderr_file=stderr_file) != expected_status:
         sys.exit(1)
 
 def banner(string):

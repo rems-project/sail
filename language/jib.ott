@@ -96,6 +96,7 @@ op :: '' ::=
   | neq               :: :: neq
   | ite               :: :: ite
   | get_abstract      :: :: get_abstract
+  | string_eq         :: :: string_eq
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq
@@ -196,6 +197,9 @@ ctyp :: 'CT_' ::=
   | poly kid                :: :: poly
 
   | memory_writes           :: :: memory_writes
+% Used for configuration, an immutable reference to some json data
+  | json                    :: :: json
+  | json_key                :: :: json_key
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id
@@ -204,13 +208,6 @@ clexp :: 'CL_' ::=
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple
   | void : ctyp              :: :: void
-
-ctype_def :: 'CTD_' ::=
-  {{ com C type definition }}
-  | enum id = id0 '|' ... '|' idn                    :: :: enum
-  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
-  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
-  | abstract id : ctyp                               :: :: abstract
 
 iannot :: '' ::=
   {{ phantom }}
@@ -221,12 +218,17 @@ creturn :: 'CR_' ::=
   | clexp                     :: :: one
   | ( clexp0 , ... , clexpn ) :: :: multi
 
+init :: 'Init_' ::=
+  | cval                             :: :: cval
+  | static value                     :: :: static
+  | json_key string0 . ... . stringn :: :: json_key
+
 instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
 % Jib_compile.ml.
   | ctyp name                                      :: :: decl
-  | ctyp name = cval                               :: :: init
+  | ctyp name = init                               :: :: init
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
@@ -242,7 +244,7 @@ instr :: 'I_' ::=
 % Jib_compile.ml, as exceptional control flow is handled by a separate
 % Jib->Jib pass.
   | if ( cval ) { instr0 ; ... ; instrn }
-    else { instr0 ; ... ; instrm } : ctyp          :: :: if
+    else { instr0 ; ... ; instrm }                 :: :: if
   | { instr0 ; ... ; instrn }                      :: :: block
   | try { instr0 ; ... ; instrn }                  :: :: try_block
   | throw cval                                     :: :: throw
@@ -262,6 +264,18 @@ instr :: 'I_' ::=
 % For optimising away allocations and copying.
   | reset ctyp name                                :: :: reset
   | ctyp name = cval                               :: :: reinit
+
+ctype_def_init :: 'CTDI_' ::=
+  | = { instr0 ; ... ; instrn } :: :: instrs
+  |                             :: :: none
+
+ctype_def :: 'CTD_' ::=
+  {{ com C type definition }}
+  | enum id = id0 '|' ... '|' idn                    :: :: enum
+  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
+  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | abbrev id = ctyp                                 :: :: abbrev
+  | abstract id : ctyp ctype_def_init                :: :: abstract
 
 def_annot :: '' ::=
   {{ phantom }}

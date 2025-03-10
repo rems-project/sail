@@ -21,11 +21,10 @@ skip_tests = {
   'while_PM', # Not currently in a useful state
 }
 
-def test(name, dir):
-    banner('Testing Coq backend on {}'.format(name))
-    results = Results(name)
+def test(name, dir, lib):
+    banner('Testing Coq backend on {} with {}'.format(name, lib))
+    results = Results('{} on {}'.format(name, lib))
     results.expect_failure('bind_typ_var.sail', 'unsupported existential quantification of a vector length')
-    results.expect_failure('execute_decode_hard.sail', 'Complex existential type - probably going to need this for ARM instruction ASTs')
     results.expect_failure('exist1.sail', 'Needs an existential witness')
     results.expect_failure('while_MM.sail', 'Non-terminating loops - I\'ve written terminating versions of these')
     results.expect_failure('while_MP.sail', 'Non-terminating loops - I\'ve written terminating versions of these')
@@ -52,6 +51,12 @@ def test(name, dir):
     results.expect_failure('ex_list_infer.sail', 'Would need to turn a term with existential type into a dependent pair')
     results.expect_failure('ex_vector_infer.sail', 'Would need to turn a term with existential type into a dependent pair')
     results.expect_failure('float_prelude.sail', 'Would need float types in coq-sail')
+    results.expect_failure('config_bits_types.sail', 'Would need to turn a term with existential type into a dependent pair')
+    results.expect_failure('config_mismatch.sail', 'Uses non-existant configuration entry')
+    if lib == 'bbv':
+        results.expect_failure('sysreg.sail', 'Concurrency interface not currently supported on BBV')
+        results.expect_failure('type_alias.sail', 'Concurrency interface not currently supported on BBV')
+
     for filenames in chunks(os.listdir(dir), parallel()):
         tests = {}
         for filename in filenames:
@@ -62,7 +67,7 @@ def test(name, dir):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('mkdir -p _build_{}'.format(basename))
-                step('\'{}\' --coq --coq-lib-style stdpp --dcoq-undef-axioms --strict-bitvector --coq-output-dir _build_{} -o out {}/{}'.format(sail, basename, dir, filename))
+                step('\'{}\' --coq --coq-lib-style {} --dcoq-undef-axioms --strict-bitvector --coq-output-dir _build_{} -o out {}/{}'.format(sail, lib, basename, dir, filename))
                 os.chdir('_build_{}'.format(basename))
                 step('coqc out_types.v')
                 step('coqc out.v')
@@ -75,8 +80,10 @@ def test(name, dir):
 
 xml = '<testsuites>\n'
 
-xml += test('typecheck tests', '../typecheck/pass')
-xml += test('Coq specific tests', 'pass')
+xml += test('typecheck tests', '../typecheck/pass', 'stdpp')
+xml += test('Coq specific tests', 'pass', 'stdpp')
+xml += test('typecheck tests', '../typecheck/pass', 'bbv')
+xml += test('Coq specific tests', 'pass', 'bbv')
 
 xml += '</testsuites>\n'
 

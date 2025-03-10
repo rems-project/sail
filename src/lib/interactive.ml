@@ -58,7 +58,7 @@ module State = struct
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
     default_sail_dir : string;
-    config : Yojson.Basic.t option;
+    config : Yojson.Safe.t option;
   }
 
   let initial_istate config default_sail_dir =

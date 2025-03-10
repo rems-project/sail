@@ -1,11 +1,15 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
+
 
 abbrev bits k_n := (BitVec k_n)
 
@@ -16,20 +20,45 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 
 inductive virtaddr where
   | virtaddr (_ : (BitVec 32))
   deriving BEq
 
-open virtaddr
 
-abbrev SailM := PreSailM PEmpty.elim trivialChoiceSource Unit
+
+abbrev Register := PEmpty
+abbrev RegisterType : Register -> Type := PEmpty.elim
+
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open virtaddr
+open option
 
 namespace Functions
 
-/-- Type quantifiers: k_ex737# : Bool, k_ex736# : Bool -/
+/-- Type quantifiers: k_ex761# : Bool, k_ex760# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -39,7 +68,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -49,42 +78,36 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
+  if (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m)
-         -
-         1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m)
-              -
-              1)
-       else (Int.tdiv n m)
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n
-    -
-    (m
-      *
-      (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -140,7 +163,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    if (BEq.beq (BitVec.access bv (len - 1)) 1#1)
+    if (BEq.beq (BitVec.access bv (len -i 1)) 1#1)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -154,10 +177,11 @@ def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) 
   let (notn, str) := tuple_0
   if (BEq.beq str "-")
   then (BitVec.zero notn)
-  else let parsed := (BitVec.zero notn)
-       if (BEq.beq (BitVec.access parsed (notn - 1)) 0#1)
-       then parsed
-       else (BitVec.zero notn)
+  else
+    let parsed := (BitVec.zero notn)
+    if (BEq.beq (BitVec.access parsed (notn -i 1)) 0#1)
+    then parsed
+    else (BitVec.zero notn)
 
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards_matches (tuple_0 : (Nat × String)) : Bool :=
@@ -168,10 +192,18 @@ def test_constr (app_0 : virtaddr) : (BitVec 32) :=
   let .virtaddr addr := app_0
   addr
 
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def termination (n : Nat) : Int :=
+  if (BEq.beq n 0)
+  then 0
+  else (1 +i (termination (n -i 1)))
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
-end Functions
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
 
+end Functions
 open Functions
 

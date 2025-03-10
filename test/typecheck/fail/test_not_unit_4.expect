@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mfail/test_not_unit_4.sail[0m:3.4-12:
+3[96m |[0mval test_bad : unit -> unit
+ [92m |[0m    [92m^------^[0m [92mval declaration here[0m
+[96mfail/test_not_unit_4.sail[0m:5.0-7:
+5[96m |[0m$[test]
+ [91m |[0m[91m^-----^[0m
+ [91m |[0m Function with separate val prototype has a $[test] attribute, it should be attached there instead.

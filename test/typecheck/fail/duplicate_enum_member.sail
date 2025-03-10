@@ -1,0 +1,4 @@
+
+enum Foo = {
+  Bar, Bar
+}

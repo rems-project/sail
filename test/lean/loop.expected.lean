@@ -1,11 +1,15 @@
 import Out.Sail.Sail
 import Out.Sail.BitVec
 
+open PreSail
+
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
 set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
+
 
 abbrev bits k_n := (BitVec k_n)
 
@@ -16,7 +20,7 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving BEq
 
-open option
+
 
 inductive Register : Type where
   | r
@@ -24,16 +28,37 @@ inductive Register : Type where
 open Register
 
 abbrev RegisterType : Register → Type
-  | .r => Int
+  | .r => Nat
 
-open RegisterRef
-instance : Inhabited (RegisterRef RegisterType Int) where
+instance : Inhabited (RegisterRef RegisterType Nat) where
   default := .Reg r
-abbrev SailM := PreSailM RegisterType trivialChoiceSource Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+
+
+XXXXXXXXX
+
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Defs
+
+import Out.Specialization
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 10_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+
+
+open option
+open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1485# : Bool, k_ex1484# : Bool -/
+/-- Type quantifiers: k_ex1861# : Bool, k_ex1860# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -43,7 +68,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (LE.le len (Sail.BitVec.length v))
+  if (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -53,42 +78,36 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (GE.ge l n)
-  then (HShiftLeft.hShiftLeft (sail_ones n) i)
-  else let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-       (HShiftLeft.hShiftLeft ((HShiftLeft.hShiftLeft one l) - one) i)
+  if (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (GE.ge n 0)
+  if (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (LT.lt n 0) (GT.gt m 0))
-  then ((Int.tdiv (n + 1) m)
-         -
-         1)
-  else if (Bool.and (GT.gt n 0) (LT.lt m 0))
-       then ((Int.tdiv (n - 1) m)
-              -
-              1)
-       else (Int.tdiv n m)
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
-  (n
-    -
-    (m
-      *
-      (fdiv_int n m)))
+  (n -i (m *i (fdiv_int n m)))
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -111,85 +130,124 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreachloop (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
+def foreach_loop (m : Nat) (n : Nat) : Nat := Id.run do
+  let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + 1))
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let res := loop_vars
+    loop_vars := (res +i 1)
+  (pure loop_vars)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreachloopmon (m : Nat) (n : Nat) : SailM Int := do
+def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
-  foreach_M loop_i_lower loop_i_upper 1 () (λ i _ => do writeReg r ((← readReg r) + 1))
+  let mut loop_vars := ()
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let () := loop_vars
+    loop_vars ← do writeReg r ((← readReg r) +i 1)
+  (pure loop_vars)
   readReg r
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreachloopboth (m : Nat) (n : Nat) : SailM Int := do
-  let res : Int := 0
-  let res : Int ← do
+def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
+  let res : Nat := 0
+  let res ← (( do
     let loop_i_lower := n
     let loop_i_upper := m
-    foreach_M loop_i_lower loop_i_upper 1 res
-      (λ i res => do
-        let res : Int := (res + 1)
-        writeReg r ((← readReg r)
-          +
-          res)
-        (pure res))
-  (pure (res + 1))
+    let mut loop_vars := res
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
+      let res := loop_vars
+      loop_vars ← do
+        let res : Nat := (res +i 1)
+        writeReg r ((← readReg r) +i res)
+        (pure res)
+    (pure loop_vars) ) : SailM Nat )
+  (pure (res +i 1))
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreachloopmultiplevar (m : Nat) (n : Nat) : Int :=
-  let res : Int := 0
-  let mult : Int := 1
-  let (mult, res) :=
+def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
+  let res : Nat := 0
+  let mult : Nat := 1
+  let (mult, res) ← (( do
     let loop_i_lower := m
     let loop_i_upper := n
-    foreach_ loop_i_lower loop_i_upper 1 (mult, res)
-      (λ i (mult, res) =>
-        let res : Int := (res + 1)
-        let mult : Int := (res * mult)
-        (mult, res))
-  mult
+    let mut loop_vars := (mult, res)
+    for i in [loop_i_lower:loop_i_upper + 1:1] do
+      let (mult, res) := loop_vars
+      loop_vars :=
+        let res : Nat := (res +i 1)
+        let mult : Nat := (res *i mult)
+        (mult, res)
+    (pure loop_vars) ) : Id (Nat × Nat) )
+  (pure mult)
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
-def foreachloopuseindex (m : Nat) (n : Nat) : Nat :=
+def foreach_loopuseindex (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
   let loop_i_lower := m
   let loop_i_upper := n
-  foreach_ loop_i_lower loop_i_upper 1 res (λ i res => (res + i))
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper + 1:1] do
+    let res := loop_vars
+    loop_vars := (res +i i)
+  (pure loop_vars)
 
-/-- Type quantifiers: n : Nat, 0 ≤ n -/
-def earlyreturneffect (n : Nat) : SailM Bool := do
-  let loop_i_lower := 0
-  let loop_i_upper := n
-  catchEarlyReturn
-  (foreach_ME loop_i_lower loop_i_upper 1 ()
-    (λ i _ => do
-      if (GT.gt i 5)
-      then (pure (early_return (false : Bool)))
-      else (pure (cont ((← writeReg r ((← readReg r) + 1)))))))
-  (pure (GT.gt (← readReg r) n))
-
-/-- Type quantifiers: n : Nat, 0 ≤ n -/
-def earlyreturnpure (n : Nat) : Bool := Id.run do
+/-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
+def while_loop (m : Nat) (n : Nat) : Nat := Id.run do
   let res : Nat := 0
-  let res : Nat ← do
-    let loop_i_lower := 0
-    let loop_i_upper := n
-    catchEarlyReturnPure
-    (foreach_E loop_i_lower loop_i_upper 1 res
-      (λ i res =>
-        if (GT.gt i 5)
-        then (early_return (false : Bool))
-        else (cont ((res + i)))))
-  (pure (GT.gt res n))
+  let mut loop_vars := res
+  while (λ res => (res <b n)) loop_vars do
+    let res := loop_vars
+    loop_vars := ((res +i 1) : Nat)
+  (pure loop_vars)
+
+/-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
+def while_loopmon (m : Nat) (n : Nat) : SailM Nat := do
+  let mut loop_vars := ()
+  while (← (λ _ => do (pure ((← readReg r) <b n))) loop_vars) do
+    let () := loop_vars
+    loop_vars ← do writeReg r ((← readReg r) +i 1)
+  (pure loop_vars)
+  readReg r
+
+/-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
+def while_loopboth (m : Nat) (n : Nat) : SailM Nat := do
+  let res : Nat := 0
+  let res ← (( do
+    let mut loop_vars := res
+    while (λ res => (res <b n)) loop_vars do
+      let res := loop_vars
+      loop_vars ← do
+        let res : Nat := (res +i 1)
+        writeReg r ((← readReg r) +i res)
+        (pure res)
+    (pure loop_vars) ) : SailM Nat )
+  (pure (res +i 1))
+
+/-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
+def while_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
+  let res : Nat := 0
+  let mult : Nat := 1
+  let (mult, res) ← (( do
+    let mut loop_vars := (mult, res)
+    while (λ (mult, res) => (res <b n)) loop_vars do
+      let (mult, res) := loop_vars
+      loop_vars :=
+        (let res : Nat := (res +i 1)
+        let mult : Nat := (res *i mult)
+        (mult, res) : (Nat × Nat))
+    (pure loop_vars) ) : Id (Nat × Nat) )
+  (pure mult)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
-  writeReg r (← (undefined_int ()))
+  writeReg r (← (undefined_nat ()))
+
+def sail_model_init (x_0 : Unit) : SailM Unit := do
+  (initialize_registers ())
 
 end Functions
-
 open Functions
 

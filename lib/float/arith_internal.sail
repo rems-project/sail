@@ -170,7 +170,7 @@ function float_add_same_exp_internal (op_0, op_1) = {
     let mantissa = sail_shiftleft (mantissa_offset, length (fp_0.exp) - 2);
     let rm = float_get_rounding ();
 
-    return float_round_and_compose (sign, exp, mantissa, rm);
+    float_round_and_compose (sign, exp, mantissa, rm);
   }
 }
 

@@ -1,0 +1,7 @@
+{
+    "arch" : {
+        "xlen" : 32,
+        "ylen" : 64,
+        "have_the_thing" : true
+    }
+}

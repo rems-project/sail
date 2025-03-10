@@ -46,6 +46,7 @@
 
 open Libsail
 
+open Ast_util
 open Interactive.State
 
 let opt_branch_coverage = ref None
@@ -57,6 +58,7 @@ let opt_no_lib = ref false
 let opt_no_main = ref false
 let opt_no_mangle = ref false
 let opt_no_rts = ref false
+let opt_preserve_types = ref IdSet.empty
 let opt_specialize_c = ref false
 
 let c_options =
@@ -92,8 +94,12 @@ let c_options =
     );
     (Flag.create ~prefix:["c"] "specialize", Arg.Set opt_specialize_c, "specialize integer arguments in C output");
     ( Flag.create ~prefix:["c"] "preserve",
-      Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
+      Arg.String (fun str -> Specialize.add_initial_calls (IdSet.singleton (mk_id str))),
       "make sure the provided function identifier is preserved in C output"
+    );
+    ( Flag.create ~prefix:["c"] "preserve_type",
+      Arg.String (fun str -> opt_preserve_types := IdSet.add (mk_id str) !opt_preserve_types),
+      "make sure the provided type identifier is preserved in the C output"
     );
     ( Flag.create ~prefix:["c"] "fold_unit",
       Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
@@ -166,9 +172,7 @@ let collect_c_name_info ast =
   List.iter
     (function
       | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, extern), _)), _) -> (
-          match Ast_util.extern_assoc "c" extern with
-          | Some name -> reserved := Util.StringSet.add name !reserved
-          | None -> ()
+          match extern_assoc "c" extern with Some name -> reserved := Util.StringSet.add name !reserved | None -> ()
         )
       | DEF_aux (DEF_pragma ("c_reserved", Pragma_line (name, _)), _) -> reserved := Util.StringSet.add name !reserved
       | DEF_aux (DEF_pragma ("c_override", Pragma_structured data), def_annot) -> (
@@ -195,6 +199,7 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     let reserved_words = reserveds
     let overrides = overrides
     let branch_coverage = !opt_branch_coverage
+    let preserve_types = !opt_preserve_types
   end) in
   Reporting.opt_warnings := true;
   let echo_output, basename = match out_file with Some f -> (false, f) | None -> (true, "out") in
@@ -232,6 +237,8 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
 
 let _ =
   Pragma.register "c_in_main";
+  Pragma.register "c_in_main_post";
   Pragma.register "c_reserved";
   Pragma.register "c_override";
-  Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true c_target
+  Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true
+    ~supports_runtime_config:true c_target

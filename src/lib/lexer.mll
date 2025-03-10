@@ -62,6 +62,7 @@ let kw_table =
      ("bitone",                  (fun _ -> Bitone));
      ("by",                      (fun _ -> By));
      ("match",                   (fun _ -> Match));
+     ("config",                  (fun _ -> Config));
      ("clause",                  (fun _ -> Clause));
      ("dec",                     (fun _ -> Dec));
      ("operator",                (fun _ -> Op));
@@ -109,6 +110,7 @@ let kw_table =
      ("union",                   (fun _ -> Union));
      ("newtype",                 (fun _ -> Newtype));
      ("with",                    (fun _ -> With));
+     ("when",                    (fun _ -> When));
      ("val",                     (fun _ -> Val));
      ("outcome",                 (fun _ -> Outcome));
      ("instantiation",           (fun _ -> Instantiation));

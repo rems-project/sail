@@ -56,10 +56,7 @@ module P = Parse_ast
 (* See mli file for details on what these flags do *)
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
-let opt_abstract_types = ref false
 let opt_strict_bitvector = ref false
-
-let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -1167,7 +1164,7 @@ let check_duplicate_fields ~error ~field_id fields =
       match IdSet.find_opt id seen with
       | Some seen_id ->
           raise
-            (Reporting.err_general (Hint ("Previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
+            (Reporting.err_general (Hint ("previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
       | None -> IdSet.add id seen
     )
     IdSet.empty fields
@@ -1215,7 +1212,9 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
               | [] -> FP_no_wild
             in
             let fpats = List.map (to_ast_fpat ctx) fpats in
-            check_duplicate_fields ~error:(fun f -> "Duplicate field " ^ f ^ " in struct pattern") ~field_id:fst fpats;
+            check_duplicate_fields
+              ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct pattern" f)
+              ~field_id:fst fpats;
             P_struct (fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
@@ -1224,6 +1223,14 @@ and to_ast_fpat ctx (P.FP_aux (aux, l)) =
   match aux with
   | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
   | FP_wild -> Reporting.unreachable l __POS__ "Unexpected field wildcard"
+
+let rec is_config (P.E_aux (aux, _)) =
+  match aux with
+  | P.E_field (exp, field) -> begin
+      match is_config exp with None -> None | Some key -> Some (string_of_parse_id field :: key)
+    end
+  | P.E_config root -> Some [root]
+  | _ -> None
 
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
@@ -1300,10 +1307,19 @@ and to_ast_exp ctx exp =
           )
         | P.E_struct_update (exp, fexps) -> (
             match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct_update (to_ast_exp ctx exp, fexps)
+            | Some fexps ->
+                check_duplicate_fields
+                  ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct update" f)
+                  ~field_id:(fun (FE_aux (FE_fexp (id, _), _)) -> id)
+                  fexps;
+                E_struct_update (to_ast_exp ctx exp, fexps)
             | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
           )
-        | P.E_field (exp, id) -> E_field (to_ast_exp ctx exp, to_ast_id ctx id)
+        | P.E_field (exp, field) -> (
+            match is_config exp with
+            | None -> E_field (to_ast_exp ctx exp, to_ast_id ctx field)
+            | Some key -> E_config (List.rev (string_of_parse_id field :: key))
+          )
         | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
         | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
         | P.E_let (leb, exp) -> E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp)
@@ -1313,6 +1329,7 @@ and to_ast_exp ctx exp =
         | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
         | P.E_exit exp -> E_exit (to_ast_exp ctx exp)
         | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
+        | P.E_config key -> E_config [key]
         | P.E_return exp -> E_return (to_ast_exp ctx exp)
         | P.E_assert (cond, msg) -> E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg)
         | P.E_internal_plet (pat, exp1, exp2) ->
@@ -1616,6 +1633,24 @@ let to_ast_record ctx id typq fields =
   let fields = List.map (fun (atyp, id) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) fields in
   (id, typq, fields, add_constructor id typq K_type ctx)
 
+let check_duplicate_enum_ids ids =
+  let _ =
+    List.fold_left
+      (fun seen id ->
+        let l = id_loc id in
+        match Bindings.find_opt id seen with
+        | Some previous ->
+            raise
+              (Reporting.err_general
+                 (Hint ("previous occurence here", previous, l))
+                 (Printf.sprintf "Enumeration member '%s' occurs twice in enum declaration" (string_of_id id))
+              )
+        | None -> Bindings.add id (id_loc id) seen
+      )
+      Bindings.empty ids
+  in
+  ()
+
 let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
   | P.TD_abbrev (id, typq, kind_opt, atyp) ->
@@ -1668,28 +1703,28 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
         @ generated_records,
         add_constructor id typq K_type ctx
       )
-  | P.TD_enum (id, fns, enums) ->
+  | P.TD_enum (id, fns, members) ->
       let id = to_ast_reserved_type_id ctx id in
       let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
-      let fns = generate_enum_functions l ctx id fns enums in
-      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
+      let fns = generate_enum_functions l ctx id fns members in
+      let members = List.map (fun e -> to_ast_id ctx (fst e)) members in
+      check_duplicate_enum_ids members;
+      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
-  | P.TD_abstract (id, kind) ->
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
+  | P.TD_abstract (id, kind, instantiation) -> (
       let id = to_ast_reserved_type_id ctx id in
-      begin
-        match to_ast_kind kind with
-        | Some kind ->
-            ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
-              {
-                ctx with
-                type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
-              }
-            )
-        | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
-      end
+      let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
+      match to_ast_kind kind with
+      | Some kind ->
+          ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
+            {
+              ctx with
+              type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+            }
+          )
+      | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
+    )
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
@@ -1807,14 +1842,39 @@ let pexp_of_mpexp (MPat_aux (aux, annot)) exp =
   | MPat_pat mpat -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
   | MPat_when (mpat, guard) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
 
-let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
-  match mapcl with
+let apply_when_guard guard (MCL_aux (mcl, annot)) =
+  match mcl with
+  | MCL_bidir (MPat_aux (MPat_pat mpat1, pexp_annot1), MPat_aux (MPat_pat mpat2, pexp_annot2)) ->
+      MCL_aux
+        ( MCL_bidir (MPat_aux (MPat_when (mpat1, guard), pexp_annot1), MPat_aux (MPat_when (mpat2, guard), pexp_annot2)),
+          annot
+        )
+  | MCL_forwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_forwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_backwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_backwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_bidir (MPat_aux (MPat_when (_, if_guard), _), _)
+  | MCL_bidir (_, MPat_aux (MPat_when (_, if_guard), _))
+  | MCL_forwards (Pat_aux (Pat_when (_, if_guard, _), _))
+  | MCL_backwards (Pat_aux (Pat_when (_, if_guard, _), _)) ->
+      raise
+        (Reporting.err_general
+           (Hint ("'if' clause here", exp_loc if_guard, exp_loc guard))
+           "Mapping clause has both a 'when' guard and an 'if' clause"
+        )
+
+let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mcl, l)) =
+  match mcl with
   | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
-  | P.MCL_doc (doc_comment, mcl) -> begin
+  | P.MCL_doc (doc_comment, mcl) -> (
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
       | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
-    end
+    )
+  | P.MCL_when (mcl, guard) ->
+      let mcl = to_ast_mapcl doc attrs ctx mcl in
+      let guard = to_ast_exp ctx guard in
+      apply_when_guard guard mcl
   | P.MCL_bidir (mpexp1, mpexp2) ->
       MCL_aux
         (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l (), empty_uannot))
@@ -1986,7 +2046,6 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let d = to_ast_dec ctx dec in
       ([DEF_aux (DEF_register d, annot)], ctx)
   | P.DEF_constraint nc ->
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let nc = to_ast_constraint ctx nc in
       ([DEF_aux (DEF_constraint nc, annot)], ctx)
   | P.DEF_pragma (pragma, P.Pragma_line (arg, ltrim)) ->

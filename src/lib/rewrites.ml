@@ -653,6 +653,7 @@ let rewrite_ast_remove_vector_concat env ast =
     {
       rewrite_exp = rewrite_exp_remove_vector_concat_pat;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun = rewrite_fun_remove_vector_concat_pat;
@@ -1328,6 +1329,7 @@ let rewrite_ast_remove_bitvector_pats env ast =
     {
       rewrite_exp = rewrite_exp_remove_bitvector_pat;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun = rewrite_fun_remove_bitvector_pat;
@@ -1573,6 +1575,7 @@ let rewrite_ast_exp_lift_assign env defs =
     {
       rewrite_exp = rewrite_exp_lift_assign_intro;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       (*_lift_assign_intro*) rewrite_fun;
@@ -1986,7 +1989,7 @@ let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) = Tu_aux
 
 let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
-  | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
+  | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
   | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
       TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
   | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, rw_typquant typq, typ_arg), annot)
@@ -2228,6 +2231,7 @@ let rewrite_ast_remove_blocks env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -2324,9 +2328,10 @@ let rewrite_ast_letbind_effects effect_info env =
     let pure_rewrap e = purify (rewrap e) in
     match exp_aux with
     | E_block es -> failwith "E_block should have been removed till now"
-    | E_id id -> k exp
-    | E_ref id -> k exp
+    | E_id _ -> k exp
+    | E_ref _ -> k exp
     | E_lit _ -> k exp
+    | E_config _ -> k exp
     | E_typ (typ, exp') -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_typ (typ, exp'))))
     | E_app (op_bool, [l; r]) when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
         (* Leave effectful operands of Boolean "and"/"or" in place to allow
@@ -2458,6 +2463,7 @@ let rewrite_ast_letbind_effects effect_info env =
         {
           rewrite_exp;
           rewrite_pat;
+          rewrite_mpat;
           rewrite_let;
           rewrite_lexp;
           rewrite_fun;
@@ -2523,6 +2529,7 @@ let rewrite_ast_internal_lets env =
     {
       rewrite_exp = (fun _ exp -> fold_exp alg exp);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3005,6 +3012,7 @@ let rewrite_ast_remove_superfluous_letbinds env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3110,6 +3118,7 @@ let rewrite_ast_remove_superfluous_returns env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3134,7 +3143,16 @@ let rewrite_ast_remove_e_assign env ast =
   in
   let rewrite_exp _ e = replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_ast_base
-    { rewrite_exp; rewrite_pat; rewrite_let; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
+    {
+      rewrite_exp;
+      rewrite_pat;
+      rewrite_mpat;
+      rewrite_let;
+      rewrite_lexp;
+      rewrite_fun;
+      rewrite_def;
+      rewrite_ast = rewrite_ast_base;
+    }
     { ast with defs = loop_specs @ ast.defs }
 
 let merge_funcls env ast =
@@ -3812,6 +3830,7 @@ module MakeExhaustive = struct
         {
           rewrite_exp = (fun _ -> fold_exp alg);
           rewrite_pat;
+          rewrite_mpat;
           rewrite_let;
           rewrite_lexp;
           rewrite_fun;
@@ -4692,6 +4711,7 @@ let all_rewriters =
             )
         )
     );
+    ("add_register_init_function", base_rewriter State.add_register_init_function);
     ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
     ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
@@ -4759,7 +4779,13 @@ let rewrite ctx effect_info env rewriters ast =
          (1, (ctx, ast, effect_info, env))
          rewriters
       )
-  with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
+  with
+  | Type_error.Type_error (l, err) ->
+      Printexc.print_backtrace stderr;
+      raise (Type_error.to_reporting_exn l err)
+  | e ->
+      Printexc.print_backtrace stderr;
+      raise e
 
 let () =
   let open Interactive in

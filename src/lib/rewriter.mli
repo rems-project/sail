@@ -55,6 +55,7 @@ type ('a, 'b) rewriters = {
   rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
   rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
@@ -78,6 +79,8 @@ val rewrite_ast_base_progress : string -> (tannot, env) rewriters -> typed_ast -
 val rewrite_lexp : (tannot, env) rewriters -> tannot lexp -> tannot lexp
 
 val rewrite_pat : (tannot, env) rewriters -> tannot pat -> tannot pat
+
+val rewrite_mpat : (tannot, env) rewriters -> tannot mpat -> tannot mpat
 
 val rewrite_pexp : (tannot, env) rewriters -> tannot pexp -> tannot pexp
 
@@ -159,6 +162,7 @@ type ( 'a,
   e_constraint : n_constraint -> 'exp_aux;
   e_exit : 'exp -> 'exp_aux;
   e_throw : 'exp -> 'exp_aux;
+  e_config : string list -> 'exp_aux;
   e_return : 'exp -> 'exp_aux;
   e_assert : 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;

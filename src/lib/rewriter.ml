@@ -54,6 +54,7 @@ type ('a, 'b) rewriters = {
   rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
   rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
@@ -172,12 +173,28 @@ let rewrite_pat rewriters (P_aux (pat, (l, annot))) =
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
   | P_struct (fpats, fwild) -> rewrap (P_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats, fwild))
 
+let rewrite_mpat rewriters (MP_aux (pat, (l, annot))) =
+  let rewrap p = MP_aux (p, (l, annot)) in
+  let rewrite = rewriters.rewrite_mpat rewriters in
+  match pat with
+  | MP_lit _ | MP_id _ | MP_vector_subrange _ -> rewrap pat
+  | MP_as (pat, id) -> rewrap (MP_as (rewrite pat, id))
+  | MP_typ (pat, typ) -> rewrap (MP_typ (rewrite pat, typ))
+  | MP_app (id, pats) -> rewrap (MP_app (id, List.map rewrite pats))
+  | MP_vector pats -> rewrap (MP_vector (List.map rewrite pats))
+  | MP_vector_concat pats -> rewrap (MP_vector_concat (List.map rewrite pats))
+  | MP_tuple pats -> rewrap (MP_tuple (List.map rewrite pats))
+  | MP_list pats -> rewrap (MP_list (List.map rewrite pats))
+  | MP_cons (pat1, pat2) -> rewrap (MP_cons (rewrite pat1, rewrite pat2))
+  | MP_string_append pats -> rewrap (MP_string_append (List.map rewrite pats))
+  | MP_struct fpats -> rewrap (MP_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats))
+
 let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrap e = E_aux (e, (l, annot)) in
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
-  | E_id _ | E_lit _ -> rewrap exp
+  | E_id _ | E_lit _ | E_config _ -> rewrap exp
   | E_typ (typ, exp) -> rewrap (E_typ (typ, rewrite exp))
   | E_app (id, exps) -> rewrap (E_app (id, List.map rewrite exps))
   | E_app_infix (el, id, er) -> rewrap (E_app_infix (rewrite el, id, rewrite er))
@@ -275,15 +292,15 @@ let rewrite_fun rewriters (FD_aux (FD_function (recopt, tannotopt, funcls), (l, 
 let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
   let aux =
     match aux with
-    | MPat_pat mpat -> MPat_pat mpat
-    | MPat_when (mpat, exp) -> MPat_when (mpat, rewriters.rewrite_exp rewriters exp)
+    | MPat_pat mpat -> MPat_pat (rewriters.rewrite_mpat rewriters mpat)
+    | MPat_when (mpat, exp) -> MPat_when (rewriters.rewrite_mpat rewriters mpat, rewriters.rewrite_exp rewriters exp)
   in
   MPat_aux (aux, (l, annot))
 
 let rewrite_mapcl rewriters (MCL_aux (aux, def_annot)) =
   let aux =
     match aux with
-    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
+    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, rewrite_mpexp rewriters mpexp2)
     | MCL_forwards pexp -> MCL_forwards (rewrite_pexp rewriters pexp)
     | MCL_backwards pexp -> MCL_backwards (rewrite_pexp rewriters pexp)
   in
@@ -347,7 +364,16 @@ let rewrite_ast_base_progress prefix rewriters ast =
   { ast with defs = rewrite 1 ast.defs }
 
 let rewriters_base =
-  { rewrite_exp; rewrite_pat; rewrite_let; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
+  {
+    rewrite_exp;
+    rewrite_pat;
+    rewrite_mpat;
+    rewrite_let;
+    rewrite_lexp;
+    rewrite_fun;
+    rewrite_def;
+    rewrite_ast = rewrite_ast_base;
+  }
 
 let rewrite_ast ast = rewrite_ast_base rewriters_base ast
 
@@ -453,7 +479,12 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_list = (fun ps -> Option.map (fun ps -> MP_list ps) (Util.option_all ps));
     p_cons = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt));
     p_string_append = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps));
-    p_struct = (fun _ -> None);
+    p_struct =
+      (fun (fs, _) ->
+        Option.map
+          (fun fs -> MP_struct fs)
+          (List.map (fun (id, v) -> Option.map (fun v -> (id, v)) v) fs |> Util.option_all)
+      );
     p_aux = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat, annot)) pat);
   }
 
@@ -504,6 +535,7 @@ type ( 'a,
   e_constraint : n_constraint -> 'exp_aux;
   e_exit : 'exp -> 'exp_aux;
   e_throw : 'exp -> 'exp_aux;
+  e_config : string list -> 'exp_aux;
   e_return : 'exp -> 'exp_aux;
   e_assert : 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
@@ -574,6 +606,7 @@ let rec fold_exp_aux alg = function
   | E_constraint nc -> alg.e_constraint nc
   | E_exit e -> alg.e_exit (fold_exp alg e)
   | E_throw e -> alg.e_throw (fold_exp alg e)
+  | E_config key -> alg.e_config key
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert (e1, e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_var (lexp, e1, e2) -> alg.e_var (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
@@ -652,6 +685,7 @@ let id_exp_alg =
     e_constraint = (fun nc -> E_constraint nc);
     e_exit = (fun e1 -> E_exit e1);
     e_throw = (fun e1 -> E_throw e1);
+    e_config = (fun key -> E_config key);
     e_return = (fun e1 -> E_return e1);
     e_assert = (fun (e1, e2) -> E_assert (e1, e2));
     e_var = (fun (lexp, e2, e3) -> E_var (lexp, e2, e3));
@@ -783,6 +817,7 @@ let compute_exp_alg bot join =
     e_constraint = (fun nc -> (bot, E_constraint nc));
     e_exit = (fun (v1, e1) -> (v1, E_exit e1));
     e_throw = (fun (v1, e1) -> (v1, E_throw e1));
+    e_config = (fun key -> (bot, E_config key));
     e_return = (fun (v1, e1) -> (v1, E_return e1));
     e_assert = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_assert (e1, e2)));
     e_var = (fun ((vl, lexp), (v2, e2), (v3, e3)) -> (join_list [vl; v2; v3], E_var (lexp, e2, e3)));
@@ -882,6 +917,7 @@ let pure_exp_alg bot join =
     e_constraint = (fun nc -> bot);
     e_exit = (fun v1 -> v1);
     e_throw = (fun v1 -> v1);
+    e_config = (fun _ -> bot);
     e_return = (fun v1 -> v1);
     e_assert = (fun (v1, v2) -> join v1 v2);
     e_var = (fun (vl, v2, v3) -> join_list [vl; v2; v3]);
@@ -997,7 +1033,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_block (List.rev es)))
-  | E_id _ | E_ref _ | E_lit _ -> (x, exp)
+  | E_id _ | E_ref _ | E_lit _ | E_config _ -> (x, exp)
   | E_typ (typ, e) ->
       let x, e = f x e in
       (x, re (E_typ (typ, e)))

@@ -236,6 +236,7 @@ and exp_aux =
   | E_sizeof of atyp
   | E_constraint of atyp
   | E_exit of exp
+  | E_config of string
   | E_throw of exp
   | E_try of exp * pexp list
   | E_return of exp
@@ -363,6 +364,7 @@ and mapcl_aux =
   | MCL_forwards_deprecated of mpexp * exp
   | MCL_forwards of pexp
   | MCL_backwards of pexp
+  | MCL_when of mapcl * exp
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)
@@ -384,7 +386,7 @@ type type_def_aux =
   | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
   | TD_variant of id * typquant * type_union list (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
-  | TD_abstract of id * kind
+  | TD_abstract of id * kind * string list option
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type val_spec_aux = (* Value type specification *)
