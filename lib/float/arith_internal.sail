@@ -13,6 +13,7 @@ $define _FLOAT_ARITH_INTERNAL
 $include <float/common.sail>
 $include <float/zero.sail>
 $include <float/nan.sail>
+$include <float/rounding.sail>
 
 val      float_is_lt_internal : fp_bits_x2 -> bool
 function float_is_lt_internal ((op_0, op_1)) = {
@@ -167,8 +168,9 @@ function float_add_same_exp_internal (op_0, op_1) = {
     let one = sail_zero_extend ([bitone], bitsize);
     let mantissa_offset = mantissa_sum + sail_shiftleft (one, shift_bitsize);
     let mantissa = sail_shiftleft (mantissa_offset, length (fp_0.exp) - 2);
+    let rm = float_get_rounding ();
 
-    float_round_and_compose (sign, exp, mantissa, fp_rounding_global);
+    float_round_and_compose (sign, exp, mantissa, rm);
   }
 }
 
