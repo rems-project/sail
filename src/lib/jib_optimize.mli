@@ -56,7 +56,11 @@ val optimize_unit : instr list -> instr list
    instructions, prodcing a flat list of instructions. *)
 val flatten_instrs : instr list -> instr list
 
-val flatten_cdef : cdef -> cdef
+(** Flatten all instructions within a cdef. If max_depth is provided,
+    will only flatten definitions exceding a certain depth (computed
+    by counting nested block and if-then-else instructions). *)
+val flatten_cdef : ?max_depth:int -> cdef -> cdef
+
 val reset_flat_counter : unit -> unit
 
 val unique_per_function_ids : cdef list -> cdef list

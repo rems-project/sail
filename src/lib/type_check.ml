@@ -4943,8 +4943,8 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
         | Some (attr_l, None) ->
             typ_error (Hint ("When checking this struct", l, attr_l)) "No argument for undefined attribute"
       end
-  | TD_variant (id, typq, arms, _) ->
-      let rec_env = Env.add_variant id (typq, arms) env in
+  | TD_variant (id, typq, arms, is_newtype) ->
+      let rec_env = Env.add_variant ~is_newtype id (typq, arms) env in
       (* register_value is a special type used by theorem prover
          backends that we allow to be recursive. *)
       let non_rec_env = if string_of_id id = "register_value" then rec_env else env in

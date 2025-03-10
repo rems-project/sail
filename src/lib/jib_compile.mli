@@ -110,6 +110,8 @@ val ctx_has_val_spec : id -> ctx -> bool
     If unspecified and there is no current target, it defaults to "c". *)
 val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
 
+val transparent_newtype : ctx -> ctyp -> ctyp
+
 (** {2 Compilation functions} *)
 
 (** The Config module specifies static configuration for compiling

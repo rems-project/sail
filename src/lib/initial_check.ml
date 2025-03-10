@@ -1530,7 +1530,7 @@ let realize_union_anon_rec_arm union_id typq (P.Tu_aux (_, l) as tu) =
 
 let rec realize_union_anon_rec_types orig_union arms =
   match orig_union with
-  | P.TD_variant (union_id, typq, _) -> begin
+  | P.TD_variant (union_id, typq, _, _) -> begin
       match arms with
       | [] -> []
       | arm :: arms ->
@@ -1674,7 +1674,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
   | P.TD_record (id, typq, fields) ->
       let id, typq, fields, ctx = to_ast_record ctx id typq fields in
       ([DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)], ctx)
-  | P.TD_variant (id, typq, arms) as union ->
+  | P.TD_variant (id, typq, arms, is_newtype) as union ->
       let (typq, arms), kenv = KindInference.infer_union ctx typq arms KindInference.initial_env in
       (* First generate auxilliary record types for anonymous records in constructors *)
       let records_and_arms = realize_union_anon_rec_types union arms in
@@ -1699,7 +1699,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let arms =
         List.map (ConvertType.to_ast_type_union kenv None [] None (add_constructor id typq K_type typq_ctx)) arms
       in
-      ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)]
+      ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, is_newtype), (l, empty_uannot))), def_annot)]
         @ generated_records,
         add_constructor id typq K_type ctx
       )

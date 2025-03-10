@@ -78,7 +78,9 @@ open Ast_util
 open Jib
 open Type_check
 
-type function_id = Sail_function of id | Pure_extern of id | Extern of id
+type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of id | Extern of id
+
+type constructor_id = Constructor of id | Newtype_wrapper of id
 
 (** Each ANF expression has an annotation which contains the location of
     the original Sail expression, it's typing environment, and the
@@ -118,7 +120,7 @@ and 'a apat_aux =
   | AP_tuple of 'a apat list
   | AP_id of id * 'a
   | AP_global of id * 'a
-  | AP_app of id * 'a apat * 'a
+  | AP_app of constructor_id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
   | AP_struct of (id * 'a apat) list * 'a

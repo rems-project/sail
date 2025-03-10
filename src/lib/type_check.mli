@@ -159,6 +159,8 @@ module Env : sig
 
   val is_variant : id -> t -> bool
 
+  val is_newtype : id -> t -> bool
+
   val is_record : id -> t -> bool
 
   val is_enum : id -> t -> bool

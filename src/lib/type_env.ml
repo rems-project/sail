@@ -86,6 +86,7 @@ type global_env = {
   mappings : (typquant * typ * typ) env_item Bindings.t;
   unions : (typquant * type_union list) env_item Bindings.t;
   union_ids : (typquant * typ) env_item Bindings.t;
+  newtypes : IdSet.t;
   scattered_union_envs : global_env Bindings.t;
   abstract_typs : kind env_item Bindings.t;
   constraints : (constraint_reason * n_constraint) list;
@@ -114,6 +115,7 @@ let empty_global_env =
     mappings = Bindings.empty;
     unions = Bindings.empty;
     union_ids = Bindings.empty;
+    newtypes = IdSet.empty;
     scattered_union_envs = Bindings.empty;
     abstract_typs = Bindings.empty;
     constraints = [];
@@ -1472,7 +1474,7 @@ let get_toplevel_lets env = Bindings.bindings env.global.letbinds |> List.map fs
 
 let is_variant id env = Bindings.mem id env.global.unions
 
-let add_variant id (typq, constructors) env =
+let add_variant ?(is_newtype = false) id (typq, constructors) env =
   let constructors =
     List.map
       (fun (Tu_aux (Tu_ty_id (typ, id), def_annot)) ->
@@ -1485,10 +1487,16 @@ let add_variant id (typq, constructors) env =
     typ_print (lazy (adding ^ "variant " ^ string_of_id id)) [@coverage off];
     update_global
       (fun global ->
-        { global with unions = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, constructors)) global.unions }
+        {
+          global with
+          unions = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, constructors)) global.unions;
+          newtypes = (if is_newtype then IdSet.add id global.newtypes else global.newtypes);
+        }
       )
       env
   )
+
+let is_newtype id env = IdSet.mem id env.global.newtypes
 
 let add_scattered_variant id typq env =
   let env = add_scattered_id id [] env in

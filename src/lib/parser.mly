@@ -1019,13 +1019,13 @@ type_def:
   | Enum id With enum_functions Eq Lcurly enum Rcurly
     { mk_td (TD_enum ($2, $4, $7)) $startpos $endpos }
   | Newtype id Eq type_union
-    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4])) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], true)) $startpos $endpos }
   | Newtype id typaram Eq type_union
-    { mk_td (TD_variant ($2, $3, [$5])) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, [$5], true)) $startpos $endpos }
   | Union id Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5)) $startpos $endpos }
+    { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typaram Eq Lcurly type_unions Rcurly
-    { mk_td (TD_variant ($2, $3, $6)) $startpos $endpos }
+    { mk_td (TD_variant ($2, $3, $6, false)) $startpos $endpos }
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 

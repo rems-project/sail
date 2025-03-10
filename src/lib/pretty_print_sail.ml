@@ -719,7 +719,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
     | A_typ _ -> empty
 
-  let doc_type_def (TD_aux (td, _)) =
+  let doc_type_def (TD_aux (td, (l, _))) =
     match td with
     | TD_abstract (id, kind, instantiation) ->
         let doc_inst = function
@@ -756,23 +756,21 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace;
           ]
-    | TD_variant (id, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, TypQ_aux (TypQ_tq [], _), unions, _) ->
-        separate space
-          [
-            string "union";
-            doc_id id;
-            equals;
-            surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace;
-          ]
-    | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
-        separate space
-          [
-            string "union";
-            doc_id id;
-            doc_param_quants qs;
-            equals;
-            surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace;
-          ]
+    | TD_variant (id, quant, clauses, is_newtype) ->
+        let quant_doc =
+          match quant with
+          | TypQ_aux (TypQ_no_forall, _) | TypQ_aux (TypQ_tq [], _) -> empty
+          | TypQ_aux (TypQ_tq qs, _) -> space ^^ doc_param_quants qs
+        in
+        let body =
+          if is_newtype then (
+            match clauses with
+            | [clause] -> doc_union clause
+            | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pretty-print a newtype with multiple clauses")
+          )
+          else surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union clauses) rbrace
+        in
+        separate space [string (if is_newtype then "newtype" else "union"); doc_id id ^^ quant_doc; equals; body]
     | TD_bitfield (id, typ, fields) ->
         let doc_field (id, range) = separate space [doc_id id; colon; doc_index_range range] in
         doc_op equals
