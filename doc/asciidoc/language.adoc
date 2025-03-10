@@ -81,7 +81,7 @@ include::sailcomment:example[from=let-var]
 NOTE: For those familiar with Rust, a trailing semicolon in Sail does
 not change the semantics of the block and is purely optional.
 
-=== The unit type
+=== The `unit` type
 
 The simplest type in Sail is the _unit type_ `unit`. It is a type with
 a single member `()`. Rather than have functions that takes zero
@@ -273,7 +273,7 @@ sub-range of v can be updated using
 order of the indexes is the same as described above for increasing and
 decreasing vectors.
 
-=== The list type
+=== The `list` type
 :list-example: sail_doc/list.json
 
 In addition to vectors, Sail also has `list` as a built-in type. For
@@ -500,6 +500,35 @@ previously.
 As with structs, we can define polymorphic union types, like
 
 sail::either[from=union,type=type]
+
+==== `newtype`
+
+There is a slight variation of the `union` keyword, which allows
+constructing a union with just a single constructor:
+
+[source,sail]
+----
+newtype register_index = Mk_index : bits(5)
+----
+this is semantically equivalent to
+[source,sail]
+----
+union register_index = {
+  Mk_index : bits(5)
+}
+----
+
+The main difference from is that for certain Sail targets (including
+C, SMT, and SystemVerilog) `register_index` will be compiled as if it
+were `bits(5)` directly.
+
+The purpose of the `newtype` construct is to create an alias for an
+existing type which is distinct from the perspective of the type
+system -- We cannot accidentally pass any `bits(5)` where a
+`register_index` index is required, as register indices must have been
+explicitly constructed using `Mk_index`. This means that using
+`newtypes` can increase type-safety and therefore prevent errors,
+unlike regular type synonyms which we discuss below.
 
 === Type synonyms
 :type_syn: sail_doc/type_syn.json
@@ -1398,14 +1427,15 @@ Sail if Sail did not itself support exceptions. In practice Sail
 language-level exceptions end up being quite a nice tool for
 implementing processor exceptions in ISA specifications.
 
-For exceptions we have two language features: `throw` statements
-and `try`--`catch` blocks. The throw keyword takes a value of
-type `exception` as an argument, which can be any user defined type
-with that name. There is no built-in exception type, so to use
-exceptions one must be set up on a per-project basis. Usually the
-exception type will be a union, often a scattered union, which allows
-for the exceptions to be declared throughout the specification as they
-would be in OCaml, for example:
+For exceptions we have two language features: `throw` statements and
+`try`--`catch` blocks. The throw keyword takes a value of type
+`exception` as an argument, which can be any user defined type with
+that name. There is no built-in exception type, so to use exceptions
+one must be set up on a per-project basis. The exception type must be
+a union (except it cannot be declared via `newtype`), and is usually a
+scattered union to allow exceptions to be declared throughout the
+specification as they would be in OCaml, for example:
+
 [source,sail]
 ----
 include::sail:EXN[from=exn,type=span]

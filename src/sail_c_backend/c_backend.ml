@@ -839,6 +839,22 @@ end
 
 let combine_variables = visit_cdefs (new Combine_variables.visitor)
 
+module Remove_stack_clears = struct
+  let is_stack_clear = function I_aux (I_clear (ctyp, _), _) -> is_stack_ctyp ctyp | _ -> false
+
+  class visitor : jib_visitor =
+    object
+      inherit empty_jib_visitor
+
+      method! vinstrs instrs =
+        if List.exists is_stack_clear instrs then
+          change_do_children (List.filter (fun i -> not (is_stack_clear i)) instrs)
+        else DoChildren
+    end
+end
+
+let remove_stack_clears = visit_cdefs (new Remove_stack_clears.visitor)
+
 let concatMap f xs = List.concat (List.map f xs)
 
 let optimize ~have_rts recursive_functions cdefs =
@@ -847,7 +863,8 @@ let optimize ~have_rts recursive_functions cdefs =
   |> (if !optimize_alias then concatMap remove_alias else nothing)
   |> (if !optimize_alias then combine_variables else nothing)
   (* We need the runtime to initialize hoisted allocations *)
-  |> if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing
+  |> (if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing)
+  |> remove_stack_clears
 
 (**************************************************************************)
 (* 6. Code generation                                                     *)
@@ -891,6 +908,11 @@ end
 module Codegen (Config : CODEGEN_CONFIG) = struct
   open Printf
 
+  let has_prefix prefix s =
+    if String.length s < String.length prefix then false else String.sub s 0 (String.length prefix) = prefix
+
+  let has_sail_prefix s = has_prefix "sail_" s || has_prefix "Sail_" s || has_prefix "SAIL_" s
+
   module NameGen =
     Name_generator.Make
       (struct
@@ -902,6 +924,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             && (not (Util.StringSet.mem s Keywords.c_reserved_words))
             && (not (Util.StringSet.mem s Keywords.c_used_words))
             && (not (Util.StringSet.mem s Config.reserved_words))
+            && (not (has_sail_prefix s))
             && not (c_int_type_name s)
           in
           (not Config.no_mangle) || valid_name s
