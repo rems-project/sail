@@ -14,3 +14,17 @@ function foo(ys: bits(6), xs: bits(6)) -> unit = {
     let _ = xs[3..1] @ (xs[0..0] @ xs[5..4]);
     ()
 }
+
+function rX r =
+    match r {
+        0b00000 =>  /**/ EXTZ(0x0),
+        0b00001 =>
+            /**/
+            EXTZ(0x1),
+        0b00001 =>{
+            /**/
+            EXTZ(0x1)},
+        _ =>
+            //
+            Xs[ unsigned(r)],
+    }

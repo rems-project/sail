@@ -44,9 +44,15 @@ enum E with f -> very_long_type_that_will_trigger_a_linebreak,
 }
 
 function has_loops () = {
-    foreach (n from 1 to 3) { () };
-    foreach (n from 3 downto 1) { () };
-    foreach (n from 0 to 4 by 2) { () };
+    foreach (n from 1 to 3) {
+        ()
+    };
+    foreach (n from 3 downto 1) {
+        ()
+    };
+    foreach (n from 0 to 4 by 2) {
+        ()
+    };
     foreach (n from 10000000000000000000000000000000 to 444444444444444444444444444444444444444444444444444444444444) {
         ()
     };

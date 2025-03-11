@@ -1,0 +1,298 @@
+function one_atom () =
+    /* comment */
+    0b1
+
+function one_binary_op () =
+    //
+    a + 1
+
+function haveXcheri () -> bool =
+    /* This is a necessary but not sufficient condition, but should do for now. */
+    misa.X == 0b1
+
+function one_binary_op () =
+    //
+    {
+        let a = 1;
+        1
+    }
+
+function let_in_once_without_trailing_comment () =
+    let a = 1 in
+    a
+
+function let_in_once_with_trailing_comment () =
+    // comment
+    let a = 1 in
+    a + 1
+
+function shift_right_arith64(v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = sign_extend(v) in
+    (v128 >> shift)[63..0]
+
+function binary_op(v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = sign_extend(v) in
+    (v128 >> shift)[63 > 0]
+
+function binary_op(v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = sign_extend(v) in
+    (v128 >> shift)[
+        let a = 1 in
+        63 > 0
+    ]
+
+function binary_op(v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = sign_extend(v) in
+    let a =
+        (if
+            let a = 1 in
+            a > 1
+        then {
+            let a = 1 in
+            63 > 0
+        } else {
+            let a = 1 in
+            if a > 1 then {
+                1
+            } else {
+                let a = 1 in
+                a
+            }
+        })
+    in
+    (v128 >> shift)[
+        if
+            let a = 1 in
+            a > 1
+        then
+            let a = 1 in
+            63 > 0
+        else
+            let a = 1 in
+            if a > 1
+            then 1
+            else
+                let a = 1 in
+                a
+    ]
+
+function binary_op(v : bits(64), shift : bits(6)) -> bits(64) =
+    let v128 : bits(128) = sign_extend(v) in
+    (v128 >> shift)[
+        if
+            let a = 1 in
+            a > 1
+        then {
+            let a = 1 in
+            63 > 0
+        } else {
+            let a = 1 in
+            if a > 1 then {
+                1
+            } else {
+                let a = 1 in
+                a
+            }
+        }
+    ]
+
+function let_in_once_with_comment () =
+    //
+    // 2. commend in a and =
+    let /**/ a = /**/ /**/ 1 in
+    /**/
+    //
+    a + 1
+
+// 3. multi line should be better?
+function let_in_twice () =
+    //
+    let a = 1 in
+    let b = 1 in
+    a + 1
+
+function let_in_three () =
+    //
+    let a = 1 in
+    let b = 1 in
+    /*let c = 1; is not valid now */
+    a + 1
+
+function let_in_once2 () =
+    //
+    let a = 1 in
+    a + 1
+
+function atom_with_braces () =
+    //
+    {
+        1
+    }
+
+function exps_with_braces () =
+    //
+    {
+        let a = 1;
+        a + 1
+    }
+
+function if_stmt () = if a > 1 then { 1 } else { 2 }
+
+function if_stmt () =
+    if a > 1 then {
+        let a = 1 in
+        1 // comment
+    } else {
+        let a = 1 in
+        2
+    }
+
+function if_stmt () =
+    if
+        let a = 1 in
+        if a > 1 then { 2 } else { 3 }
+    then {
+        2
+    } else {
+        3
+    }
+
+function if_stmt () =
+    if
+        let a = 1 in
+        if a > 1 then {
+            2 // comment
+        } else {
+            3
+        }
+    then {
+        // comment
+        2
+    } else {
+        3
+        // comment
+    }
+
+function if_stmt () =
+    if
+        let a = 1 in
+        if a > 1 then {
+            2 /* comment */
+        } else {
+            3
+        }
+    then {
+        /* comment */
+        2
+    } else {
+        3
+        /* comment */
+    }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    if a > 1 then { 1 } else { 2 }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    /* comment */
+    if a > 1 then { 1 } else { 2 }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    /* comment */
+    if
+        //comment
+        a > 1
+    then {
+        1
+    } else {
+        2
+    }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 then { 1 } else { 2 }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 /* comment */  then { 1 } else { 2 }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 /* comment */  then {
+        /* comment */ 1
+    } else {
+        2
+    }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 /* comment */  then {
+        /* comment */ 1 /* comment */
+    } else {
+        2
+    }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 /* comment */  then {
+        /* comment */ 1 /* comment */
+    } else {
+        /* comment */ 2
+    }
+
+function let_with_if_stmt () =
+    let a = 1 in
+    /* comment */
+    if a > 1 /* comment */  then {
+        /* comment */ 1 /* comment */
+    } else {
+        /* comment */ 2
+    } /* comment */
+
+function very_complex_if_stmt () = {
+    if width == 4 & paddr == plat_htif_tohost() then {
+        if data == (htif_tohost[31..0]) then {
+            htif_payload_writes = htif_payload_writes + 1
+        } else {
+            htif_payload_writes = 0x1
+        };
+        htif_tohost = vector_update_subrange(htif_tohost, 31, 0, data)
+    } else {
+        if width == 4 & paddr == plat_htif_tohost() + 4 then {
+            if (data[15..0]) == (htif_tohost[47..32]) then {
+                htif_payload_writes = htif_payload_writes + 1
+            } else {
+                htif_payload_writes = 0x1
+            };
+            htif_cmd_write = bitone;
+            htif_tohost = vector_update_subrange(htif_tohost, 63, 32, data)
+        } /* unaligned command writes are not supported and will not be detected */ else {
+            htif_tohost = zero_extend(data)
+        }
+    }
+}
+
+function a () = {
+    let res : xlenbits = match csr {
+        foo => 0,
+        bar => /* check extensions */ 1,
+        _ =>
+            /* check extensions */
+            match csr {
+                Some(res) => 1,
+                None() => 2,
+            },
+    }
+}
+
+function check_CSR_access(csrrw, csrpr, p, isWrite) = not(isWrite == true & csrrw == 0b11)
+    & /* read/write */ (privLevel_to_bits(p) >=_u csrpr) /* privilege */
