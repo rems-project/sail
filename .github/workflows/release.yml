@@ -19,11 +19,12 @@ jobs:
             container: rockylinux:8
             ocaml_version: 5.2.1
             opam_cache_key: rocky8-5.2.1
-          - name: mac-arm64
-            os: macos-latest
-            container: ""
-            ocaml_version: 5.2.1
-            opam_cache_key: macos-latest-5.2.1
+          # MacOS disabled for now due to code signing and notarisation requirements
+          # - name: mac-arm64 */
+          #   os: macos-latest */
+          #   container: "" */
+          #   ocaml_version: 5.2.1 */
+          #   opam_cache_key: macos-latest-5.2.1 */
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
