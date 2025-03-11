@@ -45,6 +45,7 @@ XXXXXXXXX
 
 import Out.Sail.Sail
 import Out.Sail.BitVec
+import Out.Sail.IntRange
 import Out.Defs
 
 import Out.Specialization

@@ -201,6 +201,11 @@ open Sail
 
 |}
 
+let path_to_static_libarary sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
+
+let copy_from_static_library sail_dir lean_sail_dir str =
+  Unix.system ("cp " ^ path_to_static_libarary sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
+
 let start_lean_output (out_name : string) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
@@ -222,17 +227,9 @@ let start_lean_output (out_name : string) default_sail_dir =
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
   let lean_sail_dir = lean_src_dir ^ "/Sail/" in
   Unix.mkdir lean_sail_dir 0o775;
-  let _ =
-    Unix.system
-      ("cp "
-      ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/BitVec.lean")
-      ^ " " ^ Filename.quote lean_sail_dir
-      )
-  in
-  let _ =
-    Unix.system
-      ("cp " ^ Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/Sail.lean") ^ " " ^ Filename.quote lean_sail_dir)
-  in
+  let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
+  let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
+  let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
@@ -250,6 +247,7 @@ let start_lean_output (out_name : string) default_sail_dir =
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
+  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
   output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n\n");
   List.iter
     (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n\n"))

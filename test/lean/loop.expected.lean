@@ -41,6 +41,7 @@ XXXXXXXXX
 
 import Out.Sail.Sail
 import Out.Sail.BitVec
+import Out.Sail.IntRange
 import Out.Defs
 
 import Out.Specialization
@@ -135,7 +136,7 @@ def foreach_loop (m : Nat) (n : Nat) : Nat := Id.run do
   let loop_i_lower := m
   let loop_i_upper := n
   let mut loop_vars := res
-  for i in [loop_i_lower:loop_i_upper + 1:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1]i do
     let res := loop_vars
     loop_vars := (res +i 1)
   (pure loop_vars)
@@ -145,7 +146,7 @@ def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper + 1:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1]i do
     let () := loop_vars
     loop_vars ← do writeReg r ((← readReg r) +i 1)
   (pure loop_vars)
@@ -158,7 +159,7 @@ def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
     let loop_i_lower := n
     let loop_i_upper := m
     let mut loop_vars := res
-    for i in [loop_i_lower:loop_i_upper + 1:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1]i do
       let res := loop_vars
       loop_vars ← do
         let res : Nat := (res +i 1)
@@ -175,7 +176,7 @@ def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
     let loop_i_lower := m
     let loop_i_upper := n
     let mut loop_vars := (mult, res)
-    for i in [loop_i_lower:loop_i_upper + 1:1] do
+    for i in [loop_i_lower:loop_i_upper + 1:1]i do
       let (mult, res) := loop_vars
       loop_vars :=
         let res : Nat := (res +i 1)
@@ -190,7 +191,7 @@ def foreach_loopuseindex (m : Nat) (n : Nat) : Nat := Id.run do
   let loop_i_lower := m
   let loop_i_upper := n
   let mut loop_vars := res
-  for i in [loop_i_lower:loop_i_upper + 1:1] do
+  for i in [loop_i_lower:loop_i_upper + 1:1]i do
     let res := loop_vars
     loop_vars := (res +i i)
   (pure loop_vars)

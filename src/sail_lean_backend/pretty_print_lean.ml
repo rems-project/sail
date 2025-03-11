@@ -750,7 +750,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let vars_pp, body_ctx = name_loop_vars ctx in
           let body_pp = doc_exp (as_monadic && effects) body_ctx body in
           let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
-          let loop_bracket = brackets (separate colon [from_exp_pp; to_exp_pp ^^ string " + 1"; step_exp_pp]) in
+          let loop_bracket =
+            brackets (separate colon [from_exp_pp; to_exp_pp ^^ string " + 1"; step_exp_pp]) ^^ string "i"
+          in
           let loop_head = flow (break 1) [string "for"; loopvar_pp; string "in"; loop_bracket; string "do"] in
           let arrow = if effects then leftarrowdo else coloneq in
           let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
