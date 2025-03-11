@@ -1,5 +1,7 @@
 default Order dec
 
+$define CONCURRENCY_INTERFACE_V3
+
 $include <prelude.sail>
 $include <concurrency_interface.sail>
 $include <concurrency_interface/exception.sail>
@@ -8,15 +10,48 @@ val id_bits64 : bits(64) -> bits(64)
 
 function id_bits64 bv = bv
 
+val unit_true : unit -> bool
+function unit_true () = true
+
+val unit_false : unit -> bool
+function unit_false () = true
+
+val unit_zero : unit -> int
+function unit_zero () = 0
+
 instantiation sail_mem_read with
-  'pa = bits(64),
-  'translation_summary = unit,
-  'arch_ak = unit,
+  'addr_space = unit,
+  'mem_acc = unit,
+  mem_acc_is_explicit = unit_true,
+  mem_acc_is_ifetch = unit_false,
+  mem_acc_is_ttw = unit_false,
+  mem_acc_is_relaxed = unit_true,
+  mem_acc_is_rel_acq_rcpc = unit_false,
+  mem_acc_is_rel_acq_rcsc = unit_false,
+  mem_acc_is_standalone = unit_true,
+  mem_acc_is_exclusive = unit_false,
+  mem_acc_is_atomic_rmw = unit_false,
   'abort = bits(8),
-  pa_bits = id_bits64
+  CHERI = unit_false,
+  cap_size = unit_zero
+
+
 
 instantiation sail_mem_write with
-  pa_bits = id_bits64
+  'addr_space = unit,
+  'mem_acc = unit,
+  mem_acc_is_explicit = unit_true,
+  mem_acc_is_ifetch = unit_false,
+  mem_acc_is_ttw = unit_false,
+  mem_acc_is_relaxed = unit_true,
+  mem_acc_is_rel_acq_rcpc = unit_false,
+  mem_acc_is_rel_acq_rcsc = unit_false,
+  mem_acc_is_standalone = unit_true,
+  mem_acc_is_exclusive = unit_false,
+  mem_acc_is_atomic_rmw = unit_false,
+  'abort = bits(8),
+  CHERI = unit_false,
+  cap_size = unit_zero
 
 enum my_barrier = Barrier1 | Barrier2
 
@@ -28,14 +63,14 @@ register R2 : bits(64)
 val main : unit -> unit
 
 function main() = {
-    let w_req : Mem_write_request(8, 64, bits(64), unit, unit) = struct {
-        access_kind = AK_explicit(struct { variety = AV_plain, strength = AS_normal }),
-        va = None(),
-        pa = 0x0000_0000_0060_0000,
-        translation = (),
+    let w_req : Mem_write_request(8, 1, 64, unit, unit) = struct {
+        access_kind = (),
+        address = 0x0000_0000_0060_0000,
+        address_space = (),
         size = 8,
-        value = Some(0xABCD_1234_FFFF_5678),
-        tag = Some(true),
+        num_tag = 1,
+        value = [0xAB, 0xCD, 0x12, 0x34, 0xFF, 0xFF, 0x56, 0x78],
+        tags = [true]
     };
     match sail_mem_write(w_req) {
         Ok(_) => (),
@@ -43,32 +78,30 @@ function main() = {
             print_bits("abort = ", abort)
         }
     };
-    let r_req : Mem_read_request(8, 64, bits(64), unit, unit) = struct {
-        access_kind = AK_explicit(struct { variety = AV_plain, strength = AS_normal }),
-        va = None(),
-        pa = 0x0000_0000_0060_0000,
-        translation = (),
+    let r_req : Mem_read_request(8, 0, 64, unit, unit) = struct {
+        access_kind = (),
+        address = 0x0000_0000_0060_0000,
+        address_space = (),
         size = 8,
-        tag = false,
+        num_tag = 0
     };
     match sail_mem_read(r_req) {
-        Ok((value, None())) => {
-            print_bits("read memory (no tag read) = ", value)
+        Ok((value, _)) => {
+            print_bits("read memory (no tag read) = ", from_bytes(value))
         },
         _ => print_endline("invalid read"),
     };
     sail_barrier(Barrier1);
-    let r_req : Mem_read_request(8, 64, bits(64), unit, unit) = struct {
-        access_kind = AK_explicit(struct { variety = AV_plain, strength = AS_normal }),
-        va = None(),
-        pa = 0x0000_0000_0060_0000,
-        translation = (),
+    let r_req : Mem_read_request(8, 1, 64, unit, unit) = struct {
+        access_kind = (),
+        address = 0x0000_0000_0060_0000,
+        address_space = (),
         size = 8,
-        tag = true,
+        num_tag = 1,
     };
     match sail_mem_read(r_req) {
-        Ok((value, Some(true))) => {
-            print_bits("read memory (true tag) = ", value)
+        Ok((value, v)) if v[0] => {
+            print_bits("read memory (true tag) = ", from_bytes(value))
         },
         _ => print_endline("invalid read"),
     };

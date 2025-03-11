@@ -52,6 +52,7 @@ $include_error A default order must be set (using `default Order dec` or `defaul
 $endif
 
 $include <flow.sail>
+$include <arith.sail>
 
 type bits('n) = bitvector('n)
 
@@ -380,6 +381,30 @@ val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
 
 function sail_ones(n) = not_vec(sail_zeros(n))
 
+
+// TODO make that work for increasing vector indexing
+val to_bytes : forall 'n, 'n > 0. (implicit('n), bits (8 * 'n)) -> vector('n, bits(8))
+
+function to_bytes(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        // TODO fix for increasing order
+        res[i] = b[(8*i + 7) .. (8*i)]
+    };
+    res
+}
+
+val from_bytes : forall 'n, 'n > 0. (implicit('n), vector('n, bits(8))) -> bits(8 * 'n)
+
+function from_bytes(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        // TODO fix for increasing order
+        res[(8*i + 7) .. (8*i)] = v[i]
+    };
+    res
+}
+
 // Some ARM specific builtins
 
 $ifdef _DEFAULT_DEC
@@ -446,3 +471,4 @@ $endif
 overload __size = {__id, bitvector_length, vector_length}
 
 $endif
+
