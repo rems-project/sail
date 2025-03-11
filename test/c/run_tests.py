@@ -156,7 +156,8 @@ def test_coq(name):
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
-    results.expect_failure("config_vec_list.sail", "existential type not supported by Coq backend yet")
+    results.expect_failure("config_abstract_bool.sail", "Not quite supported register type")
+    results.expect_failure("newtype.sail", "Type definition with a parameter that should be merged, inferred, or made explicit")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
