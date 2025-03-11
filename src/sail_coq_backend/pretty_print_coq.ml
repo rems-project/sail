@@ -527,9 +527,9 @@ let rec flatten_nc (NC_aux (nc, l) as nc_full) =
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
 let rec doc_typ_fns ctx env =
   (* following the structure of parser for precedence *)
-  let rec typ ty = fn_typ true ty
-  and typ' ty = fn_typ false ty
-  and fn_typ atyp_needed (Typ_aux (t, _) as ty) =
+  let rec typ ?(skip_vars = KidSet.empty) ty = fn_typ true skip_vars ty
+  and typ' ?(skip_vars = KidSet.empty) ty = fn_typ false skip_vars ty
+  and fn_typ atyp_needed skip_vars (Typ_aux (t, _) as ty) =
     match t with
     | Typ_fn (args, ret) ->
         let ret_typ =
@@ -537,29 +537,29 @@ let rec doc_typ_fns ctx env =
           (*if effectful efct
             then separate space [string "M"; fn_typ true ret]
             else *)
-          separate space [fn_typ false ret]
+          separate space [fn_typ false skip_vars ret]
         in
-        let arg_typs = List.map (app_typ false) args in
+        let arg_typs = List.map (app_typ false skip_vars) args in
         let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
         (* once we have proper excetions we need to know what the exceptions type is *)
         if atyp_needed then parens tpp else tpp
-    | _ -> tup_typ atyp_needed ty
-  and tup_typ atyp_needed (Typ_aux (t, _) as ty) =
+    | _ -> tup_typ atyp_needed skip_vars ty
+  and tup_typ atyp_needed skip_vars (Typ_aux (t, _) as ty) =
     match t with
-    | Typ_tuple typs -> parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
-    | _ -> app_typ atyp_needed ty
-  and app_typ atyp_needed (Typ_aux (t, l) as ty) =
+    | Typ_tuple typs -> parens (separate_map (space ^^ star ^^ space) (app_typ false skip_vars) typs)
+    | _ -> app_typ atyp_needed skip_vars ty
+  and app_typ atyp_needed skip_vars (Typ_aux (t, l) as ty) =
     match t with
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         (* TODO: remove duplication with exists, below *)
-        let tpp = string "mword " ^^ doc_nexp ctx env m in
+        let tpp = string "mword " ^^ doc_nexp ctx env ~skip_vars m in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
         (* TODO: remove duplication with exists, below *)
-        let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx env m in
+        let tpp = string "vec" ^^ space ^^ typ ~skip_vars elem_typ ^^ space ^^ doc_nexp ctx env ~skip_vars m in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
-        let tpp = string "register_ref register " ^^ typ etyp in
+        let tpp = string "register_ref register " ^^ typ ~skip_vars etyp in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "range", _), _)
     | Typ_app (Id_aux (Id "implicit", _), _)
@@ -567,10 +567,10 @@ let rec doc_typ_fns ctx env =
         string "Z"
     | Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool _atom_nc, _)]) -> string "bool"
     | Typ_app (id, args) ->
-        let tpp = doc_id_type ctx.global (Some env) id ^^ space ^^ separate_map space doc_typ_arg args in
+        let tpp = doc_id_type ctx.global (Some env) id ^^ space ^^ separate_map space (doc_typ_arg ~skip_vars) args in
         if atyp_needed then parens tpp else tpp
-    | _ -> atomic_typ atyp_needed ty
-  and atomic_typ atyp_needed (Typ_aux (t, l) as ty) =
+    | _ -> atomic_typ atyp_needed ~skip_vars ty
+  and atomic_typ atyp_needed ?(skip_vars = KidSet.empty) (Typ_aux (t, l) as ty) =
     match t with
     | Typ_id (Id_aux (Id "nat", _)) -> string "Z"
     | Typ_id (Id_aux (Id "string_literal", _)) -> string "string"
@@ -585,12 +585,14 @@ let rec doc_typ_fns ctx env =
     | Typ_app _ | Typ_tuple _ | Typ_fn _ ->
         (* exhaustiveness matters here to avoid infinite loops
          * if we add a new Typ constructor *)
-        let tpp = typ ty in
+        let tpp = typ ~skip_vars ty in
         if atyp_needed then parens tpp else tpp
     (* TODO: handle non-integer kopts *)
     | Typ_exist (kopts, nc, ty') ->
-        (* TODO: check for kopts used in ty', using coq_nvars_of_typ, but make sure that's correct *)
-        atomic_typ atyp_needed ty'
+        (* As we don't yet generate dependent pairs, just skip all of the existentially bound variables and hope
+           that Rocq will infer them. *)
+        let skip_vars = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) skip_vars kopts in
+        atomic_typ atyp_needed ~skip_vars ty'
     (* TODO: decide how to handle situations where an existential witness is required, e.g.,
                 by turning {'n, 'n >= 0. bits('n)} into a pair of 'n and the bitvector.  The code below
                 is the old implementation which used embedded proofs, but might prove useful.
@@ -717,10 +719,10 @@ let rec doc_typ_fns ctx env =
                end*)*)
     | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-  and doc_typ_arg ?(prop_vars = false) (A_aux (t, _)) =
+  and doc_typ_arg ?(prop_vars = false) ?(skip_vars = KidSet.empty) (A_aux (t, _)) =
     match t with
-    | A_typ t -> app_typ true t
-    | A_nexp n -> doc_nexp ctx env n
+    | A_typ t -> app_typ true skip_vars t
+    | A_nexp n -> doc_nexp ctx env ~skip_vars n
     | A_bool nc -> parens (doc_nc_exp ctx env nc)
   in
   (typ', atomic_typ, doc_typ_arg)
