@@ -52,6 +52,7 @@ $include_error A default order must be set (using `default Order dec` or `defaul
 $endif
 
 $include <flow.sail>
+$include <arith.sail>
 
 type bits('n) = bitvector('n)
 
@@ -380,6 +381,49 @@ val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
 
 function sail_ones(n) = not_vec(sail_zeros(n))
 
+
+// Little endian bytes conversion, least significant byte ends up at index 0 in the vector
+val to_bytes_le : forall 'n, 'n > 0. (implicit('n), bits (8 * 'n)) -> vector('n, bits(8))
+
+$ifdef _DEFAULT_DEC
+function to_bytes_le(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        res[i] = b[(8 * i + 7) .. (8 * i)]
+    };
+    res
+}
+$else
+function to_bytes_le(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        res[i] = b[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)]
+    };
+    res
+}
+$endif
+
+val from_bytes_le : forall 'n, 'n > 0. (implicit('n), vector('n, bits(8))) -> bits(8 * 'n)
+
+$ifdef _DEFAULT_DEC
+function from_bytes_le(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        res[(8 * i + 7) .. (8 * i)] = v[i]
+    };
+    res
+}
+$else
+function from_bytes_le(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        res[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)] = v[i]
+    };
+    res
+}
+$endif
+
+
 // Some ARM specific builtins
 
 $ifdef _DEFAULT_DEC
@@ -446,3 +490,4 @@ $endif
 overload __size = {__id, bitvector_length, vector_length}
 
 $endif
+
