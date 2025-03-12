@@ -80,3 +80,13 @@ function while_loopmultiplevar(m : nat, n : nat) -> nat = {
   };
   mult
 }
+
+val while_print : unit -> unit
+function while_print() = {
+  var i : int = 0;
+  while i < 10 do {
+    i = i + 1
+  };
+  print_int("i = ", i)
+}
+
