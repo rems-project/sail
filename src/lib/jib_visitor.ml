@@ -29,18 +29,17 @@ let rec visit_ctyp vis outer_ctyp =
     | CT_tup ctyps ->
         let ctyps' = visit_ctyps vis ctyps in
         if ctyps == ctyps' then no_change else CT_tup ctyps'
-    | CT_enum (id, members) ->
+    | CT_enum id ->
         let id' = visit_id vis id in
-        let members' = map_no_copy (visit_id vis) members in
-        if id == id' && members == members' then no_change else CT_enum (id', members')
-    | CT_struct (id, fields) ->
+        if id == id' then no_change else CT_enum id'
+    | CT_struct (id, ctyps) ->
         let id' = visit_id vis id in
-        let fields' = map_no_copy (visit_binding vis) fields in
-        if id == id' && fields == fields' then no_change else CT_struct (id', fields')
-    | CT_variant (id, ctors) ->
+        let ctyps' = visit_ctyps vis ctyps in
+        if id == id' && ctyps == ctyps' then no_change else CT_struct (id', ctyps')
+    | CT_variant (id, ctyps) ->
         let id' = visit_id vis id in
-        let ctors' = map_no_copy (visit_binding vis) ctors in
-        if id == id' && ctors == ctors' then no_change else CT_variant (id', ctors')
+        let ctyps' = visit_ctyps vis ctyps in
+        if id == id' && ctyps == ctyps' then no_change else CT_variant (id', ctyps')
     | CT_fvector (n, ctyp) ->
         let ctyp' = visit_ctyp vis ctyp in
         if ctyp == ctyp' then no_change else CT_fvector (n, ctyp')
@@ -75,10 +74,11 @@ let rec visit_clexp vis outer_clexp =
         let name2' = visit_name vis name2 in
         let ctyp' = visit_ctyp vis ctyp in
         if name1 == name1' && name2 == name2' && ctyp == ctyp' then no_change else CL_rmw (name1', name2', ctyp')
-    | CL_field (clexp, id) ->
+    | CL_field (clexp, id, ctyp) ->
         let clexp' = visit_clexp vis clexp in
         let id' = visit_id vis id in
-        if clexp == clexp' && id == id' then no_change else CL_field (clexp', id')
+        let ctyp' = visit_ctyp vis ctyp in
+        if clexp == clexp' && id == id' && ctyp == ctyp' then no_change else CL_field (clexp', id', ctyp')
     | CL_addr clexp ->
         let clexp' = visit_clexp vis clexp in
         if clexp == clexp' then no_change else CL_addr clexp'
@@ -113,21 +113,18 @@ let rec visit_cval vis outer_cval =
     | V_lit (value, ctyp) ->
         let ctyp' = visit_ctyp vis ctyp in
         if ctyp == ctyp' then no_change else V_lit (value, ctyp')
-    | V_tuple (cvals, ctyp) ->
+    | V_tuple cvals ->
         let cvals' = visit_cvals vis cvals in
-        let ctyp' = visit_ctyp vis ctyp in
-        if cvals == cvals' && ctyp == ctyp' then no_change else V_tuple (cvals', ctyp')
+        if cvals == cvals' then no_change else V_tuple cvals'
     | V_struct (fields, ctyp) ->
         let fields' = map_no_copy (visit_field vis) fields in
         let ctyp' = visit_ctyp vis ctyp in
         if fields == fields' && ctyp == ctyp' then no_change else V_struct (fields', ctyp')
-    | V_ctor_kind (cval, (id, ctyps), ctyp) ->
+    | V_ctor_kind (cval, (id, ctyps)) ->
         let cval' = visit_cval vis cval in
         let id' = visit_id vis id in
         let ctyps' = visit_ctyps vis ctyps in
-        let ctyp' = visit_ctyp vis ctyp in
-        if cval == cval' && id == id' && ctyps == ctyps' && ctyp == ctyp' then no_change
-        else V_ctor_kind (cval', (id', ctyps'), ctyp')
+        if cval == cval' && id == id' && ctyps == ctyps' then no_change else V_ctor_kind (cval', (id', ctyps'))
     | V_ctor_unwrap (cval, (id, ctyps), ctyp) ->
         let cval' = visit_cval vis cval in
         let id' = visit_id vis id in
@@ -141,10 +138,11 @@ let rec visit_cval vis outer_cval =
     | V_call (op, cvals) ->
         let cvals' = visit_cvals vis cvals in
         if cvals == cvals' then no_change else V_call (op, cvals')
-    | V_field (cval, id) ->
+    | V_field (cval, id, ctyp) ->
         let cval' = visit_cval vis cval in
         let id' = visit_id vis id in
-        if cval == cval' && id == id' then no_change else V_field (cval', id')
+        let ctyp' = visit_ctyp vis ctyp in
+        if cval == cval' && id == id' && ctyp == ctyp' then no_change else V_field (cval', id', ctyp')
   in
   do_visit vis (vis#vcval outer_cval) aux outer_cval
 
@@ -251,14 +249,14 @@ and visit_ctype_def vis no_change =
       let id' = visit_id vis id in
       let members' = map_no_copy (visit_id vis) members in
       if id == id' && members == members' then no_change else CTD_enum (id', members')
-  | CTD_struct (id, fields) ->
+  | CTD_struct (id, tyvars, fields) ->
       let id' = visit_id vis id in
       let fields' = map_no_copy (visit_binding vis) fields in
-      if id == id' && fields == fields' then no_change else CTD_struct (id', fields')
-  | CTD_variant (id, ctors) ->
+      if id == id' && fields == fields' then no_change else CTD_struct (id', tyvars, fields')
+  | CTD_variant (id, tyvars, ctors) ->
       let id' = visit_id vis id in
       let ctors' = map_no_copy (visit_binding vis) ctors in
-      if id == id' && ctors == ctors' then no_change else CTD_variant (id', ctors')
+      if id == id' && ctors == ctors' then no_change else CTD_variant (id', tyvars, ctors')
   | CTD_abbrev (id, ctyp) ->
       let id' = visit_id vis id in
       let ctyp' = visit_ctyp vis ctyp in
@@ -292,12 +290,12 @@ let visit_cdef vis outer_cdef =
         let instrs' = visit_instrs vis instrs in
         if bindings == bindings' && instrs == instrs' then no_change
         else CDEF_aux (CDEF_let (n, bindings', instrs'), def_annot)
-    | CDEF_val (id, extern, ctyps, ctyp) ->
+    | CDEF_val (id, tyvars, ctyps, ctyp, extern) ->
         let id' = visit_id vis id in
         let ctyps' = visit_ctyps vis ctyps in
         let ctyp' = visit_ctyp vis ctyp in
         if id == id' && ctyps == ctyps' && ctyp == ctyp' then no_change
-        else CDEF_aux (CDEF_val (id', extern, ctyps', ctyp'), def_annot)
+        else CDEF_aux (CDEF_val (id', tyvars, ctyps', ctyp', extern), def_annot)
     | CDEF_fundef (id, ret_id, params, instrs) ->
         let id' = visit_id vis id in
         let ret_id' = map_no_copy_opt (visit_id vis) ret_id in

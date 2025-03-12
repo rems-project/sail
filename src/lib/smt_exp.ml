@@ -1126,26 +1126,30 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
         Some (Big_int.of_string ("0x" ^ v))
     | _ -> None
 
-  let rec value_of_sexpr sexpr =
+  let rec value_of_sexpr l ctx sexpr =
     let open Jib in
     let open Value in
     function
     | CT_fbits width -> begin
         match parse_sexpr_int width sexpr with
         | Some value -> mk_vector (Sail_lib.get_slice_int' (width, value, 0))
-        | None -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
+        | None -> raise (Reporting.err_general l ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr))
       end
-    | CT_struct (_, fields) -> begin
+    | CT_struct _ as ctyp -> begin
+        let fields = Jib_compile.struct_field_bindings l ctx ctyp |> snd |> Bindings.bindings in
         match sexpr with
         | List (Atom name :: smt_fields) ->
             V_record
               (List.fold_left2
-                 (fun m (field_id, ctyp) sexpr -> StringMap.add (string_of_id field_id) (value_of_sexpr sexpr ctyp) m)
+                 (fun m (field_id, ctyp) sexpr ->
+                   StringMap.add (string_of_id field_id) (value_of_sexpr l ctx sexpr ctyp) m
+                 )
                  StringMap.empty fields smt_fields
               )
-        | _ -> failwith ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr)
+        | _ -> raise (Reporting.err_general l ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr))
       end
-    | CT_enum (_, members) -> begin
+    | CT_enum enum_id -> begin
+        let members = Jib_compile.enum_members l ctx enum_id |> IdSet.elements in
         match sexpr with
         | Atom name -> begin
             match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
@@ -1174,15 +1178,15 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
       end
     | ctyp -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp ctyp)
 
-  let rec find_arg id ctyp arg_smt_names = function
+  let rec find_arg l ctx id ctyp arg_smt_names = function
     | List [Atom "define-fun"; Atom str; List []; _; value] :: _
       when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
-        (id, value_of_sexpr value ctyp)
-    | _ :: sexps -> find_arg id ctyp arg_smt_names sexps
+        (id, value_of_sexpr l ctx value ctyp)
+    | _ :: sexps -> find_arg l ctx id ctyp arg_smt_names sexps
     | [] -> (id, V_unit)
 
-  let build_counterexample args arg_ctyps arg_smt_names model =
-    List.map2 (fun id ctyp -> find_arg id ctyp arg_smt_names model) args arg_ctyps
+  let build_counterexample l ctx args arg_ctyps arg_smt_names model =
+    List.map2 (fun id ctyp -> find_arg l ctx id ctyp arg_smt_names model) args arg_ctyps
 
   let rec run frame =
     match frame with
@@ -1192,7 +1196,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     | Interpreter.Fail (_, _, _, _, msg) -> Result.Error msg
     | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp state eff)
 
-  let check ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
+  let check ~loc ~ctx ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
     let open Printf in
     let open Ast in
     print_endline ("Checking counterexample: " ^ file_name);
@@ -1212,7 +1216,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
           let open Value in
           let open Interpreter in
           print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
-          let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
+          let counterexample = build_counterexample loc ctx args arg_ctyps arg_smt_names model in
           List.iter (fun (id, v) -> print_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
           let istate = initial_state ast env !primops in
           let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ) in

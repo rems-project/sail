@@ -107,6 +107,14 @@ val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
 
 val transparent_newtype : ctx -> ctyp -> ctyp
 
+val struct_field_bindings : Ast.l -> ctx -> ctyp -> Ast.id * ctyp Bindings.t
+
+val struct_fields : Ast.l -> ctx -> ctyp -> Ast.id * (Ast.id -> ctyp)
+
+val variant_constructor_bindings : Ast.l -> ctx -> ctyp -> Ast.id * ctyp Bindings.t
+
+val enum_members : Ast.l -> ctx -> Ast.id -> IdSet.t
+
 (** {2 Compilation functions} *)
 
 (** The Config module specifies static configuration for compiling Sail into Jib. We have to provide a conversion

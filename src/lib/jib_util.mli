@@ -120,8 +120,6 @@ val string_of_cval : cval -> string
 val string_of_clexp : clexp -> string
 val string_of_instr : instr -> string
 
-val full_string_of_ctyp : ctyp -> string
-
 (** {1 Functions and modules for working with ctyps} *)
 
 val map_ctyp : (ctyp -> ctyp) -> ctyp -> ctyp

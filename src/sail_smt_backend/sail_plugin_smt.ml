@@ -167,9 +167,9 @@ let smt_target out_file { ast; effect_info; env; _ } =
   Profile.finish "Generating SMT" t;
   if !opt_smt_auto then
     List.iter
-      (fun ({ file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
-        Counterexample.check ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id ~args ~arg_ctyps
-          ~arg_smt_names
+      (fun ({ loc; file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
+        Counterexample.check ~loc ~ctx ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id ~args
+          ~arg_ctyps ~arg_smt_names
       )
       generated_smt;
   ()

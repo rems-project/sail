@@ -399,7 +399,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun acc cdef ->
         match cdef with
-        | CDEF_aux (CDEF_type (CTD_variant (_, ctors)), _) ->
+        | CDEF_aux (CDEF_type (CTD_variant (_, _, ctors)), _) ->
             List.fold_left (fun acc (id, _) -> IdSet.add id acc) acc ctors
         | _ -> acc
       )
@@ -628,19 +628,23 @@ module Make (Config : CONFIG) = struct
 
   let sv_type_id id = string (sv_type_id_string id)
 
-  let rec bit_width = function
+  let rec bit_width ctx = function
     | CT_unit | CT_bit | CT_bool -> Some 1
     | CT_fbits len -> Some len
     | CT_lbits -> Some Config.max_unknown_bitvector_width
-    | CT_enum (_, ids) -> Some (required_width (Big_int.of_int (List.length ids - 1)))
+    | CT_enum enum_id ->
+        let members = Jib_compile.enum_members Parse_ast.Unknown ctx enum_id in
+        Some (required_width (Big_int.of_int (IdSet.cardinal members - 1)))
     | CT_constant c -> Some (required_width c)
-    | CT_variant (_, ctors) ->
-        List.map (fun (_, ctyp) -> bit_width ctyp) ctors |> Util.option_all |> Option.map (List.fold_left max 1)
-    | CT_struct (_, fields) ->
-        List.map (fun (_, ctyp) -> bit_width ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
+    | CT_variant _ as ctyp ->
+        let ctors = Jib_compile.variant_constructor_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
+        List.map (fun (_, ctyp) -> bit_width ctx ctyp) ctors |> Util.option_all |> Option.map (List.fold_left max 1)
+    | CT_struct _ as ctyp ->
+        let fields = Jib_compile.struct_field_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
+        List.map (fun (_, ctyp) -> bit_width ctx ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
     | _ -> None
 
-  let is_packed ctyp = if Config.no_packed then false else Option.is_some (bit_width ctyp)
+  let is_packed ctx ctyp = if Config.no_packed then false else Option.is_some (bit_width ctx ctyp)
 
   let simple_type str = (str, None)
 
@@ -660,7 +664,7 @@ module Make (Config : CONFIG) = struct
     | CT_lint -> ksprintf simple_type "logic [%d:0]" (Config.max_unknown_integer_width - 1)
     | CT_string -> simple_type (if Config.no_strings then "sail_unit" else "string")
     | CT_unit -> simple_type "sail_unit"
-    | CT_variant (id, _) | CT_struct (id, _) | CT_enum (id, _) -> simple_type (sv_type_id_string id)
+    | CT_variant (id, _) | CT_struct (id, _) | CT_enum id -> simple_type (sv_type_id_string id)
     | CT_constant c ->
         let width = required_width c in
         if two_state then ksprintf simple_type "bit [%d:0]" (width - 1)
@@ -697,7 +701,7 @@ module Make (Config : CONFIG) = struct
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_generic_vector_length = 32
-        let union_ctyp_classify ctyp = is_packed ctyp && not Config.never_pack_unions
+        let union_ctyp_classify ctx ctyp = is_packed ctx ctyp && not Config.never_pack_unions
         let register_ref reg_name = Fn ("reg_ref", [String_lit reg_name])
       end)
       (struct
@@ -753,7 +757,7 @@ module Make (Config : CONFIG) = struct
     | ty, None -> string ty ^^ space ^^ doc
     | ty, Some index -> string ty ^^ space ^^ doc ^^ space ^^ string index
 
-  let pp_type_def = function
+  let pp_type_def ctx = function
     | CTD_abstract (id, _, _) ->
         Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
     | CTD_abbrev _ -> empty
@@ -761,9 +765,9 @@ module Make (Config : CONFIG) = struct
         string "typedef" ^^ space ^^ string "enum" ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
         ^^ space ^^ sv_type_id id ^^ semi
-    | CTD_struct (id, fields) ->
+    | CTD_struct (id, _, fields) ->
         let sv_field (id, ctyp) = wrap_type ctyp (pp_id id) in
-        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) fields in
+        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctx ctyp) fields in
         string "typedef" ^^ space ^^ string "struct"
         ^^ (if can_be_packed then space ^^ string "packed" else empty)
         ^^ space
@@ -773,7 +777,7 @@ module Make (Config : CONFIG) = struct
              ^^ semi ^^ hardline ^^ rbrace
              )
         ^^ space ^^ sv_type_id id ^^ semi
-    | CTD_variant (id, ctors) ->
+    | CTD_variant (id, _, ctors) ->
         let kind_id (id, _) = string_of_id id |> Util.zencode_string |> String.uppercase_ascii |> string in
         let sv_ctor (id, ctyp) = wrap_type ctyp (pp_id id) in
         let tag_type = string ("sailtag_" ^ pp_id_string id) in
@@ -790,16 +794,21 @@ module Make (Config : CONFIG) = struct
         (* At least verilator only allows unions for packed types (which
            is roughly equivalent to types that can be represented as
            finite bitvectors). *)
-        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctyp) ctors && not Config.never_pack_unions in
+        let can_be_packed = List.for_all (fun (_, ctyp) -> is_packed ctx ctyp) ctors && not Config.never_pack_unions in
         kind_enum ^^ twice hardline
         ^^
         if can_be_packed then (
-          let max_width = bit_width (CT_variant (id, ctors)) |> Option.get in
+          let max_width =
+            List.map (fun (_, ctyp) -> bit_width ctx ctyp) ctors
+            |> Util.option_all
+            |> Option.map (List.fold_left max 1)
+            |> Option.get
+          in
           let padding_structs =
             List.map
               (fun (ctor_id, ctyp) ->
                 let padding_type = string ("sailpadding_" ^ pp_id_string ctor_id) in
-                let required_padding = max_width - Option.get (bit_width ctyp) in
+                let required_padding = max_width - Option.get (bit_width ctx ctyp) in
                 let padded =
                   separate space
                     [
@@ -1124,7 +1133,7 @@ module Make (Config : CONFIG) = struct
 
   let rec sv_clexp = function
     | CL_id (id, _) -> pp_name id
-    | CL_field (clexp, field) -> sv_clexp clexp ^^ dot ^^ pp_id field
+    | CL_field (clexp, field, _) -> sv_clexp clexp ^^ dot ^^ pp_id field
     | clexp -> string ("// CLEXP " ^ Jib_util.string_of_clexp clexp)
 
   let svir_update_fbits = function
@@ -1166,24 +1175,21 @@ module Make (Config : CONFIG) = struct
         ksprintf string "sail_reg_assign_%s" encoded ^^ parens (pp_name id ^^ comma ^^ space ^^ value) ^^ semi
     | _ -> sv_clexp clexp ^^ space ^^ equals ^^ space ^^ value ^^ semi
 
-  let rec svir_clexp ?(parents = []) = function
+  let rec svir_clexp ?(parents = []) l ctx = function
     | CL_id (id, _) -> ([], SVP_id id)
-    | CL_field (clexp, field) ->
-        let updates, lexp = svir_clexp ~parents:(field :: parents) clexp in
+    | CL_field (clexp, field, _) ->
+        let updates, lexp = svir_clexp ~parents:(field :: parents) l ctx clexp in
         (updates, SVP_field (lexp, field))
     | CL_void ctyp -> ([], SVP_void ctyp)
     | CL_rmw (id_from, id, ctyp) ->
         let rec assignments lexp subpart ctyp = function
           | parent :: parents -> begin
-              match ctyp with
-              | CT_struct (struct_id, fields) ->
-                  let _, field_ctyp = List.find (fun (f, _) -> Id.compare f parent = 0) fields in
-                  let other_fields = List.filter (fun (f, _) -> Id.compare f parent <> 0) fields in
-                  assignments (SVP_field (lexp, parent)) (Field (struct_id, parent, subpart)) field_ctyp parents
-                  @ List.map
-                      (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, subpart)))
-                      other_fields
-              | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "expected struct type"
+              let struct_id, fields = Jib_compile.struct_field_bindings l ctx ctyp in
+              let fields = Bindings.bindings fields in
+              let _, field_ctyp = List.find (fun (f, _) -> Id.compare f parent = 0) fields in
+              let other_fields = List.filter (fun (f, _) -> Id.compare f parent <> 0) fields in
+              assignments (SVP_field (lexp, parent)) (Field (struct_id, parent, subpart)) field_ctyp parents
+              @ List.map (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, subpart))) other_fields
             end
           | [] -> []
         in
@@ -1191,18 +1197,18 @@ module Make (Config : CONFIG) = struct
         (updates, SVP_id id)
     | CL_addr _ | CL_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "addr/tuple"
 
-  let svir_creturn = function
-    | CR_one clexp -> svir_clexp clexp
-    | CR_multi clexps -> ([], SVP_multi (List.map snd (List.map svir_clexp clexps)))
+  let svir_creturn l ctx = function
+    | CR_one clexp -> svir_clexp l ctx clexp
+    | CR_multi clexps -> ([], SVP_multi (List.map snd (List.map (svir_clexp l ctx) clexps)))
 
   let with_updates l updates aux =
     let wrap aux = SVS_aux (aux, l) in
     match updates with [] -> aux | _ -> SVS_block (List.map wrap updates @ [wrap aux])
 
-  let convert_return l creturn to_aux return_type_opt =
+  let convert_return l ctx creturn to_aux return_type_opt =
     let wrap aux = SVS_aux (aux, l) in
     let ctyp = creturn_ctyp creturn in
-    let updates, ret = svir_creturn creturn in
+    let updates, ret = svir_creturn l ctx creturn in
     match return_type_opt with
     | Some ctyp' ->
         let temp = ngensym () in
@@ -1264,7 +1270,7 @@ module Make (Config : CONFIG) = struct
           | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
               wrap (SVS_assign (SVP_index (SVP_id v, i), x))
           | _, _ ->
-              let updates, lexp = svir_clexp clexp in
+              let updates, lexp = svir_clexp l ctx clexp in
               wrap (with_updates l updates (SVS_assign (lexp, value)))
         end
     | None -> (
@@ -1272,7 +1278,7 @@ module Make (Config : CONFIG) = struct
         | Some generator ->
             let generated_name = generator args (creturn_ctyp creturn) in
             let* args = mapM Smt.smt_cval args in
-            let updates, ret = svir_creturn creturn in
+            let updates, ret = svir_creturn l ctx creturn in
             wrap (with_updates l updates (SVS_call (ret, SVN_string generated_name, args)))
         | None ->
             let _, _, _, uannot = Bindings.find id ctx.valspecs in
@@ -1293,8 +1299,8 @@ module Make (Config : CONFIG) = struct
             in
             let* args = fmap (List.map fst) (convert_arguments args arg_convs) in
             let* aux =
-              if is_function then convert_return l creturn (fun ret -> SVS_assign (ret, Fn (name, args))) ret_conv
-              else convert_return l creturn (fun ret -> SVS_call (ret, SVN_string name, args)) ret_conv
+              if is_function then convert_return l ctx creturn (fun ret -> SVS_assign (ret, Fn (name, args))) ret_conv
+              else convert_return l ctx creturn (fun ret -> SVS_call (ret, SVN_string name, args)) ret_conv
             in
             wrap aux
       )
@@ -1322,7 +1328,7 @@ module Make (Config : CONFIG) = struct
         let* value =
           Smt_gen.bind (Smt.smt_cval cval) (Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval))
         in
-        let updates, lexp = svir_clexp clexp in
+        let updates, lexp = svir_clexp l ctx clexp in
         wrap (with_updates l updates (SVS_assign (lexp, value)))
     | I_funcall (creturn, preserve_name, (id, _), args) ->
         if ctx_is_extern id ctx then (
@@ -1332,7 +1338,7 @@ module Make (Config : CONFIG) = struct
         else if Id.compare id (mk_id "sail_assert") = 0 then
           if Config.no_assertions then wrap SVS_skip
           else (
-            let _, ret = svir_creturn creturn in
+            let _, ret = svir_creturn l ctx creturn in
             match args with
             | [cond; msg] ->
                 let* cond = Smt.smt_cval cond in
@@ -1351,7 +1357,7 @@ module Make (Config : CONFIG) = struct
         else if Id.compare id (mk_id "sail_cons") = 0 then extern_generate l ctx creturn id "sail_cons" args
         else if Id.compare id (mk_id "update_fbits") = 0 then
           let* rhs = svir_update_fbits args in
-          let updates, ret = svir_creturn creturn in
+          let updates, ret = svir_creturn l ctx creturn in
           wrap (with_updates l updates (SVS_assign (ret, rhs)))
         else if Id.compare id (mk_id "internal_vector_init") = 0 then return None
         else if Id.compare id (mk_id "internal_vector_update") = 0 then (
@@ -1367,7 +1373,7 @@ module Make (Config : CONFIG) = struct
                   in
                   let* x = Smt.smt_cval x in
                   let j = mk_id "j" in
-                  let updates, ret = svir_creturn creturn in
+                  let updates, ret = svir_creturn l ctx creturn in
                   begin
                     match (ret, arr) with
                     | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
@@ -1403,7 +1409,7 @@ module Make (Config : CONFIG) = struct
           let args =
             args @ if footprint.contains_assert then [Option.value ~default:(Bool_lit true) pathcond] else []
           in
-          let updates, ret = svir_creturn creturn in
+          let updates, ret = svir_creturn l ctx creturn in
           if preserve_name then wrap (with_updates l updates (SVS_call (ret, SVN_string (string_of_id id), args)))
           else wrap (with_updates l updates (SVS_call (ret, SVN_id id, args)))
         )
@@ -1520,7 +1526,7 @@ module Make (Config : CONFIG) = struct
     match statement_opt with Some statement -> return (pp_statement statement) | None -> return empty
 
   let sv_checked_instr spec_info ctx (I_aux (_, (_, l)) as instr) =
-    let v, _ = Smt_gen.run (sv_instr spec_info ctx instr) l in
+    let v, _ = Smt_gen.run (sv_instr spec_info ctx instr) l ctx in
     v
 
   let smt_ssanode cfg pathconds =
@@ -1988,7 +1994,7 @@ module Make (Config : CONFIG) = struct
               return ()
         )
         visit_order
-      |> fun m -> Smt_gen.run m Parse_ast.Unknown
+      |> fun m -> Smt_gen.run m Parse_ast.Unknown ctx
     in
 
     let final_names = get_final_names !ssa_vars cfg in
@@ -2169,7 +2175,7 @@ module Make (Config : CONFIG) = struct
     in
     { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
-  let toplevel_module id spec_info fn_ctyps =
+  let toplevel_module spec_info ctx id fn_ctyps =
     if not (Bindings.mem id fn_ctyps && Bindings.mem id spec_info.footprints) then
       raise
         (Reporting.err_general Parse_ast.Unknown
@@ -2225,7 +2231,7 @@ module Make (Config : CONFIG) = struct
     let arg_name n = name (mk_id ("arg" ^ string_of_int n)) in
     let arg_cvals = List.mapi (fun n ctyp -> V_id (arg_name n, ctyp)) arg_ctyps in
     let args, arg_ctyps =
-      List.split (fst (Smt_gen.run (convert_arguments ~reverse:true arg_cvals arg_conversions) Parse_ast.Unknown))
+      List.split (fst (Smt_gen.run (convert_arguments ~reverse:true arg_cvals arg_conversions) Parse_ast.Unknown ctx))
     in
     let arg_ports = List.mapi (fun n ctyp -> mk_port (arg_name n) ctyp) arg_ctyps in
     let instantiate_main =
@@ -2370,7 +2376,7 @@ module Make (Config : CONFIG) = struct
       defs = List.map mk_def defs;
     }
 
-  let rec pp_module m =
+  let rec pp_module ctx m =
     let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
     let ports =
       match (m.input_ports, m.output_ports) with
@@ -2394,7 +2400,7 @@ module Make (Config : CONFIG) = struct
       else doc
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
-    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def (Some m.name)) m.defs))
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ctx (Some m.name)) m.defs))
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f =
@@ -2428,7 +2434,7 @@ module Make (Config : CONFIG) = struct
     ^^ nest 4 (hardline ^^ pp_body f.body)
     ^^ hardline ^^ string "endfunction"
 
-  and pp_def in_module (SVD_aux (aux, _)) =
+  and pp_def ctx in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
     | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
@@ -2452,8 +2458,8 @@ module Make (Config : CONFIG) = struct
         in
         pp_sv_name module_name ^^ params ^^ space ^^ string instance_name ^^ connections ^^ semi
     | SVD_fundef f -> pp_fundef f
-    | SVD_module m -> pp_module m
-    | SVD_type type_def -> pp_type_def type_def
+    | SVD_module m -> pp_module ctx m
+    | SVD_type type_def -> pp_type_def ctx type_def
     | SVD_dpi_function { function_name; return_type; param_types } ->
         let ret_ty, typedef =
           match return_type with
@@ -2501,7 +2507,7 @@ module Make (Config : CONFIG) = struct
     ^^ hardline ^^ string "endfunction"
 
   let sv_fundef spec_info ctx f params param_ctyps ret_ctyp body =
-    pp_module (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
+    pp_module ctx (svir_module spec_info ctx f params param_ctyps ret_ctyp body)
 
   let filter_clear = filter_instrs (function I_aux (I_clear _, _) -> false | _ -> true)
 
@@ -2541,7 +2547,7 @@ module Make (Config : CONFIG) = struct
         |> structure_control_flow_block |> filter_clear
       )
     in
-    let statements, _ = Smt_gen.run (fmap Util.option_these (mapM (svir_instr spec_info ctx) setup)) (gen_loc l) in
+    let statements, _ = Smt_gen.run (fmap Util.option_these (mapM (svir_instr spec_info ctx) setup)) (gen_loc l) ctx in
     SVD_fundef
       {
         function_name = SVN_string name;
@@ -2669,7 +2675,7 @@ module Make (Config : CONFIG) = struct
 
   let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (f, ext_name, param_ctyps, ret_ctyp) ->
+    | CDEF_val (f, _, param_ctyps, ret_ctyp, ext_name) ->
         let attr, (module FunctionAttr) = get_sv_def_attribute "sv_function" def_annot in
         if Option.is_some attr then
           let module Attr = AttributeParser (FunctionAttr) in
@@ -2778,8 +2784,9 @@ module Make (Config : CONFIG) = struct
           fn_ctyps,
           name :: setup_calls
         )
-    | CDEF_type td -> ({ empty_cdef_doc with outside_module = pp_type_def td ^^ twice hardline }, fn_ctyps, setup_calls)
-    | CDEF_val (f, _, param_ctyps, ret_ctyp) ->
+    | CDEF_type td ->
+        ({ empty_cdef_doc with outside_module = pp_type_def ctx td ^^ twice hardline }, fn_ctyps, setup_calls)
+    | CDEF_val (f, _, param_ctyps, ret_ctyp, _) ->
         (empty_cdef_doc, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
     | CDEF_fundef (f, _, params, body) ->
         if List.mem (string_of_id f) Config.ignore then (empty_cdef_doc, fn_ctyps, setup_calls)
