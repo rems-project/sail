@@ -53,7 +53,7 @@ open Register
 
 namespace Functions
 
-/-- Type quantifiers: k_ex1861# : Bool, k_ex1860# : Bool -/
+/-- Type quantifiers: k_ex1941# : Bool, k_ex1940# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -236,6 +236,16 @@ def while_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
         (mult, res) : (Nat × Nat))
     (pure loop_vars) ) : Id (Nat × Nat) )
   (pure mult)
+
+def while_print (_ : Unit) : Unit := Id.run do
+  let i : Int := 0
+  let i ← (( do
+    let mut loop_vars := i
+    while (λ i => (i <b 10)) loop_vars do
+      let i := loop_vars
+      loop_vars := ((i +i 1) : Int)
+    (pure loop_vars) ) : Id Int )
+  (pure (print_int "i = " i))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_nat ()))
