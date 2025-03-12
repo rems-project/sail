@@ -240,13 +240,13 @@ let to_infix_parser_op =
   | _ -> Reporting.unreachable P.Unknown __POS__ "Invalid fixity"
 
 let parse_infix :
-      'a 'b.
-      P.l ->
-      ctx ->
-      ('a P.infix_token * Lexing.position * Lexing.position) list ->
-      ('a -> Infix_parser.token) ->
-      'b Infix_parser.MenhirInterpreter.checkpoint ->
-      'b =
+    'a 'b.
+    P.l ->
+    ctx ->
+    ('a P.infix_token * Lexing.position * Lexing.position) list ->
+    ('a -> Infix_parser.token) ->
+    'b Infix_parser.MenhirInterpreter.checkpoint ->
+    'b =
  fun l ctx infix_tokens mk_primary checkpoint ->
   let open Infix_parser in
   let tokens =
@@ -321,26 +321,21 @@ let parse_infix_atyp ctx = function
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
-(** The [KindInference] module implements a type-inference module for
-    kind (types of types).
+(** The [KindInference] module implements a type-inference module for kind (types of types).
 
-    The algorithm used is essentially Hindley-Milner style, athough
-    because the language of types is very simple, some things can be
-    simple. *)
+    The algorithm used is essentially Hindley-Milner style, athough because the language of types is very simple, some
+    things can be simple. *)
 module KindInference = struct
-  (** This is the kind for a variable during kind inference. Either it
-      can be [Unknown], or it can be a [Known] kind. *)
+  (** This is the kind for a variable during kind inference. Either it can be [Unknown], or it can be a [Known] kind. *)
   type unification_kind = Unknown | Known of P.kind_aux * l
 
-  (** This type is similar to the [unification_kind] type, but the
-      [Unknown] kinds are represented as variables. When checking a
-      kind-polymorphic type constructor (e.g. operator ==) in types we
-      want to have something like:
+  (** This type is similar to the [unification_kind] type, but the [Unknown] kinds are represented as variables. When
+      checking a kind-polymorphic type constructor (e.g. operator ==) in types we want to have something like:
       {v
       ∀α. (α, α) -> Bool
       v}
-      To do this we create a new fresh variable for [α], which would
-      be a [Kind_var], and [Bool] would be an explicit [Kind]. *)
+      To do this we create a new fresh variable for [α], which would be a [Kind_var], and [Bool] would be an explicit
+      [Kind]. *)
   type inference_kind = Kind_var of int | Kind of P.kind_aux * l
 
   (* This is the typing environment for the kind-inference
@@ -1565,7 +1560,8 @@ let generate_enum_functions l ctx enum_id fns exps =
           (Reporting.err_general l
              (sprintf
                 "Each enumeration clause for %s must define exactly %d expressions for the functions %s\n\
-                 %s expressions have been given here" (string_of_id enum_id) num_fns
+                 %s expressions have been given here"
+                (string_of_id enum_id) num_fns
                 (string_of_list ", " string_of_parse_id (List.map fst fns))
                 (if n = 0 then "No" else if n > num_fns then "Too many" else "Too few")
              )

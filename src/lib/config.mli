@@ -48,36 +48,29 @@
 
 open Type_check
 
-(** Rewrite any any configuration nodes in the AST, and gather
-    configuration information.
+(** Rewrite any any configuration nodes in the AST, and gather configuration information.
 
     This rewrite performs two operations:
 
-    First, It takes a JSON configuration file as input and replaces
-    E_config nodes within the AST using information within that JSON.
-    For example:
+    First, It takes a JSON configuration file as input and replaces E_config nodes within the AST using information
+    within that JSON. For example:
 
     {@sail[
-    config a.b.c : T
+      config a.b.c : T
     ]}
 
-    will cause [a.b.c] to be looked up in the provided JSON and
-    whatever JSON value is at that key will be interpreted as the type
-    [T] and inserted in the AST.
+    will cause [a.b.c] to be looked up in the provided JSON and whatever JSON value is at that key will be interpreted
+    as the type [T] and inserted in the AST.
 
-    If [a.b.c] does not exist, then the E_config node will remain to
-    be instantiated by a configuration value at runtime.
+    If [a.b.c] does not exist, then the E_config node will remain to be instantiated by a configuration value at
+    runtime.
 
-    Second, for each type [T] attached to a configuration node (which
-    may have been inferred from context by the type system), we will
-    also attempt to synthesise a JSON Schema. If [T] cannot be turned
-    into a valid schema then this function raises a fatal type error
-    exception. This schema cannot capture every possible invariant of
-    an ISA configuration, but it does provide enough to guarantee that
-    a configuration applied at runtime will not break type-safety
-    assuming it validates against the schema.
+    Second, for each type [T] attached to a configuration node (which may have been inferred from context by the type
+    system), we will also attempt to synthesise a JSON Schema. If [T] cannot be turned into a valid schema then this
+    function raises a fatal type error exception. This schema cannot capture every possible invariant of an ISA
+    configuration, but it does provide enough to guarantee that a configuration applied at runtime will not break
+    type-safety assuming it validates against the schema.
 
-    The function will return that JSON schema alongside the re-written
-    AST. *)
+    The function will return that JSON schema alongside the re-written AST. *)
 val rewrite_ast :
   Target.target -> env -> Frontend.abstract_instantiation -> Yojson.Safe.t -> typed_ast -> Yojson.Safe.t * typed_ast

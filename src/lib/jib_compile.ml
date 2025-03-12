@@ -266,8 +266,7 @@ let callgraph cdefs =
             (iter_instr (function
               | I_aux (I_funcall (_, _, (call, _), _), _) -> graph := IdGraph.add_edge id call !graph
               | _ -> ()
-              )
-              )
+              ))
             body;
           !graph
       | _ -> graph
@@ -2773,7 +2772,7 @@ module Make (C : CONFIG) = struct
           when Option.is_some (get_def_attribute "test" def_annot) ->
             IdSet.add id ids
         | _ -> ids
-      )
+        )
       IdSet.empty ast.defs
     |> IdSet.elements
 

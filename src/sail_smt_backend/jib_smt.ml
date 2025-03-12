@@ -803,10 +803,9 @@ module Make (Config : CONFIG) = struct
 
     return (stack, state)
 
-  (** When we generate a property for a CDEF_val, we find it's
-   associated function body in a CDEF_fundef node. However, we must
-   keep track of any global letbindings between the spec and the
-   fundef, so they can appear in the generated SMT. *)
+  (** When we generate a property for a CDEF_val, we find it's associated function body in a CDEF_fundef node. However,
+      we must keep track of any global letbindings between the spec and the fundef, so they can appear in the generated
+      SMT. *)
   let rec find_function lets id = function
     | CDEF_aux (CDEF_fundef (id', heap_return, args, body), def_annot) :: _ when Id.compare id id' = 0 ->
         (lets, Some (heap_return, args, body, def_annot))
@@ -1048,10 +1047,9 @@ module CompileConfig (Opts : sig
 end) : Jib_compile.CONFIG = struct
   open Jib_compile
 
-  (** Convert a sail type into a C-type. This function can be quite
-     slow, because it uses ctx.local_env and SMT to analyse the Sail
-     types and attempts to fit them into the smallest possible C
-     types, provided ctx.optimize_smt is true (default) **)
+  (** Convert a sail type into a C-type. This function can be quite slow, because it uses ctx.local_env and SMT to
+      analyse the Sail types and attempts to fit them into the smallest possible C types, provided ctx.optimize_smt is
+      true (default) **)
   let rec convert_typ ctx typ =
     let open Ast in
     let open Type_check in

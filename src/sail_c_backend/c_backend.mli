@@ -54,24 +54,19 @@ open Type_check
 (** Define generated functions as static *)
 val opt_static : bool ref
 
-(** Ordinarily we use plain z-encoding to name-mangle generated Sail
-   identifiers into a form suitable for C. If opt_prefix is set, then
-   the "z" which is added on the front of each generated C function
-   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
-   give sail_my_function rather than zmy_function. *)
+(** Ordinarily we use plain z-encoding to name-mangle generated Sail identifiers into a form suitable for C. If
+    opt_prefix is set, then the "z" which is added on the front of each generated C function will be replaced by
+    opt_prefix. E.g. opt_prefix := "sail_" would give sail_my_function rather than zmy_function. *)
 val opt_prefix : string ref
 
-(** opt_extra_params and opt_extra_arguments allow additional state to
-   be threaded through the generated C code by adding an additional
-   parameter to each function type, and then giving an extra argument
-   to each function call. For example we could have
+(** opt_extra_params and opt_extra_arguments allow additional state to be threaded through the generated C code by
+    adding an additional parameter to each function type, and then giving an extra argument to each function call. For
+    example we could have
 
-   opt_extra_params := Some "CPUMIPSState *env"
-   opt_extra_arguments := Some "env"
+    opt_extra_params := Some "CPUMIPSState *env" opt_extra_arguments := Some "env"
 
-   and every generated function will take a pointer to a QEMU MIPS
-   processor state, and each function will be passed the env argument
-   when it is called. *)
+    and every generated function will take a pointer to a QEMU MIPS processor state, and each function will be passed
+    the env argument when it is called. *)
 val opt_extra_params : string option ref
 
 val opt_extra_arguments : string option ref
@@ -85,16 +80,14 @@ val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
 module type CODEGEN_CONFIG = sig
-  (** If this is true, then we will generate a separate header file,
-      otherwise a single C file will be generated without a header
-      file. *)
+  (** If this is true, then we will generate a separate header file, otherwise a single C file will be generated without
+      a header file. *)
   val generate_header : bool
 
   (** A list of includes for the generated C file *)
   val includes : string list
 
-  (** A list of includes for the generated header (if it is
-      created). *)
+  (** A list of includes for the generated header (if it is created). *)
   val header_includes : string list
 
   (** Do not generate a main function *)
@@ -103,23 +96,19 @@ module type CODEGEN_CONFIG = sig
   (** Do not include sail.h automatically *)
   val no_lib : bool
 
-  (** Do not include rts.h (the runtime), and do not generate code
-      that requires any setup or teardown routines to be run by a runtime
-      before executing any instruction semantics. *)
+  (** Do not include rts.h (the runtime), and do not generate code that requires any setup or teardown routines to be
+      run by a runtime before executing any instruction semantics. *)
   val no_rts : bool
 
-  (** Do not mangle generated C identifiers, prefer readable names
-      when possible. *)
+  (** Do not mangle generated C identifiers, prefer readable names when possible. *)
   val no_mangle : bool
 
   val reserved_words : Util.StringSet.t
 
   val overrides : string Name_generator.Overrides.t
 
-  (** If [Some channel], the generated C code will be instrumented to
-      track branch coverage information. Information about all the
-      possible branches will be written to the provided output
-      channel. *)
+  (** If [Some channel], the generated C code will be instrumented to track branch coverage information. Information
+      about all the possible branches will be written to the provided output channel. *)
   val branch_coverage : out_channel option
 
   val preserve_types : Ast_util.IdSet.t

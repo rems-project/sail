@@ -53,16 +53,13 @@ end
 module type CONFIG = sig
   type style
 
-  (** This predicate describes a set of names that are allowed or forbidden in
-      the target. *)
+  (** This predicate describes a set of names that are allowed or forbidden in the target. *)
   val allowed : string -> bool
 
-  (** If a name is not forbidden this function creates a pretty
-      version of the name in the required style. *)
+  (** If a name is not forbidden this function creates a pretty version of the name in the required style. *)
   val pretty : style -> string -> string
 
-  (** If a name is forbidden, it is passed to the mangling function
-      instead. *)
+  (** If a name is forbidden, it is passed to the mangling function instead. *)
   val mangle : style -> string -> string
 
   (** Create the n-th variant of a name. It should be the case that [variant s 0 = s] *)

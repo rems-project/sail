@@ -26,7 +26,7 @@ type context = {
   global : global_context;
   env : Type_check.env;
       (** The typechecking environment of the current function. This environment is reset using [initial_context] when
-          we start processing a new function. Note that we use it to store paths of the form id.x.y.z.  *)
+          we start processing a new function. Note that we use it to store paths of the form id.x.y.z. *)
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
@@ -913,9 +913,8 @@ let doc_binder ctx i t =
   let ctx = match captured_typ_var (i, t) with Some (i, ki) -> add_single_kid_id_rename ctx i ki | _ -> ctx in
   (ctx, separate space [doc_id_ctor i; colon; doc_typ ctx t] |> parenthesizer)
 
-(** Find all patterns in the arguments of the sail function that Lean cannot handle in a [def],
-and add them as let bindings in the prelude of the translation of the function. This assumes
-that the pattern is irrefutable. *)
+(** Find all patterns in the arguments of the sail function that Lean cannot handle in a [def], and add them as let
+    bindings in the prelude of the translation of the function. This assumes that the pattern is irrefutable. *)
 let add_function_pattern ctx fixup_binders (P_aux (pat, pat_annot) as pat_full) var typ =
   match pat with
   | P_id _ | P_typ (_, P_aux (P_id _, _)) | P_tuple [] | P_lit _ | P_wild -> fixup_binders
@@ -927,10 +926,9 @@ let add_function_pattern ctx fixup_binders (P_aux (pat, pat_annot) as pat_full) 
           )
         |> fixup_binders
 
-(** Find all the [int] and [atom] types in the function pattern and express them as paths that use the
-lean variables, so that we can use them in the return type of the function. For example, see the function
-[two_tuples_atom] in the test case test/lean/typquant.sail.
-*)
+(** Find all the [int] and [atom] types in the function pattern and express them as paths that use the lean variables,
+    so that we can use them in the return type of the function. For example, see the function [two_tuples_atom] in the
+    test case test/lean/typquant.sail. *)
 let rec add_path_renamings ~path ctx (P_aux (pat, pat_annot)) (Typ_aux (typ, typ_annot) as typ_full) =
   match (pat, typ) with
   | P_tuple pats, Typ_tuple typs ->

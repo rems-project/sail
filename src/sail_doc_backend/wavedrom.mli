@@ -48,35 +48,30 @@ open Libsail
 
 (** Convert a Sail pattern into a WaveDrom diagram.
 
-   See {{: https://wavedrom.com/ } the WaveDrom website} for details
-   of the format.
+    See {{:https://wavedrom.com/} the WaveDrom website} for details of the format.
 
-   The labels argument is the argument to the $[wavedrom argument]
-   attribute which can be attached to mapping and function
-   definitions/clauses. It consists of a space-separated list of
-   labels for the WaveDrom diagram, an '_' underscore label will cause
-   that label to be omitted.
+    The labels argument is the argument to the $[wavedrom argument] attribute which can be attached to mapping and
+    function definitions/clauses. It consists of a space-separated list of labels for the WaveDrom diagram, an '_'
+    underscore label will cause that label to be omitted.
 
-   As an example:
+    As an example:
 
-   {@sail[
-   $[wavedrom REG3 dest ADD input input]
-   mapping clause encdec =
-       Add(rd, rx, ry) <-> 0xFFFF @ rd : bits(5) @ 0b1 @ rx : bits(5) @ ry : bits(5)
-   ]}
+    {@sail[
+      $[wavedrom REG3 dest ADD input input]
+      mapping clause encdec =
+          Add(rd, rx, ry) <-> 0xFFFF @ rd : bits(5) @ 0b1 @ rx : bits(5) @ ry : bits(5)
+    ]}
 
-   will produce
+    will produce
 
-   {@wavedrom[
-   {reg:[
-       { bits: 5, name: 'ry', attr: ['input'] },
-       { bits: 5, name: 'rx', attr: ['input'] },
-       { bits: 1, name: 0b1, attr: ['ADD'] },
-       { bits: 5, name: 'rd', attr: ['dest'] },
-       { bits: 16, name: 0xFFFF, attr: ['REG3'] }
-   ]}
-   ]}
+    {@wavedrom[
+      {reg:[
+          { bits: 5, name: 'ry', attr: ['input'] },
+          { bits: 5, name: 'rx', attr: ['input'] },
+          { bits: 1, name: 0b1, attr: ['ADD'] },
+          { bits: 5, name: 'rd', attr: ['dest'] },
+          { bits: 16, name: 0xFFFF, attr: ['REG3'] }
+    ]}
 
-   This function will return None if the pattern cannot be converted into a diagram.
-*)
+    This function will return None if the pattern cannot be converted into a diagram. *)
 val of_pattern : labels:string option -> Type_check.tannot Ast.pat -> string option

@@ -959,7 +959,10 @@ let doc_exp_lem, doc_let_lem =
                 (* If the union has type variables, we may need an annotation for Lem to typecheck it *)
                 (* let _, _, union_id, _ = Env.union_constructor_info f env |> unwrap in
                    let typq, _ = Env.get_variants env |> Bindings.find_opt union_id |> unwrap in *)
-                let annotation_needed = false (* List.length (quant_items typq) > 0 *) in
+                let annotation_needed =
+                  false
+                  (* List.length (quant_items typq) > 0 *)
+                in
                 let wrap_union doc = if aexp_needed || annotation_needed then parens doc else doc in
                 let epp =
                   match args with

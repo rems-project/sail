@@ -54,12 +54,10 @@ val opt_ddump_tc_ast : bool ref
 val opt_list_files : bool ref
 val opt_reformat : string option ref
 
-(** env_update: This function takes a pre abstract instantiation type
-    environment, and makes any abstract types concrete if they were
-    instantiated.
+(** env_update: This function takes a pre abstract instantiation type environment, and makes any abstract types concrete
+    if they were instantiated.
 
-    config_ids: The set of identifiers that were instantiated from the
-    provided configuration. *)
+    config_ids: The set of identifiers that were instantiated from the provided configuration. *)
 type abstract_instantiation = {
   env_update : Type_check.env -> Type_check.env;
   config_ids : (kind_aux * string list) Bindings.t;
@@ -72,15 +70,14 @@ val instantiate_abstract_types :
   Type_check.typed_ast ->
   Type_check.typed_ast * abstract_instantiation
 
-(** The [FILE_HANDLER] module type allows plugins to define handlers
-    for custom file types. It defines how those files are processed
-    and eventually generate Sail AST types. *)
+(** The [FILE_HANDLER] module type allows plugins to define handlers for custom file types. It defines how those files
+    are processed and eventually generate Sail AST types. *)
 module type FILE_HANDLER = sig
   (** A parsed representation of the file. *)
   type parsed
 
-  (** The file handler may do some arbitrary processing of the parsed
-      file contents prior to generating Sail AST types. *)
+  (** The file handler may do some arbitrary processing of the parsed file contents prior to generating Sail AST types.
+  *)
   type processed
 
   val parse : Parse_ast.l option -> string -> parsed
@@ -88,21 +85,20 @@ module type FILE_HANDLER = sig
   (** If the file will define any functions, we must inform Sail. *)
   val defines_functions : processed -> IdSet.t
 
-  (** If the file generates registers without any initialized default
-      value, we must inform Sail, i.e this would be a register like
+  (** If the file generates registers without any initialized default value, we must inform Sail, i.e this would be a
+      register like
 
       {@sail[
-      register X : bits(32)
+        register X : bits(32)
       ]}
 
       rather than
 
       {@sail[
-      register X : bits(32) = 0x0000_0000
+        register X : bits(32) = 0x0000_0000
       ]}
 
-      which does have a default value.
-  *)
+      which does have a default value. *)
   val uninitialized_registers : processed -> (Ast.id * Ast.typ) list
 
   val process :
@@ -116,8 +112,8 @@ module type FILE_HANDLER = sig
   val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
 end
 
-(** Register a file handler module. The extension should be the
-    extension for the file type we want to handle, e.g. ".json". *)
+(** Register a file handler module. The extension should be the extension for the file type we want to handle, e.g.
+    ".json". *)
 val register_file_handler : extension:string -> (module FILE_HANDLER) -> unit
 
 val load_modules :

@@ -54,8 +54,7 @@ val unssa_name : Jib.name -> Jib.name * int
 (** A mutable array based graph type, with nodes indexed by integers. *)
 type 'a array_graph
 
-(** Create an empty array_graph, specifying the initial size of the
-   underlying array. *)
+(** Create an empty array_graph, specifying the initial size of the underlying array. *)
 val make : initial_size:int -> unit -> 'a array_graph
 
 module IntSet = Util.IntSet
@@ -66,13 +65,11 @@ val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
 
 val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
 
-(** Add a vertex to a graph, returning the index of the inserted
-   vertex. If the number of vertices exceeds the size of the
-   underlying array, then it is dynamically resized. *)
+(** Add a vertex to a graph, returning the index of the inserted vertex. If the number of vertices exceeds the size of
+    the underlying array, then it is dynamically resized. *)
 val add_vertex : 'a -> 'a array_graph -> int
 
-(** Add an edge between two existing vertices. Raises Invalid_argument
-   if either of the vertices do not exist. *)
+(** Add an edge between two existing vertices. Raises Invalid_argument if either of the vertices do not exist. *)
 val add_edge : int -> int -> 'a array_graph -> unit
 
 exception Not_a_DAG of int
@@ -97,8 +94,8 @@ type cf_node =
 
 val control_flow_graph : Jib.instr list -> int * int * ('a list * cf_node) array_graph
 
-(** [immediate_dominators graph root] will calculate the immediate
-   dominators for a control flow graph with a specified root node. *)
+(** [immediate_dominators graph root] will calculate the immediate dominators for a control flow graph with a specified
+    root node. *)
 val immediate_dominators : ?post:bool -> 'a array_graph -> int -> int array
 
 type ssa_elem = Phi of Jib.name * Jib.ctyp * Jib.name list | Pi of Jib.cval list
@@ -113,9 +110,8 @@ val phi_dependencies : (ssa_elem list * cf_node) array_graph -> NameGraph.graph 
 val ssa :
   ?globals:NameSet.t -> ?debug_prefix:string -> Jib.instr list -> int * int * (ssa_elem list * cf_node) array_graph
 
-(** Output the control-flow graph in graphviz format for
-   debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
-   image of the graph. *)
+(** Output the control-flow graph in graphviz format for debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
+    image of the graph. *)
 val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
 
 val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit

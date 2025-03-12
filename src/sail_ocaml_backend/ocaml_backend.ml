@@ -466,7 +466,7 @@ let rec get_initialize_registers = function
   | DEF_aux
       ( DEF_fundef
           (FD_aux
-            (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
+             (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
             ),
         _
       )
@@ -701,7 +701,9 @@ let rec ocaml_cases polymorphic_variant ctx =
     separate space [bar; name; string "of"; ocaml_typ ctx typ]
   in
   function
-  | [tu] -> ocaml_case tu | tu :: tus -> ocaml_case tu ^/^ ocaml_cases polymorphic_variant ctx tus | [] -> empty
+  | [tu] -> ocaml_case tu
+  | tu :: tus -> ocaml_case tu ^/^ ocaml_cases polymorphic_variant ctx tus
+  | [] -> empty
 
 let rec ocaml_exceptions ctx =
   let ocaml_exception (Tu_aux (Tu_ty_id (typ, id), _)) =

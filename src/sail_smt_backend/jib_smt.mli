@@ -71,9 +71,8 @@ module Make (Config : CONFIG) : sig
     arg_smt_names : (id * string option) list;
   }
 
-  (** Generate SMT for all the $property and $counterexample pragmas
-      provided, and write the generated SMT to appropriately named
-      files. *)
+  (** Generate SMT for all the $property and $counterexample pragmas provided, and write the generated SMT to
+      appropriately named files. *)
   val generate_smt :
     properties:(string * string * l * 'a val_spec) Bindings.t (** See Property.find_properties *) ->
     name_file:(string -> string) (** Applied to each function name to generate the file name for the smtlib file *) ->

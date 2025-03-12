@@ -1798,27 +1798,31 @@ let pat_var (P_aux (paux, a)) =
   in
   match paux with (P_as (_, id) | P_id id) when is_var id -> Some id | _ -> None
 
-(** Split out function clauses for individual union constructor patterns
-   (e.g. AST nodes) into auxiliary functions. Used for the execute function.
+(** Split out function clauses for individual union constructor patterns (e.g. AST nodes) into auxiliary functions. Used
+    for the execute function.
 
-   For example:
+    For example:
 
-   function execute(Instr(x, y)) = ...
+    {v
+     function execute(Instr(x, y)) = ...
+    v}
 
-   would become
+    would become
 
-   function execute_Instr(x, y) = ...
+    {v
+     function execute_Instr(x, y) = ...
 
-   function execute(Instr(x, y)) = execute_C(x, y)
+     function execute(Instr(x, y)) = execute_C(x, y)
+    v}
 
-   This is actually a slightly complex rewrite than it first appears, because
-   we have to deal with cases where the AST type has constraints in various
-   places, e.g.
+    This is actually a slightly more complex rewrite than it first appears, because we have to deal with cases where the
+    AST type has constraints in various places, e.g.
 
-   union ast('x: Int), 0 <= 'x < 32 = {
-     Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
-   }
- *)
+    {@sail[
+      union ast('x: Int), 0 <= 'x < 32 = {
+        Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
+      }
+    ]} *)
 let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, clauses), ((l, _) as fdannot))) def_annot =
     (* let rec_clauses, clauses = List.partition is_funcl_rec clauses in *)
@@ -2322,7 +2326,8 @@ let rewrite_ast_letbind_effects effect_info env =
     (* n_exp_term forces an expression to be translated into a form
        "let .. let .. let .. in EXP" where EXP has no effect and does not update
        variables *)
-    n_exp_pure exp (fun exp -> exp)
+    n_exp_pure exp (fun exp -> exp
+    )
   and n_exp (E_aux (exp_aux, annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
     let rewrap e = E_aux (e, annot) in
     let pure_rewrap e = purify (rewrap e) in
@@ -3921,7 +3926,7 @@ let move_loop_measures ast =
       (fun id -> function
         | [] -> ()
         | _ :: _ -> Reporting.print_err (id_loc id) "Warning" ("unused loop measure for function " ^ string_of_id id)
-      )
+        )
       unused
   in
   { ast with defs = List.rev rev_defs }
@@ -4401,12 +4406,10 @@ let rewrite_unroll_constant_loops _type_env defs =
     { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
     defs
 
-(** Remove bitfield records and turn them into plain bitvectors
-    This can improve performance for Isabelle, because processing record types is slow there
-    (and we don't gain much by having record types with just a `bits` field).
-    This rewrite is assumed to be run after initial type checking, so that accesses to
-    fields other than `bits` have already been rewritten into calls to accessor functions.
-    A type-checking pass is expected to be run after this rewrite. *)
+(** Remove bitfield records and turn them into plain bitvectors This can improve performance for Isabelle, because
+    processing record types is slow there (and we don't gain much by having record types with just a `bits` field). This
+    rewrite is assumed to be run after initial type checking, so that accesses to fields other than `bits` have already
+    been rewritten into calls to accessor functions. A type-checking pass is expected to be run after this rewrite. *)
 let remove_bitfield_records type_env =
   let rewrite_def rewriters = function
     (* Avoid using Env.get_bitfield in case the typing environment is out of date (e.g., due to nexp_ids) *)

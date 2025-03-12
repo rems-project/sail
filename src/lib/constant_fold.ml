@@ -114,22 +114,17 @@ let safe_primops =
       "Elf_loader.elf_tohost";
     ]
 
-(** We can specify a list of identifiers that we want to remove from
-   the final AST here. This is useful for removing tracing features in
-   optimized builds, e.g. for booting an OS as fast as possible.
+(** We can specify a list of identifiers that we want to remove from the final AST here. This is useful for removing
+    tracing features in optimized builds, e.g. for booting an OS as fast as possible.
 
-   Basically we just do this by mapping
+    Basically we just do this by mapping
 
-   f(x, y, z) -> ()
+    f(x, y, z) -> ()
 
-   when f is in the list of identifiers to be mapped to unit. The
-   advantage of doing it like this is if x, y, and z are
-   computationally expensive then we remove them also. String
-   concatenation is very expensive at runtime so this is something we
-   really want when cutting out tracing features. Obviously it's
-   important that they don't have any meaningful side effects, and
-   that f does actually have type unit.
-*)
+    when f is in the list of identifiers to be mapped to unit. The advantage of doing it like this is if x, y, and z are
+    computationally expensive then we remove them also. String concatenation is very expensive at runtime so this is
+    something we really want when cutting out tracing features. Obviously it's important that they don't have any
+    meaningful side effects, and that f does actually have type unit. *)
 let opt_fold_to_unit = ref []
 
 let fold_to_unit id =
@@ -166,22 +161,17 @@ let rec run frame =
       run (cont (Value.V_attempted_read reg) st)
   | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
-(** This rewriting pass looks for function applications (E_app)
-   expressions where every argument is a literal. It passes these
-   expressions to the OCaml interpreter in interpreter.ml, and
-   reconstructs the values returned back into expressions which are
-   then re-typechecked and re-inserted back into the AST.
+(** This rewriting pass looks for function applications (E_app) expressions where every argument is a literal. It passes
+    these expressions to the OCaml interpreter in interpreter.ml, and reconstructs the values returned back into
+    expressions which are then re-typechecked and re-inserted back into the AST.
 
-   We don't use the effect system to decide if expressions are safe to
-   evaluate, because this ignores I/O, and would force us to ignore
-   functions that maybe throw exceptions internally but as called are
-   totally safe. Instead any exceptions during evaluation are caught,
-   and the original expression is kept. Some causes of this could be:
+    We don't use the effect system to decide if expressions are safe to evaluate, because this ignores I/O, and would
+    force us to ignore functions that maybe throw exceptions internally but as called are totally safe. Instead any
+    exceptions during evaluation are caught, and the original expression is kept. Some causes of this could be:
 
-   - Function tries to read/write register.
-   - Calls an unsafe primop.
-   - Throws an exception that isn't caught.
- *)
+    - Function tries to read/write register.
+    - Calls an unsafe primop.
+    - Throws an exception that isn't caught. *)
 
 let initial_state ast env = Interpreter.initial_state ~registers:false ast env safe_primops
 

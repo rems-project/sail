@@ -44,24 +44,22 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** Sail documentation comments are written using (a subset of)
-   markdown. This module defines converter modules that convert these
-   Markdown comments into various documentation formats. *)
+(** Sail documentation comments are written using (a subset of) markdown. This module defines converter modules that
+    convert these Markdown comments into various documentation formats. *)
 
 open Libsail
 
 module type CONVERTER = sig
   type config
 
-  (** The location is the location of the doc comment, used for errors
-      if we cannot convert the markdown for any reason. *)
+  (** The location is the location of the doc comment, used for errors if we cannot convert the markdown for any reason.
+  *)
   val default_config : loc:Parse_ast.l -> config
 
   val convert : config -> string -> string
 end
 
-(** This is the trivial converter that just leaves the comments in
-   Markdown format. *)
+(** This is the trivial converter that just leaves the comments in Markdown format. *)
 module IdentityConverter : CONVERTER
 
 (** Convert Markdown comments into Asciidoc. *)

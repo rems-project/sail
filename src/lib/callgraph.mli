@@ -97,7 +97,7 @@ val top_sort_defs : Type_check.typed_ast -> Type_check.typed_ast
 
 val slice_instantiation_types : string -> Type_check.typed_ast -> Type_check.typed_ast
 
-(** Callgraph consisting *only* of calls, not other dependencies.  Doesn't rely on types. *)
+(** Callgraph consisting *only* of calls, not other dependencies. Doesn't rely on types. *)
 
 module FCG : sig
   include Graph.S with type node = id and type node_set = IdSet.t and type graph = Graph.Make(Id).graph

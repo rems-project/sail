@@ -286,7 +286,7 @@ let process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs files 
           let defs = Preprocess.preprocess default_sail_dir target_name options defs in
           let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [("", defs)]) in
           ((ctx, vs_ids, regs), ProcessedGenerated ast.defs)
-    )
+      )
     (ctx, vs_ids, regs) files
 
 let check_files env files =
@@ -298,7 +298,7 @@ let check_files env files =
       | ProcessedGenerated defs ->
           let defs, env = Type_error.check_defs env defs in
           (env, { defs; comments = [] })
-    )
+      )
     env files
 
 let load_modules ?target default_sail_dir options env proj root_mod_ids =

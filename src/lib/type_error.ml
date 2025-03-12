@@ -210,7 +210,7 @@ let simp_typ =
     | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (nexp_simp nexp), l)
     | A_aux (A_bool nc, l) -> A_aux (A_bool (constraint_simp nc), l)
     | arg -> arg
-  )
+    )
 
 (* If we have a sequence of overloading errors this function rates
    them based on a heuristic score stored in the

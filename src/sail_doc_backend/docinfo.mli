@@ -67,12 +67,10 @@ val json_of_hyperlink : hyperlink -> Yojson.Basic.t
 val json_of_docinfo : 'a docinfo -> Yojson.Basic.t
 
 module type CONFIG = sig
-  (** If [Some] then the source code will be directly included in the
-      documentation info. *)
+  (** If [Some] then the source code will be directly included in the documentation info. *)
   val embedding_mode : embedding option
 
-  (** If true, then we include both the source directly and a
-      reference using the location information. *)
+  (** If true, then we include both the source directly and a reference using the location information. *)
   val embed_with_location : bool
 end
 

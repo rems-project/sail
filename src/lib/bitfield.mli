@@ -59,18 +59,16 @@ val get_bits_field : uannot exp -> uannot exp
 (** Create an expression converting the given expression from a bitvector to a bitfield *)
 val construct_bitfield_exp : id -> uannot exp -> uannot exp
 
-(** Create an expression converting the given expression from a bitvector to a
-    bitfield, but using a struct expression rather than a constructor function *)
+(** Create an expression converting the given expression from a bitvector to a bitfield, but using a struct expression
+    rather than a constructor function *)
 val construct_bitfield_struct : id -> uannot exp -> uannot exp
 
 type field_accessor_ids = { get : id; set : id; update : id; overload : id }
 
-(** The [macro] function generates multiple definitions to get, set,
-   and update fields, so we can use this function to find the names of
-   those functions in a consistent way. *)
+(** The [macro] function generates multiple definitions to get, set, and update fields, so we can use this function to
+    find the names of those functions in a consistent way. *)
 val field_accessor_ids : id -> id -> field_accessor_ids
 
-(** Bitfields work a bit like a macro, which generate a struct wrapper
-   around a simple bitvector type, along with a host of accessor
-   functions. *)
+(** Bitfields work a bit like a macro, which generate a struct wrapper around a simple bitvector type, along with a host
+    of accessor functions. *)
 val macro : id -> nexp -> order -> index_range Bindings.t -> untyped_def list

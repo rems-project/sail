@@ -686,12 +686,14 @@ module Simplifier = struct
     | Fn ("and", (Fn ("not", [Fn ("=", [lit; v])]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
         Reconstruct (0, SimpSet.add_var_inequality v lit simpset, smt_conj xs, add_to_and x)
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
-        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x)
+    | _ -> NoChange
 
   let rule_ite_assume =
     mk_rule __LOC__ @@ fun simpset -> function
     | Ite ((Fn ("=", [v; lit]) as i), t, e) when is_literal lit && SimpSet.is_simp_var v ->
-        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, e, fun e -> Ite (i, t, e)) | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, e, fun e -> Ite (i, t, e))
+    | _ -> NoChange
 
   let is_equality = function
     | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some (v, lit)
@@ -740,19 +742,22 @@ module Simplifier = struct
   let rule_or_assume =
     mk_rule __LOC__ @@ fun simpset -> function
     | Fn ("or", v :: xs) when SimpSet.is_simp_var v ->
-        Reconstruct (0, SimpSet.add_var v (Bool_lit false) simpset, smt_disj xs, add_to_or v) | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var v (Bool_lit false) simpset, smt_disj xs, add_to_or v)
+    | _ -> NoChange
 
   let rule_var =
     mk_rule __LOC__ @@ fun simpset -> function
     | v when SimpSet.is_simp_var v -> (
         match SimpSet.find_opt v simpset with Some exp -> change exp | None -> NoChange
-      ) | _ -> NoChange
+      )
+    | _ -> NoChange
 
   let rule_tester =
     mk_rule __LOC__ @@ fun simpset -> function
     | Tester (ctor, Var v) -> (
         match SimpSet.is_ctor v ctor simpset with Some b -> change (Bool_lit b) | _ -> NoChange
-      ) | _ -> NoChange
+      )
+    | _ -> NoChange
 
   let rule_access_ite =
     mk_simple_rule __LOC__ @@ function
@@ -777,7 +782,8 @@ module Simplifier = struct
             (fun exp -> match simp_eq lit exp with Some true -> true | _ -> false)
             (SimpSet.inequalities v simpset)
         then change (Bool_lit true)
-        else NoChange | _ -> NoChange
+        else NoChange
+    | _ -> NoChange
 
   let rule_not_not = mk_simple_rule __LOC__ @@ function Fn ("not", [Fn ("not", [exp])]) -> change exp | _ -> NoChange
 

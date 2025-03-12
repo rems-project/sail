@@ -52,9 +52,8 @@ module Big_int = Nat_big_num
 
 (** {1 Untyped AST annotations and locations} *)
 
-(** The type of annotations for untyped AST nodes. When expressions
-   are type-checked the untyped annotations are replaced with typed
-   annotations {!Type_check.tannot}. *)
+(** The type of annotations for untyped AST nodes. When expressions are type-checked the untyped annotations are
+    replaced with typed annotations {!Type_check.tannot}. *)
 type uannot
 
 (** Aliases for an untyped definitions and full AST for readability *)
@@ -85,13 +84,11 @@ val attribute_data_string_with_loc : attribute_data -> (string * Parse_ast.l) op
 
 val attribute_data_list : attribute_data -> attribute_data list option
 
-(** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
+(** Add an attribute to an annotation. Attributes are attached to expressions in Sail via:
     {@sail[
-    $[attribute argument] expression
+      $[attribute argument] expression
     ]}
-    The location argument should be a span that corresponds to the attribute itself, and not
-    include the expression.
-*)
+    The location argument should be a span that corresponds to the attribute itself, and not include the expression. *)
 val add_attribute : l -> string -> attribute_data option -> uannot -> uannot
 
 val remove_attribute : string -> uannot -> uannot
@@ -117,17 +114,15 @@ val def_annot_map_loc : (l -> l) -> 'a def_annot -> 'a def_annot
 
 val def_annot_map_env : ('a -> 'b) -> 'a def_annot -> 'b def_annot
 
-(** The empty annotation (as a location + uannot pair). Should be used
-   carefully because it can result in unhelpful error messgaes. However
-   a common pattern is generating code with [no_annot], then adding location
-   information with the various [locate_] functions in this module. *)
+(** The empty annotation (as a location + uannot pair). Should be used carefully because it can result in unhelpful
+    error messgaes. However a common pattern is generating code with [no_annot], then adding location information with
+    the various [locate_] functions in this module. *)
 val no_annot : l * uannot
 
 (** {1 Generated locations} *)
 
-(** [gen_loc l] takes a location l and generates a location which
-   means 'generated/derived from location l'. This is useful for debugging
-   errors that occur in generated code. *)
+(** [gen_loc l] takes a location l and generates a location which means 'generated/derived from location l'. This is
+    useful for debugging errors that occur in generated code. *)
 val gen_loc : Parse_ast.l -> Parse_ast.l
 
 val is_gen_loc : Parse_ast.l -> bool
@@ -144,9 +139,8 @@ val visibility_loc : visibility -> Parse_ast.l
 
 type mut = Immutable | Mutable
 
-(** [lvar] is the type of variables - they can either be registers,
-   local mutable or immutable variables constructors or unbound
-   identifiers. *)
+(** [lvar] is the type of variables - they can either be registers, local mutable or immutable variables constructors or
+    unbound identifiers. *)
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
 val is_unbound : 'a lvar -> bool
@@ -202,8 +196,7 @@ val unaux_constraint : n_constraint -> n_constraint_aux
 
 (** {2 Destruct type annotated patterns and expressions} *)
 
-(** [untyp_pat (P_aux (P_typ (typ, pat)), _)] returns [Some (pat,
-   typ)] or [None] if the pattern does not match. *)
+(** [untyp_pat (P_aux (P_typ (typ, pat)), _)] returns [Some (pat, typ)] or [None] if the pattern does not match. *)
 val untyp_pat : 'a pat -> 'a pat * typ option
 
 (** Same as [untyp_pat], but for [E_typ] nodes *)
@@ -263,11 +256,9 @@ val is_bitvector_typ : typ -> bool
 
 (** {1 Simplifcation of numeric expressions and constraints}
 
-   These functions simplify nexps and n_constraints using various
-   basic rules. In general they will guarantee to reduce constant
-   numeric expressions like 2 + 5 into 7, although they will not
-   simplify 2^constant, as that often leads to unreadable error
-   messages containing huge numbers. *)
+    These functions simplify nexps and n_constraints using various basic rules. In general they will guarantee to reduce
+    constant numeric expressions like 2 + 5 into 7, although they will not simplify 2^constant, as that often leads to
+    unreadable error messages containing huge numbers. *)
 
 val nexp_simp : nexp -> nexp
 val constraint_simp : n_constraint -> n_constraint
@@ -458,8 +449,8 @@ val def_loc : ('a, 'b) def -> Parse_ast.l
 
 (** {1 Printing utilities}
 
-   Note: For debugging and error messages only - not guaranteed to
-   produce parseable Sail, or even print all language constructs! *)
+    Note: For debugging and error messages only - not guaranteed to produce parseable Sail, or even print all language
+    constructs! *)
 
 val string_of_order : order -> string
 
@@ -588,12 +579,10 @@ val extern_assoc : string -> extern option -> string option
 
 (** {1 Manipulating locations} *)
 
-(** locate takes an expression and recursively sets the location in
-   every subexpression using a function that takes the orginal
-   location as an argument. Expressions build using mk_exp and similar
-   do not have locations, so they can then be annotated as e.g. locate
-   (gen_loc l) (mk_exp ...) where l is the location from which the
-   code is being generated. *)
+(** locate takes an expression and recursively sets the location in every subexpression using a function that takes the
+    orginal location as an argument. Expressions build using mk_exp and similar do not have locations, so they can then
+    be annotated as e.g. locate (gen_loc l) (mk_exp ...) where l is the location from which the code is being generated.
+*)
 val locate : (l -> l) -> 'a exp -> 'a exp
 
 val locate_pat : (l -> l) -> 'a pat -> 'a pat
@@ -604,22 +593,17 @@ val locate_typ : (l -> l) -> typ -> typ
 
 val locate_letbind : (l -> l) -> 'a letbind -> 'a letbind
 
-(** Make a unique location by giving it a Parse_ast.Unique wrapper with
-   a generated number. *)
+(** Make a unique location by giving it a Parse_ast.Unique wrapper with a generated number. *)
 val unique : l -> l
 
-(** Convert unknown locations into known ones by replacing any Unknown
-    subparts of the second argument with the first argument. Set up so
-    one can do: [locate (unknown_to l) exp] and similar. *)
+(** Convert unknown locations into known ones by replacing any Unknown subparts of the second argument with the first
+    argument. Set up so one can do: [locate (unknown_to l) exp] and similar. *)
 val unknown_to : l -> l -> l
 
-(** Try to find the annotation closest to the provided location (which
-    can be in any format, as long as we can tell if it is smaller than
-    any other location). Note that this function makes no guarantees
-    about finding the closest annotation or even finding an annotation
-    at all. This is used by the LSP to provide type-at-cursor
-    functionality and we don't mind if it's a bit fuzzy in that
-    context. *)
+(** Try to find the annotation closest to the provided location (which can be in any format, as long as we can tell if
+    it is smaller than any other location). Note that this function makes no guarantees about finding the closest
+    annotation or even finding an annotation at all. This is used by the LSP to provide type-at-cursor functionality and
+    we don't mind if it's a bit fuzzy in that context. *)
 module Scanner (Loc : sig
   type t
 
@@ -630,9 +614,8 @@ end
 
 (** {1 Substitutions}
 
-   The function X_subst substitutes a type argument into something of
-   type X. The type of the type argument determines which kind of type
-   variables will be replaced *)
+    The function X_subst substitutes a type argument into something of type X. The type of the type argument determines
+    which kind of type variables will be replaced *)
 
 val nexp_subst : kid -> typ_arg -> nexp -> nexp
 val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
