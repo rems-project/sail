@@ -2436,19 +2436,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let unit_tests = get_unit_tests cdefs in
 
-      let unit_test_functions =
-        ["unit (*const SAIL_TESTS[])(unit) = {"]
+      let unit_test_defs =
+        (* Number of unit tests. *)
+        [sprintf "const size_t SAIL_TEST_COUNT = %d;" (List.length unit_tests)]
+        (* Pointers to unit test functions, with NULL entry for convenience. *)
+        @ [sprintf "unit (*const SAIL_TESTS[%d])(unit) = {" (List.length unit_tests + 1)]
         @ List.map (fun id -> sprintf "  %s," (sgen_function_id id)) unit_tests
         @ ["  NULL"; "};"]
-        |> separate_map hardline string
-      in
-
-      let unit_test_names =
-        ["const char* const SAIL_TEST_NAMES[] = {"]
-        @ Util.map_last
-            (fun is_last id -> sprintf "  \"%s\"%s" (String.escaped (string_of_id id)) (if is_last then "" else ","))
-            unit_tests
-        @ ["};"]
+        (* Unit test names, with NULL entry for convenience. *)
+        @ [sprintf "const char* const SAIL_TEST_NAMES[%d] = {" (List.length unit_tests + 1)]
+        @ List.map (fun id -> sprintf "  \"%s\"," (String.escaped (string_of_id id))) unit_tests
+        @ ["  NULL"; "};"]
         |> separate_map hardline string
       in
 
@@ -2459,7 +2457,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         [
           Printf.sprintf "%svoid model_test(void)" (static ());
           "{";
-          "  for (size_t i = 0; SAIL_TESTS[i] != NULL; ++i) {";
+          "  for (size_t i = 0; i < SAIL_TEST_COUNT; ++i) {";
           "    model_init();";
           "    printf(\"Testing %s\\n\", SAIL_TEST_NAMES[i]);";
           "    SAIL_TESTS[i](UNIT);";
@@ -2517,8 +2515,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_main ^^ hlhl
                else empty
              )
-          ^^ unit_test_functions ^^ hlhl ^^ unit_test_names ^^ hlhl ^^ model_test ^^ hlhl ^^ actual_main ^^ hardline
-          ^^ end_extern_cpp ^^ hardline
+          ^^ unit_test_defs ^^ hlhl ^^ model_test ^^ hlhl ^^ actual_main ^^ hardline ^^ end_extern_cpp ^^ hardline
           )
       )
     with Type_error.Type_error (l, err) ->
