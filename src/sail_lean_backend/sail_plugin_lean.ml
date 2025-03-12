@@ -198,7 +198,6 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-
 |}
 
 let path_to_static_libarary sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
@@ -248,11 +247,11 @@ let start_lean_output (out_name : string) default_sail_dir =
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
   output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n\n");
+  output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n");
   List.iter
-    (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n\n"))
+    (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
     !opt_lean_import_files;
-  output_string funcs_file file_prelude;
+  output_string funcs_file ("\n" ^ file_prelude);
   if !opt_lean_noncomputable then output_string funcs_file "noncomputable section\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; lakefile }

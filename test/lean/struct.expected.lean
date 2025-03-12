@@ -10,18 +10,13 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
-
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving BEq
-
-
-
 
 structure My_struct where
   field1 : Int
@@ -30,7 +25,6 @@ structure My_struct where
 
 /-- Type quantifiers: k_n : Int, k_vasize : Int, k_pa : Type, k_ts : Type, k_arch_ak : Type, k_n > 0
   ∧ k_vasize ≥ 0 -/
-
 structure Mem_write_request
   (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
   va : (Option (BitVec k_vasize))
@@ -55,7 +49,6 @@ import Out.Sail.Sail
 import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
-
 import Out.Specialization
 
 set_option maxHeartbeats 1_000_000_000
@@ -64,7 +57,6 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-
 
 open option
 
