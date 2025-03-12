@@ -955,14 +955,22 @@ let instr_reads (I_aux (instr, _)) = fst (instr_deps instr)
 let instr_writes (I_aux (instr, _)) = snd (instr_deps instr)
 
 let rec filter_instrs f instrs =
-  let filter_instrs' = function
-    | I_aux (I_block instrs, aux) -> I_aux (I_block (filter_instrs f instrs), aux)
-    | I_aux (I_try_block instrs, aux) -> I_aux (I_try_block (filter_instrs f instrs), aux)
+  let filter_instrs' instr =
+    match instr with
+    | I_aux (I_block instrs, aux) ->
+        let instrs' = filter_instrs f instrs in
+        if instrs == instrs' then instr else I_aux (I_block instrs', aux)
+    | I_aux (I_try_block instrs, aux) ->
+        let instrs' = filter_instrs f instrs in
+        if instrs == instrs' then instr else I_aux (I_try_block instrs', aux)
     | I_aux (I_if (cval, instrs1, instrs2), aux) ->
-        I_aux (I_if (cval, filter_instrs f instrs1, filter_instrs f instrs2), aux)
-    | instr -> instr
+        let instrs1' = filter_instrs f instrs1 in
+        let instrs2' = filter_instrs f instrs2 in
+        if instrs1 == instrs1' && instrs2 == instrs2' then instr else I_aux (I_if (cval, instrs1', instrs2'), aux)
+    | _ -> instr
   in
-  List.filter f (List.map filter_instrs' instrs)
+  let instrs = map_no_copy filter_instrs' instrs in
+  if List.exists (fun i -> not (f i)) instrs then List.filter f instrs else instrs
 
 (* GLOBAL: label_counter is used to make sure all labels have unique
    names. Like gensym_counter it should be safe to reset between
@@ -1141,3 +1149,52 @@ let instr_split_at f =
     | instr :: instrs -> instr_split_at' f (instr :: before) instrs
   in
   instr_split_at' f []
+
+let rec cval_has_ctyp pred = function
+  | V_id (_, ctyp) | V_member (_, ctyp) | V_lit (_, ctyp) -> pred ctyp
+  | V_tuple (cvals, ctyp) -> List.exists (cval_has_ctyp pred) cvals || pred ctyp
+  | V_field (cval, _) | V_tuple_member (cval, _, _) -> cval_has_ctyp pred cval
+  | V_call (_, cvals) -> List.exists (cval_has_ctyp pred) cvals
+  | V_ctor_kind (cval, (_, ctyps), ctyp) | V_ctor_unwrap (cval, (_, ctyps), ctyp) ->
+      cval_has_ctyp pred cval || List.exists pred ctyps || pred ctyp
+  | V_struct (fields, ctyp) -> List.exists (fun (_, cval) -> cval_has_ctyp pred cval) fields || pred ctyp
+
+let rec clexp_has_ctyp pred = function
+  | CL_id (_, ctyp) | CL_rmw (_, _, ctyp) | CL_void ctyp -> pred ctyp
+  | CL_field (clexp, _) | CL_addr clexp | CL_tuple (clexp, _) -> clexp_has_ctyp pred clexp
+
+let creturn_has_ctyp pred = function
+  | CR_one clexp -> clexp_has_ctyp pred clexp
+  | CR_multi clexps -> List.exists (clexp_has_ctyp pred) clexps
+
+let init_has_ctyp pred = function Init_cval cval -> cval_has_ctyp pred cval | Init_static _ | Init_json_key _ -> false
+
+let rec instr_has_ctyp pred (I_aux (aux, _)) =
+  match aux with
+  | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp -> pred ctyp
+  | I_init (ctyp, _, init) -> pred ctyp || init_has_ctyp pred init
+  | I_reinit (ctyp, _, cval) -> pred ctyp || cval_has_ctyp pred cval
+  | I_jump (cval, _) | I_throw cval | I_return cval -> cval_has_ctyp pred cval
+  | I_copy (clexp, cval) -> clexp_has_ctyp pred clexp || cval_has_ctyp pred cval
+  | I_if (i, t, e) -> cval_has_ctyp pred i || List.exists (instr_has_ctyp pred) t || List.exists (instr_has_ctyp pred) e
+  | I_block instrs | I_try_block instrs -> List.exists (instr_has_ctyp pred) instrs
+  | I_funcall (creturn, _, (_, ctyps), cvals) ->
+      creturn_has_ctyp pred creturn || List.exists pred ctyps || List.exists (cval_has_ctyp pred) cvals
+  | I_goto _ | I_label _ | I_comment _ | I_raw _ | I_end _ | I_exit _ -> false
+
+let ctype_def_has_ctyp pred = function
+  | CTD_enum _ | CTD_abstract _ -> false
+  | CTD_abbrev (_, ctyp) -> pred ctyp
+  | CTD_struct (_, fields) -> List.exists (fun (_, ctyp) -> pred ctyp) fields
+  | CTD_variant (_, ctors) -> List.exists (fun (_, ctyp) -> pred ctyp) ctors
+
+let rec cdef_has_ctyp pred (CDEF_aux (aux, _)) =
+  match aux with
+  | CDEF_register (_, ctyp, instrs) -> pred ctyp || List.exists (instr_has_ctyp pred) instrs
+  | CDEF_val (_, _, ctyps, ctyp) -> List.exists pred ctyps || pred ctyp
+  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
+      List.exists (instr_has_ctyp pred) instrs
+  | CDEF_type tdef -> ctype_def_has_ctyp pred tdef
+  | CDEF_let (_, bindings, instrs) ->
+      List.exists (fun (_, ctyp) -> pred ctyp) bindings || List.exists (instr_has_ctyp pred) instrs
+  | CDEF_pragma _ -> false
