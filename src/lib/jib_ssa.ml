@@ -537,12 +537,12 @@ let rename_variables globals graph root children =
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
-    | V_field (f, field) -> V_field (fold_cval f, field)
+    | V_field (f, field, ctyp) -> V_field (fold_cval f, field, ctyp)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
-    | V_ctor_kind (f, ctor, ctyp) -> V_ctor_kind (fold_cval f, ctor, ctyp)
+    | V_ctor_kind (f, ctor) -> V_ctor_kind (fold_cval f, ctor)
     | V_ctor_unwrap (f, ctor, ctyp) -> V_ctor_unwrap (fold_cval f, ctor, ctyp)
     | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, fold_cval cval)) fields, ctyp)
-    | V_tuple (members, ctyp) -> V_tuple (List.map fold_cval members, ctyp)
+    | V_tuple members -> V_tuple (List.map fold_cval members)
   in
 
   let fold_init = function
@@ -564,7 +564,7 @@ let rename_variables globals graph root children =
         push_stack id i;
         CL_id (ssa_name i id, ctyp)
     | CL_rmw _ -> assert false
-    | CL_field (clexp, field) -> CL_field (fold_clexp true clexp, field)
+    | CL_field (clexp, field, ctyp) -> CL_field (fold_clexp true clexp, field, ctyp)
     | CL_addr clexp -> CL_addr (fold_clexp false clexp)
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void ctyp -> CL_void ctyp

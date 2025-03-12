@@ -297,37 +297,23 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
         | _ -> CT_vector (convert_typ ctx typ)
       end
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
-    | Typ_id id when Bindings.mem id ctx.records ->
-        CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, [])
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
-        let typ_params, fields = Bindings.find id ctx.records in
-        let quants =
-          List.fold_left2
-            (fun quants typ_param typ_arg ->
-              match typ_arg with
-              | A_aux (A_typ typ, _) -> KBindings.add typ_param (convert_typ ctx typ) quants
-              | _ -> Reporting.unreachable l __POS__ "Non-type argument for record here should be impossible"
-            )
-            ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+        let ctyp_args =
+          List.filter_map
+            (function A_aux (A_typ typ, _) -> Some (ctyp_suprema (convert_typ ctx typ)) | _ -> None)
+            typ_args
         in
-        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
-    | Typ_id id when Bindings.mem id ctx.variants ->
-        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings) |> transparent_newtype ctx
+        CT_struct (id, ctyp_args)
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, []) |> transparent_newtype ctx
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
-        let typ_params, ctors = Bindings.find id ctx.variants in
-        let quants =
-          List.fold_left2
-            (fun quants typ_param typ_arg ->
-              match typ_arg with
-              | A_aux (A_typ typ, _) -> KBindings.add typ_param (convert_typ ctx typ) quants
-              | _ -> Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
-            )
-            ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+        let ctyp_args =
+          List.filter_map
+            (function A_aux (A_typ typ, _) -> Some (ctyp_suprema (convert_typ ctx typ)) | _ -> None)
+            typ_args
         in
-        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings) |> transparent_newtype ctx
-    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+        CT_variant (id, ctyp_args) |> transparent_newtype ctx
+    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum id
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
     | Typ_exist _ -> begin
         (* Use Type_check.destruct_exist when optimising with SMT, to
@@ -505,7 +491,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let svir = List.rev svir in
   let svir_types, svir = List.partition Sv_ir.is_typedef svir in
   let library_svir = SV.Primops.get_generated_library_defs () in
-  let toplevel_svir = [Sv_ir.mk_def (Sv_ir.SVD_module (SV.toplevel_module (mk_id !opt_toplevel) spec_info fn_ctyps))] in
+  let toplevel_svir =
+    [Sv_ir.mk_def (Sv_ir.SVD_module (SV.toplevel_module spec_info ctx (mk_id !opt_toplevel) fn_ctyps))]
+  in
 
   let svir = library_svir @ svir @ toplevel_svir in
 
@@ -525,9 +513,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
       )
       empty (StringSet.elements !opt_dpi_sets)
     ^^ string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
-    ^^ separate_map (twice hardline) (pp_def None) svir_types
+    ^^ separate_map (twice hardline) (pp_def ctx None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
-    ^^ separate_map (twice hardline) (pp_def None) svir
+    ^^ separate_map (twice hardline) (pp_def ctx None) svir
   in
 
   (*

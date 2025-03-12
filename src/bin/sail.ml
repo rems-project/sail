@@ -618,6 +618,7 @@ let parse_config_file file =
     None
 
 let main () =
+  (* let _ = Memtrace.start_tracing ~context:None ~sampling_rate:1e-6 ~filename:"trace.ctf" in *)
   if Option.is_some (Sys.getenv_opt "SAIL_NEW_CLI") then opt_new_cli := true;
 
   options := Arg.align (fix_options !options);

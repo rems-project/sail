@@ -116,7 +116,7 @@ module Make (Config : CONFIG) : sig
     Jib.cdef ->
     Sv_ir.sv_def list * (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t
 
-  val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
+  val pp_def : Jib_compile.ctx -> Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
   (** Create a SystemVerilog module that wraps the provided Sail function in a more convenient interface.
 
@@ -126,7 +126,11 @@ module Make (Config : CONFIG) : sig
       The way this is generated is controlled by the sv_toplevel attribute, which is attached to the signature of the
       function. *)
   val toplevel_module :
-    Ast.id -> spec_info -> (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t -> Sv_ir.sv_module
+    spec_info ->
+    Jib_compile.ctx ->
+    Ast.id ->
+    (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t ->
+    Sv_ir.sv_module
 
   val sv_cdef :
     spec_info ->

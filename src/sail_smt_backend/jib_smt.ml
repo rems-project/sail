@@ -219,7 +219,7 @@ module Make (Config : CONFIG) = struct
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_generic_vector_length = Config.max_unknown_generic_vector_length
-        let union_ctyp_classify _ = true
+        let union_ctyp_classify _ _ = true
         let register_ref reg_name =
           let id = mk_id reg_name in
           let rmap =
@@ -287,25 +287,35 @@ module Make (Config : CONFIG) = struct
     | CT_sbits n -> return smt_lbits
     | CT_lbits -> return smt_lbits
     | CT_bool -> return Bool
-    | CT_enum (id, elems) -> return (mk_enum (zencode_upper_id id) (List.map zencode_id elems))
-    | CT_struct (id, fields) ->
+    | CT_enum id ->
+        let* l = Smt_gen.current_location in
+        let* ctx = Smt_gen.get_context in
+        let elems = Jib_compile.enum_members l ctx id in
+        return (mk_enum (zencode_upper_id id) (List.map zencode_id (IdSet.elements elems)))
+    | CT_struct _ as ctyp ->
+        let* l = Smt_gen.current_location in
+        let* ctx = Smt_gen.get_context in
+        let id, fields = Jib_compile.struct_field_bindings l ctx ctyp in
         let* fields =
           mapM
             (fun (id, ctyp) ->
               let* ctyp = smt_ctyp ctyp in
               return (zencode_id id, ctyp)
             )
-            fields
+            (Bindings.bindings fields)
         in
         return (mk_record (zencode_upper_id id) fields)
-    | CT_variant (id, ctors) ->
+    | CT_variant _ as ctyp ->
+        let* l = Smt_gen.current_location in
+        let* ctx = Smt_gen.get_context in
+        let id, ctors = Jib_compile.variant_constructor_bindings l ctx ctyp in
         let* ctors =
           mapM
             (fun (id, ctyp) ->
               let* ctyp = smt_ctyp ctyp in
               return (zencode_id id, ctyp)
             )
-            ctors
+            (Bindings.bindings ctors)
         in
         return (mk_variant (zencode_upper_id id) ctors)
     | CT_fvector (n, ctyp) ->
@@ -470,33 +480,30 @@ module Make (Config : CONFIG) = struct
     | CL_rmw (_, write, ctyp) -> (write, ctyp)
     | CL_id _ -> assert false
     | CL_tuple (clexp, _) -> rmw_write clexp
-    | CL_field (clexp, _) -> rmw_write clexp
+    | CL_field (clexp, _, _) -> rmw_write clexp
     | clexp -> failwith "Could not understand l-expression"
 
   let rmw_read = function CL_rmw (read, _, _) -> read | _ -> assert false
 
   let rmw_modify smt = function
-    | CL_tuple (clexp, n) ->
+    | CL_tuple (clexp, n) -> (
         let ctyp = clexp_ctyp clexp in
-        begin
-          match ctyp with
-          | CT_tup ctyps ->
-              let len = List.length ctyps in
-              let set_tup i = if i == n then smt else Fn (Printf.sprintf "tup_%d_%d" len i, [Var (rmw_read clexp)]) in
-              Fn ("tup" ^ string_of_int len, List.init len set_tup)
-          | _ -> failwith "Tuple modify does not have tuple type"
-        end
-    | CL_field (clexp, field) ->
+        match ctyp with
+        | CT_tup ctyps ->
+            let len = List.length ctyps in
+            let set_tup i = if i == n then smt else Fn (Printf.sprintf "tup_%d_%d" len i, [Var (rmw_read clexp)]) in
+            return (Fn ("tup" ^ string_of_int len, List.init len set_tup))
+        | _ -> failwith "Tuple modify does not have tuple type"
+      )
+    | CL_field (clexp, field, _) ->
+        let* l = Smt_gen.current_location in
+        let* ctx = Smt_gen.get_context in
         let ctyp = clexp_ctyp clexp in
-        begin
-          match ctyp with
-          | CT_struct (struct_id, fields) ->
-              let set_field (field', _) =
-                if Id.compare field field' = 0 then smt else Field (struct_id, field', Var (rmw_read clexp))
-              in
-              Fn (zencode_upper_id struct_id, List.map set_field fields)
-          | _ -> failwith "Struct modify does not have struct type"
-        end
+        let struct_id, fields = Jib_compile.struct_field_bindings l ctx ctyp in
+        let set_field (field', _) =
+          if Id.compare field field' = 0 then smt else Field (struct_id, field', Var (rmw_read clexp))
+        in
+        return (Fn (zencode_upper_id struct_id, List.map set_field (Bindings.bindings fields)))
     | _ -> assert false
 
   let builtin_sqrt_real root v =
@@ -570,8 +577,10 @@ module Make (Config : CONFIG) = struct
         else if not extern then (
           let is_ctor =
             match ret_ctyp with
-            | CT_variant (union_id, ctors) ->
-                Option.map snd (List.find_opt (fun (ctor, _) -> Id.compare ctor function_id = 0) ctors)
+            | CT_variant _ ->
+                let union_id, ctors = Jib_compile.variant_constructor_bindings l ctx ret_ctyp in
+                Option.map snd
+                  (List.find_opt (fun (ctor, _) -> Id.compare ctor function_id = 0) (Bindings.bindings ctors))
             | _ -> None
           in
           match (is_ctor, args) with
@@ -593,7 +602,8 @@ module Make (Config : CONFIG) = struct
         let* smt = Smt.smt_cval cval in
         let* smt = Smt.smt_conversion ~into:(clexp_ctyp clexp) ~from:(cval_ctyp cval) smt in
         let write, ctyp = rmw_write clexp in
-        singleton (define_const write ctyp (rmw_modify smt clexp))
+        let* modifier = rmw_modify smt clexp in
+        singleton (define_const write ctyp modifier)
     | I_decl (ctyp, id) -> begin
         begin
           match l with Unique (n, _) -> Stack.push (n, zencode_name id) state.arg_stack | _ -> ()
@@ -649,7 +659,7 @@ module Make (Config : CONFIG) = struct
     | CTD_abbrev _ -> return None
     | CTD_enum (id, elems) ->
         return (Some (declare_datatypes (mk_enum (zencode_upper_id id) (List.map zencode_id elems))))
-    | CTD_struct (id, fields) ->
+    | CTD_struct (id, _, fields) ->
         let* fields =
           mapM
             (fun (field, ctyp) ->
@@ -659,7 +669,7 @@ module Make (Config : CONFIG) = struct
             fields
         in
         return (Some (declare_datatypes (mk_record (zencode_upper_id id) fields)))
-    | CTD_variant (id, ctors) ->
+    | CTD_variant (id, _, ctors) ->
         let* ctors =
           mapM
             (fun (ctor, ctyp) ->
@@ -790,7 +800,7 @@ module Make (Config : CONFIG) = struct
                  push_smt_defs stack basic_block;
                  get_pathcond state.node state.cfg
                 )
-                Parse_ast.Unknown
+                Parse_ast.Unknown ctx
             in
             if not Config.ignore_overflow then (
               let overflow_stack = event_stack state Overflow in
@@ -827,6 +837,7 @@ module Make (Config : CONFIG) = struct
     | Q_or qs -> smt_disj (List.map (smt_query state) qs)
 
   type generated_smt_info = {
+    loc : Ast.l;
     file_name : string;
     function_id : id;
     args : id list;
@@ -836,7 +847,7 @@ module Make (Config : CONFIG) = struct
 
   let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props -> begin
+    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> begin
         match find_function [] function_id all_cdefs with
         | intervening_lets, Some (None, args, instrs, function_def_annot) ->
             let function_id_string = string_of_id function_id in
@@ -871,7 +882,7 @@ module Make (Config : CONFIG) = struct
 
             let t = Profile.start () in
             let (stack, state), _ =
-              Smt_gen.run (smt_instr_list debug_attr function_id_string ctx all_cdefs instrs) pragma_l
+              Smt_gen.run (smt_instr_list debug_attr function_id_string ctx all_cdefs instrs) pragma_l ctx
             in
             Profile.finish (Printf.sprintf "SMT conversion (%s)" function_id_string) t;
 
@@ -882,7 +893,7 @@ module Make (Config : CONFIG) = struct
             let out_chan = open_out fname in
             if prop_type = "counterexample" then output_string out_chan "(set-option :produce-models true)\n";
 
-            let header, _ = Smt_gen.run (smt_header all_cdefs) pragma_l in
+            let header, _ = Smt_gen.run (smt_header all_cdefs) pragma_l ctx in
             List.iter
               (fun def ->
                 output_string out_chan (string_of_smt_def def);
@@ -918,7 +929,7 @@ module Make (Config : CONFIG) = struct
                   )
                 arg_decls
             in
-            Some { file_name = fname; function_id; args; arg_ctyps; arg_smt_names }
+            Some { loc = pragma_l; file_name = fname; function_id; args; arg_ctyps; arg_smt_names }
         | _ ->
             let _, _, pragma_l, _ = Bindings.find function_id props in
             raise (Reporting.err_general pragma_l "No function body found")
@@ -1102,37 +1113,19 @@ end) : Jib_compile.CONFIG = struct
         | _ -> CT_vector (convert_typ ctx typ)
       end
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
-    | Typ_id id when Bindings.mem id ctx.records ->
-        CT_struct (id, Bindings.find id ctx.records |> snd |> Bindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, [])
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
-        let typ_params, fields = Bindings.find id ctx.records in
-        let quants =
-          List.fold_left2
-            (fun quants typ_param typ_arg ->
-              match typ_arg with
-              | A_aux (A_typ typ, _) -> KBindings.add typ_param (convert_typ ctx typ) quants
-              | _ -> Reporting.unreachable l __POS__ "Non-type argument for record here should be impossible"
-            )
-            ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+        let ctyp_args =
+          List.filter_map (function A_aux (A_typ typ, _) -> Some (convert_typ ctx typ) | _ -> None) typ_args
         in
-        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_struct (id, Bindings.map fix_ctyp fields |> Bindings.bindings)
-    | Typ_id id when Bindings.mem id ctx.variants ->
-        CT_variant (id, Bindings.find id ctx.variants |> snd |> Bindings.bindings) |> transparent_newtype ctx
+        CT_struct (id, ctyp_args)
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, []) |> transparent_newtype ctx
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
-        let typ_params, ctors = Bindings.find id ctx.variants in
-        let quants =
-          List.fold_left2
-            (fun quants typ_param typ_arg ->
-              match typ_arg with
-              | A_aux (A_typ typ, _) -> KBindings.add typ_param (convert_typ ctx typ) quants
-              | _ -> Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
-            )
-            ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+        let ctyp_args =
+          List.filter_map (function A_aux (A_typ typ, _) -> Some (convert_typ ctx typ) | _ -> None) typ_args
         in
-        let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
-        CT_variant (id, Bindings.map fix_ctyp ctors |> Bindings.bindings) |> transparent_newtype ctx
-    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+        CT_variant (id, ctyp_args)
+    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum id
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
     | Typ_exist _ -> begin
         (* Use Type_check.destruct_exist when optimising with SMT, to

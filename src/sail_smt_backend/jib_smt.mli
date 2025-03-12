@@ -64,6 +64,7 @@ end
 
 module Make (Config : CONFIG) : sig
   type generated_smt_info = {
+    loc : Ast.l;
     file_name : string;
     function_id : id;
     args : id list;

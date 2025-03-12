@@ -67,19 +67,21 @@ let append_checks c1 c2 =
 
 type 'a check_writer_state = { value : 'a; checks : checks }
 
-type 'a check_writer = Parse_ast.l -> 'a check_writer_state
+type 'a check_writer = Parse_ast.l -> Jib_compile.ctx -> 'a check_writer_state
 
-let return x _ = { value = x; checks = empty_checks }
+let return x _ _ = { value = x; checks = empty_checks }
 
-let current_location l = { value = l; checks = empty_checks }
+let current_location l _ = { value = l; checks = empty_checks }
 
-let bind m f l =
-  let state = m l in
-  let state' = f state.value l in
+let get_context _ ctx = { value = ctx; checks = empty_checks }
+
+let bind m f l ctx =
+  let state = m l ctx in
+  let state' = f state.value l ctx in
   { value = state'.value; checks = append_checks state.checks state'.checks }
 
-let fmap f m l =
-  let state = m l in
+let fmap f m l ctx =
+  let state = m l ctx in
   let value = f state.value in
   { value; checks = state.checks }
 
@@ -107,19 +109,19 @@ let rec iterM f = function
       let* _ = f x in
       iterM f xs
 
-let run m l =
-  let state = m l in
+let run m l ctx =
+  let state = m l ctx in
   (state.value, state.checks)
 
-let mk_check_writer f l =
-  let value, checks = f l in
+let mk_check_writer f l ctx =
+  let value, checks = f l ctx in
   { value; checks }
 
-let overflow_check check (_ : Parse_ast.l) = { value = (); checks = { empty_checks with overflows = [check] } }
+let overflow_check check _ _ = { value = (); checks = { empty_checks with overflows = [check] } }
 
-let string_used (_ : Parse_ast.l) = { value = (); checks = { empty_checks with strings_used = true } }
+let string_used _ _ = { value = (); checks = { empty_checks with strings_used = true } }
 
-let real_used (_ : Parse_ast.l) = { value = (); checks = { empty_checks with reals_used = true } }
+let real_used _ _ = { value = (); checks = { empty_checks with reals_used = true } }
 
 (* [signed_size n m exp] takes a smt expression assumed to be a
    integer (signed bitvector) of length m and forces it to be length n
@@ -220,7 +222,7 @@ module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val max_unknown_generic_vector_length : int
-  val union_ctyp_classify : ctyp -> bool
+  val union_ctyp_classify : Jib_compile.ctx -> ctyp -> bool
   val register_ref : string -> smt_exp
 end
 
@@ -389,14 +391,15 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
         | V_call (op, args) ->
             let* args = mapM smt_cval args in
             return (smt_cval_call op args)
-        | V_ctor_kind (union, (ctor, _), ctyp) ->
+        | V_ctor_kind (union, (ctor, _)) ->
             let* union = smt_cval union in
             return (Fn ("not", [Tester (ctor, union)]))
         | V_ctor_unwrap (union, (ctor, _), ctyp) ->
             let union_ctyp = cval_ctyp union in
             let* union = smt_cval union in
-            return (Unwrap (ctor, Config.union_ctyp_classify union_ctyp, union))
-        | V_field (record, field) -> (
+            let* ctx = get_context in
+            return (Unwrap (ctor, Config.union_ctyp_classify ctx union_ctyp, union))
+        | V_field (record, field, _) -> (
             match cval_ctyp record with
             | CT_struct (struct_id, _) ->
                 let* record = smt_cval record in
@@ -405,25 +408,20 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 let* l = current_location in
                 Reporting.unreachable l __POS__ "Field for non-struct type found"
           )
-        | V_struct (fields, ctyp) -> (
+        | V_struct (fields, ctyp) ->
             let* l = current_location in
-            match ctyp with
-            | CT_struct (struct_id, field_ctyps) ->
-                let* fields =
-                  mapM
-                    (fun (field_id, field) ->
-                      match List.find_opt (fun (field_id', _) -> Id.compare field_id field_id' = 0) field_ctyps with
-                      | None -> Reporting.unreachable l __POS__ "Unknown field in struct"
-                      | Some (_, ctyp) ->
-                          let* smt = smt_cval field in
-                          let* smt = smt_conversion ~into:ctyp ~from:(cval_ctyp field) smt in
-                          return (field_id, smt)
-                    )
-                    fields
-                in
-                return (Struct (struct_id, fields))
-            | _ -> Reporting.unreachable l __POS__ "Struct literal with non-struct type found"
-          )
+            let* ctx = get_context in
+            let struct_id, field_ctyp = Jib_compile.struct_fields l ctx ctyp in
+            let* fields =
+              mapM
+                (fun (field_id, field) ->
+                  let* smt = smt_cval field in
+                  let* smt = smt_conversion ~into:(field_ctyp field_id) ~from:(cval_ctyp field) smt in
+                  return (field_id, smt)
+                )
+                fields
+            in
+            return (Struct (struct_id, fields))
         | V_tuple _ | V_tuple_member _ ->
             let* l = current_location in
             Reporting.unreachable l __POS__ "Found tuple value, which should have been removed before SMT generation"
@@ -1128,16 +1126,14 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_vector_update_inc vec i x ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp) with
-    (*
     | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 > Big_int.to_int i && Big_int.to_int i > 0 ->
         assert (n = m);
-        let i = (n - 1) - Big_int.to_int i in
+        let i = n - 1 - Big_int.to_int i in
         let* bv = smt_cval vec in
         let* x = smt_cval x in
-        let top = Extract (n - 1, i + 1, bv) in
-        let bot = Extract (i - 1, 0, bv) in
+        let top = Extract (n - 1, i + 1, n, bv) in
+        let bot = Extract (i - 1, 0, n, bv) in
         return (Fn ("concat", [top; Fn ("concat", [x; bot])]))
-       *)
     | CT_fbits n, CT_constant i, CT_bit, CT_fbits m when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
         let* bv = smt_cval vec in
         let* x = smt_cval x in
@@ -1403,11 +1399,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let rec builtin_eq_anything x y =
     match (cval_ctyp x, cval_ctyp y) with
-    | CT_struct (xid, xfields), CT_struct (yid, yfields) ->
-        let compare_field (f1, _) (f2, _) = Id.compare f1 f2 in
-        let xfields = List.stable_sort compare_field xfields in
-        let yfields = List.stable_sort compare_field yfields in
+    | (CT_struct _ as xt), (CT_struct _ as yt) ->
         let* l = current_location in
+        let* ctx = get_context in
+        let xfields = Jib_compile.struct_field_bindings l ctx xt |> snd |> Bindings.bindings in
+        let yfields = Jib_compile.struct_field_bindings l ctx yt |> snd |> Bindings.bindings in
         let* fields =
           if List.compare_lengths xfields yfields <> 0 then
             Reporting.unreachable l __POS__ "Tried comparing struct with different number of fields"
@@ -1416,17 +1412,17 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
               (fun (f1, ctyp1) (f2, ctyp2) ->
                 if Id.compare f1 f2 <> 0 then
                   Reporting.unreachable l __POS__ "Tried comparing struct with different fields"
-                else builtin_eq_anything (V_field (x, f1)) (V_field (y, f2))
+                else builtin_eq_anything (V_field (x, f1, ctyp1)) (V_field (y, f2, ctyp2))
               )
               xfields yfields
             |> sequence
         in
         return (Fn ("and", fields))
-    | CT_variant (xid, xctors), CT_variant (yid, yctors) ->
-        let compare_ctor (ctor1, _) (ctor2, _) = Id.compare ctor1 ctor2 in
-        let xctors = List.stable_sort compare_ctor xctors in
-        let yctors = List.stable_sort compare_ctor yctors in
+    | (CT_variant _ as xt), (CT_variant _ as yt) ->
         let* l = current_location in
+        let* ctx = get_context in
+        let xctors = Jib_compile.variant_constructor_bindings l ctx xt |> snd |> Bindings.bindings in
+        let yctors = Jib_compile.variant_constructor_bindings l ctx yt |> snd |> Bindings.bindings in
         let* constructors =
           if List.compare_lengths xctors yctors <> 0 then
             Reporting.unreachable l __POS__ "Tried comparing unions with different number of constructors"
