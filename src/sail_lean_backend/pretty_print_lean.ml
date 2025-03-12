@@ -1047,13 +1047,12 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
         (flow (break 1) [string "inductive"; id; string "where"]
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
         )
-      ^^ hardline ^^ hardline
   | TD_record (id, tq, fields, _) ->
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
-      doc_typ_quant_in_comment ctx tq ^^ hardline
+      doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
            ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving BEq"
@@ -1078,12 +1077,11 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
-      doc_typ_quant_in_comment ctx tq ^^ hardline
+      doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
            ^^ pp_tus ^^ hardline ^^ string "deriving BEq"
            )
-      ^^ hardline ^^ hardline
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)

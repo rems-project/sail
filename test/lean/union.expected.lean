@@ -10,34 +10,25 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-
-
 structure rectangle where
   width : Int
   height : Int
   deriving BEq
 
-
 structure circle where
   radius : Int
   deriving BEq
-
 
 inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
   deriving BEq
 
-
-
 /-- Type quantifiers: k_a : Type -/
-
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
   deriving BEq
-
-
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -53,7 +44,6 @@ import Out.Sail.Sail
 import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
-
 import Out.Specialization
 
 set_option maxHeartbeats 1_000_000_000
@@ -62,7 +52,6 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-
 
 open shape
 open my_option
