@@ -272,16 +272,16 @@ end = struct
               let* c = solve_unique env nexp in
               Some
                 (`Assoc
-                  [
-                    ( "oneOf",
-                      `List
-                        [
-                          `Assoc (schema_bool_array (array_constraint ~min_length:c ~max_length:c ()));
-                          `Assoc (schema_hex_object "integer" [("const", `Intlit (Big_int.to_string c))]);
-                        ]
-                    );
-                  ]
-                  )
+                   [
+                     ( "oneOf",
+                       `List
+                         [
+                           `Assoc (schema_bool_array (array_constraint ~min_length:c ~max_length:c ()));
+                           `Assoc (schema_hex_object "integer" [("const", `Intlit (Big_int.to_string c))]);
+                         ]
+                     );
+                   ]
+                )
           | [KOpt_aux (KOpt_kind (_, v), _)], nc, Nexp_aux (Nexp_var v', _) when Kid.compare v v' = 0 ->
               let* bool_array_nc_logic =
                 nc |> constraint_simp |> ArrayConstraint.constraint_schema v |> Option.map (logic_type schema_bool_array)
@@ -470,20 +470,20 @@ end = struct
       | None -> Hashtbl.add tbl part (Sail_value (config_type, []))
       | Some (Sail_value (h_types, t_types)) -> Hashtbl.replace tbl part (Sail_value (config_type, h_types :: t_types))
       | Some obj -> subkey_error config_type.loc full_parts obj
-    )
+      )
 
   let insert_abstract full_parts id kind_aux map =
     insert_with full_parts (id_loc id) map (fun part tbl -> function
       | None -> Hashtbl.add tbl part (Abstract_type (id, kind_aux, []))
       | Some obj -> subkey_error (id_loc id) full_parts obj
-    )
+      )
 
   let insert_abstract_constraint full_parts (NC_aux (_, l) as nc) map =
     insert_with full_parts l map (fun part tbl -> function
       | None -> ()
       | Some (Abstract_type (id, kind_aux, ncs)) -> Hashtbl.replace tbl part (Abstract_type (id, kind_aux, nc :: ncs))
       | Some obj -> subkey_error l full_parts obj
-    )
+      )
 end
 
 let find_json ~at:l full_parts json =
@@ -702,7 +702,8 @@ let rewrite_exp tgt global_env env_update types json (aux, annot) =
           else
             Printf.sprintf
               "Runtime configuration is not supported when generating code for target '%s'\n\
-               An explicit configuration should be provided with the --config option." (Target.name tgt)
+               An explicit configuration should be provided with the --config option."
+              (Target.name tgt)
             |> Reporting.err_general (fst annot)
             |> raise
       | Some json -> (

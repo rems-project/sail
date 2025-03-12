@@ -49,23 +49,19 @@
 open Ast_util
 open Jib
 
-(** The main limitiation when converting Sail into pure SMT bitvectors
-    is that Sail has arbitrary precision types, as well as types like
-    real and string that are not very SMT friendly. We can add dynamic
-    assertions that effectivly check at runtime that we never exceed
-    some upper bound on bitvector size, and log if we ever use
-    features like strings or real numbers. *)
+(** The main limitiation when converting Sail into pure SMT bitvectors is that Sail has arbitrary precision types, as
+    well as types like real and string that are not very SMT friendly. We can add dynamic assertions that effectivly
+    check at runtime that we never exceed some upper bound on bitvector size, and log if we ever use features like
+    strings or real numbers. *)
 type checks
 
 val get_overflows : checks -> Smt_exp.smt_exp list
 
-(** We generate primitives in a monad that accumulates any required
-    dynamic checks, and contains the location information for any
-    error messages. *)
+(** We generate primitives in a monad that accumulates any required dynamic checks, and contains the location
+    information for any error messages. *)
 type 'a check_writer
 
-(** The SMT generation monad contains the location of the expression
-    or definition we are generating SMT for *)
+(** The SMT generation monad contains the location of the expression or definition we are generating SMT for *)
 val current_location : Parse_ast.l check_writer
 
 val return : 'a -> 'a check_writer
@@ -90,57 +86,46 @@ val string_used : unit check_writer
 
 val real_used : unit check_writer
 
-(** Convert a SMT bitvector expression of size [from] into a SMT
-    bitvector expression of size [into] with the same signed
-    value. When [into < from] inserts a dynamic check that the
-    original value is representable at the new length. *)
+(** Convert a SMT bitvector expression of size [from] into a SMT bitvector expression of size [into] with the same
+    signed value. When [into < from] inserts a dynamic check that the original value is representable at the new length.
+*)
 val signed_size : ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
 
-(** Similar to [signed_size], except it assumes the bitvector is
-    representing an unsigned value. *)
+(** Similar to [signed_size], except it assumes the bitvector is representing an unsigned value. *)
 val unsigned_size :
   ?max_value:int -> ?checked:bool -> into:int -> from:int -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
 
-(** [bvint sz n] Create a (two's complement) SMT bitvector
-    representing a the number [n] in a bitvector of length
-    [sz]. Raises an error if this is not possible. *)
+(** [bvint sz n] Create a (two's complement) SMT bitvector representing a the number [n] in a bitvector of length [sz].
+    Raises an error if this is not possible. *)
 val bvint : int -> Big_int.num -> Smt_exp.smt_exp
 
 module type CONFIG = sig
-  (** Sail has arbitrary precision integers, but in order to generate
-      pure bitvectors we must constrain them to some upper bound. As
-      described above, we can insert dynamic checks to ensure this
-      constraint is never violated at runtime. *)
+  (** Sail has arbitrary precision integers, but in order to generate pure bitvectors we must constrain them to some
+      upper bound. As described above, we can insert dynamic checks to ensure this constraint is never violated at
+      runtime. *)
   val max_unknown_integer_width : int
 
-  (** If we have a Sail type [bits('n)], where ['n] is unconstrained,
-      then we cannot know how many bits to use to represent
-      it. Instead we use a bitvector of this length, plus a width
-      field. We will generate runtime checks to ensure this length is
-      sufficient. *)
+  (** If we have a Sail type [bits('n)], where ['n] is unconstrained, then we cannot know how many bits to use to
+      represent it. Instead we use a bitvector of this length, plus a width field. We will generate runtime checks to
+      ensure this length is sufficient. *)
   val max_unknown_bitvector_width : int
 
-  (** If we have a generic vector, [vector('n, 'a)], where ['n] is
-      unconstrained, then we represent it as a vector of at most this
-      length. *)
+  (** If we have a generic vector, [vector('n, 'a)], where ['n] is unconstrained, then we represent it as a vector of at
+      most this length. *)
   val max_unknown_generic_vector_length : int
 
-  (** Some SystemVerilog implementations (e.g. Verilator), don't
-      support unpacked union types, which forces us to generate
-      different code for different unions depending on the types the
-      contain. This is abstracted into a classify function that the
-      instantiator of this module can supply. *)
+  (** Some SystemVerilog implementations (e.g. Verilator), don't support unpacked union types, which forces us to
+      generate different code for different unions depending on the types the contain. This is abstracted into a
+      classify function that the instantiator of this module can supply. *)
   val union_ctyp_classify : ctyp -> bool
 
   (** How we handle register references differs between backends *)
   val register_ref : string -> Smt_exp.smt_exp
 end
 
-(** Some Sail primitives we can't directly convert to pure SMT
-    definitions, either because they don't exist in SMTLIB (like
-    count_leading_zeros), or they involve input/output. In these cases
-    we provide a module so the backend can provide callbacks to
-    generate the required implementations for these primitives. *)
+(** Some Sail primitives we can't directly convert to pure SMT definitions, either because they don't exist in SMTLIB
+    (like count_leading_zeros), or they involve input/output. In these cases we provide a module so the backend can
+    provide callbacks to generate the required implementations for these primitives. *)
 module type PRIMOP_GEN = sig
   val print_bits : Parse_ast.l -> ctyp -> string
   val string_of_bits : Parse_ast.l -> ctyp -> string
@@ -156,11 +141,9 @@ module type PRIMOP_GEN = sig
   val eq_list : Parse_ast.l -> (cval -> cval -> Smt_exp.smt_exp check_writer) -> ctyp -> ctyp -> string check_writer
 end
 
-(** We have various options for handling undefined bits for SMT
-    generation, either we can treat them all as zero (which is
-    consistent with the default emulator behavior), or generated
-    undefined bits, or have the builtin generator skip these
-    functions. *)
+(** We have various options for handling undefined bits for SMT generation, either we can treat them all as zero (which
+    is consistent with the default emulator behavior), or generated undefined bits, or have the builtin generator skip
+    these functions. *)
 type undefined_mode = Undefined_zeros | Undefined_bits | Undefined_disable
 
 module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
@@ -177,15 +160,12 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) : sig
 
   val wf_lbits : Smt_exp.smt_exp -> Smt_exp.smt_exp
 
-  (** Create an SMT expression that converts an expression of the jib
-      type [from] into an SMT expression for the jib type [into]. Note
-      that this function assumes that the input is of the correct
-      type. *)
+  (** Create an SMT expression that converts an expression of the jib type [from] into an SMT expression for the jib
+      type [into]. Note that this function assumes that the input is of the correct type. *)
   val smt_conversion : into:ctyp -> from:ctyp -> Smt_exp.smt_exp -> Smt_exp.smt_exp check_writer
 
-  (** Compile a call to a Sail builtin function into an SMT expression
-      implementing that call. Returns None if that builtin is
-      unsupported by this module. *)
+  (** Compile a call to a Sail builtin function into an SMT expression implementing that call. Returns None if that
+      builtin is unsupported by this module. *)
   val builtin :
     ?allow_io:bool -> ?undefined:undefined_mode -> string -> (cval list -> ctyp -> Smt_exp.smt_exp check_writer) option
 end

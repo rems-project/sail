@@ -44,9 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** We want to provide warnings for e.g. a mispelled pragma rather
-    than just silently ignoring them, so we can access a list of all
-    recognised pragmas. *)
+(** We want to provide warnings for e.g. a mispelled pragma rather than just silently ignoring them, so we can access a
+    list of all recognised pragmas. *)
 val all : unit -> Util.StringSet.t
 
 val register : string -> unit

@@ -46,10 +46,9 @@
 
 (** Module for breaking AST into syntactic chunks and interleaving comments.
 
-   This module is part of the Sail formatting system. It takes a
-   parsed AST (not a desugared AST, as for formatting we need to
-   preserve as much as possible), and breaks it up into more abstract
-   syntactic elements - 'chunks' for want of a better term. *)
+    This module is part of the Sail formatting system. It takes a parsed AST (not a desugared AST, as for formatting we
+    need to preserve as much as possible), and breaks it up into more abstract syntactic elements - 'chunks' for want of
+    a better term. *)
 
 type binder = Var_binder | Let_binder | Internal_plet_binder
 

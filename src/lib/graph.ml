@@ -58,8 +58,7 @@ module type S = sig
 
   val empty : graph
 
-  (** Add an edge from the first node to the second node, creating
-       the nodes if they do not exist. *)
+  (** Add an edge from the first node to the second node, creating the nodes if they do not exist. *)
   val add_edge : node -> node -> graph -> graph
 
   val has_edge : node -> node -> graph -> bool
@@ -72,9 +71,8 @@ module type S = sig
 
   val nodes : graph -> node list
 
-  (** Return the set of nodes that are reachable from the first set
-       of nodes (roots), without passing through the second set of
-       nodes (cuts). *)
+  (** Return the set of nodes that are reachable from the first set of nodes (roots), without passing through the second
+      set of nodes (cuts). *)
   val reachable : node_set -> node_set -> graph -> node_set
 
   (** Prune a graph from roots to cuts. *)
@@ -88,13 +86,11 @@ module type S = sig
 
   exception Not_a_DAG of node * graph
 
-  (** Topologically sort a graph. Throws Not_a_DAG if the graph is
-       not directed acyclic. *)
+  (** Topologically sort a graph. Throws Not_a_DAG if the graph is not directed acyclic. *)
   val topsort : graph -> node list
 
-  (** Find strongly connected components using Tarjan's algorithm.
-        This algorithm also returns a topological sorting of the graph
-        components. *)
+  (** Find strongly connected components using Tarjan's algorithm. This algorithm also returns a topological sorting of
+      the graph components. *)
   val scc : ?original_order:node list -> graph -> node list list
 
   val edge_list : graph -> (node * node) list

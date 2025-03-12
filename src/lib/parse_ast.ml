@@ -55,10 +55,8 @@ type l =
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
 
-(** We put the attribute data type in it's own module, so other
-    modules can import it unqualified. The parse AST and the main AST
-    share this type, so modules that wouldn't normally import this
-    module will want to use it. *)
+(** We put the attribute data type in it's own module, so other modules can import it unqualified. The parse AST and the
+    main AST share this type, so modules that wouldn't normally import this module will want to use it. *)
 module Attribute_data = struct
   type attribute_data_aux =
     | AD_object of (string * attribute_data) list
@@ -90,11 +88,14 @@ type kind_aux =
 
 type kind = K_aux of kind_aux * l
 
-type kid_aux = (* identifiers with kind, ticked to differentiate from program variables *)
+type kid_aux =
+  (* identifiers with kind, ticked to differentiate from program variables *)
   | Var of x
 
-type id_aux = (* Identifier *)
-  | Id of x | Operator of x (* remove infix status *)
+type id_aux =
+  (* Identifier *)
+  | Id of x
+  | Operator of x (* remove infix status *)
 
 type kid = Kid_aux of kid_aux * l
 
@@ -165,7 +166,8 @@ type typquant_aux =
 
 type typquant = TypQ_aux of typquant_aux * l
 
-type typschm_aux = (* type scheme *)
+type typschm_aux =
+  (* type scheme *)
   | TypSchm_ts of typquant * atyp
 
 type typschm = TypSchm_aux of typschm_aux * l
@@ -190,8 +192,10 @@ type pat_aux =
 
 and pat = P_aux of pat_aux * l
 
-and fpat_aux = (* Field pattern *)
-  | FP_field of id * pat | FP_wild
+and fpat_aux =
+  (* Field pattern *)
+  | FP_field of id * pat
+  | FP_wild
 
 and fpat = FP_aux of fpat_aux * l
 
@@ -199,8 +203,10 @@ type loop = While | Until
 
 type if_loc = { if_loc : l; then_loc : l; else_loc : l option }
 
-type measure_aux = (* optional termination measure for a loop *)
-  | Measure_none | Measure_some of exp
+type measure_aux =
+  (* optional termination measure for a loop *)
+  | Measure_none
+  | Measure_some of exp
 
 and measure = Measure_aux of measure_aux * l
 
@@ -264,7 +270,8 @@ and pexp_aux =
 
 and pexp = Pat_aux of pexp_aux * l
 
-and letbind_aux = (* Let binding *)
+and letbind_aux =
+  (* Let binding *)
   | LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
 
 and letbind = LB_aux of letbind_aux * l
@@ -372,12 +379,14 @@ type mapdef_aux =
 
 type mapdef = MD_aux of mapdef_aux * l
 
-type outcome_spec_aux = (* outcome declaration *)
+type outcome_spec_aux =
+  (* outcome declaration *)
   | OV_outcome of id * typschm * kinded_id list
 
 type outcome_spec = OV_aux of outcome_spec_aux * l
 
-type fundef_aux = (* Function definition *)
+type fundef_aux =
+  (* Function definition *)
   | FD_function of rec_opt * tannot_opt * funcl list
 
 type type_def_aux =
@@ -389,10 +398,12 @@ type type_def_aux =
   | TD_abstract of id * kind * string list option
   | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
-type val_spec_aux = (* Value type specification *)
+type val_spec_aux =
+  (* Value type specification *)
   | VS_val_spec of typschm * id * extern option
 
-type dec_spec_aux = (* Register declarations *)
+type dec_spec_aux =
+  (* Register declarations *)
   | DEC_reg of atyp * id * exp option
 
 type scattered_def_aux =
@@ -426,8 +437,10 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = prec * Big_int.num * string
 
-type pragma = (* pragma contents *)
-  | Pragma_line of string * int | Pragma_structured of (string * attribute_data) list
+type pragma =
+  (* pragma contents *)
+  | Pragma_line of string * int
+  | Pragma_structured of (string * attribute_data) list
 
 type def_aux =
   (* Top-level definition *)
@@ -466,5 +479,6 @@ type lexp_aux =
 
 and lexp = LE_aux of lexp_aux * l
 
-type defs = (* Definition sequence *)
+type defs =
+  (* Definition sequence *)
   | Defs of (string * def list) list

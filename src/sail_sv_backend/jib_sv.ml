@@ -1914,8 +1914,7 @@ module Make (Config : CONFIG) = struct
         | I_aux (I_decl (_, Name (id, _)), (_, l)) | I_aux (I_init (_, Name (id, _), _), (_, l)) ->
             variable_locations := Bindings.add id l !variable_locations
         | _ -> ()
-        )
-        )
+        ))
       body;
 
     let phivars = ref (-1) in

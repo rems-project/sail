@@ -298,7 +298,9 @@ let output_html ?(css = default_css) ~file_info ~hyperlinks out_chan =
       else if ends_on n link then (
         output_string out_chan "</a>";
         (* Another link span could start on the same character *)
-        match get_link n with Some (t, ls, _) when n = ls -> outputf "<a href=\"%s\">" t | _ -> ()
+        match get_link n with
+        | Some (t, ls, _) when n = ls -> outputf "<a href=\"%s\">" t
+        | _ -> ()
       );
       output_html_char out_chan c
     )

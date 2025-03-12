@@ -46,25 +46,22 @@
 
 (** Type error utilities
 
-This file wraps the functions in Type_check, so they return
-Fatal_error exceptions from the Reporting module rather than
-Type_errors. *)
+    This file wraps the functions in Type_check, so they return Fatal_error exceptions from the Reporting module rather
+    than Type_errors. *)
 
 open Ast
 open Ast_util
 open Type_env
 
-(** If false (default), we'll only explain generated variables, not
-   variables written explicitly by the user in the source. *)
+(** If false (default), we'll only explain generated variables, not variables written explicitly by the user in the
+    source. *)
 val opt_explain_all_variables : bool ref
 
-(** If false (default), we'll list relevant constraints, but not go
-   into detail about how they were derived *)
+(** If false (default), we'll list relevant constraints, but not go into detail about how they were derived *)
 val opt_explain_constraints : bool ref
 
-(** If false (default), we will try to pick the most likely error to
-    have caused an overload to fail, and only show those. If true, we
-    will show all type errors that caused an overload to fail. *)
+(** If false (default), we will try to pick the most likely error to have caused an overload to fail, and only show
+    those. If true, we will show all type errors that caused an overload to fail. *)
 val opt_explain_all_overloads : bool ref
 
 type constraint_reason = (l * string) option
@@ -85,8 +82,8 @@ type type_error =
   | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
       (** Takes the name of the function and the set of functions in scope *)
   | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
-      (** Takes the name of the identifier, the set of local bindings, and
-          whether we have a function of the same name in scope. *)
+      (** Takes the name of the identifier, the set of local bindings, and whether we have a function of the same name
+          in scope. *)
   | Err_hint of string  (** A short error that only appears attached to a location *)
   | Err_with_hint of string * type_error
   | Err_alternate of type_error * (string * Parse_ast.l * type_error) list

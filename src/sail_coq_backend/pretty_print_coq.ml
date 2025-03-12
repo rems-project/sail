@@ -4504,7 +4504,9 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
     let generic_eq_types = types_used_with_generic_eq defs in
     let countable_types =
       (* We only generate these for stdpp, because it has the typeclass for them *)
-      match library_style with Stdpp -> countable_types defs | BBV -> IdSet.empty
+      match library_style with
+      | Stdpp -> countable_types defs
+      | BBV -> IdSet.empty
     in
     let interface_defs =
       match concurrency_monad_params with

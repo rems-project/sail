@@ -44,10 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** This module defines types representing the documentation info
-   (docinfo) associated with Sail ASTs. Additionally we define
-   functions for converting these types into a language-neutral json
-   representation. *)
+(** This module defines types representing the documentation info (docinfo) associated with Sail ASTs. Additionally we
+    define functions for converting these types into a language-neutral json representation. *)
 
 open Libsail
 
@@ -64,11 +62,9 @@ end)
 
 module Document = Pretty_print_sail.Document
 
-(** In the case of latex, we generate files containing a sequence of
-   commands that can simply be included. For other documentation
-   targets with tooling that may consume the json output however, we
-   define a version number that allows checking the generated version
-   info with what the external tooling supports. *)
+(** In the case of latex, we generate files containing a sequence of commands that can simply be included. For other
+    documentation targets with tooling that may consume the json output however, we define a version number that allows
+    checking the generated version info with what the external tooling supports. *)
 let docinfo_version = 1
 
 let same_file f1 f2 = Filename.basename f1 = Filename.basename f2 && Filename.dirname f1 = Filename.dirname f2

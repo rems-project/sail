@@ -47,8 +47,7 @@
 
 open Libsail
 
-(** We use some words in the compilation process, so treat them as
-    C reserveds even though they are not. *)
+(** We use some words in the compilation process, so treat them as C reserveds even though they are not. *)
 val c_used_words : Util.StringSet.t
 
 (** The set of C reserved keywords *)

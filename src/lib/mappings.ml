@@ -49,43 +49,40 @@
     The elaboration is somewhat complicated as we need to turn:
 
     {@sail[
-    $[<completeness>] match x {
-      <pat> => <expr1>,
-      mapping(A) => <expr2>,
-      <rest>
-    }
+      $[<completeness>] match x {
+        <pat> => <expr1>,
+        mapping(A) => <expr2>,
+        <rest>
+      }
     ]}
 
     into
 
     {@sail[
-    let y = x in
-    $[mapping_match] $[complete] match ($[complete] match y {
-      <pat> => Some(<expr1>),
-      z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
-        A => Some(<expr2>),
+      let y = x in
+      $[mapping_match] $[complete] match ($[complete] match y {
+        <pat> => Some(<expr1>),
+        z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
+          A => Some(<expr2>),
+          _ => None(),
+        },
         _ => None(),
-      },
-      _ => None(),
-    }) {
-      Some(w) => w,
-      None() => $[<completeness>] match y {
-        <rest>
-      },
-    }
+      }) {
+        Some(w) => w,
+        None() => $[<completeness>] match y {
+          <rest>
+        },
+      }
     ]}
 
-    which is quite complicated. The [$[mapping_match]] attribute
-    ensures the type checker can re-check the mapping despite
-    the added option type.
+    which is quite complicated. The [$[mapping_match]] attribute ensures the type checker can re-check the mapping
+    despite the added option type.
 
     There are a few constraints that make this rewrite as tricky looking as it is:
 
     - We don't want to duplicate any expression (`<expr1>` and `<expr2>`).
-    - We can't change the evaluation order, as this might change the
-      observable side effects of the expression. This includes the order
-      in which we evaluate `mapping_forwards` relative to all the other
-      expressions.
+    - We can't change the evaluation order, as this might change the observable side effects of the expression. This
+      includes the order in which we evaluate `mapping_forwards` relative to all the other expressions.
     - The scope of all pattern bindings should be preserved.
     - The match can be embedded in any context (so we can't use `return`).
     - Mappings can be nested e.g. `m1(m2(m3(<pattern>)))`.
@@ -93,19 +90,19 @@
     If the mapping match is in a return position we can instead rewrite to
 
     {@sail[
-    let y = x in {
-      $[complete] match y {
-        <pat> => return <expr1>,
-        z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
-          A => return <expr2>,
+      let y = x in {
+        $[complete] match y {
+          <pat> => return <expr1>,
+          z if mapping_forwards_matches(z) => $[complete] match $[mapping_guarded] mapping_forwards(z) {
+            A => return <expr2>,
+            _ => (),
+          },
           _ => (),
-        },
-        _ => (),
-      };
-      $[<completeness>] match y {
-        <rest>
+        };
+        $[<completeness>] match y {
+          <rest>
+        }
       }
-    }
     ]}
 
     which avoids the nested match statements and option type. *)

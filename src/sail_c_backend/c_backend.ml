@@ -90,12 +90,10 @@ let c_error ?loc:(l = Parse_ast.Unknown) message = raise (Reporting.err_general 
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-(** This function is used to split types into those we allocate on the
-    stack, versus those which need to live on the heap, or otherwise
-    require some additional memory management.
+(** This function is used to split types into those we allocate on the stack, versus those which need to live on the
+    heap, or otherwise require some additional memory management.
 
-    This is roughly the same distinction that Rust makes between copy
-    and non-copy types. *)
+    This is roughly the same distinction that Rust makes between copy and non-copy types. *)
 let rec is_stack_ctyp ctyp =
   match ctyp with
   | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
@@ -205,10 +203,9 @@ module C_config (Opts : sig
   val branch_coverage : out_channel option
   val preserve_types : IdSet.t
 end) : CONFIG = struct
-  (** Convert a sail type into a C-type. This function can be quite
-     slow, because it uses ctx.local_env and SMT to analyse the Sail
-     types and attempts to fit them into the smallest possible C
-     types, provided ctx.optimize_smt is true (default) **)
+  (** Convert a sail type into a C-type. This function can be quite slow, because it uses ctx.local_env and SMT to
+      analyse the Sail types and attempts to fit them into the smallest possible C types, provided ctx.optimize_smt is
+      true (default) **)
   let rec convert_typ ctx typ =
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
@@ -330,9 +327,8 @@ end) : CONFIG = struct
     | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
     | _ -> assert false
 
-  (** Used to make sure the -Ofixed_int and -Ofixed_bits don't
-     interfere with assumptions made about optimizations in the common
-     case. *)
+  (** Used to make sure the -Ofixed_int and -Ofixed_bits don't interfere with assumptions made about optimizations in
+      the common case. *)
   let never_optimize = function CT_lbits | CT_lint -> true | _ -> false
 
   let rec c_aval ctx = function
@@ -355,7 +351,8 @@ end) : CONFIG = struct
                   (* id's type changed due to flow typing, so it's
                      really still heap allocated! *)
                   v
-              with (* Hack: Assuming global letbindings don't change from flow typing... *)
+              with
+              (* Hack: Assuming global letbindings don't change from flow typing... *)
               | Not_found ->
                 AV_cval (V_id (name id, ctyp), typ)
             end
@@ -549,15 +546,11 @@ end) : CONFIG = struct
   let preserve_types = Opts.preserve_types
 end
 
-(** Functions that have heap-allocated return types are implemented by
-   passing a pointer a location where the return value should be
-   stored. The ANF -> Sail IR pass for expressions simply outputs an
-   I_return instruction for any return value, so this function walks
-   over the IR ast for expressions and modifies the return statements
-   into code that sets that pointer, as well as adds extra control
-   flow to cleanup heap-allocated variables correctly when a function
-   terminates early. See the generate_cleanup function for how this is
-   done. *)
+(** Functions that have heap-allocated return types are implemented by passing a pointer a location where the return
+    value should be stored. The ANF -> Sail IR pass for expressions simply outputs an I_return instruction for any
+    return value, so this function walks over the IR ast for expressions and modifies the return statements into code
+    that sets that pointer, as well as adds extra control flow to cleanup heap-allocated variables correctly when a
+    function terminates early. See the generate_cleanup function for how this is done. *)
 let fix_early_heap_return ret instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
@@ -637,13 +630,11 @@ let rec insert_heap_returns ret_ctyps = function
   | cdef :: cdefs -> cdef :: insert_heap_returns ret_ctyps cdefs
   | [] -> []
 
-(** To keep things neat we use GCC's local labels extension to limit
-   the scope of labels. We do this by iterating over all the blocks
-   and adding a __label__ declaration with all the labels local to
-   that block. The add_local_labels function is called by the code
-   generator just before it outputs C.
+(** To keep things neat we use GCC's local labels extension to limit the scope of labels. We do this by iterating over
+    all the blocks and adding a __label__ declaration with all the labels local to that block. The add_local_labels
+    function is called by the code generator just before it outputs C.
 
-   See https://gcc.gnu.org/onlinedocs/gcc/Local-Labels.html **)
+    See https://gcc.gnu.org/onlinedocs/gcc/Local-Labels.html **)
 let add_local_labels' instrs =
   let is_label (I_aux (instr, _)) = match instr with I_label str -> [str] | _ -> [] in
   let labels = List.concat (List.map is_label instrs) in
@@ -707,12 +698,14 @@ let is_not_removed = function I_aux (I_comment "REMOVED", _) -> false | _ -> tru
 
 (** This optimization looks for patterns of the form:
 
-    create x : t;
-    x = y;
-    // modifications to x, and no changes to y
-    y = x;
-    // no further changes to x
-    kill x;
+    {v
+       create x : t;
+       x = y;
+       // modifications to x, and no changes to y
+       y = x;
+       // no further changes to x
+       kill x;
+    v}
 
     If found, we can remove the variable x, and directly modify y instead. *)
 let remove_alias =
@@ -772,11 +765,13 @@ let remove_alias =
 
 (** This optimization looks for patterns of the form
 
-    create x : t;
-    create y : t;
-    // modifications to y, no changes to x
-    x = y;
-    kill y;
+    {v
+       create x : t;
+       create y : t;
+       // modifications to y, no changes to x
+       x = y;
+       kill y;
+    v}
 
     If found we can replace y by x *)
 module Combine_variables = struct
@@ -1225,10 +1220,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_void _ -> assert false
     | CL_rmw _ -> assert false
 
-  (** Generate instructions to copy from a cval to a clexp. This will
-   insert any needed type conversions from big integers to small
-   integers (or vice versa), or from arbitrary-length bitvectors to
-   and from uint64 bitvectors as needed. *)
+  (** Generate instructions to copy from a cval to a clexp. This will insert any needed type conversions from big
+      integers to small integers (or vice versa), or from arbitrary-length bitvectors to and from uint64 bitvectors as
+      needed. *)
   let rec codegen_conversion l clexp cval =
     let ctyp_to = clexp_ctyp clexp in
     let ctyp_from = cval_ctyp cval in
@@ -1744,19 +1738,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           ]
         else []
 
-  (** GLOBAL: because C doesn't have real anonymous tuple types
-   (anonymous structs don't quite work the way we need) every tuple
-   type in the spec becomes some generated named struct in C. This is
-   done in such a way that every possible tuple type has a unique name
-   associated with it. This global variable keeps track of these
-   generated struct names, so we never generate two copies of the
-   struct that is used to represent them in C.
-   The way this works is that codegen_def scans each definition's type
-   annotations for tuple types and generates the required structs
-   using codegen_type_def before the actual definition is generated by
-   codegen_def'.
-   This variable should be reset to empty only when the entire AST has
-   been translated to C. **)
+  (** GLOBAL: because C doesn't have real anonymous tuple types (anonymous structs don't quite work the way we need)
+      every tuple type in the spec becomes some generated named struct in C. This is done in such a way that every
+      possible tuple type has a unique name associated with it. This global variable keeps track of these generated
+      struct names, so we never generate two copies of the struct that is used to represent them in C. The way this
+      works is that codegen_def scans each definition's type annotations for tuple types and generates the required
+      structs using codegen_type_def before the actual definition is generated by codegen_def'. This variable should be
+      reset to empty only when the entire AST has been translated to C. **)
   let generated = ref IdSet.empty
 
   let codegen_tup ctx ctyps =
@@ -2195,13 +2183,10 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         |> to_impl
     | CDEF_pragma _ -> []
 
-  (** As we generate C we need to generate specialized version of tuple,
-   list, and vector type. These must be generated in the correct
-   order. The ctyp_dependencies function generates a list of
-   c_gen_typs in the order they must be generated. Types may be
-   repeated in ctyp_dependencies so it's up to the code-generator not
-   to repeat definitions pointlessly (using the !generated variable)
-   *)
+  (** As we generate C we need to generate specialized version of tuple, list, and vector type. These must be generated
+      in the correct order. The ctyp_dependencies function generates a list of c_gen_typs in the order they must be
+      generated. Types may be repeated in ctyp_dependencies so it's up to the code-generator not to repeat definitions
+      pointlessly (using the !generated variable) *)
   type c_gen_typ = CTG_tup of ctyp list | CTG_list of ctyp | CTG_vector of ctyp
 
   let rec ctyp_dependencies = function
@@ -2221,8 +2206,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CTG_tup ctyps -> codegen_tup ctx ctyps
     | CTG_list ctyp -> codegen_list ctyp
 
-  (** When we generate code for a definition, we need to first generate
-   any auxillary type definitions that are required. *)
+  (** When we generate code for a definition, we need to first generate any auxillary type definitions that are
+      required. *)
   let codegen_def ctx def =
     let ctyps = cdef_ctyps def |> CTSet.elements in
     (* We should have erased any polymorphism introduced by variants at this point! *)
@@ -2298,7 +2283,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         | CDEF_aux (CDEF_val (id, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
             IdSet.add id ids
         | _ -> ids
-      )
+        )
       IdSet.empty cdefs
     |> IdSet.elements
 

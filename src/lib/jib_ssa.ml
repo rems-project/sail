@@ -112,8 +112,7 @@ let add_vertex data graph =
   graph.next <- n + 1;
   n
 
-(** Add an edge between two existing vertices. Raises Invalid_argument
-   if either of the vertices do not exist. *)
+(** Add an edge between two existing vertices. Raises Invalid_argument if either of the vertices do not exist. *)
 let add_edge n m graph =
   begin
     match graph.nodes.(n) with
@@ -296,12 +295,10 @@ let control_flow_graph instrs =
    swap the graph ordering. *)
 let graph_order ~post predecessors successors = if post then (successors, predecessors) else (predecessors, successors)
 
-(** Calculate the (immediate) dominators of a graph using the
-   Lengauer-Tarjan algorithm. This is the slightly less sophisticated
-   version from Appel's book 'Modern compiler implementation in ML'
-   which runs in O(n log(n)) time.
+(** Calculate the (immediate) dominators of a graph using the Lengauer-Tarjan algorithm. This is the slightly less
+    sophisticated version from Appel's book 'Modern compiler implementation in ML' which runs in O(n log(n)) time.
 
-   If the post flag is set this computes the post-dominators. *)
+    If the post flag is set this computes the post-dominators. *)
 let immediate_dominators ?(post = false) graph root =
   let none = -1 in
   let vertex = Array.make (cardinal graph) 0 in
@@ -380,8 +377,7 @@ let immediate_dominators ?(post = false) graph root =
   done;
   idom
 
-(** [(dominator_children idoms).(n)] are the nodes whose immediate dominator
-   (idom) is n. *)
+(** [(dominator_children idoms).(n)] are the nodes whose immediate dominator (idom) is n. *)
 let dominator_children idom =
   let none = -1 in
   let children = Array.make (Array.length idom) IntSet.empty in
@@ -392,8 +388,7 @@ let dominator_children idom =
   done;
   children
 
-(** [dominate idom n w] is true if n dominates w in the tree of
-   immediate dominators idom. *)
+(** [dominate idom n w] is true if n dominates w in the tree of immediate dominators idom. *)
 let rec dominate idom n w =
   let none = -1 in
   let p = idom.(n) in

@@ -96,9 +96,8 @@ let fixup_comments ~filename source =
     source;
   Buffer.contents fixed
 
-(** We implement a small wrapper around a subset of the PPrint API to
-    track line breaks and dedents (points where the indentation level
-    decreases), re-implementing a few core combinators. *)
+(** We implement a small wrapper around a subset of the PPrint API to track line breaks and dedents (points where the
+    indentation level decreases), re-implementing a few core combinators. *)
 module PPrintWrapper = struct
   type hardline_type = Required | Desired
 

@@ -49,14 +49,11 @@ open Libsail
 
 module StringSet = Set.Make (String)
 
-(** We use some words in the compilation process, so treat them as
-    Systemverilog reserveds even though they are not. *)
+(** We use some words in the compilation process, so treat them as Systemverilog reserveds even though they are not. *)
 let sv_used_words = ["padding"] |> StringSet.of_list
 
-(** Systemverilog has a lot of keywords, this list is from the
-    SystemVerilog LRM 1800-2017, Table B.1. Fortunately, there are no
-    keywords begining with the letter z, so our z-encoding scheme
-    works to avoid any clashes. *)
+(** Systemverilog has a lot of keywords, this list is from the SystemVerilog LRM 1800-2017, Table B.1. Fortunately,
+    there are no keywords begining with the letter z, so our z-encoding scheme works to avoid any clashes. *)
 let sv_reserved_words =
   [
     "accept_on";

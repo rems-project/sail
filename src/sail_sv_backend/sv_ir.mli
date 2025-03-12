@@ -45,11 +45,9 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** This file defines an intermediate representation that is roughly
-    equivalent to the subset of SystemVerilog that we target. This
-    enables us to perform SystemVerilog to SystemVerilog rewrites -
-    for this purpose we also define a vistor-pattern rewriter
-    [svir_visitor], much like it's [jib_visitor] equivalent. *)
+(** This file defines an intermediate representation that is roughly equivalent to the subset of SystemVerilog that we
+    target. This enables us to perform SystemVerilog to SystemVerilog rewrites - for this purpose we also define a
+    vistor-pattern rewriter [svir_visitor], much like it's [jib_visitor] equivalent. *)
 
 open Libsail
 
@@ -158,9 +156,8 @@ val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
 val is_typedef : sv_def -> bool
 
 class type svir_visitor = object
-  (** Note that despite inheriting from common_visitor, we don't use
-      [vid]. Instead specific types of identifiers should be
-      re-written by matching on their containing node. *)
+  (** Note that despite inheriting from common_visitor, we don't use [vid]. Instead specific types of identifiers should
+      be re-written by matching on their containing node. *)
   inherit common_visitor
 
   method vsmt_exp : smt_exp -> smt_exp visit_action

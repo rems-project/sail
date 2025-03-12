@@ -47,8 +47,7 @@
 open Ast
 open Ast_util
 
-(** Linearize cases involving power where we would otherwise require
-   the SMT solver to use non-linear arithmetic. *)
+(** Linearize cases involving power where we would otherwise require the SMT solver to use non-linear arithmetic. *)
 val opt_smt_linearize : bool ref
 
 (** Val use a separate string literal type *)
@@ -60,21 +59,18 @@ type env
 
 type t = env
 
-(** Set the modules in the environment. Note that calling this twice
-    on an environment with different arguments will invalidate all
-    module identifiers! *)
+(** Set the modules in the environment. Note that calling this twice on an environment with different arguments will
+    invalidate all module identifiers! *)
 val set_modules : Project.project_structure -> t -> t
 
 val get_module_id_opt : t -> string -> Project.mod_id option
 val get_module_id : at:l -> t -> string -> Project.mod_id
 
-(** Start typechecking within a module context. The module id must be
-    a valid module created via the set_modules call, otherwise we will
-    fail with an internal error. *)
+(** Start typechecking within a module context. The module id must be a valid module created via the set_modules call,
+    otherwise we will fail with an internal error. *)
 val start_module : at:l -> Project.mod_id -> t -> t
 
-(** End the current module context, returning us to type-checking in
-    the global scope. *)
+(** End the current module context, returning us to type-checking in the global scope. *)
 val end_module : t -> t
 
 (** This effectively disables all module related access control *)
@@ -87,8 +83,7 @@ val get_current_visibility : t -> visibility
 
 type module_state
 
-(** This is the same as end_module and open_all_modules, except it
-    returns the module state so it can be restored with
+(** This is the same as end_module and open_all_modules, except it returns the module state so it can be restored with
     restore_scope. *)
 val with_global_scope : t -> t * module_state
 
@@ -117,8 +112,8 @@ val add_outcome_variable : l -> kid -> typ -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
 val get_outcome_typschm_opt : t -> (typquant * typ) option
 
-(** For a user-defined type identifier we can control whether it is
-   allowed to be created with the undefined literal in Sail *)
+(** For a user-defined type identifier we can control whether it is allowed to be created with the undefined literal in
+    Sail *)
 val is_user_undefined : id -> t -> bool
 
 val allow_user_undefined : id -> t -> t
@@ -244,14 +239,12 @@ val is_toplevel : t -> l option
 val wf_typ : at:l -> t -> typ -> unit
 val wf_constraint : at:l -> t -> n_constraint -> unit
 
-(** Some of the code in the environment needs to use the smt solver,
-   which is defined below. To break the circularity this would cause
-   (as the prove code depends on the environment), we add a reference
-   to the prover to the initial environment. *)
+(** Some of the code in the environment needs to use the smt solver, which is defined below. To break the circularity
+    this would cause (as the prove code depends on the environment), we add a reference to the prover to the initial
+    environment. *)
 val set_prover : (t -> n_constraint -> bool) option -> t -> t
 
-(** This should not be used outside the type checker, as initial_env
-   sets up a correct initial environment. *)
+(** This should not be used outside the type checker, as initial_env sets up a correct initial environment. *)
 val empty : t
 
 val builtin_typs : (typquant * kind_aux) Bindings.t

@@ -256,8 +256,7 @@ let check_shadow_leaks l inner_env outer_env typ =
     (KidSet.elements vars);
   typ
 
-(** Pull an (potentially)-existentially qualified type into the global
-   typing environment **)
+(** Pull an (potentially)-existentially qualified type into the global typing environment **)
 let bind_existential l name typ env =
   match destruct_exist ~name (Env.expand_synonyms env typ) with
   | Some (kids, nc, typ) -> (typ, add_existential l kids nc env)
@@ -948,7 +947,9 @@ let alpha_equivalent env typ1 typ2 =
     Typ_aux (relabelled_aux, l)
   and relabel_arg (A_aux (aux, l) as arg) =
     (* FIXME relabel constraint *)
-    match aux with A_nexp _ | A_bool _ -> arg | A_typ typ -> A_aux (A_typ (relabel typ), l)
+    match aux with
+    | A_nexp _ | A_bool _ -> arg
+    | A_typ typ -> A_aux (A_typ (relabel typ), l)
   in
 
   let typ1 = relabel (Env.expand_synonyms env typ1) in
@@ -2990,16 +2991,16 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_vector_concat_generic :
-      'a 'b.
-      ('a, 'b) pattern_functions ->
-      ('b list -> typ -> 'b) ->
-      l ->
-      bool ->
-      Env.t ->
-      'a ->
-      'a list ->
-      typ option ->
-      'b * Env.t * uannot exp list =
+    'a 'b.
+    ('a, 'b) pattern_functions ->
+    ('b list -> typ -> 'b) ->
+    l ->
+    bool ->
+    Env.t ->
+    'a ->
+    'a list ->
+    typ option ->
+    'b * Env.t * uannot exp list =
  fun funcs annotate l allow_unknown env pat pats typ_opt ->
   (* Try to infer a constant length, and the element type if non-bitvector *)
   let typ_opt =
@@ -5153,7 +5154,7 @@ and check_impldef : Env.t -> env def_annot -> uannot funcl -> typed_def list * E
   | None -> typ_error fcl_def_annot.loc "Cannot declare an implementation outside of an outcome"
 
 and check_outcome_instantiation :
-      'a. Env.t -> env def_annot -> 'a instantiation_spec -> subst list -> typed_def list * Env.t =
+    'a. Env.t -> env def_annot -> 'a instantiation_spec -> subst list -> typed_def list * Env.t =
  fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params, vals, outcome_env = Env.get_outcome l id env in
@@ -5198,7 +5199,7 @@ and check_outcome_instantiation :
                 )
           end
         | IS_aux (IS_id (id_from, id_to), decl_l) -> (typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
-      )
+        )
       (typ, [], [], env) substs
   in
   let typ, new_instantiated, fns, env = instantiate_typ substs typ in
@@ -5330,7 +5331,7 @@ and check_def_lazy env def =
       (List.map (fun def -> Strict_def def) defs, env)
 
 and check_defs_progress :
-      'a. (Env.t -> untyped_def -> 'a list * Env.t) -> int -> int -> Env.t -> untyped_def list -> 'a list * Env.t =
+    'a. (Env.t -> untyped_def -> 'a list * Env.t) -> int -> int -> Env.t -> untyped_def list -> 'a list * Env.t =
  fun checker n total env defs ->
   let rec aux n total acc env defs =
     match defs with

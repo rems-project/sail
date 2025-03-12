@@ -129,8 +129,8 @@ let rec apat_bindings (AP_aux (apat_aux, _)) =
   | AP_struct (afpats, _) ->
       List.fold_left IdSet.union IdSet.empty (List.map (fun (_, apat) -> apat_bindings apat) afpats)
 
-(** This function returns the types of all bound variables in a
-   pattern. It ignores AP_global, apat_globals is used for that. *)
+(** This function returns the types of all bound variables in a pattern. It ignores AP_global, apat_globals is used for
+    that. *)
 let rec apat_types (AP_aux (apat_aux, { env; _ })) =
   let merge id b1 b2 =
     match (b1, b2) with

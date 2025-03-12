@@ -46,30 +46,24 @@
 
 (** The A-normal form (ANF) grammar
 
-    The first step in compiling Sail into Jib IR is converting the
-    Sail expression grammar into A-normal form (ANF). Essentially this
-    converts expressions such as [f(g(x), h(y))] into something like:
+    The first step in compiling Sail into Jib IR is converting the Sail expression grammar into A-normal form (ANF).
+    Essentially this converts expressions such as [f(g(x), h(y))] into something like:
 
     [let v0 = g(x) in let v1 = h(x) in f(v0, v1)]
 
-    Essentially the arguments to every function must be trivial, and
-    complex expressions must be let bound to new variables, or used in
-    a block, assignment, or control flow statement (if, for, and
-    while/until loops). The [aexp] datatype represents these
-    expressions, while [aval] represents the trivial values.
+    Essentially the arguments to every function must be trivial, and complex expressions must be let bound to new
+    variables, or used in a block, assignment, or control flow statement (if, for, and while/until loops). The [aexp]
+    datatype represents these expressions, while [aval] represents the trivial values.
 
-    The convention is that the type of an aexp is given by last
-    argument to a constructor. It is omitted where it is obvious - for
-    example all for loops have unit as their type. If some constituent
-    part of the aexp has an annotation, the it refers to the previous
-    argument, so in
+    The convention is that the type of an aexp is given by last argument to a constructor. It is omitted where it is
+    obvious - for example all for loops have unit as their type. If some constituent part of the aexp has an annotation,
+    the it refers to the previous argument, so in
 
     [AE_let (id, typ1, _, body, typ2)]
 
-    [typ1] is the type of the bound identifer, whereas [typ2] is the
-    type of the whole let expression (and therefore also the body).
-    The type is represented as a generic parameter ['a], so we can
-    represent both typed and untyped ANF expressions.
+    [typ1] is the type of the bound identifer, whereas [typ2] is the type of the whole let expression (and therefore
+    also the body). The type is represented as a generic parameter ['a], so we can represent both typed and untyped ANF
+    expressions.
 
     See Flanagan et al's {e The Essence of Compiling with Continuations}. *)
 
@@ -82,10 +76,8 @@ type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of 
 
 type constructor_id = Constructor of id | Newtype_wrapper of id
 
-(** Each ANF expression has an annotation which contains the location of
-    the original Sail expression, it's typing environment, and the
-    uannot type containing any attributes attached to the original
-    expression. *)
+(** Each ANF expression has an annotation which contains the location of the original Sail expression, it's typing
+    environment, and the uannot type containing any attributes attached to the original expression. *)
 type anf_annot = { loc : l; env : Env.t; uannot : uannot }
 
 type 'a aexp = AE_aux of 'a aexp_aux * anf_annot
@@ -108,9 +100,8 @@ and 'a aexp_aux =
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
-      (** A short circuting operator (either [and] or [or]) must have
-          only its first argument reduced to a trivial value in the
-          ANF representation. *)
+      (** A short circuting operator (either [and] or [or]) must have only its first argument reduced to a trivial value
+          in the ANF representation. *)
 
 and sc_op = SC_and | SC_or
 
@@ -127,9 +118,8 @@ and 'a apat_aux =
   | AP_nil of 'a
   | AP_wild of 'a
 
-(** We allow ANF->ANF optimization to insert fragments of Jib IR
-   directly in the ANF grammar via [AV_cval]. Such fragments
-   must be side-effect free expressions. *)
+(** We allow ANF->ANF optimization to insert fragments of Jib IR directly in the ANF grammar via [AV_cval]. Such
+    fragments must be side-effect free expressions. *)
 and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
@@ -143,8 +133,8 @@ and 'a aval =
 
 and 'a alexp = AL_id of id * 'a | AL_addr of id * 'a | AL_field of 'a alexp * id
 
-(** When the ANF translation has to introduce new bindings it uses a
-    counter to ensure uniqueness. This function resets that counter. *)
+(** When the ANF translation has to introduce new bindings it uses a counter to ensure uniqueness. This function resets
+    that counter. *)
 val reset_anf_counter : unit -> unit
 
 (** Get the location from an [aexp]'s annotation *)
@@ -161,9 +151,8 @@ val map_aval : (anf_annot -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 (** Map over all function calls in an ANF expression *)
 val map_functions : (anf_annot -> function_id -> 'a aval list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
-(** This function 'folds' an [aexp] applying the provided function to
-    all leaf subexpressions, then applying the function to their
-    containing expression, and so on recursively in a bottom-up order. *)
+(** This function 'folds' an [aexp] applying the provided function to all leaf subexpressions, then applying the
+    function to their containing expression, and so on recursively in a bottom-up order. *)
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
 val aexp_bindings : 'a aexp -> IdSet.t
@@ -178,8 +167,8 @@ val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 val apat_globals : 'a apat -> (id * 'a) list
 val apat_types : 'a apat -> 'a Bindings.t
 
-(** Returns true if an ANF expression is dead due to flow typing
-   implying it is unreachable. Note: This function calls SMT. *)
+(** Returns true if an ANF expression is dead due to flow typing implying it is unreachable. Note: This function calls
+    SMT. *)
 val is_dead_aexp : 'a aexp -> bool
 
 (** {2 Compiling to ANF expressions} *)

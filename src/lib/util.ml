@@ -342,8 +342,9 @@ let copy_file src dst =
 
 let move_file src dst =
   if Sys.file_exists dst then Sys.remove dst;
-  try (* try efficient version *)
-      Sys.rename src dst
+  try
+    (* try efficient version *)
+    Sys.rename src dst
   with Sys_error _ ->
     (* OK, do it the the hard way *)
     copy_file src dst;

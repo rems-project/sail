@@ -335,7 +335,9 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
           let kopts, nc', ty = apply_kid_insts inst nc' ty in
           let ty =
             (* Typ_exist is not allowed an empty list of kids *)
-            match kopts with [] -> ty | _ -> Typ_aux (Typ_exist (kopts, nc', ty), l)
+            match kopts with
+            | [] -> ty
+            | _ -> Typ_aux (Typ_exist (kopts, nc', ty), l)
           in
           (inst @ inst0, ty)
         in
@@ -1090,7 +1092,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
                   let match_exp = E_aux (E_id id, (l', binding_exp_annot)) in
                   let pat_to_split = P_aux (P_id id, (l', binding_exp_annot)) in
                   let patsubsts = split_pat [(id_string, splits)] pat_to_split in
-                  let patsubsts = match patsubsts with Some x -> x | None -> assert false (* TODO *) in
+                  let patsubsts =
+                    match patsubsts with Some x -> x | None -> assert false
+                    (* TODO *)
+                  in
                   let pexps =
                     List.map
                       (fun (pat', substs, pchoices, ksubsts) ->
@@ -2686,7 +2691,7 @@ module Analysis = struct
           Some
             (KidSet.fold
                (* Allow failures for non-Int type variables *)
-                 (fun kid deps -> try dmerge deps (KBindings.find kid kid_deps) with Not_found -> deps
+               (fun kid deps -> try dmerge deps (KBindings.find kid kid_deps) with Not_found -> deps
                )
                kids dempty
             )

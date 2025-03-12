@@ -674,7 +674,9 @@ module Make (C : Config) = struct
     let flatten = function
       | GP_tuple gpats -> gpats
       | GP_wild -> List.init width (fun _ -> GP_wild)
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern" [@coverage off]
+        )
     in
     Rows
       (List.map
@@ -693,7 +695,9 @@ module Make (C : Config) = struct
       | GP_struct (_, fpats) ->
           List.map (fun field -> match Bindings.find_opt field fpats with Some gpat -> gpat | None -> GP_wild) fields
       | GP_wild -> List.init num_fields (fun _ -> GP_wild)
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Struct column contains invalid pattern" [@coverage off]
+        )
     in
     Rows
       (List.map
@@ -711,7 +715,9 @@ module Make (C : Config) = struct
     let flatten = function
       | GP_app (_, _, gpats) -> GP_tuple gpats
       | GP_wild -> GP_wild
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
+        )
     in
     let remove_ctor row =
       Columns (List.mapi (fun i gpat -> if i = c then flatten gpat else gpat) (columns_to_list row))
@@ -746,7 +752,9 @@ module Make (C : Config) = struct
     let uncons = function
       | GP_wild -> GP_tuple [GP_wild; GP_wild]
       | GP_cons (hd_gpat, tl_gpat) -> GP_tuple [hd_gpat; tl_gpat]
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cons row contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Cons row contains invalid pattern" [@coverage off]
+        )
     in
     let remove_cons row =
       Columns (List.mapi (fun i gpat -> if i = c then uncons gpat else gpat) (columns_to_list row))
@@ -992,8 +1000,10 @@ module Make (C : Config) = struct
                 Some (update_cases l wildcarded_pats cases)
             | Completeness_unknown -> None
           end
-    with (* For now, if any error occurs just report the pattern match is incomplete *)
-    | _ -> None
+    with
+    (* For now, if any error occurs just report the pattern match is incomplete *)
+    | _ ->
+      None
 
   let is_complete_funcls_wildcarded ?(keyword = "match") l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
