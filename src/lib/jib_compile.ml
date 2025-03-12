@@ -68,27 +68,19 @@ let ngensym () = name (gensym ())
 (* 4. Conversion to low-level AST                                         *)
 (**************************************************************************)
 
-(** We now use a low-level AST called Jib (see language/bytecode.ott)
-   that is only slightly abstracted away from C. To be succint in
-   comments we usually refer to this as Sail IR or IR rather than
-   low-level AST repeatedly.
+(** We now use a low-level AST called Jib (see language/bytecode.ott) that is only slightly abstracted away from C. To
+    be succint in comments we usually refer to this as Sail IR or IR rather than low-level AST repeatedly.
 
-   The general idea is ANF expressions are converted into lists of
-   instructions (type instr) where allocations and deallocations are
-   now made explicit. ANF values (aval) are mapped to the cval type,
-   which is even simpler still. Some things are still more abstract
-   than in C, so the type definitions follow the sail type definition
-   structure, just with typ (from ast.ml) replaced with
-   ctyp. Top-level declarations that have no meaning for the backend
-   are not included at this level.
+    The general idea is ANF expressions are converted into lists of instructions (type instr) where allocations and
+    deallocations are now made explicit. ANF values (aval) are mapped to the cval type, which is even simpler still.
+    Some things are still more abstract than in C, so the type definitions follow the sail type definition structure,
+    just with typ (from ast.ml) replaced with ctyp. Top-level declarations that have no meaning for the backend are not
+    included at this level.
 
-   The convention used here is that functions of the form compile_X
-   compile the type X into types in this AST, so compile_aval maps
-   avals into cvals. Note that the return types for these functions
-   are often quite complex, and they usually return some tuple
-   containing setup instructions (to allocate memory for the
-   expression), cleanup instructions (to deallocate that memory) and
-   possibly typing information about what has been translated. **)
+    The convention used here is that functions of the form compile_X compile the type X into types in this AST, so
+    compile_aval maps avals into cvals. Note that the return types for these functions are often quite complex, and they
+    usually return some tuple containing setup instructions (to allocate memory for the expression), cleanup
+    instructions (to deallocate that memory) and possibly typing information about what has been translated. **)
 
 (* FIXME: This stage shouldn't care about this *)
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
@@ -109,13 +101,10 @@ let is_ct_enum = function CT_enum _ -> true | _ -> false
 
 let iblock1 = function [instr] -> instr | instrs -> iblock instrs
 
-(** The context type contains two type-checking
-   environments. ctx.local_env contains the closest typechecking
-   environment, usually from the expression we are compiling, whereas
-   ctx.tc_env is the global type checking environment from
-   type-checking the entire AST. We also keep track of local variables
-   in ctx.locals, so we know when their type changes due to flow
-   typing. *)
+(** The context type contains two type-checking environments. ctx.local_env contains the closest typechecking
+    environment, usually from the expression we are compiling, whereas ctx.tc_env is the global type checking
+    environment from type-checking the entire AST. We also keep track of local variables in ctx.locals, so we know when
+    their type changes due to flow typing. *)
 type ctx = {
   target_name : string;
   records : (kid list * ctyp Bindings.t) Bindings.t;
@@ -591,11 +580,9 @@ module Make (C : CONFIG) = struct
 
   (** Compile a function call.
 
-      If called as [compile_funcall ~override_id:foo l ctx bar args], then we will compile
-      as if we are calling [bar], but insert a call to [foo] in the IR. This is used for
-      optimizations where we can generate a more efficient version of [foo] that doesn't exist
-      in the original Sail.
-  *)
+      If called as [compile_funcall ~override_id:foo l ctx bar args], then we will compile as if we are calling [bar],
+      but insert a call to [foo] in the IR. This is used for optimizations where we can generate a more efficient
+      version of [foo] that doesn't exist in the original Sail. *)
   let compile_funcall_with ?override_id l ctx id compile_arg args =
     let setup = ref [] in
     let cleanup = ref [] in
@@ -1122,10 +1109,9 @@ module Make (C : CONFIG) = struct
     | Some def_annot -> Option.is_some (get_def_attribute "optimize_control_flow_order" def_annot)
     | None -> false
 
-  (** Returns true if we have an infalliable mapping case. This occurs
-      only if the final case is marked with $[mapping_last] by the
-      mappings.ml rewrite, and we have a $[mapping_infallible]
-      attribute attached to the containing function in the context. *)
+  (** Returns true if we have an infalliable mapping case. This occurs only if the final case is marked with
+      $[mapping_last] by the mappings.ml rewrite, and we have a $[mapping_infallible] attribute attached to the
+      containing function in the context. *)
   let has_infallible_mapping_case ctx = function
     | [] -> true
     | cases ->
@@ -1714,13 +1700,10 @@ module Make (C : CONFIG) = struct
 
   let fast_int = function CT_lint when !optimize_aarch64_fast_struct -> CT_fint 64 | ctyp -> ctyp
 
-  (** Compile a sail type definition into a IR one. Most of the
-   actual work of translating the typedefs into C is done by the code
-   generator, as it's easy to keep track of structs, tuples and unions
-   in their sail form at this level, and leave the fiddly details of
-   how they get mapped to C in the next stage. This function also adds
-   details of the types it compiles to the context, ctx, which is why
-   it returns a ctypdef * ctx pair. **)
+  (** Compile a sail type definition into a IR one. Most of the actual work of translating the typedefs into C is done
+      by the code generator, as it's easy to keep track of structs, tuples and unions in their sail form at this level,
+      and leave the fiddly details of how they get mapped to C in the next stage. This function also adds details of the
+      types it compiles to the context, ctx, which is why it returns a ctypdef * ctx pair. **)
   let compile_type_def ctx (TD_aux (type_def, (l, _))) =
     match type_def with
     | TD_enum (id, ids, _) ->
@@ -1911,15 +1894,11 @@ module Make (C : CONFIG) = struct
         let body_label = label "fundef_body_" in
         (destructure @ [igoto body_label; ilabel fail_label; imatch_failure l; ilabel body_label], cleanup)
 
-  (** Functions that have heap-allocated return types are implemented by
-   passing a pointer a location where the return value should be
-   stored. The ANF -> Sail IR pass for expressions simply outputs an
-   I_return instruction for any return value, so this function walks
-   over the IR ast for expressions and modifies the return statements
-   into code that sets that pointer, as well as adds extra control
-   flow to cleanup heap-allocated variables correctly when a function
-   terminates early. See the generate_cleanup function for how this is
-   done. *)
+  (** Functions that have heap-allocated return types are implemented by passing a pointer a location where the return
+      value should be stored. The ANF -> Sail IR pass for expressions simply outputs an I_return instruction for any
+      return value, so this function walks over the IR ast for expressions and modifies the return statements into code
+      that sets that pointer, as well as adds extra control flow to cleanup heap-allocated variables correctly when a
+      function terminates early. See the generate_cleanup function for how this is done. *)
   let fix_early_return l ret instrs =
     let end_function_label = label "end_function_" in
     let is_return_recur (I_aux (instr, _)) =
@@ -2391,39 +2370,11 @@ module Make (C : CONFIG) = struct
     if IdSet.is_empty (IdSet.diff polymorphic_functions unreachable_polymorphic_functions) then (cdefs, ctx)
     else specialize_functions ~specialized_calls ctx cdefs
 
-  class contains_struct_visitor id found =
-    object
-      inherit empty_jib_visitor
-
-      method! vctyp =
-        function
-        | CT_struct (id', _) when Id.compare id id' = 0 ->
-            found := true;
-            SkipChildren
-        | _ -> DoChildren
-    end
-
   let contains_struct id cdef =
-    let found = ref false in
-    let _ = visit_cdef (new contains_struct_visitor id found) cdef in
-    !found
-
-  class contains_variant_visitor id found =
-    object
-      inherit empty_jib_visitor
-
-      method! vctyp =
-        function
-        | CT_variant (id', _) when Id.compare id id' = 0 ->
-            found := true;
-            SkipChildren
-        | _ -> DoChildren
-    end
+    cdef_has_ctyp (ctyp_has (function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false)) cdef
 
   let contains_variant id cdef =
-    let found = ref false in
-    let _ = visit_cdef (new contains_variant_visitor id found) cdef in
-    !found
+    cdef_has_ctyp (ctyp_has (function CT_variant (id', _) -> Id.compare id id' = 0 | _ -> false)) cdef
 
   class fix_variants_visitor ctx var_id =
     object

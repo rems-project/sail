@@ -50,11 +50,10 @@ open Ast
 open Ast_util
 open Jib
 
-(** {1 Instruction construction functions, and Jib names } *)
+(** {1 Instruction construction functions, and Jib names} *)
 
-(** Create a generator that produces fresh names, paired with a
-   function that resets the generator (allowing it to regenerate the
-   same name). *)
+(** Create a generator that produces fresh names, paired with a function that resets the generator (allowing it to
+    regenerate the same name). *)
 val symbol_generator : string -> (unit -> id) * (unit -> unit)
 
 val idecl : l -> ctyp -> name -> instr
@@ -226,3 +225,5 @@ val cdef_map_cval : (cval -> cval) -> cdef -> cdef
 
 (** Map over each instruction in a cdef using concatmap_instr *)
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
+
+val cdef_has_ctyp : (ctyp -> bool) -> cdef -> bool
