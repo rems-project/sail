@@ -1,0 +1,15 @@
+name = "lean-riscv"
+version = "0.1.0"
+defaultTargets = ["lean-riscv"]
+
+[[lean_lib]]
+name = "LeanRiscv"
+
+[[lean_exe]]
+name = "lean-riscv"
+root = "Main"
+
+[[require]]
+name = "ELFSage"
+scope = "draperlaboratory"
+rev = "8f3d6e7"
