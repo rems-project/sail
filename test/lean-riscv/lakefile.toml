@@ -1,12 +1,12 @@
 name = "lean-riscv"
 version = "0.1.0"
-defaultTargets = ["lean-riscv"]
+defaultTargets = ["run-riscv-lean"]
 
 [[lean_lib]]
 name = "LeanRiscv"
 
 [[lean_exe]]
-name = "lean-riscv"
+name = "run-riscv-lean"
 root = "Main"
 
 [[require]]
