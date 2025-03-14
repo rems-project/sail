@@ -51,6 +51,7 @@ open Ast_util
 let scan_exp_in_pexp f (Pat_aux (aux, _)) =
   match aux with
   | Pat_exp (_, exp) -> f exp
+  | Pat_or (_, exp) -> f exp
   | Pat_when (_, guard, exp) ->
       f guard;
       f exp

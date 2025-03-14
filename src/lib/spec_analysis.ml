@@ -67,6 +67,7 @@ let assigned_vars_in_fexps fes =
 let assigned_vars_in_pexp (Pat_aux (p, _)) =
   match p with
   | Pat_exp (_, e) -> assigned_vars e
+  | Pat_or (_, e) -> assigned_vars e
   | Pat_when (p, e1, e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2)
 
 let rec assigned_vars_in_lexp (LE_aux (le, _)) =
@@ -224,6 +225,7 @@ let nexp_subst_fns substs =
   and s_fexp (FE_aux (FE_fexp (id, e), (l, annot))) = FE_aux (FE_fexp (id, s_exp e), (l, s_tannot annot))
   and s_pexp = function
     | Pat_aux (Pat_exp (p, e), (l, annot)) -> Pat_aux (Pat_exp (s_pat p, s_exp e), (l, s_tannot annot))
+    | Pat_aux (Pat_or (ps, e), (l, annot)) -> Pat_aux (Pat_or (List.map s_pat ps, s_exp e), (l, s_tannot annot))
     | Pat_aux (Pat_when (p, e1, e2), (l, annot)) -> Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2), (l, s_tannot annot))
   and s_letbind (LB_aux (lb, (l, annot))) =
     match lb with LB_val (p, e) -> LB_aux (LB_val (s_pat p, s_exp e), (l, s_tannot annot))

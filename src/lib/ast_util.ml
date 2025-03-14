@@ -1295,6 +1295,9 @@ and string_of_fexp (FE_aux (FE_fexp (field, exp), _)) = string_of_id field ^ " =
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
   | Pat_exp (pat, exp) -> string_of_pat pat ^ " => " ^ string_of_exp exp
+  | Pat_or (pats, exp) ->
+      let pat_strings = List.map (fun pat -> string_of_pat pat) pats in
+      String.concat ", " pat_strings ^ " => " ^ string_of_exp exp
   | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " if " ^ string_of_exp guard ^ " => " ^ string_of_exp exp
 
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
@@ -1804,6 +1807,7 @@ and subst_pexp id value (Pat_aux (pexp_aux, annot)) =
     match pexp_aux with
     | Pat_exp (pat, exp) when IdSet.mem id (pat_ids pat) -> Pat_exp (pat, exp)
     | Pat_exp (pat, exp) -> Pat_exp (pat, subst id value exp)
+    | Pat_or (pats, exp) -> Pat_or (pats, subst id value exp)
     | Pat_when (pat, guard, exp) when IdSet.mem id (pat_ids pat) -> Pat_when (pat, guard, exp)
     | Pat_when (pat, guard, exp) -> Pat_when (pat, subst id value guard, subst id value exp)
   in
@@ -2296,6 +2300,7 @@ struct
     else (
       match aux with
       | Pat_exp (pat, exp) -> option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
+      | Pat_or (pats, exp) -> option_chain (find_annot_pat sl (List.hd pats)) (find_annot_exp sl exp)
       | Pat_when (pat, guard, exp) -> option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
     )
 

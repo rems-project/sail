@@ -944,6 +944,7 @@ module Make (C : Config) = struct
         )
     (* We also don't consider guarded cases *)
     | Pat_aux (Pat_when _, _) :: cases -> cases_to_pats ctx from ~have_guard:true ~have_mapping cases
+    | Pat_aux (Pat_or _, _) :: cases -> cases_to_pats ctx from ~have_guard:true ~have_mapping cases
 
   let rec update_cases l new_pats cases =
     match (new_pats, cases) with

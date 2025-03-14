@@ -2272,6 +2272,10 @@ let doc_exp, doc_let =
     | Pat_aux (Pat_exp (pat, e), _) ->
         let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
         group (prefix 3 1 (separate space [pipe; doc_pat ctxt false pat; bigarrow]) (group (top_exp new_ctxt false e)))
+    | Pat_aux (Pat_or (pats, e), _) ->
+        let new_ctxt = merge_new_tyvars ctxt old_env (List.hd pats) (env_of e) in
+        let pats_doc = separate_map (string ", ") (fun pat -> doc_pat ctxt false pat) pats in
+        group (prefix 3 1 (separate space [pipe; pats_doc; bigarrow]) (group (top_exp new_ctxt false e)))
     | Pat_aux (Pat_when (_, _, _), (l, _)) ->
         raise
           (Reporting.err_unreachable l __POS__

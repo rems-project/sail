@@ -260,6 +260,7 @@ and opt_default = Def_val_aux of opt_default_aux * l
 and pexp_aux =
   (* Pattern match *)
   | Pat_exp of pat * exp
+  | Pat_or of pat list * exp
   | Pat_when of pat * exp * exp
   | Pat_attribute of string * attribute_data option * pexp
 

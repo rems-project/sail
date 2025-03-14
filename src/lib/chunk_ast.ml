@@ -746,6 +746,7 @@ let is_aligned pexps =
   let rec pexp_exp_column = function
     | Pat_aux (Pat_attribute (_, _, pexp), _) -> pexp_exp_column pexp
     | Pat_aux (Pat_exp (_, E_aux (_, l)), _) -> starting_column_num l
+    | Pat_aux (Pat_or (_, E_aux (_, l)), _) -> starting_column_num l
     | Pat_aux (Pat_when (_, _, E_aux (_, l)), _) -> starting_column_num l
   in
   List.fold_left
@@ -1068,6 +1069,7 @@ and chunk_pexp ?delim comments chunks (Pat_aux (aux, l)) =
       (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
       ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
       { funcl_space; pat = pat_chunks; guard = None; body = exp_chunks }
+  | Pat_or (pats, exp) -> raise (Reporting.err_unreachable l __POS__ "Pattern or is not supported in this context")
   | Pat_when (pat, guard, exp) ->
       let pat_chunks = Queue.create () in
       chunk_pat comments pat_chunks pat;

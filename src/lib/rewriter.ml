@@ -151,6 +151,8 @@ let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
   function
   | Pat_aux (Pat_exp (p, e), pannot) -> Pat_aux (Pat_exp (rewriters.rewrite_pat rewriters p, rewrite e), pannot)
+  | Pat_aux (Pat_or (ps, e), pannot) ->
+      Pat_aux (Pat_or (List.map (rewriters.rewrite_pat rewriters) ps, rewrite e), pannot)
   | Pat_aux (Pat_when (p, e, e'), pannot) ->
       Pat_aux (Pat_when (rewriters.rewrite_pat rewriters p, rewrite e, rewrite e'), pannot)
 
@@ -603,6 +605,18 @@ and fold_fexp alg (FE_aux (fexp_aux, annot)) = alg.fe_aux (fold_fexp_aux alg fex
 
 and fold_pexp_aux alg = function
   | Pat_exp (pat, e) -> alg.pat_exp (fold_pat alg.pat_alg pat, fold_exp alg e)
+  | Pat_or (pats, e) ->
+      let id = mk_id "p" in
+      let guard =
+        mk_exp
+          (E_match
+             ( mk_exp (E_id id),
+               List.mapi (fun i p -> mk_pexp (Pat_exp (p, mk_exp (E_lit (mk_lit L_true))))) pats
+               @ [mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_lit (mk_lit L_false))))]
+             )
+          )
+      in
+      alg.pat_when (mk_pat (P_id id), guard, fold_exp alg e)
   | Pat_when (pat, e, e') -> alg.pat_when (fold_pat alg.pat_alg pat, fold_exp alg e, fold_exp alg e')
 
 and fold_pexp alg (Pat_aux (pexp_aux, annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
@@ -923,6 +937,9 @@ let default_fold_pexp f x (Pat_aux (pe, ann)) =
     | Pat_exp (p, e) ->
         let x, e = f x e in
         (x, Pat_exp (p, e))
+    | Pat_or (ps, e) ->
+        let x, e = f x e in
+        (x, Pat_or (ps, e))
     | Pat_when (p, e1, e2) ->
         let x, e1 = f x e1 in
         let x, e2 = f x e2 in
